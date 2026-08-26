@@ -1,0 +1,476 @@
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
+import "../components"
+
+ScrollView {
+    id: root
+    contentWidth: availableWidth
+
+    signal openNewPaddy()
+    signal openNewMilling()
+    signal openNewSale()
+    signal openNewVoucher()
+    signal openLedgers()
+    signal openStock()
+    signal openPaddy()
+    signal openLedgerMenu()
+    signal openStockMenu()
+    signal openAddVoucherMenu()
+
+    ColumnLayout {
+        anchors.fill: parent
+        anchors.margins: 14
+        spacing: 14
+
+        // Top Action & Header Bar
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 12
+
+            ColumnLayout {
+                spacing: 2
+                Text {
+                    text: "Executive Accounting Dashboard"
+                    color: "#0F172A"
+                    font.pixelSize: 22
+                    font.bold: true
+                }
+                Text {
+                    text: "Mahadev Rice Milling ERP & Financial Control System"
+                    color: "#64748B"
+                    font.pixelSize: 12
+                }
+            }
+
+            Item { Layout.fillWidth: true }
+
+            RowLayout {
+                spacing: 8
+                Button {
+                    id: btnPaddy
+                    background: Rectangle { color: "#16A34A"; radius: 6 }
+                    contentItem: RowLayout {
+                        spacing: 6
+                        Text { text: "🌾 New Paddy Slip"; color: "#FFF"; font.bold: true; font.pixelSize: 12 }
+                        KbdBadge { text: "F2"; badgeColor: "#14532D"; textColor: "#86EFAC"; borderColor: "#16A34A" }
+                    }
+                    onClicked: root.openNewPaddy()
+                }
+
+                Button {
+                    id: btnSale
+                    background: Rectangle { color: "#2563EB"; radius: 6 }
+                    contentItem: RowLayout {
+                        spacing: 6
+                        Text { text: "🧾 New Invoice"; color: "#FFF"; font.bold: true; font.pixelSize: 12 }
+                    }
+                    onClicked: root.openNewSale()
+                }
+            }
+        }
+
+        // 3-SECTION HORIZONTAL LAYOUT
+        // Ratio: Left = 1 (16.7%), Middle = 4 (66.7% = 2/3rd), Right = 1 (16.7%)
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            spacing: 14
+
+            // ==============================================================
+            // LEFT SECTION (1/6th Width): FIRM INFO, PAN, GST, FY SELECTED
+            // ==============================================================
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredWidth: 1
+                Layout.fillHeight: true
+                color: "#FFFFFF"
+                border.color: "#E2E8F0"
+                border.width: 1
+                radius: 10
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: 14
+                    spacing: 12
+
+                    RowLayout {
+                        spacing: 8
+                        Rectangle {
+                            width: 34
+                            height: 34
+                            radius: 8
+                            color: "#EFF6FF"
+                            border.color: "#BFDBFE"
+                            Text { anchors.centerIn: parent; text: "🏛️"; font.pixelSize: 18 }
+                        }
+                        ColumnLayout {
+                            spacing: 0
+                            Text { text: "FIRM PROFILE"; color: "#2563EB"; font.pixelSize: 10; font.bold: true; font.letterSpacing: 1.0 }
+                            Text { text: "Mahadev Rice Mill"; color: "#0F172A"; font.pixelSize: 14; font.bold: true; elide: Text.ElideRight }
+                        }
+                    }
+
+                    Rectangle { Layout.fillWidth: true; height: 1; color: "#F1F5F9" }
+
+                    // Details List
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 10
+
+                        // Financial Year Selected Badge
+                        Rectangle {
+                            Layout.fillWidth: true
+                            height: 46
+                            radius: 8
+                            color: "#F0FDF4"
+                            border.color: "#BBF7D0"
+
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: 10
+                                anchors.rightMargin: 10
+                                spacing: 8
+                                Text { text: "📅"; font.pixelSize: 16 }
+                                ColumnLayout {
+                                    spacing: 0
+                                    Text { text: "Financial Year Selected"; color: "#166534"; font.pixelSize: 10 }
+                                    Text { text: "FY 2026-2027 (Active)"; color: "#15803D"; font.pixelSize: 12; font.bold: true }
+                                }
+                            }
+                        }
+
+                        // GSTIN
+                        ColumnLayout {
+                            spacing: 2
+                            Text { text: "GSTIN Number:"; color: "#64748B"; font.pixelSize: 11 }
+                            Text { text: "29AAACM8899F1Z4"; color: "#0F172A"; font.pixelSize: 12; font.bold: true; font.family: "Menlo, Consolas, sans-serif" }
+                        }
+
+                        // PAN
+                        ColumnLayout {
+                            spacing: 2
+                            Text { text: "PAN Number:"; color: "#64748B"; font.pixelSize: 11 }
+                            Text { text: "AAACM8899F"; color: "#0F172A"; font.pixelSize: 12; font.bold: true; font.family: "Menlo, Consolas, sans-serif" }
+                        }
+
+                        // FSSAI
+                        ColumnLayout {
+                            spacing: 2
+                            Text { text: "FSSAI License:"; color: "#64748B"; font.pixelSize: 11 }
+                            Text { text: "11223344556677"; color: "#0F172A"; font.pixelSize: 12; font.bold: true; font.family: "Menlo, Consolas, sans-serif" }
+                        }
+
+                        // Business Type
+                        ColumnLayout {
+                            spacing: 2
+                            Text { text: "Business Type:"; color: "#64748B"; font.pixelSize: 11 }
+                            Text { text: "Paddy Milling & Grain ERP"; color: "#0F172A"; font.pixelSize: 12; font.bold: true }
+                        }
+
+                        // Location
+                        ColumnLayout {
+                            spacing: 2
+                            Text { text: "Location:"; color: "#64748B"; font.pixelSize: 11 }
+                            Text { text: "Raichur, Karnataka"; color: "#0F172A"; font.pixelSize: 12; font.bold: true }
+                        }
+                    }
+
+                    Item { Layout.fillHeight: true }
+
+                    // Status Badge
+                    Rectangle {
+                        Layout.fillWidth: true
+                        height: 30
+                        radius: 6
+                        color: "#F8FAFC"
+                        border.color: "#E2E8F0"
+
+                        RowLayout {
+                            anchors.centerIn: parent
+                            spacing: 6
+                            Rectangle { width: 8; height: 8; radius: 4; color: "#16A34A" }
+                            Text { text: "GST Tax Registered"; color: "#334155"; font.pixelSize: 11; font.bold: true }
+                        }
+                    }
+                }
+            }
+
+            // ==============================================================
+            // MIDDLE SECTION (4/6th = 2/3rd Width): VERTICAL UP-TO-DOWN MENU & METRICS
+            // ==============================================================
+            ColumnLayout {
+                Layout.fillWidth: true
+                Layout.preferredWidth: 4
+                Layout.fillHeight: true
+                spacing: 14
+
+                // Top Metrics Cards Strip
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 12
+
+                    StatCard {
+                        title: "Raw Paddy Stock"
+                        value: (typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.paddyStock : "0.0 Qtl"
+                        subtext: "In Godowns A & B"
+                        icon: "🌾"
+                        accentColor: "#D97706"
+                        Layout.fillWidth: true
+                    }
+
+                    StatCard {
+                        title: "Finished Rice Stock"
+                        value: (typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.riceStock : "0.0 Qtl"
+                        subtext: "Ready for Dispatch"
+                        icon: "🍚"
+                        accentColor: "#16A34A"
+                        Layout.fillWidth: true
+                    }
+
+                    StatCard {
+                        title: "Total Revenue"
+                        value: (typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.totalSales : "₹0.0"
+                        subtext: "Sales Invoices"
+                        icon: "🧾"
+                        accentColor: "#2563EB"
+                        Layout.fillWidth: true
+                    }
+                }
+
+                // VERTICAL UP-TO-DOWN MENU SECTION (STACKED COLUMN)
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 10
+
+                    Text {
+                        text: "MASTER & VOUCHER MENU"
+                        color: "#64748B"
+                        font.pixelSize: 11
+                        font.bold: true
+                        font.letterSpacing: 1.0
+                    }
+
+                    // 1. Ledger Master
+                    Rectangle {
+                        id: cardLedger
+                        Layout.fillWidth: true
+                        height: 54
+                        radius: 8
+                        color: mouseLedger.containsMouse ? "#EFF6FF" : "#FFFFFF"
+                        border.color: mouseLedger.containsMouse ? "#2563EB" : "#E2E8F0"
+                        border.width: 1
+
+                        MouseArea {
+                            id: mouseLedger
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: root.openLedgerMenu()
+                        }
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 14
+                            anchors.rightMargin: 14
+                            spacing: 12
+
+                            Rectangle {
+                                width: 36; height: 36; radius: 8; color: "#DBEAFE"
+                                Text { anchors.centerIn: parent; text: "📖"; font.pixelSize: 18 }
+                            }
+
+                            ColumnLayout {
+                                spacing: 1
+                                Layout.fillWidth: true
+                                Text { text: "1. Ledger Master"; color: "#0F172A"; font.pixelSize: 13; font.bold: true }
+                                Text { text: "New Ledger, Modify, View Ledger, Groups"; color: "#64748B"; font.pixelSize: 11 }
+                            }
+
+                            KbdBadge { text: "Alt+6"; badgeColor: "#EFF6FF"; textColor: "#2563EB"; borderColor: "#BFDBFE" }
+                        }
+                    }
+
+                    // 2. Stock Master
+                    Rectangle {
+                        id: cardStock
+                        Layout.fillWidth: true
+                        height: 54
+                        radius: 8
+                        color: mouseStock.containsMouse ? "#F0FDF4" : "#FFFFFF"
+                        border.color: mouseStock.containsMouse ? "#16A34A" : "#E2E8F0"
+                        border.width: 1
+
+                        MouseArea {
+                            id: mouseStock
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: root.openStockMenu()
+                        }
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 14
+                            anchors.rightMargin: 14
+                            spacing: 12
+
+                            Rectangle {
+                                width: 36; height: 36; radius: 8; color: "#DCFCE7"
+                                Text { anchors.centerIn: parent; text: "📦"; font.pixelSize: 18 }
+                            }
+
+                            ColumnLayout {
+                                spacing: 1
+                                Layout.fillWidth: true
+                                Text { text: "2. Stock Master"; color: "#0F172A"; font.pixelSize: 13; font.bold: true }
+                                Text { text: "Raw Paddy, Rice & By-Product Inventory"; color: "#64748B"; font.pixelSize: 11 }
+                            }
+
+                            KbdBadge { text: "Alt+4"; badgeColor: "#F0FDF4"; textColor: "#16A34A"; borderColor: "#BBF7D0" }
+                        }
+                    }
+
+                    // 3. Add Vouchers
+                    Rectangle {
+                        id: cardAddVch
+                        Layout.fillWidth: true
+                        height: 54
+                        radius: 8
+                        color: mouseAddVch.containsMouse ? "#FEF3C7" : "#FFFFFF"
+                        border.color: mouseAddVch.containsMouse ? "#D97706" : "#E2E8F0"
+                        border.width: 1
+
+                        MouseArea {
+                            id: mouseAddVch
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: root.openAddVoucherMenu()
+                        }
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 14
+                            anchors.rightMargin: 14
+                            spacing: 12
+
+                            Rectangle {
+                                width: 36; height: 36; radius: 8; color: "#FEF3C7"
+                                Text { anchors.centerIn: parent; text: "📝"; font.pixelSize: 18 }
+                            }
+
+                            ColumnLayout {
+                                spacing: 1
+                                Layout.fillWidth: true
+                                Text { text: "3. Add Vouchers"; color: "#0F172A"; font.pixelSize: 13; font.bold: true }
+                                Text { text: "Sales Invoices, Paddy Slips, Journal & Milling"; color: "#64748B"; font.pixelSize: 11 }
+                            }
+
+                            KbdBadge { text: "F2"; badgeColor: "#FEF3C7"; textColor: "#D97706"; borderColor: "#FDE68A" }
+                        }
+                    }
+
+                    // 4. More Vouchers
+                    Rectangle {
+                        id: cardMoreVch
+                        Layout.fillWidth: true
+                        height: 54
+                        radius: 8
+                        color: mouseMoreVch.containsMouse ? "#F3E8FF" : "#FFFFFF"
+                        border.color: mouseMoreVch.containsMouse ? "#7C3AED" : "#E2E8F0"
+                        border.width: 1
+
+                        MouseArea {
+                            id: mouseMoreVch
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: root.openAddVoucherMenu()
+                        }
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 14
+                            anchors.rightMargin: 14
+                            spacing: 12
+
+                            Rectangle {
+                                width: 36; height: 36; radius: 8; color: "#F3E8FF"
+                                Text { anchors.centerIn: parent; text: "📑"; font.pixelSize: 18 }
+                            }
+
+                            ColumnLayout {
+                                spacing: 1
+                                Layout.fillWidth: true
+                                Text { text: "4. More Vouchers"; color: "#0F172A"; font.pixelSize: 13; font.bold: true }
+                                Text { text: "Journal Vouchers & Contra Transfer Entries"; color: "#64748B"; font.pixelSize: 11 }
+                            }
+
+                            KbdBadge { text: "Alt+5"; badgeColor: "#F3E8FF"; textColor: "#7C3AED"; borderColor: "#E9D5FF" }
+                        }
+                    }
+                }
+
+                // Procurement Slips FastTable
+                FastTable {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    title: "Recent Paddy Procurement Slips"
+                    model: paddyModel
+                    headers: ["Slip No", "Date", "Farmer", "Variety", "Bags", "Net (Qtl)", "Net Amt (₹)", "Status"]
+                    roleKeys: ["slip_no", "arrival_date", "farmer_name", "paddy_variety", "bag_count", "net_weight_qtl", "net_amount", "payment_status"]
+                    onNewEntryRequested: root.openNewPaddy()
+                }
+            }
+
+            // ==============================================================
+            // RIGHT SECTION (1/6th Width): KEPT EMPTY FOR NOW AS REQUESTED
+            // ==============================================================
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredWidth: 1
+                Layout.fillHeight: true
+                color: "#FFFFFF"
+                border.color: "#E2E8F0"
+                border.width: 1
+                radius: 10
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: 16
+                    spacing: 12
+
+                    Text {
+                        text: "QUICK WIDGETS"
+                        color: "#94A3B8"
+                        font.pixelSize: 10
+                        font.bold: true
+                        font.letterSpacing: 1.0
+                    }
+
+                    Rectangle { Layout.fillWidth: true; height: 1; color: "#F1F5F9" }
+
+                    Item { Layout.fillHeight: true }
+
+                    // Placeholder graphic / subtle text
+                    ColumnLayout {
+                        Layout.alignment: Qt.AlignHCenter
+                        spacing: 8
+                        Text {
+                            text: "⚡"
+                            font.pixelSize: 28
+                            horizontalAlignment: Text.AlignHCenter
+                            Layout.alignment: Qt.AlignHCenter
+                        }
+                        Text {
+                            text: "Reserved Section"
+                            color: "#94A3B8"
+                            font.pixelSize: 12
+                            font.bold: true
+                            horizontalAlignment: Text.AlignHCenter
+                        }
+                    }
+
+                    Item { Layout.fillHeight: true }
+                }
+            }
+        }
+    }
+}

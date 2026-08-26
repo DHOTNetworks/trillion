@@ -1,0 +1,76 @@
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
+
+ColumnLayout {
+    id: root
+    property string label: ""
+    property string placeholderText: ""
+    property string text: ""
+    property bool isRequired: false
+    property alias focusInput: textInput.focus
+    property alias inputMethodHints: textInput.inputMethodHints
+
+    signal returnPressed()
+
+    spacing: 4
+
+    RowLayout {
+        spacing: 4
+        visible: root.label !== ""
+        Text {
+            text: root.label
+            color: "#334155"
+            font.pixelSize: 12
+            font.bold: true
+        }
+        Text {
+            text: "*"
+            color: "#DC2626"
+            font.pixelSize: 12
+            font.bold: true
+            visible: root.isRequired
+        }
+    }
+
+    Rectangle {
+        Layout.fillWidth: true
+        implicitHeight: 36
+        radius: 6
+        color: "#FFFFFF"
+        border.color: textInput.activeFocus ? "#2563EB" : "#CBD5E1"
+        border.width: textInput.activeFocus ? 2 : 1
+
+        TextField {
+            id: textInput
+            anchors.fill: parent
+            anchors.leftMargin: 10
+            anchors.rightMargin: 10
+            text: root.text
+            placeholderText: root.placeholderText
+            color: "#0F172A"
+            font.pixelSize: 13
+            font.family: "Menlo, Consolas, sans-serif"
+            background: null
+            selectByMouse: true
+
+            onTextChanged: root.text = textInput.text
+
+            Keys.onReturnPressed: function(event) {
+                event.accepted = true
+                Qt.callLater(function() {
+                    root.returnPressed()
+                })
+            }
+            Keys.onEnterPressed: function(event) {
+                event.accepted = true
+                Qt.callLater(function() {
+                    root.returnPressed()
+                })
+            }
+            Keys.onEscapePressed: function(event) {
+                event.accepted = false
+            }
+        }
+    }
+}
