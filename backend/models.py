@@ -227,7 +227,7 @@ class SalesModel(BaseTableModel):
             return "VCH-9001"
 
     @Slot(str, str, str, str, str, str, int, float, float, float, float, float, float, float, float, float, str, str, str, str, result=bool)
-    def add_sales_invoice_full(self, invoice_no, invoice_date, party_ledger, gstin, item_name, hsn_code, bag_count, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount, round_off, total_amount, payment_mode, vehicle_no, eway_bill_no, narration):
+    def add_sales_invoice_full(self, invoice_no, invoice_date, party_ledger, gstin, item_name, hsn_code, bag_count, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount, round_off, total_amount, payment_mode, vehicle_no, eway_bill_no, narration, sale_status="Self Sale", market_fee_status="Paid", dami=0.0, labour=0.0, auction=0.0, m_fee=0.0, hrdf=0.0, other_exp=0.0, welfare=0.0, dhrmd=0.0, sutli=0.0, less_amount=0.0, gr_no="", driver="", bill_time="", sauda_date="", shipping_address="", po_no="", grade="", kanda_weight="", transport="", broker_name=""):
         try:
             conn = get_connection()
             cursor = conn.cursor()
@@ -244,9 +244,9 @@ class SalesModel(BaseTableModel):
 
             cursor.execute("""
             INSERT INTO sales_invoices 
-            (invoice_no, invoice_date, customer_id, customer_name, gstin, item_name, hsn_code, bag_count, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount, round_off, gst_amount, total_amount, payment_mode, vehicle_no, eway_bill_no, narration)
-            VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (invoice_no, invoice_date, party_ledger, gstin, item_name, hsn_code, bag_count, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount, round_off, gst_amount, total_amount, payment_mode, vehicle_no, eway_bill_no, narration))
+            (invoice_no, invoice_date, customer_id, customer_name, gstin, item_name, hsn_code, bag_count, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount, round_off, gst_amount, total_amount, payment_mode, vehicle_no, eway_bill_no, narration, sale_status, market_fee_status, dami, labour, auction, m_fee, hrdf, other_exp, welfare, dhrmd, sutli, less_amount, gr_no, driver, bill_time, sauda_date, shipping_address, po_no, grade, kanda_weight, transport, broker_name)
+            VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (invoice_no, invoice_date, party_ledger, gstin, item_name, hsn_code, bag_count, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount, round_off, gst_amount, total_amount, payment_mode, vehicle_no, eway_bill_no, narration, sale_status, market_fee_status, dami, labour, auction, m_fee, hrdf, other_exp, welfare, dhrmd, sutli, less_amount, gr_no, driver, bill_time, sauda_date, shipping_address, po_no, grade, kanda_weight, transport, broker_name))
             
             # Post Double-Entry Ledger Voucher into vouchers table
             cursor.execute("SELECT MAX(id) FROM vouchers")
@@ -266,6 +266,82 @@ class SalesModel(BaseTableModel):
             return True
         except Exception as e:
             print(f"Error adding sales invoice full: {e}")
+            return False
+
+
+class PurchaseModel(BaseTableModel):
+    dataChangedSignal = Signal()
+
+    def __init__(self, parent=None):
+        headers = ["Invoice No", "Date", "Supplier", "Item", "Bags", "Weight (Qtl)", "Rate (₹)", "Taxable (₹)", "GST %", "Total (₹)", "Mode"]
+        role_keys = ["invoice_no", "invoice_date", "supplier_name", "item_name", "bag_count", "weight_qtl", "rate_per_qtl", "taxable_amount", "gst_pct", "total_amount", "payment_mode"]
+        super().__init__(headers, role_keys, parent)
+        self.reload_data()
+
+    @Slot()
+    def reload_data(self):
+        self.beginResetModel()
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM purchase_invoices ORDER BY id DESC")
+        rows = cursor.fetchall()
+        self._data = [dict(r) for r in rows]
+        conn.close()
+        self.endResetModel()
+        self.dataChangedSignal.emit()
+
+    @Slot(result=str)
+    def get_next_voucher_no(self):
+        try:
+            conn = get_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT MAX(id) FROM vouchers")
+            max_id = cursor.fetchone()[0] or 9000
+            conn.close()
+            return f"VCH-{max_id + 1}"
+        except Exception as e:
+            return "VCH-9001"
+
+    @Slot(str, str, str, str, str, str, int, float, float, float, float, float, float, float, float, float, str, str, str, str, result=bool)
+    def add_purchase_invoice_full(self, invoice_no, invoice_date, party_ledger, gstin, item_name, hsn_code, bag_count, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount, round_off, total_amount, payment_mode, vehicle_no, eway_bill_no, narration, sale_status="Self Sale", market_fee_status="Paid", dami=0.0, labour=0.0, auction=0.0, m_fee=0.0, hrdf=0.0, other_exp=0.0, welfare=0.0, dhrmd=0.0, sutli=0.0, less_amount=0.0, gr_no="", driver="", bill_time="", sauda_date="", shipping_address="", po_no="", grade="", kanda_weight="", transport="", broker_name=""):
+        try:
+            conn = get_connection()
+            cursor = conn.cursor()
+            
+            if not invoice_no:
+                cursor.execute("SELECT MAX(id) FROM purchase_invoices")
+                max_id = cursor.fetchone()[0] or 7000
+                invoice_no = f"PUR-{max_id + 1}"
+            
+            if not invoice_date:
+                invoice_date = date.today().strftime("%Y-%m-%d")
+
+            gst_amount = cgst_amount + sgst_amount + igst_amount
+
+            cursor.execute("""
+            INSERT INTO purchase_invoices 
+            (invoice_no, invoice_date, supplier_id, supplier_name, gstin, item_name, hsn_code, bag_count, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount, round_off, gst_amount, total_amount, payment_mode, vehicle_no, eway_bill_no, narration, sale_status, market_fee_status, dami, labour, auction, m_fee, hrdf, other_exp, welfare, dhrmd, sutli, less_amount, gr_no, driver, bill_time, sauda_date, shipping_address, po_no, grade, kanda_weight, transport, broker_name)
+            VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (invoice_no, invoice_date, party_ledger, gstin, item_name, hsn_code, bag_count, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount, round_off, gst_amount, total_amount, payment_mode, vehicle_no, eway_bill_no, narration, sale_status, market_fee_status, dami, labour, auction, m_fee, hrdf, other_exp, welfare, dhrmd, sutli, less_amount, gr_no, driver, bill_time, sauda_date, shipping_address, po_no, grade, kanda_weight, transport, broker_name))
+            
+            # Post Double-Entry Ledger Voucher into vouchers table
+            cursor.execute("SELECT MAX(id) FROM vouchers")
+            v_max = cursor.fetchone()[0] or 9000
+            vch_no = f"VCH-{v_max + 1}"
+            vch_narration = f"Purchase Bill {invoice_no} - {item_name} ({weight_qtl} Qtl @ ₹{rate_per_qtl})"
+            if narration: vch_narration += " | " + narration
+
+            cursor.execute("""
+            INSERT INTO vouchers (voucher_no, voucher_date, voucher_type, party_name, account_type, amount, narration)
+            VALUES (?, ?, 'Purchase', ?, 'Purchase Account', ?, ?)
+            """, (vch_no, invoice_date, party_ledger, total_amount, vch_narration))
+
+            conn.commit()
+            conn.close()
+            self.reload_data()
+            return True
+        except Exception as e:
+            print(f"Error adding purchase invoice full: {e}")
             return False
 
 
@@ -290,6 +366,18 @@ class VouchersModel(BaseTableModel):
         self.endResetModel()
         self.dataChangedSignal.emit()
 
+    @Slot(result=str)
+    def get_next_voucher_no(self):
+        try:
+            conn = get_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT MAX(id) FROM vouchers")
+            max_id = cursor.fetchone()[0] or 9000
+            conn.close()
+            return f"VCH-{max_id + 1}"
+        except Exception as e:
+            return "VCH-9001"
+
     @Slot(str, str, str, str, float, str, result=bool)
     def add_voucher(self, vch_type, party_name, vch_date, account_type, amount, narration):
         try:
@@ -306,7 +394,7 @@ class VouchersModel(BaseTableModel):
             cursor.execute("""
             INSERT INTO vouchers 
             (voucher_no, voucher_date, voucher_type, party_id, party_name, account_type, amount, narration)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, 1, ?, ?, ?, ?)
             """, (voucher_no, vch_date, vch_type, 1, party_name, account_type, amount, narration))
             
             conn.commit()
@@ -315,6 +403,68 @@ class VouchersModel(BaseTableModel):
             return True
         except Exception as e:
             print(f"Error adding voucher: {e}")
+            return False
+
+    @Slot(str, str, str, float, str, str, result=bool)
+    def add_cheque_voucher(self, vch_type, dr_party, cr_party, amount, chq_no, narration, vch_date=""):
+        try:
+            conn = get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("SELECT MAX(id) FROM vouchers")
+            max_id = cursor.fetchone()[0] or 9000
+            voucher_no = f"VCH-{max_id + 1}"
+            
+            if not vch_date:
+                vch_date = date.today().strftime("%Y-%m-%d")
+
+            full_narration = f"Ch. No. {chq_no}" if chq_no else ""
+            if narration:
+                full_narration += " | " + narration if full_narration else narration
+
+            cursor.execute("""
+            INSERT INTO vouchers 
+            (voucher_no, voucher_date, voucher_type, party_id, party_name, account_type, amount, narration)
+            VALUES (?, ?, ?, 1, ?, ?, ?, ?)
+            """, (voucher_no, vch_date, vch_type, dr_party, cr_party, amount, full_narration))
+            
+            conn.commit()
+            conn.close()
+            self.reload_data()
+            return True
+        except Exception as e:
+            print(f"Error adding cheque voucher: {e}")
+            return False
+
+    @Slot(str, str, float, str, str, str, str, result=bool)
+    def add_journal_voucher(self, dr_party, cr_party, amount, ref_no="", narration="", vch_date="", vch_type="Journal"):
+        try:
+            conn = get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("SELECT MAX(id) FROM vouchers")
+            max_id = cursor.fetchone()[0] or 9000
+            voucher_no = f"VCH-{max_id + 1}"
+            
+            if not vch_date:
+                vch_date = date.today().strftime("%Y-%m-%d")
+
+            full_narration = f"Ref: {ref_no}" if ref_no else ""
+            if narration:
+                full_narration += " | " + narration if full_narration else narration
+
+            cursor.execute("""
+            INSERT INTO vouchers 
+            (voucher_no, voucher_date, voucher_type, party_id, party_name, account_type, amount, narration)
+            VALUES (?, ?, ?, 1, ?, ?, ?, ?)
+            """, (voucher_no, vch_date, vch_type, dr_party, cr_party, amount, full_narration))
+            
+            conn.commit()
+            conn.close()
+            self.reload_data()
+            return True
+        except Exception as e:
+            print(f"Error adding journal voucher: {e}")
             return False
 
 
@@ -328,6 +478,90 @@ class PartiesModel(BaseTableModel):
     @Slot(result=list)
     def get_parties_list(self):
         return [r["name"] for r in self._data if "name" in r and r.get("name")]
+
+    @Slot(result=list)
+    def get_bank_accounts_list(self):
+        try:
+            conn = get_connection()
+            cursor = conn.cursor()
+            cursor.execute("""
+            SELECT name FROM parties 
+            WHERE group_name LIKE '%Bank%' OR party_type = 'Bank' OR name LIKE '%Bank%'
+            ORDER BY name ASC
+            """)
+            rows = [r[0] for r in cursor.fetchall()]
+            conn.close()
+            if not rows:
+                rows = ["IndusInd Bank(200999406993)", "SBI Raichur Main Branch", "HDFC Bank MG Road"]
+            return rows
+        except Exception as e:
+            print(f"Error fetching bank accounts list: {e}")
+            return ["IndusInd Bank(200999406993)", "SBI Raichur Main Branch", "HDFC Bank MG Road"]
+
+    @Slot(str, result=str)
+    def get_ledger_live_balance(self, ledger_name):
+        if not ledger_name or not ledger_name.strip():
+            return "0.00 Dr"
+        try:
+            clean_name = ledger_name.strip()
+            clean_name_lower = clean_name.lower()
+            conn = get_connection()
+            cursor = conn.cursor()
+
+            # Get party opening balance
+            cursor.execute("SELECT opening_balance, balance_type FROM parties WHERE LOWER(name) = ? OR LOWER(name) LIKE ?", (clean_name_lower, f"%{clean_name_lower}%"))
+            p_row = cursor.fetchone()
+            net_dr = 0.0
+            net_cr = 0.0
+            if p_row:
+                op = float(p_row["opening_balance"] or 0.0)
+                btype = p_row["balance_type"] or "Dr"
+                if btype == "Dr":
+                    net_dr += op
+                else:
+                    net_cr += op
+
+            # Sum Sales Invoices (Dr)
+            cursor.execute("SELECT SUM(total_amount) FROM sales_invoices WHERE LOWER(customer_name) = ? OR LOWER(customer_name) LIKE ?", (clean_name_lower, f"%{clean_name_lower}%"))
+            s_sum = cursor.fetchone()[0] or 0.0
+            net_dr += float(s_sum)
+
+            # Sum Paddy Procurement Arrivals (Dr)
+            cursor.execute("SELECT SUM(total_amount) FROM paddy_procurement WHERE LOWER(farmer_name) = ? OR LOWER(farmer_name) LIKE ?", (clean_name_lower, f"%{clean_name_lower}%"))
+            pa_sum = cursor.fetchone()[0] or 0.0
+            net_dr += float(pa_sum)
+
+            # Sum Purchase Invoices (Cr)
+            cursor.execute("SELECT SUM(total_amount) FROM purchase_invoices WHERE LOWER(supplier_name) = ? OR LOWER(supplier_name) LIKE ?", (clean_name_lower, f"%{clean_name_lower}%"))
+            pur_sum = cursor.fetchone()[0] or 0.0
+            net_cr += float(pur_sum)
+
+            # Sum Vouchers (Double Entry Balance Evaluation)
+            cursor.execute("SELECT voucher_type, party_name, account_type, amount FROM vouchers")
+            for v_row in cursor.fetchall():
+                v_type = v_row["voucher_type"]
+                if v_type in ["Sales", "Purchase"]:
+                    continue
+
+                dr_p = (v_row["party_name"] or "").strip().lower()
+                cr_p = (v_row["account_type"] or "").strip().lower()
+                v_val = float(v_row["amount"] or 0.0)
+
+                if dr_p and (dr_p == clean_name_lower or clean_name_lower in dr_p):
+                    net_dr += v_val
+                if cr_p and (cr_p == clean_name_lower or clean_name_lower in cr_p):
+                    net_cr += v_val
+
+            conn.close()
+
+            diff = net_dr - net_cr
+            if diff >= 0:
+                return f"{diff:,.2f} Dr"
+            else:
+                return f"{abs(diff):,.2f} Cr"
+        except Exception as e:
+            print(f"Error fetching live balance for {ledger_name}: {e}")
+            return "0.00 Dr"
 
     @Slot()
     def reload_data(self):
@@ -356,10 +590,206 @@ class PartiesModel(BaseTableModel):
         except Exception as e:
             print(f"Error adding party: {e}")
             return False
-
-    @Slot(result=list)
     def get_party_list(self):
         return self._data
+
+    @Slot(str, result=dict)
+    def get_party_statement(self, party_name):
+        dr_items = []
+        cr_items = []
+
+        def parse_dates(d_str):
+            if not d_str:
+                return "9999-12-31", ""
+            s = str(d_str).strip()
+            if "-" in s:
+                p = s.split("-")
+                if len(p) == 3:
+                    if len(p[0]) == 4:
+                        return f"{p[0]}-{int(p[1]):02d}-{int(p[2]):02d}", f"{int(p[2]):02d}-{int(p[1]):02d}-{p[0]}"
+                    elif len(p[2]) == 4:
+                        return f"{p[2]}-{int(p[1]):02d}-{int(p[0]):02d}", f"{int(p[0]):02d}-{int(p[1]):02d}-{p[2]}"
+            elif "/" in s:
+                p = s.split("/")
+                if len(p) == 3 and len(p[2]) == 4:
+                    return f"{p[2]}-{int(p[1]):02d}-{int(p[0]):02d}", f"{int(p[0]):02d}-{int(p[1]):02d}-{p[2]}"
+            return s, s
+
+        try:
+            conn = get_connection()
+            cursor = conn.cursor()
+
+            clean_name = party_name.strip() if party_name else ""
+
+            if clean_name:
+                # Opening balance
+                cursor.execute("SELECT opening_balance, balance_type FROM parties WHERE name LIKE ? OR name = ?", (f"%{clean_name}%", clean_name))
+                p_row = cursor.fetchone()
+                if p_row and p_row["opening_balance"] and float(p_row["opening_balance"]) > 0:
+                    op_val = float(p_row["opening_balance"])
+                    b_type = p_row["balance_type"] or "Dr"
+                    op_item = {
+                        "isSelected": False,
+                        "vIso": "2026-04-01",
+                        "vDate": "01-04-2026",
+                        "refNo": "OP-BAL",
+                        "particulars": f"Opening Balance ({b_type})",
+                        "amount": op_val
+                    }
+                    if b_type == "Dr":
+                        dr_items.append(op_item)
+                    else:
+                        cr_items.append(op_item)
+
+                # Sales Invoices (Dr)
+                cursor.execute("""
+                SELECT invoice_no, invoice_date, item_name, weight_qtl, total_amount, narration 
+                FROM sales_invoices 
+                WHERE customer_name LIKE ? OR customer_name = ?
+                ORDER BY id ASC
+                """, (f"%{clean_name}%", clean_name))
+                for r in cursor.fetchall():
+                    iso_d, fmt_d = parse_dates(r["invoice_date"])
+                    parts_str = f"Sales Invoice: {r['item_name']} ({r['weight_qtl']} Qtl)"
+                    if r["narration"]:
+                        parts_str += f" | {r['narration']}"
+
+                    dr_items.append({
+                        "isSelected": False,
+                        "vIso": iso_d,
+                        "vDate": fmt_d,
+                        "refNo": r["invoice_no"],
+                        "particulars": parts_str,
+                        "amount": float(r["total_amount"])
+                    })
+
+                # Purchase Invoices (Cr)
+                cursor.execute("""
+                SELECT invoice_no, invoice_date, item_name, weight_qtl, total_amount, narration 
+                FROM purchase_invoices 
+                WHERE supplier_name LIKE ? OR supplier_name = ?
+                ORDER BY id ASC
+                """, (f"%{clean_name}%", clean_name))
+                for r in cursor.fetchall():
+                    iso_d, fmt_d = parse_dates(r["invoice_date"])
+                    parts_str = f"Purchase Bill: {r['item_name']} ({r['weight_qtl']} Qtl)"
+                    if r["narration"]:
+                        parts_str += f" | {r['narration']}"
+
+                    cr_items.append({
+                        "isSelected": False,
+                        "vIso": iso_d,
+                        "vDate": fmt_d,
+                        "refNo": r["invoice_no"],
+                        "particulars": parts_str,
+                        "amount": float(r["total_amount"])
+                    })
+
+                # Paddy Arrivals (Dr)
+                cursor.execute("""
+                SELECT receipt_no, arrival_date, variety, net_weight_qtl, total_amount 
+                FROM paddy_procurement 
+                WHERE farmer_name LIKE ? OR farmer_name = ?
+                ORDER BY id ASC
+                """, (f"%{clean_name}%", clean_name))
+                for pa in cursor.fetchall():
+                    iso_d, fmt_d = parse_dates(pa["arrival_date"])
+                    dr_items.append({
+                        "isSelected": False,
+                        "vIso": iso_d,
+                        "vDate": fmt_d,
+                        "refNo": pa["receipt_no"],
+                        "particulars": f"Paddy Arrival: {pa['variety']} ({pa['net_weight_qtl']} Qtl)",
+                        "amount": float(pa["total_amount"])
+                    })
+
+                # Vouchers (Double Entry Ledger Statement matching)
+                cursor.execute("""
+                SELECT voucher_no, voucher_date, voucher_type, party_name, account_type, amount, narration 
+                FROM vouchers 
+                ORDER BY id ASC
+                """)
+                clean_name_lower = clean_name.lower()
+                for vr in cursor.fetchall():
+                    v_type = vr["voucher_type"]
+                    if v_type in ["Sales", "Purchase"]:
+                        continue
+
+                    dr_p = (vr["party_name"] or "").strip()
+                    cr_p = (vr["account_type"] or "").strip()
+                    v_amt = float(vr["amount"] or 0.0)
+                    iso_d, fmt_d = parse_dates(vr["voucher_date"])
+                    narration_note = vr["narration"] or ""
+
+                    is_dr_match = dr_p and (dr_p.lower() == clean_name_lower or clean_name_lower in dr_p.lower())
+                    is_cr_match = cr_p and (cr_p.lower() == clean_name_lower or clean_name_lower in cr_p.lower())
+
+                    if is_dr_match:
+                        part_desc = f"{v_type} (Cr: {cr_p})"
+                        if narration_note:
+                            part_desc += f" | {narration_note}"
+                        dr_items.append({
+                            "isSelected": False,
+                            "vIso": iso_d,
+                            "vDate": fmt_d,
+                            "refNo": vr["voucher_no"],
+                            "particulars": part_desc,
+                            "amount": v_amt
+                        })
+
+                    if is_cr_match:
+                        part_desc = f"{v_type} (Dr: {dr_p})"
+                        if narration_note:
+                            part_desc += f" | {narration_note}"
+                        cr_items.append({
+                            "isSelected": False,
+                            "vIso": iso_d,
+                            "vDate": fmt_d,
+                            "refNo": vr["voucher_no"],
+                            "particulars": part_desc,
+                            "amount": v_amt
+                        })
+            else:
+                # Load all transactions across all parties
+                cursor.execute("SELECT invoice_no, invoice_date, customer_name, item_name, weight_qtl, total_amount, narration FROM sales_invoices ORDER BY id ASC")
+                for r in cursor.fetchall():
+                    iso_d, fmt_d = parse_dates(r["invoice_date"])
+                    parts_str = f"[{r['customer_name']}] Sales Invoice: {r['item_name']} ({r['weight_qtl']} Qtl)"
+                    if r["narration"]: parts_str += f" | {r['narration']}"
+                    dr_items.append({ "isSelected": False, "vIso": iso_d, "vDate": fmt_d, "refNo": r["invoice_no"], "particulars": parts_str, "amount": float(r["total_amount"]) })
+
+                cursor.execute("SELECT invoice_no, invoice_date, supplier_name, item_name, weight_qtl, total_amount, narration FROM purchase_invoices ORDER BY id ASC")
+                for r in cursor.fetchall():
+                    iso_d, fmt_d = parse_dates(r["invoice_date"])
+                    parts_str = f"[{r['supplier_name']}] Purchase Bill: {r['item_name']} ({r['weight_qtl']} Qtl)"
+                    if r["narration"]: parts_str += f" | {r['narration']}"
+                    cr_items.append({ "isSelected": False, "vIso": iso_d, "vDate": fmt_d, "refNo": r["invoice_no"], "particulars": parts_str, "amount": float(r["total_amount"]) })
+
+                cursor.execute("SELECT receipt_no, arrival_date, farmer_name, variety, net_weight_qtl, total_amount FROM paddy_procurement ORDER BY id ASC")
+                for pa in cursor.fetchall():
+                    iso_d, fmt_d = parse_dates(pa["arrival_date"])
+                    dr_items.append({ "isSelected": False, "vIso": iso_d, "vDate": fmt_d, "refNo": pa["receipt_no"], "particulars": f"[{pa['farmer_name']}] Paddy Arrival: {pa['variety']} ({pa['net_weight_qtl']} Qtl)", "amount": float(pa["total_amount"]) })
+
+                cursor.execute("SELECT voucher_no, voucher_date, voucher_type, party_name, account_type, amount, narration FROM vouchers ORDER BY id ASC")
+                for vr in cursor.fetchall():
+                    if vr["voucher_type"] in ["Sales", "Purchase"]: continue
+                    iso_d, fmt_d = parse_dates(vr["voucher_date"])
+                    dr_p = vr["party_name"] or ""
+                    cr_p = vr["account_type"] or ""
+                    narration_note = vr["narration"] or ""
+                    
+                    dr_items.append({ "isSelected": False, "vIso": iso_d, "vDate": fmt_d, "refNo": vr["voucher_no"], "particulars": f"[{dr_p}] {vr['voucher_type']} (Cr: {cr_p}) - {narration_note}", "amount": float(vr["amount"]) })
+                    cr_items.append({ "isSelected": False, "vIso": iso_d, "vDate": fmt_d, "refNo": vr["voucher_no"], "particulars": f"[{cr_p}] {vr['voucher_type']} (Dr: {dr_p}) - {narration_note}", "amount": float(vr["amount"]) })
+
+            conn.close()
+
+            dr_items.sort(key=lambda x: x.get("vIso", ""))
+            cr_items.sort(key=lambda x: x.get("vIso", ""))
+
+            return {"dr_items": dr_items, "cr_items": cr_items}
+        except Exception as e:
+            print(f"Error fetching party statement for {party_name}: {e}")
+            return {"dr_items": [], "cr_items": []}
 
     @Slot(result=list)
     def get_account_groups(self):
@@ -380,9 +810,6 @@ class PartiesModel(BaseTableModel):
             cursor.execute("SELECT name FROM account_groups ORDER BY name ASC")
             rows = [r[0] for r in cursor.fetchall()]
             conn.close()
-            for d in defaults:
-                if d not in rows:
-                    rows.append(d)
             return rows
         except Exception as e:
             return defaults

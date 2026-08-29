@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import "../components"
+import "../dialogs"
 
 ScrollView {
     id: root
@@ -413,38 +414,60 @@ ScrollView {
                     Text { text: "💾 Save Complete Ledger Account"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 14 }
                     KbdBadge { text: "Enter"; badgeColor: "#1E3A8A"; textColor: "#93C5FD"; borderColor: "#2563EB" }
                 }
-                onClicked: {
-                    var success = partiesModel.add_ledger_full(
-                        nameInput.text,
-                        aliasInput.text,
-                        "",
-                        groupCombo.currentText,
-                        partyTypeInput.text,
-                        specialTypeInput.text,
-                        parseFloat(opBalInput.text) || 0.0,
-                        balTypeCombo.currentText,
-                        mailingNameInput.text !== "" ? mailingNameInput.text : nameInput.text,
-                        addressInput.text,
-                        cityCombo.editText !== "" ? cityCombo.editText : cityCombo.currentText,
-                        districtCombo.editText !== "" ? districtCombo.editText : districtCombo.currentText,
-                        stateCombo.editText !== "" ? stateCombo.editText : stateCombo.currentText,
-                        pinInput.text,
-                        phoneInput.text,
-                        mobileInput.text,
-                        whatsappInput.text,
-                        emailInput.text,
-                        contactPersonInput.text,
-                        gstinInput.text,
-                        panInput.text,
-                        aadhaarInput.text,
-                        parseFloat(creditLimitInput.text) || 0.0,
-                        parseInt(creditDaysInput.text) || 30
-                    )
-                    if (success) {
-                        root.savedSuccess()
-                    }
-                }
+                onClicked: root.saveLedger()
             }
         }
+    }
+
+    function saveLedger() {
+        if (!nameInput.text.trim()) {
+            return
+        }
+        saveConfirmModal.open()
+    }
+
+    function executeSaveLedger() {
+        var success = partiesModel.add_ledger_full(
+            nameInput.text,
+            aliasInput.text,
+            "",
+            groupCombo.currentText,
+            partyTypeInput.text,
+            specialTypeInput.text,
+            parseFloat(opBalInput.text) || 0.0,
+            balTypeCombo.currentText,
+            mailingNameInput.text !== "" ? mailingNameInput.text : nameInput.text,
+            addressInput.text,
+            cityCombo.editText !== "" ? cityCombo.editText : cityCombo.currentText,
+            districtCombo.editText !== "" ? districtCombo.editText : districtCombo.currentText,
+            stateCombo.editText !== "" ? stateCombo.editText : stateCombo.currentText,
+            pinInput.text,
+            phoneInput.text,
+            mobileInput.text,
+            whatsappInput.text,
+            emailInput.text,
+            contactPersonInput.text,
+            gstinInput.text,
+            panInput.text,
+            aadhaarInput.text,
+            parseFloat(creditLimitInput.text) || 0.0,
+            parseInt(creditDaysInput.text) || 0,
+            bankNameInput.text,
+            bankAccountInput.text,
+            ifscInput.text,
+            "",
+            ""
+        )
+        if (success) {
+            root.savedSuccess()
+        }
+    }
+
+    ConfirmationModal {
+        id: saveConfirmModal
+        anchors.centerIn: parent
+        titleText: "CONFIRM LEDGER SAVE"
+        messageText: "Are you sure you want to save & create Ledger Account '" + nameInput.text.trim() + "' under group '" + groupCombo.currentText + "'?"
+        onConfirmed: root.executeSaveLedger()
     }
 }

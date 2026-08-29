@@ -126,7 +126,17 @@ Rectangle {
                     RowLayout {
                         spacing: 8
                         KbdBadge { text: "F2"; badgeColor: "#16A34A"; textColor: "#FFF"; borderColor: "#15803D" }
-                        Text { text: "Open New Entry Modal"; color: "#1E293B"; font.pixelSize: 13 }
+                        Text { text: "Open New Voucher Entry Menu"; color: "#1E293B"; font.pixelSize: 13 }
+                    }
+                    RowLayout {
+                        spacing: 8
+                        KbdBadge { text: "F3 / F4 / F5"; badgeColor: "#7C3AED"; textColor: "#FFF"; borderColor: "#6D28D9" }
+                        Text { text: "Payment (F3), Receipt (F4), Journal (F5)"; color: "#1E293B"; font.pixelSize: 13 }
+                    }
+                    RowLayout {
+                        spacing: 8
+                        KbdBadge { text: "F8 / F9"; badgeColor: "#2563EB"; textColor: "#FFF"; borderColor: "#1D4ED8" }
+                        Text { text: "Sales Invoice (F8), Purchase Bill (F9)"; color: "#1E293B"; font.pixelSize: 13 }
                     }
                     RowLayout {
                         spacing: 8

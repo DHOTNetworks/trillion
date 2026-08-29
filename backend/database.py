@@ -13,6 +13,8 @@ def migrate_db():
     try:
         conn = get_connection()
         cursor = conn.cursor()
+        
+        # 1. Migrate parties table
         existing_cols = [r[1] for r in cursor.execute("PRAGMA table_info(parties)").fetchall()]
         cols_to_add = {
             "alias": "TEXT",
@@ -42,6 +44,106 @@ def migrate_db():
             if col not in existing_cols:
                 cursor.execute(f"ALTER TABLE parties ADD COLUMN {col} {col_type}")
         conn.commit()
+
+        # Seed default Bank Accounts and Sample Parties if not present
+        default_banks = [
+            ("IndusInd Bank(200999406993)", "INDUS-BANK", "Bank Accounts", "Vendor", "IndusInd Bank", "200999406993", "INDB0000123", 17535.24, "Dr"),
+            ("SBI Raichur Main Branch", "SBI-RCH", "Bank Accounts", "Vendor", "State Bank of India", "30998877665", "SBIN0001234", 150000.00, "Dr"),
+            ("HDFC Bank MG Road", "HDFC-BLR", "Bank Accounts", "Vendor", "HDFC Bank", "501002003004", "HDFC0000123", 450000.00, "Dr"),
+            ("Baksish Kumar Pro. [Sirsa]", "BKP-SIRSA", "Sundry Debtors (Buyers)", "Buyer", "IndusInd Bank", "200999406993", "INDB0000123", 25709746.75, "Dr")
+        ]
+        for b_name, b_alias, b_group, b_ptype, b_bname, b_bacc, b_ifsc, b_op, b_type in default_banks:
+            cursor.execute("SELECT id FROM parties WHERE name = ?", (b_name,))
+            if not cursor.fetchone():
+                cursor.execute("""
+                INSERT INTO parties (name, alias, group_name, party_type, bank_name, bank_account, ifsc_code, opening_balance, balance_type)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (b_name, b_alias, b_group, b_ptype, b_bname, b_bacc, b_ifsc, b_op, b_type))
+        conn.commit()
+
+        # 2. Migrate sales_invoices table
+        sales_tables = [r[0] for r in cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='sales_invoices'").fetchall()]
+        if sales_tables:
+            sales_cols = [r[1] for r in cursor.execute("PRAGMA table_info(sales_invoices)").fetchall()]
+            sales_cols_to_add = {
+                "gstin": "TEXT",
+                "hsn_code": "TEXT",
+                "cgst_amount": "REAL DEFAULT 0.0",
+                "sgst_amount": "REAL DEFAULT 0.0",
+                "igst_amount": "REAL DEFAULT 0.0",
+                "round_off": "REAL DEFAULT 0.0",
+                "vehicle_no": "TEXT",
+                "eway_bill_no": "TEXT",
+                "narration": "TEXT",
+                "sale_status": "TEXT DEFAULT 'Self Sale'",
+                "market_fee_status": "TEXT DEFAULT 'Paid'",
+                "dami": "REAL DEFAULT 0.0",
+                "labour": "REAL DEFAULT 0.0",
+                "auction": "REAL DEFAULT 0.0",
+                "m_fee": "REAL DEFAULT 0.0",
+                "hrdf": "REAL DEFAULT 0.0",
+                "other_exp": "REAL DEFAULT 0.0",
+                "welfare": "REAL DEFAULT 0.0",
+                "dhrmd": "REAL DEFAULT 0.0",
+                "sutli": "REAL DEFAULT 0.0",
+                "less_amount": "REAL DEFAULT 0.0",
+                "gr_no": "TEXT",
+                "driver": "TEXT",
+                "bill_time": "TEXT",
+                "sauda_date": "TEXT",
+                "shipping_address": "TEXT",
+                "po_no": "TEXT",
+                "grade": "TEXT",
+                "kanda_weight": "TEXT",
+                "transport": "TEXT",
+                "broker_name": "TEXT"
+            }
+            for col, col_type in sales_cols_to_add.items():
+                if col not in sales_cols:
+                    cursor.execute(f"ALTER TABLE sales_invoices ADD COLUMN {col} {col_type}")
+            conn.commit()
+
+        # 3. Migrate purchase_invoices table
+        pur_tables = [r[0] for r in cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='purchase_invoices'").fetchall()]
+        if pur_tables:
+            pur_cols = [r[1] for r in cursor.execute("PRAGMA table_info(purchase_invoices)").fetchall()]
+            pur_cols_to_add = {
+                "gstin": "TEXT",
+                "hsn_code": "TEXT",
+                "cgst_amount": "REAL DEFAULT 0.0",
+                "sgst_amount": "REAL DEFAULT 0.0",
+                "igst_amount": "REAL DEFAULT 0.0",
+                "round_off": "REAL DEFAULT 0.0",
+                "vehicle_no": "TEXT",
+                "eway_bill_no": "TEXT",
+                "narration": "TEXT",
+                "sale_status": "TEXT DEFAULT 'Self Sale'",
+                "market_fee_status": "TEXT DEFAULT 'Paid'",
+                "dami": "REAL DEFAULT 0.0",
+                "labour": "REAL DEFAULT 0.0",
+                "auction": "REAL DEFAULT 0.0",
+                "m_fee": "REAL DEFAULT 0.0",
+                "hrdf": "REAL DEFAULT 0.0",
+                "other_exp": "REAL DEFAULT 0.0",
+                "welfare": "REAL DEFAULT 0.0",
+                "dhrmd": "REAL DEFAULT 0.0",
+                "sutli": "REAL DEFAULT 0.0",
+                "less_amount": "REAL DEFAULT 0.0",
+                "gr_no": "TEXT",
+                "driver": "TEXT",
+                "bill_time": "TEXT",
+                "sauda_date": "TEXT",
+                "shipping_address": "TEXT",
+                "po_no": "TEXT",
+                "grade": "TEXT",
+                "kanda_weight": "TEXT",
+                "transport": "TEXT",
+                "broker_name": "TEXT"
+            }
+            for col, col_type in pur_cols_to_add.items():
+                if col not in pur_cols:
+                    cursor.execute(f"ALTER TABLE purchase_invoices ADD COLUMN {col} {col_type}")
+            conn.commit()
 
         # Backfill rich party details for pre-existing records with empty fields
         cursor.execute("""
@@ -99,50 +201,51 @@ def init_db():
         city TEXT,
         district TEXT,
         state TEXT DEFAULT 'Karnataka',
-        pincode TEXT,
+        pincode TEXT DEFAULT '584101',
+        country TEXT DEFAULT 'India',
         
         -- Contact Info
-        phone TEXT,
         mobile TEXT,
         whatsapp TEXT,
+        phone TEXT,
         email TEXT,
         contact_person TEXT,
         
-        -- Statutory & Tax Compliance
-        gstin TEXT,
+        -- GST & Statutory
         pan TEXT,
         aadhaar TEXT,
-        gst_party_type TEXT DEFAULT 'Unregistered', -- 'Registered', 'Unregistered', 'Composition'
+        gstin TEXT,
+        gst_party_type TEXT DEFAULT 'Unregistered',
         
         -- Banking Details
         bank_name TEXT,
         bank_account TEXT,
         ifsc_code TEXT,
         
-        -- Trading Terms
+        -- Credit Policy
         credit_limit REAL DEFAULT 0.0,
         credit_days INTEGER DEFAULT 30
     );
     """)
 
-    # 2. Paddy Procurement / Arrival Slips
+    # 2. Paddy Procurement Arrivals
     cursor.execute("""
-    CREATE TABLE IF NOT EXISTS paddy_arrivals (
+    CREATE TABLE IF NOT EXISTS paddy_procurement (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        slip_no TEXT UNIQUE NOT NULL,
+        receipt_no TEXT UNIQUE NOT NULL,
         arrival_date TEXT NOT NULL,
         farmer_id INTEGER,
         farmer_name TEXT NOT NULL,
-        paddy_variety TEXT NOT NULL, -- e.g. Sona Masoori, IR64, Wada Kolam
+        variety TEXT NOT NULL,
         bag_count INTEGER NOT NULL,
         gross_weight_qtl REAL NOT NULL,
         moisture_pct REAL DEFAULT 14.0,
-        moisture_deduction_qtl REAL DEFAULT 0.0,
+        deduction_qtl REAL DEFAULT 0.0,
         net_weight_qtl REAL NOT NULL,
         rate_per_qtl REAL NOT NULL,
-        hamali_charges REAL DEFAULT 0.0,
-        net_amount REAL NOT NULL,
-        payment_status TEXT DEFAULT 'Unpaid', -- 'Paid', 'Unpaid', 'Partial'
+        total_amount REAL NOT NULL,
+        status TEXT DEFAULT 'Unpaid',
+        payment_mode TEXT DEFAULT 'Pending',
         FOREIGN KEY (farmer_id) REFERENCES parties(id)
     );
     """)
@@ -194,13 +297,43 @@ def init_db():
     );
     """)
 
-    # 5. Financial Vouchers (Cash, Bank, Journal, Debit Note, Credit Note)
+    # 5. Purchase Invoices (Raw Paddy & Material Purchases)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS purchase_invoices (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        invoice_no TEXT UNIQUE NOT NULL,
+        invoice_date TEXT NOT NULL,
+        supplier_id INTEGER,
+        supplier_name TEXT NOT NULL,
+        gstin TEXT,
+        item_name TEXT NOT NULL,
+        hsn_code TEXT,
+        bag_count INTEGER DEFAULT 0,
+        weight_qtl REAL NOT NULL,
+        rate_per_qtl REAL NOT NULL,
+        taxable_amount REAL NOT NULL,
+        gst_pct REAL DEFAULT 5.0,
+        cgst_amount REAL DEFAULT 0.0,
+        sgst_amount REAL DEFAULT 0.0,
+        igst_amount REAL DEFAULT 0.0,
+        round_off REAL DEFAULT 0.0,
+        gst_amount REAL DEFAULT 0.0,
+        total_amount REAL NOT NULL,
+        payment_mode TEXT DEFAULT 'Credit',
+        vehicle_no TEXT,
+        eway_bill_no TEXT,
+        narration TEXT,
+        FOREIGN KEY (supplier_id) REFERENCES parties(id)
+    );
+    """)
+
+    # 6. Financial Vouchers (Cash, Bank, Journal, Debit Note, Credit Note)
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS vouchers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         voucher_no TEXT UNIQUE NOT NULL,
         voucher_date TEXT NOT NULL,
-        voucher_type TEXT NOT NULL, -- 'Payment', 'Receipt', 'Contra', 'Journal'
+        voucher_type TEXT NOT NULL, -- 'Payment', 'Receipt', 'Contra', 'Journal', 'Purchase', 'Sales'
         party_name TEXT NOT NULL,
         account_type TEXT NOT NULL, -- 'Cash', 'HDFC Bank', 'SBI Raichur'
         amount REAL NOT NULL,
@@ -208,7 +341,7 @@ def init_db():
     );
     """)
 
-    # 6. Account Groups Table (TrillionApp AccountGroup Model)
+    # 7. Account Groups Table (TrillionApp AccountGroup Model)
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS account_groups (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -242,148 +375,92 @@ def init_db():
         """, default_groups)
         conn.commit()
 
-    # 7. Inventory Levels
+    # 8. Inventory Levels
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS inventory (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         item_code TEXT UNIQUE NOT NULL,
         item_name TEXT NOT NULL,
         category TEXT NOT NULL, -- 'Raw Paddy', 'Finished Rice', 'By-Product'
+        current_stock_qtl REAL NOT NULL DEFAULT 0.0,
+        reorder_level_qtl REAL DEFAULT 50.0,
         unit TEXT DEFAULT 'Qtl',
-        current_stock_qtl REAL DEFAULT 0.0,
-        reorder_level_qtl REAL DEFAULT 50.0
-    );
-    """)
-
-    # 8. TrillionApp Comprehensive Stock Items Master Table
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS stock_items (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT UNIQUE NOT NULL,
-        code TEXT,
-        item_type TEXT DEFAULT 'Finished Rice', -- 'Raw Paddy', 'Finished Rice', 'By-Product', 'Packing Material'
-        goods_type TEXT DEFAULT 'Goods',
-        company_name TEXT,
-        category_name TEXT DEFAULT 'Finished Rice',
-        unit TEXT DEFAULT 'Qtl',
-        purchase_rate REAL DEFAULT 0.0,
         sale_rate REAL DEFAULT 0.0,
-        mrp REAL DEFAULT 0.0,
-        discount REAL DEFAULT 0.0,
-        hsn_code TEXT,
-        gst_rate REAL DEFAULT 0.0,
-        cess_rate REAL DEFAULT 0.0,
-        packing_kg REAL DEFAULT 26.0,
-        market_fee_rate REAL DEFAULT 0.0,
-        dami_rate REAL DEFAULT 0.0,
-        opening_bags INTEGER DEFAULT 0,
-        opening_qty REAL DEFAULT 0.0,
-        opening_rate REAL DEFAULT 0.0,
-        opening_value REAL DEFAULT 0.0,
-        purchase_ledger TEXT DEFAULT 'Paddy Procurement Purchases',
-        sale_ledger TEXT DEFAULT 'Rice Milling Sales Revenue',
-        stock_ledger TEXT DEFAULT 'Stock-in-Hand (Paddy & Rice)',
-        is_milling_item INTEGER DEFAULT 1,
-        include_in_trading INTEGER DEFAULT 1,
-        calculate_stock INTEGER DEFAULT 1
+        gst_rate TEXT DEFAULT '5%',
+        packing_kg INTEGER DEFAULT 50
     );
     """)
 
-    cursor.execute("SELECT COUNT(*) FROM stock_items")
-    if cursor.fetchone()[0] == 0:
-        default_stock_items = [
-            ("Sona Masoori Steam Rice 26kg", "RICE-SONA-26", "Finished Rice", "Goods", "Mahadev Brand", "Finished Rice", "Bags", 0.0, 3850.0, 4200.0, 0.0, "100630", 5.0, 0.0, 26.0, 0.0, 0.0, 0, 0.0, 0.0, 0.0, "Paddy Procurement Purchases", "Rice Milling Sales Revenue", "Stock-in-Hand (Paddy & Rice)", 1, 1, 1),
-            ("Paddy Sona Masoori Raw", "PAD-SONA-01", "Raw Paddy", "Goods", "Raw Grain", "Raw Paddy", "Qtl", 2450.0, 0.0, 0.0, 0.0, "100610", 0.0, 0.0, 100.0, 1.5, 2.0, 0, 0.0, 0.0, 0.0, "Paddy Procurement Purchases", "Rice Milling Sales Revenue", "Stock-in-Hand (Paddy & Rice)", 1, 1, 1),
-            ("Rice Bran (16% Oil)", "BY-BRAN-01", "By-Product", "Goods", "Mill Output", "By-Product", "Qtl", 0.0, 2400.0, 2600.0, 0.0, "230240", 5.0, 0.0, 50.0, 0.0, 0.0, 0, 0.0, 0.0, 0.0, "Paddy Procurement Purchases", "Rice Milling Sales Revenue", "Stock-in-Hand (Paddy & Rice)", 1, 1, 1),
-            ("Paddy Husk Loose", "BY-HUSK-01", "By-Product", "Goods", "Mill Output", "By-Product", "Qtl", 0.0, 650.0, 750.0, 0.0, "230240", 0.0, 0.0, 100.0, 0.0, 0.0, 0, 0.0, 0.0, 0.0, "Paddy Procurement Purchases", "Rice Milling Sales Revenue", "Stock-in-Hand (Paddy & Rice)", 1, 1, 1),
-            ("Broken Rice Nakku", "BY-NAKKU-01", "By-Product", "Goods", "Mill Output", "By-Product", "Qtl", 0.0, 2800.0, 3000.0, 0.0, "100640", 5.0, 0.0, 50.0, 0.0, 0.0, 0, 0.0, 0.0, 0.0, "Paddy Procurement Purchases", "Rice Milling Sales Revenue", "Stock-in-Hand (Paddy & Rice)", 1, 1, 1)
-        ]
-        cursor.executemany("""
-        INSERT INTO stock_items (name, code, item_type, goods_type, company_name, category_name, unit, purchase_rate, sale_rate, mrp, discount, hsn_code, gst_rate, cess_rate, packing_kg, market_fee_rate, dami_rate, opening_bags, opening_qty, opening_rate, opening_value, purchase_ledger, sale_ledger, stock_ledger, is_milling_item, include_in_trading, calculate_stock)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, default_stock_items)
-        conn.commit()
-
-    conn.commit()
-
-    # Seed initial demo data if empty
+    # Seed initial data if tables are empty
     cursor.execute("SELECT COUNT(*) FROM parties")
     if cursor.fetchone()[0] == 0:
-        seed_demo_data(cursor)
-        conn.commit()
+        cursor.executemany("""
+        INSERT INTO parties (name, alias, prefix, group_name, party_type, special_type, mailing_name, address, city, district, state, pincode, mobile, whatsapp, email, contact_person, pan, aadhaar, gstin, bank_name, bank_account, ifsc_code)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, [
+            ("Ramesh Kumar (Farmer)", "RK-FARM", "M/s", "Sundry Creditors (Farmers/Vendors)", "Farmer", "Paddy Seller", "Ramesh Kumar", "Village Farm Road", "Raichur", "Raichur", "Karnataka", "584101", "9876543210", "9876543210", "ramesh@farmer.com", "Ramesh Kumar", "AAAPR1234F", "998877665544", "29ABCDE1234F1Z5", "SBI Raichur Main Branch", "30998877665", "SBIN0001234"),
+            ("Karnataka Rice Traders", "KRT-BLR", "M/s", "Sundry Debtors (Buyers)", "Buyer", "Rice Buyer", "Karnataka Rice Traders", "APMC Yard Market", "Bengaluru", "Bengaluru", "Karnataka", "560001", "9123456789", "9123456789", "orders@krt.com", "Suresh Patel", "BBBPK5678G", "887766554433", "29XYZAB5678C1Z2", "HDFC Bank MG Road", "501002003004", "HDFC0000123"),
+            ("Venkateswara Food Supplies", "VFS-HYD", "M/s", "Sundry Debtors (Buyers)", "Buyer", "Rice Buyer", "Venkateswara Food Supplies", "Koti Grain Market", "Hyderabad", "Hyderabad", "Telangana", "500001", "9988112233", "9988112233", "info@vfs.com", "Venkatesh Rao", "CCCPV9012H", "776655443322", "36AAAAA9999A1Z5", "ICICI Bank Abids", "000405006007", "ICIC0000004"),
+            ("Sri Rama Traders (Mandi)", "SRT-RCH", "M/s", "Sundry Creditors (Farmers/Vendors)", "Vendor", "Mandi Agent", "Sri Rama Traders", "Cotton Market Road", "Raichur", "Raichur", "Karnataka", "584101", "9448012345", "9448012345", "srirama@mandi.com", "Ramachandra", "DDDPR3456I", "665544332211", "29BBBBB8888B1Z6", "Canara Bank APMC", "110022334455", "CNRB0001100")
+        ])
 
+    cursor.execute("SELECT COUNT(*) FROM inventory")
+    if cursor.fetchone()[0] == 0:
+        cursor.executemany("""
+        INSERT INTO inventory (item_code, item_name, category, current_stock_qtl, sale_rate, gst_rate, packing_kg)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, [
+            ("RICE-SONA-1", "Sona Masoori Raw Rice (50kg)", "Finished Rice", 450.0, 4800.0, "5%", 50),
+            ("RICE-STEAM-1", "Sona Masoori Steam Rice (25kg)", "Finished Rice", 320.0, 5200.0, "5%", 25),
+            ("RICE-IR64", "IR-64 Raw Rice", "Finished Rice", 600.0, 3600.0, "5%", 50),
+            ("BY-BROKEN", "Broken Rice (100%)", "By-Product", 180.0, 2200.0, "5%", 50),
+            ("BY-BRAN", "Rice Bran (16% Oil)", "By-Product", 210.0, 2400.0, "5%", 50),
+            ("BY-HUSK", "Paddy Husk Loose", "By-Product", 150.0, 650.0, "5%", 50)
+        ])
+
+    cursor.execute("SELECT COUNT(*) FROM paddy_procurement")
+    if cursor.fetchone()[0] == 0:
+        cursor.executemany("""
+        INSERT INTO paddy_procurement (receipt_no, arrival_date, farmer_id, farmer_name, variety, bag_count, gross_weight_qtl, moisture_pct, deduction_qtl, net_weight_qtl, rate_per_qtl, total_amount, status, payment_mode)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, [
+            ("ARR-1001", "2026-08-20", 1, "Ramesh Kumar (Farmer)", "Sona Masoori Paddy", 120, 61.20, 14.5, 0.60, 60.60, 2350.0, 142410.0, "Paid", "Bank Transfer"),
+            ("ARR-1002", "2026-08-22", 4, "Sri Rama Traders (Mandi)", "IR-64 Paddy", 200, 102.50, 15.0, 1.50, 101.00, 2100.0, 212100.0, "Unpaid", "Pending")
+        ])
+
+    cursor.execute("SELECT COUNT(*) FROM sales_invoices")
+    if cursor.fetchone()[0] == 0:
+        cursor.executemany("""
+        INSERT INTO sales_invoices (invoice_no, invoice_date, customer_id, customer_name, gstin, item_name, hsn_code, bag_count, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount, round_off, gst_amount, total_amount, payment_mode, vehicle_no, eway_bill_no, narration)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, [
+            ("INV-5001", "2026-08-21", 2, "Karnataka Rice Traders", "29XYZAB5678C1Z2", "Sona Masoori Raw Rice (50kg)", "10063010", 200, 100.0, 4800.0, 480000.0, 5.0, 12000.0, 12000.0, 0.0, 0.0, 24000.0, 504000.0, "Credit", "KA-36-EA-4589", "181002938475", "Sales invoice entry against Order #4029"),
+            ("INV-5002", "2026-08-23", 3, "Venkateswara Food Supplies", "36AAAAA9999A1Z5", "Rice Bran (16% Oil)", "23069090", 100, 50.0, 2400.0, 120000.0, 5.0, 0.0, 0.0, 6000.0, 0.0, 6000.0, 126000.0, "Credit", "AP-21-TX-9012", "181002938476", "Sales of rice bran by-product")
+        ])
+
+    cursor.execute("SELECT COUNT(*) FROM purchase_invoices")
+    if cursor.fetchone()[0] == 0:
+        cursor.executemany("""
+        INSERT INTO purchase_invoices (invoice_no, invoice_date, supplier_id, supplier_name, gstin, item_name, hsn_code, bag_count, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount, round_off, gst_amount, total_amount, payment_mode, vehicle_no, eway_bill_no, narration)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, [
+            ("PUR-7001", "2026-08-20", 1, "Ramesh Kumar (Farmer)", "29ABCDE1234F1Z5", "Sona Masoori Paddy", "10061010", 120, 60.6, 2350.0, 142410.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 142410.0, "Credit", "KA-36-EA-4589", "181002938475", "Raw paddy purchase arrival")
+        ])
+
+    cursor.execute("SELECT COUNT(*) FROM vouchers")
+    if cursor.fetchone()[0] == 0:
+        cursor.executemany("""
+        INSERT INTO vouchers (voucher_no, voucher_date, voucher_type, party_name, account_type, amount, narration)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, [
+            ("VCH-9001", "2026-08-20", "Payment", "Ramesh Kumar (Farmer)", "SBI Raichur", 142410.0, "Paddy procurement payment for receipt ARR-1001"),
+            ("VCH-9002", "2026-08-21", "Receipt", "Karnataka Rice Traders", "HDFC Bank", 250000.0, "Advance receipt against Sales Invoice INV-5001"),
+            ("VCH-9003", "2026-08-22", "Payment", "Direct Expenses (Hamali/Freight)", "Cash", 4500.0, "Hamali unloading charges for arrival ARR-1002")
+        ])
+
+    conn.commit()
     conn.close()
 
-def seed_demo_data(cursor):
-    today = date.today().strftime("%Y-%m-%d")
-    yesterday = (date.today() - timedelta(days=1)).strftime("%Y-%m-%d")
-    prev_week = (date.today() - timedelta(days=5)).strftime("%Y-%m-%d")
-
-    # Seed Parties with TrillionApp fields
-    parties = [
-        ("Ramesh Kumar (Farmer)", "RK-FARM", "Shri", "Sundry Creditors", "Farmer", "Paddy Seller", 0.0, "Cr", "Ramesh Kumar", "Village Raichur", "Raichur", "Raichur", "Karnataka", "584101", "9876543210", "9876543210", "9876543210", "ramesh@farmer.com", "Ramesh Kumar", "", "AAAPR1234F", "998877665544", "Unregistered", "SBI Raichur", "30998877665", "SBIN0001234", 100000.0, 30),
-        ("Suresh Patil (Farmer)", "SP-FARM", "Shri", "Sundry Creditors", "Farmer", "Paddy Seller", 0.0, "Cr", "Suresh Patil", "Koppal Farm Road", "Koppal", "Koppal", "Karnataka", "583231", "9876543211", "9876543211", "9876543211", "suresh@farmer.com", "Suresh Patil", "", "AAAPS5678G", "887766554433", "Unregistered", "Canara Bank", "40998877661", "CNRB0004321", 150000.0, 30),
-        ("Sri Lakshmi Traders", "SLT-BLR", "M/s", "Sundry Debtors", "Buyer", "Rice Buyer", 45000.0, "Dr", "Sri Lakshmi Traders Pvt Ltd", "APMC Yard Market", "Bengaluru", "Bengaluru Urban", "Karnataka", "560002", "9811122233", "9811122233", "9811122233", "sales@srilakshmi.com", "Venkatesh Rao", "29ABCDE1234F1Z5", "ABCDE1234F", "112233445566", "Registered", "HDFC Bank", "50100998877", "HDFC0000123", 500000.0, 45),
-        ("Balaji Grain Suppliers", "BGS-HYD", "M/s", "Sundry Debtors", "Buyer", "Rice Buyer", 82000.0, "Dr", "Balaji Grain Suppliers", "Ganj Market", "Hyderabad", "Hyderabad", "Telangana", "500001", "9822233344", "9822233344", "9822233344", "info@balajigrains.in", "Balaji Reddy", "36ABCDE5678F1Z2", "ABCDE5678F", "223344556677", "Registered", "ICICI Bank", "60998877112", "ICIC0000456", 750000.0, 45),
-        ("Golden Poultry Feeds", "GPF-HPT", "M/s", "Sundry Debtors", "Buyer", "Rice Buyer", 12500.0, "Dr", "Golden Poultry Feeds", "Industrial Area", "Hospet", "Vijayanagara", "Karnataka", "583201", "9833344455", "9833344455", "9833344455", "purchases@goldenfeeds.com", "Mahesh Kumar", "29XYZPS9988H1Z1", "XYZPS9988H", "334455667788", "Registered", "Axis Bank", "91802001122", "UTIB0000789", 300000.0, 30),
-    ]
-    cursor.executemany("""
-    INSERT INTO parties (name, alias, prefix, group_name, party_type, special_type, opening_balance, balance_type, mailing_name, address, city, district, state, pincode, phone, mobile, whatsapp, email, contact_person, gstin, pan, aadhaar, gst_party_type, bank_name, bank_account, ifsc_code, credit_limit, credit_days)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, parties)
-
-    # Seed Inventory Items
-    inventory = [
-        ("PAD-SONA", "Paddy (Sona Masoori)", "Raw Paddy", "Qtl", 1450.0, 200.0),
-        ("PAD-IR64", "Paddy (IR64)", "Raw Paddy", "Qtl", 820.0, 150.0),
-        ("RICE-SONA-1", "Sona Masoori Steam Rice Grade-A", "Finished Rice", "Qtl", 680.0, 100.0),
-        ("RICE-RAW-IR64", "IR64 Raw Rice", "Finished Rice", "Qtl", 410.0, 80.0),
-        ("BY-BROKEN", "Broken Rice (Nakku)", "By-Product", "Qtl", 95.0, 20.0),
-        ("BY-BRAN", "Rice Bran (16% Oil)", "By-Product", "Qtl", 140.0, 30.0),
-        ("BY-HUSK", "Paddy Husk", "By-Product", "Qtl", 220.0, 50.0),
-    ]
-    cursor.executemany("""
-    INSERT INTO inventory (item_code, item_name, category, unit, current_stock_qtl, reorder_level_qtl)
-    VALUES (?, ?, ?, ?, ?, ?)
-    """, inventory)
-
-    # Seed Paddy Arrivals
-    arrivals = [
-        ("SLIP-1001", prev_week, 1, "Ramesh Kumar (Farmer)", "Sona Masoori", 150, 112.5, 14.5, 0.5, 112.0, 2450.0, 750.0, 275150.0, "Paid"),
-        ("SLIP-1002", yesterday, 2, "Suresh Patil (Farmer)", "IR64", 200, 150.0, 16.0, 3.0, 147.0, 2150.0, 1000.0, 317050.0, "Unpaid"),
-        ("SLIP-1003", today, 3, "Venkatesh Farmers Co", "Sona Masoori", 280, 210.0, 15.0, 2.1, 207.9, 2480.0, 1400.0, 516992.0, "Unpaid"),
-    ]
-    cursor.executemany("""
-    INSERT INTO paddy_arrivals (slip_no, arrival_date, farmer_id, farmer_name, paddy_variety, bag_count, gross_weight_qtl, moisture_pct, moisture_deduction_qtl, net_weight_qtl, rate_per_qtl, hamali_charges, net_amount, payment_status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, arrivals)
-
-    # Seed Milling Batches
-    milling = [
-        ("MB-2026-01", prev_week, "Sona Masoori", 300.0, 201.0, 21.0, 24.0, 51.0, 3.0, 67.0),
-        ("MB-2026-02", yesterday, "IR64", 250.0, 167.5, 17.5, 20.0, 42.5, 2.5, 67.0),
-    ]
-    cursor.executemany("""
-    INSERT INTO milling_batches (batch_no, batch_date, paddy_variety, paddy_input_qtl, head_rice_qtl, broken_rice_qtl, bran_qtl, husk_qtl, wastage_qtl, yield_pct)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, milling)
-
-    # Seed Sales Invoices
-    sales = [
-        ("INV-5001", prev_week, 4, "Sri Lakshmi Traders", "Sona Masoori Steam Rice Grade-A", 200, 100.0, 3850.0, 385000.0, 5.0, 19250.0, 404250.0, "Credit"),
-        ("INV-5002", yesterday, 6, "Golden Poultry Feeds", "Rice Bran (16% Oil)", 120, 60.0, 2400.0, 144000.0, 5.0, 7200.0, 151200.0, "Cash"),
-    ]
-    cursor.executemany("""
-    INSERT INTO sales_invoices (invoice_no, invoice_date, customer_id, customer_name, item_name, bag_count, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, gst_amount, total_amount, payment_mode)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, sales)
-
-    # Seed Vouchers
-    vouchers = [
-        ("VCH-9001", prev_week, "Payment", 1, "Ramesh Kumar (Farmer)", "HDFC Bank", 275150.0, "Payment for Paddy Slip-1001"),
-        ("VCH-9002", yesterday, "Receipt", 6, "Golden Poultry Feeds", "Cash", 151200.0, "Cash receipt against INV-5002"),
-    ]
-    cursor.executemany("""
-    INSERT INTO vouchers (voucher_no, voucher_date, voucher_type, party_id, party_name, account_type, amount, narration)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    """, vouchers)
+if __name__ == "__main__":
+    init_db()
+    print("Mahadev Accounting Database Initialized & Migrated Successfully!")

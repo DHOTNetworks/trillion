@@ -10,6 +10,7 @@ from backend.models import (
     PaddyArrivalsModel, 
     MillingModel, 
     SalesModel, 
+    PurchaseModel,
     VouchersModel, 
     PartiesModel, 
     AccountGroupsModel,
@@ -35,6 +36,7 @@ def main():
     paddy_model = PaddyArrivalsModel()
     milling_model = MillingModel()
     sales_model = SalesModel()
+    purchase_model = PurchaseModel()
     vouchers_model = VouchersModel()
     parties_model = PartiesModel()
     groups_model = AccountGroupsModel()
@@ -46,6 +48,7 @@ def main():
     root_context.setContextProperty("paddyModel", paddy_model)
     root_context.setContextProperty("millingModel", milling_model)
     root_context.setContextProperty("salesModel", sales_model)
+    root_context.setContextProperty("purchaseModel", purchase_model)
     root_context.setContextProperty("vouchersModel", vouchers_model)
     root_context.setContextProperty("partiesModel", parties_model)
     root_context.setContextProperty("groupsModel", groups_model)

@@ -61,15 +61,15 @@ Item {
     }
 
     function resetForm() {
-        if (typeof salesModel !== "undefined" && salesModel) {
-            autoVchCode = salesModel.get_next_voucher_no()
+        if (typeof purchaseModel !== "undefined" && purchaseModel) {
+            autoVchCode = purchaseModel.get_next_voucher_no()
             autoVoucherNo = autoVchCode.replace("VCH-", "")
         } else {
             autoVchCode = "VCH-9001"
             autoVoucherNo = "1"
         }
 
-        invNoInput.text = "INV-" + autoVoucherNo
+        invNoInput.text = "PUR-" + autoVoucherNo
         dueDaysInput.text = "0"
         marketTypeCombo.currentIndex = 0
         posCombo.currentIndex = 0
@@ -243,7 +243,8 @@ Item {
         if (!itemName) return
         var item = (typeof stockItemsModel !== "undefined" && stockItemsModel) ? stockItemsModel.get_item_by_name(itemName) : null
         if (item) {
-            if (item.sale_rate) rateInput.text = item.sale_rate.toString()
+            if (item.purchase_rate) rateInput.text = item.purchase_rate.toString()
+            else if (item.sale_rate) rateInput.text = item.sale_rate.toString()
             if (item.gst_rate) gstInput.text = item.gst_rate
             if (item.packing_kg) {
                 var pVal = parseFloat(item.packing_kg) || 50.0
@@ -281,7 +282,7 @@ Item {
         var partyLedger = partyCombo.currentText.trim()
 
         if (!partyLedger) {
-            statusMessage = "❌ Please select a Party Ledger Account."
+            statusMessage = "❌ Please select a Supplier / Party Ledger Account."
             isError = true
             return
         }
@@ -314,19 +315,21 @@ Item {
         var sgstVal = selectedTaxStatus === "IGST" ? 0.0 : gstTaxAmount / 2.0
         var igstVal = selectedTaxStatus === "IGST" ? gstTaxAmount : 0.0
 
-        if (typeof salesModel !== "undefined" && salesModel) {
-            var ok = salesModel.add_sales_invoice_full(
+        if (typeof purchaseModel !== "undefined" && purchaseModel) {
+            var ok = purchaseModel.add_purchase_invoice_full(
                 invNo, invDate, partyLedger, gstinInput.text.trim(), mainItemName, "", totalBags, totalWeight, 0.0,
                 taxableAmount, 5.0, cgstVal, sgstVal, igstVal, roundOffAmount, grandTotal,
-                "Credit", vehicle, eway, narr
+                "Credit", vehicle, eway, narr,
+                selectedSaleStatus, selectedMarketFeeStatus, damiAmount, labourAmount, auctionAmount, mFeeAmount, hrdfAmount, otherExpAmount, welfareAmount, dhrmdAmount, sutliAmount, lessAmount,
+                grNoInput.text.trim(), driverInput.text.trim(), billTimeInput.text.trim(), saudaDateInput.text.trim(), shippingAddressInput.text.trim(), poNoInput.text.trim(), gradeInput.text.trim(), kandaWeightInput.text.trim(), transportInput.text.trim(), brokerNameInput.text.trim()
             )
             if (ok) {
-                statusMessage = "✅ Sales Voucher " + invNo + " saved & posted successfully!"
+                statusMessage = "✅ Purchase Voucher " + invNo + " saved & posted successfully!"
                 isError = false
                 resetForm()
                 root.invoiceSaved()
             } else {
-                statusMessage = "❌ Failed to save Sales Voucher."
+                statusMessage = "❌ Failed to save Purchase Voucher."
                 isError = true
             }
         }
@@ -343,8 +346,8 @@ Item {
     ConfirmationModal {
         id: saveConfirmModal
         anchors.centerIn: parent
-        titleText: "CONFIRM SALES VOUCHER SAVE"
-        messageText: "Are you sure you want to save & post Sales Voucher " + invNoInput.text.trim() + " for ₹" + grandTotal.toFixed(2) + "?"
+        titleText: "CONFIRM PURCHASE VOUCHER SAVE"
+        messageText: "Are you sure you want to save & post Purchase Voucher " + invNoInput.text.trim() + " for ₹" + grandTotal.toFixed(2) + "?"
         onConfirmed: root.executeSaveInvoice()
     }
 
@@ -369,7 +372,7 @@ Item {
                 ColumnLayout {
                     spacing: 0
                     Text {
-                        text: "Sales Voucher Entry (F8)"
+                        text: "Purchase Voucher Entry (F9)"
                         color: "#0F172A"
                         font.pixelSize: 18
                         font.bold: true
@@ -446,7 +449,7 @@ Item {
                             RowLayout {
                                 anchors.fill: parent
                                 anchors.leftMargin: 8; anchors.rightMargin: 8
-                                Text { text: root.autoVchCode; color: "#2563EB"; font.pixelSize: 11; font.bold: true }
+                                Text { text: root.autoVchCode; color: "#16A34A"; font.pixelSize: 11; font.bold: true }
                                 Item { Layout.fillWidth: true }
                                 Text { text: "🔒"; font.pixelSize: 9 }
                             }
@@ -455,10 +458,10 @@ Item {
 
                     ColumnLayout {
                         spacing: 1
-                        Text { text: "Invoice No (Editable)"; color: "#0F172A"; font.pixelSize: 10; font.bold: true }
+                        Text { text: "Purchase Bill No (Editable)"; color: "#0F172A"; font.pixelSize: 10; font.bold: true }
                         CustomInput {
                             id: invNoInput
-                            placeholderText: "INV-1"
+                            placeholderText: "PUR-1"
                             Layout.preferredWidth: 120
                             onReturnPressed: invoiceDateInput.focusInput = true
                             onRightPressed: invoiceDateInput.focusInput = true
@@ -468,7 +471,7 @@ Item {
 
                     ColumnLayout {
                         spacing: 1
-                        Text { text: "Invoice Date"; color: "#0F172A"; font.pixelSize: 10; font.bold: true }
+                        Text { text: "Bill Date"; color: "#0F172A"; font.pixelSize: 10; font.bold: true }
                         CustomInput {
                             id: invoiceDateInput
                             text: Qt.formatDate(new Date(), "dd-MM-yyyy")
@@ -566,30 +569,30 @@ Item {
                     // Tax Status Badge Selectors
                     ColumnLayout {
                         spacing: 1
-                        Text { text: "Tax Status : (Alt+R / Alt+T)"; color: "#2563EB"; font.pixelSize: 10; font.bold: true }
+                        Text { text: "Tax Status : (Alt+R / Alt+T)"; color: "#16A34A"; font.pixelSize: 10; font.bold: true }
                         RowLayout {
                             spacing: 4
 
                             Rectangle {
                                 width: 90; height: 28; radius: 5
-                                color: root.selectedTaxStatus === "GST / Exempt" ? "#2563EB" : "#F1F5F9"
-                                border.color: root.selectedTaxStatus === "GST / Exempt" ? "#1D4ED8" : "#CBD5E1"
+                                color: root.selectedTaxStatus === "GST / Exempt" ? "#16A34A" : "#F1F5F9"
+                                border.color: root.selectedTaxStatus === "GST / Exempt" ? "#15803D" : "#CBD5E1"
                                 Text { anchors.centerIn: parent; text: "GST / Exempt"; color: root.selectedTaxStatus === "GST / Exempt" ? "#FFF" : "#475569"; font.pixelSize: 10; font.bold: true }
                                 MouseArea { anchors.fill: parent; onClicked: { root.selectedTaxStatus = "GST / Exempt"; root.isManualGst = false; root.recalculateTotals() } }
                             }
 
                             Rectangle {
                                 width: 55; height: 28; radius: 5
-                                color: root.selectedTaxStatus === "IGST" ? "#2563EB" : "#F1F5F9"
-                                border.color: root.selectedTaxStatus === "IGST" ? "#1D4ED8" : "#CBD5E1"
+                                color: root.selectedTaxStatus === "IGST" ? "#16A34A" : "#F1F5F9"
+                                border.color: root.selectedTaxStatus === "IGST" ? "#15803D" : "#CBD5E1"
                                 Text { anchors.centerIn: parent; text: "IGST"; color: root.selectedTaxStatus === "IGST" ? "#FFF" : "#475569"; font.pixelSize: 10; font.bold: true }
                                 MouseArea { anchors.fill: parent; onClicked: { root.selectedTaxStatus = "IGST"; root.isManualGst = false; root.recalculateTotals() } }
                             }
 
                             Rectangle {
                                 width: 60; height: 28; radius: 5
-                                color: root.selectedTaxStatus === "Export" ? "#2563EB" : "#F1F5F9"
-                                border.color: root.selectedTaxStatus === "Export" ? "#1D4ED8" : "#CBD5E1"
+                                color: root.selectedTaxStatus === "Export" ? "#16A34A" : "#F1F5F9"
+                                border.color: root.selectedTaxStatus === "Export" ? "#15803D" : "#CBD5E1"
                                 Text { anchors.centerIn: parent; text: "Export"; color: root.selectedTaxStatus === "Export" ? "#FFF" : "#475569"; font.pixelSize: 10; font.bold: true }
                                 MouseArea { anchors.fill: parent; onClicked: { root.selectedTaxStatus = "Export"; root.isManualGst = false; root.recalculateTotals() } }
                             }
@@ -597,7 +600,7 @@ Item {
                     }
                 }
 
-                // Row 2: Sale To Party Ledger Account * & Party GSTIN
+                // Row 2: Purchase From Party Ledger Account * & Party GSTIN
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 8
@@ -606,7 +609,7 @@ Item {
                         spacing: 1
                         Layout.fillWidth: true
                         Layout.preferredWidth: 600
-                        Text { text: "Sale To Party Ledger Account *"; color: "#0F172A"; font.pixelSize: 10; font.bold: true }
+                        Text { text: "Purchase From Party / Supplier Ledger Account *"; color: "#0F172A"; font.pixelSize: 10; font.bold: true }
                         CustomWhiteCombo {
                             id: partyCombo
                             model: (typeof partiesModel !== "undefined" && partiesModel) ? partiesModel.get_parties_list() : []
@@ -621,7 +624,7 @@ Item {
                     ColumnLayout {
                         spacing: 1
                         Layout.preferredWidth: 240
-                        Text { text: "Party GSTIN"; color: "#475569"; font.pixelSize: 10; font.bold: true }
+                        Text { text: "Supplier GSTIN"; color: "#475569"; font.pixelSize: 10; font.bold: true }
                         CustomInput {
                             id: gstinInput
                             placeholderText: "29AAAAA0000A1Z5"
@@ -701,7 +704,7 @@ Item {
                                 
                                 Item { Layout.preferredWidth: 50; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: model.gstPct + "%"; color: "#475569"; font.pixelSize: 12 } }
                                 Item { Layout.preferredWidth: 95; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: model.rate > 0 ? model.rate.toFixed(2) : ""; color: "#0F172A"; font.pixelSize: 12; font.bold: true } }
-                                Item { Layout.preferredWidth: 110; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: "₹" + model.amount.toFixed(2); color: "#2563EB"; font.pixelSize: 12; font.bold: true } }
+                                Item { Layout.preferredWidth: 110; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: "₹" + model.amount.toFixed(2); color: "#16A34A"; font.pixelSize: 12; font.bold: true } }
                                 
                                 Item {
                                     Layout.preferredWidth: 35
@@ -721,8 +724,8 @@ Item {
                     Rectangle {
                         Layout.fillWidth: true
                         height: 36
-                        color: "#EFF6FF"
-                        border.color: "#93C5FD"
+                        color: "#F0FDF4"
+                        border.color: "#86EFAC"
                         border.width: 1
 
                         RowLayout {
@@ -730,7 +733,7 @@ Item {
                             anchors.leftMargin: 8; anchors.rightMargin: 8
                             spacing: 6
 
-                            Item { Layout.preferredWidth: 30; Text { anchors.verticalCenter: parent.verticalCenter; text: (lineItemsModel.count + 1) + "."; color: "#2563EB"; font.pixelSize: 12; font.bold: true } }
+                            Item { Layout.preferredWidth: 30; Text { anchors.verticalCenter: parent.verticalCenter; text: (lineItemsModel.count + 1) + "."; color: "#16A34A"; font.pixelSize: 12; font.bold: true } }
 
                             CustomWhiteCombo {
                                 id: itemCombo
@@ -828,7 +831,7 @@ Item {
                                 Button {
                                     anchors.centerIn: parent
                                     width: 28; height: 22
-                                    background: Rectangle { color: "#2563EB"; radius: 4 }
+                                    background: Rectangle { color: "#16A34A"; radius: 4 }
                                     contentItem: Text { text: "+"; color: "#FFF"; font.bold: true; font.pixelSize: 12; horizontalAlignment: Text.AlignHCenter }
                                     onClicked: root.addCurrentItemRow()
                                 }
@@ -1256,7 +1259,7 @@ Item {
                                 Text { text: "Narration :"; color: "#475569"; font.pixelSize: 9; font.bold: true }
                                 CustomInput {
                                     id: narrationInput
-                                    placeholderText: "Sales invoice entry against Order #4029"
+                                    placeholderText: "Purchase voucher entry against Order #4029"
                                     Layout.fillWidth: true
                                     onReturnPressed: gstTaxInput.forceActiveFocus()
                                     onRightPressed: gstTaxInput.forceActiveFocus()
@@ -1437,11 +1440,11 @@ Item {
                     id: saveBtn
                     height: 32
                     Layout.preferredWidth: 250
-                    background: Rectangle { color: saveBtn.activeFocus ? "#1D4ED8" : "#2563EB"; radius: 6; border.color: saveBtn.activeFocus ? "#60A5FA" : "transparent"; border.width: 2 }
+                    background: Rectangle { color: saveBtn.activeFocus ? "#15803D" : "#16A34A"; radius: 6; border.color: saveBtn.activeFocus ? "#86EFAC" : "transparent"; border.width: 2 }
                     contentItem: RowLayout {
                         anchors.centerIn: parent
                         spacing: 6
-                        Text { text: "💾 Save & Post Sales Voucher (F2)"; color: "#FFF"; font.bold: true; font.pixelSize: 12 }
+                        Text { text: "💾 Save & Post Purchase Voucher (F9 / F2)"; color: "#FFF"; font.bold: true; font.pixelSize: 12 }
                     }
                     onClicked: root.saveInvoice()
                     Keys.onReturnPressed: root.saveInvoice()

@@ -3,216 +3,186 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import "../components"
 
-Rectangle {
+Popup {
     id: root
-    width: 600
-    height: 440
-    color: "#FFFFFF"
-    radius: 12
-    border.color: "#CBD5E1"
-    border.width: 1
+    width: 460
+    implicitHeight: mainCol.implicitHeight + 36
+    modal: true
+    dim: true
+    focus: true
+    closePolicy: Popup.CloseOnPressOutside | Popup.CloseOnEscape
 
-    signal closeRequested()
-    signal optionSelected(int optionIndex)
+    signal optionSelected(int optionIndex, int selectedIndex)
 
-    function handleKeyPress(event) {
-        if (event.key === Qt.Key_1 || event.key === Qt.Key_S) {
-            root.optionSelected(1)
-            event.accepted = true
-        } else if (event.key === Qt.Key_2 || event.key === Qt.Key_P) {
-            root.optionSelected(2)
-            event.accepted = true
-        } else if (event.key === Qt.Key_3 || event.key === Qt.Key_J) {
-            root.optionSelected(3)
-            event.accepted = true
-        } else if (event.key === Qt.Key_4 || event.key === Qt.Key_M) {
-            root.optionSelected(4)
-            event.accepted = true
-        } else if (event.key === Qt.Key_Escape) {
-            root.closeRequested()
-            event.accepted = true
-        }
+    property int selectedIndex: 0
+
+    onOpened: {
+        item1.resetMouseTracking()
+        item2.resetMouseTracking()
+        item3.resetMouseTracking()
+        item4.resetMouseTracking()
+        item5.resetMouseTracking()
+        item6.resetMouseTracking()
+        Qt.callLater(function() { menuScope.forceActiveFocus() })
     }
 
-    ColumnLayout {
+    function triggerSelected() {
+        var opt = selectedIndex + 1
+        var sel = selectedIndex
+        root.close()
+        root.optionSelected(opt, sel)
+    }
+
+    background: Rectangle {
+        color: "#FFFFFF"
+        border.color: "#2563EB"
+        border.width: 2.5
+        radius: 12
+    }
+
+    contentItem: FocusScope {
+        id: menuScope
         anchors.fill: parent
-        anchors.margins: 20
-        spacing: 16
+        focus: true
 
-        // Modal Header
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: 10
-
-            Rectangle {
-                width: 38; height: 38; radius: 8; color: "#EFF6FF"
-                Text { anchors.centerIn: parent; text: "📑"; font.pixelSize: 20 }
-            }
-
-            ColumnLayout {
-                spacing: 0
-                Text { text: "SELECT VOUCHER ENTRY TYPE"; color: "#2563EB"; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.0 }
-                Text { text: "Add New Accounting & Inventory Voucher"; color: "#0F172A"; font.pixelSize: 17; font.bold: true }
-            }
-
-            Item { Layout.fillWidth: true }
-
-            Button {
-                id: closeBtn
-                width: 32; height: 32
-                background: Rectangle { color: closeBtn.hovered ? "#DC2626" : "#F1F5F9"; radius: 16 }
-                contentItem: Text { text: "✕"; color: closeBtn.hovered ? "#FFF" : "#475569"; font.bold: true; horizontalAlignment: Text.AlignHCenter }
-                onClicked: root.closeRequested()
-            }
+        Keys.onUpPressed: function(event) {
+            event.accepted = true
+            if (root.selectedIndex > 0) root.selectedIndex--
+            else root.selectedIndex = 5
         }
-
-        Rectangle { Layout.fillWidth: true; height: 1; color: "#E2E8F0" }
-
-        Text {
-            text: "Choose the voucher category to record new transaction entries:"
-            color: "#64748B"
-            font.pixelSize: 12
+        Keys.onDownPressed: function(event) {
+            event.accepted = true
+            if (root.selectedIndex < 5) root.selectedIndex++
+            else root.selectedIndex = 0
         }
+        Keys.onReturnPressed: function(event) {
+            event.accepted = true
+            root.triggerSelected()
+        }
+        Keys.onEnterPressed: function(event) {
+            event.accepted = true
+            root.triggerSelected()
+        }
+        Keys.onEscapePressed: function(event) {
+            event.accepted = true
+            root.close()
+        }
+        Keys.onDigit1Pressed: function(event) { event.accepted = true; root.selectedIndex = 0; root.triggerSelected() }
+        Keys.onDigit2Pressed: function(event) { event.accepted = true; root.selectedIndex = 1; root.triggerSelected() }
+        Keys.onDigit3Pressed: function(event) { event.accepted = true; root.selectedIndex = 2; root.triggerSelected() }
+        Keys.onDigit4Pressed: function(event) { event.accepted = true; root.selectedIndex = 3; root.triggerSelected() }
+        Keys.onDigit5Pressed: function(event) { event.accepted = true; root.selectedIndex = 4; root.triggerSelected() }
+        Keys.onDigit6Pressed: function(event) { event.accepted = true; root.selectedIndex = 5; root.triggerSelected() }
 
-        // 4 VOUCHER SUBMENU CARDS
         ColumnLayout {
-            Layout.fillWidth: true
+            id: mainCol
+            anchors.fill: parent
+            anchors.margins: 14
             spacing: 10
 
-            // 1. Sales Voucher
-            Rectangle {
+            // Header Title
+            RowLayout {
                 Layout.fillWidth: true
-                height: 58
-                color: mouse1.containsMouse ? "#EFF6FF" : "#F8FAFC"
-                border.color: mouse1.containsMouse ? "#2563EB" : "#E2E8F0"
-                border.width: mouse1.containsMouse ? 2 : 1
-                radius: 8
-
-                MouseArea {
-                    id: mouse1
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    onClicked: root.optionSelected(1)
+                Text {
+                    text: "ADD VOUCHER MENU"
+                    color: "#2563EB"
+                    font.pixelSize: 13
+                    font.bold: true
+                    font.letterSpacing: 1.0
                 }
-
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: 14; anchors.rightMargin: 14
-                    spacing: 12
-
-                    KbdBadge { text: "1"; badgeColor: "#2563EB"; textColor: "#FFF"; borderColor: "#1D4ED8" }
-
-                    ColumnLayout {
-                        spacing: 2
-                        Text { text: "🛍️ Sales Voucher (Tax Invoice)"; color: "#0F172A"; font.pixelSize: 14; font.bold: true }
-                        Text { text: "Record sales invoices for finished rice, broken rice, rice bran & by-products"; color: "#64748B"; font.pixelSize: 11 }
-                    }
-
-                    Item { Layout.fillWidth: true }
-                    Text { text: "→"; color: "#2563EB"; font.pixelSize: 16; font.bold: true }
+                Item { Layout.fillWidth: true }
+                Text {
+                    text: "Press ↑ / ↓ & Enter"
+                    color: "#64748B"
+                    font.pixelSize: 11
+                    font.bold: true
                 }
             }
 
-            // 2. Purchase Voucher / Paddy Slip
-            Rectangle {
-                Layout.fillWidth: true
-                height: 58
-                color: mouse2.containsMouse ? "#F0FDF4" : "#F8FAFC"
-                border.color: mouse2.containsMouse ? "#16A34A" : "#E2E8F0"
-                border.width: mouse2.containsMouse ? 2 : 1
-                radius: 8
+            Rectangle { Layout.fillWidth: true; height: 1; color: "#CBD5E1" }
 
-                MouseArea {
-                    id: mouse2
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    onClicked: root.optionSelected(2)
-                }
-
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: 14; anchors.rightMargin: 14
-                    spacing: 12
-
-                    KbdBadge { text: "2"; badgeColor: "#16A34A"; textColor: "#FFF"; borderColor: "#15803D" }
-
-                    ColumnLayout {
-                        spacing: 2
-                        Text { text: "🌾 Purchase Voucher / Paddy Arrival Slip"; color: "#0F172A"; font.pixelSize: 14; font.bold: true }
-                        Text { text: "Record raw paddy arrivals, gate passes, moisture deduction & purchase bills"; color: "#64748B"; font.pixelSize: 11 }
-                    }
-
-                    Item { Layout.fillWidth: true }
-                    Text { text: "→"; color: "#16A34A"; font.pixelSize: 16; font.bold: true }
-                }
+            // Item 1
+            NavMenuItem {
+                id: item1
+                index: 0
+                selectedIndex: root.selectedIndex
+                itemHeight: 42
+                fontPixelSize: 14
+                text: "1. Sales Voucher (Tax Invoice - F8)"
+                activeColor: "#2563EB"
+                activeBorderColor: "#1D4ED8"
+                onItemHovered: root.selectedIndex = 0
+                onItemClicked: { root.selectedIndex = 0; root.triggerSelected() }
             }
 
-            // 3. Journal Voucher / Contra
-            Rectangle {
-                Layout.fillWidth: true
-                height: 58
-                color: mouse3.containsMouse ? "#FEF3C7" : "#F8FAFC"
-                border.color: mouse3.containsMouse ? "#D97706" : "#E2E8F0"
-                border.width: mouse3.containsMouse ? 2 : 1
-                radius: 8
-
-                MouseArea {
-                    id: mouse3
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    onClicked: root.optionSelected(3)
-                }
-
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: 14; anchors.rightMargin: 14
-                    spacing: 12
-
-                    KbdBadge { text: "3"; badgeColor: "#D97706"; textColor: "#FFF"; borderColor: "#B45309" }
-
-                    ColumnLayout {
-                        spacing: 2
-                        Text { text: "📑 Journal Voucher / Bank & Cash Transfer"; color: "#0F172A"; font.pixelSize: 14; font.bold: true }
-                        Text { text: "Record cash receipts, bank payments, contra transfers & adjustment journal entries"; color: "#64748B"; font.pixelSize: 11 }
-                    }
-
-                    Item { Layout.fillWidth: true }
-                    Text { text: "→"; color: "#D97706"; font.pixelSize: 16; font.bold: true }
-                }
+            // Item 2
+            NavMenuItem {
+                id: item2
+                index: 1
+                selectedIndex: root.selectedIndex
+                itemHeight: 42
+                fontPixelSize: 14
+                text: "2. Purchase Voucher (Purchase Bill - F9)"
+                activeColor: "#2563EB"
+                activeBorderColor: "#1D4ED8"
+                onItemHovered: root.selectedIndex = 1
+                onItemClicked: { root.selectedIndex = 1; root.triggerSelected() }
             }
 
-            // 4. Milling Process Voucher
-            Rectangle {
-                Layout.fillWidth: true
-                height: 58
-                color: mouse4.containsMouse ? "#F3E8FF" : "#F8FAFC"
-                border.color: mouse4.containsMouse ? "#9333EA" : "#E2E8F0"
-                border.width: mouse4.containsMouse ? 2 : 1
-                radius: 8
+            // Item 3
+            NavMenuItem {
+                id: item3
+                index: 2
+                selectedIndex: root.selectedIndex
+                itemHeight: 42
+                fontPixelSize: 14
+                text: "3. Cheque / Bank Payment Voucher (F3)"
+                activeColor: "#DC2626"
+                activeBorderColor: "#991B1B"
+                onItemHovered: root.selectedIndex = 2
+                onItemClicked: { root.selectedIndex = 2; root.triggerSelected() }
+            }
 
-                MouseArea {
-                    id: mouse4
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    onClicked: root.optionSelected(4)
-                }
+            // Item 4
+            NavMenuItem {
+                id: item4
+                index: 3
+                selectedIndex: root.selectedIndex
+                itemHeight: 42
+                fontPixelSize: 14
+                text: "4. Cheque / Bank Receipt Voucher (F4)"
+                activeColor: "#16A34A"
+                activeBorderColor: "#15803D"
+                onItemHovered: root.selectedIndex = 3
+                onItemClicked: { root.selectedIndex = 3; root.triggerSelected() }
+            }
 
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: 14; anchors.rightMargin: 14
-                    spacing: 12
+            // Item 5
+            NavMenuItem {
+                id: item5
+                index: 4
+                selectedIndex: root.selectedIndex
+                itemHeight: 42
+                fontPixelSize: 14
+                text: "5. Journal Voucher / General Journal (F5)"
+                activeColor: "#2563EB"
+                activeBorderColor: "#1D4ED8"
+                onItemHovered: root.selectedIndex = 4
+                onItemClicked: { root.selectedIndex = 4; root.triggerSelected() }
+            }
 
-                    KbdBadge { text: "4"; badgeColor: "#9333EA"; textColor: "#FFF"; borderColor: "#7E22CE" }
-
-                    ColumnLayout {
-                        spacing: 2
-                        Text { text: "⚙️ Milling Process Yield Production Voucher"; color: "#0F172A"; font.pixelSize: 14; font.bold: true }
-                        Text { text: "Record raw paddy input milling batches, head rice, broken rice, bran & husk yields"; color: "#64748B"; font.pixelSize: 11 }
-                    }
-
-                    Item { Layout.fillWidth: true }
-                    Text { text: "→"; color: "#9333EA"; font.pixelSize: 16; font.bold: true }
-                }
+            // Item 6
+            NavMenuItem {
+                id: item6
+                index: 5
+                selectedIndex: root.selectedIndex
+                itemHeight: 42
+                fontPixelSize: 14
+                text: "6. Milling Process Yield Production Voucher"
+                activeColor: "#2563EB"
+                activeBorderColor: "#1D4ED8"
+                onItemHovered: root.selectedIndex = 5
+                onItemClicked: { root.selectedIndex = 5; root.triggerSelected() }
             }
         }
     }

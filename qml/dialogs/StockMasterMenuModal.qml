@@ -3,164 +3,136 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import "../components"
 
-Rectangle {
+Popup {
     id: root
-    width: 520
-    height: 340
-    color: "#FFFFFF"
-    border.color: "#E2E8F0"
-    border.width: 1
-    radius: 12
+    width: 420
+    implicitHeight: mainCol.implicitHeight + 36
+    modal: true
+    dim: true
+    focus: true
+    closePolicy: Popup.CloseOnPressOutside | Popup.CloseOnEscape
 
-    signal closeRequested()
-    signal actionSelected(string actionName)
+    signal actionSelected(string actionName, int selectedIndex)
 
-    FocusScope {
-        anchors.fill: parent
-        focus: true
-        Keys.onEscapePressed: root.closeRequested()
-        Keys.onDigit1Pressed: root.actionSelected("New Stock Item")
-        Keys.onDigit2Pressed: root.actionSelected("Modify Stock Item")
-        Keys.onDigit3Pressed: root.actionSelected("Stock Details")
+    property int selectedIndex: 0
+
+    onOpened: {
+        item1.resetMouseTracking()
+        item2.resetMouseTracking()
+        item3.resetMouseTracking()
+        Qt.callLater(function() { menuScope.forceActiveFocus() })
     }
 
-    ColumnLayout {
+    function triggerSelected() {
+        var act = ""
+        if (selectedIndex === 0) act = "New Stock Item"
+        else if (selectedIndex === 1) act = "Modify Stock Item"
+        else if (selectedIndex === 2) act = "Stock Details"
+        var sel = selectedIndex
+        root.close()
+        root.actionSelected(act, sel)
+    }
+
+    background: Rectangle {
+        color: "#FFFFFF"
+        border.color: "#16A34A"
+        border.width: 2.5
+        radius: 12
+    }
+
+    contentItem: FocusScope {
+        id: menuScope
         anchors.fill: parent
-        anchors.margins: 20
-        spacing: 16
+        focus: true
 
-        // Header
-        RowLayout {
-            Layout.fillWidth: true
-            RowLayout {
-                spacing: 10
-                Rectangle {
-                    width: 36; height: 36; radius: 8; color: "#DCFCE7"
-                    Text { anchors.centerIn: parent; text: "📦"; font.pixelSize: 18 }
-                }
-                ColumnLayout {
-                    spacing: 0
-                    Text { text: "STOCK MASTER MENU"; color: "#16A34A"; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.0 }
-                    Text { text: "Select Stock Operation"; color: "#0F172A"; font.pixelSize: 16; font.bold: true }
-                }
-            }
-
-            Item { Layout.fillWidth: true }
-
-            Button {
-                id: closeBtn
-                width: 28
-                height: 28
-                background: Rectangle { color: closeBtn.hovered ? "#DC2626" : "#F1F5F9"; radius: 14 }
-                contentItem: Text { text: "✕"; color: closeBtn.hovered ? "#FFF" : "#475569"; font.bold: true; horizontalAlignment: Text.AlignHCenter }
-                onClicked: root.closeRequested()
-            }
+        Keys.onUpPressed: function(event) {
+            event.accepted = true
+            if (root.selectedIndex > 0) root.selectedIndex--
+            else root.selectedIndex = 2
         }
+        Keys.onDownPressed: function(event) {
+            event.accepted = true
+            if (root.selectedIndex < 2) root.selectedIndex++
+            else root.selectedIndex = 0
+        }
+        Keys.onReturnPressed: function(event) {
+            event.accepted = true
+            root.triggerSelected()
+        }
+        Keys.onEnterPressed: function(event) {
+            event.accepted = true
+            root.triggerSelected()
+        }
+        Keys.onEscapePressed: function(event) {
+            event.accepted = true
+            root.close()
+        }
+        Keys.onDigit1Pressed: function(event) { event.accepted = true; root.selectedIndex = 0; root.triggerSelected() }
+        Keys.onDigit2Pressed: function(event) { event.accepted = true; root.selectedIndex = 1; root.triggerSelected() }
+        Keys.onDigit3Pressed: function(event) { event.accepted = true; root.selectedIndex = 2; root.triggerSelected() }
 
-        Rectangle { Layout.fillWidth: true; height: 1; color: "#E2E8F0" }
-
-        // 3 Stock Master Options List
         ColumnLayout {
-            Layout.fillWidth: true
-            spacing: 8
+            id: mainCol
+            anchors.fill: parent
+            anchors.margins: 14
+            spacing: 10
 
-            // 1. New Stock Item
-            Rectangle {
+            // Header Title
+            RowLayout {
+                Layout.fillWidth: true
+                Text {
+                    text: "STOCK MASTER MENU"
+                    color: "#16A34A"
+                    font.pixelSize: 13
+                    font.bold: true
+                    font.letterSpacing: 1.0
+                }
+                Item { Layout.fillWidth: true }
+                Text {
+                    text: "Press ↑ / ↓ & Enter"
+                    color: "#64748B"
+                    font.pixelSize: 11
+                    font.bold: true
+                }
+            }
+
+            Rectangle { Layout.fillWidth: true; height: 1; color: "#CBD5E1" }
+
+            // Item 1
+            NavMenuItem {
                 id: item1
-                Layout.fillWidth: true
-                height: 54
-                radius: 8
-                color: mouse1.containsMouse ? "#F0FDF4" : "#F8FAFC"
-                border.color: mouse1.containsMouse ? "#16A34A" : "#E2E8F0"
-                border.width: 1
-
-                MouseArea {
-                    id: mouse1
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    onClicked: root.actionSelected("New Stock Item")
-                }
-
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: 14; anchors.rightMargin: 14
-                    spacing: 12
-                    Text { text: "📦"; font.pixelSize: 18 }
-                    ColumnLayout {
-                        spacing: 1
-                        Layout.fillWidth: true
-                        Text { text: "1. New Stock Item"; color: "#0F172A"; font.pixelSize: 13; font.bold: true }
-                        Text { text: "Add new Raw Paddy variety, Finished Rice grade or By-Product"; color: "#64748B"; font.pixelSize: 11 }
-                    }
-                    KbdBadge { text: "1"; badgeColor: "#F0FDF4"; textColor: "#16A34A"; borderColor: "#BBF7D0" }
-                }
+                index: 0
+                selectedIndex: root.selectedIndex
+                text: "1. New Stock Item"
+                activeColor: "#16A34A"
+                activeBorderColor: "#15803D"
+                onItemHovered: root.selectedIndex = 0
+                onItemClicked: { root.selectedIndex = 0; root.triggerSelected() }
             }
 
-            // 2. Modify Stock Item
-            Rectangle {
+            // Item 2
+            NavMenuItem {
                 id: item2
-                Layout.fillWidth: true
-                height: 54
-                radius: 8
-                color: mouse2.containsMouse ? "#F0FDF4" : "#F8FAFC"
-                border.color: mouse2.containsMouse ? "#16A34A" : "#E2E8F0"
-                border.width: 1
-
-                MouseArea {
-                    id: mouse2
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    onClicked: root.actionSelected("Modify Stock Item")
-                }
-
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: 14; anchors.rightMargin: 14
-                    spacing: 12
-                    Text { text: "✏️"; font.pixelSize: 18 }
-                    ColumnLayout {
-                        spacing: 1
-                        Layout.fillWidth: true
-                        Text { text: "2. Modify Stock Item"; color: "#0F172A"; font.pixelSize: 13; font.bold: true }
-                        Text { text: "Edit reorder level, unit of measure, or item description"; color: "#64748B"; font.pixelSize: 11 }
-                    }
-                    KbdBadge { text: "2"; badgeColor: "#F0FDF4"; textColor: "#16A34A"; borderColor: "#BBF7D0" }
-                }
+                index: 1
+                selectedIndex: root.selectedIndex
+                text: "2. Modify Stock Item"
+                activeColor: "#16A34A"
+                activeBorderColor: "#15803D"
+                onItemHovered: root.selectedIndex = 1
+                onItemClicked: { root.selectedIndex = 1; root.triggerSelected() }
             }
 
-            // 3. Stock Details
-            Rectangle {
+            // Item 3
+            NavMenuItem {
                 id: item3
-                Layout.fillWidth: true
-                height: 54
-                radius: 8
-                color: mouse3.containsMouse ? "#F0FDF4" : "#F8FAFC"
-                border.color: mouse3.containsMouse ? "#16A34A" : "#E2E8F0"
-                border.width: 1
-
-                MouseArea {
-                    id: mouse3
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    onClicked: root.actionSelected("Stock Details")
-                }
-
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: 14; anchors.rightMargin: 14
-                    spacing: 12
-                    Text { text: "📊"; font.pixelSize: 18 }
-                    ColumnLayout {
-                        spacing: 1
-                        Layout.fillWidth: true
-                        Text { text: "3. Stock Details & Inventory Register"; color: "#0F172A"; font.pixelSize: 13; font.bold: true }
-                        Text { text: "View live godown inventory, bag counts & stock balances"; color: "#64748B"; font.pixelSize: 11 }
-                    }
-                    KbdBadge { text: "3"; badgeColor: "#F0FDF4"; textColor: "#16A34A"; borderColor: "#BBF7D0" }
-                }
+                index: 2
+                selectedIndex: root.selectedIndex
+                text: "3. Stock Details & Register"
+                activeColor: "#16A34A"
+                activeBorderColor: "#15803D"
+                onItemHovered: root.selectedIndex = 2
+                onItemClicked: { root.selectedIndex = 2; root.triggerSelected() }
             }
         }
-
-        Item { Layout.fillHeight: true }
     }
 }

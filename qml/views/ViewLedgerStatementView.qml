@@ -18,8 +18,18 @@ Rectangle {
     property string netBalanceType: "Dr (Debit Balance)"
 
     Component.onCompleted: {
-        partySearch.focusInput = true
         loadPartyStatement("")
+        Qt.callLater(function() {
+            partySearch.focusAndOpen()
+        })
+    }
+
+    onVisibleChanged: {
+        if (visible) {
+            Qt.callLater(function() {
+                partySearch.focusAndOpen()
+            })
+        }
     }
 
     function toIso(dStr) {
@@ -38,26 +48,18 @@ Rectangle {
         drSelectedTotal = 0.0
         crSelectedTotal = 0.0
 
-        if (!pName) {
-            applyDateFilterAndSort()
-            return
-        }
-
-        if (pName.indexOf("Ramesh") !== -1) {
-            drMasterModel.append({ isSelected: false, vDate: "10-08-2026", refNo: "SLIP-1001", particulars: "Paddy Arrival (Sona Masoori 112 Qtl)", amount: 275150.0 })
-            crMasterModel.append({ isSelected: false, vDate: "15-08-2026", refNo: "VCH-9001", particulars: "HDFC Bank - Payment for Paddy Slip-1001", amount: 275150.0 })
-        } else if (pName.indexOf("Suresh") !== -1) {
-            drMasterModel.append({ isSelected: false, vDate: "24-08-2026", refNo: "SLIP-1002", particulars: "Paddy Arrival (IR64 147 Qtl)", amount: 317050.0 })
-        } else if (pName.indexOf("Balaji") !== -1) {
-            drMasterModel.append({ isSelected: false, vDate: "01-04-2026", refNo: "OP-BAL", particulars: "Opening Balance (Dr)", amount: 82000.0 })
-            drMasterModel.append({ isSelected: false, vDate: "20-08-2026", refNo: "INV-5004", particulars: "Sona Masoori Steam Rice Grade-A", amount: 250000.0 })
-            crMasterModel.append({ isSelected: false, vDate: "22-08-2026", refNo: "VCH-9004", particulars: "Bank Receipt - ICICI Bank", amount: 150000.0 })
-        } else if (pName.indexOf("Golden") !== -1) {
-            drMasterModel.append({ isSelected: false, vDate: "24-08-2026", refNo: "INV-5002", particulars: "Rice Bran (16% Oil) 60 Qtl", amount: 151200.0 })
-            crMasterModel.append({ isSelected: false, vDate: "24-08-2026", refNo: "VCH-9002", particulars: "Cash Receipt against INV-5002", amount: 151200.0 })
-        } else {
-            drMasterModel.append({ isSelected: false, vDate: "01-04-2026", refNo: "OP-BAL", particulars: "Opening Balance (Dr)", amount: 45000.0 })
-            drMasterModel.append({ isSelected: false, vDate: "18-08-2026", refNo: "INV-5001", particulars: "Sona Masoori Steam Rice Grade-A (200 Bags)", amount: 404250.0 })
+        if (typeof partiesModel !== "undefined" && partiesModel && partiesModel.get_party_statement) {
+            var res = partiesModel.get_party_statement(pName)
+            if (res && res.dr_items) {
+                for (var d = 0; d < res.dr_items.length; d++) {
+                    drMasterModel.append(res.dr_items[d])
+                }
+            }
+            if (res && res.cr_items) {
+                for (var c = 0; c < res.cr_items.length; c++) {
+                    crMasterModel.append(res.cr_items[c])
+                }
+            }
         }
 
         applyDateFilterAndSort()
@@ -175,7 +177,7 @@ Rectangle {
             }
         }
 
-        // 2. FILTER & PARTY SELECTION BAR (DD-MM-YYYY FORMAT)
+        // 2. FILTER & PARTY SELECTION BAR (FULL FINANCIAL YEAR BY DEFAULT)
         Rectangle {
             Layout.fillWidth: true
             height: 48
@@ -193,67 +195,45 @@ Rectangle {
 
                 Text { text: "Search Party:"; color: "#2563EB"; font.pixelSize: 12; font.bold: true }
 
-                AutoCompletePartySearch {
+                CustomWhiteCombo {
                     id: partySearch
-                    implicitWidth: 300
-                    implicitHeight: 34
-                    onPartySelected: function(party) {
-                        root.loadPartyStatement(party.name)
+                    Layout.preferredWidth: 320
+                    model: (typeof partiesModel !== "undefined" && partiesModel) ? partiesModel.get_parties_list() : []
+                    onCurrentTextChanged: root.loadPartyStatement(currentText)
+                    onReturnPressed: {
+                        drListView.forceActiveFocus()
+                        if (drListView.count > 0 && drListView.currentIndex < 0) drListView.currentIndex = 0
                     }
                 }
 
-                Text { text: "From Date:"; color: "#0F172A"; font.pixelSize: 12; font.bold: true }
+                // Active Financial Year Badge Indicator
                 Rectangle {
-                    width: 120; height: 34; radius: 6; color: "#FFFFFF"
-                    border.color: fromDateInput.activeFocus ? "#2563EB" : "#CBD5E1"
-                    border.width: fromDateInput.activeFocus ? 2 : 1
+                    height: 28
+                    Layout.preferredWidth: 180
+                    color: "#EFF6FF"
+                    border.color: "#93C5FD"
+                    radius: 6
 
-                    TextField {
-                        id: fromDateInput
-                        anchors.fill: parent
-                        anchors.leftMargin: 8
-                        anchors.rightMargin: 8
-                        text: "01-04-2026"
-                        color: "#0F172A"
-                        font.pixelSize: 12
-                        font.bold: true
-                        font.family: "Menlo, Consolas, sans-serif"
-                        background: null
-                        selectByMouse: true
-                        onTextChanged: root.applyDateFilterAndSort()
+                    RowLayout {
+                        anchors.centerIn: parent
+                        spacing: 6
+                        Text { text: "📅 FY 2026-27 (All Data)"; color: "#1D4ED8"; font.pixelSize: 11; font.bold: true }
                     }
                 }
 
-                Text { text: "To Date:"; color: "#0F172A"; font.pixelSize: 12; font.bold: true }
-                Rectangle {
-                    width: 120; height: 34; radius: 6; color: "#FFFFFF"
-                    border.color: toDateInput.activeFocus ? "#2563EB" : "#CBD5E1"
-                    border.width: toDateInput.activeFocus ? 2 : 1
-
-                    TextField {
-                        id: toDateInput
-                        anchors.fill: parent
-                        anchors.leftMargin: 8
-                        anchors.rightMargin: 8
-                        text: "25-08-2026"
-                        color: "#0F172A"
-                        font.pixelSize: 12
-                        font.bold: true
-                        font.family: "Menlo, Consolas, sans-serif"
-                        background: null
-                        selectByMouse: true
-                        onTextChanged: root.applyDateFilterAndSort()
+                Button {
+                    id: filterBtn
+                    height: 32
+                    background: Rectangle { color: filterPopup.visible ? "#1D4ED8" : "#2563EB"; radius: 6 }
+                    contentItem: RowLayout {
+                        spacing: 6
+                        Text { text: "🔍 Filter Dates"; color: "#FFF"; font.bold: true; font.pixelSize: 12 }
+                        KbdBadge { text: "Alt+F"; badgeColor: "#1E3A8A"; textColor: "#93C5FD"; borderColor: "#2563EB" }
                     }
+                    onClicked: filterPopup.open()
                 }
 
                 Item { Layout.fillWidth: true }
-
-                Button {
-                    height: 32
-                    background: Rectangle { color: "#2563EB"; radius: 6 }
-                    contentItem: Text { text: "⚡ Auto Sorted"; color: "#FFF"; font.bold: true; font.pixelSize: 12 }
-                    onClicked: root.applyDateFilterAndSort()
-                }
 
                 Button {
                     height: 32
@@ -274,8 +254,8 @@ Rectangle {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 color: "#FFFFFF"
-                border.color: "#3B82F6"
-                border.width: 2
+                border.color: drListView.activeFocus ? "#2563EB" : "#CBD5E1"
+                border.width: drListView.activeFocus ? 2 : 1
                 radius: 8
 
                 ColumnLayout {
@@ -329,13 +309,53 @@ Rectangle {
                         clip: true
                         spacing: 2
                         boundsBehavior: Flickable.StopAtBounds
+                        focus: true
+                        activeFocusOnTab: true
+                        currentIndex: -1
+
+                        Keys.onUpPressed: function(event) {
+                            if (drListView.currentIndex > 0) {
+                                event.accepted = true
+                                drListView.currentIndex--
+                                drListView.positionViewAtIndex(drListView.currentIndex, ListView.Contain)
+                            }
+                        }
+                        Keys.onDownPressed: function(event) {
+                            if (drListView.currentIndex < drListModel.count - 1) {
+                                event.accepted = true
+                                drListView.currentIndex++
+                                drListView.positionViewAtIndex(drListView.currentIndex, ListView.Contain)
+                            }
+                        }
+                        Keys.onSpacePressed: function(event) {
+                            if (drListView.currentIndex >= 0 && drListView.currentIndex < drListModel.count) {
+                                event.accepted = true
+                                var cur = drListModel.get(drListView.currentIndex)
+                                drListModel.setProperty(drListView.currentIndex, "isSelected", !cur.isSelected)
+                                root.recalcTotals()
+                            }
+                        }
+                        Keys.onRightPressed: function(event) {
+                            event.accepted = true
+                            crListView.forceActiveFocus()
+                            if (crListView.currentIndex < 0 && crListModel.count > 0) crListView.currentIndex = 0
+                        }
 
                         delegate: Rectangle {
                             width: drListView.width
                             height: 36
-                            color: index % 2 === 0 ? "#FFFFFF" : "#F8FAFC"
-                            border.color: "#E2E8F0"
+                            color: (drListView.activeFocus && drListView.currentIndex === index) ? "#DBEAFE" : (index % 2 === 0 ? "#FFFFFF" : "#F8FAFC")
+                            border.color: (drListView.activeFocus && drListView.currentIndex === index) ? "#2563EB" : "#E2E8F0"
+                            border.width: (drListView.activeFocus && drListView.currentIndex === index) ? 2 : 1
                             radius: 4
+
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: {
+                                    drListView.forceActiveFocus()
+                                    drListView.currentIndex = index
+                                }
+                            }
 
                             RowLayout {
                                 anchors.fill: parent
@@ -364,6 +384,8 @@ Rectangle {
                                     MouseArea {
                                         anchors.fill: parent
                                         onClicked: {
+                                            drListView.forceActiveFocus()
+                                            drListView.currentIndex = index
                                             drListModel.setProperty(index, "isSelected", !model.isSelected)
                                             root.recalcTotals()
                                         }
@@ -417,8 +439,8 @@ Rectangle {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 color: "#FFFFFF"
-                border.color: "#16A34A"
-                border.width: 2
+                border.color: crListView.activeFocus ? "#16A34A" : "#CBD5E1"
+                border.width: crListView.activeFocus ? 2 : 1
                 radius: 8
 
                 ColumnLayout {
@@ -472,13 +494,53 @@ Rectangle {
                         clip: true
                         spacing: 2
                         boundsBehavior: Flickable.StopAtBounds
+                        focus: true
+                        activeFocusOnTab: true
+                        currentIndex: -1
+
+                        Keys.onUpPressed: function(event) {
+                            if (crListView.currentIndex > 0) {
+                                event.accepted = true
+                                crListView.currentIndex--
+                                crListView.positionViewAtIndex(crListView.currentIndex, ListView.Contain)
+                            }
+                        }
+                        Keys.onDownPressed: function(event) {
+                            if (crListView.currentIndex < crListModel.count - 1) {
+                                event.accepted = true
+                                crListView.currentIndex++
+                                crListView.positionViewAtIndex(crListView.currentIndex, ListView.Contain)
+                            }
+                        }
+                        Keys.onSpacePressed: function(event) {
+                            if (crListView.currentIndex >= 0 && crListView.currentIndex < crListModel.count) {
+                                event.accepted = true
+                                var cur = crListModel.get(crListView.currentIndex)
+                                crListModel.setProperty(crListView.currentIndex, "isSelected", !cur.isSelected)
+                                root.recalcTotals()
+                            }
+                        }
+                        Keys.onLeftPressed: function(event) {
+                            event.accepted = true
+                            drListView.forceActiveFocus()
+                            if (drListView.currentIndex < 0 && drListModel.count > 0) drListView.currentIndex = 0
+                        }
 
                         delegate: Rectangle {
                             width: crListView.width
                             height: 36
-                            color: index % 2 === 0 ? "#FFFFFF" : "#F8FAFC"
-                            border.color: "#E2E8F0"
+                            color: (crListView.activeFocus && crListView.currentIndex === index) ? "#DCFCE7" : (index % 2 === 0 ? "#FFFFFF" : "#F8FAFC")
+                            border.color: (crListView.activeFocus && crListView.currentIndex === index) ? "#16A34A" : "#E2E8F0"
+                            border.width: (crListView.activeFocus && crListView.currentIndex === index) ? 2 : 1
                             radius: 4
+
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: {
+                                    crListView.forceActiveFocus()
+                                    crListView.currentIndex = index
+                                }
+                            }
 
                             RowLayout {
                                 anchors.fill: parent
@@ -507,6 +569,8 @@ Rectangle {
                                     MouseArea {
                                         anchors.fill: parent
                                         onClicked: {
+                                            crListView.forceActiveFocus()
+                                            crListView.currentIndex = index
                                             crListModel.setProperty(index, "isSelected", !model.isSelected)
                                             root.recalcTotals()
                                         }
@@ -610,6 +674,111 @@ Rectangle {
                             font.pixelSize: 11
                             font.bold: true
                         }
+                    }
+                }
+            }
+        }
+    }
+
+    Shortcut {
+        sequence: "Alt+F"
+        context: Qt.WindowShortcut
+        onActivated: filterPopup.open()
+    }
+
+    Popup {
+        id: filterPopup
+        width: 380
+        implicitHeight: filterCol.implicitHeight + 36
+        modal: true
+        dim: true
+        anchors.centerIn: parent
+        focus: true
+        closePolicy: Popup.CloseOnPressOutside | Popup.CloseOnEscape
+
+        background: Rectangle {
+            color: "#FFFFFF"
+            border.color: "#2563EB"
+            border.width: 2.5
+            radius: 12
+        }
+
+        contentItem: FocusScope {
+            id: popScope
+            anchors.fill: parent
+            focus: true
+
+            Keys.onReturnPressed: function(event) { event.accepted = true; popScope.applyFilter() }
+            Keys.onEnterPressed: function(event) { event.accepted = true; popScope.applyFilter() }
+            Keys.onEscapePressed: function(event) { event.accepted = true; filterPopup.close() }
+
+            function applyFilter() {
+                filterPopup.close()
+                root.applyDateFilterAndSort()
+                drListView.forceActiveFocus()
+            }
+
+            function clearFilter() {
+                fromDateInput.text = "01-04-2026"
+                toDateInput.text = "31-03-2027"
+                filterPopup.close()
+                root.applyDateFilterAndSort()
+                drListView.forceActiveFocus()
+            }
+
+            ColumnLayout {
+                id: filterCol
+                anchors.fill: parent
+                anchors.margins: 18
+                spacing: 14
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Text { text: "📅 Filter Statement Date Range"; color: "#0F172A"; font.pixelSize: 15; font.bold: true }
+                    Item { Layout.fillWidth: true }
+                    Button { flat: true; text: "✕"; onClicked: filterPopup.close() }
+                }
+
+                Rectangle { Layout.fillWidth: true; height: 1; color: "#E2E8F0" }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 12
+
+                    CustomInput {
+                        id: fromDateInput
+                        label: "From Date (DD-MM-YYYY)"
+                        text: "01-04-2026"
+                        focusInput: true
+                        Layout.fillWidth: true
+                        onReturnPressed: toDateInput.focusInput = true
+                    }
+
+                    CustomInput {
+                        id: toDateInput
+                        label: "To Date (DD-MM-YYYY)"
+                        text: "31-03-2027"
+                        Layout.fillWidth: true
+                        onReturnPressed: popScope.applyFilter()
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 10
+
+                    Button {
+                        background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
+                        contentItem: Text { text: "Clear (Full Year)"; color: "#475569"; font.bold: true; font.pixelSize: 12 }
+                        onClicked: popScope.clearFilter()
+                    }
+
+                    Item { Layout.fillWidth: true }
+
+                    Button {
+                        background: Rectangle { color: "#2563EB"; radius: 6 }
+                        contentItem: Text { text: "Apply Filter (Enter)"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 12 }
+                        onClicked: popScope.applyFilter()
                     }
                 }
             }

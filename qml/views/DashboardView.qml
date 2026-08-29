@@ -6,6 +6,7 @@ import "../components"
 ScrollView {
     id: root
     contentWidth: availableWidth
+    focus: true
 
     signal openNewPaddy()
     signal openNewMilling()
@@ -17,6 +18,53 @@ ScrollView {
     signal openLedgerMenu()
     signal openStockMenu()
     signal openAddVoucherMenu()
+    signal openOtherVoucherMenu()
+
+    property int selectedMenuIndex: 0
+
+    Component.onCompleted: {
+        root.forceActiveFocus()
+    }
+
+    Keys.onUpPressed: function(event) {
+        event.accepted = true
+        if (selectedMenuIndex > 0) {
+            selectedMenuIndex--
+        } else {
+            selectedMenuIndex = 3
+        }
+    }
+
+    Keys.onDownPressed: function(event) {
+        event.accepted = true
+        if (selectedMenuIndex < 3) {
+            selectedMenuIndex++
+        } else {
+            selectedMenuIndex = 0
+        }
+    }
+
+    Keys.onReturnPressed: function(event) {
+        event.accepted = true
+        triggerSelectedMenu()
+    }
+
+    Keys.onEnterPressed: function(event) {
+        event.accepted = true
+        triggerSelectedMenu()
+    }
+
+    function triggerSelectedMenu() {
+        if (selectedMenuIndex === 0) {
+            root.openLedgerMenu()
+        } else if (selectedMenuIndex === 1) {
+            root.openStockMenu()
+        } else if (selectedMenuIndex === 2) {
+            root.openAddVoucherMenu()
+        } else if (selectedMenuIndex === 3) {
+            root.openOtherVoucherMenu()
+        }
+    }
 
     ColumnLayout {
         anchors.fill: parent
@@ -244,29 +292,25 @@ ScrollView {
                     spacing: 10
 
                     Text {
-                        text: "MASTER & VOUCHER MENU"
-                        color: "#64748B"
+                        text: "MASTER & VOUCHER MENU (Use ↑ / ↓ Arrow Keys & Press Enter)"
+                        color: "#2563EB"
                         font.pixelSize: 11
                         font.bold: true
                         font.letterSpacing: 1.0
                     }
 
                     // 1. Ledger Master
-                    Rectangle {
+                    NavMenuItem {
                         id: cardLedger
-                        Layout.fillWidth: true
-                        height: 54
-                        radius: 8
-                        color: mouseLedger.containsMouse ? "#EFF6FF" : "#FFFFFF"
-                        border.color: mouseLedger.containsMouse ? "#2563EB" : "#E2E8F0"
-                        border.width: 1
-
-                        MouseArea {
-                            id: mouseLedger
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            onClicked: root.openLedgerMenu()
-                        }
+                        index: 0
+                        selectedIndex: root.selectedMenuIndex
+                        itemHeight: 54
+                        activeColor: "#EFF6FF"
+                        activeBorderColor: "#2563EB"
+                        normalColor: "#FFFFFF"
+                        normalBorderColor: "#E2E8F0"
+                        onItemHovered: root.selectedMenuIndex = 0
+                        onItemClicked: { root.selectedMenuIndex = 0; root.openLedgerMenu() }
 
                         RowLayout {
                             anchors.fill: parent
@@ -291,21 +335,17 @@ ScrollView {
                     }
 
                     // 2. Stock Master
-                    Rectangle {
+                    NavMenuItem {
                         id: cardStock
-                        Layout.fillWidth: true
-                        height: 54
-                        radius: 8
-                        color: mouseStock.containsMouse ? "#F0FDF4" : "#FFFFFF"
-                        border.color: mouseStock.containsMouse ? "#16A34A" : "#E2E8F0"
-                        border.width: 1
-
-                        MouseArea {
-                            id: mouseStock
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            onClicked: root.openStockMenu()
-                        }
+                        index: 1
+                        selectedIndex: root.selectedMenuIndex
+                        itemHeight: 54
+                        activeColor: "#F0FDF4"
+                        activeBorderColor: "#16A34A"
+                        normalColor: "#FFFFFF"
+                        normalBorderColor: "#E2E8F0"
+                        onItemHovered: root.selectedMenuIndex = 1
+                        onItemClicked: { root.selectedMenuIndex = 1; root.openStockMenu() }
 
                         RowLayout {
                             anchors.fill: parent
@@ -330,21 +370,17 @@ ScrollView {
                     }
 
                     // 3. Add Vouchers
-                    Rectangle {
+                    NavMenuItem {
                         id: cardAddVch
-                        Layout.fillWidth: true
-                        height: 54
-                        radius: 8
-                        color: mouseAddVch.containsMouse ? "#FEF3C7" : "#FFFFFF"
-                        border.color: mouseAddVch.containsMouse ? "#D97706" : "#E2E8F0"
-                        border.width: 1
-
-                        MouseArea {
-                            id: mouseAddVch
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            onClicked: root.openAddVoucherMenu()
-                        }
+                        index: 2
+                        selectedIndex: root.selectedMenuIndex
+                        itemHeight: 54
+                        activeColor: "#FEF3C7"
+                        activeBorderColor: "#D97706"
+                        normalColor: "#FFFFFF"
+                        normalBorderColor: "#E2E8F0"
+                        onItemHovered: root.selectedMenuIndex = 2
+                        onItemClicked: { root.selectedMenuIndex = 2; root.openAddVoucherMenu() }
 
                         RowLayout {
                             anchors.fill: parent
@@ -368,22 +404,18 @@ ScrollView {
                         }
                     }
 
-                    // 4. More Vouchers
-                    Rectangle {
+                    // 4. Other Vouchers
+                    NavMenuItem {
                         id: cardMoreVch
-                        Layout.fillWidth: true
-                        height: 54
-                        radius: 8
-                        color: mouseMoreVch.containsMouse ? "#F3E8FF" : "#FFFFFF"
-                        border.color: mouseMoreVch.containsMouse ? "#7C3AED" : "#E2E8F0"
-                        border.width: 1
-
-                        MouseArea {
-                            id: mouseMoreVch
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            onClicked: root.openAddVoucherMenu()
-                        }
+                        index: 3
+                        selectedIndex: root.selectedMenuIndex
+                        itemHeight: 54
+                        activeColor: "#F3E8FF"
+                        activeBorderColor: "#7C3AED"
+                        normalColor: "#FFFFFF"
+                        normalBorderColor: "#E2E8F0"
+                        onItemHovered: root.selectedMenuIndex = 3
+                        onItemClicked: { root.selectedMenuIndex = 3; root.openOtherVoucherMenu() }
 
                         RowLayout {
                             anchors.fill: parent
@@ -399,8 +431,8 @@ ScrollView {
                             ColumnLayout {
                                 spacing: 1
                                 Layout.fillWidth: true
-                                Text { text: "4. More Vouchers"; color: "#0F172A"; font.pixelSize: 13; font.bold: true }
-                                Text { text: "Journal Vouchers & Contra Transfer Entries"; color: "#64748B"; font.pixelSize: 11 }
+                                Text { text: "4. Other Vouchers"; color: "#0F172A"; font.pixelSize: 13; font.bold: true }
+                                Text { text: "J-Form Mandi Procurement, Journal & Milling Vouchers"; color: "#64748B"; font.pixelSize: 11 }
                             }
 
                             KbdBadge { text: "Alt+5"; badgeColor: "#F3E8FF"; textColor: "#7C3AED"; borderColor: "#E9D5FF" }

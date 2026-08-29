@@ -12,6 +12,10 @@ ColumnLayout {
     property alias inputMethodHints: textInput.inputMethodHints
 
     signal returnPressed()
+    signal leftPressed()
+    signal rightPressed()
+    signal upPressed()
+    signal downPressed()
 
     spacing: 4
 
@@ -66,6 +70,38 @@ ColumnLayout {
                 event.accepted = true
                 Qt.callLater(function() {
                     root.returnPressed()
+                })
+            }
+            Keys.onLeftPressed: function(event) {
+                if (textInput.cursorPosition === 0 || textInput.selectedText.length > 0) {
+                    event.accepted = true
+                    Qt.callLater(function() {
+                        root.leftPressed()
+                    })
+                } else {
+                    event.accepted = false
+                }
+            }
+            Keys.onRightPressed: function(event) {
+                if (textInput.cursorPosition === textInput.text.length || textInput.selectedText.length > 0) {
+                    event.accepted = true
+                    Qt.callLater(function() {
+                        root.rightPressed()
+                    })
+                } else {
+                    event.accepted = false
+                }
+            }
+            Keys.onUpPressed: function(event) {
+                event.accepted = true
+                Qt.callLater(function() {
+                    root.upPressed()
+                })
+            }
+            Keys.onDownPressed: function(event) {
+                event.accepted = true
+                Qt.callLater(function() {
+                    root.downPressed()
                 })
             }
             Keys.onEscapePressed: function(event) {

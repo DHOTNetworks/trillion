@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import "../components"
+import "../dialogs"
 
 ScrollView {
     id: root
@@ -199,21 +200,36 @@ ScrollView {
                     Text { text: "💾 Save Account Group"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 14 }
                     KbdBadge { text: "Enter"; badgeColor: "#1E3A8A"; textColor: "#93C5FD"; borderColor: "#2563EB" }
                 }
-                onClicked: {
-                    var pName = parentCombo.currentText !== "" ? parentCombo.currentText : parentCombo.editText
-                    var success = groupsModel.add_group(
-                        groupNameInput.text,
-                        pName !== "" ? pName : "Primary",
-                        natureCombo.currentText,
-                        descInput.text,
-                        bsCheck.checked
-                    )
-                    if (success) {
-                        partiesModel.reload_data()
-                        root.savedSuccess()
-                    }
-                }
+                onClicked: root.saveGroup()
             }
         }
+    }
+
+    function saveGroup() {
+        if (!groupNameInput.text.trim()) return
+        saveConfirmModal.open()
+    }
+
+    function executeSaveGroup() {
+        var pName = parentCombo.currentText !== "" ? parentCombo.currentText : parentCombo.editText
+        var success = groupsModel.add_group(
+            groupNameInput.text,
+            pName !== "" ? pName : "Primary",
+            natureCombo.currentText,
+            descInput.text,
+            bsCheck.checked
+        )
+        if (success) {
+            partiesModel.reload_data()
+            root.savedSuccess()
+        }
+    }
+
+    ConfirmationModal {
+        id: saveConfirmModal
+        anchors.centerIn: parent
+        titleText: "CONFIRM ACCOUNT GROUP SAVE"
+        messageText: "Are you sure you want to save & create Account Group '" + groupNameInput.text.trim() + "'?"
+        onConfirmed: root.executeSaveGroup()
     }
 }

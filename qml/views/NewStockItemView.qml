@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import "../components"
+import "../dialogs"
 
 ScrollView {
     id: root
@@ -387,35 +388,50 @@ ScrollView {
                     Text { text: "💾 Save Stock Item"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 14 }
                     KbdBadge { text: "Enter"; badgeColor: "#1E3A8A"; textColor: "#93C5FD"; borderColor: "#2563EB" }
                 }
-                onClicked: {
-                    var gstVal = parseFloat(gstCombo.currentText.replace("%", "")) || 0.0
-                    var success = stockItemsModel.add_stock_item(
-                        nameInput.text,
-                        codeInput.text,
-                        typeCombo.currentText,
-                        companyInput.text,
-                        unitCombo.currentText,
-                        parseFloat(purRateInput.text) || 0.0,
-                        parseFloat(saleRateInput.text) || 0.0,
-                        parseFloat(mrpInput.text) || 0.0,
-                        parseFloat(discountInput.text) || 0.0,
-                        hsnInput.text,
-                        gstVal,
-                        parseFloat(cessInput.text) || 0.0,
-                        parseFloat(packingInput.text) || 26.0,
-                        parseInt(opBagsInput.text) || 0,
-                        parseFloat(opQtyInput.text) || 0.0,
-                        parseFloat(opRateInput.text) || 0.0,
-                        parseFloat(opValInput.text) || 0.0,
-                        purLedgerCombo.currentText,
-                        saleLedgerCombo.currentText,
-                        stockLedgerCombo.currentText
-                    )
-                    if (success) {
-                        root.savedSuccess()
-                    }
-                }
+                onClicked: root.saveStockItem()
             }
         }
+    }
+
+    function saveStockItem() {
+        if (!nameInput.text.trim()) return
+        saveConfirmModal.open()
+    }
+
+    function executeSaveStockItem() {
+        var gstVal = parseFloat(gstCombo.currentText.replace("%", "")) || 0.0
+        var success = stockItemsModel.add_stock_item(
+            nameInput.text,
+            codeInput.text,
+            typeCombo.currentText,
+            companyInput.text,
+            unitCombo.currentText,
+            parseFloat(purRateInput.text) || 0.0,
+            parseFloat(saleRateInput.text) || 0.0,
+            parseFloat(mrpInput.text) || 0.0,
+            parseFloat(discountInput.text) || 0.0,
+            hsnInput.text,
+            gstVal,
+            parseFloat(cessInput.text) || 0.0,
+            parseFloat(packingInput.text) || 26.0,
+            parseInt(opBagsInput.text) || 0,
+            parseFloat(opQtyInput.text) || 0.0,
+            parseFloat(opRateInput.text) || 0.0,
+            parseFloat(opValInput.text) || 0.0,
+            purLedgerCombo.currentText,
+            saleLedgerCombo.currentText,
+            stockLedgerCombo.currentText
+        )
+        if (success) {
+            root.savedSuccess()
+        }
+    }
+
+    ConfirmationModal {
+        id: saveConfirmModal
+        anchors.centerIn: parent
+        titleText: "CONFIRM STOCK ITEM SAVE"
+        messageText: "Are you sure you want to save & create Stock Item '" + nameInput.text.trim() + "' under type '" + typeCombo.currentText + "'?"
+        onConfirmed: root.executeSaveStockItem()
     }
 }
