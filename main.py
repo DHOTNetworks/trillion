@@ -55,7 +55,8 @@ def main():
     root_context.setContextProperty("stockItemsModel", stock_items_model)
 
     # Load main QML interface
-    qml_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "qml", "main.qml")
+    base_path = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+    qml_file = os.path.join(base_path, "qml", "main.qml")
     engine.load(QUrl.fromLocalFile(qml_file))
 
     if not engine.rootObjects():

@@ -54,7 +54,7 @@ Rectangle {
             color: "#0F172A"
             font.pixelSize: 20
             font.bold: true
-            font.family: "Menlo, SF Pro Display, Segoe UI, sans-serif"
+            font.family: "Segoe UI"
         }
 
         Text {

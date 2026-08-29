@@ -405,7 +405,7 @@ class VouchersModel(BaseTableModel):
             print(f"Error adding voucher: {e}")
             return False
 
-    @Slot(str, str, str, float, str, str, result=bool)
+    @Slot(str, str, str, float, str, str, str, result=bool)
     def add_cheque_voucher(self, vch_type, dr_party, cr_party, amount, chq_no, narration, vch_date=""):
         try:
             conn = get_connection()

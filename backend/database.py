@@ -1,11 +1,21 @@
 import sqlite3
 import os
+import sys
 from datetime import datetime, date, timedelta
 
-DB_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "mahadev_accounting.db")
+def get_db_path():
+    base_dir = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+    if os.path.basename(base_dir) == 'backend':
+        return os.path.abspath(os.path.join(base_dir, "..", "mahadev_accounting.db"))
+    cand = os.path.join(base_dir, "mahadev_accounting.db")
+    if os.path.exists(cand):
+        return cand
+    return os.path.abspath(os.path.join(base_dir, "..", "mahadev_accounting.db"))
+
+DB_FILE = get_db_path()
 
 def get_connection():
-    conn = sqlite3.connect(DB_FILE)
+    conn = sqlite3.connect(get_db_path())
     conn.row_factory = sqlite3.Row
     return conn
 

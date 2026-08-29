@@ -141,12 +141,7 @@ FocusScope {
         }
 
         if (typeof vouchersModel !== "undefined" && vouchersModel) {
-            var ok = false
-            if (typeof vouchersModel.add_journal_voucher === "function") {
-                ok = vouchersModel.add_journal_voucher(drParty, crParty, totalDebit, refNote, narrationInput.text.trim(), vchDate, "Journal")
-            } else {
-                ok = vouchersModel.add_cheque_voucher("Journal", drParty, crParty, totalDebit, refNote, narrationInput.text.trim(), vchDate)
-            }
+            var ok = vouchersModel.add_journal_voucher(drParty, crParty, totalDebit, refNote, narrationInput.text.trim(), vchDate, "Journal")
 
             if (ok) {
                 statusMessage = "✅ Journal Voucher " + autoVchCode + " saved & posted successfully!"
@@ -588,7 +583,7 @@ FocusScope {
                                 Text {
                                     anchors.centerIn: parent
                                     text: (typeof partiesModel !== "undefined" && partiesModel && ledgerName.trim()) ? partiesModel.get_ledger_live_balance(ledgerName.trim()) : "0.00 Dr"
-                                    color: "#334155"; font.pixelSize: 11; font.bold: true; font.family: "Menlo, Consolas, sans-serif"
+                                    color: "#334155"; font.pixelSize: 11; font.bold: true; font.family: "Menlo"
                                 }
                             }
 

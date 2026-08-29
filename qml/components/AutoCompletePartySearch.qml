@@ -13,52 +13,36 @@ Rectangle {
 
     property string selectedPartyName: ""
     property alias focusInput: searchInput.focus
+    property var searchResults: []
     signal partySelected(var party)
 
-    ListModel {
-        id: filteredModel
-    }
-
     function updateFilteredList() {
-        filteredModel.clear()
-        if (!partiesModel || typeof partiesModel.get_party_list !== 'function') return
-        
-        var list = partiesModel.get_party_list()
-        var q = searchInput.text.toLowerCase().trim()
-        if (q === "" || !list) return
-
-        for (var i = 0; i < list.length; i++) {
-            var p = list[i]
-            var n = p.name ? String(p.name) : ""
-            var g = p.group_name ? String(p.group_name) : ""
-            var ph = p.phone ? String(p.phone) : ""
-            var ct = p.city ? String(p.city) : ""
-
-            if (n.toLowerCase().indexOf(q) !== -1 || g.toLowerCase().indexOf(q) !== -1) {
-                filteredModel.append({
-                    pName: n,
-                    pGroup: g ? g : "Sundry Debtors",
-                    pPhone: ph,
-                    pCity: ct ? ct : "Raichur"
-                })
-            }
+        if (!partiesModel || typeof partiesModel.search_parties !== 'function') {
+            searchResults = []
+            return
         }
+        var q = searchInput.text.trim()
+        if (q === "") {
+            searchResults = []
+            return
+        }
+        searchResults = partiesModel.search_parties(q)
         searchList.currentIndex = 0
     }
 
     function selectCurrentItem() {
-        if (filteredModel.count > 0 && searchList.currentIndex >= 0 && searchList.currentIndex < filteredModel.count) {
-            var item = filteredModel.get(searchList.currentIndex)
+        if (searchResults && searchResults.length > 0 && searchList.currentIndex >= 0 && searchList.currentIndex < searchResults.length) {
+            var item = searchResults[searchList.currentIndex]
             if (item) {
-                var pName = item.pName
+                var pName = item.name ? String(item.name) : ""
                 searchInput.text = pName
                 root.selectedPartyName = pName
-                popup.close()
+                root.searchResults = []
                 root.partySelected({
                     name: pName,
-                    group_name: item.pGroup,
-                    phone: item.pPhone,
-                    city: item.pCity
+                    group_name: item.group_name ? String(item.group_name) : "Sundry Debtors",
+                    phone: item.phone ? String(item.phone) : "",
+                    city: item.city ? String(item.city) : "Raichur"
                 })
             }
         }
@@ -81,43 +65,37 @@ Rectangle {
             color: "#0F172A"
             font.pixelSize: 13
             font.bold: true
+            font.family: "Segoe UI"
             background: null
             Layout.fillWidth: true
             selectByMouse: true
 
-            onTextChanged: {
-                root.updateFilteredList()
-                if (filteredModel.count > 0 && text.trim().length > 0) {
-                    popup.open()
-                } else {
-                    popup.close()
-                }
-            }
+            onTextChanged: root.updateFilteredList()
 
-            // Arrow keys navigation bounded strictly to filteredModel.count
+            // Arrow keys navigation bounded strictly to searchResults.length
             Keys.onDownPressed: function(event) {
-                if (popup.opened && filteredModel.count > 0) {
+                if (dropdownBox.visible && root.searchResults && root.searchResults.length > 0) {
                     event.accepted = true
-                    searchList.currentIndex = Math.min(filteredModel.count - 1, searchList.currentIndex + 1)
+                    searchList.currentIndex = Math.min(root.searchResults.length - 1, searchList.currentIndex + 1)
                 }
             }
 
             Keys.onUpPressed: function(event) {
-                if (popup.opened && filteredModel.count > 0) {
+                if (dropdownBox.visible && root.searchResults && root.searchResults.length > 0) {
                     event.accepted = true
                     searchList.currentIndex = Math.max(0, searchList.currentIndex - 1)
                 }
             }
 
             Keys.onReturnPressed: function(event) {
-                if (popup.opened && filteredModel.count > 0) {
+                if (dropdownBox.visible && root.searchResults && root.searchResults.length > 0) {
                     event.accepted = true
                     root.selectCurrentItem()
                 }
             }
 
             Keys.onEnterPressed: function(event) {
-                if (popup.opened && filteredModel.count > 0) {
+                if (dropdownBox.visible && root.searchResults && root.searchResults.length > 0) {
                     event.accepted = true
                     root.selectCurrentItem()
                 }
@@ -131,26 +109,25 @@ Rectangle {
         }
     }
 
-    // FLOATING POPUP OVERLAY SIZED STRICTLY TO MATCHES COUNT
-    Popup {
-        id: popup
+    // FLOATING DROPDOWN OVERLAY (LIGHTWEIGHT RECTANGLE PREVENTING WIN32 POPUP GRAB HANGS)
+    Rectangle {
+        id: dropdownBox
+        z: 9999
         y: root.height + 4
         width: root.width
-        implicitHeight: Math.min(180, Math.max(38, filteredModel.count * 36 + 8))
-        padding: 4
-        closePolicy: Popup.CloseOnPressOutside | Popup.CloseOnEscape
+        height: Math.min(200, (root.searchResults ? root.searchResults.length : 0) * 36 + 8)
+        visible: searchInput.activeFocus && root.searchResults && root.searchResults.length > 0 && searchInput.text.trim().length > 0
+        color: "#FFFFFF"
+        border.color: "#2563EB"
+        border.width: 1
+        radius: 6
 
-        background: Rectangle {
-            color: "#FFFFFF"
-            border.color: "#2563EB"
-            border.width: 1
-            radius: 6
-        }
-
-        contentItem: ListView {
+        ListView {
             id: searchList
+            anchors.fill: parent
+            anchors.margins: 4
             clip: true
-            model: filteredModel
+            model: root.searchResults
             currentIndex: 0
 
             delegate: Rectangle {
@@ -177,10 +154,11 @@ Rectangle {
                     spacing: 8
 
                     Text {
-                        text: model.pName
+                        text: (modelData && modelData.name) ? String(modelData.name) : ""
                         color: index === searchList.currentIndex ? "#2563EB" : "#0F172A"
                         font.pixelSize: 12
                         font.bold: true
+                        font.family: "Segoe UI"
                         Layout.fillWidth: true
                         elide: Text.ElideRight
                     }
@@ -193,9 +171,10 @@ Rectangle {
                         Text {
                             id: groupTxt
                             anchors.centerIn: parent
-                            text: model.pGroup
+                            text: (modelData && modelData.group_name) ? String(modelData.group_name) : "Sundry Debtors"
                             color: index === searchList.currentIndex ? "#1D4ED8" : "#64748B"
                             font.pixelSize: 10
+                            font.family: "Segoe UI"
                         }
                     }
                 }

@@ -18,9 +18,9 @@ Rectangle {
     Text {
         id: label
         anchors.centerIn: parent
-        font.pixelSize: 11
+        font.pixelSize: 10
         font.bold: true
-        font.family: "Menlo, Monaco, Consolas, monospace"
+        font.family: "Menlo"
         color: root.textColor
     }
 }

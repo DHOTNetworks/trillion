@@ -1,1 +1,12 @@
 .DS_Store
+build/
+build_*/
+dist/
+*.dmg
+*.app
+*.log
+__pycache__/
+*.pyc
+*.db-journal
+*.db-wal
+*.db-shm

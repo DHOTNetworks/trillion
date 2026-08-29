@@ -159,11 +159,12 @@ Rectangle {
                             text: {
                                 if (!roleKey) return ""
                                 try {
+                                    if (listView.model && typeof listView.model.get_value === "function") {
+                                        var val = listView.model.get_value(rowRect.rowIndexVal, roleKey)
+                                        if (val !== undefined && val !== null) return String(val)
+                                    }
                                     if (rowRect.rowData && rowRect.rowData[roleKey] !== undefined && rowRect.rowData[roleKey] !== null) {
                                         return String(rowRect.rowData[roleKey])
-                                    }
-                                    if (typeof model !== "undefined" && model && model[roleKey] !== undefined && model[roleKey] !== null) {
-                                        return String(model[roleKey])
                                     }
                                 } catch(e) {}
                                 return ""
@@ -175,7 +176,7 @@ Rectangle {
                                 return "#1E293B"
                             }
                             font.pixelSize: 12
-                            font.family: "Menlo, Consolas, sans-serif"
+                            font.family: "Menlo"
                             font.bold: roleKey === "net_amount" || roleKey === "total_amount" || roleKey === "slip_no" || roleKey === "invoice_no" || roleKey === "closeValVal"
                             Layout.preferredWidth: (root.columnWidths && colIndex < root.columnWidths.length) ? root.columnWidths[colIndex] : 100
                             Layout.fillWidth: (root.columnWidths && colIndex < root.columnWidths.length) ? false : true

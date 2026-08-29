@@ -6,7 +6,7 @@ ColumnLayout {
     id: root
     property string label: ""
     property string placeholderText: ""
-    property string text: ""
+    property alias text: textInput.text
     property bool isRequired: false
     property alias focusInput: textInput.focus
     property alias inputMethodHints: textInput.inputMethodHints
@@ -50,15 +50,12 @@ ColumnLayout {
             anchors.fill: parent
             anchors.leftMargin: 10
             anchors.rightMargin: 10
-            text: root.text
             placeholderText: root.placeholderText
             color: "#0F172A"
             font.pixelSize: 13
-            font.family: "Menlo, Consolas, sans-serif"
+            font.family: "Menlo"
             background: null
             selectByMouse: true
-
-            onTextChanged: root.text = textInput.text
 
             Keys.onReturnPressed: function(event) {
                 event.accepted = true

@@ -192,21 +192,21 @@ ScrollView {
                         ColumnLayout {
                             spacing: 2
                             Text { text: "GSTIN Number:"; color: "#64748B"; font.pixelSize: 11 }
-                            Text { text: "29AAACM8899F1Z4"; color: "#0F172A"; font.pixelSize: 12; font.bold: true; font.family: "Menlo, Consolas, sans-serif" }
+                            Text { text: "29AAACM8899F1Z4"; color: "#0F172A"; font.pixelSize: 12; font.bold: true; font.family: "Menlo" }
                         }
 
                         // PAN
                         ColumnLayout {
                             spacing: 2
                             Text { text: "PAN Number:"; color: "#64748B"; font.pixelSize: 11 }
-                            Text { text: "AAACM8899F"; color: "#0F172A"; font.pixelSize: 12; font.bold: true; font.family: "Menlo, Consolas, sans-serif" }
+                            Text { text: "AAACM8899F"; color: "#0F172A"; font.pixelSize: 12; font.bold: true; font.family: "Menlo" }
                         }
 
                         // FSSAI
                         ColumnLayout {
                             spacing: 2
                             Text { text: "FSSAI License:"; color: "#64748B"; font.pixelSize: 11 }
-                            Text { text: "11223344556677"; color: "#0F172A"; font.pixelSize: 12; font.bold: true; font.family: "Menlo, Consolas, sans-serif" }
+                            Text { text: "11223344556677"; color: "#0F172A"; font.pixelSize: 12; font.bold: true; font.family: "Menlo" }
                         }
 
                         // Business Type

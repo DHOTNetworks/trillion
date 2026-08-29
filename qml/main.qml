@@ -21,6 +21,7 @@ ApplicationWindow {
     property int lastLedgerSubmenuIndex: 0
     property int lastStockSubmenuIndex: 0
     property int lastVoucherSubmenuIndex: 0
+    property int lastOtherSubmenuIndex: 0
     property bool isShortcutsModalOpen: false
     property bool isPaddyModalOpen: false
     property bool isItemMovementModalOpen: false
