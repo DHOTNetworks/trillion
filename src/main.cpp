@@ -4,6 +4,9 @@
 #include <QQuickStyle>
 #include <QIcon>
 #include <QDir>
+#include <QFile>
+#include <QTextStream>
+#include <QDateTime>
 #include <QDebug>
 
 #include "database_manager.h"
@@ -18,7 +21,42 @@
 #include "models/milling_model.h"
 #include "models/financial_years_model.h"
 
+// File logging handler to write diagnostic logs to debug_log.txt
+void customLogMessageHandler(QtMsgType type, const QMessageLogContext &context, const QString &msg) {
+    QString txt;
+    QString timeStr = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss.zzz");
+    switch (type) {
+        case QtDebugMsg:
+            txt = QString("[%1] [DEBUG] %2").arg(timeStr, msg);
+            break;
+        case QtInfoMsg:
+            txt = QString("[%1] [INFO] %2").arg(timeStr, msg);
+            break;
+        case QtWarningMsg:
+            txt = QString("[%1] [WARNING] %2 (%3:%4)").arg(timeStr, msg, context.file ? context.file : "", QString::number(context.line));
+            break;
+        case QtCriticalMsg:
+            txt = QString("[%1] [CRITICAL] %2 (%3:%4)").arg(timeStr, msg, context.file ? context.file : "", QString::number(context.line));
+            break;
+        case QtFatalMsg:
+            txt = QString("[%1] [FATAL] %2 (%3:%4)").arg(timeStr, msg, context.file ? context.file : "", QString::number(context.line));
+            break;
+    }
+
+    QFile outFile(QDir::current().filePath("debug_log.txt"));
+    if (outFile.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
+        QTextStream ts(&outFile);
+        ts << txt << "\n";
+        outFile.close();
+    }
+}
+
 int main(int argc, char* argv[]) {
+    // Install log handler
+    qInstallMessageHandler(customLogMessageHandler);
+
+    qInfo() << "Starting Mahadev Rice Mill ERP application...";
+
     // Set Basic style to ensure custom dark theme renders across all platforms
     QQuickStyle::setStyle("Basic");
 
@@ -56,26 +94,28 @@ int main(int argc, char* argv[]) {
     ctx->setContextProperty("stockItemsModel", &stockItemsModel);
     ctx->setContextProperty("financialYearsModel", &financialYearsModel);
 
-    // Support both QRC embedded build and file system execution
-    const QUrl url = QUrl("qrc:/qml/main.qml");
+    // Resolve QML Main entry point (prefer QRC embedded, fallback to local app directory)
+    QUrl mainQmlUrl;
+    if (QFile::exists(":/qml/main.qml")) {
+        qInfo() << "Loading QML from embedded resource: qrc:/qml/main.qml";
+        mainQmlUrl = QUrl("qrc:/qml/main.qml");
+    } else {
+        QString localPath = QDir::current().absoluteFilePath("qml/main.qml");
+        qInfo() << "Loading QML from local filesystem path:" << localPath;
+        mainQmlUrl = QUrl::fromLocalFile(localPath);
+    }
+
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreated,
-                     &app, [url](QObject* obj, const QUrl& objUrl) {
-        if (!obj && url == objUrl) {
-            qCritical() << "Failed to load QML interface!";
+                     &app, [mainQmlUrl](QObject* obj, const QUrl& objUrl) {
+        if (!obj && mainQmlUrl == objUrl) {
+            qCritical() << "FATAL: Failed to load root QML interface from" << objUrl;
             QCoreApplication::exit(-1);
+        } else {
+            qInfo() << "Root QML interface loaded successfully!";
         }
     }, Qt::QueuedConnection);
 
-    if (QFile::exists(":/qml/main.qml")) {
-        engine.load(url);
-    } else {
-        engine.load(QUrl::fromLocalFile(QDir::current().absoluteFilePath("qml/main.qml")));
-    }
+    engine.load(mainQmlUrl);
 
-    if (engine.rootObjects().isEmpty()) {
-        return -1;
-    }
-
-    qInfo() << "Mahadev Rice Mill ERP (Native C++ Engine) launched successfully!";
     return app.exec();
 }

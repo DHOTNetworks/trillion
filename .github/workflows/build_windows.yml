@@ -44,6 +44,12 @@ jobs:
           mkdir dist
           mkdir dist\MahadevRiceMillERP
           copy build\MahadevRiceMillERP.exe dist\MahadevRiceMillERP\
+          
+          REM Copy local QML folder & Database template into distribution folder
+          xcopy qml dist\MahadevRiceMillERP\qml\ /E /I /Y
+          copy mahadev_accounting.db dist\MahadevRiceMillERP\
+          
+          REM Deploy Qt runtime plugins and compiler runtime
           windeployqt --qmldir qml --release --compiler-runtime --no-translations dist\MahadevRiceMillERP\MahadevRiceMillERP.exe
 
       - name: Copy MSVC CRT DLLs
