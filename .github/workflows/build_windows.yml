@@ -62,17 +62,16 @@ jobs:
         run: |
           choco install 7zip.commandline -y
           
-          # Write SFX config
-          $sfxConfig = @'
-;!@Install@!UTF-8!
-Title="Mahadev Rice Mill Accounting ERP"
-ExecuteFile="MahadevRiceMillERP.exe"
-;!@InstallEnd@!
-'@
-          [System.IO.File]::WriteAllText("dist\config.txt", $sfxConfig)
-
+          # Write SFX config file using standard Set-Content with indentation preserved
+          @'
+          ;!@Install@!UTF-8!
+          Title="Mahadev Rice Mill Accounting ERP"
+          ExecuteFile="MahadevRiceMillERP.exe"
+          ;!@InstallEnd@!
+          '@ | Out-File -FilePath "dist\config.txt" -Encoding ascii
+          
           # Download 7z SFX module
-          Invoke-WebRequest -Uri "https://github.com/chrislake/7zsfxmm/releases/download/1.7.0.3900/7zsd_All.sfx" -OutFile dist\7zsd.sfx -UseBasicParsing
+          Invoke-WebRequest -Uri "https://github.com/chrislake/7zsfxmm/releases/download/1.7.0.3900/7zsd_All.sfx" -OutFile "dist\7zsd.sfx" -UseBasicParsing
           
           cd dist\app
           7za a -r -mx9 ..\app_payload.7z *
