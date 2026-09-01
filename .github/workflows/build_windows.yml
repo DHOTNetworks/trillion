@@ -38,13 +38,20 @@ jobs:
         run: |
           cmake --build build --config Release
 
-      - name: Deploy Windows Binary with windeployqt
+      - name: Deploy Windows Binary with windeployqt & MSVC Runtime
         shell: cmd
         run: |
           mkdir dist
           mkdir dist\MahadevRiceMillERP
           copy build\MahadevRiceMillERP.exe dist\MahadevRiceMillERP\
-          windeployqt --qmldir qml --release dist\MahadevRiceMillERP\MahadevRiceMillERP.exe
+          
+          REM Deploy all Qt plugins, QML imports, and compiler runtime
+          windeployqt --qmldir qml --release --compiler-runtime --no-translations dist\MahadevRiceMillERP\MahadevRiceMillERP.exe
+          
+          REM Explicitly copy MSVC C/C++ Runtime DLLs (msvcp140.dll, vcruntime140.dll, vcruntime140_1.dll)
+          powershell -Command "Get-ChildItem -Path '${env:VCToolsRedistDir}x64\Microsoft.VC143.CRT\*.dll' | Copy-Item -Destination 'dist\MahadevRiceMillERP\' -Force"
+          
+          REM Create distribution zip
           cd dist
           tar -a -c -f "MahadevRiceMill-Windows-x64.zip" MahadevRiceMillERP
 
