@@ -1,12 +1,36 @@
-.DS_Store
-build/
-build_*/
-dist/
-*.dmg
-*.app
-*.log
+# Environments
+venv/
+.venv/
+env/
+
+# Byte-compiled / cache
 __pycache__/
-*.pyc
-*.db-journal
-*.db-wal
-*.db-shm
+*.py[cod]
+*$py.class
+*.bak
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Build artifacts
+build/
+build-*/
+dist/
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.dylib
+*.a
+*.lib
+
+# Local SQLite databases (keep data folder template if needed)
+data/
+*.bak

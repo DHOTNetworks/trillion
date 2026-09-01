@@ -9,6 +9,7 @@ ColumnLayout {
     property alias text: textInput.text
     property bool isRequired: false
     property alias focusInput: textInput.focus
+    property alias isFocused: textInput.activeFocus
     property alias inputMethodHints: textInput.inputMethodHints
 
     signal returnPressed()
@@ -16,6 +17,11 @@ ColumnLayout {
     signal rightPressed()
     signal upPressed()
     signal downPressed()
+
+    function focusAndSelect() {
+        textInput.forceActiveFocus()
+        textInput.selectAll()
+    }
 
     spacing: 4
 

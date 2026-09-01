@@ -11,6 +11,7 @@ ScrollView {
     signal cancelRequested()
     signal openItemMovement(string itemName)
 
+    property int totalItemsCount: 0
     property real totalClosingQty: 0.0
     property real totalClosingVal: 0.0
     property string searchQuery: ""
@@ -29,6 +30,7 @@ ScrollView {
         stockRegisterModel.clear()
         totalClosingQty = 0.0
         totalClosingVal = 0.0
+        var count = 0
         
         var query = searchQuery.trim().toLowerCase()
         
@@ -46,24 +48,37 @@ ScrollView {
                 }
             }
 
+            var opQ = (it.opening_qty !== undefined && it.opening_qty !== null) ? Number(it.opening_qty) : 0.0
+            var inQ = (it.inward_qty !== undefined && it.inward_qty !== null) ? Number(it.inward_qty) : 0.0
+            var outQ = (it.outward_qty !== undefined && it.outward_qty !== null) ? Number(it.outward_qty) : 0.0
+            var closeQ = (it.closing_qty !== undefined && it.closing_qty !== null) ? Number(it.closing_qty) : 0.0
+            var rVal = (it.rate !== undefined && it.rate !== null) ? Number(it.rate) : 0.0
+            var closeV = (it.closing_value !== undefined && it.closing_value !== null) ? Number(it.closing_value) : 0.0
+
             stockRegisterModel.append({
                 idVal: it.id,
                 nameVal: name,
                 codeVal: code ? code : "-",
                 typeVal: typeStr ? typeStr : "-",
                 unitVal: it.unit ? it.unit : "Qtl",
-                opQtyVal: it.opening_qty.toFixed(2),
-                inQtyVal: it.inward_qty.toFixed(2),
-                outQtyVal: it.outward_qty.toFixed(2),
-                closeQtyVal: it.closing_qty.toFixed(2),
-                closeQtyNum: it.closing_qty,
-                rateVal: "₹" + it.rate.toFixed(2),
-                closeValVal: "₹" + it.closing_value.toLocaleString(Qt.locale(), "f", 2),
-                closeValNum: it.closing_value
+                opBags: it.opening_bags || 0,
+                inBags: it.inward_bags || 0,
+                outBags: it.outward_bags || 0,
+                closeBags: it.closing_bags || 0,
+                opQtyVal: it.opening_qty_fmt || opQ.toFixed(2),
+                inQtyVal: it.inward_qty_fmt || inQ.toFixed(2),
+                outQtyVal: it.outward_qty_fmt || outQ.toFixed(2),
+                closeQtyVal: it.closing_qty_fmt || closeQ.toFixed(2),
+                closeQtyNum: closeQ,
+                rateVal: it.rate_fmt || ("₹" + rVal.toFixed(2)),
+                closeValVal: it.closing_value_fmt || ("₹" + closeV.toFixed(2)),
+                closeValNum: closeV
             })
-            totalClosingQty += it.closing_qty
-            totalClosingVal += it.closing_value
+            totalClosingQty += closeQ
+            totalClosingVal += closeV
+            count++
         }
+        totalItemsCount = count
     }
 
     ListModel { id: stockRegisterModel }
@@ -80,13 +95,13 @@ ScrollView {
             ColumnLayout {
                 spacing: 2
                 Text {
-                    text: "📦 Inventory Stock Register & Item Movement Details"
+                    text: "📊 Real-time Stock Register & Audited Inventory"
                     color: "#0F172A"
                     font.pixelSize: 20
                     font.bold: true
                 }
                 Text {
-                    text: "Real-time raw paddy, finished rice & by-product stock balances, inward arrivals, outward sales & valuation."
+                    text: "Itemized tracking of Opening, Inward, Outward & Closing Balances across all grains and commodities."
                     color: "#64748B"
                     font.pixelSize: 12
                 }
@@ -96,40 +111,36 @@ ScrollView {
 
             Button {
                 id: backBtn
-                background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
-                contentItem: RowLayout {
-                    spacing: 6
-                    Text { text: "← Back to Dashboard"; color: "#475569"; font.pixelSize: 13; font.bold: true }
-                    KbdBadge { text: "Esc"; badgeColor: "#DC2626"; textColor: "#FFF"; borderColor: "#B91C1C" }
-                }
+                background: Rectangle { color: backBtn.hovered ? "#475569" : "#334155"; radius: 6 }
+                contentItem: Text { text: "← Back (Esc)"; color: "#F8FAFC"; font.pixelSize: 12; font.bold: true }
                 onClicked: root.cancelRequested()
             }
         }
 
         Rectangle { Layout.fillWidth: true; height: 1; color: "#E2E8F0" }
 
-        // SUMMARY KPI METRICS BAR
+        // STATS STRIP
         RowLayout {
             Layout.fillWidth: true
-            spacing: 14
+            spacing: 12
 
             StatCard {
-                title: "TOTAL STOCK ITEMS"
-                value: stockRegisterModel.count.toString() + " Items"
+                title: "TOTAL COMMODITIES"
+                value: root.totalItemsCount.toString()
                 accentColor: "#2563EB"
                 Layout.fillWidth: true
             }
 
             StatCard {
                 title: "NET CLOSING STOCK"
-                value: root.totalClosingQty.toFixed(1) + " Qtl"
+                value: (typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.format_qty(root.totalClosingQty) : (root.totalClosingQty.toFixed(1) + " Qtl")
                 accentColor: "#16A34A"
                 Layout.fillWidth: true
             }
 
             StatCard {
                 title: "TOTAL STOCK VALUATION"
-                value: "₹" + root.totalClosingVal.toLocaleString(Qt.locale(), "f", 2)
+                value: (typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.format_inr(root.totalClosingVal) : ("₹" + root.totalClosingVal.toFixed(2))
                 accentColor: "#D97706"
                 Layout.fillWidth: true
             }

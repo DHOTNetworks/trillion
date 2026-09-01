@@ -1,0 +1,48 @@
+name: Build Windows Standalone EXE
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Qt 6.7.2
+        uses: jurplel/install-qt-action@v3
+        with:
+          version: '6.7.2'
+          arch: 'win64_msvc2022_64'
+          modules: 'qtdeclarative qtquickcontrols2'
+          cache: true
+
+      - name: Setup MSVC Developer Command Prompt
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Configure CMake
+        run: |
+          cmake -B build -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON
+
+      - name: Build Application
+        run: |
+          cmake --build build --config Release
+
+      - name: Deploy Qt Dependencies (windeployqt)
+        run: |
+          windeployqt --qmldir qml --release --compiler-runtime build/MahadevRiceMillERP.exe
+          mkdir dist
+          copy build\MahadevRiceMillERP.exe dist\
+          xcopy build\* dist\ /E /I /Y
+
+      - name: Upload Windows Standalone Binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mahadev-ERP-Windows-x64
+          path: dist/

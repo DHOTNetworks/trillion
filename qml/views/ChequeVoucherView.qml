@@ -14,8 +14,8 @@ FocusScope {
     // Mode: "Payment" (F3) or "Receipt" (F4)
     property string voucherMode: "Payment"
 
-    property string autoVoucherNo: "1"
-    property string autoVchCode: "VCH-9004"
+    property string autoVoucherNo: ""
+    property string autoVchCode: ""
     
     property real totalDebit: 0.0
     property real totalCredit: 0.0
@@ -39,13 +39,7 @@ FocusScope {
     }
 
     function resetForm() {
-        if (typeof vouchersModel !== "undefined" && vouchersModel) {
-            cursorMax()
-        } else {
-            autoVchCode = "VCH-9004"
-            autoVoucherNo = "4"
-        }
-
+        cursorMax()
         voucherRowsModel.clear()
         // Clean empty entries (zero prefilled data)
         voucherRowsModel.append({ drcr: "Dr", ledgerName: "", debitAmt: "", creditAmt: "", refNo: "" })
@@ -58,8 +52,12 @@ FocusScope {
 
     function cursorMax() {
         if (typeof vouchersModel !== "undefined" && vouchersModel) {
-            autoVchCode = vouchersModel.get_next_voucher_no()
-            autoVoucherNo = autoVchCode.replace("VCH-", "")
+            var prefix = (root.voucherMode === "Receipt" || root.voucherMode === "ChRt") ? "ChRt" : "ChPt"
+            autoVchCode = vouchersModel.get_next_voucher_no(prefix)
+            autoVoucherNo = autoVchCode
+        } else {
+            autoVchCode = ""
+            autoVoucherNo = ""
         }
     }
 
@@ -693,7 +691,7 @@ FocusScope {
 
                             Text {
                                 Layout.preferredWidth: 140
-                                text: "₹" + root.totalDebit.toLocaleString(Qt.locale(), "f", 2)
+                                text: (typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.format_inr(root.totalDebit) : ("₹" + root.totalDebit.toFixed(2))
                                 color: "#2563EB"
                                 font.pixelSize: 13
                                 font.bold: true
@@ -702,7 +700,7 @@ FocusScope {
 
                             Text {
                                 Layout.preferredWidth: 140
-                                text: "₹" + root.totalCredit.toLocaleString(Qt.locale(), "f", 2)
+                                text: (typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.format_inr(root.totalCredit) : ("₹" + root.totalCredit.toFixed(2))
                                 color: "#2563EB"
                                 font.pixelSize: 13
                                 font.bold: true

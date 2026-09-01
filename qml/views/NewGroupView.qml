@@ -4,17 +4,17 @@ import QtQuick.Layouts
 import "../components"
 import "../dialogs"
 
-ScrollView {
+Item {
     id: root
-    contentWidth: availableWidth
-    clip: true
+    anchors.fill: parent
 
     signal cancelRequested()
     signal savedSuccess()
 
     ColumnLayout {
-        width: root.availableWidth > 0 ? root.availableWidth : 1100
-        spacing: 20
+        anchors.fill: parent
+        anchors.margins: 14
+        spacing: 12
 
         // Page Header Bar
         RowLayout {
@@ -22,17 +22,17 @@ ScrollView {
             spacing: 12
 
             ColumnLayout {
-                spacing: 2
+                spacing: 1
                 Text {
                     text: "📁 Create New Account Group"
                     color: "#0F172A"
-                    font.pixelSize: 20
+                    font.pixelSize: 18
                     font.bold: true
                 }
                 Text {
                     text: "Define new accounting hierarchy sub-groups under Assets, Liabilities, Income, or Expenses."
                     color: "#64748B"
-                    font.pixelSize: 12
+                    font.pixelSize: 11
                 }
             }
 
@@ -43,7 +43,7 @@ ScrollView {
                 background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
                 contentItem: RowLayout {
                     spacing: 6
-                    Text { text: "← Back to Dashboard"; color: "#475569"; font.pixelSize: 13; font.bold: true }
+                    Text { text: "← Back to Dashboard"; color: "#475569"; font.pixelSize: 12; font.bold: true }
                     KbdBadge { text: "Esc"; badgeColor: "#DC2626"; textColor: "#FFF"; borderColor: "#B91C1C" }
                 }
                 onClicked: root.cancelRequested()
@@ -55,31 +55,31 @@ ScrollView {
         // GROUP DETAILS FORM CARD
         Rectangle {
             Layout.fillWidth: true
-            implicitHeight: formCol.implicitHeight + 32
+            implicitHeight: formCol.implicitHeight + 24
             color: "#FFFFFF"
             border.color: "#E2E8F0"
             border.width: 1
-            radius: 10
+            radius: 8
 
             ColumnLayout {
                 id: formCol
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.top: parent.top
-                anchors.margins: 16
-                spacing: 16
+                anchors.margins: 12
+                spacing: 12
 
                 Text {
                     text: "ACCOUNT GROUP DEFINITION & CLASSIFICATION"
                     color: "#2563EB"
                     font.pixelSize: 11
                     font.bold: true
-                    font.letterSpacing: 1.0
+                    font.letterSpacing: 0.8
                 }
 
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: 14
+                    spacing: 12
 
                     CustomInput {
                         id: groupNameInput
@@ -89,6 +89,8 @@ ScrollView {
                         focusInput: true
                         Layout.fillWidth: true
                         onReturnPressed: parentCombo.focusAndOpen()
+                        onRightPressed: parentCombo.focusAndOpen()
+                        onDownPressed: natureCombo.focusAndOpen()
                     }
 
                     CustomWhiteCombo {
@@ -97,12 +99,14 @@ ScrollView {
                         Layout.fillWidth: true
                         model: (groupsModel && typeof groupsModel.get_parent_groups === 'function') ? groupsModel.get_parent_groups() : (partiesModel ? partiesModel.get_account_groups() : [])
                         onReturnPressed: natureCombo.focusAndOpen()
+                        onLeftPressed: groupNameInput.focusInput = true
+                        onDownPressed: descInput.focusInput = true
                     }
                 }
 
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: 14
+                    spacing: 12
 
                     CustomWhiteCombo {
                         id: natureCombo
@@ -110,6 +114,9 @@ ScrollView {
                         Layout.preferredWidth: 240
                         model: ["Assets", "Liabilities", "Income", "Expense"]
                         onReturnPressed: descInput.focusInput = true
+                        onRightPressed: descInput.focusInput = true
+                        onUpPressed: groupNameInput.focusInput = true
+                        onDownPressed: submitBtn.focus = true
                     }
 
                     CustomInput {
@@ -117,7 +124,10 @@ ScrollView {
                         label: "Description / Notes"
                         placeholderText: "Sub-group for tracking specific accounting transactions and reporting"
                         Layout.fillWidth: true
-                        onReturnPressed: bsCheck.focus = true
+                        onReturnPressed: root.saveGroup()
+                        onLeftPressed: natureCombo.focusAndOpen()
+                        onUpPressed: parentCombo.focusAndOpen()
+                        onDownPressed: submitBtn.focus = true
                     }
                 }
 
@@ -152,27 +162,19 @@ ScrollView {
                             property bool checked: true
                             onClicked: checked = !checked
                         }
-
-                        Keys.onReturnPressed: function(event) {
-                            event.accepted = true
-                            bsCheckMouse.checked = !bsCheckMouse.checked
-                            submitBtn.focus = true
-                        }
-                        Keys.onSpacePressed: function(event) {
-                            event.accepted = true
-                            bsCheckMouse.checked = !bsCheckMouse.checked
-                        }
                     }
 
                     Text {
                         text: "Extract in Financial Statements (Balance Sheet & Profit / Loss Statement)"
                         color: "#0F172A"
-                        font.pixelSize: 13
+                        font.pixelSize: 12
                         font.bold: true
                     }
                 }
             }
         }
+
+        Item { Layout.fillHeight: true }
 
         // SAVE & CANCEL ACTION BAR
         RowLayout {
@@ -194,12 +196,14 @@ ScrollView {
 
             Button {
                 id: submitBtn
-                background: Rectangle { color: submitBtn.hovered ? "#1D4ED8" : "#2563EB"; radius: 6 }
+                background: Rectangle { color: (submitBtn.hovered || submitBtn.activeFocus) ? "#1D4ED8" : "#2563EB"; radius: 6; border.color: submitBtn.activeFocus ? "#93C5FD" : "transparent"; border.width: 2 }
                 contentItem: RowLayout {
                     spacing: 6
                     Text { text: "💾 Save Account Group"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 14 }
                     KbdBadge { text: "Enter"; badgeColor: "#1E3A8A"; textColor: "#93C5FD"; borderColor: "#2563EB" }
                 }
+                Keys.onReturnPressed: root.saveGroup()
+                Keys.onEnterPressed: root.saveGroup()
                 onClicked: root.saveGroup()
             }
         }
@@ -231,5 +235,11 @@ ScrollView {
         titleText: "CONFIRM ACCOUNT GROUP SAVE"
         messageText: "Are you sure you want to save & create Account Group '" + groupNameInput.text.trim() + "'?"
         onConfirmed: root.executeSaveGroup()
+    }
+
+    Component.onCompleted: {
+        Qt.callLater(function() {
+            groupNameInput.focusInput = true
+        })
     }
 }

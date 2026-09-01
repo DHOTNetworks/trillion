@@ -11,8 +11,8 @@ FocusScope {
     signal cancelRequested()
     signal voucherSaved()
 
-    property string autoVoucherNo: "1"
-    property string autoVchCode: "VCH-9004"
+    property string autoVoucherNo: ""
+    property string autoVchCode: ""
     
     property real totalDebit: 0.0
     property real totalCredit: 0.0
@@ -32,13 +32,7 @@ FocusScope {
     }
 
     function resetForm() {
-        if (typeof vouchersModel !== "undefined" && vouchersModel) {
-            cursorMax()
-        } else {
-            autoVchCode = "VCH-9004"
-            autoVoucherNo = "4"
-        }
-
+        cursorMax()
         voucherRowsModel.clear()
         // Clean empty entries (zero prefilled data)
         voucherRowsModel.append({ drcr: "Dr", ledgerName: "", debitAmt: "", creditAmt: "", refNo: "" })
@@ -51,8 +45,11 @@ FocusScope {
 
     function cursorMax() {
         if (typeof vouchersModel !== "undefined" && vouchersModel) {
-            autoVchCode = vouchersModel.get_next_voucher_no()
-            autoVoucherNo = autoVchCode.replace("VCH-", "")
+            autoVchCode = vouchersModel.get_next_voucher_no("Jrnl")
+            autoVoucherNo = autoVchCode
+        } else {
+            autoVchCode = ""
+            autoVoucherNo = ""
         }
     }
 
@@ -654,14 +651,14 @@ FocusScope {
                 ColumnLayout {
                     spacing: 1
                     Text { text: "Total Debit (₹)"; color: "#64748B"; font.pixelSize: 10; font.bold: true }
-                    Text { text: "₹" + root.totalDebit.toLocaleString(Qt.locale(), 'f', 2); color: "#0F172A"; font.pixelSize: 15; font.bold: true }
+                    Text { text: (typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.format_inr(root.totalDebit) : ("₹" + root.totalDebit.toFixed(2)); color: "#0F172A"; font.pixelSize: 15; font.bold: true }
                 }
 
                 // Total Credit Badge
                 ColumnLayout {
                     spacing: 1
                     Text { text: "Total Credit (₹)"; color: "#64748B"; font.pixelSize: 10; font.bold: true }
-                    Text { text: "₹" + root.totalCredit.toLocaleString(Qt.locale(), 'f', 2); color: "#0F172A"; font.pixelSize: 15; font.bold: true }
+                    Text { text: (typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.format_inr(root.totalCredit) : ("₹" + root.totalCredit.toFixed(2)); color: "#0F172A"; font.pixelSize: 15; font.bold: true }
                 }
 
                 // Save Action Button

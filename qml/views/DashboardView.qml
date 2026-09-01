@@ -19,11 +19,26 @@ ScrollView {
     signal openStockMenu()
     signal openAddVoucherMenu()
     signal openOtherVoucherMenu()
+    signal openReportsMenu()
+    signal openPeriodModal()
 
     property int selectedMenuIndex: 0
+    property string activePeriodText: ""
 
     Component.onCompleted: {
         root.forceActiveFocus()
+        if (typeof stockItemsModel !== "undefined" && stockItemsModel) {
+            var fy = stockItemsModel.get_financial_year()
+            var sd = stockItemsModel.get_from_date()
+            var ed = stockItemsModel.get_to_date()
+            var s_fmt = sd.indexOf("-") !== -1 ? sd.split("-").reverse().join("-") : sd
+            var e_fmt = ed.indexOf("-") !== -1 ? ed.split("-").reverse().join("-") : ed
+            if (s_fmt && e_fmt) {
+                root.activePeriodText = s_fmt + " To " + e_fmt + " (" + fy + ")"
+            } else if (fy) {
+                root.activePeriodText = fy
+            }
+        }
     }
 
     Keys.onUpPressed: function(event) {
@@ -31,13 +46,13 @@ ScrollView {
         if (selectedMenuIndex > 0) {
             selectedMenuIndex--
         } else {
-            selectedMenuIndex = 3
+            selectedMenuIndex = 4
         }
     }
 
     Keys.onDownPressed: function(event) {
         event.accepted = true
-        if (selectedMenuIndex < 3) {
+        if (selectedMenuIndex < 4) {
             selectedMenuIndex++
         } else {
             selectedMenuIndex = 0
@@ -63,6 +78,8 @@ ScrollView {
             root.openAddVoucherMenu()
         } else if (selectedMenuIndex === 3) {
             root.openOtherVoucherMenu()
+        } else if (selectedMenuIndex === 4) {
+            root.openReportsMenu()
         }
     }
 
@@ -95,6 +112,28 @@ ScrollView {
 
             RowLayout {
                 spacing: 8
+
+                // Bahi-Khata Financial Year / Accounting Period Selector
+                Button {
+                    id: btnPeriod
+                    background: Rectangle {
+                        color: "#F0FDF4"
+                        border.color: "#16A34A"
+                        border.width: 1.5
+                        radius: 6
+                    }
+                    contentItem: RowLayout {
+                        spacing: 6
+                        Text { text: "📅 Period:"; color: "#166534"; font.pixelSize: 11; font.bold: true }
+                        Text { text: root.activePeriodText; color: "#15803D"; font.pixelSize: 12; font.bold: true }
+                        Rectangle {
+                            width: 16; height: 16; radius: 8; color: "#16A34A"
+                            Text { anchors.centerIn: parent; text: "⚙"; color: "#FFF"; font.pixelSize: 9 }
+                        }
+                    }
+                    onClicked: root.openPeriodModal()
+                }
+
                 Button {
                     id: btnPaddy
                     background: Rectangle { color: "#16A34A"; radius: 6 }
@@ -436,6 +475,41 @@ ScrollView {
                             }
 
                             KbdBadge { text: "Alt+5"; badgeColor: "#F3E8FF"; textColor: "#7C3AED"; borderColor: "#E9D5FF" }
+                        }
+                    }
+
+                    // 5. Reports & Statements
+                    NavMenuItem {
+                        id: cardReports
+                        index: 4
+                        selectedIndex: root.selectedMenuIndex
+                        itemHeight: 54
+                        activeColor: "#ECFDF5"
+                        activeBorderColor: "#059669"
+                        normalColor: "#FFFFFF"
+                        normalBorderColor: "#E2E8F0"
+                        onItemHovered: root.selectedMenuIndex = 4
+                        onItemClicked: { root.selectedMenuIndex = 4; root.openReportsMenu() }
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 14
+                            anchors.rightMargin: 14
+                            spacing: 12
+
+                            Rectangle {
+                                width: 36; height: 36; radius: 8; color: "#DCFCE7"
+                                Text { anchors.centerIn: parent; text: "📊"; font.pixelSize: 18 }
+                            }
+
+                            ColumnLayout {
+                                spacing: 1
+                                Layout.fillWidth: true
+                                Text { text: "5. Reports & Statements"; color: "#0F172A"; font.pixelSize: 13; font.bold: true }
+                                Text { text: "Milling Statement, Stock Register, Party Ledger & Invoices"; color: "#64748B"; font.pixelSize: 11 }
+                            }
+
+                            KbdBadge { text: "Alt+7"; badgeColor: "#ECFDF5"; textColor: "#059669"; borderColor: "#A7F3D0" }
                         }
                     }
                 }

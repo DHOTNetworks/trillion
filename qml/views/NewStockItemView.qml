@@ -4,17 +4,17 @@ import QtQuick.Layouts
 import "../components"
 import "../dialogs"
 
-ScrollView {
+Item {
     id: root
-    contentWidth: availableWidth
-    clip: true
+    anchors.fill: parent
 
     signal cancelRequested()
     signal savedSuccess()
 
     ColumnLayout {
-        width: root.availableWidth > 0 ? root.availableWidth : 1200
-        spacing: 20
+        anchors.fill: parent
+        anchors.margins: 14
+        spacing: 10
 
         // Page Header Bar
         RowLayout {
@@ -22,17 +22,17 @@ ScrollView {
             spacing: 12
 
             ColumnLayout {
-                spacing: 2
+                spacing: 1
                 Text {
                     text: "📦 Define New Inventory Stock Item"
                     color: "#0F172A"
-                    font.pixelSize: 20
+                    font.pixelSize: 18
                     font.bold: true
                 }
                 Text {
-                    text: "Define rice milling product details, GST rate, packing weight, opening valuation & accounting ledgers."
+                    text: "Single-slate item master, GST rates, packing weight, opening valuation & ledger accounts (Enter & ↑/↓/←/→)"
                     color: "#64748B"
-                    font.pixelSize: 12
+                    font.pixelSize: 11
                 }
             }
 
@@ -43,7 +43,7 @@ ScrollView {
                 background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
                 contentItem: RowLayout {
                     spacing: 6
-                    Text { text: "← Back to Dashboard"; color: "#475569"; font.pixelSize: 13; font.bold: true }
+                    Text { text: "← Back to Dashboard"; color: "#475569"; font.pixelSize: 12; font.bold: true }
                     KbdBadge { text: "Esc"; badgeColor: "#DC2626"; textColor: "#FFF"; borderColor: "#B91C1C" }
                 }
                 onClicked: root.cancelRequested()
@@ -52,34 +52,34 @@ ScrollView {
 
         Rectangle { Layout.fillWidth: true; height: 1; color: "#E2E8F0" }
 
-        // SECTION 1: PRIMARY ITEM CLASSIFICATION
+        // CARD 1: PRIMARY ITEM CLASSIFICATION & PRICING
         Rectangle {
             Layout.fillWidth: true
-            implicitHeight: secCol1.implicitHeight + 28
+            implicitHeight: secCol1.implicitHeight + 20
             color: "#FFFFFF"
             border.color: "#E2E8F0"
             border.width: 1
-            radius: 10
+            radius: 8
 
             ColumnLayout {
                 id: secCol1
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.top: parent.top
-                anchors.margins: 14
-                spacing: 12
+                anchors.margins: 10
+                spacing: 8
 
                 Text {
-                    text: "1. PRIMARY ITEM CLASSIFICATION & BRANDING"
+                    text: "1. PRIMARY ITEM CLASSIFICATION & PRICING"
                     color: "#2563EB"
                     font.pixelSize: 11
                     font.bold: true
-                    font.letterSpacing: 1.0
+                    font.letterSpacing: 0.8
                 }
 
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: 12
+                    spacing: 8
 
                     CustomInput {
                         id: nameInput
@@ -89,43 +89,56 @@ ScrollView {
                         focusInput: true
                         Layout.fillWidth: true
                         onReturnPressed: codeInput.focusInput = true
+                        onRightPressed: codeInput.focusInput = true
+                        onDownPressed: unitCombo.focusAndOpen()
                     }
 
                     CustomInput {
                         id: codeInput
                         label: "Product Code / SKU"
-                        placeholderText: "e.g. RICE-SONA-26"
-                        Layout.preferredWidth: 200
+                        placeholderText: "RICE-SONA-26"
+                        Layout.preferredWidth: 150
                         onReturnPressed: typeCombo.focusAndOpen()
+                        onLeftPressed: nameInput.focusInput = true
+                        onRightPressed: typeCombo.focusAndOpen()
+                        onDownPressed: packingInput.focusInput = true
                     }
-                }
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 12
 
                     CustomWhiteCombo {
                         id: typeCombo
                         label: "Item Type *"
-                        Layout.fillWidth: true
+                        Layout.preferredWidth: 180
                         model: (typeof stockItemsModel !== "undefined" && stockItemsModel) ? stockItemsModel.get_item_types() : []
                         onReturnPressed: companyInput.focusInput = true
+                        onLeftPressed: codeInput.focusInput = true
+                        onRightPressed: companyInput.focusInput = true
+                        onDownPressed: purRateInput.focusInput = true
                     }
 
                     CustomInput {
                         id: companyInput
                         label: "Brand / Manufacturer"
-                        placeholderText: "e.g. Mahadev Brand, Supreme Gold"
-                        Layout.fillWidth: true
+                        placeholderText: "Mahadev Brand, Supreme Gold"
+                        Layout.preferredWidth: 220
                         onReturnPressed: unitCombo.focusAndOpen()
+                        onLeftPressed: typeCombo.focusAndOpen()
+                        onDownPressed: saleRateInput.focusInput = true
                     }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
 
                     CustomWhiteCombo {
                         id: unitCombo
                         label: "Measurement Unit *"
-                        Layout.preferredWidth: 150
+                        Layout.preferredWidth: 130
                         model: (typeof stockItemsModel !== "undefined" && stockItemsModel) ? stockItemsModel.get_units() : []
                         onReturnPressed: packingInput.focusInput = true
+                        onRightPressed: packingInput.focusInput = true
+                        onUpPressed: nameInput.focusInput = true
+                        onDownPressed: mrpInput.focusInput = true
                     }
 
                     CustomInput {
@@ -133,41 +146,13 @@ ScrollView {
                         label: "Packing Wt (kg/bag)"
                         placeholderText: "26.0"
                         inputMethodHints: Qt.ImhFormattedNumbersOnly
-                        Layout.preferredWidth: 150
+                        Layout.preferredWidth: 140
                         onReturnPressed: purRateInput.focusInput = true
+                        onLeftPressed: unitCombo.focusAndOpen()
+                        onRightPressed: purRateInput.focusInput = true
+                        onUpPressed: codeInput.focusInput = true
+                        onDownPressed: discountInput.focusInput = true
                     }
-                }
-            }
-        }
-
-        // SECTION 2: PRICING & GST TAX COMPLIANCE
-        Rectangle {
-            Layout.fillWidth: true
-            implicitHeight: secCol2.implicitHeight + 28
-            color: "#FFFFFF"
-            border.color: "#E2E8F0"
-            border.width: 1
-            radius: 10
-
-            ColumnLayout {
-                id: secCol2
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.top: parent.top
-                anchors.margins: 14
-                spacing: 12
-
-                Text {
-                    text: "2. PRICING & GST TAX COMPLIANCE"
-                    color: "#16A34A"
-                    font.pixelSize: 11
-                    font.bold: true
-                    font.letterSpacing: 1.0
-                }
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 12
 
                     CustomInput {
                         id: purRateInput
@@ -176,6 +161,10 @@ ScrollView {
                         inputMethodHints: Qt.ImhFormattedNumbersOnly
                         Layout.fillWidth: true
                         onReturnPressed: saleRateInput.focusInput = true
+                        onLeftPressed: packingInput.focusInput = true
+                        onRightPressed: saleRateInput.focusInput = true
+                        onUpPressed: typeCombo.focusAndOpen()
+                        onDownPressed: hsnInput.focusInput = true
                     }
 
                     CustomInput {
@@ -185,7 +174,42 @@ ScrollView {
                         inputMethodHints: Qt.ImhFormattedNumbersOnly
                         Layout.fillWidth: true
                         onReturnPressed: mrpInput.focusInput = true
+                        onLeftPressed: purRateInput.focusInput = true
+                        onUpPressed: companyInput.focusInput = true
+                        onDownPressed: gstCombo.focusAndOpen()
                     }
+                }
+            }
+        }
+
+        // CARD 2: GST TAX COMPLIANCE & INITIAL STOCK VALUATION
+        Rectangle {
+            Layout.fillWidth: true
+            implicitHeight: secCol2.implicitHeight + 20
+            color: "#FFFFFF"
+            border.color: "#E2E8F0"
+            border.width: 1
+            radius: 8
+
+            ColumnLayout {
+                id: secCol2
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.margins: 10
+                spacing: 8
+
+                Text {
+                    text: "2. GST TAX COMPLIANCE & INITIAL STOCK VALUATION"
+                    color: "#16A34A"
+                    font.pixelSize: 11
+                    font.bold: true
+                    font.letterSpacing: 0.8
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
 
                     CustomInput {
                         id: mrpInput
@@ -194,6 +218,9 @@ ScrollView {
                         inputMethodHints: Qt.ImhFormattedNumbersOnly
                         Layout.fillWidth: true
                         onReturnPressed: discountInput.focusInput = true
+                        onRightPressed: discountInput.focusInput = true
+                        onUpPressed: unitCombo.focusAndOpen()
+                        onDownPressed: opBagsInput.focusInput = true
                     }
 
                     CustomInput {
@@ -201,29 +228,36 @@ ScrollView {
                         label: "Discount %"
                         placeholderText: "0.0"
                         inputMethodHints: Qt.ImhFormattedNumbersOnly
-                        Layout.preferredWidth: 120
+                        Layout.preferredWidth: 110
                         onReturnPressed: hsnInput.focusInput = true
+                        onLeftPressed: mrpInput.focusInput = true
+                        onRightPressed: hsnInput.focusInput = true
+                        onUpPressed: packingInput.focusInput = true
+                        onDownPressed: opQtyInput.focusInput = true
                     }
-                }
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 12
 
                     CustomInput {
                         id: hsnInput
                         label: "HSN / SAC Code"
                         placeholderText: "100630"
-                        Layout.fillWidth: true
+                        Layout.preferredWidth: 150
                         onReturnPressed: gstCombo.focusAndOpen()
+                        onLeftPressed: discountInput.focusInput = true
+                        onRightPressed: gstCombo.focusAndOpen()
+                        onUpPressed: purRateInput.focusInput = true
+                        onDownPressed: opRateInput.focusInput = true
                     }
 
                     CustomWhiteCombo {
                         id: gstCombo
                         label: "GST Rate % *"
-                        Layout.preferredWidth: 150
+                        Layout.preferredWidth: 130
                         model: (typeof stockItemsModel !== "undefined" && stockItemsModel) ? stockItemsModel.get_gst_rates() : []
                         onReturnPressed: cessInput.focusInput = true
+                        onLeftPressed: hsnInput.focusInput = true
+                        onRightPressed: cessInput.focusInput = true
+                        onUpPressed: saleRateInput.focusInput = true
+                        onDownPressed: opValInput.focusInput = true
                     }
 
                     CustomInput {
@@ -231,41 +265,17 @@ ScrollView {
                         label: "Cess %"
                         placeholderText: "0.0"
                         inputMethodHints: Qt.ImhFormattedNumbersOnly
-                        Layout.preferredWidth: 140
+                        Layout.preferredWidth: 100
                         onReturnPressed: opBagsInput.focusInput = true
+                        onLeftPressed: gstCombo.focusAndOpen()
+                        onUpPressed: saleRateInput.focusInput = true
+                        onDownPressed: opValInput.focusInput = true
                     }
-                }
-            }
-        }
-
-        // SECTION 3: INITIAL STOCK & VALUATION
-        Rectangle {
-            Layout.fillWidth: true
-            implicitHeight: secCol3.implicitHeight + 28
-            color: "#FFFFFF"
-            border.color: "#E2E8F0"
-            border.width: 1
-            radius: 10
-
-            ColumnLayout {
-                id: secCol3
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.top: parent.top
-                anchors.margins: 14
-                spacing: 12
-
-                Text {
-                    text: "3. INITIAL STOCK & VALUATION"
-                    color: "#D97706"
-                    font.pixelSize: 11
-                    font.bold: true
-                    font.letterSpacing: 1.0
                 }
 
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: 12
+                    spacing: 8
 
                     CustomInput {
                         id: opBagsInput
@@ -274,66 +284,80 @@ ScrollView {
                         inputMethodHints: Qt.ImhDigitsOnly
                         Layout.fillWidth: true
                         onReturnPressed: opQtyInput.focusInput = true
+                        onRightPressed: opQtyInput.focusInput = true
+                        onUpPressed: mrpInput.focusInput = true
+                        onDownPressed: purLedgerCombo.focusAndOpen()
                     }
 
                     CustomInput {
                         id: opQtyInput
-                        label: "Opening Quantity (Qtl/Units)"
-                        placeholderText: "0.0"
+                        label: "Opening Quantity (Qtl)"
+                        placeholderText: "0.000"
                         inputMethodHints: Qt.ImhFormattedNumbersOnly
                         Layout.fillWidth: true
                         onReturnPressed: opRateInput.focusInput = true
+                        onLeftPressed: opBagsInput.focusInput = true
+                        onRightPressed: opRateInput.focusInput = true
+                        onUpPressed: discountInput.focusInput = true
+                        onDownPressed: saleLedgerCombo.focusAndOpen()
                     }
 
                     CustomInput {
                         id: opRateInput
-                        label: "Opening Valuation Rate (₹)"
+                        label: "Opening Rate (₹)"
                         placeholderText: "0.00"
                         inputMethodHints: Qt.ImhFormattedNumbersOnly
                         Layout.fillWidth: true
                         onReturnPressed: opValInput.focusInput = true
+                        onLeftPressed: opQtyInput.focusInput = true
+                        onRightPressed: opValInput.focusInput = true
+                        onUpPressed: hsnInput.focusInput = true
+                        onDownPressed: stockLedgerCombo.focusAndOpen()
                     }
 
                     CustomInput {
                         id: opValInput
-                        label: "Opening Total Value (₹)"
+                        label: "Opening Valuation (₹)"
                         placeholderText: "0.00"
                         inputMethodHints: Qt.ImhFormattedNumbersOnly
                         Layout.fillWidth: true
                         onReturnPressed: purLedgerCombo.focusAndOpen()
+                        onLeftPressed: opRateInput.focusInput = true
+                        onUpPressed: gstCombo.focusAndOpen()
+                        onDownPressed: stockLedgerCombo.focusAndOpen()
                     }
                 }
             }
         }
 
-        // SECTION 4: FINANCIAL LEDGER POSTINGS
+        // CARD 3: FINANCIAL LEDGER POSTINGS
         Rectangle {
             Layout.fillWidth: true
-            implicitHeight: secCol4.implicitHeight + 28
+            implicitHeight: secCol3.implicitHeight + 20
             color: "#FFFFFF"
             border.color: "#E2E8F0"
             border.width: 1
-            radius: 10
+            radius: 8
 
             ColumnLayout {
-                id: secCol4
+                id: secCol3
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.top: parent.top
-                anchors.margins: 14
-                spacing: 12
+                anchors.margins: 10
+                spacing: 8
 
                 Text {
-                    text: "4. FINANCIAL LEDGER POSTINGS"
+                    text: "3. FINANCIAL LEDGER POSTINGS"
                     color: "#7C3AED"
                     font.pixelSize: 11
                     font.bold: true
-                    font.letterSpacing: 1.0
+                    font.letterSpacing: 0.8
                 }
 
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: 12
+                    spacing: 8
 
                     CustomWhiteCombo {
                         id: purLedgerCombo
@@ -341,6 +365,9 @@ ScrollView {
                         Layout.fillWidth: true
                         model: (typeof partiesModel !== "undefined" && partiesModel) ? partiesModel.get_account_groups() : []
                         onReturnPressed: saleLedgerCombo.focusAndOpen()
+                        onRightPressed: saleLedgerCombo.focusAndOpen()
+                        onUpPressed: opBagsInput.focusInput = true
+                        onDownPressed: submitBtn.focus = true
                     }
 
                     CustomWhiteCombo {
@@ -349,6 +376,10 @@ ScrollView {
                         Layout.fillWidth: true
                         model: (typeof partiesModel !== "undefined" && partiesModel) ? partiesModel.get_account_groups() : []
                         onReturnPressed: stockLedgerCombo.focusAndOpen()
+                        onLeftPressed: purLedgerCombo.focusAndOpen()
+                        onRightPressed: stockLedgerCombo.focusAndOpen()
+                        onUpPressed: opQtyInput.focusInput = true
+                        onDownPressed: submitBtn.focus = true
                     }
 
                     CustomWhiteCombo {
@@ -356,11 +387,16 @@ ScrollView {
                         label: "Stock Valuation Account"
                         Layout.fillWidth: true
                         model: (typeof partiesModel !== "undefined" && partiesModel) ? partiesModel.get_account_groups() : []
-                        onReturnPressed: submitBtn.focus = true
+                        onReturnPressed: root.saveStockItem()
+                        onLeftPressed: saleLedgerCombo.focusAndOpen()
+                        onUpPressed: opValInput.focusInput = true
+                        onDownPressed: submitBtn.focus = true
                     }
                 }
             }
         }
+
+        Item { Layout.fillHeight: true }
 
         // SAVE & CANCEL ACTION BAR
         RowLayout {
@@ -382,12 +418,14 @@ ScrollView {
 
             Button {
                 id: submitBtn
-                background: Rectangle { color: submitBtn.hovered ? "#1D4ED8" : "#2563EB"; radius: 6 }
+                background: Rectangle { color: (submitBtn.hovered || submitBtn.activeFocus) ? "#1D4ED8" : "#2563EB"; radius: 6; border.color: submitBtn.activeFocus ? "#93C5FD" : "transparent"; border.width: 2 }
                 contentItem: RowLayout {
                     spacing: 6
-                    Text { text: "💾 Save Stock Item"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 14 }
+                    Text { text: "💾 Save Complete Stock Item"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 14 }
                     KbdBadge { text: "Enter"; badgeColor: "#1E3A8A"; textColor: "#93C5FD"; borderColor: "#2563EB" }
                 }
+                Keys.onReturnPressed: root.saveStockItem()
+                Keys.onEnterPressed: root.saveStockItem()
                 onClicked: root.saveStockItem()
             }
         }
@@ -433,5 +471,11 @@ ScrollView {
         titleText: "CONFIRM STOCK ITEM SAVE"
         messageText: "Are you sure you want to save & create Stock Item '" + nameInput.text.trim() + "' under type '" + typeCombo.currentText + "'?"
         onConfirmed: root.executeSaveStockItem()
+    }
+
+    Component.onCompleted: {
+        Qt.callLater(function() {
+            nameInput.focusInput = true
+        })
     }
 }

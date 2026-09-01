@@ -201,8 +201,8 @@ Rectangle {
                     model: (typeof partiesModel !== "undefined" && partiesModel) ? partiesModel.get_parties_list() : []
                     onCurrentTextChanged: root.loadPartyStatement(currentText)
                     onReturnPressed: {
-                        drListView.forceActiveFocus()
-                        if (drListView.count > 0 && drListView.currentIndex < 0) drListView.currentIndex = 0
+                        crListView.forceActiveFocus()
+                        if (crListView.count > 0 && crListView.currentIndex < 0) crListView.currentIndex = 0
                     }
                 }
 
@@ -217,7 +217,12 @@ Rectangle {
                     RowLayout {
                         anchors.centerIn: parent
                         spacing: 6
-                        Text { text: "📅 FY 2026-27 (All Data)"; color: "#1D4ED8"; font.pixelSize: 11; font.bold: true }
+                        Text {
+                            text: "📅 " + ((typeof stockItemsModel !== "undefined" && stockItemsModel) ? stockItemsModel.get_financial_year() : "Active Period")
+                            color: "#1D4ED8"
+                            font.pixelSize: 11
+                            font.bold: true
+                        }
                     }
                 }
 
@@ -243,198 +248,13 @@ Rectangle {
             }
         }
 
-        // 3. MAIN 2-COLUMN SCROLLABLE GRID SECTION
+        // 3. MAIN 2-COLUMN SCROLLABLE GRID SECTION (CREDIT ON LEFT, DEBIT ON RIGHT)
         RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
             spacing: 12
 
-            // ==================== LEFT COLUMN: DEBIT SIDE (JAMA / Dr) ====================
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                color: "#FFFFFF"
-                border.color: drListView.activeFocus ? "#2563EB" : "#CBD5E1"
-                border.width: drListView.activeFocus ? 2 : 1
-                radius: 8
-
-                ColumnLayout {
-                    anchors.fill: parent
-                    anchors.margins: 10
-                    spacing: 8
-
-                    // Side Header
-                    Rectangle {
-                        Layout.fillWidth: true
-                        height: 32
-                        color: "#EFF6FF"
-                        radius: 6
-
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.leftMargin: 10
-                            anchors.rightMargin: 10
-                            Text { text: "🔴 DEBIT SIDE (JAMA / Dr) - " + root.currentPartyName; color: "#1D4ED8"; font.pixelSize: 12; font.bold: true; elide: Text.ElideRight; Layout.fillWidth: true }
-                            Text { text: "Gives / Receivables"; color: "#3B82F6"; font.pixelSize: 11; font.bold: true }
-                        }
-                    }
-
-                    // Table Header Grid
-                    Rectangle {
-                        Layout.fillWidth: true
-                        height: 28
-                        color: "#F1F5F9"
-                        radius: 4
-
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.leftMargin: 6
-                            anchors.rightMargin: 6
-                            spacing: 6
-
-                            Text { text: "Sel"; color: "#475569"; font.pixelSize: 11; font.bold: true; width: 28; horizontalAlignment: Text.AlignHCenter }
-                            Text { text: "Date"; color: "#475569"; font.pixelSize: 11; font.bold: true; width: 85 }
-                            Text { text: "Ref No"; color: "#475569"; font.pixelSize: 11; font.bold: true; width: 75 }
-                            Text { text: "Particulars"; color: "#475569"; font.pixelSize: 11; font.bold: true; Layout.fillWidth: true }
-                            Text { text: "Amount (₹)"; color: "#475569"; font.pixelSize: 11; font.bold: true; horizontalAlignment: Text.AlignRight; width: 95 }
-                        }
-                    }
-
-                    // Debit Entries Scrollable ListView
-                    ListView {
-                        id: drListView
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        model: drListModel
-                        clip: true
-                        spacing: 2
-                        boundsBehavior: Flickable.StopAtBounds
-                        focus: true
-                        activeFocusOnTab: true
-                        currentIndex: -1
-
-                        Keys.onUpPressed: function(event) {
-                            if (drListView.currentIndex > 0) {
-                                event.accepted = true
-                                drListView.currentIndex--
-                                drListView.positionViewAtIndex(drListView.currentIndex, ListView.Contain)
-                            }
-                        }
-                        Keys.onDownPressed: function(event) {
-                            if (drListView.currentIndex < drListModel.count - 1) {
-                                event.accepted = true
-                                drListView.currentIndex++
-                                drListView.positionViewAtIndex(drListView.currentIndex, ListView.Contain)
-                            }
-                        }
-                        Keys.onSpacePressed: function(event) {
-                            if (drListView.currentIndex >= 0 && drListView.currentIndex < drListModel.count) {
-                                event.accepted = true
-                                var cur = drListModel.get(drListView.currentIndex)
-                                drListModel.setProperty(drListView.currentIndex, "isSelected", !cur.isSelected)
-                                root.recalcTotals()
-                            }
-                        }
-                        Keys.onRightPressed: function(event) {
-                            event.accepted = true
-                            crListView.forceActiveFocus()
-                            if (crListView.currentIndex < 0 && crListModel.count > 0) crListView.currentIndex = 0
-                        }
-
-                        delegate: Rectangle {
-                            width: drListView.width
-                            height: 36
-                            color: (drListView.activeFocus && drListView.currentIndex === index) ? "#DBEAFE" : (index % 2 === 0 ? "#FFFFFF" : "#F8FAFC")
-                            border.color: (drListView.activeFocus && drListView.currentIndex === index) ? "#2563EB" : "#E2E8F0"
-                            border.width: (drListView.activeFocus && drListView.currentIndex === index) ? 2 : 1
-                            radius: 4
-
-                            MouseArea {
-                                anchors.fill: parent
-                                onClicked: {
-                                    drListView.forceActiveFocus()
-                                    drListView.currentIndex = index
-                                }
-                            }
-
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.leftMargin: 6
-                                anchors.rightMargin: 6
-                                spacing: 6
-
-                                // CUSTOM CLEAN WHITE CHECKBOX
-                                Rectangle {
-                                    width: 20
-                                    height: 20
-                                    radius: 4
-                                    color: model.isSelected ? "#2563EB" : "#FFFFFF"
-                                    border.color: model.isSelected ? "#1D4ED8" : "#CBD5E1"
-                                    border.width: 1
-
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: "✓"
-                                        color: "#FFFFFF"
-                                        font.pixelSize: 12
-                                        font.bold: true
-                                        visible: model.isSelected
-                                    }
-
-                                    MouseArea {
-                                        anchors.fill: parent
-                                        onClicked: {
-                                            drListView.forceActiveFocus()
-                                            drListView.currentIndex = index
-                                            drListModel.setProperty(index, "isSelected", !model.isSelected)
-                                            root.recalcTotals()
-                                        }
-                                    }
-                                }
-
-                                Text { text: model.vDate; color: "#334155"; font.pixelSize: 11; font.family: "Menlo"; width: 85 }
-                                Text { text: model.refNo; color: "#2563EB"; font.pixelSize: 11; font.bold: true; font.family: "Menlo"; width: 75 }
-                                Text { text: model.particulars; color: "#0F172A"; font.pixelSize: 11; Layout.fillWidth: true; elide: Text.ElideRight }
-                                Text { text: "₹" + model.amount.toLocaleString(Qt.locale(), 'f', 2); color: "#1D4ED8"; font.pixelSize: 12; font.bold: true; horizontalAlignment: Text.AlignRight; width: 95 }
-                            }
-                        }
-                    }
-
-                    Rectangle { Layout.fillWidth: true; height: 1; color: "#CBD5E1" }
-
-                    // Debit Subtotals Bar
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 4
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            Text { text: "Total Dr Entries:"; color: "#475569"; font.pixelSize: 11; font.bold: true }
-                            Item { Layout.fillWidth: true }
-                            Text { text: "₹" + root.drTotalAll.toLocaleString(Qt.locale(), 'f', 2); color: "#0F172A"; font.pixelSize: 13; font.bold: true }
-                        }
-
-                        Rectangle {
-                            Layout.fillWidth: true
-                            height: 28
-                            color: root.drSelectedTotal > 0 ? "#DBEAFE" : "#F8FAFC"
-                            radius: 4
-                            border.color: root.drSelectedTotal > 0 ? "#93C5FD" : "#E2E8F0"
-
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.leftMargin: 8
-                                anchors.rightMargin: 8
-                                Text { text: "☑ Checked Dr Total:"; color: "#1E40AF"; font.pixelSize: 11; font.bold: true }
-                                Item { Layout.fillWidth: true }
-                                Text { text: "₹" + root.drSelectedTotal.toLocaleString(Qt.locale(), 'f', 2); color: "#1D4ED8"; font.pixelSize: 12; font.bold: true }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // ==================== RIGHT COLUMN: CREDIT SIDE (NAMA / Cr) ====================
+            // ==================== LEFT COLUMN: CREDIT SIDE (JAMA / Cr) ====================
             Rectangle {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -459,7 +279,7 @@ Rectangle {
                             anchors.fill: parent
                             anchors.leftMargin: 10
                             anchors.rightMargin: 10
-                            Text { text: "🟢 CREDIT SIDE (NAMA / Cr) - " + root.currentPartyName; color: "#15803D"; font.pixelSize: 12; font.bold: true; elide: Text.ElideRight; Layout.fillWidth: true }
+                            Text { text: "🟢 CREDIT SIDE (JAMA / Cr) - " + root.currentPartyName; color: "#15803D"; font.pixelSize: 12; font.bold: true; elide: Text.ElideRight; Layout.fillWidth: true }
                             Text { text: "Takes / Payables"; color: "#16A34A"; font.pixelSize: 11; font.bold: true }
                         }
                     }
@@ -520,7 +340,7 @@ Rectangle {
                                 root.recalcTotals()
                             }
                         }
-                        Keys.onLeftPressed: function(event) {
+                        Keys.onRightPressed: function(event) {
                             event.accepted = true
                             drListView.forceActiveFocus()
                             if (drListView.currentIndex < 0 && drListModel.count > 0) drListView.currentIndex = 0
@@ -580,7 +400,7 @@ Rectangle {
                                 Text { text: model.vDate; color: "#334155"; font.pixelSize: 11; font.family: "Menlo"; width: 85 }
                                 Text { text: model.refNo; color: "#16A34A"; font.pixelSize: 11; font.bold: true; font.family: "Menlo"; width: 75 }
                                 Text { text: model.particulars; color: "#0F172A"; font.pixelSize: 11; Layout.fillWidth: true; elide: Text.ElideRight }
-                                Text { text: "₹" + model.amount.toLocaleString(Qt.locale(), 'f', 2); color: "#15803D"; font.pixelSize: 12; font.bold: true; horizontalAlignment: Text.AlignRight; width: 95 }
+                                Text { text: (typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.format_inr(model.amount) : ("₹" + model.amount.toFixed(2)); color: "#15803D"; font.pixelSize: 12; font.bold: true; horizontalAlignment: Text.AlignRight; width: 95 }
                             }
                         }
                     }
@@ -596,7 +416,7 @@ Rectangle {
                             Layout.fillWidth: true
                             Text { text: "Total Cr Entries:"; color: "#475569"; font.pixelSize: 11; font.bold: true }
                             Item { Layout.fillWidth: true }
-                            Text { text: "₹" + root.crTotalAll.toLocaleString(Qt.locale(), 'f', 2); color: "#0F172A"; font.pixelSize: 13; font.bold: true }
+                            Text { text: (typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.format_inr(root.crTotalAll) : ("₹" + root.crTotalAll.toFixed(2)); color: "#0F172A"; font.pixelSize: 13; font.bold: true }
                         }
 
                         Rectangle {
@@ -612,7 +432,192 @@ Rectangle {
                                 anchors.rightMargin: 8
                                 Text { text: "☑ Checked Cr Total:"; color: "#166534"; font.pixelSize: 11; font.bold: true }
                                 Item { Layout.fillWidth: true }
-                                Text { text: "₹" + root.crSelectedTotal.toLocaleString(Qt.locale(), 'f', 2); color: "#15803D"; font.pixelSize: 12; font.bold: true }
+                                Text { text: (typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.format_inr(root.crSelectedTotal) : ("₹" + root.crSelectedTotal.toFixed(2)); color: "#15803D"; font.pixelSize: 12; font.bold: true }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ==================== RIGHT COLUMN: DEBIT SIDE (NAAME / Dr) ====================
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                color: "#FFFFFF"
+                border.color: drListView.activeFocus ? "#2563EB" : "#CBD5E1"
+                border.width: drListView.activeFocus ? 2 : 1
+                radius: 8
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: 10
+                    spacing: 8
+
+                    // Side Header
+                    Rectangle {
+                        Layout.fillWidth: true
+                        height: 32
+                        color: "#EFF6FF"
+                        radius: 6
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 10
+                            anchors.rightMargin: 10
+                            Text { text: "🔴 DEBIT SIDE (NAAME / Dr) - " + root.currentPartyName; color: "#1D4ED8"; font.pixelSize: 12; font.bold: true; elide: Text.ElideRight; Layout.fillWidth: true }
+                            Text { text: "Gives / Receivables"; color: "#3B82F6"; font.pixelSize: 11; font.bold: true }
+                        }
+                    }
+
+                    // Table Header Grid
+                    Rectangle {
+                        Layout.fillWidth: true
+                        height: 28
+                        color: "#F1F5F9"
+                        radius: 4
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 6
+                            anchors.rightMargin: 6
+                            spacing: 6
+
+                            Text { text: "Sel"; color: "#475569"; font.pixelSize: 11; font.bold: true; width: 28; horizontalAlignment: Text.AlignHCenter }
+                            Text { text: "Date"; color: "#475569"; font.pixelSize: 11; font.bold: true; width: 85 }
+                            Text { text: "Ref No"; color: "#475569"; font.pixelSize: 11; font.bold: true; width: 75 }
+                            Text { text: "Particulars"; color: "#475569"; font.pixelSize: 11; font.bold: true; Layout.fillWidth: true }
+                            Text { text: "Amount (₹)"; color: "#475569"; font.pixelSize: 11; font.bold: true; horizontalAlignment: Text.AlignRight; width: 95 }
+                        }
+                    }
+
+                    // Debit Entries Scrollable ListView
+                    ListView {
+                        id: drListView
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        model: drListModel
+                        clip: true
+                        spacing: 2
+                        boundsBehavior: Flickable.StopAtBounds
+                        focus: false
+                        activeFocusOnTab: true
+                        currentIndex: -1
+
+                        Keys.onUpPressed: function(event) {
+                            if (drListView.currentIndex > 0) {
+                                event.accepted = true
+                                drListView.currentIndex--
+                                drListView.positionViewAtIndex(drListView.currentIndex, ListView.Contain)
+                            }
+                        }
+                        Keys.onDownPressed: function(event) {
+                            if (drListView.currentIndex < drListModel.count - 1) {
+                                event.accepted = true
+                                drListView.currentIndex++
+                                drListView.positionViewAtIndex(drListView.currentIndex, ListView.Contain)
+                            }
+                        }
+                        Keys.onSpacePressed: function(event) {
+                            if (drListView.currentIndex >= 0 && drListView.currentIndex < drListModel.count) {
+                                event.accepted = true
+                                var cur = drListModel.get(drListView.currentIndex)
+                                drListModel.setProperty(drListView.currentIndex, "isSelected", !cur.isSelected)
+                                root.recalcTotals()
+                            }
+                        }
+                        Keys.onLeftPressed: function(event) {
+                            event.accepted = true
+                            crListView.forceActiveFocus()
+                            if (crListView.currentIndex < 0 && crListModel.count > 0) crListView.currentIndex = 0
+                        }
+
+                        delegate: Rectangle {
+                            width: drListView.width
+                            height: 36
+                            color: (drListView.activeFocus && drListView.currentIndex === index) ? "#DBEAFE" : (index % 2 === 0 ? "#FFFFFF" : "#F8FAFC")
+                            border.color: (drListView.activeFocus && drListView.currentIndex === index) ? "#2563EB" : "#E2E8F0"
+                            border.width: (drListView.activeFocus && drListView.currentIndex === index) ? 2 : 1
+                            radius: 4
+
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: {
+                                    drListView.forceActiveFocus()
+                                    drListView.currentIndex = index
+                                }
+                            }
+
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: 6
+                                anchors.rightMargin: 6
+                                spacing: 6
+
+                                // CUSTOM CLEAN WHITE CHECKBOX
+                                Rectangle {
+                                    width: 20
+                                    height: 20
+                                    radius: 4
+                                    color: model.isSelected ? "#2563EB" : "#FFFFFF"
+                                    border.color: model.isSelected ? "#1D4ED8" : "#CBD5E1"
+                                    border.width: 1
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: "✓"
+                                        color: "#FFFFFF"
+                                        font.pixelSize: 12
+                                        font.bold: true
+                                        visible: model.isSelected
+                                    }
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        onClicked: {
+                                            drListView.forceActiveFocus()
+                                            drListView.currentIndex = index
+                                            drListModel.setProperty(index, "isSelected", !model.isSelected)
+                                            root.recalcTotals()
+                                        }
+                                    }
+                                }
+
+                                Text { text: model.vDate; color: "#334155"; font.pixelSize: 11; font.family: "Menlo"; width: 85 }
+                                Text { text: model.refNo; color: "#2563EB"; font.pixelSize: 11; font.bold: true; font.family: "Menlo"; width: 75 }
+                                Text { text: model.particulars; color: "#0F172A"; font.pixelSize: 11; Layout.fillWidth: true; elide: Text.ElideRight }
+                                Text { text: (typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.format_inr(model.amount) : ("₹" + model.amount.toFixed(2)); color: "#1D4ED8"; font.pixelSize: 12; font.bold: true; horizontalAlignment: Text.AlignRight; width: 95 }
+                            }
+                        }
+                    }
+
+                    Rectangle { Layout.fillWidth: true; height: 1; color: "#CBD5E1" }
+
+                    // Debit Subtotals Bar
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 4
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Text { text: "Total Dr Entries:"; color: "#475569"; font.pixelSize: 11; font.bold: true }
+                            Item { Layout.fillWidth: true }
+                            Text { text: (typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.format_inr(root.drTotalAll) : ("₹" + root.drTotalAll.toFixed(2)); color: "#0F172A"; font.pixelSize: 13; font.bold: true }
+                        }
+
+                        Rectangle {
+                            Layout.fillWidth: true
+                            height: 28
+                            color: root.drSelectedTotal > 0 ? "#DBEAFE" : "#F8FAFC"
+                            radius: 4
+                            border.color: root.drSelectedTotal > 0 ? "#93C5FD" : "#E2E8F0"
+
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: 8
+                                anchors.rightMargin: 8
+                                Text { text: "☑ Checked Dr Total:"; color: "#1E40AF"; font.pixelSize: 11; font.bold: true }
+                                Item { Layout.fillWidth: true }
+                                Text { text: (typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.format_inr(root.drSelectedTotal) : ("₹" + root.drSelectedTotal.toFixed(2)); color: "#1D4ED8"; font.pixelSize: 12; font.bold: true }
                             }
                         }
                     }
@@ -638,7 +643,7 @@ Rectangle {
                     spacing: 2
                     Text { text: "CHECKED ENTRIES RECONCILIATION"; color: "#94A3B8"; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8 }
                     Text {
-                        text: "Selected Dr: ₹" + root.drSelectedTotal.toLocaleString(Qt.locale(), 'f', 2) + "  |  Selected Cr: ₹" + root.crSelectedTotal.toLocaleString(Qt.locale(), 'f', 2)
+                        text: "Selected Cr: " + ((typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.format_inr(root.crSelectedTotal) : ("₹" + root.crSelectedTotal.toFixed(2))) + "  |  Selected Dr: " + ((typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.format_inr(root.drSelectedTotal) : ("₹" + root.drSelectedTotal.toFixed(2)))
                         color: "#E2E8F0"
                         font.pixelSize: 13
                         font.bold: true
@@ -654,7 +659,7 @@ Rectangle {
                         spacing: 0
                         Text { text: "FINAL STATEMENT NET BALANCE"; color: "#94A3B8"; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8; Layout.alignment: Qt.AlignRight }
                         Text {
-                            text: "₹" + root.netBalance.toLocaleString(Qt.locale(), 'f', 2)
+                            text: (typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.format_inr(root.netBalance) : ("₹" + root.netBalance.toFixed(2))
                             color: "#38BDF8"
                             font.pixelSize: 20
                             font.bold: true
@@ -715,7 +720,7 @@ Rectangle {
             function applyFilter() {
                 filterPopup.close()
                 root.applyDateFilterAndSort()
-                drListView.forceActiveFocus()
+                crListView.forceActiveFocus()
             }
 
             function clearFilter() {
@@ -723,7 +728,7 @@ Rectangle {
                 toDateInput.text = "31-03-2027"
                 filterPopup.close()
                 root.applyDateFilterAndSort()
-                drListView.forceActiveFocus()
+                crListView.forceActiveFocus()
             }
 
             ColumnLayout {

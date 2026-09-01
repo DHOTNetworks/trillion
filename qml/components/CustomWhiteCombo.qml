@@ -8,10 +8,11 @@ ColumnLayout {
     property string label: ""
     property alias model: combo.model
     property alias currentIndex: combo.currentIndex
-    property alias editText: combo.editText
+    property alias text: comboField.text
+    property alias editText: comboField.text
     property alias editable: combo.editable
     property alias focusInput: comboField.focus
-    readonly property string currentText: combo.editText
+    readonly property string currentText: comboField.text
 
     signal returnPressed()
     signal leftPressed()
@@ -22,6 +23,7 @@ ColumnLayout {
     property bool userNavigatedPopup: false
 
     function focusAndOpen() {
+        combo.forceActiveFocus()
         comboField.forceActiveFocus()
         comboField.selectAll()
     }
@@ -48,47 +50,40 @@ ColumnLayout {
 
     function commitSelection() {
         if (combo.popup.visible && root.userNavigatedPopup) {
-            var hIdx = combo.highlightedIndex
+            var hIdx = (popupListView && typeof popupListView.currentIndex !== "undefined") ? popupListView.currentIndex : -1
             if (hIdx >= 0 && hIdx < combo.count) {
                 combo.currentIndex = hIdx
                 var selText = combo.textAt(hIdx)
                 if (selText !== undefined && selText !== null) {
-                    combo.editText = selText
                     comboField.text = selText
                 }
-            } else if (comboField.text !== "") {
-                combo.editText = comboField.text
+                return
             }
-        } else {
-            var currentVal = (comboField.text || "").trim().toLowerCase()
-            var matchIdx = -1
-            if (currentVal.length > 0) {
-                for (var i = 0; i < combo.count; i++) {
-                    var itemStr = (combo.textAt(i) || "").trim().toLowerCase()
-                    if (itemStr === currentVal) {
-                        matchIdx = i
-                        break
-                    }
-                }
-                if (matchIdx < 0) {
-                    for (var j = 0; j < combo.count; j++) {
-                        var itemStr2 = (combo.textAt(j) || "").trim().toLowerCase()
-                        if (itemStr2.startsWith(currentVal)) {
-                            matchIdx = j
-                            break
-                        }
-                    }
-                }
-            }
+        }
 
-            if (matchIdx >= 0) {
-                combo.currentIndex = matchIdx
-                var matchedText = combo.textAt(matchIdx)
-                combo.editText = matchedText
-                comboField.text = matchedText
-            } else if (comboField.text !== "") {
-                combo.editText = comboField.text
+        var currentVal = (comboField.text || "").trim().toLowerCase()
+        if (currentVal.length === 0) {
+            combo.currentIndex = -1
+            return
+        }
+
+        // Check if typed text exact-matches any item in the model
+        var exactIdx = -1
+        for (var i = 0; i < combo.count; i++) {
+            var itemStr = (combo.textAt(i) || "").trim().toLowerCase()
+            if (itemStr === currentVal) {
+                exactIdx = i
+                break
             }
+        }
+
+        if (exactIdx >= 0) {
+            combo.currentIndex = exactIdx
+            comboField.text = combo.textAt(exactIdx)
+        } else {
+            // Unmatched custom text (e.g. "Sirsa", custom station, or custom name):
+            // KEEP typed custom text untouched and reset combo index!
+            combo.currentIndex = -1
         }
     }
 
@@ -143,6 +138,42 @@ ColumnLayout {
                 Qt.callLater(root.emitRight)
             }
         }
+        Keys.onUpPressed: function(event) {
+            if (combo.popup.visible) {
+                event.accepted = true
+                var list = popupListView
+                if (list && list.count > 0) {
+                    var nextIdx = Math.max(0, list.currentIndex - 1)
+                    list.currentIndex = nextIdx
+                    list.positionViewAtIndex(nextIdx, ListView.Contain)
+                    var selText = combo.textAt(nextIdx)
+                    if (selText !== undefined && selText !== null) {
+                        comboField.text = selText
+                    }
+                }
+            } else {
+                event.accepted = true
+                Qt.callLater(root.emitUp)
+            }
+        }
+        Keys.onDownPressed: function(event) {
+            if (combo.popup.visible) {
+                event.accepted = true
+                var list = popupListView
+                if (list && list.count > 0) {
+                    var nextIdx = Math.min(list.count - 1, list.currentIndex + 1)
+                    list.currentIndex = nextIdx
+                    list.positionViewAtIndex(nextIdx, ListView.Contain)
+                    var selText = combo.textAt(nextIdx)
+                    if (selText !== undefined && selText !== null) {
+                        comboField.text = selText
+                    }
+                }
+            } else {
+                event.accepted = true
+                Qt.callLater(root.emitDown)
+            }
+        }
 
         background: Rectangle {
             color: "#FFFFFF"
@@ -155,7 +186,6 @@ ColumnLayout {
             id: comboField
             leftPadding: 8
             rightPadding: 20
-            text: combo.editText
             font.pixelSize: 12
             font.bold: true
             color: "#0F172A"
@@ -170,13 +200,11 @@ ColumnLayout {
 
             onTextEdited: {
                 root.userNavigatedPopup = false
-                combo.editText = text
                 var typed = text.trim().toLowerCase()
 
                 if (typed.length > 0) {
-                    if (!combo.popup.visible) combo.popup.open()
-
                     var matchIdx = -1
+                    // 1. Exact or Prefix matching
                     for (var i = 0; i < combo.count; i++) {
                         var itemStr = (combo.textAt(i) || "").trim().toLowerCase()
                         if (itemStr === typed || itemStr.startsWith(typed)) {
@@ -184,14 +212,32 @@ ColumnLayout {
                             break
                         }
                     }
-                    if (matchIdx >= 0) {
-                        if (combo.popup && combo.popup.contentItem && typeof combo.popup.contentItem.currentIndex !== "undefined") {
-                            combo.popup.contentItem.currentIndex = matchIdx
+                    // 2. Substring matching if >= 2 characters
+                    if (matchIdx < 0 && typed.length >= 2) {
+                        for (var j = 0; j < combo.count; j++) {
+                            var itemStr2 = (combo.textAt(j) || "").trim().toLowerCase()
+                            if (itemStr2.indexOf(typed) !== -1) {
+                                matchIdx = j
+                                break
+                            }
                         }
+                    }
+
+                    if (matchIdx >= 0) {
+                        if (!combo.popup.visible) combo.popup.open()
+                        if (combo.popup && popupListView) {
+                            popupListView.currentIndex = matchIdx
+                            popupListView.positionViewAtIndex(matchIdx, ListView.Contain)
+                        }
+                    } else {
+                        // NO matches found for custom text (e.g. "Sirsa"): Close popup immediately
+                        if (combo.popup.visible) combo.popup.close()
+                        if (popupListView) popupListView.currentIndex = -1
                     }
                 } else {
                     combo.currentIndex = -1
                     if (combo.popup.visible) combo.popup.close()
+                    if (popupListView) popupListView.currentIndex = -1
                 }
             }
 
@@ -209,40 +255,40 @@ ColumnLayout {
             }
             Keys.onUpPressed: function(event) {
                 if (combo.popup.visible) {
-                    root.userNavigatedPopup = true
-                }
-                if (!combo.popup.visible) {
                     event.accepted = true
-                    Qt.callLater(root.emitUp)
-                    if (combo.currentIndex > 0) {
-                        combo.currentIndex--
-                        var selText = combo.textAt(combo.currentIndex)
+                    root.userNavigatedPopup = true
+                    var list = popupListView
+                    if (list && list.count > 0) {
+                        var nextIdx = Math.max(0, list.currentIndex - 1)
+                        list.currentIndex = nextIdx
+                        list.positionViewAtIndex(nextIdx, ListView.Contain)
+                        var selText = combo.textAt(nextIdx)
                         if (selText !== undefined && selText !== null) {
-                            combo.editText = selText
                             comboField.text = selText
                         }
                     }
                 } else {
-                    event.accepted = false
+                    event.accepted = true
+                    Qt.callLater(root.emitUp)
                 }
             }
             Keys.onDownPressed: function(event) {
                 if (combo.popup.visible) {
-                    root.userNavigatedPopup = true
-                }
-                if (!combo.popup.visible) {
                     event.accepted = true
-                    Qt.callLater(root.emitDown)
-                    if (combo.currentIndex < combo.count - 1) {
-                        combo.currentIndex++
-                        var selText = combo.textAt(combo.currentIndex)
+                    root.userNavigatedPopup = true
+                    var list = popupListView
+                    if (list && list.count > 0) {
+                        var nextIdx = Math.min(list.count - 1, list.currentIndex + 1)
+                        list.currentIndex = nextIdx
+                        list.positionViewAtIndex(nextIdx, ListView.Contain)
+                        var selText = combo.textAt(nextIdx)
                         if (selText !== undefined && selText !== null) {
-                            combo.editText = selText
                             comboField.text = selText
                         }
                     }
                 } else {
-                    event.accepted = false
+                    event.accepted = true
+                    Qt.callLater(root.emitDown)
                 }
             }
             Keys.onLeftPressed: function(event) {
@@ -267,22 +313,21 @@ ColumnLayout {
             width: combo.width - 12
             height: modelData !== "" ? 30 : 0
             visible: modelData !== "" && modelData !== undefined
-            highlighted: combo.highlightedIndex === index
+            highlighted: popupListView ? (popupListView.currentIndex === index) : false
             contentItem: Text {
                 text: modelData ? modelData : ""
-                color: combo.highlightedIndex === index ? "#2563EB" : "#0F172A"
+                color: (popupListView && popupListView.currentIndex === index) ? "#2563EB" : "#0F172A"
                 font.pixelSize: 12
-                font.bold: combo.highlightedIndex === index
+                font.bold: popupListView ? (popupListView.currentIndex === index) : false
                 verticalAlignment: Text.AlignVCenter
                 elide: Text.ElideRight
             }
             background: Rectangle {
-                color: combo.highlightedIndex === index ? "#EFF6FF" : "#FFFFFF"
+                color: (popupListView && popupListView.currentIndex === index) ? "#EFF6FF" : "#FFFFFF"
                 radius: 4
             }
             onClicked: {
                 combo.currentIndex = index
-                combo.editText = modelData
                 comboField.text = modelData
                 combo.popup.close()
                 Qt.callLater(root.emitReturn)

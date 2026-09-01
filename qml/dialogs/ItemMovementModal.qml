@@ -5,8 +5,8 @@ import "../components"
 
 Rectangle {
     id: root
-    width: 1080
-    height: 620
+    width: parent ? Math.min(parent.width - 32, 1380) : 1380
+    height: parent ? Math.min(parent.height - 40, 720) : 720
     color: "#FFFFFF"
     radius: 12
     border.color: "#CBD5E1"
@@ -15,13 +15,17 @@ Rectangle {
     signal closeRequested()
 
     property string itemName: ""
+    property int totalInwardBags: 0
     property real totalInwardQty: 0.0
     property real totalInwardVal: 0.0
+    property int totalOutwardBags: 0
     property real totalOutwardQty: 0.0
     property real totalOutwardVal: 0.0
     
+    property int selectedInwardBags: 0
     property real selectedInwardQty: 0.0
     property real selectedInwardVal: 0.0
+    property int selectedOutwardBags: 0
     property real selectedOutwardQty: 0.0
     property real selectedOutwardVal: 0.0
     
@@ -32,8 +36,10 @@ Rectangle {
         itemName = name
         inwardModel.clear()
         outwardModel.clear()
+        totalInwardBags = 0
         totalInwardQty = 0.0
         totalInwardVal = 0.0
+        totalOutwardBags = 0
         totalOutwardQty = 0.0
         totalOutwardVal = 0.0
 
@@ -46,36 +52,53 @@ Rectangle {
         var movs = (typeof stockItemsModel !== "undefined" && stockItemsModel) ? stockItemsModel.get_item_movements(name) : []
         for (var i = 0; i < movs.length; i++) {
             var m = movs[i]
+            var b = parseInt(m.bags) || 0
+            var q = parseFloat(m.qty) || 0.0
+            var r = parseFloat(m.rate) || 0.0
+            var a = parseFloat(m.amount) || 0.0
+            var p = m.party ? String(m.party).replace(/\u00a0/g, ' ') : ""
+
             if (m.isInward) {
                 inwardModel.append({
                     isSelected: false,
-                    vDate: m.vDate,
-                    refNo: m.refNo,
-                    party: m.party,
-                    bags: m.bags,
-                    qty: m.qty,
-                    rate: m.rate,
-                    amount: m.amount
+                    vDate: m.vDate ? String(m.vDate) : "",
+                    refNo: m.refNo ? String(m.refNo) : "",
+                    party: p,
+                    bags: b,
+                    qty: q,
+                    rate: r,
+                    amount: a
                 })
-                totalInwardQty += m.qty
-                totalInwardVal += m.amount
+                totalInwardBags += b
+                totalInwardQty += q
+                totalInwardVal += a
             } else {
                 outwardModel.append({
                     isSelected: false,
-                    vDate: m.vDate,
-                    refNo: m.refNo,
-                    party: m.party,
-                    bags: m.bags,
-                    qty: m.qty,
-                    rate: m.rate,
-                    amount: m.amount
+                    vDate: m.vDate ? String(m.vDate) : "",
+                    refNo: m.refNo ? String(m.refNo) : "",
+                    party: p,
+                    bags: b,
+                    qty: q,
+                    rate: r,
+                    amount: a
                 })
-                totalOutwardQty += m.qty
-                totalOutwardVal += m.amount
+                totalOutwardBags += b
+                totalOutwardQty += q
+                totalOutwardVal += a
             }
         }
         recalculateInwardTotals()
         recalculateOutwardTotals()
+
+        if (inwardListView) {
+            inwardListView.contentY = 0
+            inwardListView.positionViewAtBeginning()
+        }
+        if (outwardListView) {
+            outwardListView.contentY = 0
+            outwardListView.positionViewAtBeginning()
+        }
     }
 
     function toggleSelectAllInwards(state) {
@@ -94,6 +117,7 @@ Rectangle {
 
     function recalculateInwardTotals() {
         var count = 0
+        var bTotal = 0
         var qty = 0.0
         var val = 0.0
         var hasSelections = false
@@ -103,16 +127,19 @@ Rectangle {
             if (row.isSelected) {
                 hasSelections = true
                 count++
-                qty += row.qty
-                val += row.amount
+                bTotal += (parseInt(row.bags) || 0)
+                qty += (parseFloat(row.qty) || 0.0)
+                val += (parseFloat(row.amount) || 0.0)
             }
         }
         selectedInwardCount = count
 
         if (hasSelections) {
+            selectedInwardBags = bTotal
             selectedInwardQty = qty
             selectedInwardVal = val
         } else {
+            selectedInwardBags = totalInwardBags
             selectedInwardQty = totalInwardQty
             selectedInwardVal = totalInwardVal
         }
@@ -120,6 +147,7 @@ Rectangle {
 
     function recalculateOutwardTotals() {
         var count = 0
+        var bTotal = 0
         var qty = 0.0
         var val = 0.0
         var hasSelections = false
@@ -129,16 +157,19 @@ Rectangle {
             if (row.isSelected) {
                 hasSelections = true
                 count++
-                qty += row.qty
-                val += row.amount
+                bTotal += (parseInt(row.bags) || 0)
+                qty += (parseFloat(row.qty) || 0.0)
+                val += (parseFloat(row.amount) || 0.0)
             }
         }
         selectedOutwardCount = count
 
         if (hasSelections) {
+            selectedOutwardBags = bTotal
             selectedOutwardQty = qty
             selectedOutwardVal = val
         } else {
+            selectedOutwardBags = totalOutwardBags
             selectedOutwardQty = totalOutwardQty
             selectedOutwardVal = totalOutwardVal
         }
@@ -171,13 +202,17 @@ Rectangle {
 
             Item { Layout.fillWidth: true }
 
-            Button {
+            Rectangle {
                 id: closeBtn
-                width: 32
-                height: 32
-                background: Rectangle { color: closeBtn.hovered ? "#DC2626" : "#F1F5F9"; radius: 16 }
-                contentItem: Text { text: "✕"; color: closeBtn.hovered ? "#FFF" : "#475569"; font.bold: true; horizontalAlignment: Text.AlignHCenter }
-                onClicked: root.closeRequested()
+                width: 32; height: 32; radius: 16
+                color: closeBtnArea.containsMouse ? "#DC2626" : "#F1F5F9"
+                Text { anchors.centerIn: parent; text: "✕"; color: closeBtnArea.containsMouse ? "#FFF" : "#475569"; font.bold: true }
+                MouseArea {
+                    id: closeBtnArea
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onClicked: root.closeRequested()
+                }
             }
         }
 
@@ -230,12 +265,12 @@ Rectangle {
 
                         RowLayout {
                             anchors.fill: parent
-                            anchors.leftMargin: 6; anchors.rightMargin: 6
-                            spacing: 4
+                            anchors.leftMargin: 8; anchors.rightMargin: 8
+                            spacing: 6
 
                             // Master Inwards Checkbox
                             Rectangle {
-                                width: 26; height: parent.height
+                                width: 22; height: parent.height
                                 color: "transparent"
                                 Rectangle {
                                     anchors.centerIn: parent
@@ -259,12 +294,12 @@ Rectangle {
                                 }
                             }
 
-                            Text { text: "Date"; color: "#475569"; font.pixelSize: 11; font.bold: true; Layout.preferredWidth: 75 }
-                            Text { text: "Ref No"; color: "#475569"; font.pixelSize: 11; font.bold: true; Layout.preferredWidth: 85 }
+                            Text { text: "Date"; color: "#475569"; font.pixelSize: 11; font.bold: true; Layout.preferredWidth: 80 }
+                            Text { text: "Ref No"; color: "#475569"; font.pixelSize: 11; font.bold: true; Layout.preferredWidth: 125 }
                             Text { text: "Supplier / Farmer"; color: "#475569"; font.pixelSize: 11; font.bold: true; Layout.fillWidth: true; elide: Text.ElideRight }
-                            Text { text: "Bags"; color: "#475569"; font.pixelSize: 11; font.bold: true; Layout.preferredWidth: 40; horizontalAlignment: Text.AlignRight }
-                            Text { text: "Qtl"; color: "#475569"; font.pixelSize: 11; font.bold: true; Layout.preferredWidth: 55; horizontalAlignment: Text.AlignRight }
-                            Text { text: "Amount ₹"; color: "#475569"; font.pixelSize: 11; font.bold: true; Layout.preferredWidth: 85; horizontalAlignment: Text.AlignRight }
+                            Text { text: "Bags"; color: "#475569"; font.pixelSize: 11; font.bold: true; Layout.preferredWidth: 45; horizontalAlignment: Text.AlignRight }
+                            Text { text: "Qtl"; color: "#475569"; font.pixelSize: 11; font.bold: true; Layout.preferredWidth: 65; horizontalAlignment: Text.AlignRight }
+                            Text { text: "Amount ₹"; color: "#475569"; font.pixelSize: 11; font.bold: true; Layout.preferredWidth: 105; horizontalAlignment: Text.AlignRight }
                         }
                     }
 
@@ -276,6 +311,12 @@ Rectangle {
                         clip: true
                         model: inwardModel
                         spacing: 1
+                        boundsBehavior: Flickable.StopAtBounds
+
+                        ScrollBar.vertical: ScrollBar {
+                            policy: ScrollBar.AsNeeded
+                            active: true
+                        }
 
                         delegate: Rectangle {
                             width: inwardListView.width
@@ -285,12 +326,12 @@ Rectangle {
 
                             RowLayout {
                                 anchors.fill: parent
-                                anchors.leftMargin: 6; anchors.rightMargin: 6
-                                spacing: 4
+                                anchors.leftMargin: 8; anchors.rightMargin: 8
+                                spacing: 6
 
                                 // Row Checkbox
                                 Rectangle {
-                                    width: 26; height: parent.height
+                                    width: 22; height: parent.height
                                     color: "transparent"
                                     Rectangle {
                                         anchors.centerIn: parent
@@ -312,12 +353,12 @@ Rectangle {
                                     }
                                 }
 
-                                Text { text: model.vDate ? model.vDate : ""; color: "#334155"; font.pixelSize: 11; Layout.preferredWidth: 75 }
-                                Text { text: model.refNo ? model.refNo : ""; color: "#2563EB"; font.pixelSize: 11; font.bold: true; Layout.preferredWidth: 85 }
-                                Text { text: model.party ? model.party : ""; color: "#0F172A"; font.pixelSize: 11; Layout.fillWidth: true; elide: Text.ElideRight }
-                                Text { text: model.bags ? model.bags.toString() : "0"; color: "#334155"; font.pixelSize: 11; Layout.preferredWidth: 40; horizontalAlignment: Text.AlignRight }
-                                Text { text: model.qty ? model.qty.toFixed(2) : "0.00"; color: "#16A34A"; font.pixelSize: 11; font.bold: true; Layout.preferredWidth: 55; horizontalAlignment: Text.AlignRight }
-                                Text { text: model.amount ? "₹" + model.amount.toLocaleString(Qt.locale(), "f", 2) : "₹0.00"; color: "#0F172A"; font.pixelSize: 11; font.bold: true; Layout.preferredWidth: 85; horizontalAlignment: Text.AlignRight }
+                                Text { text: model.vDate ? String(model.vDate) : ""; color: "#334155"; font.pixelSize: 11; Layout.preferredWidth: 80 }
+                                Text { text: model.refNo ? String(model.refNo) : ""; color: "#2563EB"; font.pixelSize: 11; font.bold: true; Layout.preferredWidth: 125; elide: Text.ElideRight }
+                                Text { text: model.party ? String(model.party) : ""; color: "#0F172A"; font.pixelSize: 11; Layout.fillWidth: true; elide: Text.ElideRight }
+                                Text { text: (parseInt(model.bags) || 0).toString(); color: "#334155"; font.pixelSize: 11; Layout.preferredWidth: 45; horizontalAlignment: Text.AlignRight }
+                                Text { text: (parseFloat(model.qty) || 0.0).toFixed(2); color: "#16A34A"; font.pixelSize: 11; font.bold: true; Layout.preferredWidth: 65; horizontalAlignment: Text.AlignRight }
+                                Text { text: (typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.format_inr(model.amount) : ("₹" + (parseFloat(model.amount) || 0.0).toFixed(2)); color: "#0F172A"; font.pixelSize: 11; font.bold: true; Layout.preferredWidth: 105; horizontalAlignment: Text.AlignRight }
                             }
                         }
                     }
@@ -334,12 +375,12 @@ Rectangle {
                             anchors.fill: parent
                             anchors.leftMargin: 12; anchors.rightMargin: 12
                             Text {
-                                text: root.selectedInwardCount > 0 ? "Selected Inward Qty (" + root.selectedInwardCount.toString() + "):" : "Total Inward Quantity:"
+                                text: root.selectedInwardCount > 0 ? "Selected Inwards (" + root.selectedInwardCount.toString() + "):" : "Total Inwards:"
                                 color: "#166534"; font.pixelSize: 11; font.bold: true
                             }
-                            Text { text: root.selectedInwardQty.toFixed(2) + " Qtl"; color: "#15803D"; font.pixelSize: 12; font.bold: true }
+                            Text { text: root.selectedInwardBags.toString() + " Bags (" + root.selectedInwardQty.toFixed(2) + " Qtl)"; color: "#15803D"; font.pixelSize: 12; font.bold: true }
                             Item { Layout.fillWidth: true }
-                            Text { text: "Total: ₹" + root.selectedInwardVal.toLocaleString(Qt.locale(), "f", 2); color: "#166534"; font.pixelSize: 11; font.bold: true }
+                            Text { text: "Total: " + ((typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.format_inr(root.selectedInwardVal) : ("₹" + root.selectedInwardVal.toFixed(2))); color: "#166534"; font.pixelSize: 11; font.bold: true }
                         }
                     }
                 }
@@ -386,12 +427,12 @@ Rectangle {
 
                         RowLayout {
                             anchors.fill: parent
-                            anchors.leftMargin: 6; anchors.rightMargin: 6
-                            spacing: 4
+                            anchors.leftMargin: 8; anchors.rightMargin: 8
+                            spacing: 6
 
                             // Master Outwards Checkbox
                             Rectangle {
-                                width: 26; height: parent.height
+                                width: 22; height: parent.height
                                 color: "transparent"
                                 Rectangle {
                                     anchors.centerIn: parent
@@ -415,12 +456,12 @@ Rectangle {
                                 }
                             }
 
-                            Text { text: "Date"; color: "#475569"; font.pixelSize: 11; font.bold: true; Layout.preferredWidth: 75 }
-                            Text { text: "Ref No"; color: "#475569"; font.pixelSize: 11; font.bold: true; Layout.preferredWidth: 85 }
+                            Text { text: "Date"; color: "#475569"; font.pixelSize: 11; font.bold: true; Layout.preferredWidth: 80 }
+                            Text { text: "Ref No"; color: "#475569"; font.pixelSize: 11; font.bold: true; Layout.preferredWidth: 125 }
                             Text { text: "Buyer / Customer"; color: "#475569"; font.pixelSize: 11; font.bold: true; Layout.fillWidth: true; elide: Text.ElideRight }
-                            Text { text: "Bags"; color: "#475569"; font.pixelSize: 11; font.bold: true; Layout.preferredWidth: 40; horizontalAlignment: Text.AlignRight }
-                            Text { text: "Qtl"; color: "#475569"; font.pixelSize: 11; font.bold: true; Layout.preferredWidth: 55; horizontalAlignment: Text.AlignRight }
-                            Text { text: "Amount ₹"; color: "#475569"; font.pixelSize: 11; font.bold: true; Layout.preferredWidth: 85; horizontalAlignment: Text.AlignRight }
+                            Text { text: "Bags"; color: "#475569"; font.pixelSize: 11; font.bold: true; Layout.preferredWidth: 45; horizontalAlignment: Text.AlignRight }
+                            Text { text: "Qtl"; color: "#475569"; font.pixelSize: 11; font.bold: true; Layout.preferredWidth: 65; horizontalAlignment: Text.AlignRight }
+                            Text { text: "Amount ₹"; color: "#475569"; font.pixelSize: 11; font.bold: true; Layout.preferredWidth: 105; horizontalAlignment: Text.AlignRight }
                         }
                     }
 
@@ -432,6 +473,12 @@ Rectangle {
                         clip: true
                         model: outwardModel
                         spacing: 1
+                        boundsBehavior: Flickable.StopAtBounds
+
+                        ScrollBar.vertical: ScrollBar {
+                            policy: ScrollBar.AsNeeded
+                            active: true
+                        }
 
                         delegate: Rectangle {
                             width: outwardListView.width
@@ -441,12 +488,12 @@ Rectangle {
 
                             RowLayout {
                                 anchors.fill: parent
-                                anchors.leftMargin: 6; anchors.rightMargin: 6
-                                spacing: 4
+                                anchors.leftMargin: 8; anchors.rightMargin: 8
+                                spacing: 6
 
                                 // Row Checkbox
                                 Rectangle {
-                                    width: 26; height: parent.height
+                                    width: 22; height: parent.height
                                     color: "transparent"
                                     Rectangle {
                                         anchors.centerIn: parent
@@ -468,12 +515,12 @@ Rectangle {
                                     }
                                 }
 
-                                Text { text: model.vDate ? model.vDate : ""; color: "#334155"; font.pixelSize: 11; Layout.preferredWidth: 75 }
-                                Text { text: model.refNo ? model.refNo : ""; color: "#EA580C"; font.pixelSize: 11; font.bold: true; Layout.preferredWidth: 85 }
-                                Text { text: model.party ? model.party : ""; color: "#0F172A"; font.pixelSize: 11; Layout.fillWidth: true; elide: Text.ElideRight }
-                                Text { text: model.bags ? model.bags.toString() : "0"; color: "#334155"; font.pixelSize: 11; Layout.preferredWidth: 40; horizontalAlignment: Text.AlignRight }
-                                Text { text: model.qty ? model.qty.toFixed(2) : "0.00"; color: "#DC2626"; font.pixelSize: 11; font.bold: true; Layout.preferredWidth: 55; horizontalAlignment: Text.AlignRight }
-                                Text { text: model.amount ? "₹" + model.amount.toLocaleString(Qt.locale(), "f", 2) : "₹0.00"; color: "#0F172A"; font.pixelSize: 11; font.bold: true; Layout.preferredWidth: 85; horizontalAlignment: Text.AlignRight }
+                                Text { text: model.vDate ? String(model.vDate) : ""; color: "#334155"; font.pixelSize: 11; Layout.preferredWidth: 80 }
+                                Text { text: model.refNo ? String(model.refNo) : ""; color: "#EA580C"; font.pixelSize: 11; font.bold: true; Layout.preferredWidth: 125; elide: Text.ElideRight }
+                                Text { text: model.party ? String(model.party) : ""; color: "#0F172A"; font.pixelSize: 11; Layout.fillWidth: true; elide: Text.ElideRight }
+                                Text { text: (parseInt(model.bags) || 0).toString(); color: "#334155"; font.pixelSize: 11; Layout.preferredWidth: 45; horizontalAlignment: Text.AlignRight }
+                                Text { text: (parseFloat(model.qty) || 0.0).toFixed(2); color: "#DC2626"; font.pixelSize: 11; font.bold: true; Layout.preferredWidth: 65; horizontalAlignment: Text.AlignRight }
+                                Text { text: (typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.format_inr(model.amount) : ("₹" + (parseFloat(model.amount) || 0.0).toFixed(2)); color: "#0F172A"; font.pixelSize: 11; font.bold: true; Layout.preferredWidth: 105; horizontalAlignment: Text.AlignRight }
                             }
                         }
                     }
@@ -490,12 +537,12 @@ Rectangle {
                             anchors.fill: parent
                             anchors.leftMargin: 12; anchors.rightMargin: 12
                             Text {
-                                text: root.selectedOutwardCount > 0 ? "Selected Outward Qty (" + root.selectedOutwardCount.toString() + "):" : "Total Outward Quantity:"
+                                text: root.selectedOutwardCount > 0 ? "Selected Outwards (" + root.selectedOutwardCount.toString() + "):" : "Total Outwards:"
                                 color: "#9A3412"; font.pixelSize: 11; font.bold: true
                             }
-                            Text { text: root.selectedOutwardQty.toFixed(2) + " Qtl"; color: "#C2410C"; font.pixelSize: 12; font.bold: true }
+                            Text { text: root.selectedOutwardBags.toString() + " Bags (" + root.selectedOutwardQty.toFixed(2) + " Qtl)"; color: "#C2410C"; font.pixelSize: 12; font.bold: true }
                             Item { Layout.fillWidth: true }
-                            Text { text: "Total: ₹" + root.selectedOutwardVal.toLocaleString(Qt.locale(), "f", 2); color: "#9A3412"; font.pixelSize: 11; font.bold: true }
+                            Text { text: "Total: " + ((typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.format_inr(root.selectedOutwardVal) : ("₹" + root.selectedOutwardVal.toFixed(2))); color: "#9A3412"; font.pixelSize: 11; font.bold: true }
                         }
                     }
                 }
@@ -515,9 +562,9 @@ Rectangle {
 
                 Text { text: (root.selectedInwardCount > 0 || root.selectedOutwardCount > 0) ? "SELECTED ENTRIES NET BALANCE:" : "ITEM NET CLOSING BALANCE:"; color: "#94A3B8"; font.pixelSize: 12; font.bold: true }
                 Text {
-                    text: (root.selectedInwardQty - root.selectedOutwardQty).toFixed(2) + " Qtl"
+                    text: (root.selectedInwardBags - root.selectedOutwardBags).toString() + " Bags (" + (root.selectedInwardQty - root.selectedOutwardQty).toFixed(2) + " Qtl)"
                     color: (root.selectedInwardQty - root.selectedOutwardQty) >= 0 ? "#4ADE80" : "#F87171"
-                    font.pixelSize: 15
+                    font.pixelSize: 14
                     font.bold: true
                 }
 
@@ -525,7 +572,7 @@ Rectangle {
 
                 Text { text: "NET VALUATION:"; color: "#94A3B8"; font.pixelSize: 12; font.bold: true }
                 Text {
-                    text: "₹" + (root.selectedInwardVal - root.selectedOutwardVal).toLocaleString(Qt.locale(), "f", 2)
+                    text: (typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.format_inr(root.selectedInwardVal - root.selectedOutwardVal) : ("₹" + (root.selectedInwardVal - root.selectedOutwardVal).toFixed(2))
                     color: "#60A5FA"
                     font.pixelSize: 15
                     font.bold: true

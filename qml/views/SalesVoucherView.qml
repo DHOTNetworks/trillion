@@ -10,8 +10,8 @@ Item {
     signal cancelRequested()
     signal invoiceSaved()
 
-    property string autoVoucherNo: "1"
-    property string autoVchCode: "VCH-9001"
+    property string autoVoucherNo: ""
+    property string autoVchCode: ""
     
     // Toggle for Without Stock Market Type
     readonly property bool isWithoutStock: marketTypeCombo.currentText.indexOf("Without Stock") !== -1
@@ -61,15 +61,18 @@ Item {
     }
 
     function resetForm() {
+        var nextInv = ""
         if (typeof salesModel !== "undefined" && salesModel) {
             autoVchCode = salesModel.get_next_voucher_no()
-            autoVoucherNo = autoVchCode.replace("VCH-", "")
+            autoVoucherNo = autoVchCode
+            nextInv = salesModel.get_next_invoice_no()
         } else {
-            autoVchCode = "VCH-9001"
-            autoVoucherNo = "1"
+            autoVchCode = ""
+            autoVoucherNo = ""
         }
 
-        invNoInput.text = "INV-" + autoVoucherNo
+        invNoInput.text = ""
+        invNoInput.placeholderText = nextInv ? nextInv : "e.g. MRI/2627-244"
         dueDaysInput.text = "0"
         marketTypeCombo.currentIndex = 0
         posCombo.currentIndex = 0
@@ -256,6 +259,7 @@ Item {
     }
 
     function recalculateRowAmount(forceRecalcWeight) {
+        if (!weightInput || !bagsInput || !pkngInput || !amountInput || !rateInput) return
         if (root.isWithoutStock) {
             var rWithout = parseFloat(rateInput.text) || 0.0
             amountInput.text = rWithout > 0 ? rWithout.toFixed(2) : "0.00"
@@ -302,6 +306,9 @@ Item {
     function executeSaveInvoice() {
         var partyLedger = partyCombo.currentText.trim()
         var invNo = invNoInput.text.trim()
+        if (!invNo && typeof salesModel !== "undefined" && salesModel) {
+            invNo = salesModel.get_next_invoice_no()
+        }
         var invDate = Qt.formatDate(new Date(), "dd-MM-yyyy")
         var vehicle = vehNoInput.text.trim()
         var eway = ewayInput.text.trim()
@@ -321,7 +328,7 @@ Item {
                 "Credit", vehicle, eway, narr
             )
             if (ok) {
-                statusMessage = "✅ Sales Voucher " + invNo + " saved & posted successfully!"
+                statusMessage = "✅ Sales Voucher " + (invNo ? invNo : autoVchCode) + " saved & posted successfully!"
                 isError = false
                 resetForm()
                 root.invoiceSaved()
@@ -344,7 +351,7 @@ Item {
         id: saveConfirmModal
         anchors.centerIn: parent
         titleText: "CONFIRM SALES VOUCHER SAVE"
-        messageText: "Are you sure you want to save & post Sales Voucher " + invNoInput.text.trim() + " for ₹" + grandTotal.toFixed(2) + "?"
+        messageText: "Are you sure you want to save & post Sales Voucher " + (invNoInput.text.trim() || (typeof salesModel !== "undefined" ? salesModel.get_next_invoice_no() : autoVchCode)) + " for ₹" + grandTotal.toFixed(2) + "?"
         onConfirmed: root.executeSaveInvoice()
     }
 
@@ -459,7 +466,7 @@ Item {
                         CustomInput {
                             id: invNoInput
                             placeholderText: "INV-1"
-                            Layout.preferredWidth: 120
+                            Layout.preferredWidth: 140
                             onReturnPressed: invoiceDateInput.focusInput = true
                             onRightPressed: invoiceDateInput.focusInput = true
                             onLeftPressed: marketTypeCombo.focusAndOpen()
@@ -859,7 +866,7 @@ Item {
                             Text { visible: !root.isWithoutStock; text: root.totalWeight.toFixed(3) + " Qtl."; color: "#0F172A"; font.pixelSize: 12; font.bold: true }
                             Item { visible: !root.isWithoutStock; implicitWidth: 16 }
 
-                            Text { text: "₹" + root.taxableAmount.toLocaleString(Qt.locale(), "f", 2); color: "#9A3412"; font.pixelSize: 13; font.bold: true }
+                            Text { text: (typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.format_inr(root.taxableAmount) : ("₹" + root.taxableAmount.toFixed(2)); color: "#9A3412"; font.pixelSize: 13; font.bold: true }
                         }
                     }
 
@@ -1285,7 +1292,7 @@ Item {
                             Layout.fillWidth: true
                             Text { text: "Subtotal Taxable:"; color: "#475569"; font.pixelSize: 11; font.bold: true }
                             Item { Layout.fillWidth: true }
-                            Text { text: "₹" + root.taxableAmount.toLocaleString(Qt.locale(), "f", 2); color: "#0F172A"; font.pixelSize: 11; font.bold: true }
+                            Text { text: (typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.format_inr(root.taxableAmount) : ("₹" + root.taxableAmount.toFixed(2)); color: "#0F172A"; font.pixelSize: 11; font.bold: true }
                         }
 
                         RowLayout {
@@ -1411,7 +1418,7 @@ Item {
                                 anchors.leftMargin: 10; anchors.rightMargin: 10
                                 Text { text: "GRAND TOTAL:"; color: "#166534"; font.pixelSize: 11; font.bold: true }
                                 Item { Layout.fillWidth: true }
-                                Text { text: "₹" + root.grandTotal.toLocaleString(Qt.locale(), "f", 2); color: "#15803D"; font.pixelSize: 15; font.bold: true }
+                                Text { text: (typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.format_inr(root.grandTotal) : ("₹" + root.grandTotal.toFixed(2)); color: "#15803D"; font.pixelSize: 15; font.bold: true }
                             }
                         }
                     }

@@ -10,6 +10,7 @@ Popup {
     modal: true
     dim: true
     focus: true
+    anchors.centerIn: Overlay.overlay
     closePolicy: Popup.CloseOnPressOutside | Popup.CloseOnEscape
 
     property string titleText: "CONFIRM SAVE ENTRY"

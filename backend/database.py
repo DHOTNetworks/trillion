@@ -36,46 +36,111 @@ def migrate_db():
             "city": "TEXT",
             "district": "TEXT",
             "state": "TEXT DEFAULT 'Karnataka'",
+            "state_code": "TEXT",
             "pincode": "TEXT",
+            "route": "TEXT",
             "mobile": "TEXT",
             "whatsapp": "TEXT",
+            "phone": "TEXT",
             "email": "TEXT",
             "contact_person": "TEXT",
             "pan": "TEXT",
             "aadhaar": "TEXT",
+            "tan": "TEXT",
+            "gstin": "TEXT",
             "gst_party_type": "TEXT DEFAULT 'Unregistered'",
             "bank_name": "TEXT",
             "bank_account": "TEXT",
             "ifsc_code": "TEXT",
             "credit_limit": "REAL DEFAULT 0.0",
-            "credit_days": "INTEGER DEFAULT 30"
+            "credit_days": "INTEGER DEFAULT 30",
+            "interest_rate": "REAL DEFAULT 0.0",
+            "commission_rate": "REAL DEFAULT 0.0",
+            "commission_on": "TEXT",
+            "apply_tcs": "INTEGER DEFAULT 0",
+            "tcs_exempt": "INTEGER DEFAULT 0",
+            "legacy_id": "INTEGER"
         }
         for col, col_type in cols_to_add.items():
             if col not in existing_cols:
                 cursor.execute(f"ALTER TABLE parties ADD COLUMN {col} {col_type}")
         conn.commit()
 
-        # Seed default Bank Accounts and Sample Parties if not present
-        default_banks = [
-            ("IndusInd Bank(200999406993)", "INDUS-BANK", "Bank Accounts", "Vendor", "IndusInd Bank", "200999406993", "INDB0000123", 17535.24, "Dr"),
-            ("SBI Raichur Main Branch", "SBI-RCH", "Bank Accounts", "Vendor", "State Bank of India", "30998877665", "SBIN0001234", 150000.00, "Dr"),
-            ("HDFC Bank MG Road", "HDFC-BLR", "Bank Accounts", "Vendor", "HDFC Bank", "501002003004", "HDFC0000123", 450000.00, "Dr"),
-            ("Baksish Kumar Pro. [Sirsa]", "BKP-SIRSA", "Sundry Debtors (Buyers)", "Buyer", "IndusInd Bank", "200999406993", "INDB0000123", 25709746.75, "Dr")
-        ]
-        for b_name, b_alias, b_group, b_ptype, b_bname, b_bacc, b_ifsc, b_op, b_type in default_banks:
-            cursor.execute("SELECT id FROM parties WHERE name = ?", (b_name,))
-            if not cursor.fetchone():
-                cursor.execute("""
-                INSERT INTO parties (name, alias, group_name, party_type, bank_name, bank_account, ifsc_code, opening_balance, balance_type)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (b_name, b_alias, b_group, b_ptype, b_bname, b_bacc, b_ifsc, b_op, b_type))
-        conn.commit()
+        # 1.5 Migrate stock_items table
+        item_tables = [r[0] for r in cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='stock_items'").fetchall()]
+        if item_tables:
+            item_cols = [r[1] for r in cursor.execute("PRAGMA table_info(stock_items)").fetchall()]
+            item_cols_to_add = {
+                "legacy_code": "INTEGER",
+                "sap_code": "TEXT",
+                "dami_rate": "REAL DEFAULT 0.0",
+                "market_fee_rate": "REAL DEFAULT 0.0",
+                "hrdf_rate": "REAL DEFAULT 0.0",
+                "utrai_rate": "REAL DEFAULT 0.0",
+                "jharai_rate": "REAL DEFAULT 0.0",
+                "bharai_rate": "REAL DEFAULT 0.0",
+                "tulai_rate": "REAL DEFAULT 0.0",
+                "khichai_rate": "REAL DEFAULT 0.0",
+                "silai_rate": "REAL DEFAULT 0.0",
+                "loading_rate": "REAL DEFAULT 0.0",
+                "reverse_charge": "INTEGER DEFAULT 0",
+                "item_form_type": "TEXT DEFAULT 'Both'",
+                "trading_ledger": "TEXT",
+                "gst_ledger": "TEXT",
+                "dami_ledger": "TEXT",
+                "market_fee_ledger": "TEXT",
+                "hrdf_ledger": "TEXT"
+            }
+            for col, col_type in item_cols_to_add.items():
+                if col not in item_cols:
+                    cursor.execute(f"ALTER TABLE stock_items ADD COLUMN {col} {col_type}")
+            conn.commit()
+
+        # 1.8 Migrate vouchers table
+        vch_tables = [r[0] for r in cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='vouchers'").fetchall()]
+        if vch_tables:
+            vch_cols = [r[1] for r in cursor.execute("PRAGMA table_info(vouchers)").fetchall()]
+            vch_cols_to_add = {
+                "legacy_type": "TEXT",
+                "instrument_no": "TEXT",
+                "instrument_date": "TEXT",
+                "bank_date": "TEXT",
+                "taxable_amount": "REAL DEFAULT 0.0",
+                "gst_pct": "REAL DEFAULT 0.0",
+                "cgst_amount": "REAL DEFAULT 0.0",
+                "sgst_amount": "REAL DEFAULT 0.0",
+                "igst_amount": "REAL DEFAULT 0.0",
+                "cess_amount": "REAL DEFAULT 0.0",
+                "round_off": "REAL DEFAULT 0.0",
+                "vehicle_no": "TEXT",
+                "gr_no": "TEXT",
+                "driver_name": "TEXT",
+                "eway_bill_no": "TEXT",
+                "broker_name": "TEXT",
+                "farmer_name": "TEXT",
+                "sauda_date": "TEXT",
+                "dami": "REAL DEFAULT 0.0",
+                "labour": "REAL DEFAULT 0.0",
+                "auction": "REAL DEFAULT 0.0",
+                "m_fee": "REAL DEFAULT 0.0",
+                "hrdf": "REAL DEFAULT 0.0",
+                "other_exp": "REAL DEFAULT 0.0",
+                "welfare": "REAL DEFAULT 0.0",
+                "dhrmd": "REAL DEFAULT 0.0",
+                "sutli": "REAL DEFAULT 0.0",
+                "less_amount": "REAL DEFAULT 0.0"
+            }
+            for col, col_type in vch_cols_to_add.items():
+                if col not in vch_cols:
+                    cursor.execute(f"ALTER TABLE vouchers ADD COLUMN {col} {col_type}")
+            conn.commit()
 
         # 2. Migrate sales_invoices table
         sales_tables = [r[0] for r in cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='sales_invoices'").fetchall()]
         if sales_tables:
             sales_cols = [r[1] for r in cursor.execute("PRAGMA table_info(sales_invoices)").fetchall()]
             sales_cols_to_add = {
+                "voucher_no": "TEXT",
                 "gstin": "TEXT",
                 "hsn_code": "TEXT",
                 "cgst_amount": "REAL DEFAULT 0.0",
@@ -118,6 +183,7 @@ def migrate_db():
         if pur_tables:
             pur_cols = [r[1] for r in cursor.execute("PRAGMA table_info(purchase_invoices)").fetchall()]
             pur_cols_to_add = {
+                "voucher_no": "TEXT",
                 "gstin": "TEXT",
                 "hsn_code": "TEXT",
                 "cgst_amount": "REAL DEFAULT 0.0",
@@ -154,33 +220,6 @@ def migrate_db():
                 if col not in pur_cols:
                     cursor.execute(f"ALTER TABLE purchase_invoices ADD COLUMN {col} {col_type}")
             conn.commit()
-
-        # Backfill rich party details for pre-existing records with empty fields
-        cursor.execute("""
-        UPDATE parties SET 
-            alias = COALESCE(NULLIF(alias, ''), 'RK-FARM'),
-            group_name = COALESCE(NULLIF(group_name, ''), 'Sundry Creditors (Farmers/Vendors)'),
-            party_type = COALESCE(NULLIF(party_type, ''), 'Farmer'),
-            special_type = COALESCE(NULLIF(special_type, ''), 'Paddy Seller'),
-            mailing_name = COALESCE(NULLIF(mailing_name, ''), name),
-            address = COALESCE(NULLIF(address, ''), 'Village Farm Road, APMC Market'),
-            city = COALESCE(NULLIF(city, ''), 'Raichur'),
-            district = COALESCE(NULLIF(district, ''), 'Raichur'),
-            state = COALESCE(NULLIF(state, ''), 'Karnataka'),
-            pincode = COALESCE(NULLIF(pincode, ''), '584101'),
-            mobile = COALESCE(NULLIF(mobile, ''), COALESCE(phone, '9876543210')),
-            whatsapp = COALESCE(NULLIF(whatsapp, ''), COALESCE(phone, '9876543210')),
-            email = COALESCE(NULLIF(email, ''), 'ramesh@farmer.com'),
-            contact_person = COALESCE(NULLIF(contact_person, ''), name),
-            gstin = COALESCE(NULLIF(gstin, ''), '29ABCDE1234F1Z5'),
-            pan = COALESCE(NULLIF(pan, ''), 'AAAPR1234F'),
-            aadhaar = COALESCE(NULLIF(aadhaar, ''), '998877665544'),
-            bank_name = COALESCE(NULLIF(bank_name, ''), 'SBI Raichur Main Branch'),
-            bank_account = COALESCE(NULLIF(bank_account, ''), '30998877665'),
-            ifsc_code = COALESCE(NULLIF(ifsc_code, ''), 'SBIN0001234')
-        WHERE group_name IS NULL OR group_name = '' OR city IS NULL OR city = '' OR district IS NULL OR district = '';
-        """)
-        conn.commit()
         conn.close()
     except Exception as e:
         print(f"Migration notice: {e}")
@@ -198,21 +237,23 @@ def init_db():
         alias TEXT,
         prefix TEXT DEFAULT 'M/s',
         group_name TEXT DEFAULT 'Sundry Debtors',
-        party_type TEXT NOT NULL DEFAULT 'Farmer', -- 'Farmer', 'Buyer', 'Merchant', 'Vendor'
-        special_type TEXT DEFAULT 'Paddy Seller', -- 'Paddy Seller', 'Rice Buyer', 'Mandi Agent', 'Transporter', 'Hamali Contractor'
+        party_type TEXT NOT NULL DEFAULT 'Buyer',
+        special_type TEXT DEFAULT 'Rice Buyer',
         
         -- Opening Balance
         opening_balance REAL DEFAULT 0.0,
-        balance_type TEXT DEFAULT 'Cr', -- 'Dr' or 'Cr'
+        balance_type TEXT DEFAULT 'Cr',
         
         -- Address & Location
         mailing_name TEXT,
         address TEXT,
         city TEXT,
         district TEXT,
-        state TEXT DEFAULT 'Karnataka',
-        pincode TEXT DEFAULT '584101',
+        state TEXT DEFAULT 'Haryana',
+        state_code TEXT,
+        pincode TEXT DEFAULT '125055',
         country TEXT DEFAULT 'India',
+        route TEXT,
         
         -- Contact Info
         mobile TEXT,
@@ -224,6 +265,7 @@ def init_db():
         -- GST & Statutory
         pan TEXT,
         aadhaar TEXT,
+        tan TEXT,
         gstin TEXT,
         gst_party_type TEXT DEFAULT 'Unregistered',
         
@@ -234,7 +276,54 @@ def init_db():
         
         -- Credit Policy
         credit_limit REAL DEFAULT 0.0,
-        credit_days INTEGER DEFAULT 30
+        credit_days INTEGER DEFAULT 30,
+        interest_rate REAL DEFAULT 0.0,
+        commission_rate REAL DEFAULT 0.0,
+        commission_on TEXT,
+        apply_tcs INTEGER DEFAULT 0,
+        tcs_exempt INTEGER DEFAULT 0,
+        legacy_id INTEGER
+    );
+    """)
+
+    # 1.5 Stock Items Master
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS stock_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        code TEXT UNIQUE NOT NULL,
+        alias TEXT,
+        print_name TEXT,
+        item_type TEXT NOT NULL DEFAULT 'Finished Rice',
+        goods_type TEXT DEFAULT 'Goods',
+        company_name TEXT DEFAULT 'Mill Master',
+        category_name TEXT,
+        unit TEXT DEFAULT 'Qtl',
+        alt_unit TEXT DEFAULT 'Bags',
+        conversion_factor REAL DEFAULT 1.0,
+        hsn_code TEXT DEFAULT '1006',
+        gst_rate REAL DEFAULT 5.0,
+        cess_rate REAL DEFAULT 0.0,
+        purchase_rate REAL DEFAULT 0.0,
+        sale_rate REAL DEFAULT 0.0,
+        mrp REAL DEFAULT 0.0,
+        min_rate REAL DEFAULT 0.0,
+        discount REAL DEFAULT 0.0,
+        packing_kg REAL DEFAULT 50.0,
+        opening_bags INTEGER DEFAULT 0,
+        opening_qty REAL DEFAULT 0.0,
+        opening_rate REAL DEFAULT 0.0,
+        opening_value REAL DEFAULT 0.0,
+        purchase_ledger TEXT DEFAULT 'Purchase Accounts',
+        sale_ledger TEXT DEFAULT 'Sales Accounts',
+        stock_ledger TEXT DEFAULT 'Stock-in-Hand',
+        is_milling_item INTEGER DEFAULT 0,
+        include_in_trading INTEGER DEFAULT 1,
+        calculate_stock INTEGER DEFAULT 1,
+        dami_rate REAL DEFAULT 0.0,
+        market_fee_rate REAL DEFAULT 0.0,
+        hrdf_rate REAL DEFAULT 0.0,
+        legacy_code INTEGER
     );
     """)
 
@@ -260,20 +349,46 @@ def init_db():
     );
     """)
 
-    # 3. Milling Production Batches
+    # 3. Milling Production Batches & Line Items
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS milling_batches (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        batch_no TEXT UNIQUE NOT NULL,
+        fy_id INTEGER,
+        financial_year TEXT DEFAULT 'FY 2025-26',
+        batch_no TEXT NOT NULL,
         batch_date TEXT NOT NULL,
-        paddy_variety TEXT NOT NULL,
-        paddy_input_qtl REAL NOT NULL,
-        head_rice_qtl REAL NOT NULL,
-        broken_rice_qtl REAL NOT NULL,
-        bran_qtl REAL NOT NULL,
-        husk_qtl REAL NOT NULL,
-        wastage_qtl REAL NOT NULL,
-        yield_pct REAL NOT NULL
+        paddy_variety TEXT NOT NULL DEFAULT 'Paddy Basmati',
+        paddy_input_qtl REAL NOT NULL DEFAULT 0.0,
+        head_rice_qtl REAL NOT NULL DEFAULT 0.0,
+        broken_rice_qtl REAL NOT NULL DEFAULT 0.0,
+        bran_qtl REAL NOT NULL DEFAULT 0.0,
+        husk_qtl REAL NOT NULL DEFAULT 0.0,
+        wastage_qtl REAL NOT NULL DEFAULT 0.0,
+        yield_pct REAL NOT NULL DEFAULT 0.0,
+        narration TEXT,
+        FOREIGN KEY (fy_id) REFERENCES financial_years(id)
+    );
+    """)
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS milling_voucher_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        batch_id INTEGER,
+        batch_no TEXT NOT NULL,
+        batch_date TEXT NOT NULL,
+        row_no INTEGER DEFAULT 1,
+        drcr TEXT NOT NULL, -- 'Cr' (Consumed) or 'Dr' (Produced)
+        item_id INTEGER,
+        item_code TEXT,
+        item_name TEXT NOT NULL,
+        percentage REAL DEFAULT 0.0,
+        weight_qtl REAL NOT NULL DEFAULT 0.0,
+        bags INTEGER DEFAULT 0,
+        rate REAL DEFAULT 0.0,
+        amount REAL DEFAULT 0.0,
+        narration TEXT,
+        FOREIGN KEY (batch_id) REFERENCES milling_batches(id),
+        FOREIGN KEY (item_id) REFERENCES stock_items(id)
     );
     """)
 
@@ -281,11 +396,14 @@ def init_db():
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS sales_invoices (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        invoice_no TEXT UNIQUE NOT NULL,
+        fy_id INTEGER,
+        financial_year TEXT DEFAULT 'FY 2025-26',
+        invoice_no TEXT NOT NULL,
         invoice_date TEXT NOT NULL,
         customer_id INTEGER,
         customer_name TEXT NOT NULL,
         gstin TEXT,
+        item_id INTEGER,
         item_name TEXT NOT NULL,
         hsn_code TEXT,
         bag_count INTEGER DEFAULT 0,
@@ -303,7 +421,29 @@ def init_db():
         vehicle_no TEXT,
         eway_bill_no TEXT,
         narration TEXT,
-        FOREIGN KEY (customer_id) REFERENCES parties(id)
+        gr_no TEXT,
+        driver_name TEXT,
+        driver TEXT,
+        broker_name TEXT,
+        shipping_address TEXT,
+        po_no TEXT,
+        distance INTEGER DEFAULT 0,
+        irn_no TEXT,
+        bill_time TEXT,
+        sauda_date TEXT,
+        dami REAL DEFAULT 0.0,
+        labour REAL DEFAULT 0.0,
+        auction REAL DEFAULT 0.0,
+        m_fee REAL DEFAULT 0.0,
+        hrdf REAL DEFAULT 0.0,
+        other_exp REAL DEFAULT 0.0,
+        welfare REAL DEFAULT 0.0,
+        dhrmd REAL DEFAULT 0.0,
+        sutli REAL DEFAULT 0.0,
+        less_amount REAL DEFAULT 0.0,
+        FOREIGN KEY (customer_id) REFERENCES parties(id),
+        FOREIGN KEY (item_id) REFERENCES stock_items(id),
+        FOREIGN KEY (fy_id) REFERENCES financial_years(id)
     );
     """)
 
@@ -311,11 +451,14 @@ def init_db():
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS purchase_invoices (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        invoice_no TEXT UNIQUE NOT NULL,
+        fy_id INTEGER,
+        financial_year TEXT DEFAULT 'FY 2025-26',
+        invoice_no TEXT NOT NULL,
         invoice_date TEXT NOT NULL,
         supplier_id INTEGER,
         supplier_name TEXT NOT NULL,
         gstin TEXT,
+        item_id INTEGER,
         item_name TEXT NOT NULL,
         hsn_code TEXT,
         bag_count INTEGER DEFAULT 0,
@@ -333,7 +476,29 @@ def init_db():
         vehicle_no TEXT,
         eway_bill_no TEXT,
         narration TEXT,
-        FOREIGN KEY (supplier_id) REFERENCES parties(id)
+        gr_no TEXT,
+        driver_name TEXT,
+        driver TEXT,
+        broker_name TEXT,
+        shipping_address TEXT,
+        po_no TEXT,
+        distance INTEGER DEFAULT 0,
+        irn_no TEXT,
+        bill_time TEXT,
+        sauda_date TEXT,
+        dami REAL DEFAULT 0.0,
+        labour REAL DEFAULT 0.0,
+        auction REAL DEFAULT 0.0,
+        m_fee REAL DEFAULT 0.0,
+        hrdf REAL DEFAULT 0.0,
+        other_exp REAL DEFAULT 0.0,
+        welfare REAL DEFAULT 0.0,
+        dhrmd REAL DEFAULT 0.0,
+        sutli REAL DEFAULT 0.0,
+        less_amount REAL DEFAULT 0.0,
+        FOREIGN KEY (supplier_id) REFERENCES parties(id),
+        FOREIGN KEY (item_id) REFERENCES stock_items(id),
+        FOREIGN KEY (fy_id) REFERENCES financial_years(id)
     );
     """)
 
@@ -341,13 +506,46 @@ def init_db():
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS vouchers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        voucher_no TEXT UNIQUE NOT NULL,
+        fy_id INTEGER,
+        financial_year TEXT DEFAULT 'FY 2025-26',
+        voucher_no TEXT NOT NULL,
         voucher_date TEXT NOT NULL,
-        voucher_type TEXT NOT NULL, -- 'Payment', 'Receipt', 'Contra', 'Journal', 'Purchase', 'Sales'
+        voucher_type TEXT NOT NULL,
+        legacy_type TEXT,
+        ledger_id INTEGER,
         party_name TEXT NOT NULL,
-        account_type TEXT NOT NULL, -- 'Cash', 'HDFC Bank', 'SBI Raichur'
+        account_type TEXT NOT NULL,
         amount REAL NOT NULL,
-        narration TEXT
+        narration TEXT,
+        instrument_no TEXT,
+        instrument_date TEXT,
+        bank_date TEXT,
+        taxable_amount REAL DEFAULT 0.0,
+        gst_pct REAL DEFAULT 0.0,
+        cgst_amount REAL DEFAULT 0.0,
+        sgst_amount REAL DEFAULT 0.0,
+        igst_amount REAL DEFAULT 0.0,
+        cess_amount REAL DEFAULT 0.0,
+        round_off REAL DEFAULT 0.0,
+        vehicle_no TEXT,
+        gr_no TEXT,
+        driver_name TEXT,
+        eway_bill_no TEXT,
+        broker_name TEXT,
+        farmer_name TEXT,
+        sauda_date TEXT,
+        dami REAL DEFAULT 0.0,
+        labour REAL DEFAULT 0.0,
+        auction REAL DEFAULT 0.0,
+        m_fee REAL DEFAULT 0.0,
+        hrdf REAL DEFAULT 0.0,
+        other_exp REAL DEFAULT 0.0,
+        welfare REAL DEFAULT 0.0,
+        dhrmd REAL DEFAULT 0.0,
+        sutli REAL DEFAULT 0.0,
+        less_amount REAL DEFAULT 0.0,
+        FOREIGN KEY (ledger_id) REFERENCES parties(id),
+        FOREIGN KEY (fy_id) REFERENCES financial_years(id)
     );
     """)
 
@@ -401,76 +599,68 @@ def init_db():
     );
     """)
 
-    # Seed initial data if tables are empty
-    cursor.execute("SELECT COUNT(*) FROM parties")
-    if cursor.fetchone()[0] == 0:
-        cursor.executemany("""
-        INSERT INTO parties (name, alias, prefix, group_name, party_type, special_type, mailing_name, address, city, district, state, pincode, mobile, whatsapp, email, contact_person, pan, aadhaar, gstin, bank_name, bank_account, ifsc_code)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, [
-            ("Ramesh Kumar (Farmer)", "RK-FARM", "M/s", "Sundry Creditors (Farmers/Vendors)", "Farmer", "Paddy Seller", "Ramesh Kumar", "Village Farm Road", "Raichur", "Raichur", "Karnataka", "584101", "9876543210", "9876543210", "ramesh@farmer.com", "Ramesh Kumar", "AAAPR1234F", "998877665544", "29ABCDE1234F1Z5", "SBI Raichur Main Branch", "30998877665", "SBIN0001234"),
-            ("Karnataka Rice Traders", "KRT-BLR", "M/s", "Sundry Debtors (Buyers)", "Buyer", "Rice Buyer", "Karnataka Rice Traders", "APMC Yard Market", "Bengaluru", "Bengaluru", "Karnataka", "560001", "9123456789", "9123456789", "orders@krt.com", "Suresh Patel", "BBBPK5678G", "887766554433", "29XYZAB5678C1Z2", "HDFC Bank MG Road", "501002003004", "HDFC0000123"),
-            ("Venkateswara Food Supplies", "VFS-HYD", "M/s", "Sundry Debtors (Buyers)", "Buyer", "Rice Buyer", "Venkateswara Food Supplies", "Koti Grain Market", "Hyderabad", "Hyderabad", "Telangana", "500001", "9988112233", "9988112233", "info@vfs.com", "Venkatesh Rao", "CCCPV9012H", "776655443322", "36AAAAA9999A1Z5", "ICICI Bank Abids", "000405006007", "ICIC0000004"),
-            ("Sri Rama Traders (Mandi)", "SRT-RCH", "M/s", "Sundry Creditors (Farmers/Vendors)", "Vendor", "Mandi Agent", "Sri Rama Traders", "Cotton Market Road", "Raichur", "Raichur", "Karnataka", "584101", "9448012345", "9448012345", "srirama@mandi.com", "Ramachandra", "DDDPR3456I", "665544332211", "29BBBBB8888B1Z6", "Canara Bank APMC", "110022334455", "CNRB0001100")
-        ])
+    # 9. Financial Years Master
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS financial_years (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        year_name TEXT UNIQUE NOT NULL,
+        start_date TEXT NOT NULL,
+        end_date TEXT NOT NULL,
+        is_active INTEGER DEFAULT 0
+    );
+    """)
 
-    cursor.execute("SELECT COUNT(*) FROM inventory")
-    if cursor.fetchone()[0] == 0:
-        cursor.executemany("""
-        INSERT INTO inventory (item_code, item_name, category, current_stock_qtl, sale_rate, gst_rate, packing_kg)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, [
-            ("RICE-SONA-1", "Sona Masoori Raw Rice (50kg)", "Finished Rice", 450.0, 4800.0, "5%", 50),
-            ("RICE-STEAM-1", "Sona Masoori Steam Rice (25kg)", "Finished Rice", 320.0, 5200.0, "5%", 25),
-            ("RICE-IR64", "IR-64 Raw Rice", "Finished Rice", 600.0, 3600.0, "5%", 50),
-            ("BY-BROKEN", "Broken Rice (100%)", "By-Product", 180.0, 2200.0, "5%", 50),
-            ("BY-BRAN", "Rice Bran (16% Oil)", "By-Product", 210.0, 2400.0, "5%", 50),
-            ("BY-HUSK", "Paddy Husk Loose", "By-Product", 150.0, 650.0, "5%", 50)
-        ])
+    # 10. Custom Closing Stocks (Bahi-Khata Audited Year-End Inventories)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS custom_closing_stocks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        fy_id INTEGER,
+        financial_year TEXT NOT NULL,
+        closing_date TEXT NOT NULL,
+        item_id INTEGER,
+        item_code TEXT NOT NULL,
+        item_name TEXT NOT NULL,
+        bags INTEGER DEFAULT 0,
+        weight_qtl REAL DEFAULT 0.0,
+        rate REAL DEFAULT 0.0,
+        amount REAL DEFAULT 0.0,
+        FOREIGN KEY (item_id) REFERENCES stock_items(id),
+        FOREIGN KEY (fy_id) REFERENCES financial_years(id)
+    );
+    """)
 
-    cursor.execute("SELECT COUNT(*) FROM paddy_procurement")
-    if cursor.fetchone()[0] == 0:
-        cursor.executemany("""
-        INSERT INTO paddy_procurement (receipt_no, arrival_date, farmer_id, farmer_name, variety, bag_count, gross_weight_qtl, moisture_pct, deduction_qtl, net_weight_qtl, rate_per_qtl, total_amount, status, payment_mode)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, [
-            ("ARR-1001", "2026-08-20", 1, "Ramesh Kumar (Farmer)", "Sona Masoori Paddy", 120, 61.20, 14.5, 0.60, 60.60, 2350.0, 142410.0, "Paid", "Bank Transfer"),
-            ("ARR-1002", "2026-08-22", 4, "Sri Rama Traders (Mandi)", "IR-64 Paddy", 200, 102.50, 15.0, 1.50, 101.00, 2100.0, 212100.0, "Unpaid", "Pending")
-        ])
-
-    cursor.execute("SELECT COUNT(*) FROM sales_invoices")
-    if cursor.fetchone()[0] == 0:
-        cursor.executemany("""
-        INSERT INTO sales_invoices (invoice_no, invoice_date, customer_id, customer_name, gstin, item_name, hsn_code, bag_count, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount, round_off, gst_amount, total_amount, payment_mode, vehicle_no, eway_bill_no, narration)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, [
-            ("INV-5001", "2026-08-21", 2, "Karnataka Rice Traders", "29XYZAB5678C1Z2", "Sona Masoori Raw Rice (50kg)", "10063010", 200, 100.0, 4800.0, 480000.0, 5.0, 12000.0, 12000.0, 0.0, 0.0, 24000.0, 504000.0, "Credit", "KA-36-EA-4589", "181002938475", "Sales invoice entry against Order #4029"),
-            ("INV-5002", "2026-08-23", 3, "Venkateswara Food Supplies", "36AAAAA9999A1Z5", "Rice Bran (16% Oil)", "23069090", 100, 50.0, 2400.0, 120000.0, 5.0, 0.0, 0.0, 6000.0, 0.0, 6000.0, 126000.0, "Credit", "AP-21-TX-9012", "181002938476", "Sales of rice bran by-product")
-        ])
-
-    cursor.execute("SELECT COUNT(*) FROM purchase_invoices")
-    if cursor.fetchone()[0] == 0:
-        cursor.executemany("""
-        INSERT INTO purchase_invoices (invoice_no, invoice_date, supplier_id, supplier_name, gstin, item_name, hsn_code, bag_count, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount, round_off, gst_amount, total_amount, payment_mode, vehicle_no, eway_bill_no, narration)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, [
-            ("PUR-7001", "2026-08-20", 1, "Ramesh Kumar (Farmer)", "29ABCDE1234F1Z5", "Sona Masoori Paddy", "10061010", 120, 60.6, 2350.0, 142410.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 142410.0, "Credit", "KA-36-EA-4589", "181002938475", "Raw paddy purchase arrival")
-        ])
-
-    cursor.execute("SELECT COUNT(*) FROM vouchers")
-    if cursor.fetchone()[0] == 0:
-        cursor.executemany("""
-        INSERT INTO vouchers (voucher_no, voucher_date, voucher_type, party_name, account_type, amount, narration)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, [
-            ("VCH-9001", "2026-08-20", "Payment", "Ramesh Kumar (Farmer)", "SBI Raichur", 142410.0, "Paddy procurement payment for receipt ARR-1001"),
-            ("VCH-9002", "2026-08-21", "Receipt", "Karnataka Rice Traders", "HDFC Bank", 250000.0, "Advance receipt against Sales Invoice INV-5001"),
-            ("VCH-9003", "2026-08-22", "Payment", "Direct Expenses (Hamali/Freight)", "Cash", 4500.0, "Hamali unloading charges for arrival ARR-1002")
-        ])
+    # 11. Stock Transactions (Lossless Bahi-Khata Inventory Ledger)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS stock_transactions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        fy_id INTEGER,
+        financial_year TEXT,
+        voucher_no TEXT,
+        voucher_date TEXT NOT NULL,
+        trans_type TEXT NOT NULL,
+        voucher_type TEXT,
+        party_id INTEGER,
+        party_name TEXT,
+        bill_no TEXT,
+        item_id INTEGER,
+        item_code TEXT NOT NULL,
+        item_name TEXT NOT NULL,
+        bags INTEGER DEFAULT 0,
+        packing REAL DEFAULT 0.0,
+        weight_qtl REAL NOT NULL DEFAULT 0.0,
+        rate REAL DEFAULT 0.0,
+        amount REAL DEFAULT 0.0,
+        taxable_amount REAL DEFAULT 0.0,
+        tax REAL DEFAULT 0.0,
+        tax_type TEXT,
+        narration TEXT,
+        row_no INTEGER DEFAULT 1
+    );
+    """)
 
     conn.commit()
     conn.close()
 
 if __name__ == "__main__":
     init_db()
-    print("Mahadev Accounting Database Initialized & Migrated Successfully!")
+    print("Mahadev Accounting Database Initialized Successfully!")

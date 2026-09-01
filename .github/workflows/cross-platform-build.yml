@@ -1,0 +1,118 @@
+name: Multi-Platform Cross-Compilation & Release
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            platform: macos-arm64
+            qt_arch: clang_64
+            artifact_name: MahadevRiceMill-macOS-arm64
+          - os: macos-13
+            platform: macos-x86_64
+            qt_arch: clang_64
+            artifact_name: MahadevRiceMill-macOS-x86_64
+          - os: windows-2022
+            platform: windows-x64
+            qt_arch: win64_msvc2019_64
+            artifact_name: MahadevRiceMill-Windows-x64
+          - os: ubuntu-22.04
+            platform: linux-x64
+            qt_arch: gcc_64
+            artifact_name: MahadevRiceMill-Linux-x64
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Qt6
+        uses: jurplel/install-qt-action@v3
+        with:
+          version: '6.6.3'
+          arch: ${{ matrix.qt_arch }}
+          modules: 'qtquickcontrols2'
+          archives: 'qtbase qtdeclarative'
+
+      - name: Setup Ninja
+        uses: ashutoshvarma/setup-ninja@master
+        with:
+          version: 1.11.1
+
+      # ---------------- Linux specific setup ----------------
+      - name: Install Linux Dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1-mesa-dev libxkbcommon-dev libx11-dev libx11-xcb-dev libfontenc-dev libice-dev libsm-dev libxau-dev libxaw7-dev libxcomposite-dev libxcursor-dev libxdamage-dev libxdmcp-dev libxext-dev libxfixes-dev libxfont-dev libxft-dev libxi-dev libxinerama-dev libxkbfile-dev libxmu-dev libxmuu-dev libxpm-dev libxrandr-dev libxrender-dev libxres-dev libxss-dev libxt-dev libxtst-dev libxv-dev libxvmc-dev libxxf86vm-dev
+
+      # ---------------- Build Steps ----------------
+      - name: Configure CMake (Windows MSVC)
+        if: runner.os == 'Windows'
+        run: |
+          cmake -B build -G "Ninja" -DCMAKE_BUILD_TYPE=Release
+        shell: cmd
+        env:
+          CC: cl.exe
+          CXX: cl.exe
+
+      - name: Configure CMake (macOS & Linux)
+        if: runner.os != 'Windows'
+        run: |
+          cmake -B build -G "Ninja" -DCMAKE_BUILD_TYPE=Release
+
+      - name: Compile Application
+        run: |
+          cmake --build build --config Release --parallel
+
+      # ---------------- Packaging macOS ----------------
+      - name: Package macOS DMG / ZIP
+        if: runner.os == 'macOS'
+        run: |
+          macdeployqt build/MahadevRiceMill.app -qmldir=qml -always-overwrite -dmg
+          mkdir -p dist
+          if [ -f "build/MahadevRiceMill.dmg" ]; then
+            cp "build/MahadevRiceMill.dmg" "dist/${{ matrix.artifact_name }}.dmg"
+          fi
+          cd build && zip -r "../dist/${{ matrix.artifact_name }}.app.zip" "MahadevRiceMill.app"
+
+      # ---------------- Packaging Windows ----------------
+      - name: Package Windows Portable Executable & DLLs
+        if: runner.os == 'Windows'
+        run: |
+          windeployqt --qmldir qml --release --no-translations build/MahadevRiceMill.exe
+          mkdir dist
+          mkdir dist\MahadevRiceMill
+          xcopy build\* dist\MahadevRiceMill\ /E /H /Y
+          cd dist
+          tar -a -c -f "${{ matrix.artifact_name }}.zip" MahadevRiceMill
+
+      # ---------------- Packaging Linux ----------------
+      - name: Package Linux Standalone Bundle
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p dist/MahadevRiceMill
+          cp build/MahadevRiceMill dist/MahadevRiceMill/
+          cp -r qml dist/MahadevRiceMill/
+          cp qtquickcontrols2.conf dist/MahadevRiceMill/
+          cd dist && tar -czvf "${{ matrix.artifact_name }}.tar.gz" MahadevRiceMill
+
+      # ---------------- Upload Artifacts ----------------
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: dist/*
