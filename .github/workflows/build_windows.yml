@@ -42,21 +42,52 @@ jobs:
         shell: cmd
         run: |
           mkdir dist
-          mkdir dist\MahadevRiceMillERP
-          copy build\MahadevRiceMillERP.exe dist\MahadevRiceMillERP\
+          mkdir dist\app
+          copy build\MahadevRiceMillERP.exe dist\app\
           
           REM Deploy all Qt plugins, QML imports, and compiler runtime
-          windeployqt --qmldir qml --release --compiler-runtime --no-translations dist\MahadevRiceMillERP\MahadevRiceMillERP.exe
+          windeployqt --qmldir qml --release --compiler-runtime --no-translations dist\app\MahadevRiceMillERP.exe
           
-          REM Explicitly copy MSVC C/C++ Runtime DLLs (msvcp140.dll, vcruntime140.dll, vcruntime140_1.dll)
-          powershell -Command "Get-ChildItem -Path '${env:VCToolsRedistDir}x64\Microsoft.VC143.CRT\*.dll' | Copy-Item -Destination 'dist\MahadevRiceMillERP\' -Force"
-          
-          REM Create distribution zip
-          cd dist
-          tar -a -c -f "MahadevRiceMill-Windows-x64.zip" MahadevRiceMillERP
+          REM Explicitly copy MSVC C/C++ Runtime DLLs
+          powershell -Command "Get-ChildItem -Path '${env:VCToolsRedistDir}x64\Microsoft.VC143.CRT\*.dll' | Copy-Item -Destination 'dist\app\' -Force"
 
-      - name: Upload Windows Standalone Artifact
+      - name: Package Single Portable Self-Contained EXE
+        shell: powershell
+        run: |
+          # Create 7z SFX single-file standalone executable
+          choco install 7zip.commandline -y
+          
+          # Write SFX config
+          $sfxConfig = @'
+          ;!@Install@!UTF-8!
+          Title="Mahadev Rice Mill Accounting ERP"
+          BeginPrompt="Launch Mahadev ERP?"
+          ExecuteFile="MahadevRiceMillERP.exe"
+          ;!@InstallEnd@!
+          '@
+          $sfxConfig | Out-File -FilePath dist\config.txt -Encoding ascii
+
+          # Download 7z SFX module
+          Invoke-WebRequest -Uri "https://github.com/chrislake/7zsfxmm/releases/download/1.7.0.3900/7zsd_All.sfx" -OutFile dist\7zsd.sfx -UseBasicParsing
+          
+          cd dist\app
+          7za a -r -mx9 ..\app_payload.7z *
+          cd ..
+          
+          # Combine into Single Standalone Executable
+          cmd /c "copy /b 7zsd.sfx + config.txt + app_payload.7z MahadevRiceMillERP_SingleFile.exe"
+          
+          # Also package the portable folder zip
+          tar -a -c -f "MahadevRiceMill-Windows-Portable.zip" app
+
+      - name: Upload Single Standalone EXE
         uses: actions/upload-artifact@v4
         with:
-          name: MahadevRiceMill-Windows-x64
-          path: dist/MahadevRiceMill-Windows-x64.zip
+          name: MahadevRiceMillERP-SingleFile-EXE
+          path: dist/MahadevRiceMillERP_SingleFile.exe
+
+      - name: Upload Portable Zip Folder
+        uses: actions/upload-artifact@v4
+        with:
+          name: MahadevRiceMill-Windows-Portable-Folder
+          path: dist/MahadevRiceMill-Windows-Portable.zip
