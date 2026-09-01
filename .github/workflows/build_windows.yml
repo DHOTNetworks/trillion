@@ -20,29 +20,34 @@ jobs:
         with:
           version: '6.7.2'
           arch: 'win64_msvc2022_64'
-          modules: 'qtdeclarative qtquickcontrols2'
+          archives: 'qtbase qtdeclarative qttools'
           cache: true
 
       - name: Setup MSVC Developer Command Prompt
         uses: ilammy/msvc-dev-cmd@v1
 
+      - name: Setup Ninja
+        uses: ashutoshvarma/setup-ninja@master
+        with:
+          version: 1.11.1
+
       - name: Configure CMake
         run: |
-          cmake -B build -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON
+          cmake -B build -G "Ninja" -DCMAKE_BUILD_TYPE=Release
 
       - name: Build Application
         run: |
           cmake --build build --config Release
 
-      - name: Deploy Qt Dependencies (windeployqt)
+      - name: Deploy Windows Binary with windeployqt
+        shell: cmd
         run: |
-          windeployqt --qmldir qml --release --compiler-runtime build/MahadevRiceMillERP.exe
           mkdir dist
           copy build\MahadevRiceMillERP.exe dist\
-          xcopy build\* dist\ /E /I /Y
+          windeployqt --qmldir qml --release dist\MahadevRiceMillERP.exe
 
-      - name: Upload Windows Standalone Binary
+      - name: Upload Windows Standalone Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Mahadev-ERP-Windows-x64
+          name: MahadevRiceMill-Windows-x64
           path: dist/
