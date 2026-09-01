@@ -65,7 +65,7 @@ Rectangle {
             color: "#0F172A"
             font.pixelSize: 13
             font.bold: true
-            font.family: "Segoe UI"
+            font.family: "Segoe UI, -apple-system, Roboto, sans-serif"
             background: null
             Layout.fillWidth: true
             selectByMouse: true
@@ -158,7 +158,7 @@ Rectangle {
                         color: index === searchList.currentIndex ? "#2563EB" : "#0F172A"
                         font.pixelSize: 12
                         font.bold: true
-                        font.family: "Segoe UI"
+                        font.family: "Segoe UI, -apple-system, Roboto, sans-serif"
                         Layout.fillWidth: true
                         elide: Text.ElideRight
                     }
@@ -174,7 +174,7 @@ Rectangle {
                             text: (modelData && modelData.group_name) ? String(modelData.group_name) : "Sundry Debtors"
                             color: index === searchList.currentIndex ? "#1D4ED8" : "#64748B"
                             font.pixelSize: 10
-                            font.family: "Segoe UI"
+                            font.family: "Segoe UI, -apple-system, Roboto, sans-serif"
                         }
                     }
                 }

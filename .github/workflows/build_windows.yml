@@ -42,9 +42,9 @@ jobs:
         shell: cmd
         run: |
           mkdir dist
-          mkdir dist\app
-          copy build\MahadevRiceMillERP.exe dist\app\
-          windeployqt --qmldir qml --release --compiler-runtime --no-translations dist\app\MahadevRiceMillERP.exe
+          mkdir dist\MahadevRiceMillERP
+          copy build\MahadevRiceMillERP.exe dist\MahadevRiceMillERP\
+          windeployqt --qmldir qml --release --compiler-runtime --no-translations dist\MahadevRiceMillERP\MahadevRiceMillERP.exe
 
       - name: Copy MSVC CRT DLLs
         shell: powershell
@@ -53,39 +53,18 @@ jobs:
             $crtDir = Join-Path $env:VCToolsRedistDir "x64\Microsoft.VC143.CRT"
             if (Test-Path $crtDir) {
               Write-Host "Copying MSVC CRT from: $crtDir"
-              Copy-Item "$crtDir\*.dll" -Destination "dist\app\" -Force
+              Copy-Item "$crtDir\*.dll" -Destination "dist\MahadevRiceMillERP\" -Force
             }
           }
 
-      - name: Package Single Portable Self-Contained EXE
+      - name: Package Portable Zip
         shell: powershell
         run: |
-          choco install 7zip -y
-          
-          $sfx = "C:\Program Files\7-Zip\7z.sfx"
-          if (-not (Test-Path $sfx)) {
-            $sfx = "C:\Program Files (x86)\7-Zip\7z.sfx"
-          }
-          Write-Host "Using SFX Module: $sfx"
-          
-          # Compress all app files into payload
-          & "C:\Program Files\7-Zip\7z.exe" a -r -mx9 dist\app_payload.7z .\dist\app\*
-          
-          # Combine SFX stub and payload into Single-File Standalone EXE
-          cmd /c "copy /b `"$sfx`" + dist\app_payload.7z dist\MahadevRiceMillERP_SingleFile.exe"
-          
-          # Also package portable zip
           cd dist
-          tar -a -c -f "MahadevRiceMill-Windows-Portable.zip" app
+          tar -a -c -f "MahadevRiceMill-Windows-x64.zip" MahadevRiceMillERP
 
-      - name: Upload Single Standalone EXE
+      - name: Upload Windows Standalone Package
         uses: actions/upload-artifact@v4
         with:
-          name: MahadevRiceMillERP-SingleFile-EXE
-          path: dist/MahadevRiceMillERP_SingleFile.exe
-
-      - name: Upload Portable Zip Folder
-        uses: actions/upload-artifact@v4
-        with:
-          name: MahadevRiceMill-Windows-Portable-Folder
-          path: dist/MahadevRiceMill-Windows-Portable.zip
+          name: MahadevRiceMill-Windows-x64
+          path: dist/MahadevRiceMill-Windows-x64.zip

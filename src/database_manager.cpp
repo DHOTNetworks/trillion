@@ -38,7 +38,6 @@ bool DatabaseManager::initDatabase(const QString& dbPath) {
     // Enable WAL mode for high concurrency and performance
     executeNonQuery("PRAGMA journal_mode=WAL;");
     executeNonQuery("PRAGMA synchronous=NORMAL;");
-    executeNonQuery("PRAGMA foreign_keys=ON;");
 
     runMigrations();
     return true;
@@ -163,6 +162,47 @@ void DatabaseManager::runMigrations() {
         "end_date TEXT NOT NULL,"
         "is_active INTEGER DEFAULT 0,"
         "is_locked INTEGER DEFAULT 0"
+        ");"
+    );
+
+    // Seed default financial years if empty
+    QVariant fyCount = executeScalar("SELECT COUNT(*) FROM financial_years;");
+    if (!fyCount.isValid() || fyCount.toLongLong() == 0) {
+        executeNonQuery("INSERT INTO financial_years (year_name, start_date, end_date, is_active) VALUES ('FY 2026-27', '2026-04-01', '2027-03-31', 1);");
+        executeNonQuery("INSERT INTO financial_years (year_name, start_date, end_date, is_active) VALUES ('FY 2025-26', '2025-04-01', '2026-03-31', 0);");
+    }
+
+    // Account Groups
+    executeNonQuery(
+        "CREATE TABLE IF NOT EXISTS account_groups ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "name TEXT NOT NULL UNIQUE,"
+        "parent_group_name TEXT,"
+        "nature TEXT NOT NULL,"
+        "description TEXT,"
+        "extract_in_balance_sheet INTEGER DEFAULT 0,"
+        "is_system INTEGER DEFAULT 1"
+        ");"
+    );
+
+    // Paddy Arrivals
+    executeNonQuery(
+        "CREATE TABLE IF NOT EXISTS paddy_arrivals ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "slip_no TEXT NOT NULL,"
+        "arrival_date TEXT NOT NULL,"
+        "farmer_id INTEGER,"
+        "farmer_name TEXT,"
+        "paddy_variety TEXT,"
+        "bag_count INTEGER,"
+        "gross_weight_qtl REAL,"
+        "moisture_pct REAL,"
+        "moisture_deduction_qtl REAL,"
+        "net_weight_qtl REAL,"
+        "rate_per_qtl REAL,"
+        "hamali_charges REAL,"
+        "net_amount REAL,"
+        "payment_status TEXT"
         ");"
     );
 

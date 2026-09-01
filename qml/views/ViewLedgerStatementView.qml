@@ -397,8 +397,8 @@ Rectangle {
                                     }
                                 }
 
-                                Text { text: model.vDate; color: "#334155"; font.pixelSize: 11; font.family: "Menlo"; width: 85 }
-                                Text { text: model.refNo; color: "#16A34A"; font.pixelSize: 11; font.bold: true; font.family: "Menlo"; width: 75 }
+                                Text { text: model.vDate; color: "#334155"; font.pixelSize: 11; font.family: "Segoe UI, Consolas, Menlo, sans-serif"; width: 85 }
+                                Text { text: model.refNo; color: "#16A34A"; font.pixelSize: 11; font.bold: true; font.family: "Segoe UI, Consolas, Menlo, sans-serif"; width: 75 }
                                 Text { text: model.particulars; color: "#0F172A"; font.pixelSize: 11; Layout.fillWidth: true; elide: Text.ElideRight }
                                 Text { text: (typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.format_inr(model.amount) : ("₹" + model.amount.toFixed(2)); color: "#15803D"; font.pixelSize: 12; font.bold: true; horizontalAlignment: Text.AlignRight; width: 95 }
                             }
@@ -582,8 +582,8 @@ Rectangle {
                                     }
                                 }
 
-                                Text { text: model.vDate; color: "#334155"; font.pixelSize: 11; font.family: "Menlo"; width: 85 }
-                                Text { text: model.refNo; color: "#2563EB"; font.pixelSize: 11; font.bold: true; font.family: "Menlo"; width: 75 }
+                                Text { text: model.vDate; color: "#334155"; font.pixelSize: 11; font.family: "Segoe UI, Consolas, Menlo, sans-serif"; width: 85 }
+                                Text { text: model.refNo; color: "#2563EB"; font.pixelSize: 11; font.bold: true; font.family: "Segoe UI, Consolas, Menlo, sans-serif"; width: 75 }
                                 Text { text: model.particulars; color: "#0F172A"; font.pixelSize: 11; Layout.fillWidth: true; elide: Text.ElideRight }
                                 Text { text: (typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.format_inr(model.amount) : ("₹" + model.amount.toFixed(2)); color: "#1D4ED8"; font.pixelSize: 12; font.bold: true; horizontalAlignment: Text.AlignRight; width: 95 }
                             }

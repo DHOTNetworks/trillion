@@ -176,7 +176,7 @@ Rectangle {
                                 return "#1E293B"
                             }
                             font.pixelSize: 12
-                            font.family: "Menlo"
+                            font.family: "Segoe UI, Consolas, Menlo, sans-serif"
                             font.bold: roleKey === "net_amount" || roleKey === "total_amount" || roleKey === "slip_no" || roleKey === "invoice_no" || roleKey === "closeValVal"
                             Layout.preferredWidth: (root.columnWidths && colIndex < root.columnWidths.length) ? root.columnWidths[colIndex] : 100
                             Layout.fillWidth: (root.columnWidths && colIndex < root.columnWidths.length) ? false : true

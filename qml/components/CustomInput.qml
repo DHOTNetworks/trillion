@@ -59,7 +59,7 @@ ColumnLayout {
             placeholderText: root.placeholderText
             color: "#0F172A"
             font.pixelSize: 13
-            font.family: "Menlo"
+            font.family: "Segoe UI, Consolas, Menlo, sans-serif"
             background: null
             selectByMouse: true
 
