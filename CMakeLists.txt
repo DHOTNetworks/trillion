@@ -8,17 +8,6 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-# Option for standalone static build
-option(BUILD_STATIC "Build standalone static binary with zero runtime dependencies" OFF)
-
-if(BUILD_STATIC)
-    message(STATUS "Configuring for Standalone Static Binary Build...")
-    if(MSVC)
-        # Statically link MSVC C/C++ Runtime (/MT)
-        set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-    endif()
-endif()
-
 # Find Qt 6 Packages
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2)
 
@@ -44,6 +33,12 @@ set(SOURCES
     src/engine/accounting_engine.h
     src/models/base_table_model.h
     src/models/base_table_model.cpp
+    src/models/dashboard_controller.h
+    src/models/dashboard_controller.cpp
+    src/models/paddy_arrivals_model.h
+    src/models/paddy_arrivals_model.cpp
+    src/models/account_groups_model.h
+    src/models/account_groups_model.cpp
     src/models/sales_model.h
     src/models/sales_model.cpp
     src/models/purchase_model.h
@@ -90,5 +85,3 @@ elseif(WIN32)
         WIN32_EXECUTABLE TRUE
     )
 endif()
-
-message(STATUS "Mahadev Rice Mill ERP C++ Project configured successfully!")
