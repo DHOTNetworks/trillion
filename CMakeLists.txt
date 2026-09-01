@@ -53,10 +53,62 @@ set(SOURCES
     src/models/milling_model.cpp
     src/models/financial_years_model.h
     src/models/financial_years_model.cpp
-    qml.qrc
 )
 
-add_executable(${PROJECT_NAME} ${SOURCES})
+qt_add_executable(${PROJECT_NAME} ${SOURCES})
+
+# Qt 6 Ahead-of-Time QML to C++ Compilation Engine
+qt_add_qml_module(${PROJECT_NAME}
+    URI MahadevERP
+    VERSION 1.0
+    RESOURCE_PREFIX /
+    QML_FILES
+        qml/main.qml
+        qml/components/AppHeader.qml
+        qml/components/AutoCompletePartySearch.qml
+        qml/components/CustomInput.qml
+        qml/components/CustomWhiteCombo.qml
+        qml/components/FastTable.qml
+        qml/components/FormNavigationScope.qml
+        qml/components/KbdBadge.qml
+        qml/components/NavMenuItem.qml
+        qml/components/Sidebar.qml
+        qml/components/StatCard.qml
+        qml/dialogs/AccountingPeriodModal.qml
+        qml/dialogs/AddVoucherMenuModal.qml
+        qml/dialogs/ConfirmationModal.qml
+        qml/dialogs/ItemMovementModal.qml
+        qml/dialogs/JFormStubModal.qml
+        qml/dialogs/KeyboardShortcutsModal.qml
+        qml/dialogs/LedgerMasterMenuModal.qml
+        qml/dialogs/NewLedgerModal.qml
+        qml/dialogs/NewPaddyModal.qml
+        qml/dialogs/OtherVouchersMenuModal.qml
+        qml/dialogs/ReportsMenuModal.qml
+        qml/dialogs/StockMasterMenuModal.qml
+        qml/views/ChequeVoucherView.qml
+        qml/views/DashboardView.qml
+        qml/views/JournalVoucherView.qml
+        qml/views/MillingStatementView.qml
+        qml/views/MillingView.qml
+        qml/views/MillingVoucherView.qml
+        qml/views/ModifyGroupView.qml
+        qml/views/ModifyLedgerView.qml
+        qml/views/ModifyStockItemView.qml
+        qml/views/NewGroupView.qml
+        qml/views/NewLedgerView.qml
+        qml/views/NewStockItemView.qml
+        qml/views/PaddyProcurementView.qml
+        qml/views/PurchaseRegisterView.qml
+        qml/views/PurchaseVoucherView.qml
+        qml/views/ReportsView.qml
+        qml/views/SalesInvoicingView.qml
+        qml/views/SalesRegisterView.qml
+        qml/views/SalesVoucherView.qml
+        qml/views/StockDetailView.qml
+        qml/views/ViewLedgerStatementView.qml
+        qml/views/VoucherLedgerView.qml
+)
 
 target_include_directories(${PROJECT_NAME} PRIVATE
     src
