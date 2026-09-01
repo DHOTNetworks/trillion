@@ -60,25 +60,19 @@ jobs:
       - name: Package Single Portable Self-Contained EXE
         shell: powershell
         run: |
-          choco install 7zip.commandline -y
+          choco install 7zip -y
           
-          # Write SFX config file using standard Set-Content with indentation preserved
-          @'
-          ;!@Install@!UTF-8!
-          Title="Mahadev Rice Mill Accounting ERP"
-          ExecuteFile="MahadevRiceMillERP.exe"
-          ;!@InstallEnd@!
-          '@ | Out-File -FilePath "dist\config.txt" -Encoding ascii
+          $sfx = "C:\Program Files\7-Zip\7z.sfx"
+          if (-not (Test-Path $sfx)) {
+            $sfx = "C:\Program Files (x86)\7-Zip\7z.sfx"
+          }
+          Write-Host "Using SFX Module: $sfx"
           
-          # Download 7z SFX module
-          Invoke-WebRequest -Uri "https://github.com/chrislake/7zsfxmm/releases/download/1.7.0.3900/7zsd_All.sfx" -OutFile "dist\7zsd.sfx" -UseBasicParsing
+          # Compress all app files into payload
+          & "C:\Program Files\7-Zip\7z.exe" a -r -mx9 dist\app_payload.7z .\dist\app\*
           
-          cd dist\app
-          7za a -r -mx9 ..\app_payload.7z *
-          cd ..\..
-          
-          # Combine into Single Standalone Executable
-          cmd /c "copy /b dist\7zsd.sfx + dist\config.txt + dist\app_payload.7z dist\MahadevRiceMillERP_SingleFile.exe"
+          # Combine SFX stub and payload into Single-File Standalone EXE
+          cmd /c "copy /b `"$sfx`" + dist\app_payload.7z dist\MahadevRiceMillERP_SingleFile.exe"
           
           # Also package portable zip
           cd dist
