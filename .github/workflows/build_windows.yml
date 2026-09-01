@@ -15,11 +15,11 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Install Qt 6.7.2
+      - name: Install Qt 6.7.2 (MSVC 64-bit)
         uses: jurplel/install-qt-action@v3
         with:
           version: '6.7.2'
-          arch: 'win64_msvc2022_64'
+          arch: 'win64_msvc2019_64'
           cache: true
 
       - name: Setup MSVC Developer Command Prompt
@@ -42,11 +42,14 @@ jobs:
         shell: cmd
         run: |
           mkdir dist
-          copy build\MahadevRiceMillERP.exe dist\
-          windeployqt --qmldir qml --release dist\MahadevRiceMillERP.exe
+          mkdir dist\MahadevRiceMillERP
+          copy build\MahadevRiceMillERP.exe dist\MahadevRiceMillERP\
+          windeployqt --qmldir qml --release dist\MahadevRiceMillERP\MahadevRiceMillERP.exe
+          cd dist
+          tar -a -c -f "MahadevRiceMill-Windows-x64.zip" MahadevRiceMillERP
 
       - name: Upload Windows Standalone Artifact
         uses: actions/upload-artifact@v4
         with:
           name: MahadevRiceMill-Windows-x64
-          path: dist/
+          path: dist/MahadevRiceMill-Windows-x64.zip
