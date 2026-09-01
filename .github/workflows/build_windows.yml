@@ -20,7 +20,6 @@ jobs:
         with:
           version: '6.7.2'
           arch: 'win64_msvc2022_64'
-          archives: 'qtbase qtdeclarative qttools'
           cache: true
 
       - name: Setup MSVC Developer Command Prompt
