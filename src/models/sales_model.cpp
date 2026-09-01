@@ -128,7 +128,7 @@ bool SalesModel::add_sales_invoice_full(
 
     QString vchNo = voucher_no.isEmpty() ? get_next_voucher_no(fyLabel) : voucher_no;
     QString invNo = invoice_no.isEmpty() ? get_next_invoice_no(fyLabel) : invoice_no;
-    double gstAmount = cgst_amount + sgst_amount + igst_amount;
+    double gst_amount = cgst_amount + sgst_amount + igst_amount;
 
     bool ok = DatabaseManager::instance().executeNonQuery(
         "INSERT INTO sales_invoices ("
