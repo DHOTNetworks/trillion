@@ -34,11 +34,14 @@ int main(int argc, char* argv[]) {
     app.setApplicationName("Mahadev Rice Mill ERP & Accounting");
     app.setOrganizationName("MahadevAgro");
 
-    // Resolve Database Path
+    // Resolve Database Path portably (App dir, working dir, or fallback)
     QString appDir = QCoreApplication::applicationDirPath();
-    QString resolvedDbPath = "/Users/karan/MahadevAc/mahadev_accounting.db";
+    QString resolvedDbPath = QDir(appDir).filePath("mahadev_accounting.db");
     if (!QFile::exists(resolvedDbPath)) {
         resolvedDbPath = QDir::current().filePath("mahadev_accounting.db");
+    }
+    if (!QFile::exists(resolvedDbPath)) {
+        resolvedDbPath = "/Users/karan/MahadevAc/mahadev_accounting.db";
     }
 
     std::cout << "[INFO] Initializing SQLite database at: " << resolvedDbPath.toStdString() << std::endl << std::flush;
@@ -78,14 +81,33 @@ int main(int argc, char* argv[]) {
     ctx->setContextProperty("stockItemsModel", &stockItemsModel);
     ctx->setContextProperty("financialYearsModel", &financialYearsModel);
 
-    // Add import paths
-    engine.addImportPath("/Users/karan/MahadevAc/qml");
-    engine.addImportPath("/Users/karan/MahadevAc/qml/components");
-    engine.addImportPath("/Users/karan/MahadevAc/qml/views");
-    engine.addImportPath("/Users/karan/MahadevAc/qml/dialogs");
+    // Add import paths (Embedded QRC + local file fallbacks)
+    engine.addImportPath(":/");
+    engine.addImportPath(":/MahadevERP");
+    engine.addImportPath(":/MahadevERP/qml");
+    engine.addImportPath("qrc:/");
+    engine.addImportPath("qrc:/MahadevERP");
+    engine.addImportPath("qrc:/MahadevERP/qml");
+    engine.addImportPath(QDir(appDir).filePath("qml"));
+    engine.addImportPath(QDir(appDir).filePath("qml/components"));
+    engine.addImportPath(QDir(appDir).filePath("qml/views"));
+    engine.addImportPath(QDir(appDir).filePath("qml/dialogs"));
+    engine.addImportPath(QDir::current().filePath("qml"));
 
-    QString mainQmlPath = "/Users/karan/MahadevAc/qml/main.qml";
-    QUrl mainQmlUrl = QUrl::fromLocalFile(mainQmlPath);
+    // Determine Main QML URL (prefer compiled QRC resource)
+    QUrl mainQmlUrl("qrc:/MahadevERP/qml/main.qml");
+    if (!QFile::exists(":/MahadevERP/qml/main.qml")) {
+        QString localAppQml = QDir(appDir).filePath("qml/main.qml");
+        QString localCurQml = QDir::current().filePath("qml/main.qml");
+        if (QFile::exists(localAppQml)) {
+            mainQmlUrl = QUrl::fromLocalFile(localAppQml);
+        } else if (QFile::exists(localCurQml)) {
+            mainQmlUrl = QUrl::fromLocalFile(localCurQml);
+        } else if (QFile::exists("/Users/karan/MahadevAc/qml/main.qml")) {
+            mainQmlUrl = QUrl::fromLocalFile("/Users/karan/MahadevAc/qml/main.qml");
+        }
+    }
+
     std::cout << "[INFO] Loading main QML: " << mainQmlUrl.toString().toStdString() << std::endl << std::flush;
 
     engine.load(mainQmlUrl);
