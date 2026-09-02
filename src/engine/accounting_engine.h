@@ -7,74 +7,73 @@
 
 class AccountingEngine {
 public:
-    static QVariantMap calculateSalesTax(double taxableAmount, double gstPct, bool isIgst = false) {
-        QVariantMap result;
-        double gstAmount = std::round(taxableAmount * (gstPct / 100.0) * 100.0) / 100.0;
-        double cgst = 0.0;
-        double sgst = 0.0;
-        double igst = 0.0;
-
-        if (isIgst) {
-            igst = gstAmount;
-        } else {
-            cgst = std::round((gstAmount / 2.0) * 100.0) / 100.0;
-            sgst = std::round((gstAmount / 2.0) * 100.0) / 100.0;
-        }
-
-        double totalAmount = std::round((taxableAmount + gstAmount) * 100.0) / 100.0;
-
-        result["taxable_amount"] = taxableAmount;
-        result["gst_pct"] = gstPct;
-        result["cgst_amount"] = cgst;
-        result["sgst_amount"] = sgst;
-        result["igst_amount"] = igst;
-        result["gst_amount"] = gstAmount;
-        result["total_amount"] = totalAmount;
-        return result;
+    static double calculateMoistureDeduction(double grossWeightQtl, double moisturePct, double baseMoistureLimit = 14.0) {
+        if (moisturePct <= baseMoistureLimit) return 0.0;
+        double excess = moisturePct - baseMoistureLimit;
+        return std::round((grossWeightQtl * (excess / 100.0)) * 100.0) / 100.0;
     }
 
-    static QString formatIndianNumber(double val, int decimals = 2, const QString& unit = "") {
-        if (std::isnan(val)) return "0.00";
-        bool isNegative = val < 0;
-        double absVal = std::abs(val);
-        
-        long long intPart = static_cast<long long>(absVal);
-        double fracPart = absVal - intPart;
-        
-        QString intStr = QString::number(intPart);
-        QString res = "";
-        
-        if (intStr.length() <= 3) {
-            res = intStr;
-        } else {
-            QString last3 = intStr.right(3);
-            QString remaining = intStr.left(intStr.length() - 3);
-            QStringList groups;
-            while (remaining.length() > 2) {
-                groups.prepend(remaining.right(2));
-                remaining = remaining.left(remaining.length() - 2);
-            }
-            if (!remaining.isEmpty()) {
-                groups.prepend(remaining);
-            }
-            res = groups.join(",") + "," + last3;
-        }
+    static double calculatePaddyNetAmount(double netWeightQtl, double ratePerQtl, double hamaliCharges = 0.0) {
+        double baseAmt = netWeightQtl * ratePerQtl;
+        return std::round((baseAmt + hamaliCharges) * 100.0) / 100.0;
+    }
 
-        if (isNegative) res = "-" + res;
-
-        if (decimals > 0) {
-            long long multiplier = 1;
-            for (int i = 0; i < decimals; ++i) multiplier *= 10;
-            long long fracInt = static_cast<long long>(std::round(fracPart * multiplier));
-            QString fracStr = QString::number(fracInt).rightJustified(decimals, '0');
-            res += "." + fracStr;
-        }
-
-        if (!unit.isEmpty()) res += " " + unit;
+    static QVariantMap calculateMillingYield(double paddyInputQtl, double headRiceQtl, double brokenRiceQtl, double branQtl, double huskQtl) {
+        double totalOutput = headRiceQtl + brokenRiceQtl + branQtl + huskQtl;
+        double wastageQtl = std::max(0.0, std::round((paddyInputQtl - totalOutput) * 100.0) / 100.0);
+        double yieldPct = paddyInputQtl > 0 ? (std::round(((headRiceQtl / paddyInputQtl) * 100.0) * 100.0) / 100.0) : 0.0;
+        
+        QVariantMap res;
+        res["total_output_qtl"] = totalOutput;
+        res["wastage_qtl"] = wastageQtl;
+        res["yield_pct"] = yieldPct;
         return res;
     }
 
-    static QString formatIndianCurrency(double val) {
-        return "₹" + formatIndianNumber(val, 2);
+    static QVariantMap calculateSalesTax(double taxableAmount, double gstPct = 5.0) {
+        double gstAmount = std::round((taxableAmount * (gstPct / 100.0)) * 100.0) / 100.0;
+        double totalAmount = std::round((taxableAmount + gstAmount) * 100.0) / 100.0;
+        
+        QVariantMap res;
+        res["gst_amount"] = gstAmount;
+        res["total_amount"] = totalAmount;
+        return res;
+    }
+
+    static QString formatIndianNumber(double amount, int decimals = 2, const QString& unit = "", bool includeSymbol = false) {
+        bool isNegative = amount < 0;
+        double val = std::abs(amount);
+
+        QString s = QString::number(val, 'f', decimals);
+        QStringList parts = s.split('.');
+        QString intPart = parts[0];
+        QString decPart = parts.size() > 1 ? parts[1] : "";
+
+        QString formattedInt;
+        if (intPart.length() <= 3) {
+            formattedInt = intPart;
+        } else {
+            QString last3 = intPart.right(3);
+            QString rest = intPart.left(intPart.length() - 3);
+            QStringList groups;
+            while (rest.length() > 2) {
+                groups.prepend(rest.right(2));
+                rest.chop(2);
+            }
+            if (!rest.isEmpty()) {
+                groups.prepend(rest);
+            }
+            formattedInt = groups.join(',') + ',' + last3;
+        }
+
+        QString result = (decimals > 0) ? (formattedInt + "." + decPart) : formattedInt;
+        if (isNegative) result = "-" + result;
+        if (includeSymbol) result = "₹" + result;
+        if (!unit.isEmpty()) result = result + " " + unit;
+        return result;
+    }
+
+    static QString formatIndianCurrency(double amount, bool includeSymbol = true, int decimals = 2) {
+        return formatIndianNumber(amount, decimals, "", includeSymbol);
     }
 };
