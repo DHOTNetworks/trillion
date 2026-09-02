@@ -114,7 +114,7 @@ bool SalesModel::add_sales_invoice_full(
 ) {
     QString dt = invoice_date.isEmpty() ? QDate::currentDate().toString("yyyy-MM-dd") : invoice_date;
     
-    // Resolve FY
+    // Resolve Financial Year
     QVariantList fyRows = DatabaseManager::instance().executeQuery(
         "SELECT id, year_name FROM financial_years WHERE start_date <= ? AND end_date >= ? LIMIT 1;",
         {dt, dt}
@@ -130,31 +130,91 @@ bool SalesModel::add_sales_invoice_full(
     QString invNo = invoice_no.isEmpty() ? get_next_invoice_no(fyLabel) : invoice_no;
     double gst_amount = cgst_amount + sgst_amount + igst_amount;
 
-    bool ok = DatabaseManager::instance().executeNonQuery(
+    // Resolve Item ID
+    QVariant itemRow = DatabaseManager::instance().executeScalar(
+        "SELECT id FROM stock_items WHERE name = ? LIMIT 1;",
+        {item_name}
+    );
+    int itemId = itemRow.isValid() ? itemRow.toInt() : 1;
+
+    // Resolve Customer ID
+    QVariant custRow = DatabaseManager::instance().executeScalar(
+        "SELECT id FROM parties WHERE name = ? LIMIT 1;",
+        {party_ledger}
+    );
+    int customerId = custRow.isValid() ? custRow.toInt() : 1;
+
+    // --- ATOMIC ACID TRANSACTION ---
+    DatabaseManager::instance().beginTransaction();
+
+    // 1. Insert Sales Invoice Record
+    bool okInv = DatabaseManager::instance().executeNonQuery(
         "INSERT INTO sales_invoices ("
-        "fy_id, financial_year, voucher_no, invoice_no, invoice_date, customer_id, customer_name, gstin, item_name, hsn_code, bag_count, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount, round_off, gst_amount, total_amount, payment_mode, vehicle_no, eway_bill_no, narration, sale_status, market_fee_status, dami, labour, auction, m_fee, hrdf, other_exp, welfare, dhrmd, sutli, less_amount, gr_no, driver, bill_time, sauda_date, shipping_address, po_no, grade, kanda_weight, transport, broker_name"
-        ") VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+        "fy_id, financial_year, voucher_no, invoice_no, invoice_date, customer_id, customer_name, gstin, item_id, item_name, hsn_code, "
+        "bag_count, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount, round_off, gst_amount, "
+        "total_amount, payment_mode, vehicle_no, eway_bill_no, narration, sale_status, market_fee_status, dami, labour, auction, "
+        "m_fee, hrdf, other_exp, welfare, dhrmd, sutli, less_amount, gr_no, driver, bill_time, sauda_date, shipping_address, "
+        "po_no, grade, kanda_weight, transport, broker_name"
+        ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
         {
-            fyId, fyLabel, vchNo, invNo, dt, party_ledger, gstin, item_name, hsn_code,
-            bag_count, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount, round_off, gst_amount, total_amount,
-            payment_mode, vehicle_no, eway_bill_no, narration, sale_status, market_fee_status,
+            fyId, fyLabel, vchNo, invNo, dt, customerId, party_ledger, gstin, itemId, item_name, hsn_code,
+            bag_count, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount, round_off, gst_amount,
+            total_amount, payment_mode, vehicle_no, eway_bill_no, narration, sale_status, market_fee_status,
             dami, labour, auction, m_fee, hrdf, other_exp, welfare, dhrmd, sutli, less_amount,
             gr_no, driver, bill_time, sauda_date, shipping_address, po_no, grade, kanda_weight, transport, broker_name
         }
     );
 
-    if (ok) {
-        QString vchNarr = QString("Sales Invoice %1 - %2 (%3 Qtl @ ₹%4)").arg(invNo, item_name, QString::number(weight_qtl), QString::number(rate_per_qtl));
-        if (!narration.isEmpty()) vchNarr += " | " + narration;
-
-        DatabaseManager::instance().executeNonQuery(
-            "INSERT INTO vouchers (fy_id, financial_year, voucher_no, instrument_no, voucher_date, voucher_type, legacy_type, party_name, account_type, amount, narration) "
-            "VALUES (?, ?, ?, ?, ?, 'Sales', 'Sale', ?, 'Sales Account', ?, ?);",
-            {fyId, fyLabel, vchNo, invNo, dt, party_ledger, total_amount, vchNarr}
-        );
-        reload_data();
+    if (!okInv) {
+        DatabaseManager::instance().rollback();
+        return false;
     }
-    return ok;
+
+    // 2. Guaranteed Double-Entry Ledger Posting:
+    // Debit: Customer Account for Total Amount
+    // Credit: Sales Account for Taxable Amount + GST Output Accounts
+    QString vchNarr = QString("Sales Invoice %1 - %2 (%3 Qtl @ ₹%4)").arg(invNo, item_name, QString::number(weight_qtl), QString::number(rate_per_qtl));
+    if (!narration.isEmpty()) vchNarr += " | " + narration;
+
+    bool okVch = DatabaseManager::instance().executeNonQuery(
+        "INSERT INTO vouchers ("
+        "fy_id, financial_year, voucher_no, instrument_no, voucher_date, voucher_type, legacy_type, ledger_id, party_id, party_name, "
+        "account_type, amount, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount, round_off, vehicle_no, eway_bill_no, "
+        "broker_name, sauda_date, dami, labour, auction, m_fee, hrdf, other_exp, welfare, dhrmd, sutli, less_amount, narration"
+        ") VALUES (?, ?, ?, ?, ?, 'Sales', 'Sale', ?, ?, ?, 'Sales Account', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+        {
+            fyId, fyLabel, vchNo, invNo, dt, customerId, customerId, party_ledger,
+            total_amount, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount, round_off, vehicle_no, eway_bill_no,
+            broker_name, sauda_date, dami, labour, auction, m_fee, hrdf, other_exp, welfare, dhrmd, sutli, less_amount, vchNarr
+        }
+    );
+
+    if (!okVch) {
+        DatabaseManager::instance().rollback();
+        return false;
+    }
+
+    // 3. Guaranteed Stock Transaction Outward Posting:
+    bool okStock = DatabaseManager::instance().executeNonQuery(
+        "INSERT INTO stock_transactions ("
+        "fy_id, financial_year, voucher_no, voucher_date, trans_type, voucher_type, party_id, party_name, bill_no, "
+        "item_id, item_code, item_name, bags, weight_qtl, rate, amount, taxable_amount, narration"
+        ") VALUES (?, ?, ?, ?, 'Sale', 'Sales Invoice', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+        {
+            fyId, fyLabel, vchNo, dt, customerId, party_ledger, invNo,
+            itemId, hsn_code, item_name, bag_count, weight_qtl, rate_per_qtl, total_amount, taxable_amount, vchNarr
+        }
+    );
+
+    if (!okStock) {
+        DatabaseManager::instance().rollback();
+        return false;
+    }
+
+    // Commit Transaction (ACID Durability Guarantee)
+    DatabaseManager::instance().commit();
+    reload_data();
+    return true;
 }
 
 QVariantList SalesModel::get_sales_register(const QString& param1, const QString& param2) {

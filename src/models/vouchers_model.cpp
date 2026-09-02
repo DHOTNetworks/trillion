@@ -62,12 +62,22 @@ bool VouchersModel::add_voucher(const QString& vch_type, const QString& party_na
 
     QString vchNo = get_next_voucher_no(vch_type, fyLabel);
 
+    QVariant partyRow = DatabaseManager::instance().executeScalar("SELECT id FROM parties WHERE name = ? LIMIT 1;", {party_name});
+    int partyId = partyRow.isValid() ? partyRow.toInt() : 1;
+
+    DatabaseManager::instance().beginTransaction();
     bool ok = DatabaseManager::instance().executeNonQuery(
-        "INSERT INTO vouchers (fy_id, financial_year, voucher_no, voucher_date, voucher_type, legacy_type, party_id, party_name, account_type, amount, narration) "
-        "VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?);",
-        {fyId, fyLabel, vchNo, dt, vch_type, vch_type, party_name, account_type, amount, narration}
+        "INSERT INTO vouchers (fy_id, financial_year, voucher_no, voucher_date, voucher_type, legacy_type, party_id, ledger_id, party_name, account_type, amount, narration) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+        {fyId, fyLabel, vchNo, dt, vch_type, vch_type, partyId, partyId, party_name, account_type, amount, narration}
     );
-    if (ok) reload_data();
+
+    if (ok) {
+        DatabaseManager::instance().commit();
+        reload_data();
+    } else {
+        DatabaseManager::instance().rollback();
+    }
     return ok;
 }
 
@@ -90,12 +100,22 @@ bool VouchersModel::add_cheque_voucher(const QString& vch_type, const QString& d
         fullNarr += fullNarr.isEmpty() ? narration : (" | " + narration);
     }
 
+    QVariant partyRow = DatabaseManager::instance().executeScalar("SELECT id FROM parties WHERE name = ? LIMIT 1;", {dr_party});
+    int partyId = partyRow.isValid() ? partyRow.toInt() : 1;
+
+    DatabaseManager::instance().beginTransaction();
     bool ok = DatabaseManager::instance().executeNonQuery(
-        "INSERT INTO vouchers (fy_id, financial_year, voucher_no, instrument_no, voucher_date, voucher_type, legacy_type, party_id, party_name, account_type, amount, narration) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?);",
-        {fyId, fyLabel, vchNo, chq_no, dt, vch_type, vch_type, dr_party, cr_party, amount, fullNarr}
+        "INSERT INTO vouchers (fy_id, financial_year, voucher_no, instrument_no, voucher_date, voucher_type, legacy_type, party_id, ledger_id, party_name, account_type, amount, narration) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+        {fyId, fyLabel, vchNo, chq_no, dt, vch_type, vch_type, partyId, partyId, dr_party, cr_party, amount, fullNarr}
     );
-    if (ok) reload_data();
+
+    if (ok) {
+        DatabaseManager::instance().commit();
+        reload_data();
+    } else {
+        DatabaseManager::instance().rollback();
+    }
     return ok;
 }
 
@@ -118,11 +138,21 @@ bool VouchersModel::add_journal_voucher(const QString& dr_party, const QString& 
         fullNarr += fullNarr.isEmpty() ? narration : (" | " + narration);
     }
 
+    QVariant partyRow = DatabaseManager::instance().executeScalar("SELECT id FROM parties WHERE name = ? LIMIT 1;", {dr_party});
+    int partyId = partyRow.isValid() ? partyRow.toInt() : 1;
+
+    DatabaseManager::instance().beginTransaction();
     bool ok = DatabaseManager::instance().executeNonQuery(
-        "INSERT INTO vouchers (fy_id, financial_year, voucher_no, instrument_no, voucher_date, voucher_type, legacy_type, party_id, party_name, account_type, amount, narration) "
-        "VALUES (?, ?, ?, ?, ?, ?, 'Jrnl', 1, ?, ?, ?, ?);",
-        {fyId, fyLabel, vchNo, ref_no, dt, vch_type, dr_party, cr_party, amount, fullNarr}
+        "INSERT INTO vouchers (fy_id, financial_year, voucher_no, instrument_no, voucher_date, voucher_type, legacy_type, party_id, ledger_id, party_name, account_type, amount, narration) "
+        "VALUES (?, ?, ?, ?, ?, ?, 'Jrnl', ?, ?, ?, ?, ?, ?);",
+        {fyId, fyLabel, vchNo, ref_no, dt, vch_type, partyId, partyId, dr_party, cr_party, amount, fullNarr}
     );
-    if (ok) reload_data();
+
+    if (ok) {
+        DatabaseManager::instance().commit();
+        reload_data();
+    } else {
+        DatabaseManager::instance().rollback();
+    }
     return ok;
 }

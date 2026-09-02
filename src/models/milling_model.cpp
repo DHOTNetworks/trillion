@@ -73,39 +73,79 @@ bool MillingModel::add_milling_voucher_full(
 
     QString bNo = batch_no.isEmpty() ? get_next_batch_no(fyLabel) : batch_no;
 
-    bool ok = DatabaseManager::instance().executeNonQuery(
+    // --- ATOMIC ACID TRANSACTION ---
+    DatabaseManager::instance().beginTransaction();
+
+    // 1. Insert Milling Batch Record
+    bool okBatch = DatabaseManager::instance().executeNonQuery(
         "INSERT INTO milling_batches ("
-        "fy_id, financial_year, batch_no, batch_date, paddy_item, paddy_bags, paddy_weight_qtl, "
-        "rice_item, rice_bags, rice_weight_qtl, outturn_pct, rice_cost, bran_item, bran_bags, bran_weight_qtl, bran_cost, "
-        "husk_item, husk_bags, husk_weight_qtl, husk_cost, nakku_item, nakku_bags, nakku_weight_qtl, nakku_cost, "
-        "other_byproduct_item, other_byproduct_bags, other_byproduct_weight_qtl, other_byproduct_cost, "
-        "total_byproduct_bags, total_byproduct_weight_qtl, total_byproduct_cost, loss_weight_qtl, loss_pct, "
-        "milling_cost_per_qtl, total_milling_cost, operator_name, notes"
-        ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+        "fy_id, financial_year, batch_no, batch_date, paddy_variety, paddy_input_qtl, "
+        "head_rice_qtl, broken_rice_qtl, bran_qtl, husk_qtl, wastage_qtl, yield_pct, narration"
+        ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
         {
-            fyId, fyLabel, bNo, dt, paddy_item, paddy_bags, paddy_weight,
-            rice_item, rice_bags, rice_weight, outturn_pct, rice_cost,
-            bran_item, bran_bags, bran_weight, bran_cost,
-            husk_item, husk_bags, husk_weight, husk_cost,
-            nakku_item, nakku_bags, nakku_weight, nakku_cost,
-            other_byproduct_item, other_byproduct_bags, other_byproduct_weight, other_byproduct_cost,
-            total_byproduct_bags, total_byproduct_weight, total_byproduct_cost,
-            loss_weight, loss_pct, milling_cost_per_qtl, total_milling_cost, operator_name, notes
+            fyId, fyLabel, bNo, dt, paddy_item, paddy_weight,
+            rice_weight, nakku_weight, bran_weight, husk_weight, loss_weight, outturn_pct, notes
         }
     );
 
-    if (ok) {
-        QString vchNarr = QString("Milling Batch %1 - In: %2 (%3 Qtl), Out: %4 (%5 Qtl, %6%)").arg(bNo, paddy_item, QString::number(paddy_weight), rice_item, QString::number(rice_weight), QString::number(outturn_pct));
-        if (!notes.isEmpty()) vchNarr += " | " + notes;
-
-        DatabaseManager::instance().executeNonQuery(
-            "INSERT INTO vouchers (fy_id, financial_year, voucher_no, voucher_date, voucher_type, legacy_type, party_name, account_type, amount, narration) "
-            "VALUES (?, ?, ?, ?, 'Milling', 'Mill', 'Milling Production Account', 'Inventory Account', ?, ?);",
-            {fyId, fyLabel, bNo, dt, total_milling_cost, vchNarr}
-        );
-        reload_data();
+    if (!okBatch) {
+        DatabaseManager::instance().rollback();
+        return false;
     }
-    return ok;
+
+    qint64 batchId = DatabaseManager::instance().lastInsertedId();
+
+    // 2. Line Items: Raw Paddy Consumed (Cr)
+    DatabaseManager::instance().executeNonQuery(
+        "INSERT INTO milling_voucher_items ("
+        "batch_id, batch_no, batch_date, row_no, drcr, item_name, weight_qtl, bags, narration"
+        ") VALUES (?, ?, ?, 1, 'Cr', ?, ?, ?, 'Raw Paddy Consumed in Milling');",
+        {batchId, bNo, dt, paddy_item, paddy_weight, paddy_bags}
+    );
+
+    // 3. Line Items: Finished Rice & By-products Produced (Dr)
+    int rowIdx = 2;
+    DatabaseManager::instance().executeNonQuery(
+        "INSERT INTO milling_voucher_items (batch_id, batch_no, batch_date, row_no, drcr, item_name, weight_qtl, bags, percentage, narration) "
+        "VALUES (?, ?, ?, ?, 'Dr', ?, ?, ?, ?, 'Head Rice Produced');",
+        {batchId, bNo, dt, rowIdx++, rice_item, rice_weight, rice_bags, outturn_pct}
+    );
+
+    if (bran_weight > 0) {
+        DatabaseManager::instance().executeNonQuery(
+            "INSERT INTO milling_voucher_items (batch_id, batch_no, batch_date, row_no, drcr, item_name, weight_qtl, bags, narration) "
+            "VALUES (?, ?, ?, ?, 'Dr', ?, ?, ?, 'Rice Bran Produced');",
+            {batchId, bNo, dt, rowIdx++, bran_item.isEmpty() ? "Rice Bran" : bran_item, bran_weight, bran_bags}
+        );
+    }
+
+    if (husk_weight > 0) {
+        DatabaseManager::instance().executeNonQuery(
+            "INSERT INTO milling_voucher_items (batch_id, batch_no, batch_date, row_no, drcr, item_name, weight_qtl, bags, narration) "
+            "VALUES (?, ?, ?, ?, 'Dr', ?, ?, ?, 'Rice Husk Produced');",
+            {batchId, bNo, dt, rowIdx++, husk_item.isEmpty() ? "Rice Husk" : husk_item, husk_weight, husk_bags}
+        );
+    }
+
+    // 4. Double-Entry Accounting Voucher
+    QString vchNarr = QString("Milling Batch %1 - In: %2 (%3 Qtl), Out: %4 (%5 Qtl, %6%)").arg(bNo, paddy_item, QString::number(paddy_weight), rice_item, QString::number(rice_weight), QString::number(outturn_pct));
+    if (!notes.isEmpty()) vchNarr += " | " + notes;
+
+    bool okVch = DatabaseManager::instance().executeNonQuery(
+        "INSERT INTO vouchers (fy_id, financial_year, voucher_no, voucher_date, voucher_type, legacy_type, party_name, account_type, amount, narration) "
+        "VALUES (?, ?, ?, ?, 'Milling', 'Mill', 'Milling Production Account', 'Inventory Account', ?, ?);",
+        {fyId, fyLabel, bNo, dt, total_milling_cost, vchNarr}
+    );
+
+    if (!okVch) {
+        DatabaseManager::instance().rollback();
+        return false;
+    }
+
+    // Commit Transaction
+    DatabaseManager::instance().commit();
+    reload_data();
+    return true;
 }
 
 QVariantList MillingModel::get_milling_statement(const QString& fy) {
@@ -123,15 +163,15 @@ QVariantList MillingModel::get_milling_statement(const QString& fy) {
     QVariantList result;
     for (const QVariant& r : rawRows) {
         QVariantMap row = r.toMap();
-        double pWeight = row.value("paddy_weight_qtl").toDouble();
-        double rWeight = row.value("rice_weight_qtl").toDouble();
-        double outturn = row.value("outturn_pct").toDouble();
-        double cost = row.value("total_milling_cost").toDouble();
+        double pWeight = row.value("paddy_input_qtl").toDouble();
+        double rWeight = row.value("head_rice_qtl").toDouble();
+        double outturn = row.value("yield_pct").toDouble();
+        double cost = row.value("wastage_qtl").toDouble();
 
         row["paddy_weight_fmt"] = AccountingEngine::formatIndianNumber(pWeight, 2, "Qtl");
         row["rice_weight_fmt"] = AccountingEngine::formatIndianNumber(rWeight, 2, "Qtl");
         row["outturn_fmt"] = QString::number(outturn, 'f', 2) + "%";
-        row["total_cost_fmt"] = AccountingEngine::formatIndianCurrency(cost);
+        row["total_cost_fmt"] = AccountingEngine::formatIndianNumber(cost, 2, "Qtl");
         result.append(row);
     }
     return result;
