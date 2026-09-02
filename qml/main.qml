@@ -485,6 +485,12 @@ ApplicationWindow {
                 if (mainLoader.item && typeof mainLoader.item.loadStockItems !== "undefined") {
                     mainLoader.item.loadStockItems()
                 }
+                if (mainLoader.item && typeof mainLoader.item.syncDateInputsWithActivePeriod === "function") {
+                    mainLoader.item.syncDateInputsWithActivePeriod()
+                }
+                if (mainLoader.item && typeof mainLoader.item.loadPartyStatement !== "undefined") {
+                    mainLoader.item.loadPartyStatement(mainLoader.item.currentPartyName || "")
+                }
             }
         }
 

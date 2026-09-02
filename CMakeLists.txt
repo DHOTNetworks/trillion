@@ -57,7 +57,7 @@ set(SOURCES
 
 qt_add_executable(${PROJECT_NAME} ${SOURCES})
 
-# Qt 6 Ahead-of-Time QML to C++ Compilation Engine
+# Qt 6 Ahead-of-Time QML Bytecode Compilation (qmlcachegen)
 qt_add_qml_module(${PROJECT_NAME}
     URI MahadevERP
     VERSION 1.0
@@ -118,22 +118,19 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
+    sqlite3_embedded
     Qt6::Core
     Qt6::Gui
     Qt6::Qml
     Qt6::Quick
     Qt6::QuickControls2
-    sqlite3_embedded
 )
 
-if(APPLE)
-    set_target_properties(${PROJECT_NAME} PROPERTIES
-        MACOSX_BUNDLE TRUE
-        MACOSX_BUNDLE_BUNDLE_NAME "Mahadev ERP"
-        MACOSX_BUNDLE_GUI_IDENTIFIER "com.mahadev.erp"
-    )
-elseif(WIN32)
-    set_target_properties(${PROJECT_NAME} PROPERTIES
-        WIN32_EXECUTABLE TRUE
-    )
-endif()
+# Set macOS App Bundle Properties
+set_target_properties(${PROJECT_NAME} PROPERTIES
+    MACOSX_BUNDLE TRUE
+    MACOSX_BUNDLE_BUNDLE_NAME "Mahadev Rice Mill ERP"
+    MACOSX_BUNDLE_GUI_IDENTIFIER "com.mahadevagro.ricemill"
+    MACOSX_BUNDLE_SHORT_VERSION_STRING "2.0"
+    MACOSX_BUNDLE_BUNDLE_VERSION "2.0"
+)

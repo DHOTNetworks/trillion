@@ -34,3 +34,7 @@ dist/
 # Local SQLite databases (keep data folder template if needed)
 data/
 *.bak
+*.md
+aqtinstall.log
+debug_log.txt
+generated_cpp/

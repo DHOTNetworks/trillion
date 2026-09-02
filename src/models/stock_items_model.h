@@ -43,6 +43,7 @@ public:
     Q_INVOKABLE QVariantList get_available_financial_years() const;
 
     Q_INVOKABLE QVariantList get_stock_register(const QString& param1 = "", const QString& param2 = "");
+    Q_INVOKABLE QVariantList get_item_movements(const QString& itemName, const QString& param1 = "", const QString& param2 = "");
     Q_INVOKABLE QVariantMap get_item_movement(const QString& itemName, const QString& fy = "");
 
 private:

@@ -120,6 +120,10 @@ QVariantList DatabaseManager::executeQuery(const QString& sql, const QVariantLis
                 colVal = sqlite3_column_double(stmt, i);
             } else if (colType == SQLITE_TEXT) {
                 colVal = QString::fromUtf8(reinterpret_cast<const char*>(sqlite3_column_text(stmt, i)));
+            } else if (colType == SQLITE_BLOB) {
+                const char* bData = reinterpret_cast<const char*>(sqlite3_column_blob(stmt, i));
+                int bBytes = sqlite3_column_bytes(stmt, i);
+                colVal = QByteArray(bData, bBytes);
             } else if (colType == SQLITE_NULL) {
                 colVal = QVariant();
             }

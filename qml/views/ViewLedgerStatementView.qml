@@ -18,6 +18,7 @@ Rectangle {
     property string netBalanceType: "Dr (Debit Balance)"
 
     Component.onCompleted: {
+        syncDateInputsWithActivePeriod()
         loadPartyStatement("")
         Qt.callLater(function() {
             partySearch.focusAndOpen()
@@ -26,9 +27,27 @@ Rectangle {
 
     onVisibleChanged: {
         if (visible) {
+            syncDateInputsWithActivePeriod()
+            loadPartyStatement(currentPartyName)
             Qt.callLater(function() {
                 partySearch.focusAndOpen()
             })
+        }
+    }
+
+    function syncDateInputsWithActivePeriod() {
+        if (typeof stockItemsModel !== "undefined" && stockItemsModel) {
+            var sd = stockItemsModel.get_from_date()
+            var ed = stockItemsModel.get_to_date()
+            if (sd && ed) {
+                var sParts = sd.split("-")
+                var eParts = ed.split("-")
+                if (sParts.length === 3) fromDateInput.text = sParts[2] + "-" + sParts[1] + "-" + sParts[0]
+                if (eParts.length === 3) toDateInput.text = eParts[2] + "-" + eParts[1] + "-" + eParts[0]
+            } else {
+                fromDateInput.text = ""
+                toDateInput.text = ""
+            }
         }
     }
 

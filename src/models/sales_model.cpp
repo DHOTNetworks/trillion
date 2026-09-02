@@ -220,12 +220,29 @@ bool SalesModel::add_sales_invoice_full(
 QVariantList SalesModel::get_sales_register(const QString& param1, const QString& param2) {
     QString sql;
     QVariantList params;
+    QString fromDate, toDate, fyLabel;
+
     if (!param1.isEmpty() && !param2.isEmpty()) {
-        sql = "SELECT id, voucher_no, invoice_no, invoice_date, customer_name, item_name, bag_count, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount, gst_amount, round_off, total_amount, payment_mode, vehicle_no, eway_bill_no, financial_year, narration FROM sales_invoices WHERE invoice_date >= ? AND invoice_date <= ? ORDER BY invoice_date DESC, id DESC;";
-        params << param1 << param2;
+        fromDate = param1;
+        toDate = param2;
     } else if (!param1.isEmpty() && param1 != "All") {
+        fyLabel = param1;
+    } else if (param1 != "All") {
+        QVariantList fyRows = DatabaseManager::instance().executeQuery("SELECT year_name, start_date, end_date FROM financial_years WHERE is_active = 1 LIMIT 1;");
+        if (!fyRows.isEmpty()) {
+            QVariantMap r = fyRows.first().toMap();
+            fyLabel = r.value("year_name").toString();
+            fromDate = r.value("start_date").toString();
+            toDate = r.value("end_date").toString();
+        }
+    }
+
+    if (!fromDate.isEmpty() && !toDate.isEmpty()) {
+        sql = "SELECT id, voucher_no, invoice_no, invoice_date, customer_name, item_name, bag_count, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount, gst_amount, round_off, total_amount, payment_mode, vehicle_no, eway_bill_no, financial_year, narration FROM sales_invoices WHERE invoice_date >= ? AND invoice_date <= ? ORDER BY invoice_date DESC, id DESC;";
+        params << fromDate << toDate;
+    } else if (!fyLabel.isEmpty()) {
         sql = "SELECT id, voucher_no, invoice_no, invoice_date, customer_name, item_name, bag_count, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount, gst_amount, round_off, total_amount, payment_mode, vehicle_no, eway_bill_no, financial_year, narration FROM sales_invoices WHERE financial_year = ? ORDER BY invoice_date DESC, id DESC;";
-        params << param1;
+        params << fyLabel;
     } else {
         sql = "SELECT id, voucher_no, invoice_no, invoice_date, customer_name, item_name, bag_count, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount, gst_amount, round_off, total_amount, payment_mode, vehicle_no, eway_bill_no, financial_year, narration FROM sales_invoices ORDER BY invoice_date DESC, id DESC;";
     }

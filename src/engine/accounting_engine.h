@@ -7,6 +7,20 @@
 
 class AccountingEngine {
 public:
+    static inline QString s_activeFromDate = "";
+    static inline QString s_activeToDate = "";
+    static inline QString s_activeFyLabel = "";
+
+    static void setActivePeriod(const QString& fromDate, const QString& toDate, const QString& fyLabel) {
+        s_activeFromDate = fromDate;
+        s_activeToDate = toDate;
+        s_activeFyLabel = fyLabel;
+    }
+
+    static QString getActiveFromDate() { return s_activeFromDate; }
+    static QString getActiveToDate() { return s_activeToDate; }
+    static QString getActiveFyLabel() { return s_activeFyLabel; }
+
     static double calculateMoistureDeduction(double grossWeightQtl, double moisturePct, double baseMoistureLimit = 14.0) {
         if (moisturePct <= baseMoistureLimit) return 0.0;
         double excess = moisturePct - baseMoistureLimit;

@@ -3,7 +3,7 @@
 #include <QString>
 #include <QVariantList>
 #include <QVariantMap>
-#include <QMutex>
+#include <QRecursiveMutex>
 #include "sqlite3.h"
 
 class DatabaseManager {
@@ -32,7 +32,7 @@ private:
     DatabaseManager& operator=(const DatabaseManager&) = delete;
 
     sqlite3* m_db = nullptr;
-    QMutex m_mutex;
+    QRecursiveMutex m_mutex;
     QString m_dbPath;
 
     void ensureTablesExist();

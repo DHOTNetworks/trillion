@@ -12,16 +12,26 @@ void DashboardController::refresh_stats(const QString& fromDate, const QString& 
     QString fy = fyLabel;
 
     if (fy.isEmpty() && fDate.isEmpty()) {
+        fDate = AccountingEngine::getActiveFromDate();
+        tDate = AccountingEngine::getActiveToDate();
+        fy = AccountingEngine::getActiveFyLabel();
+    }
+
+    if (fy.isEmpty() && fDate.isEmpty()) {
         QVariantList rows = DatabaseManager::instance().executeQuery("SELECT year_name, start_date, end_date FROM financial_years WHERE is_active = 1 LIMIT 1;");
         if (!rows.isEmpty()) {
             QVariantMap r = rows.first().toMap();
             fy = r.value("year_name").toString();
             fDate = r.value("start_date").toString();
             tDate = r.value("end_date").toString();
+        } else {
+            fy = "FY 2026-27";
+            fDate = "2026-04-01";
+            tDate = "2027-03-31";
         }
     }
 
-    // 1. Paddy Stock
+    // 1. Paddy Stock (Filtered by active FY Closing Stock)
     double paddyVal = 0.0;
     if (!tDate.isEmpty()) {
         QVariant pRow = DatabaseManager::instance().executeScalar(
@@ -30,12 +40,12 @@ void DashboardController::refresh_stats(const QString& fromDate, const QString& 
         );
         paddyVal = pRow.isValid() ? pRow.toDouble() : 0.0;
     } else {
-        QVariant pRow = DatabaseManager::instance().executeScalar("SELECT SUM(current_weight_qtl) FROM stock_items WHERE category = 'Raw Paddy';");
+        QVariant pRow = DatabaseManager::instance().executeScalar("SELECT SUM(current_stock_qtl) FROM inventory WHERE category = 'Raw Paddy';");
         paddyVal = pRow.isValid() ? pRow.toDouble() : 0.0;
     }
     m_paddyStock = AccountingEngine::formatIndianNumber(paddyVal, 1, "Qtl");
 
-    // 2. Rice Stock
+    // 2. Rice Stock (Filtered by active FY Closing Stock)
     double riceVal = 0.0;
     if (!tDate.isEmpty()) {
         QVariant rRow = DatabaseManager::instance().executeScalar(
@@ -44,12 +54,12 @@ void DashboardController::refresh_stats(const QString& fromDate, const QString& 
         );
         riceVal = rRow.isValid() ? rRow.toDouble() : 0.0;
     } else {
-        QVariant rRow = DatabaseManager::instance().executeScalar("SELECT SUM(current_weight_qtl) FROM stock_items WHERE category = 'Finished Rice';");
+        QVariant rRow = DatabaseManager::instance().executeScalar("SELECT SUM(current_stock_qtl) FROM inventory WHERE category = 'Finished Rice';");
         riceVal = rRow.isValid() ? rRow.toDouble() : 0.0;
     }
     m_riceStock = AccountingEngine::formatIndianNumber(riceVal, 1, "Qtl");
 
-    // 3. Sales Turnover
+    // 3. Sales Turnover (Taxable Turnover matching Bahi-Khata for active period)
     double salesVal = 0.0;
     if (!fDate.isEmpty() && !tDate.isEmpty()) {
         QVariant sRow = DatabaseManager::instance().executeScalar(
@@ -57,7 +67,7 @@ void DashboardController::refresh_stats(const QString& fromDate, const QString& 
             {fDate, tDate}
         );
         salesVal = sRow.isValid() ? sRow.toDouble() : 0.0;
-    } else if (!fy.isEmpty()) {
+    } else if (!fy.isEmpty() && fy != "All") {
         QVariant sRow = DatabaseManager::instance().executeScalar(
             "SELECT SUM(COALESCE(taxable_amount, total_amount)) FROM sales_invoices WHERE financial_year = ?;",
             {fy}
@@ -77,7 +87,7 @@ void DashboardController::refresh_stats(const QString& fromDate, const QString& 
             {fDate, tDate}
         );
         procVal = pRow.isValid() ? pRow.toDouble() : 0.0;
-    } else if (!fy.isEmpty()) {
+    } else if (!fy.isEmpty() && fy != "All") {
         QVariant pRow = DatabaseManager::instance().executeScalar(
             "SELECT SUM(COALESCE(total_amount, taxable_amount)) FROM purchase_invoices WHERE financial_year = ?;",
             {fy}
@@ -89,9 +99,18 @@ void DashboardController::refresh_stats(const QString& fromDate, const QString& 
     }
     m_totalProcurement = AccountingEngine::formatIndianCurrency(procVal);
 
-    // 5. Milling Efficiency
-    QVariant effRow = DatabaseManager::instance().executeScalar("SELECT AVG(outturn_pct) FROM milling_batches;");
-    double effVal = effRow.isValid() ? effRow.toDouble() : 65.3;
+    // 5. Avg Milling Efficiency
+    double effVal = 65.3;
+    if (!fDate.isEmpty() && !tDate.isEmpty()) {
+        QVariant effRow = DatabaseManager::instance().executeScalar(
+            "SELECT AVG(yield_pct) FROM milling_batches WHERE batch_date >= ? AND batch_date <= ?;",
+            {fDate, tDate}
+        );
+        if (effRow.isValid()) effVal = effRow.toDouble();
+    } else {
+        QVariant effRow = DatabaseManager::instance().executeScalar("SELECT AVG(yield_pct) FROM milling_batches;");
+        if (effRow.isValid()) effVal = effRow.toDouble();
+    }
     m_millingEfficiency = QString::number(effVal, 'f', 1) + "%";
 
     emit statsChanged();

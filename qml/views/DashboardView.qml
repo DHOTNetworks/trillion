@@ -27,6 +27,10 @@ ScrollView {
 
     Component.onCompleted: {
         root.forceActiveFocus()
+        loadDashboardStats()
+    }
+
+    function loadDashboardStats() {
         if (typeof stockItemsModel !== "undefined" && stockItemsModel) {
             var fy = stockItemsModel.get_financial_year()
             var sd = stockItemsModel.get_from_date()
@@ -38,6 +42,9 @@ ScrollView {
             } else if (fy) {
                 root.activePeriodText = fy
             }
+        }
+        if (typeof dashboardCtrl !== "undefined" && dashboardCtrl) {
+            dashboardCtrl.refresh_stats()
         }
     }
 

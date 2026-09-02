@@ -53,6 +53,78 @@ QStringList PartiesModel::get_bank_accounts_list() const {
     return list;
 }
 
+QStringList PartiesModel::get_account_groups() const {
+    QStringList defaults = {
+        "Bank Accounts", "Cash-in-hand", "Direct Expenses (Hamali/Freight)",
+        "Duties & Taxes (GST)", "Loans & Liabilities", "Paddy Procurement Purchases",
+        "Rice Milling Sales Revenue", "Sundry Creditors (Farmers/Vendors)", "Sundry Debtors (Buyers)"
+    };
+    QVariantList rows = DatabaseManager::instance().executeQuery("SELECT name FROM account_groups ORDER BY name COLLATE NOCASE ASC;");
+    QStringList result;
+    for (const QVariant& r : rows) {
+        QString n = r.toMap().value("name").toString();
+        if (!n.isEmpty() && !result.contains(n)) result.append(n);
+    }
+    for (const QString& d : defaults) {
+        if (!result.contains(d)) result.append(d);
+    }
+    std::sort(result.begin(), result.end(), [](const QString& a, const QString& b) {
+        return a.compare(b, Qt::CaseInsensitive) < 0;
+    });
+    return result;
+}
+
+QStringList PartiesModel::get_cities() const {
+    QStringList defaults = {"Ballari", "Bengaluru", "Hospet", "Hyderabad", "Kalaburagi", "Koppal", "Raichur", "Vijayanagara"};
+    QVariantList rows = DatabaseManager::instance().executeQuery("SELECT DISTINCT city FROM parties WHERE city IS NOT NULL AND city != '';");
+    QStringList result;
+    for (const QVariant& r : rows) {
+        QString n = r.toMap().value("city").toString();
+        if (!n.isEmpty() && !result.contains(n)) result.append(n);
+    }
+    for (const QString& d : defaults) {
+        if (!result.contains(d)) result.append(d);
+    }
+    std::sort(result.begin(), result.end(), [](const QString& a, const QString& b) {
+        return a.compare(b, Qt::CaseInsensitive) < 0;
+    });
+    return result;
+}
+
+QStringList PartiesModel::get_districts() const {
+    QStringList defaults = {"Ballari", "Bengaluru Urban", "Hyderabad", "Koppal", "Raichur", "Vijayanagara"};
+    QVariantList rows = DatabaseManager::instance().executeQuery("SELECT DISTINCT district FROM parties WHERE district IS NOT NULL AND district != '';");
+    QStringList result;
+    for (const QVariant& r : rows) {
+        QString n = r.toMap().value("district").toString();
+        if (!n.isEmpty() && !result.contains(n)) result.append(n);
+    }
+    for (const QString& d : defaults) {
+        if (!result.contains(d)) result.append(d);
+    }
+    std::sort(result.begin(), result.end(), [](const QString& a, const QString& b) {
+        return a.compare(b, Qt::CaseInsensitive) < 0;
+    });
+    return result;
+}
+
+QStringList PartiesModel::get_stations() const {
+    QStringList defaults = {"Andhra Pradesh", "Bengaluru Ganj", "Hyderabad Market", "Karnataka", "Koppal Mandi", "Raichur APMC Yard", "Telangana"};
+    QVariantList rows = DatabaseManager::instance().executeQuery("SELECT DISTINCT state FROM parties WHERE state IS NOT NULL AND state != '';");
+    QStringList result;
+    for (const QVariant& r : rows) {
+        QString n = r.toMap().value("state").toString();
+        if (!n.isEmpty() && !result.contains(n)) result.append(n);
+    }
+    for (const QString& d : defaults) {
+        if (!result.contains(d)) result.append(d);
+    }
+    std::sort(result.begin(), result.end(), [](const QString& a, const QString& b) {
+        return a.compare(b, Qt::CaseInsensitive) < 0;
+    });
+    return result;
+}
+
 QString PartiesModel::get_ledger_live_balance(const QString& ledgerName) {
     if (ledgerName.trimmed().isEmpty()) return "0.00 Dr";
     QString cleanName = ledgerName.trimmed().toLower();
@@ -129,8 +201,19 @@ QVariantMap PartiesModel::get_party_by_name(const QString& name) const {
     return QVariantMap();
 }
 
-QVariantMap PartiesModel::get_party_details(const QString& name) const {
-    return get_party_by_name(name);
+QVariantList PartiesModel::search_parties(const QString& query) const {
+    QString q = query.trimmed();
+    if (q.isEmpty()) return {};
+    QString pattern = q;
+    pattern.replace(QChar(0x00A0), '%');
+    pattern.replace(' ', '%');
+    QString wildcard = "%" + pattern + "%";
+
+    QVariantList rows = DatabaseManager::instance().executeQuery(
+        "SELECT id, name, group_name, party_type, phone, city, gstin, opening_balance, balance_type FROM parties WHERE name LIKE ? OR alias LIKE ? OR phone LIKE ? OR city LIKE ? ORDER BY name COLLATE NOCASE ASC LIMIT 30;",
+        {wildcard, wildcard, wildcard, wildcard}
+    );
+    return rows;
 }
 
 bool PartiesModel::add_party(const QString& name, const QString& ptype, const QString& phone, const QString& place, const QString& gstin, double op_bal, const QString& bal_type) {
@@ -171,60 +254,195 @@ bool PartiesModel::update_ledger_full(
     return ok;
 }
 
+static std::pair<QString, QString> parseDates(const QString& dStr) {
+    if (dStr.trimmed().isEmpty()) return {"9999-12-31", ""};
+    QString s = dStr.trimmed();
+    if (s.contains('-')) {
+        QStringList p = s.split('-');
+        if (p.size() == 3) {
+            if (p[0].length() == 4) {
+                // "2026-03-24" -> iso="2026-03-24", fmt="24-03-2026"
+                int y = p[0].toInt();
+                int m = p[1].toInt();
+                int d = p[2].toInt();
+                return {
+                    QString("%1-%2-%3").arg(y, 4, 10, QChar('0')).arg(m, 2, 10, QChar('0')).arg(d, 2, 10, QChar('0')),
+                    QString("%1-%2-%3").arg(d, 2, 10, QChar('0')).arg(m, 2, 10, QChar('0')).arg(y, 4, 10, QChar('0'))
+                };
+            } else if (p[2].length() == 4) {
+                // "24-03-2026" -> iso="2026-03-24", fmt="24-03-2026"
+                int d = p[0].toInt();
+                int m = p[1].toInt();
+                int y = p[2].toInt();
+                return {
+                    QString("%1-%2-%3").arg(y, 4, 10, QChar('0')).arg(m, 2, 10, QChar('0')).arg(d, 2, 10, QChar('0')),
+                    QString("%1-%2-%3").arg(d, 2, 10, QChar('0')).arg(m, 2, 10, QChar('0')).arg(y, 4, 10, QChar('0'))
+                };
+            }
+        }
+    } else if (s.contains('/')) {
+        QStringList p = s.split('/');
+        if (p.size() == 3 && p[2].length() == 4) {
+            int d = p[0].toInt();
+            int m = p[1].toInt();
+            int y = p[2].toInt();
+            return {
+                QString("%1-%2-%3").arg(y, 4, 10, QChar('0')).arg(m, 2, 10, QChar('0')).arg(d, 2, 10, QChar('0')),
+                QString("%1-%2-%3").arg(d, 2, 10, QChar('0')).arg(m, 2, 10, QChar('0')).arg(y, 4, 10, QChar('0'))
+            };
+        }
+    }
+    return {s, s};
+}
+
+static QString computeFyForDate(const QString& isoDate, const QString& explicitFy = "") {
+    if (!explicitFy.trimmed().isEmpty()) return explicitFy.trimmed();
+    if (isoDate >= "2026-04-01" && isoDate <= "2027-03-31") return "FY 2026-27";
+    if (isoDate >= "2025-04-01" && isoDate <= "2026-03-31") return "FY 2025-26";
+    if (isoDate >= "2024-04-01" && isoDate <= "2025-03-31") return "FY 2024-25";
+    if (isoDate >= "2023-04-01" && isoDate <= "2024-03-31") return "FY 2023-24";
+    return "FY 2025-26";
+}
+
 QVariantMap PartiesModel::get_party_statement(const QString& partyName) {
     QVariantList drItems, crItems;
     QString cleanName = partyName.trimmed();
 
+    QString activeFromDate = AccountingEngine::getActiveFromDate();
+    QString activeToDate = AccountingEngine::getActiveToDate();
+    QString activeFyName = AccountingEngine::getActiveFyLabel();
+
+    if (activeFromDate.isEmpty() && activeToDate.isEmpty()) {
+        QVariantList fyActiveRows = DatabaseManager::instance().executeQuery("SELECT year_name, start_date, end_date FROM financial_years WHERE is_active = 1 LIMIT 1;");
+        if (!fyActiveRows.isEmpty()) {
+            QVariantMap act = fyActiveRows.first().toMap();
+            activeFyName = act.value("year_name").toString();
+            activeFromDate = act.value("start_date").toString();
+            activeToDate = act.value("end_date").toString();
+        }
+    }
+
     if (!cleanName.isEmpty()) {
         QString cleanNameLower = cleanName.toLower();
+        QString namePattern = cleanName;
+        namePattern.replace(QChar(0x00A0), '%');
+        namePattern.replace(' ', '%');
+        QString wildcard = "%" + namePattern + "%";
 
-        // 1. Opening balance
+        // 1. Opening balance (Initial + prior transactions before activeFromDate)
+        double netPriorDr = 0.0;
+        double netPriorCr = 0.0;
+
         QVariantList pRows = DatabaseManager::instance().executeQuery(
-            "SELECT opening_balance, balance_type FROM parties WHERE name = ? OR name LIKE ? LIMIT 1;",
-            {cleanName, "%" + cleanName + "%"}
+            "SELECT opening_balance, balance_type FROM parties WHERE name = ? OR name LIKE ? OR name LIKE ? LIMIT 1;",
+            {cleanName, "%" + cleanName + "%", wildcard}
         );
         if (!pRows.isEmpty()) {
-            double opVal = pRows.first().toMap().value("opening_balance").toDouble();
+            double initialOp = pRows.first().toMap().value("opening_balance").toDouble();
             QString bType = pRows.first().toMap().value("balance_type").toString();
-            if (opVal > 0) {
-                QVariantMap opItem;
-                opItem["isSelected"] = false;
-                opItem["vIso"] = "2024-04-01";
-                opItem["vDate"] = "01-04-2024";
-                opItem["refNo"] = "OP-BAL";
-                opItem["particulars"] = QString("Opening Balance (%1)").arg(bType);
-                opItem["amount"] = opVal;
-                if (bType == "Dr") drItems.append(opItem);
-                else crItems.append(opItem);
+            if (bType == "Dr") netPriorDr += initialOp;
+            else netPriorCr += initialOp;
+        }
+
+        if (!activeFromDate.isEmpty()) {
+            QVariant sPrior = DatabaseManager::instance().executeScalar(
+                "SELECT SUM(total_amount) FROM sales_invoices WHERE (customer_name = ? OR customer_name LIKE ? OR customer_name LIKE ?) AND invoice_date < ?;",
+                {cleanName, "%" + cleanName + "%", wildcard, activeFromDate}
+            );
+            if (sPrior.isValid()) netPriorDr += sPrior.toDouble();
+
+            QVariant purPrior = DatabaseManager::instance().executeScalar(
+                "SELECT SUM(total_amount) FROM purchase_invoices WHERE (supplier_name = ? OR supplier_name LIKE ? OR supplier_name LIKE ?) AND invoice_date < ?;",
+                {cleanName, "%" + cleanName + "%", wildcard, activeFromDate}
+            );
+            if (purPrior.isValid()) netPriorCr += purPrior.toDouble();
+
+            QVariant padPrior = DatabaseManager::instance().executeScalar(
+                "SELECT SUM(total_amount) FROM paddy_procurement WHERE (farmer_name = ? OR farmer_name LIKE ? OR farmer_name LIKE ?) AND arrival_date < ?;",
+                {cleanName, "%" + cleanName + "%", wildcard, activeFromDate}
+            );
+            if (padPrior.isValid()) netPriorCr += padPrior.toDouble();
+
+            QVariantList vPriorRows = DatabaseManager::instance().executeQuery(
+                "SELECT voucher_type, legacy_type, party_name, account_type, amount FROM vouchers WHERE (party_name = ? OR party_name LIKE ? OR party_name LIKE ? OR account_type = ? OR account_type LIKE ? OR account_type LIKE ?) AND voucher_type NOT IN ('Sales', 'Purchase') AND voucher_date < ?;",
+                {cleanName, "%" + cleanName + "%", wildcard, cleanName, "%" + cleanName + "%", wildcard, activeFromDate}
+            );
+            for (const QVariant& vr : vPriorRows) {
+                QVariantMap v = vr.toMap();
+                QString vType = v.value("voucher_type").toString();
+                QString legType = v.value("legacy_type").toString();
+                QString drP = v.value("party_name").toString().trimmed();
+                QString crP = v.value("account_type").toString().trimmed();
+                double vAmt = v.value("amount").toDouble();
+                bool isPartyMatch = (!drP.isEmpty() && (drP.toLower() == cleanNameLower || drP.toLower().contains(cleanNameLower)));
+                bool isAccMatch = (!crP.isEmpty() && (crP.toLower() == cleanNameLower || crP.toLower().contains(cleanNameLower)));
+
+                if (isPartyMatch) {
+                    if (vType == "Payment" || legType == "ChPt" || legType == "CP" || legType == "BP") netPriorDr += vAmt;
+                    else netPriorCr += vAmt;
+                } else if (isAccMatch) {
+                    if (vType == "Receipt" || legType == "ChRt" || legType == "CR" || legType == "BR") netPriorDr += vAmt;
+                    else netPriorCr += vAmt;
+                }
             }
         }
 
-        // 2. Sales Invoices
-        QVariantList sRows = DatabaseManager::instance().executeQuery(
-            "SELECT invoice_no, invoice_date, item_name, weight_qtl, total_amount, narration FROM sales_invoices WHERE customer_name = ? OR customer_name LIKE ? ORDER BY invoice_date ASC, id ASC;",
-            {cleanName, "%" + cleanName + "%"}
-        );
+        double finalOpAmt = netPriorDr - netPriorCr;
+        if (std::abs(finalOpAmt) > 0.001) {
+            auto [opIso, opFmt] = parseDates(!activeFromDate.isEmpty() ? activeFromDate : "2024-04-01");
+            QVariantMap opItem;
+            opItem["isSelected"] = false;
+            opItem["vIso"] = opIso;
+            opItem["vDate"] = opFmt;
+            opItem["refNo"] = "OP-BAL";
+            opItem["particulars"] = QString("Opening Balance (%1)").arg(finalOpAmt >= 0 ? "Dr" : "Cr");
+            opItem["amount"] = std::abs(finalOpAmt);
+            opItem["financial_year"] = !activeFyName.isEmpty() ? activeFyName : "Opening";
+            opItem["fy"] = !activeFyName.isEmpty() ? activeFyName : "Opening";
+            if (finalOpAmt >= 0) drItems.append(opItem);
+            else crItems.append(opItem);
+        }
+
+        // 2. Sales Invoices (Respect active FY date range)
+        QString sSql = "SELECT invoice_no, invoice_date, item_name, weight_qtl, total_amount, narration, financial_year FROM sales_invoices WHERE (customer_name = ? OR customer_name LIKE ? OR customer_name LIKE ?)";
+        QVariantList sParams = {cleanName, "%" + cleanName + "%", wildcard};
+        if (!activeFromDate.isEmpty() && !activeToDate.isEmpty()) {
+            sSql += " AND invoice_date >= ? AND invoice_date <= ?";
+            sParams << activeFromDate << activeToDate;
+        }
+        sSql += " ORDER BY invoice_date ASC, id ASC;";
+        QVariantList sRows = DatabaseManager::instance().executeQuery(sSql, sParams);
         for (const QVariant& r : sRows) {
             QVariantMap s = r.toMap();
+            auto [isoD, fmtD] = parseDates(s.value("invoice_date").toString());
+            QString fyStr = computeFyForDate(isoD, s.value("financial_year").toString());
             QString parts = QString("Sales Invoice: %1 (%2 Qtl)").arg(s.value("item_name").toString(), QString::number(s.value("weight_qtl").toDouble()));
             if (!s.value("narration").toString().isEmpty()) parts += " | " + s.value("narration").toString();
             QVariantMap item;
             item["isSelected"] = false;
-            item["vIso"] = s.value("invoice_date").toString();
-            item["vDate"] = s.value("invoice_date").toString();
+            item["vIso"] = isoD;
+            item["vDate"] = fmtD;
             item["refNo"] = s.value("invoice_no").toString();
             item["particulars"] = parts;
             item["amount"] = s.value("total_amount").toDouble();
+            item["financial_year"] = fyStr;
+            item["fy"] = fyStr;
             drItems.append(item);
         }
 
-        // 3. Purchase Invoices
-        QVariantList purRows = DatabaseManager::instance().executeQuery(
-            "SELECT invoice_no, invoice_date, item_name, weight_qtl, taxable_amount, total_amount, narration FROM purchase_invoices WHERE supplier_name = ? OR supplier_name LIKE ? ORDER BY invoice_date ASC, id ASC;",
-            {cleanName, "%" + cleanName + "%"}
-        );
+        // 3. Purchase Invoices (Respect active FY date range)
+        QString purSql = "SELECT invoice_no, invoice_date, item_name, weight_qtl, taxable_amount, total_amount, narration, financial_year FROM purchase_invoices WHERE (supplier_name = ? OR supplier_name LIKE ? OR supplier_name LIKE ?)";
+        QVariantList purParams = {cleanName, "%" + cleanName + "%", wildcard};
+        if (!activeFromDate.isEmpty() && !activeToDate.isEmpty()) {
+            purSql += " AND invoice_date >= ? AND invoice_date <= ?";
+            purParams << activeFromDate << activeToDate;
+        }
+        purSql += " ORDER BY invoice_date ASC, id ASC;";
+        QVariantList purRows = DatabaseManager::instance().executeQuery(purSql, purParams);
         for (const QVariant& r : purRows) {
             QVariantMap p = r.toMap();
+            auto [isoD, fmtD] = parseDates(p.value("invoice_date").toString());
+            QString fyStr = computeFyForDate(isoD, p.value("financial_year").toString());
             double taxVal = p.value("taxable_amount").toDouble();
             double totVal = p.value("total_amount").toDouble();
             double grossAmt = taxVal > 0 ? taxVal : totVal;
@@ -235,29 +453,161 @@ QVariantMap PartiesModel::get_party_statement(const QString& partyName) {
 
             QVariantMap item;
             item["isSelected"] = false;
-            item["vIso"] = p.value("invoice_date").toString();
-            item["vDate"] = p.value("invoice_date").toString();
+            item["vIso"] = isoD;
+            item["vDate"] = fmtD;
             item["refNo"] = p.value("invoice_no").toString();
             item["particulars"] = parts;
             item["amount"] = grossAmt;
+            item["financial_year"] = fyStr;
+            item["fy"] = fyStr;
             crItems.append(item);
 
             if (tdsAmt > 0) {
                 QVariantMap tdsItem;
                 tdsItem["isSelected"] = false;
-                tdsItem["vIso"] = p.value("invoice_date").toString();
-                tdsItem["vDate"] = p.value("invoice_date").toString();
+                tdsItem["vIso"] = isoD;
+                tdsItem["vDate"] = fmtD;
                 tdsItem["refNo"] = p.value("invoice_no").toString();
                 tdsItem["particulars"] = QString("T.D.S. U/S 194Q (B.No. %1)").arg(p.value("invoice_no").toString());
+                tdsItem["amount"] = tdsAmt;
+                tdsItem["financial_year"] = fyStr;
+                tdsItem["fy"] = fyStr;
+                drItems.append(tdsItem);
+            }
+        }
+
+        // 4. Paddy Procurement / Arrivals (Respect active FY date range)
+        QString padSql = "SELECT receipt_no, arrival_date, variety, net_weight_qtl, total_amount FROM paddy_procurement WHERE (farmer_name = ? OR farmer_name LIKE ? OR farmer_name LIKE ?)";
+        QVariantList padParams = {cleanName, "%" + cleanName + "%", wildcard};
+        if (!activeFromDate.isEmpty() && !activeToDate.isEmpty()) {
+            padSql += " AND arrival_date >= ? AND arrival_date <= ?";
+            padParams << activeFromDate << activeToDate;
+        }
+        padSql += " ORDER BY arrival_date ASC, id ASC;";
+        QVariantList paRows = DatabaseManager::instance().executeQuery(padSql, padParams);
+        for (const QVariant& r : paRows) {
+            QVariantMap pa = r.toMap();
+            auto [isoD, fmtD] = parseDates(pa.value("arrival_date").toString());
+            QString fyStr = computeFyForDate(isoD);
+            QVariantMap item;
+            item["isSelected"] = false;
+            item["vIso"] = isoD;
+            item["vDate"] = fmtD;
+            item["refNo"] = pa.value("receipt_no").toString();
+            item["particulars"] = QString("Paddy Arrival: %1 (%2 Qtl)").arg(pa.value("variety").toString(), QString::number(pa.value("net_weight_qtl").toDouble()));
+            item["amount"] = pa.value("total_amount").toDouble();
+            item["financial_year"] = fyStr;
+            item["fy"] = fyStr;
+            crItems.append(item);
+        }
+
+        // 5. Vouchers (Respect active FY date range)
+        QString vSql = "SELECT voucher_no, voucher_date, voucher_type, legacy_type, party_name, account_type, amount, narration, financial_year FROM vouchers WHERE (party_name = ? OR party_name LIKE ? OR party_name LIKE ? OR account_type = ? OR account_type LIKE ? OR account_type LIKE ?) AND voucher_type NOT IN ('Sales', 'Purchase')";
+        QVariantList vParams = {cleanName, "%" + cleanName + "%", wildcard, cleanName, "%" + cleanName + "%", wildcard};
+        if (!activeFromDate.isEmpty() && !activeToDate.isEmpty()) {
+            vSql += " AND voucher_date >= ? AND voucher_date <= ?";
+            vParams << activeFromDate << activeToDate;
+        }
+        vSql += " ORDER BY voucher_date ASC, id ASC;";
+        QVariantList vRows = DatabaseManager::instance().executeQuery(vSql, vParams);
+        for (const QVariant& r : vRows) {
+            QVariantMap v = r.toMap();
+            QString vType = v.value("voucher_type").toString();
+            QString legType = v.value("legacy_type").toString();
+            QString drP = v.value("party_name").toString().trimmed();
+            QString crP = v.value("account_type").toString().trimmed();
+            double vAmt = v.value("amount").toDouble();
+            QString narr = v.value("narration").toString();
+            auto [isoD, fmtD] = parseDates(v.value("voucher_date").toString());
+            QString fyStr = computeFyForDate(isoD, v.value("financial_year").toString());
+
+            bool isPartyMatch = (!drP.isEmpty() && (drP.toLower() == cleanNameLower || drP.toLower().contains(cleanNameLower)));
+            bool isAccMatch = (!crP.isEmpty() && (crP.toLower() == cleanNameLower || crP.toLower().contains(cleanNameLower)));
+
+            if (isPartyMatch) {
+                if (vType == "Payment" || legType == "ChPt" || legType == "CP" || legType == "BP") {
+                    QString desc = QString("%1 (Paid via %2)").arg(vType, crP);
+                    if (!narr.isEmpty()) desc += " | " + narr;
+                    QVariantMap item;
+                    item["isSelected"] = false; item["vIso"] = isoD; item["vDate"] = fmtD;
+                    item["refNo"] = v.value("voucher_no").toString(); item["particulars"] = desc; item["amount"] = vAmt;
+                    item["financial_year"] = fyStr; item["fy"] = fyStr;
+                    drItems.append(item);
+                } else {
+                    QString desc = QString("%1 (Received in %2)").arg(vType, crP);
+                    if (!narr.isEmpty()) desc += " | " + narr;
+                    QVariantMap item;
+                    item["isSelected"] = false; item["vIso"] = isoD; item["vDate"] = fmtD;
+                    item["refNo"] = v.value("voucher_no").toString(); item["particulars"] = desc; item["amount"] = vAmt;
+                    item["financial_year"] = fyStr; item["fy"] = fyStr;
+                    crItems.append(item);
+                }
+            } else if (isAccMatch) {
+                if (vType == "Receipt" || legType == "ChRt" || legType == "CR" || legType == "BR") {
+                    QString desc = QString("Receipt from %1").arg(drP);
+                    if (!narr.isEmpty()) desc += " | " + narr;
+                    QVariantMap item;
+                    item["isSelected"] = false; item["vIso"] = isoD; item["vDate"] = fmtD;
+                    item["refNo"] = v.value("voucher_no").toString(); item["particulars"] = desc; item["amount"] = vAmt;
+                    item["financial_year"] = fyStr; item["fy"] = fyStr;
+                    drItems.append(item);
+                } else {
+                    QString desc = QString("Payment to %1").arg(drP);
+                    if (!narr.isEmpty()) desc += " | " + narr;
+                    QVariantMap item;
+                    item["isSelected"] = false; item["vIso"] = isoD; item["vDate"] = fmtD;
+                    item["refNo"] = v.value("voucher_no").toString(); item["particulars"] = desc; item["amount"] = vAmt;
+                    item["financial_year"] = fyStr; item["fy"] = fyStr;
+                    crItems.append(item);
+                }
+            }
+        }
+    } else {
+        // Load all transactions across all parties
+        QVariantList sRows = DatabaseManager::instance().executeQuery(
+            "SELECT invoice_no, invoice_date, customer_name, item_name, weight_qtl, total_amount, narration FROM sales_invoices ORDER BY invoice_date ASC, id ASC;"
+        );
+        for (const QVariant& r : sRows) {
+            QVariantMap s = r.toMap();
+            auto [isoD, fmtD] = parseDates(s.value("invoice_date").toString());
+            QString parts = QString("[%1] Sales Invoice: %2 (%3 Qtl)").arg(s.value("customer_name").toString(), s.value("item_name").toString(), QString::number(s.value("weight_qtl").toDouble()));
+            if (!s.value("narration").toString().isEmpty()) parts += " | " + s.value("narration").toString();
+            QVariantMap item;
+            item["isSelected"] = false; item["vIso"] = isoD; item["vDate"] = fmtD;
+            item["refNo"] = s.value("invoice_no").toString(); item["particulars"] = parts; item["amount"] = s.value("total_amount").toDouble();
+            drItems.append(item);
+        }
+
+        QVariantList purRows = DatabaseManager::instance().executeQuery(
+            "SELECT invoice_no, invoice_date, supplier_name, item_name, weight_qtl, taxable_amount, total_amount, narration FROM purchase_invoices ORDER BY invoice_date ASC, id ASC;"
+        );
+        for (const QVariant& r : purRows) {
+            QVariantMap p = r.toMap();
+            auto [isoD, fmtD] = parseDates(p.value("invoice_date").toString());
+            double taxVal = p.value("taxable_amount").toDouble();
+            double totVal = p.value("total_amount").toDouble();
+            double grossAmt = taxVal > 0 ? taxVal : totVal;
+            double tdsAmt = (grossAmt > totVal) ? std::round((grossAmt - totVal) * 100.0) / 100.0 : 0.0;
+
+            QString parts = QString("[%1] Purchase Bill: %2 (%3 Qtl)").arg(p.value("supplier_name").toString(), p.value("item_name").toString(), QString::number(p.value("weight_qtl").toDouble()));
+            if (!p.value("narration").toString().isEmpty()) parts += " | " + p.value("narration").toString();
+            QVariantMap item;
+            item["isSelected"] = false; item["vIso"] = isoD; item["vDate"] = fmtD;
+            item["refNo"] = p.value("invoice_no").toString(); item["particulars"] = parts; item["amount"] = grossAmt;
+            crItems.append(item);
+
+            if (tdsAmt > 0) {
+                QVariantMap tdsItem;
+                tdsItem["isSelected"] = false; tdsItem["vIso"] = isoD; tdsItem["vDate"] = fmtD;
+                tdsItem["refNo"] = p.value("invoice_no").toString();
+                tdsItem["particulars"] = QString("[%1] T.D.S. U/S 194Q (%2)").arg(p.value("supplier_name").toString(), p.value("invoice_no").toString());
                 tdsItem["amount"] = tdsAmt;
                 drItems.append(tdsItem);
             }
         }
 
-        // 4. Vouchers
         QVariantList vRows = DatabaseManager::instance().executeQuery(
-            "SELECT voucher_no, voucher_date, voucher_type, legacy_type, party_name, account_type, amount, narration FROM vouchers WHERE (party_name = ? OR party_name LIKE ? OR account_type = ? OR account_type LIKE ?) AND voucher_type NOT IN ('Sales', 'Purchase') ORDER BY voucher_date ASC, id ASC;",
-            {cleanName, "%" + cleanName + "%", cleanName, "%" + cleanName + "%"}
+            "SELECT voucher_no, voucher_date, voucher_type, legacy_type, party_name, account_type, amount, narration FROM vouchers WHERE voucher_type NOT IN ('Sales', 'Purchase') ORDER BY voucher_date ASC, id ASC;"
         );
         for (const QVariant& r : vRows) {
             QVariantMap v = r.toMap();
@@ -267,45 +617,60 @@ QVariantMap PartiesModel::get_party_statement(const QString& partyName) {
             QString crP = v.value("account_type").toString().trimmed();
             double vAmt = v.value("amount").toDouble();
             QString narr = v.value("narration").toString();
+            auto [isoD, fmtD] = parseDates(v.value("voucher_date").toString());
 
-            bool isPartyMatch = (!drP.isEmpty() && (drP.toLower() == cleanNameLower || drP.toLower().contains(cleanNameLower)));
-            bool isAccMatch = (!crP.isEmpty() && (crP.toLower() == cleanNameLower || crP.toLower().contains(cleanNameLower)));
+            if (vType == "Payment" || legType == "ChPt" || legType == "CP" || legType == "BP") {
+                QVariantMap dItem;
+                dItem["isSelected"] = false; dItem["vIso"] = isoD; dItem["vDate"] = fmtD;
+                dItem["refNo"] = v.value("voucher_no").toString();
+                dItem["particulars"] = QString("[%1] %2 (Paid via %3) - %4").arg(drP, vType, crP, narr);
+                dItem["amount"] = vAmt;
+                drItems.append(dItem);
 
-            if (isPartyMatch) {
-                if (vType == "Payment" || legType == "ChPt" || legType == "CP") {
-                    QString desc = QString("%1 (Paid via %2)").arg(vType, crP);
-                    if (!narr.isEmpty()) desc += " | " + narr;
-                    QVariantMap item;
-                    item["isSelected"] = false; item["vIso"] = v.value("voucher_date").toString(); item["vDate"] = v.value("voucher_date").toString();
-                    item["refNo"] = v.value("voucher_no").toString(); item["particulars"] = desc; item["amount"] = vAmt;
-                    drItems.append(item);
-                } else {
-                    QString desc = QString("%1 (Received in %2)").arg(vType, crP);
-                    if (!narr.isEmpty()) desc += " | " + narr;
-                    QVariantMap item;
-                    item["isSelected"] = false; item["vIso"] = v.value("voucher_date").toString(); item["vDate"] = v.value("voucher_date").toString();
-                    item["refNo"] = v.value("voucher_no").toString(); item["particulars"] = desc; item["amount"] = vAmt;
-                    crItems.append(item);
-                }
-            } else if (isAccMatch) {
-                if (vType == "Receipt" || legType == "ChRt") {
-                    QString desc = QString("Receipt from %1").arg(drP);
-                    if (!narr.isEmpty()) desc += " | " + narr;
-                    QVariantMap item;
-                    item["isSelected"] = false; item["vIso"] = v.value("voucher_date").toString(); item["vDate"] = v.value("voucher_date").toString();
-                    item["refNo"] = v.value("voucher_no").toString(); item["particulars"] = desc; item["amount"] = vAmt;
-                    drItems.append(item);
-                } else {
-                    QString desc = QString("Payment to %1").arg(drP);
-                    if (!narr.isEmpty()) desc += " | " + narr;
-                    QVariantMap item;
-                    item["isSelected"] = false; item["vIso"] = v.value("voucher_date").toString(); item["vDate"] = v.value("voucher_date").toString();
-                    item["refNo"] = v.value("voucher_no").toString(); item["particulars"] = desc; item["amount"] = vAmt;
-                    crItems.append(item);
-                }
+                QVariantMap cItem;
+                cItem["isSelected"] = false; cItem["vIso"] = isoD; cItem["vDate"] = fmtD;
+                cItem["refNo"] = v.value("voucher_no").toString();
+                cItem["particulars"] = QString("[%1] %2 (Dr: %3) - %4").arg(crP, vType, drP, narr);
+                cItem["amount"] = vAmt;
+                crItems.append(cItem);
+            } else if (vType == "Receipt" || legType == "ChRt" || legType == "CR" || legType == "BR") {
+                QVariantMap dItem;
+                dItem["isSelected"] = false; dItem["vIso"] = isoD; dItem["vDate"] = fmtD;
+                dItem["refNo"] = v.value("voucher_no").toString();
+                dItem["particulars"] = QString("[%1] Receipt from %2 - %3").arg(crP, drP, narr);
+                dItem["amount"] = vAmt;
+                drItems.append(dItem);
+
+                QVariantMap cItem;
+                cItem["isSelected"] = false; cItem["vIso"] = isoD; cItem["vDate"] = fmtD;
+                cItem["refNo"] = v.value("voucher_no").toString();
+                cItem["particulars"] = QString("[%1] %2 (Received in %3) - %4").arg(drP, vType, crP, narr);
+                cItem["amount"] = vAmt;
+                crItems.append(cItem);
+            } else {
+                QVariantMap dItem;
+                dItem["isSelected"] = false; dItem["vIso"] = isoD; dItem["vDate"] = fmtD;
+                dItem["refNo"] = v.value("voucher_no").toString();
+                dItem["particulars"] = QString("[%1] %2 (Cr: %3) - %4").arg(drP, vType, crP, narr);
+                dItem["amount"] = vAmt;
+                drItems.append(dItem);
+
+                QVariantMap cItem;
+                cItem["isSelected"] = false; cItem["vIso"] = isoD; cItem["vDate"] = fmtD;
+                cItem["refNo"] = v.value("voucher_no").toString();
+                cItem["particulars"] = QString("[%1] %2 (Dr: %3) - %4").arg(crP, vType, drP, narr);
+                cItem["amount"] = vAmt;
+                crItems.append(cItem);
             }
         }
     }
+
+    std::sort(drItems.begin(), drItems.end(), [](const QVariant& a, const QVariant& b) {
+        return a.toMap().value("vIso").toString() < b.toMap().value("vIso").toString();
+    });
+    std::sort(crItems.begin(), crItems.end(), [](const QVariant& a, const QVariant& b) {
+        return a.toMap().value("vIso").toString() < b.toMap().value("vIso").toString();
+    });
 
     QVariantMap res;
     res["dr_items"] = drItems;

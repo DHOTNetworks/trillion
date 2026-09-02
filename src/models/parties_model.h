@@ -15,7 +15,11 @@ public:
     Q_INVOKABLE QString get_ledger_live_balance(const QString& ledgerName);
     Q_INVOKABLE QVariantMap get_party_statement(const QString& partyName);
     Q_INVOKABLE QVariantMap get_party_by_name(const QString& name) const;
-    Q_INVOKABLE QVariantMap get_party_details(const QString& name) const;
+    Q_INVOKABLE QVariantList search_parties(const QString& query) const;
+    Q_INVOKABLE QStringList get_account_groups() const;
+    Q_INVOKABLE QStringList get_cities() const;
+    Q_INVOKABLE QStringList get_districts() const;
+    Q_INVOKABLE QStringList get_stations() const;
 
     Q_INVOKABLE bool add_party(
         const QString& name, const QString& ptype, const QString& phone,

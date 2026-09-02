@@ -195,7 +195,17 @@ Rectangle {
                 }
                 ColumnLayout {
                     spacing: 0
-                    Text { text: "ITEM MOVEMENT & TRANSACTION REGISTER"; color: "#2563EB"; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.0 }
+                    RowLayout {
+                        spacing: 8
+                        Text { text: "ITEM MOVEMENT & TRANSACTION REGISTER"; color: "#2563EB"; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.0 }
+                        Text {
+                            text: (typeof stockItemsModel !== "undefined" && stockItemsModel && stockItemsModel.active_from_date) ? 
+                                ("(From " + stockItemsModel.active_from_date + " To " + stockItemsModel.active_to_date + ")") : ""
+                            color: "#64748B"
+                            font.pixelSize: 11
+                            font.bold: true
+                        }
+                    }
                     Text { text: root.itemName !== "" ? root.itemName : "Stock Item Details"; color: "#0F172A"; font.pixelSize: 18; font.bold: true }
                 }
             }
@@ -561,11 +571,21 @@ Rectangle {
                 anchors.leftMargin: 16; anchors.rightMargin: 16
 
                 Text { text: (root.selectedInwardCount > 0 || root.selectedOutwardCount > 0) ? "SELECTED ENTRIES NET BALANCE:" : "ITEM NET CLOSING BALANCE:"; color: "#94A3B8"; font.pixelSize: 12; font.bold: true }
-                Text {
-                    text: (root.selectedInwardBags - root.selectedOutwardBags).toString() + " Bags (" + (root.selectedInwardQty - root.selectedOutwardQty).toFixed(2) + " Qtl)"
-                    color: (root.selectedInwardQty - root.selectedOutwardQty) >= 0 ? "#4ADE80" : "#F87171"
-                    font.pixelSize: 14
-                    font.bold: true
+                
+                RowLayout {
+                    spacing: 6
+                    Text {
+                        text: (root.selectedInwardBags - root.selectedOutwardBags).toString() + " Bags"
+                        color: (root.selectedInwardBags - root.selectedOutwardBags) >= 0 ? "#4ADE80" : "#F87171"
+                        font.pixelSize: 14
+                        font.bold: true
+                    }
+                    Text {
+                        text: "(" + (root.selectedInwardQty - root.selectedOutwardQty).toFixed(2) + " Qtl)"
+                        color: (root.selectedInwardQty - root.selectedOutwardQty) >= 0 ? "#4ADE80" : "#F87171"
+                        font.pixelSize: 14
+                        font.bold: true
+                    }
                 }
 
                 Item { Layout.fillWidth: true }
@@ -573,7 +593,7 @@ Rectangle {
                 Text { text: "NET VALUATION:"; color: "#94A3B8"; font.pixelSize: 12; font.bold: true }
                 Text {
                     text: (typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.format_inr(root.selectedInwardVal - root.selectedOutwardVal) : ("₹" + (root.selectedInwardVal - root.selectedOutwardVal).toFixed(2))
-                    color: "#60A5FA"
+                    color: (root.selectedInwardVal - root.selectedOutwardVal) >= 0 ? "#60A5FA" : "#F87171"
                     font.pixelSize: 15
                     font.bold: true
                 }
