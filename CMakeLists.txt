@@ -57,7 +57,7 @@ set(SOURCES
 
 qt_add_executable(${PROJECT_NAME} ${SOURCES})
 
-# Qt 6 Ahead-of-Time QML Bytecode Compilation (qmlcachegen)
+# Qt 6 Ahead-of-Time QML to C++ AOT Compilation (qmlcachegen)
 qt_add_qml_module(${PROJECT_NAME}
     URI MahadevERP
     VERSION 1.0
