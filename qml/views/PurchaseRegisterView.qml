@@ -289,6 +289,12 @@ ScrollView {
                             id: rowMouseArea
                             anchors.fill: parent
                             hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onDoubleClicked: {
+                                if (model.invNoVal) {
+                                    root.openInvoiceRequested(model.invNoVal)
+                                }
+                            }
                         }
 
                         RowLayout {

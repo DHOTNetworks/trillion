@@ -10,12 +10,12 @@ ApplicationWindow {
     width: 1380
     height: 850
     visible: true
-    title: "Mahadev Rice Mill ERP & Accounting"
+    title: (typeof firmManager !== "undefined" && firmManager && firmManager.currentFirmName !== "" ? (firmManager.currentFirmName + " • ") : "") + "Bahi-Khata ERP & Accounting"
     color: "#F4F6F9"
 
     // Active View Index: 
-    // 0=Dashboard, 1=Paddy, 2=Milling/Stock, 3=Sales, 4=Vouchers, 5=Reports/LedgerList, 6=NewLedgerPage, 7=ModifyLedgerPage, 8=ViewStatementPage, 9=NewGroup, 10=ModifyGroup, 11=NewStockItem, 12=ModifyStockItem, 13=StockDetail, 14=SalesVoucher, 15=PurchaseVoucher
-    property int currentViewIndex: 0
+    // 0=Dashboard, 1=Paddy, 2=Milling/Stock, 3=Sales, 4=Vouchers, 5=Reports/LedgerList, 6=NewLedgerPage, 7=ModifyLedgerPage, 8=ViewStatementPage, 9=NewGroup, 10=ModifyGroup, 11=NewStockItem, 12=ModifyStockItem, 13=StockDetail, 14=SalesVoucher, 15=PurchaseVoucher, 22=FirmSelector
+    property int currentViewIndex: 22
     property int lastDashboardMenuIndex: 0
     property int lastActiveMenuType: 0 // 0=Dashboard Root, 1=Ledger Menu, 2=Stock Menu, 3=AddVoucher Menu
     property int lastLedgerSubmenuIndex: 0
@@ -28,7 +28,43 @@ ApplicationWindow {
     property bool isItemMovementModalOpen: false
     property bool isPeriodModalOpen: false
     property bool isMdbModalOpen: false
-    property string activePeriodLabel: "01-04-2025 To 31-03-2026 (FY 2025-26)"
+    property string activePeriodLabel: "FY 2026-27"
+    property string pendingEditInvoiceNo: ""
+
+    Component.onCompleted: {
+        var fy = (typeof stockItemsModel !== "undefined" && stockItemsModel) ? stockItemsModel.get_financial_year() : ""
+        var sd = (typeof stockItemsModel !== "undefined" && stockItemsModel) ? stockItemsModel.get_from_date() : ""
+        var ed = (typeof stockItemsModel !== "undefined" && stockItemsModel) ? stockItemsModel.get_to_date() : ""
+        if (fy && sd && ed) {
+            var s_fmt = sd.split("-").reverse().join("-")
+            var e_fmt = ed.split("-").reverse().join("-")
+            window.activePeriodLabel = s_fmt + " To " + e_fmt + " (" + fy + ")"
+            if (typeof dashboardCtrl !== "undefined" && dashboardCtrl) {
+                dashboardCtrl.refresh_stats(sd, ed, fy)
+            }
+        }
+    }
+
+    Connections {
+        target: typeof stockItemsModel !== "undefined" ? stockItemsModel : null
+        function onPeriodChanged(fy, fromD, toD) {
+            var s_fmt = fromD.indexOf("-") !== -1 ? fromD.split("-").reverse().join("-") : fromD
+            var e_fmt = toD.indexOf("-") !== -1 ? toD.split("-").reverse().join("-") : toD
+            window.activePeriodLabel = s_fmt + " To " + e_fmt + " (" + fy + ")"
+            if (typeof dashboardCtrl !== "undefined" && dashboardCtrl) {
+                dashboardCtrl.refresh_stats(fromD, toD, fy)
+            }
+            if (mainLoader.item && typeof mainLoader.item.activePeriodText !== "undefined") {
+                mainLoader.item.activePeriodText = s_fmt + " To " + e_fmt + " (" + fy + ")"
+            }
+            if (mainLoader.item && typeof mainLoader.item.loadDashboardStats !== "undefined") {
+                mainLoader.item.loadDashboardStats()
+            }
+            if (mainLoader.item && typeof mainLoader.item.loadStockItems !== "undefined") {
+                mainLoader.item.loadStockItems()
+            }
+        }
+    }
 
     function openLedgerMasterMenu() {
         window.lastActiveMenuType = 0
@@ -73,6 +109,17 @@ ApplicationWindow {
     Shortcut { sequence: "Alt+5"; context: Qt.ApplicationShortcut; onActivated: window.openOtherVoucherMenu() } // Other Vouchers Menu
     Shortcut { sequence: "Alt+6"; context: Qt.ApplicationShortcut; onActivated: window.currentViewIndex = 5 } // Ledger List / Reports
     Shortcut { sequence: "Alt+7"; context: Qt.ApplicationShortcut; onActivated: window.openReportsMenu() } // Reports Menu
+    Shortcut { 
+        sequence: "Alt+F1"
+        context: Qt.ApplicationShortcut
+        onActivated: {
+            if (window.currentViewIndex === 22) {
+                window.currentViewIndex = 0
+            } else {
+                window.currentViewIndex = 22
+            }
+        }
+    }
     Shortcut { sequence: "F1"; context: Qt.ApplicationShortcut; onActivated: window.isShortcutsModalOpen = !window.isShortcutsModalOpen }
     Shortcut { sequence: "F2"; context: Qt.ApplicationShortcut; onActivated: window.openAddVoucherMenu() }
     Shortcut { sequence: "Alt+F2"; context: Qt.ApplicationShortcut; onActivated: window.isPeriodModalOpen = true }
@@ -179,6 +226,7 @@ ApplicationWindow {
                 onShowHelpRequested: window.isShortcutsModalOpen = true
                 onOpenAccountingPeriodRequested: window.isPeriodModalOpen = true
                 onOpenMdbMigrationRequested: window.isMdbModalOpen = true
+                onSwitchFirmRequested: window.currentViewIndex = 22
             }
 
         // Main View Loader Framework
@@ -214,6 +262,7 @@ ApplicationWindow {
                         case 19: return "views/MillingStatementView.qml"
                         case 20: return "views/SalesRegisterView.qml"
                         case 21: return "views/PurchaseRegisterView.qml"
+                        case 22: return "views/FirmSelecterView.qml"
                         default: return "views/DashboardView.qml"
                     }
                 }
@@ -308,10 +357,55 @@ ApplicationWindow {
                     if (item.cancelRequested) item.cancelRequested.connect(function() { window.currentViewIndex = 0 })
                     if (item.savedSuccess) item.savedSuccess.connect(function() { window.currentViewIndex = 0 })
                     if (item.invoiceSaved) item.invoiceSaved.connect(function() { window.currentViewIndex = 0 })
+                    if (item.openInvoiceRequested) item.openInvoiceRequested.connect(function(invNo) {
+                        window.pendingEditInvoiceNo = invNo
+                        if (window.currentViewIndex === 21) {
+                            window.currentViewIndex = 15 // Purchase Voucher View
+                        } else {
+                            window.currentViewIndex = 14 // Sales Voucher View
+                        }
+                    })
                     if (item.openItemMovement) item.openItemMovement.connect(function(itemName) {
-                        itemMovementModal.loadItemMovements(itemName)
+                        var fDate = typeof stockItemsModel !== "undefined" && stockItemsModel ? stockItemsModel.get_from_date() : ""
+                        var tDate = typeof stockItemsModel !== "undefined" && stockItemsModel ? stockItemsModel.get_to_date() : ""
+                        itemMovementModal.loadItemMovements(itemName, fDate, tDate)
                         window.isItemMovementModalOpen = true
                     })
+
+                    // Automatically load invoice for editing if pending
+                    if (window.pendingEditInvoiceNo !== "") {
+                        var invToLoad = window.pendingEditInvoiceNo
+                        window.pendingEditInvoiceNo = ""
+                        Qt.callLater(function() {
+                            if (item && typeof item.loadInvoiceForEditing === "function") {
+                                item.loadInvoiceForEditing(invToLoad)
+                            }
+                        })
+                    }
+
+                    if (window.currentViewIndex === 22 && item) {
+                        if (typeof item.firmOpened !== "undefined") {
+                            item.firmOpened.connect(function(firmId, firmName) {
+                                window.currentViewIndex = 0
+                                var fy = (typeof stockItemsModel !== "undefined" && stockItemsModel) ? stockItemsModel.get_financial_year() : ""
+                                var sd = (typeof stockItemsModel !== "undefined" && stockItemsModel) ? stockItemsModel.get_from_date() : ""
+                                var ed = (typeof stockItemsModel !== "undefined" && stockItemsModel) ? stockItemsModel.get_to_date() : ""
+                                if (fy && sd && ed) {
+                                    var s_fmt = sd.split("-").reverse().join("-")
+                                    var e_fmt = ed.split("-").reverse().join("-")
+                                    window.activePeriodLabel = s_fmt + " To " + e_fmt + " (" + fy + ")"
+                                    if (typeof dashboardCtrl !== "undefined" && dashboardCtrl) {
+                                        dashboardCtrl.refresh_stats(sd, ed, fy)
+                                    }
+                                }
+                            })
+                        }
+                        if (typeof item.cancelRequested !== "undefined") {
+                            item.cancelRequested.connect(function() {
+                                window.currentViewIndex = 0
+                            })
+                        }
+                    }
                 }
             }
         }
@@ -496,12 +590,17 @@ ApplicationWindow {
             visible: window.isPeriodModalOpen
             onCloseRequested: window.isPeriodModalOpen = false
             onPeriodSelected: function(fromIso, toIso, fyLabel) {
-                window.activePeriodLabel = "(" + fromIso + " To " + toIso + ") " + fyLabel
+                if (typeof stockItemsModel !== "undefined" && stockItemsModel) {
+                    stockItemsModel.set_accounting_period(fromIso, toIso, fyLabel)
+                }
+                var s_fmt = fromIso.indexOf("-") !== -1 ? fromIso.split("-").reverse().join("-") : fromIso
+                var e_fmt = toIso.indexOf("-") !== -1 ? toIso.split("-").reverse().join("-") : toIso
+                window.activePeriodLabel = s_fmt + " To " + e_fmt + " (" + fyLabel + ")"
                 if (typeof dashboardCtrl !== "undefined" && dashboardCtrl) {
                     dashboardCtrl.refresh_stats(fromIso, toIso, fyLabel)
                 }
                 if (mainLoader.item && typeof mainLoader.item.activePeriodText !== "undefined") {
-                    mainLoader.item.activePeriodText = fromIso + " To " + toIso + " (" + fyLabel + ")"
+                    mainLoader.item.activePeriodText = s_fmt + " To " + e_fmt + " (" + fyLabel + ")"
                 }
                 if (mainLoader.item && typeof mainLoader.item.loadDashboardStats !== "undefined") {
                     mainLoader.item.loadDashboardStats()
@@ -539,6 +638,15 @@ ApplicationWindow {
             anchors.centerIn: parent
             visible: window.isItemMovementModalOpen
             onCloseRequested: window.isItemMovementModalOpen = false
+            onOpenInvoiceRequested: function(invNo, invType) {
+                window.isItemMovementModalOpen = false
+                window.pendingEditInvoiceNo = invNo
+                if (invType === "Purchase") {
+                    window.currentViewIndex = 15 // PurchaseVoucherView
+                } else {
+                    window.currentViewIndex = 14 // SalesVoucherView
+                }
+            }
         }
     }
 }

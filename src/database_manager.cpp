@@ -56,6 +56,12 @@ void DatabaseManager::closeDatabase() {
     }
 }
 
+bool DatabaseManager::switchDatabase(const QString& newDbPath) {
+    QMutexLocker locker(&m_mutex);
+    closeDatabase();
+    return initDatabase(newDbPath);
+}
+
 bool DatabaseManager::beginTransaction() {
     return executeNonQuery("BEGIN TRANSACTION;");
 }
@@ -149,6 +155,9 @@ bool DatabaseManager::executeNonQuery(const QString& sql, const QVariantList& pa
 
     bindParams(stmt, params);
     rc = sqlite3_step(stmt);
+    if (rc != SQLITE_DONE && rc != SQLITE_ROW) {
+        qWarning() << "SQL Step Error:" << sqlite3_errmsg(m_db) << "in SQL:" << sql;
+    }
     sqlite3_finalize(stmt);
     return (rc == SQLITE_DONE || rc == SQLITE_ROW);
 }
@@ -178,6 +187,35 @@ QVariant DatabaseManager::executeScalar(const QString& sql, const QVariantList& 
 }
 
 void DatabaseManager::ensureTablesExist() {
+    // 0. Company Info
+    executeNonQuery(
+        "CREATE TABLE IF NOT EXISTS company_info ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "company_name TEXT NOT NULL,"
+        "firm_type TEXT DEFAULT 'Partnership Firm',"
+        "business_type TEXT,"
+        "address TEXT,"
+        "city TEXT,"
+        "state TEXT DEFAULT 'Haryana',"
+        "state_code TEXT DEFAULT '06',"
+        "pincode TEXT,"
+        "phone TEXT,"
+        "mobile TEXT,"
+        "email TEXT,"
+        "gstin TEXT,"
+        "pan_no TEXT,"
+        "fssai_no TEXT,"
+        "ml_no TEXT,"
+        "bank_name TEXT,"
+        "bank_account TEXT,"
+        "ifsc_code TEXT,"
+        "books_from TEXT,"
+        "acc_year_from TEXT,"
+        "acc_year_to TEXT,"
+        "data_file_source TEXT"
+        ");"
+    );
+
     // 1. Financial Years
     executeNonQuery(
         "CREATE TABLE IF NOT EXISTS financial_years ("
@@ -377,16 +415,16 @@ void DatabaseManager::ensureTablesExist() {
         "item_name TEXT NOT NULL,"
         "hsn_code TEXT,"
         "bag_count INTEGER DEFAULT 0,"
-        "weight_qtl REAL NOT NULL,"
-        "rate_per_qtl REAL NOT NULL,"
-        "taxable_amount REAL NOT NULL,"
+        "weight_qtl REAL DEFAULT 0.0,"
+        "rate_per_qtl REAL DEFAULT 0.0,"
+        "taxable_amount REAL DEFAULT 0.0,"
         "gst_pct REAL DEFAULT 5.0,"
         "cgst_amount REAL DEFAULT 0.0,"
         "sgst_amount REAL DEFAULT 0.0,"
         "igst_amount REAL DEFAULT 0.0,"
         "round_off REAL DEFAULT 0.0,"
         "gst_amount REAL DEFAULT 0.0,"
-        "total_amount REAL NOT NULL,"
+        "total_amount REAL DEFAULT 0.0,"
         "payment_mode TEXT DEFAULT 'Credit',"
         "vehicle_no TEXT,"
         "eway_bill_no TEXT,"
@@ -422,6 +460,25 @@ void DatabaseManager::ensureTablesExist() {
         ");"
     );
 
+    // 6b. Sales Invoice Items (Line items for multi-item invoices)
+    executeNonQuery(
+        "CREATE TABLE IF NOT EXISTS sales_invoice_items ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "invoice_id INTEGER NOT NULL,"
+        "invoice_no TEXT,"
+        "item_id INTEGER,"
+        "item_name TEXT,"
+        "bag_count INTEGER DEFAULT 0,"
+        "packing TEXT,"
+        "weight_qtl REAL DEFAULT 0.0,"
+        "rate_per_qtl REAL DEFAULT 0.0,"
+        "taxable_amount REAL DEFAULT 0.0,"
+        "gst_pct REAL DEFAULT 5.0,"
+        "total_amount REAL DEFAULT 0.0,"
+        "FOREIGN KEY (invoice_id) REFERENCES sales_invoices(id) ON DELETE CASCADE"
+        ");"
+    );
+
     // 7. Purchase Invoices
     executeNonQuery(
         "CREATE TABLE IF NOT EXISTS purchase_invoices ("
@@ -438,16 +495,16 @@ void DatabaseManager::ensureTablesExist() {
         "item_name TEXT NOT NULL,"
         "hsn_code TEXT,"
         "bag_count INTEGER DEFAULT 0,"
-        "weight_qtl REAL NOT NULL,"
-        "rate_per_qtl REAL NOT NULL,"
-        "taxable_amount REAL NOT NULL,"
+        "weight_qtl REAL DEFAULT 0.0,"
+        "rate_per_qtl REAL DEFAULT 0.0,"
+        "taxable_amount REAL DEFAULT 0.0,"
         "gst_pct REAL DEFAULT 5.0,"
         "cgst_amount REAL DEFAULT 0.0,"
         "sgst_amount REAL DEFAULT 0.0,"
         "igst_amount REAL DEFAULT 0.0,"
         "round_off REAL DEFAULT 0.0,"
         "gst_amount REAL DEFAULT 0.0,"
-        "total_amount REAL NOT NULL,"
+        "total_amount REAL DEFAULT 0.0,"
         "payment_mode TEXT DEFAULT 'Credit',"
         "vehicle_no TEXT,"
         "eway_bill_no TEXT,"
@@ -480,6 +537,25 @@ void DatabaseManager::ensureTablesExist() {
         "FOREIGN KEY (supplier_id) REFERENCES parties(id),"
         "FOREIGN KEY (item_id) REFERENCES stock_items(id),"
         "FOREIGN KEY (fy_id) REFERENCES financial_years(id)"
+        ");"
+    );
+
+    // 7b. Purchase Invoice Items (Line items for multi-item invoices)
+    executeNonQuery(
+        "CREATE TABLE IF NOT EXISTS purchase_invoice_items ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "invoice_id INTEGER NOT NULL,"
+        "invoice_no TEXT,"
+        "item_id INTEGER,"
+        "item_name TEXT,"
+        "bag_count INTEGER DEFAULT 0,"
+        "packing TEXT,"
+        "weight_qtl REAL DEFAULT 0.0,"
+        "rate_per_qtl REAL DEFAULT 0.0,"
+        "taxable_amount REAL DEFAULT 0.0,"
+        "gst_pct REAL DEFAULT 5.0,"
+        "total_amount REAL DEFAULT 0.0,"
+        "FOREIGN KEY (invoice_id) REFERENCES purchase_invoices(id) ON DELETE CASCADE"
         ");"
     );
 

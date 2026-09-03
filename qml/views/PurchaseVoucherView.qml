@@ -10,6 +10,9 @@ Item {
     signal cancelRequested()
     signal invoiceSaved()
 
+    property int editingInvoiceId: 0
+    readonly property bool isEditMode: editingInvoiceId > 0
+
     property string autoVoucherNo: ""
     property string autoVchCode: ""
     
@@ -61,6 +64,7 @@ Item {
     }
 
     function resetForm() {
+        editingInvoiceId = 0
         var nextInv = ""
         if (typeof purchaseModel !== "undefined" && purchaseModel) {
             autoVchCode = purchaseModel.get_next_voucher_no()
@@ -109,6 +113,67 @@ Item {
         isManualGst = false
         statusMessage = ""
         isError = false
+        recalculateTotals()
+    }
+
+    function loadInvoiceForEditing(invNoOrId) {
+        if (typeof purchaseModel === "undefined" || !purchaseModel) return
+        var inv = purchaseModel.get_purchase_invoice(invNoOrId)
+        if (!inv || !inv.id) return
+
+        editingInvoiceId = inv.id
+        autoVchCode = inv.voucher_no || ("Purc-" + inv.id)
+        autoVoucherNo = autoVchCode
+        invNoInput.text = inv.invoice_no || ""
+        if (inv.invoice_date) {
+            var parts = String(inv.invoice_date).split("-")
+            invoiceDateInput.text = parts.length === 3 ? (parts[2] + "-" + parts[1] + "-" + parts[0]) : inv.invoice_date
+        }
+        partyCombo.editText = inv.supplier_name || ""
+        gstinInput.text = inv.gstin || ""
+        vehNoInput.text = inv.vehicle_no || ""
+        grNoInput.text = inv.gr_no || ""
+        driverInput.text = inv.driver || inv.driver_name || ""
+        ewayInput.text = inv.eway_bill_no || ""
+        billTimeInput.text = inv.bill_time || ""
+        saudaDtInput.text = inv.sauda_date || ""
+        shippingInput.text = inv.shipping_address || ""
+        poNoInput.text = inv.po_no || ""
+        gradeInput.text = inv.grade || ""
+        transportInput.text = inv.transport || ""
+        brokerInput.text = inv.broker_name || ""
+        kandaWeightInput.text = inv.kanda_weight || ""
+        narrationInput.text = inv.narration || ""
+
+        damiAmount = parseFloat(inv.dami) || 0.0
+        labourAmount = parseFloat(inv.labour) || 0.0
+        auctionAmount = parseFloat(inv.auction) || 0.0
+        mFeeAmount = parseFloat(inv.m_fee) || 0.0
+        hrdfAmount = parseFloat(inv.hrdf) || 0.0
+        welfareAmount = parseFloat(inv.welfare) || 0.0
+        dhrmdAmount = parseFloat(inv.dhrmd) || 0.0
+        sutliAmount = parseFloat(inv.sutli) || 0.0
+
+        otherExpInput.text = (parseFloat(inv.other_exp) || 0.0).toFixed(2)
+        lessInput.text = (parseFloat(inv.less_amount) || 0.0).toFixed(2)
+        
+        lineItemsModel.clear()
+        var items = inv.items || []
+        for (var i = 0; i < items.length; i++) {
+            var itm = items[i]
+            var w = parseFloat(itm.weight || itm.weight_qtl || 0.0)
+            var r = parseFloat(itm.rate || itm.rate_per_qtl || 0.0)
+            var a = parseFloat(itm.amount || itm.total_amount || (w * r))
+            lineItemsModel.append({
+                itemName: itm.item_name || "",
+                bags: parseInt(itm.bags || itm.bag_count) || 0,
+                packing: (parseFloat(itm.packing) || 0.5).toFixed(3),
+                weight: w,
+                rate: r,
+                gstPct: parseFloat(itm.gst_pct || 5.0),
+                amount: a
+            })
+        }
         recalculateTotals()
     }
 
@@ -310,7 +375,8 @@ Item {
         if (!invNo && typeof purchaseModel !== "undefined" && purchaseModel) {
             invNo = purchaseModel.get_next_invoice_no()
         }
-        var invDate = Qt.formatDate(new Date(), "dd-MM-yyyy")
+        var dParts = invoiceDateInput.text.trim().split("-")
+        var invDate = dParts.length === 3 ? (dParts[2] + "-" + dParts[1] + "-" + dParts[0]) : Qt.formatDate(new Date(), "yyyy-MM-dd")
         var vehicle = vehNoInput.text.trim()
         var eway = ewayInput.text.trim()
         var narr = narrationInput.text.trim()
@@ -322,16 +388,44 @@ Item {
         var sgstVal = selectedTaxStatus === "IGST" ? 0.0 : gstTaxAmount / 2.0
         var igstVal = selectedTaxStatus === "IGST" ? gstTaxAmount : 0.0
 
+        var itemsList = []
+        for (var i = 0; i < lineItemsModel.count; i++) {
+            var it = lineItemsModel.get(i)
+            itemsList.push({
+                item_name: it.itemName,
+                bags: it.bags,
+                packing: parseFloat(it.packing) || 0.5,
+                weight: it.weight,
+                rate: it.rate,
+                gst_pct: it.gstPct,
+                amount: it.amount
+            })
+        }
+
         if (typeof purchaseModel !== "undefined" && purchaseModel) {
-            var ok = purchaseModel.add_purchase_invoice_full(
-                invNo, invDate, partyLedger, gstinInput.text.trim(), mainItemName, "", totalBags, totalWeight, 0.0,
-                taxableAmount, 5.0, cgstVal, sgstVal, igstVal, roundOffAmount, grandTotal,
-                "Credit", vehicle, eway, narr,
-                selectedSaleStatus, selectedMarketFeeStatus, damiAmount, labourAmount, auctionAmount, mFeeAmount, hrdfAmount, otherExpAmount, welfareAmount, dhrmdAmount, sutliAmount, lessAmount,
-                grNoInput.text.trim(), driverInput.text.trim(), billTimeInput.text.trim(), saudaDateInput.text.trim(), shippingAddressInput.text.trim(), poNoInput.text.trim(), gradeInput.text.trim(), kandaWeightInput.text.trim(), transportInput.text.trim(), brokerNameInput.text.trim()
-            )
+            var ok = false
+            if (root.editingInvoiceId > 0) {
+                ok = purchaseModel.update_purchase_invoice_full(
+                    root.editingInvoiceId,
+                    invNo, invDate, partyLedger, gstinInput.text.trim(), mainItemName, "", totalBags, totalWeight, 0.0,
+                    taxableAmount, 5.0, cgstVal, sgstVal, igstVal, roundOffAmount, grandTotal,
+                    "Credit", vehicle, eway, narr,
+                    selectedSaleStatus, selectedMarketFeeStatus, damiAmount, labourAmount, auctionAmount, mFeeAmount, hrdfAmount, otherExpAmount, welfareAmount, dhrmdAmount, sutliAmount, lessAmount,
+                    grNoInput.text.trim(), driverInput.text.trim(), billTimeInput.text.trim(), saudaDtInput.text.trim(), shippingInput.text.trim(), poNoInput.text.trim(), gradeInput.text.trim(), kandaWeightInput.text.trim(), transportInput.text.trim(), brokerInput.text.trim(),
+                    autoVoucherNo, itemsList
+                )
+            } else {
+                ok = purchaseModel.add_purchase_invoice_full(
+                    invNo, invDate, partyLedger, gstinInput.text.trim(), mainItemName, "", totalBags, totalWeight, 0.0,
+                    taxableAmount, 5.0, cgstVal, sgstVal, igstVal, roundOffAmount, grandTotal,
+                    "Credit", vehicle, eway, narr,
+                    selectedSaleStatus, selectedMarketFeeStatus, damiAmount, labourAmount, auctionAmount, mFeeAmount, hrdfAmount, otherExpAmount, welfareAmount, dhrmdAmount, sutliAmount, lessAmount,
+                    grNoInput.text.trim(), driverInput.text.trim(), billTimeInput.text.trim(), saudaDtInput.text.trim(), shippingInput.text.trim(), poNoInput.text.trim(), gradeInput.text.trim(), kandaWeightInput.text.trim(), transportInput.text.trim(), brokerInput.text.trim(),
+                    autoVoucherNo
+                )
+            }
             if (ok) {
-                statusMessage = "✅ Purchase Voucher " + (invNo ? invNo : autoVchCode) + " saved & posted successfully!"
+                statusMessage = root.editingInvoiceId > 0 ? ("✅ Purchase Voucher " + invNo + " updated successfully!") : ("✅ Purchase Voucher " + (invNo ? invNo : autoVchCode) + " saved & posted successfully!")
                 isError = false
                 resetForm()
                 root.invoiceSaved()
@@ -1451,7 +1545,7 @@ Item {
                     contentItem: RowLayout {
                         anchors.centerIn: parent
                         spacing: 6
-                        Text { text: "💾 Save & Post Purchase Voucher (F9 / F2)"; color: "#FFF"; font.bold: true; font.pixelSize: 12 }
+                        Text { text: root.isEditMode ? "💾 Update Purchase Voucher (F2)" : "💾 Save & Post Purchase Voucher (F9 / F2)"; color: "#FFF"; font.bold: true; font.pixelSize: 12 }
                     }
                     onClicked: root.saveInvoice()
                     Keys.onReturnPressed: root.saveInvoice()

@@ -30,35 +30,65 @@ Rectangle {
         var availableFys = (typeof stockItemsModel !== "undefined" && stockItemsModel) ? stockItemsModel.get_available_financial_years() : []
         fyPresets = availableFys
         
-        var currentFy = (typeof stockItemsModel !== "undefined" && stockItemsModel) ? stockItemsModel.get_financial_year() : "FY 2025-26"
-        selectedFyLabel = currentFy
+        var activeFromIso = (typeof stockItemsModel !== "undefined" && stockItemsModel) ? stockItemsModel.get_from_date() : ""
+        var activeToIso = (typeof stockItemsModel !== "undefined" && stockItemsModel) ? stockItemsModel.get_to_date() : ""
+        var currentFy = (typeof stockItemsModel !== "undefined" && stockItemsModel) ? stockItemsModel.get_financial_year() : ""
+
+        // Fallback to active FY if no explicit dates
+        if (!activeFromIso || !activeToIso) {
+            for (var k = 0; k < availableFys.length; k++) {
+                if (availableFys[k].name === currentFy || (!currentFy && availableFys[k].isActive)) {
+                    activeFromIso = availableFys[k].startDate
+                    activeToIso = availableFys[k].endDate
+                    currentFy = availableFys[k].name
+                    break
+                }
+            }
+        }
+
+        selectedFromIso = activeFromIso
+        selectedToIso = activeToIso
 
         for (var i = 0; i < availableFys.length; i++) {
             var f = availableFys[i]
             if (f.name === "All") continue
             
-            var isCurrent = (f.name === currentFy) || (!currentFy && f.isActive)
-            if (isCurrent) {
+            var isFromChecked = (f.startDate === activeFromIso)
+            var isToChecked = (f.endDate === activeToIso)
+
+            if (isFromChecked) {
                 selectedFromDate = f.startFormatted
-                selectedFromIso = f.startDate
+            }
+            if (isToChecked) {
                 selectedToDate = f.endFormatted
-                selectedToIso = f.endDate
-                selectedFyLabel = f.name
             }
 
             fromListModel.append({
                 date: f.startFormatted,
                 iso: f.startDate,
                 fy: f.name,
-                checked: isCurrent
+                checked: isFromChecked
             })
 
             toListModel.append({
                 date: f.endFormatted,
                 iso: f.endDate,
                 fy: f.name,
-                checked: isCurrent
+                checked: isToChecked
             })
+        }
+
+        // Match with presets dynamically to see if it matches an exact FY or is Custom Period
+        var matched = false
+        for (var m = 0; m < availableFys.length; m++) {
+            if (availableFys[m].startDate === selectedFromIso && availableFys[m].endDate === selectedToIso) {
+                selectedFyLabel = availableFys[m].name
+                matched = true
+                break
+            }
+        }
+        if (!matched) {
+            selectedFyLabel = "Custom Period"
         }
     }
 
@@ -103,6 +133,12 @@ Rectangle {
         }
         if (!matched) {
             selectedFyLabel = "Custom Period"
+        }
+    }
+
+    onVisibleChanged: {
+        if (visible) {
+            loadFromDatabase()
         }
     }
 

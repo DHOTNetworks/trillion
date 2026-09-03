@@ -77,6 +77,8 @@ set(SOURCES
     src/models/milling_model.cpp
     src/models/financial_years_model.h
     src/models/financial_years_model.cpp
+    src/models/firm_manager.h
+    src/models/firm_manager.cpp
     src/engine/bahi_khata_migrator.h
     src/engine/bahi_khata_migrator.cpp
 )
@@ -113,8 +115,10 @@ qt_add_qml_module(${PROJECT_NAME}
         qml/dialogs/OtherVouchersMenuModal.qml
         qml/dialogs/ReportsMenuModal.qml
         qml/dialogs/StockMasterMenuModal.qml
+        qml/dialogs/NewFirmModal.qml
         qml/views/ChequeVoucherView.qml
         qml/views/DashboardView.qml
+        qml/views/FirmSelecterView.qml
         qml/views/JournalVoucherView.qml
         qml/views/MillingStatementView.qml
         qml/views/MillingView.qml

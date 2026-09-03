@@ -46,6 +46,9 @@ public:
     Q_INVOKABLE QVariantList get_item_movements(const QString& itemName, const QString& param1 = "", const QString& param2 = "");
     Q_INVOKABLE QVariantMap get_item_movement(const QString& itemName, const QString& fy = "");
 
+signals:
+    void periodChanged(const QString& fy, const QString& fromDate, const QString& toDate);
+
 private:
     QString m_currentFinancialYear = "FY 2026-27";
     QString m_currentFromDate = "2026-04-01";

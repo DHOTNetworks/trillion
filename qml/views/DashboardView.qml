@@ -42,8 +42,10 @@ ScrollView {
             } else if (fy) {
                 root.activePeriodText = fy
             }
-        }
-        if (typeof dashboardCtrl !== "undefined" && dashboardCtrl) {
+            if (typeof dashboardCtrl !== "undefined" && dashboardCtrl) {
+                dashboardCtrl.refresh_stats(sd, ed, fy)
+            }
+        } else if (typeof dashboardCtrl !== "undefined" && dashboardCtrl) {
             dashboardCtrl.refresh_stats()
         }
     }
@@ -200,8 +202,16 @@ ScrollView {
                         }
                         ColumnLayout {
                             spacing: 0
+                            Layout.fillWidth: true
                             Text { text: "FIRM PROFILE"; color: "#2563EB"; font.pixelSize: 10; font.bold: true; font.letterSpacing: 1.0 }
-                            Text { text: "Mahadev Rice Mill"; color: "#0F172A"; font.pixelSize: 14; font.bold: true; elide: Text.ElideRight }
+                            Text { 
+                                text: (typeof firmManager !== "undefined" && firmManager && firmManager.currentFirmName !== "") ? firmManager.currentFirmName : "Mahadev Rice Mill"
+                                color: "#0F172A"
+                                font.pixelSize: 13
+                                font.bold: true
+                                wrapMode: Text.WordWrap
+                                Layout.fillWidth: true
+                            }
                         }
                     }
 
@@ -228,8 +238,14 @@ ScrollView {
                                 Text { text: "📅"; font.pixelSize: 16 }
                                 ColumnLayout {
                                     spacing: 0
-                                    Text { text: "Financial Year Selected"; color: "#166534"; font.pixelSize: 10 }
-                                    Text { text: "FY 2026-2027 (Active)"; color: "#15803D"; font.pixelSize: 12; font.bold: true }
+                                    Text { 
+                                        text: root.activePeriodText !== "" ? root.activePeriodText : ((typeof stockItemsModel !== "undefined" && stockItemsModel ? stockItemsModel.get_financial_year() : "FY 2026-27") + " (Active)")
+                                        color: "#15803D"
+                                        font.pixelSize: 11
+                                        font.bold: true 
+                                        wrapMode: Text.WordWrap
+                                        Layout.maximumWidth: 160
+                                    }
                                 }
                             }
                         }
@@ -238,35 +254,50 @@ ScrollView {
                         ColumnLayout {
                             spacing: 2
                             Text { text: "GSTIN Number:"; color: "#64748B"; font.pixelSize: 11 }
-                            Text { text: "29AAACM8899F1Z4"; color: "#0F172A"; font.pixelSize: 12; font.bold: true; font.family: "Segoe UI, Consolas, Menlo, sans-serif" }
+                            Text { 
+                                text: (typeof firmManager !== "undefined" && firmManager && firmManager.currentFirmInfo && firmManager.currentFirmInfo.gstin) ? firmManager.currentFirmInfo.gstin : "06ABKFM5928Q1ZG"
+                                color: "#0F172A"; font.pixelSize: 12; font.bold: true; font.family: "Segoe UI, Consolas, Menlo, sans-serif" 
+                            }
                         }
 
                         // PAN
                         ColumnLayout {
                             spacing: 2
                             Text { text: "PAN Number:"; color: "#64748B"; font.pixelSize: 11 }
-                            Text { text: "AAACM8899F"; color: "#0F172A"; font.pixelSize: 12; font.bold: true; font.family: "Segoe UI, Consolas, Menlo, sans-serif" }
+                            Text { 
+                                text: (typeof firmManager !== "undefined" && firmManager && firmManager.currentFirmInfo && firmManager.currentFirmInfo.pan_no) ? firmManager.currentFirmInfo.pan_no : "ABKFM5928Q"
+                                color: "#0F172A"; font.pixelSize: 12; font.bold: true; font.family: "Segoe UI, Consolas, Menlo, sans-serif" 
+                            }
                         }
 
-                        // FSSAI
+                        // Statutory / FSSAI / ML No
                         ColumnLayout {
                             spacing: 2
-                            Text { text: "FSSAI License:"; color: "#64748B"; font.pixelSize: 11 }
-                            Text { text: "11223344556677"; color: "#0F172A"; font.pixelSize: 12; font.bold: true; font.family: "Segoe UI, Consolas, Menlo, sans-serif" }
+                            Text { text: "Statutory / License:"; color: "#64748B"; font.pixelSize: 11 }
+                            Text { 
+                                text: (typeof firmManager !== "undefined" && firmManager && firmManager.currentFirmInfo && firmManager.currentFirmInfo.fssai_no && firmManager.currentFirmInfo.fssai_no !== "") ? ("FSSAI: " + firmManager.currentFirmInfo.fssai_no) : ((typeof firmManager !== "undefined" && firmManager && firmManager.currentFirmInfo && firmManager.currentFirmInfo.ml_no) ? ("ML: " + firmManager.currentFirmInfo.ml_no) : "10822019000152")
+                                color: "#0F172A"; font.pixelSize: 11; font.bold: true; font.family: "Segoe UI, Consolas, Menlo, sans-serif"; elide: Text.ElideRight; Layout.maximumWidth: 180 
+                            }
                         }
 
                         // Business Type
                         ColumnLayout {
                             spacing: 2
                             Text { text: "Business Type:"; color: "#64748B"; font.pixelSize: 11 }
-                            Text { text: "Paddy Milling & Grain ERP"; color: "#0F172A"; font.pixelSize: 12; font.bold: true }
+                            Text { 
+                                text: (typeof firmManager !== "undefined" && firmManager && firmManager.currentFirmInfo && firmManager.currentFirmInfo.business_type) ? firmManager.currentFirmInfo.business_type : "Paddy Milling & Grain ERP"
+                                color: "#0F172A"; font.pixelSize: 11; font.bold: true; wrapMode: Text.WordWrap; Layout.maximumWidth: 180 
+                            }
                         }
 
                         // Location
                         ColumnLayout {
                             spacing: 2
                             Text { text: "Location:"; color: "#64748B"; font.pixelSize: 11 }
-                            Text { text: "Raichur, Karnataka"; color: "#0F172A"; font.pixelSize: 12; font.bold: true }
+                            Text { 
+                                text: (typeof firmManager !== "undefined" && firmManager && firmManager.currentFirmInfo && firmManager.currentFirmInfo.city) ? (firmManager.currentFirmInfo.city + (firmManager.currentFirmInfo.state ? (", " + firmManager.currentFirmInfo.state) : "")) : "Sirsa, Haryana"
+                                color: "#0F172A"; font.pixelSize: 12; font.bold: true 
+                            }
                         }
                     }
 

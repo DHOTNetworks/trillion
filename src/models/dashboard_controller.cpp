@@ -6,6 +6,10 @@ DashboardController::DashboardController(QObject* parent) : QObject(parent) {
     refresh_stats();
 }
 
+QString DashboardController::dbPath() const {
+    return DatabaseManager::instance().dbPath();
+}
+
 void DashboardController::refresh_stats(const QString& fromDate, const QString& toDate, const QString& fyLabel) {
     QString fDate = fromDate;
     QString tDate = toDate;
@@ -31,31 +35,102 @@ void DashboardController::refresh_stats(const QString& fromDate, const QString& 
         }
     }
 
-    // 1. Paddy Stock (Filtered by active FY Closing Stock)
+    // 1. Point-in-time Stock as of tDate (Paddy Basmati - Item 43)
     double paddyVal = 0.0;
-    if (!tDate.isEmpty()) {
-        QVariant pRow = DatabaseManager::instance().executeScalar(
-            "SELECT SUM(weight_qtl) FROM custom_closing_stocks WHERE (item_name LIKE '%Paddy%' OR item_code = '43') AND closing_date = ?;",
-            {tDate}
-        );
-        paddyVal = pRow.isValid() ? pRow.toDouble() : 0.0;
+    QString targetDate = !tDate.isEmpty() ? tDate : "9999-12-31";
+    QVariant pAudited = DatabaseManager::instance().executeScalar(
+        "SELECT weight_qtl FROM custom_closing_stocks "
+        "WHERE item_code = '43' AND closing_date = ? LIMIT 1;",
+        {targetDate}
+    );
+    if (pAudited.isValid() && pAudited.toDouble() > 0.0) {
+        paddyVal = pAudited.toDouble();
     } else {
-        QVariant pRow = DatabaseManager::instance().executeScalar("SELECT SUM(current_stock_qtl) FROM inventory WHERE category = 'Raw Paddy';");
-        paddyVal = pRow.isValid() ? pRow.toDouble() : 0.0;
+        // Query latest audited closing stock on or before targetDate
+        QVariantList pPriorList = DatabaseManager::instance().executeQuery(
+            "SELECT closing_date, weight_qtl FROM custom_closing_stocks "
+            "WHERE item_code = '43' AND closing_date <= ? ORDER BY closing_date DESC LIMIT 1;",
+            {targetDate}
+        );
+        QString cDate = "1900-01-01";
+        double opPaddy = 0.0;
+        if (!pPriorList.isEmpty()) {
+            cDate = pPriorList.first().toMap().value("closing_date").toString();
+            opPaddy = pPriorList.first().toMap().value("weight_qtl").toDouble();
+        }
+
+        // Live transactions between cDate and targetDate
+        QVariant pIn = DatabaseManager::instance().executeScalar(
+            "SELECT SUM(weight_qtl) FROM stock_transactions "
+            "WHERE item_code = '43' AND trans_type IN ('Purc', 'Inward', 'P') "
+            "AND voucher_date > ? AND voucher_date <= ?;",
+            {cDate, targetDate}
+        );
+        double inPaddy = pIn.isValid() ? pIn.toDouble() : 0.0;
+
+        QVariant pOut = DatabaseManager::instance().executeScalar(
+            "SELECT SUM(weight_qtl) FROM stock_transactions "
+            "WHERE item_code = '43' AND trans_type IN ('Sale', 'Outward', 'S') "
+            "AND voucher_date > ? AND voucher_date <= ?;",
+            {cDate, targetDate}
+        );
+        double outPaddy = pOut.isValid() ? pOut.toDouble() : 0.0;
+
+        paddyVal = opPaddy + inPaddy - outPaddy;
     }
     m_paddyStock = AccountingEngine::formatIndianNumber(paddyVal, 1, "Qtl");
 
-    // 2. Rice Stock (Filtered by active FY Closing Stock)
+    // 2. Point-in-time Stock as of tDate (Rice Basmati Non Branded - Item 30)
     double riceVal = 0.0;
-    if (!tDate.isEmpty()) {
-        QVariant rRow = DatabaseManager::instance().executeScalar(
-            "SELECT SUM(weight_qtl) FROM custom_closing_stocks WHERE item_code = '30' AND closing_date = ?;",
-            {tDate}
-        );
-        riceVal = rRow.isValid() ? rRow.toDouble() : 0.0;
+    QVariant rAudited = DatabaseManager::instance().executeScalar(
+        "SELECT weight_qtl FROM custom_closing_stocks "
+        "WHERE item_code = '30' AND closing_date = ? LIMIT 1;",
+        {targetDate}
+    );
+    if (rAudited.isValid() && rAudited.toDouble() > 0.0) {
+        riceVal = rAudited.toDouble();
     } else {
-        QVariant rRow = DatabaseManager::instance().executeScalar("SELECT SUM(current_stock_qtl) FROM inventory WHERE category = 'Finished Rice';");
-        riceVal = rRow.isValid() ? rRow.toDouble() : 0.0;
+        // Query latest audited closing stock on or before targetDate
+        QVariantList rPriorList = DatabaseManager::instance().executeQuery(
+            "SELECT closing_date, weight_qtl FROM custom_closing_stocks "
+            "WHERE item_code = '30' AND closing_date <= ? ORDER BY closing_date DESC LIMIT 1;",
+            {targetDate}
+        );
+        QString cDate = "1900-01-01";
+        double opRice = 0.0;
+        if (!rPriorList.isEmpty()) {
+            cDate = rPriorList.first().toMap().value("closing_date").toString();
+            opRice = rPriorList.first().toMap().value("weight_qtl").toDouble();
+        }
+
+        // Live purchases between cDate and targetDate
+        QVariant rIn = DatabaseManager::instance().executeScalar(
+            "SELECT SUM(weight_qtl) FROM stock_transactions "
+            "WHERE item_code = '30' AND trans_type IN ('Purc', 'Inward', 'P') "
+            "AND voucher_date > ? AND voucher_date <= ?;",
+            {cDate, targetDate}
+        );
+        double inRice = rIn.isValid() ? rIn.toDouble() : 0.0;
+
+        // Live milling production between cDate and targetDate
+        QVariant rMill = DatabaseManager::instance().executeScalar(
+            "SELECT SUM(weight_qtl) FROM milling_voucher_items "
+            "WHERE item_code = '30' AND drcr = 'Dr' "
+            "AND batch_date > ? AND batch_date <= ?;",
+            {cDate, targetDate}
+        );
+        double inMilling = rMill.isValid() ? rMill.toDouble() : 0.0;
+
+        // Live sales between cDate and targetDate
+        QVariant rOut = DatabaseManager::instance().executeScalar(
+            "SELECT SUM(weight_qtl) FROM stock_transactions "
+            "WHERE item_code = '30' AND trans_type IN ('Sale', 'Outward', 'S') "
+            "AND voucher_date > ? AND voucher_date <= ?;",
+            {cDate, targetDate}
+        );
+        double outRice = rOut.isValid() ? rOut.toDouble() : 0.0;
+
+        riceVal = opRice + inRice + inMilling - outRice;
     }
     m_riceStock = AccountingEngine::formatIndianNumber(riceVal, 1, "Qtl");
 
@@ -67,7 +142,7 @@ void DashboardController::refresh_stats(const QString& fromDate, const QString& 
             {fDate, tDate}
         );
         salesVal = sRow.isValid() ? sRow.toDouble() : 0.0;
-    } else if (!fy.isEmpty() && fy != "All") {
+    } else if (!fy.isEmpty() && fy != "All" && fy != "Custom Period") {
         QVariant sRow = DatabaseManager::instance().executeScalar(
             "SELECT SUM(COALESCE(taxable_amount, total_amount)) FROM sales_invoices WHERE financial_year = ?;",
             {fy}
@@ -87,7 +162,7 @@ void DashboardController::refresh_stats(const QString& fromDate, const QString& 
             {fDate, tDate}
         );
         procVal = pRow.isValid() ? pRow.toDouble() : 0.0;
-    } else if (!fy.isEmpty() && fy != "All") {
+    } else if (!fy.isEmpty() && fy != "All" && fy != "Custom Period") {
         QVariant pRow = DatabaseManager::instance().executeScalar(
             "SELECT SUM(COALESCE(total_amount, taxable_amount)) FROM purchase_invoices WHERE financial_year = ?;",
             {fy}

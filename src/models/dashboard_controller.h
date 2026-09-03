@@ -10,6 +10,7 @@ class DashboardController : public QObject {
     Q_PROPERTY(QString totalSales READ totalSales NOTIFY statsChanged)
     Q_PROPERTY(QString totalProcurement READ totalProcurement NOTIFY statsChanged)
     Q_PROPERTY(QString millingEfficiency READ millingEfficiency NOTIFY statsChanged)
+    Q_PROPERTY(QString dbPath READ dbPath CONSTANT)
 
 public:
     explicit DashboardController(QObject* parent = nullptr);
@@ -19,6 +20,7 @@ public:
     QString totalSales() const { return m_totalSales; }
     QString totalProcurement() const { return m_totalProcurement; }
     QString millingEfficiency() const { return m_millingEfficiency; }
+    QString dbPath() const;
 
     Q_INVOKABLE void refresh_stats(const QString& fromDate = "", const QString& toDate = "", const QString& fyLabel = "");
     Q_INVOKABLE QString format_inr(double amount);

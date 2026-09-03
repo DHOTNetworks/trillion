@@ -11,7 +11,9 @@ public:
     static DatabaseManager& instance();
 
     bool initDatabase(const QString& dbPath = "mahadev_accounting.db");
+    bool switchDatabase(const QString& newDbPath);
     sqlite3* getConnection();
+    QString dbPath() const { return m_dbPath; }
     void closeDatabase();
 
     // Transactions

@@ -13,6 +13,7 @@ Rectangle {
     border.width: 1
 
     signal closeRequested()
+    signal openInvoiceRequested(string invNo, string invType)
 
     property string itemName: ""
     property int totalInwardBags: 0
@@ -32,7 +33,7 @@ Rectangle {
     property int selectedInwardCount: 0
     property int selectedOutwardCount: 0
 
-    function loadItemMovements(name) {
+    function loadItemMovements(name, fDate, tDate) {
         itemName = name
         inwardModel.clear()
         outwardModel.clear()
@@ -49,7 +50,7 @@ Rectangle {
             return
         }
 
-        var movs = (typeof stockItemsModel !== "undefined" && stockItemsModel) ? stockItemsModel.get_item_movements(name) : []
+        var movs = (typeof stockItemsModel !== "undefined" && stockItemsModel) ? stockItemsModel.get_item_movements(name, fDate || "", tDate || "") : []
         for (var i = 0; i < movs.length; i++) {
             var m = movs[i]
             var b = parseInt(m.bags) || 0
@@ -370,6 +371,17 @@ Rectangle {
                                 Text { text: (parseFloat(model.qty) || 0.0).toFixed(2); color: "#16A34A"; font.pixelSize: 11; font.bold: true; Layout.preferredWidth: 65; horizontalAlignment: Text.AlignRight }
                                 Text { text: (typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.format_inr(model.amount) : ("₹" + (parseFloat(model.amount) || 0.0).toFixed(2)); color: "#0F172A"; font.pixelSize: 11; font.bold: true; Layout.preferredWidth: 105; horizontalAlignment: Text.AlignRight }
                             }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                anchors.leftMargin: 35
+                                cursorShape: Qt.PointingHandCursor
+                                onDoubleClicked: {
+                                    if (model.refNo) {
+                                        root.openInvoiceRequested(model.refNo, "Purchase")
+                                    }
+                                }
+                            }
                         }
                     }
 
@@ -531,6 +543,17 @@ Rectangle {
                                 Text { text: (parseInt(model.bags) || 0).toString(); color: "#334155"; font.pixelSize: 11; Layout.preferredWidth: 45; horizontalAlignment: Text.AlignRight }
                                 Text { text: (parseFloat(model.qty) || 0.0).toFixed(2); color: "#DC2626"; font.pixelSize: 11; font.bold: true; Layout.preferredWidth: 65; horizontalAlignment: Text.AlignRight }
                                 Text { text: (typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.format_inr(model.amount) : ("₹" + (parseFloat(model.amount) || 0.0).toFixed(2)); color: "#0F172A"; font.pixelSize: 11; font.bold: true; Layout.preferredWidth: 105; horizontalAlignment: Text.AlignRight }
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                anchors.leftMargin: 35
+                                cursorShape: Qt.PointingHandCursor
+                                onDoubleClicked: {
+                                    if (model.refNo) {
+                                        root.openInvoiceRequested(model.refNo, "Sale")
+                                    }
+                                }
                             }
                         }
                     }

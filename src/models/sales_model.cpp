@@ -268,3 +268,139 @@ QVariantList SalesModel::get_sales_register(const QString& param1, const QString
     }
     return result;
 }
+
+QVariantMap SalesModel::get_sales_invoice(const QString& invoiceNoOrId) {
+    QVariantList rows = DatabaseManager::instance().executeQuery(
+        "SELECT * FROM sales_invoices WHERE invoice_no = ? OR id = ? LIMIT 1;",
+        {invoiceNoOrId, invoiceNoOrId}
+    );
+    if (rows.isEmpty()) return {};
+    QVariantMap inv = rows.first().toMap();
+    int invId = inv.value("id").toInt();
+
+    // Fetch line items from sales_invoice_items
+    QVariantList itemRows = DatabaseManager::instance().executeQuery(
+        "SELECT * FROM sales_invoice_items WHERE invoice_id = ? ORDER BY id ASC;",
+        {invId}
+    );
+    // If no sales_invoice_items, create single line item from header
+    if (itemRows.isEmpty() && !inv.value("item_name").toString().isEmpty()) {
+        QVariantMap itm;
+        itm["item_name"] = inv.value("item_name");
+        itm["bags"] = inv.value("bag_count");
+        itm["packing"] = 0.5;
+        itm["weight"] = inv.value("weight_qtl");
+        itm["rate"] = inv.value("rate_per_qtl");
+        itm["gst_pct"] = inv.value("gst_pct");
+        itm["amount"] = inv.value("taxable_amount");
+        itm["hsn_code"] = inv.value("hsn_code");
+        itemRows.append(itm);
+    } else {
+        for (int i = 0; i < itemRows.size(); ++i) {
+            QVariantMap itm = itemRows[i].toMap();
+            itm["bags"] = itm.value("bag_count");
+            itm["weight"] = itm.value("weight_qtl");
+            itm["rate"] = itm.value("rate_per_qtl");
+            itm["amount"] = itm.value("total_amount").toDouble() > 0 ? itm.value("total_amount") : itm.value("taxable_amount");
+            itemRows[i] = itm;
+        }
+    }
+    inv["items"] = itemRows;
+    return inv;
+}
+
+bool SalesModel::update_sales_invoice_full(
+    int invoice_id,
+    const QString& invoice_no, const QString& invoice_date, const QString& party_ledger,
+    const QString& gstin, const QString& item_name, const QString& hsn_code,
+    int bag_count, double weight_qtl, double rate_per_qtl, double taxable_amount,
+    double gst_pct, double cgst_amount, double sgst_amount, double igst_amount,
+    double round_off, double total_amount, const QString& payment_mode,
+    const QString& vehicle_no, const QString& eway_bill_no, const QString& narration,
+    const QString& sale_status, const QString& market_fee_status,
+    double dami, double labour, double auction, double m_fee,
+    double hrdf, double other_exp, double welfare, double dhrmd,
+    double sutli, double less_amount, const QString& gr_no,
+    const QString& driver, const QString& bill_time, const QString& sauda_date,
+    const QString& shipping_address, const QString& po_no, const QString& grade,
+    const QString& kanda_weight, const QString& transport, const QString& broker_name,
+    const QString& voucher_no,
+    const QVariantList& items
+) {
+    QString dt = invoice_date.isEmpty() ? QDate::currentDate().toString("yyyy-MM-dd") : invoice_date;
+    QVariant itemRow = DatabaseManager::instance().executeScalar(
+        "SELECT id FROM stock_items WHERE name = ? LIMIT 1;", {item_name}
+    );
+    int itemId = itemRow.isValid() ? itemRow.toInt() : 1;
+    QVariant custRow = DatabaseManager::instance().executeScalar(
+        "SELECT id FROM parties WHERE name = ? LIMIT 1;", {party_ledger}
+    );
+    int customerId = custRow.isValid() ? custRow.toInt() : 1;
+    double gst_amount = cgst_amount + sgst_amount + igst_amount;
+
+    DatabaseManager::instance().beginTransaction();
+
+    bool okInv = DatabaseManager::instance().executeNonQuery(
+        "UPDATE sales_invoices SET "
+        "voucher_no = ?, invoice_no = ?, invoice_date = ?, customer_id = ?, customer_name = ?, gstin = ?, "
+        "item_id = ?, item_name = ?, hsn_code = ?, bag_count = ?, weight_qtl = ?, rate_per_qtl = ?, "
+        "taxable_amount = ?, gst_pct = ?, cgst_amount = ?, sgst_amount = ?, igst_amount = ?, round_off = ?, "
+        "gst_amount = ?, total_amount = ?, payment_mode = ?, vehicle_no = ?, eway_bill_no = ?, narration = ?, "
+        "sale_status = ?, market_fee_status = ?, dami = ?, labour = ?, auction = ?, m_fee = ?, hrdf = ?, "
+        "other_exp = ?, welfare = ?, dhrmd = ?, sutli = ?, less_amount = ?, gr_no = ?, driver = ?, "
+        "bill_time = ?, sauda_date = ?, shipping_address = ?, po_no = ?, grade = ?, kanda_weight = ?, "
+        "transport = ?, broker_name = ? WHERE id = ?;",
+        {
+            voucher_no, invoice_no, dt, customerId, party_ledger, gstin,
+            itemId, item_name, hsn_code, bag_count, weight_qtl, rate_per_qtl,
+            taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount, round_off,
+            gst_amount, total_amount, payment_mode, vehicle_no, eway_bill_no, narration,
+            sale_status, market_fee_status, dami, labour, auction, m_fee, hrdf,
+            other_exp, welfare, dhrmd, sutli, less_amount, gr_no, driver,
+            bill_time, sauda_date, shipping_address, po_no, grade, kanda_weight,
+            transport, broker_name, invoice_id
+        }
+    );
+
+    if (!okInv) {
+        DatabaseManager::instance().rollback();
+        return false;
+    }
+
+    // Replace line items in sales_invoice_items
+    DatabaseManager::instance().executeNonQuery("DELETE FROM sales_invoice_items WHERE invoice_id = ?;", {invoice_id});
+    if (!items.isEmpty()) {
+        for (const QVariant& itmV : items) {
+            QVariantMap itm = itmV.toMap();
+            DatabaseManager::instance().executeNonQuery(
+                "INSERT INTO sales_invoice_items (invoice_id, invoice_no, item_id, item_name, bag_count, packing, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, total_amount) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+                {
+                    invoice_id, invoice_no, itemId, itm.value("item_name").toString(),
+                    itm.value("bags").toInt(), itm.value("packing").toDouble(),
+                    itm.value("weight").toDouble(), itm.value("rate").toDouble(),
+                    itm.value("amount").toDouble(), itm.value("gst_pct").toDouble(),
+                    itm.value("amount").toDouble()
+                }
+            );
+        }
+    }
+
+    // Update stock_transactions
+    DatabaseManager::instance().executeNonQuery(
+        "UPDATE stock_transactions SET "
+        "voucher_no = ?, voucher_date = ?, party_id = ?, party_name = ?, bill_no = ?, "
+        "item_id = ?, item_name = ?, bags = ?, weight_qtl = ?, rate = ?, amount = ?, taxable_amount = ? "
+        "WHERE bill_no = ? AND trans_type IN ('Sale', 'S');",
+        {
+            voucher_no, dt, customerId, party_ledger, invoice_no,
+            itemId, item_name, bag_count, weight_qtl, rate_per_qtl, total_amount, taxable_amount,
+            invoice_no
+        }
+    );
+
+    DatabaseManager::instance().commit();
+    reload_data();
+    return true;
+}
+

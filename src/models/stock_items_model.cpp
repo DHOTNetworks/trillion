@@ -29,6 +29,7 @@ void StockItemsModel::initActivePeriod() {
         m_currentFromDate = r.value("start_date").toString();
         m_currentToDate = r.value("end_date").toString();
     }
+    AccountingEngine::setActivePeriod(m_currentFromDate, m_currentToDate, m_currentFinancialYear);
 }
 
 void StockItemsModel::reload_data() {
@@ -157,6 +158,7 @@ void StockItemsModel::set_financial_year(const QString& fy) {
     }
     AccountingEngine::setActivePeriod(m_currentFromDate, m_currentToDate, m_currentFinancialYear);
     reload_data();
+    emit periodChanged(m_currentFinancialYear, m_currentFromDate, m_currentToDate);
 }
 
 void StockItemsModel::set_accounting_period(const QString& fromDate, const QString& toDate, const QString& fyLabel) {
@@ -179,6 +181,7 @@ void StockItemsModel::set_accounting_period(const QString& fromDate, const QStri
     }
     AccountingEngine::setActivePeriod(m_currentFromDate, m_currentToDate, m_currentFinancialYear);
     reload_data();
+    emit periodChanged(m_currentFinancialYear, m_currentFromDate, m_currentToDate);
 }
 
 QVariantList StockItemsModel::get_available_financial_years() const {
