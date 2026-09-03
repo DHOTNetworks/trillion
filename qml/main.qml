@@ -27,6 +27,7 @@ ApplicationWindow {
     property bool isPaddyModalOpen: false
     property bool isItemMovementModalOpen: false
     property bool isPeriodModalOpen: false
+    property bool isMdbModalOpen: false
     property string activePeriodLabel: "01-04-2025 To 31-03-2026 (FY 2025-26)"
 
     function openLedgerMasterMenu() {
@@ -174,7 +175,10 @@ ApplicationWindow {
             AppHeader {
                 Layout.fillWidth: true
                 visible: window.currentViewIndex === 0
+                activePeriodText: window.activePeriodLabel
                 onShowHelpRequested: window.isShortcutsModalOpen = true
+                onOpenAccountingPeriodRequested: window.isPeriodModalOpen = true
+                onOpenMdbMigrationRequested: window.isMdbModalOpen = true
             }
 
         // Main View Loader Framework
@@ -453,7 +457,7 @@ ApplicationWindow {
     Rectangle {
         anchors.fill: parent
         color: "#66000000"
-        visible: window.isShortcutsModalOpen || window.isPaddyModalOpen || window.isItemMovementModalOpen || window.isPeriodModalOpen
+        visible: window.isShortcutsModalOpen || window.isPaddyModalOpen || window.isItemMovementModalOpen || window.isPeriodModalOpen || window.isMdbModalOpen
 
         MouseArea {
             anchors.fill: parent
@@ -462,6 +466,26 @@ ApplicationWindow {
                 window.isPaddyModalOpen = false
                 window.isItemMovementModalOpen = false
                 window.isPeriodModalOpen = false
+                window.isMdbModalOpen = false
+            }
+        }
+
+        // Bahi Khata In-App MDB Migration Modal
+        MdbMigrationModal {
+            id: mdbMigrationModal
+            anchors.centerIn: parent
+            visible: window.isMdbModalOpen
+            onCloseRequested: window.isMdbModalOpen = false
+            onMigrationSuccess: {
+                if (typeof dashboardCtrl !== "undefined" && dashboardCtrl) {
+                    dashboardCtrl.refresh_stats()
+                }
+                if (mainLoader.item && typeof mainLoader.item.loadDashboardStats !== "undefined") {
+                    mainLoader.item.loadDashboardStats()
+                }
+                if (mainLoader.item && typeof mainLoader.item.loadStockItems !== "undefined") {
+                    mainLoader.item.loadStockItems()
+                }
             }
         }
 

@@ -23,6 +23,7 @@
 #include "models/account_groups_model.h"
 #include "models/milling_model.h"
 #include "models/financial_years_model.h"
+#include "engine/bahi_khata_migrator.h"
 
 int main(int argc, char* argv[]) {
     std::cout << "[INIT] Starting Mahadev Rice Mill ERP native executable..." << std::endl << std::flush;
@@ -58,6 +59,7 @@ int main(int argc, char* argv[]) {
     AccountGroupsModel groupsModel;
     StockItemsModel stockItemsModel;
     FinancialYearsModel financialYearsModel;
+    BahiKhataMigrator bahiKhataMigrator;
 
     QQmlApplicationEngine engine;
 
@@ -80,6 +82,7 @@ int main(int argc, char* argv[]) {
     ctx->setContextProperty("groupsModel", &groupsModel);
     ctx->setContextProperty("stockItemsModel", &stockItemsModel);
     ctx->setContextProperty("financialYearsModel", &financialYearsModel);
+    ctx->setContextProperty("bahiKhataMigrator", &bahiKhataMigrator);
 
     // Add import paths (Embedded QRC + local file fallbacks)
     engine.addImportPath(":/");

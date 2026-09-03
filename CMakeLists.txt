@@ -53,6 +53,8 @@ set(SOURCES
     src/models/milling_model.cpp
     src/models/financial_years_model.h
     src/models/financial_years_model.cpp
+    src/engine/bahi_khata_migrator.h
+    src/engine/bahi_khata_migrator.cpp
 )
 
 qt_add_executable(${PROJECT_NAME} ${SOURCES})
@@ -81,6 +83,7 @@ qt_add_qml_module(${PROJECT_NAME}
         qml/dialogs/JFormStubModal.qml
         qml/dialogs/KeyboardShortcutsModal.qml
         qml/dialogs/LedgerMasterMenuModal.qml
+        qml/dialogs/MdbMigrationModal.qml
         qml/dialogs/NewLedgerModal.qml
         qml/dialogs/NewPaddyModal.qml
         qml/dialogs/OtherVouchersMenuModal.qml
@@ -117,6 +120,19 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     third_party/sqlite
 )
 
+# Optional libmdb linking for native MDB reading
+find_package(PkgConfig QUIET)
+if (PKG_CONFIG_FOUND)
+    pkg_check_modules(MDB QUIET libmdb)
+endif()
+
+if (MDB_FOUND)
+    target_include_directories(${PROJECT_NAME} PRIVATE ${MDB_INCLUDE_DIRS})
+    target_link_directories(${PROJECT_NAME} PRIVATE ${MDB_LIBRARY_DIRS})
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${MDB_LIBRARIES})
+    target_compile_definitions(${PROJECT_NAME} PRIVATE HAS_LIBMDB=1)
+endif()
+
 target_link_libraries(${PROJECT_NAME} PRIVATE
     sqlite3_embedded
     Qt6::Core
@@ -132,5 +148,5 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
     MACOSX_BUNDLE_BUNDLE_NAME "Mahadev Rice Mill ERP"
     MACOSX_BUNDLE_GUI_IDENTIFIER "com.mahadevagro.ricemill"
     MACOSX_BUNDLE_SHORT_VERSION_STRING "2.0"
-    MACOSX_BUNDLE_BUNDLE_VERSION "2.0"
+    MACOSX_BUNDLE_VERSION "2.0"
 )

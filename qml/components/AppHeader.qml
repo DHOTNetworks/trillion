@@ -9,43 +9,96 @@ Rectangle {
     border.color: "#E2E8F0"
     border.width: 1
 
+    property string activePeriodText: ""
+
     signal showHelpRequested()
+    signal openAccountingPeriodRequested()
+    signal openMdbMigrationRequested()
+
+    Rectangle {
+        anchors.fill: parent
+        color: "#FFFFFF"
+    }
 
     RowLayout {
         anchors.fill: parent
         anchors.leftMargin: 16
         anchors.rightMargin: 16
-        spacing: 12
+        spacing: 16
 
-        // Logo & Title
+        // Brand & Application Title
         RowLayout {
             spacing: 10
             Rectangle {
                 width: 28
                 height: 28
                 radius: 6
-                color: "#16A34A"
+                color: "#1E3A8A"
                 Text {
                     anchors.centerIn: parent
                     text: "🌾"
-                    font.pixelSize: 15
+                    font.pixelSize: 16
                 }
             }
 
             ColumnLayout {
-                spacing: 0
+                spacing: 1
                 Text {
-                    text: "MAHADEV RICE MILLING ERP"
+                    text: "MAHADEV RICE INDUSTRY"
                     color: "#0F172A"
-                    font.pixelSize: 14
+                    font.pixelSize: 13
                     font.bold: true
                     font.letterSpacing: 0.5
                 }
                 Text {
-                    text: "Professional Accounting & Inventory System | FY 2026-27"
+                    text: "Enterprise Resource Planning & Bahi-Khata"
                     color: "#64748B"
                     font.pixelSize: 10
                 }
+            }
+        }
+
+        // Active Accounting Period Selector Pill (Bahi-Khata FY Engine)
+        Rectangle {
+            id: periodPill
+            height: 26
+            Layout.preferredWidth: periodRow.implicitWidth + 20
+            radius: 13
+            color: periodMouseArea.containsMouse ? "#EFF6FF" : "#F8FAFC"
+            border.color: periodMouseArea.containsMouse ? "#3B82F6" : "#E2E8F0"
+            border.width: 1
+
+            RowLayout {
+                id: periodRow
+                anchors.centerIn: parent
+                spacing: 6
+
+                Text {
+                    text: "📅"
+                    font.pixelSize: 11
+                }
+
+                Text {
+                    text: root.activePeriodText !== "" ? root.activePeriodText : "Period: (2025-04-01 To 2026-03-31) FY 2025-26"
+                    color: "#1E40AF"
+                    font.pixelSize: 11
+                    font.bold: true
+                }
+
+                KbdBadge {
+                    text: "F2"
+                    badgeColor: "#DBEAFE"
+                    textColor: "#1E40AF"
+                    borderColor: "#BFDBFE"
+                }
+            }
+
+            MouseArea {
+                id: periodMouseArea
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.openAccountingPeriodRequested()
             }
         }
 
@@ -53,11 +106,32 @@ Rectangle {
 
         // Live Date / Time & System Status
         RowLayout {
-            spacing: 12
+            spacing: 10
+
+            // Sync / Import Bahi Khata Button
+            Button {
+                id: mdbBtn
+                height: 26
+                background: Rectangle {
+                    color: mdbBtn.hovered ? "#EFF6FF" : "#F8FAFC"
+                    radius: 5
+                    border.color: mdbBtn.hovered ? "#2563EB" : "#CBD5E1"
+                }
+                contentItem: RowLayout {
+                    spacing: 6
+                    Text {
+                        text: "🔄 Sync MDB"
+                        color: "#2563EB"
+                        font.pixelSize: 11
+                        font.bold: true
+                    }
+                }
+                onClicked: root.openMdbMigrationRequested()
+            }
 
             Rectangle {
                 height: 24
-                width: 130
+                width: 120
                 radius: 12
                 color: "#F1F5F9"
                 border.color: "#CBD5E1"
