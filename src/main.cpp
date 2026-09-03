@@ -35,18 +35,15 @@ int main(int argc, char* argv[]) {
     app.setApplicationName("Mahadev Rice Mill ERP & Accounting");
     app.setOrganizationName("MahadevAgro");
 
-    // Resolve Database Path portably (App dir, working dir, or fallback)
     QString appDir = QCoreApplication::applicationDirPath();
-    QString resolvedDbPath = QDir(appDir).filePath("mahadev_accounting.db");
-    if (!QFile::exists(resolvedDbPath)) {
-        resolvedDbPath = QDir::current().filePath("mahadev_accounting.db");
-    }
-    if (!QFile::exists(resolvedDbPath)) {
-        resolvedDbPath = "/Users/karan/MahadevAc/mahadev_accounting.db";
-    }
+    // Resolve Database Path: search only in CWD, if not there then create one in CWD
+    QString resolvedDbPath = QDir::current().filePath("mahadev_accounting.db");
 
     std::cout << "[INFO] Initializing SQLite database at: " << resolvedDbPath.toStdString() << std::endl << std::flush;
-    DatabaseManager::instance().initDatabase(resolvedDbPath);
+    bool dbOk = DatabaseManager::instance().initDatabase(resolvedDbPath);
+    if (!dbOk) {
+        std::cerr << "[ERROR] Failed to initialize SQLite database at: " << resolvedDbPath.toStdString() << std::endl << std::flush;
+    }
 
     // Instantiate C++ Models matching Python backend
     DashboardController dashboardCtrl;
