@@ -18,8 +18,13 @@
 #ifndef _mdbtools_h_
 #define _mdbtools_h_
 
+#if defined(_WIN32) || defined(_MSC_VER)
+#define MDBTOOLS_H_HAVE_ICONV_H 0
+#define MDBTOOLS_H_HAVE_XLOCALE_H 0
+#else
 #define MDBTOOLS_H_HAVE_ICONV_H 1
 #define MDBTOOLS_H_HAVE_XLOCALE_H 1
+#endif
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -27,10 +32,24 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <unistd.h>
 #include <ctype.h>
 #include <string.h>
 #include <locale.h>
+
+#if defined(_WIN32) || defined(_MSC_VER)
+#include <io.h>
+#include <process.h>
+#include <direct.h>
+#ifndef strcasecmp
+#define strcasecmp _stricmp
+#endif
+#ifndef strncasecmp
+#define strncasecmp _strnicmp
+#endif
+#else
+#include <unistd.h>
+#endif
+
 #include <mdbfakeglib.h>
 
 #if MDBTOOLS_H_HAVE_ICONV_H
@@ -39,10 +58,6 @@
 
 #if MDBTOOLS_H_HAVE_XLOCALE_H
 #include <xlocale.h>
-#endif
-
-#ifdef _WIN32
-#include <io.h>
 #endif
 
 #ifdef __cplusplus

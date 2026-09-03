@@ -25,7 +25,9 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
+#if !defined(_WIN32) && !defined(_MSC_VER)
 #include <getopt.h>
+#endif
 #include <errno.h>
 #include <wctype.h>
 #ifdef HAVE_ICONV
@@ -525,6 +527,13 @@ GOptionContext *g_option_context_new(const char *description) {
 
 gboolean g_option_context_parse(GOptionContext *context,
         gint *argc, gchar ***argv, GError **error) {
+#if defined(_WIN32) || defined(_MSC_VER)
+    (void)context;
+    (void)argc;
+    (void)argv;
+    (void)error;
+    return TRUE;
+#else
     int i;
     int count = 0;
     int len = 0;
@@ -609,6 +618,7 @@ gboolean g_option_context_parse(GOptionContext *context,
     free(long_opts);
 
     return TRUE;
+#endif
 }
 
 void g_option_context_free(GOptionContext *context) {

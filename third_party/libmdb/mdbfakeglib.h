@@ -24,7 +24,18 @@
 #include <time.h>
 #include <locale.h>
 #include <inttypes.h>
+#include <string.h>
+
+#if defined(_WIN32) || defined(_MSC_VER)
+#ifndef strcasecmp
+#define strcasecmp _stricmp
+#endif
+#ifndef strncasecmp
+#define strncasecmp _strnicmp
+#endif
+#else
 #include <strings.h>
+#endif
 
 typedef uint16_t guint16;
 typedef uint32_t guint32;
@@ -124,10 +135,19 @@ typedef struct GOptionContext {
 #define g_ptr_array_index(array, i) \
     ((void **)array->pdata)[i]
 
+#ifndef TRUE
 #define TRUE 1
+#endif
+#ifndef FALSE
 #define FALSE 0
+#endif
 
+#if defined(_MSC_VER)
+#include <stdlib.h>
+#define GUINT32_SWAP_LE_BE(l) _byteswap_ulong((unsigned long)(l))
+#else
 #define GUINT32_SWAP_LE_BE(l) __builtin_bswap32((uint32_t)(l))
+#endif
 
 /* string functions */
 void *g_memdup(const void *src, size_t len);

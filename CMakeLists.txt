@@ -4,6 +4,8 @@ project(MahadevRiceMillERP VERSION 2.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
@@ -29,6 +31,13 @@ target_compile_definitions(sqlite3_embedded PRIVATE
 file(GLOB LIBMDB_SOURCES "third_party/libmdb/*.c")
 add_library(libmdb_embedded STATIC ${LIBMDB_SOURCES})
 target_include_directories(libmdb_embedded PUBLIC third_party/libmdb)
+target_compile_definitions(libmdb_embedded PRIVATE
+    _CRT_SECURE_NO_WARNINGS
+    _CRT_NONSTDC_NO_DEPRECATE
+)
+if (MSVC)
+    target_compile_options(libmdb_embedded PRIVATE /std:c11)
+endif()
 
 # Application Sources
 set(SOURCES
