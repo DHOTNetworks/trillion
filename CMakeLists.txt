@@ -18,6 +18,11 @@ add_library(sqlite3_embedded STATIC
     third_party/sqlite/sqlite3.c
     third_party/sqlite/sqlite3.h
 )
+set_target_properties(sqlite3_embedded PROPERTIES
+    AUTOMOC OFF
+    AUTORCC OFF
+    AUTOUIC OFF
+)
 target_include_directories(sqlite3_embedded PUBLIC third_party/sqlite)
 target_compile_definitions(sqlite3_embedded PRIVATE
     SQLITE_ENABLE_FTS5
@@ -30,13 +35,18 @@ target_compile_definitions(sqlite3_embedded PRIVATE
 # Embedded MDB (Access Jet3/Jet4) Engine - 100% In-Tree Standalone C
 file(GLOB LIBMDB_SOURCES "third_party/libmdb/*.c")
 add_library(libmdb_embedded STATIC ${LIBMDB_SOURCES})
+set_target_properties(libmdb_embedded PROPERTIES
+    AUTOMOC OFF
+    AUTORCC OFF
+    AUTOUIC OFF
+)
 target_include_directories(libmdb_embedded PUBLIC third_party/libmdb)
 target_compile_definitions(libmdb_embedded PRIVATE
     _CRT_SECURE_NO_WARNINGS
     _CRT_NONSTDC_NO_DEPRECATE
 )
 if (MSVC)
-    target_compile_options(libmdb_embedded PRIVATE /std:c11)
+    target_compile_options(libmdb_embedded PRIVATE $<$<COMPILE_LANGUAGE:C>:/std:c11>)
 endif()
 
 # Application Sources

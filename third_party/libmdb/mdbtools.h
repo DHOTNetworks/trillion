@@ -40,6 +40,8 @@
 #include <io.h>
 #include <process.h>
 #include <direct.h>
+#include <BaseTsd.h>
+typedef SSIZE_T ssize_t;
 #ifndef strcasecmp
 #define strcasecmp _stricmp
 #endif
@@ -89,7 +91,11 @@
 #endif
 #endif
 
+#if defined(_WIN32) || defined(_MSC_VER)
+typedef _locale_t mdb_locale_t;
+#else
 typedef locale_t mdb_locale_t;
+#endif
 
 enum {
 	MDB_PAGE_DB = 0,
