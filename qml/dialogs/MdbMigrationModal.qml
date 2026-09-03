@@ -38,12 +38,21 @@ Rectangle {
 
     FileDialog {
         id: fileDialog
-        title: "Select Bahi Khata Database File (Data.004 or *.mdb)"
-        nameFilters: ["Bahi Khata / Access Databases (*.004 *.mdb *.accdb)", "All Files (*)"]
+        title: "Select Bahi Khata Database File (Data.* or *.mdb)"
+        nameFilters: ["Bahi Khata Databases (Data.* *.0* *.001 *.002 *.003 *.004 *.005 *.006 *.007 *.008 *.009 *.mdb *.accdb)", "All Files (*)"]
         onAccepted: {
             var raw = fileDialog.selectedFile.toString()
-            if (raw.indexOf("file://") === 0) {
+            if (raw.indexOf("file:///") === 0) {
+                raw = raw.substring(8)
+                // If not a Windows drive letter (e.g. Z:), restore leading slash for Unix
+                if (raw.length < 2 || raw.charAt(1) !== ':') {
+                    raw = "/" + raw
+                }
+            } else if (raw.indexOf("file://") === 0) {
                 raw = raw.substring(7)
+                if (raw.length >= 3 && raw.charAt(0) === '/' && raw.charAt(2) === ':') {
+                    raw = raw.substring(1)
+                }
             }
             selectedFilePath = raw
             inspectFile(selectedFilePath)
@@ -54,6 +63,7 @@ Rectangle {
         if (!path || typeof bahiKhataMigrator === "undefined" || !bahiKhataMigrator) return
         isInspecting = true
         inspectionData = bahiKhataMigrator.inspect_mdb_file(path)
+        console.log("[MDB UI] Inspection result:", JSON.stringify(inspectionData))
         isInspecting = false
     }
 
@@ -152,14 +162,18 @@ Rectangle {
 
                     ColumnLayout {
                         anchors.centerIn: parent
-                        visible: !inspectionData.valid && !hasCompleted
-                        spacing: 6
-                        Text { Layout.alignment: Qt.AlignHCenter; text: "📂"; font.pixelSize: 32 }
+                        visible: (!inspectionData || inspectionData.valid !== true) && !hasCompleted
+                        spacing: 8
+                        Text { Layout.alignment: Qt.AlignHCenter; text: (inspectionData && inspectionData.error) ? "⚠️" : "📂"; font.pixelSize: 32 }
                         Text {
                             Layout.alignment: Qt.AlignHCenter
-                            text: "Select ~/Firm Data/Data.004 to inspect tables and rows"
-                            color: "#94A3B8"
+                            text: (inspectionData && inspectionData.error) ? inspectionData.error : "Select a Bahi Khata file (e.g. Data.004, Data.001) to inspect and migrate"
+                            color: (inspectionData && inspectionData.error) ? "#DC2626" : "#64748B"
                             font.pixelSize: 13
+                            font.bold: (inspectionData && inspectionData.error) ? true : false
+                            wrapMode: Text.WordWrap
+                            Layout.maximumWidth: 480
+                            horizontalAlignment: Text.AlignHCenter
                         }
                     }
 

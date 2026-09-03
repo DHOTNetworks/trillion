@@ -3,6 +3,7 @@
 #include <QCoreApplication>
 #include <QFileInfo>
 #include <QDir>
+#include <QUrl>
 #include <QDebug>
 #include <iostream>
 #include <vector>
@@ -12,6 +13,23 @@
 
 #include "mdbtools.h"
 #define HAS_LIBMDB 1
+
+static QString normalizeMdbPath(const QString& rawPath) {
+    QString path = rawPath.trimmed();
+    if (path.startsWith("file://", Qt::CaseInsensitive)) {
+        QUrl url(path);
+        if (url.isValid() && !url.toLocalFile().isEmpty()) {
+            path = url.toLocalFile();
+        } else {
+            path = path.mid(7);
+        }
+    }
+    // Remove leading slash for Windows drive letters like "/Z:/..." or "/C:/..."
+    if (path.length() >= 3 && path[0] == '/' && path[1].isLetter() && path[2] == ':') {
+        path = path.mid(1);
+    }
+    return QDir::toNativeSeparators(path);
+}
 
 BahiKhataMigrator::BahiKhataMigrator(QObject* parent)
     : QObject(parent)
@@ -97,8 +115,7 @@ QVariantMap BahiKhataMigrator::inspect_mdb_file(const QString& mdbFilePath) {
     QVariantMap result;
     result["valid"] = false;
 
-    QString cleanPath = mdbFilePath;
-    if (cleanPath.startsWith("file://")) cleanPath = cleanPath.mid(7);
+    QString cleanPath = normalizeMdbPath(mdbFilePath);
 
     QFileInfo fi(cleanPath);
     if (!fi.exists()) {
@@ -151,8 +168,7 @@ QVariantMap BahiKhataMigrator::inspect_mdb_file(const QString& mdbFilePath) {
 }
 
 bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
-    QString cleanPath = mdbFilePath;
-    if (cleanPath.startsWith("file://")) cleanPath = cleanPath.mid(7);
+    QString cleanPath = normalizeMdbPath(mdbFilePath);
 
     QFileInfo fi(cleanPath);
     if (!fi.exists()) {
