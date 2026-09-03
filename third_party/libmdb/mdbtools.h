@@ -48,6 +48,12 @@ typedef SSIZE_T ssize_t;
 #ifndef strncasecmp
 #define strncasecmp _strnicmp
 #endif
+#ifndef fseeko
+#define fseeko _fseeki64
+#endif
+#ifndef ftello
+#define ftello _ftelli64
+#endif
 #else
 #include <unistd.h>
 #endif
