@@ -10,12 +10,8 @@
 #include <map>
 #include <cmath>
 
-#if __has_include(<mdbtools.h>)
-#include <mdbtools.h>
+#include "mdbtools.h"
 #define HAS_LIBMDB 1
-#else
-#define HAS_LIBMDB 0
-#endif
 
 BahiKhataMigrator::BahiKhataMigrator(QObject* parent)
     : QObject(parent)

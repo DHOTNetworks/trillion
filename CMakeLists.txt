@@ -25,6 +25,11 @@ target_compile_definitions(sqlite3_embedded PRIVATE
     SQLITE_DEFAULT_WAL_SYNCHRONOUS=1
 )
 
+# Embedded MDB (Access Jet3/Jet4) Engine - 100% In-Tree Standalone C
+file(GLOB LIBMDB_SOURCES "third_party/libmdb/*.c")
+add_library(libmdb_embedded STATIC ${LIBMDB_SOURCES})
+target_include_directories(libmdb_embedded PUBLIC third_party/libmdb)
+
 # Application Sources
 set(SOURCES
     src/main.cpp
@@ -118,23 +123,14 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     src/engine
     src/models
     third_party/sqlite
+    third_party/libmdb
 )
 
-# Optional libmdb linking for native MDB reading
-find_package(PkgConfig QUIET)
-if (PKG_CONFIG_FOUND)
-    pkg_check_modules(MDB QUIET libmdb)
-endif()
-
-if (MDB_FOUND)
-    target_include_directories(${PROJECT_NAME} PRIVATE ${MDB_INCLUDE_DIRS})
-    target_link_directories(${PROJECT_NAME} PRIVATE ${MDB_LIBRARY_DIRS})
-    target_link_libraries(${PROJECT_NAME} PRIVATE ${MDB_LIBRARIES})
-    target_compile_definitions(${PROJECT_NAME} PRIVATE HAS_LIBMDB=1)
-endif()
+target_compile_definitions(${PROJECT_NAME} PRIVATE HAS_LIBMDB=1)
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
     sqlite3_embedded
+    libmdb_embedded
     Qt6::Core
     Qt6::Gui
     Qt6::Qml
