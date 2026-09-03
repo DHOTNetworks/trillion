@@ -54,6 +54,9 @@ typedef SSIZE_T ssize_t;
 #ifndef ftello
 #define ftello _ftelli64
 #endif
+#ifndef strtok_r
+#define strtok_r strtok_s
+#endif
 #else
 #include <unistd.h>
 #endif
