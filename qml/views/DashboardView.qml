@@ -125,6 +125,8 @@ T.ScrollView {
                 // Bahi-Khata Financial Year / Accounting Period Selector
                 T.Button {
                     id: btnPeriod
+                    implicitWidth: contentItem.implicitWidth + 20
+                    implicitHeight: 36
                     background: Rectangle {
                         color: "#F0FDF4"
                         border.color: "#16A34A"
@@ -145,6 +147,8 @@ T.ScrollView {
 
                 T.Button {
                     id: btnPaddy
+                    implicitWidth: contentItem.implicitWidth + 20
+                    implicitHeight: 36
                     background: Rectangle { color: "#16A34A"; radius: 6 }
                     contentItem: RowLayout {
                         spacing: 6
@@ -156,6 +160,8 @@ T.ScrollView {
 
                 T.Button {
                     id: btnSale
+                    implicitWidth: contentItem.implicitWidth + 20
+                    implicitHeight: 36
                     background: Rectangle { color: "#2563EB"; radius: 6 }
                     contentItem: RowLayout {
                         spacing: 6

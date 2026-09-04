@@ -169,8 +169,17 @@ Rectangle {
 
                 T.Button {
                     visible: (typeof firmManager !== "undefined" && firmManager && firmManager.currentFirmName !== "")
+                    implicitWidth: 190
+                    implicitHeight: 32
                     background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
-                    contentItem: Text { text: "← Back to Dashboard (Esc)"; color: "#475569"; font.pixelSize: 12; font.bold: true }
+                    contentItem: Text { 
+                        text: "← Back to Dashboard (Esc)"
+                        color: "#475569"
+                        font.pixelSize: 12
+                        font.bold: true
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
                     onClicked: root.cancelRequested()
                 }
             }
@@ -221,44 +230,67 @@ Rectangle {
                 // App Data Folder Button (when in external view)
                 T.Button {
                     visible: !root.isViewingAppData
+                    implicitWidth: 140
+                    implicitHeight: 34
                     background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
-                    contentItem: Text { text: "📁 App Data Folder"; color: "#1E293B"; font.bold: true; font.pixelSize: 12 }
+                    contentItem: Text { 
+                        text: "📁 App Data Folder"
+                        color: "#1E293B"
+                        font.bold: true
+                        font.pixelSize: 12
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
                     onClicked: root.resetToAppData()
                 }
 
                 // Import from Bahi-Khata Button
                 T.Button {
+                    implicitWidth: 200
+                    implicitHeight: 34
                     background: Rectangle { 
                         color: root.isViewingAppData ? "#EFF6FF" : "#2563EB"
                         radius: 6
                         border.color: root.isViewingAppData ? "#BFDBFE" : "#2563EB"
                     }
-                    contentItem: RowLayout {
-                        spacing: 6
-                        anchors.centerIn: parent
-                        Text { 
-                            text: "📥"
-                            font.pixelSize: 12 
-                        }
-                        Text { 
-                            text: "Import from Bahi-Khata (F4)"
-                            color: root.isViewingAppData ? "#1D4ED8" : "#FFFFFF"
-                            font.bold: true
-                            font.pixelSize: 12 
-                        }
+                    contentItem: Text { 
+                        text: "📥 Import from Bahi-Khata (F4)"
+                        color: root.isViewingAppData ? "#1D4ED8" : "#FFFFFF"
+                        font.bold: true
+                        font.pixelSize: 12 
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
                     }
                     onClicked: folderDialog.open()
                 }
 
                 T.Button {
+                    implicitWidth: 100
+                    implicitHeight: 34
                     background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
-                    contentItem: Text { text: "Browse (F3)"; color: "#334155"; font.bold: true; font.pixelSize: 12 }
+                    contentItem: Text { 
+                        text: "Browse (F3)"
+                        color: "#334155"
+                        font.bold: true
+                        font.pixelSize: 12
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
                     onClicked: folderDialog.open()
                 }
 
                 T.Button {
+                    implicitWidth: 115
+                    implicitHeight: 34
                     background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
-                    contentItem: Text { text: "🔄 Rescan (F5)"; color: "#334155"; font.bold: true; font.pixelSize: 12 }
+                    contentItem: Text { 
+                        text: "🔄 Rescan (F5)"
+                        color: "#334155"
+                        font.bold: true
+                        font.pixelSize: 12
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
                     onClicked: root.refreshFirms()
                 }
             }
@@ -321,7 +353,17 @@ Rectangle {
                         }
                         T.Button {
                             Layout.alignment: Qt.AlignHCenter
-                            text: root.isViewingAppData ? "Import from Bahi-Khata" : "Return to App Data Folder"
+                            implicitWidth: 220
+                            implicitHeight: 36
+                            background: Rectangle { color: "#EFF6FF"; radius: 6; border.color: "#BFDBFE" }
+                            contentItem: Text { 
+                                text: root.isViewingAppData ? "Import from Bahi-Khata" : "Return to App Data Folder"
+                                color: "#1D4ED8"
+                                font.bold: true
+                                font.pixelSize: 12
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                            }
                             onClicked: root.isViewingAppData ? folderDialog.open() : root.resetToAppData()
                         }
                     }
@@ -474,13 +516,16 @@ Rectangle {
             spacing: 12
 
             T.Button {
-                height: 36
+                implicitWidth: 190
+                implicitHeight: 36
                 background: Rectangle { color: "#16A34A"; radius: 6 }
-                contentItem: RowLayout {
-                    spacing: 6
-                    anchors.centerIn: parent
-                    Text { text: "➕"; font.pixelSize: 12; color: "#FFFFFF" }
-                    Text { text: "Create New Firm (F2)"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 12 }
+                contentItem: Text { 
+                    text: "➕ Create New Firm (F2)"
+                    color: "#FFFFFF"
+                    font.bold: true
+                    font.pixelSize: 12 
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
                 }
                 onClicked: newFirmModal.open()
             }
@@ -488,21 +533,18 @@ Rectangle {
             Item { Layout.fillWidth: true }
 
             T.Button {
-                height: 36
-                Layout.preferredWidth: 230
+                implicitWidth: 230
+                implicitHeight: 36
                 background: Rectangle { color: "#2563EB"; radius: 6 }
-                contentItem: RowLayout {
-                    spacing: 6
-                    anchors.centerIn: parent
-                    Text { text: "✓"; font.pixelSize: 14; font.bold: true; color: "#FFFFFF" }
-                    Text { 
-                        text: (!root.isViewingAppData && selectedIndex >= 0 && selectedIndex < firmsModel.count && !firmsModel.get(selectedIndex).is_imported) ?
-                              "Import & Open Firm (Enter)" :
-                              "Open Selected Firm (Enter)"
-                        color: "#FFFFFF"
-                        font.bold: true
-                        font.pixelSize: 12 
-                    }
+                contentItem: Text { 
+                    text: (!root.isViewingAppData && selectedIndex >= 0 && selectedIndex < firmsModel.count && !firmsModel.get(selectedIndex).is_imported) ?
+                          "✓ Import & Open Firm (Enter)" :
+                          "✓ Open Selected Firm (Enter)"
+                    color: "#FFFFFF"
+                    font.bold: true
+                    font.pixelSize: 12 
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
                 }
                 onClicked: root.openSelectedFirm()
             }

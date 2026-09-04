@@ -63,6 +63,9 @@ int main(int argc, char* argv[]) {
         }
     }
 #endif
+    // Set working directory to launchDir so relative paths (like "data/") work consistently
+    QDir::setCurrent(launchDir.absolutePath());
+    std::cout << "[INIT] Working directory set to: " << launchDir.absolutePath().toStdString() << std::endl;
 
     // In App's Current Launched Directory, create a "data" folder
     QDir dataDir(launchDir.filePath("data"));
