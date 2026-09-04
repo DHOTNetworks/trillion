@@ -59,9 +59,12 @@ Item {
 
             T.Button {
                 id: backBtn
-                background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
+                implicitWidth: contentItem.implicitWidth + 24
+                implicitHeight: 32
+                background: Rectangle { color: backBtn.hovered ? "#E2E8F0" : "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
                 contentItem: RowLayout {
                     spacing: 6
+                    anchors.centerIn: parent
                     Text { text: "← Back"; color: "#475569"; font.pixelSize: 12; font.bold: true }
                     KbdBadge { text: "Esc"; badgeColor: "#DC2626"; textColor: "#FFF"; borderColor: "#B91C1C" }
                 }
@@ -100,8 +103,17 @@ Item {
 
             T.Button {
                 id: autoClStockBtn
-                background: Rectangle { color: "#EEF2FF"; radius: 6; border.color: "#C7D2FE" }
-                contentItem: Text { text: "Auto Cl.Stock"; color: "#4338CA"; font.pixelSize: 11; font.bold: true }
+                implicitWidth: 100
+                implicitHeight: 32
+                background: Rectangle { color: autoClStockBtn.hovered ? "#E0E7FF" : "#EEF2FF"; radius: 6; border.color: "#C7D2FE" }
+                contentItem: Text {
+                    text: "Auto Cl.Stock"
+                    color: "#4338CA"
+                    font.pixelSize: 11
+                    font.bold: true
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
                 onClicked: statusToast.show("Auto Closing Stock updated according to active books.")
             }
 
@@ -169,8 +181,8 @@ Item {
 
                             // 3-Type Radio Box matching Bahi-Khata
                             Rectangle {
-                                implicitWidth: typeBoxRow.implicitWidth + 16
-                                implicitHeight: 40
+                                Layout.preferredWidth: typeBoxRow.implicitWidth + 24
+                                Layout.preferredHeight: 38
                                 color: "#FFFFFF"
                                 border.color: "#CA8A04"
                                 border.width: 1.5
@@ -179,7 +191,7 @@ Item {
                                 RowLayout {
                                     id: typeBoxRow
                                     anchors.centerIn: parent
-                                    spacing: 10
+                                    spacing: 12
 
                                     Text {
                                         text: "Item Type (Alt+T):"
@@ -887,10 +899,13 @@ Item {
 
             T.Button {
                 id: cancelBtn
-                background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
+                implicitWidth: 110
+                implicitHeight: 38
+                background: Rectangle { color: cancelBtn.hovered ? "#E2E8F0" : "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
                 contentItem: RowLayout {
                     spacing: 6
-                    Text { text: "Cancel"; color: "#475569"; font.pixelSize: 13 }
+                    anchors.centerIn: parent
+                    Text { text: "Cancel"; color: "#475569"; font.pixelSize: 13; font.bold: true }
                     KbdBadge { text: "Esc"; badgeColor: "#DC2626"; textColor: "#FFF"; borderColor: "#B91C1C" }
                 }
                 onClicked: root.cancelRequested()
@@ -900,6 +915,8 @@ Item {
 
             T.Button {
                 id: saveBtn
+                implicitWidth: 260
+                implicitHeight: 38
                 background: Rectangle {
                     color: (saveBtn.hovered || saveBtn.activeFocus) ? "#15803D" : "#16A34A"
                     radius: 6
@@ -908,6 +925,7 @@ Item {
                 }
                 contentItem: RowLayout {
                     spacing: 8
+                    anchors.centerIn: parent
                     Text { text: "💾 Save Stock Item"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 14 }
                     KbdBadge { text: "F2"; badgeColor: "#14532D"; textColor: "#86EFAC"; borderColor: "#166534" }
                 }

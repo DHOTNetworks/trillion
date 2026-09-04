@@ -1402,6 +1402,10 @@ Item {
                                 font.pixelSize: 11; font.bold: true
                                 color: "#0F172A"
                                 horizontalAlignment: Text.AlignRight
+                                verticalAlignment: TextInput.AlignVCenter
+                                topPadding: 0
+                                bottomPadding: 0
+                                rightPadding: 6
                                 background: Rectangle { color: "#FFFFFF"; border.color: "#CBD5E1"; radius: 4 }
                                 onTextChanged: { root.isManualGst = true; root.recalculateTotals() }
                                 Keys.onReturnPressed: freightInput.forceActiveFocus()
@@ -1422,6 +1426,10 @@ Item {
                                 font.pixelSize: 11; font.bold: true
                                 color: "#0F172A"
                                 horizontalAlignment: Text.AlignRight
+                                verticalAlignment: TextInput.AlignVCenter
+                                topPadding: 0
+                                bottomPadding: 0
+                                rightPadding: 6
                                 background: Rectangle { color: "#FFFFFF"; border.color: "#CBD5E1"; radius: 4 }
                                 onTextChanged: root.recalculateTotals()
                                 Keys.onReturnPressed: otherExpInput.forceActiveFocus()
@@ -1442,6 +1450,10 @@ Item {
                                 font.pixelSize: 11; font.bold: true
                                 color: "#0F172A"
                                 horizontalAlignment: Text.AlignRight
+                                verticalAlignment: TextInput.AlignVCenter
+                                topPadding: 0
+                                bottomPadding: 0
+                                rightPadding: 6
                                 background: Rectangle { color: "#FFFFFF"; border.color: "#CBD5E1"; radius: 4 }
                                 onTextChanged: root.recalculateTotals()
                                 Keys.onReturnPressed: lessInput.forceActiveFocus()
@@ -1462,6 +1474,10 @@ Item {
                                 font.pixelSize: 11; font.bold: true
                                 color: "#0F172A"
                                 horizontalAlignment: Text.AlignRight
+                                verticalAlignment: TextInput.AlignVCenter
+                                topPadding: 0
+                                bottomPadding: 0
+                                rightPadding: 6
                                 background: Rectangle { color: "#FFFFFF"; border.color: "#CBD5E1"; radius: 4 }
                                 onTextChanged: root.recalculateTotals()
                                 Keys.onReturnPressed: tcsInput.forceActiveFocus()
@@ -1482,6 +1498,10 @@ Item {
                                 font.pixelSize: 11; font.bold: true
                                 color: "#0F172A"
                                 horizontalAlignment: Text.AlignRight
+                                verticalAlignment: TextInput.AlignVCenter
+                                topPadding: 0
+                                bottomPadding: 0
+                                rightPadding: 6
                                 background: Rectangle { color: "#FFFFFF"; border.color: "#CBD5E1"; radius: 4 }
                                 onTextChanged: root.recalculateTotals()
                                 Keys.onReturnPressed: saveBtn.forceActiveFocus()

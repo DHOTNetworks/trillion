@@ -209,6 +209,12 @@ Rectangle {
                 T.TextField {
                     id: folderInput
                     Layout.fillWidth: true
+                    implicitHeight: 34
+                    verticalAlignment: TextInput.AlignVCenter
+                    leftPadding: 10
+                    rightPadding: 10
+                    topPadding: 0
+                    bottomPadding: 0
                     text: root.currentFolder
                     color: "#0F172A"
                     font.pixelSize: 12

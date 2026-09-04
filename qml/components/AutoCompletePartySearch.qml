@@ -68,6 +68,9 @@ Rectangle {
             font.pixelSize: 13
             font.bold: true
             font.family: "Segoe UI, -apple-system, Roboto, sans-serif"
+            verticalAlignment: TextInput.AlignVCenter
+            topPadding: 0
+            bottomPadding: 0
             background: null
             Layout.fillWidth: true
             selectByMouse: true

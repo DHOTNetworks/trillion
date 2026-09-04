@@ -111,8 +111,17 @@ T.ScrollView {
 
             T.Button {
                 id: backBtn
+                implicitWidth: contentItem.implicitWidth + 24
+                implicitHeight: 32
                 background: Rectangle { color: backBtn.hovered ? "#475569" : "#334155"; radius: 6 }
-                contentItem: Text { text: "← Back (Esc)"; color: "#F8FAFC"; font.pixelSize: 12; font.bold: true }
+                contentItem: Text {
+                    text: "← Back (Esc)"
+                    color: "#F8FAFC"
+                    font.pixelSize: 12
+                    font.bold: true
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
                 onClicked: root.cancelRequested()
             }
         }
@@ -206,6 +215,9 @@ T.ScrollView {
                                     color: "#0F172A"
                                     placeholderTextColor: "#94A3B8"
                                     font.pixelSize: 12
+                                    verticalAlignment: TextInput.AlignVCenter
+                                    topPadding: 0
+                                    bottomPadding: 0
                                     background: null
                                     Layout.fillWidth: true
                                     onTextChanged: {

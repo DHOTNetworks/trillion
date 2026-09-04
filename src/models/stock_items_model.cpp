@@ -51,12 +51,23 @@ QStringList StockItemsModel::get_items_list(const QString& filterType) const {
         if (!f.isEmpty()) {
             QString iType = m.value("item_type").toString().trimmed().toLower();
             if (f == "mandi") {
-                if (iType != "mandi" && iType != "both" && iType != "mandi type") continue;
+                bool isMandi = (iType == "mandi" || iType == "both" || iType == "mandi type" ||
+                                iType.contains("paddy") || iType.contains("raw"));
+                if (!isMandi) continue;
             } else if (f == "market") {
-                if (iType != "market" && iType != "both" && iType != "market type") continue;
+                bool isMarket = (iType == "market" || iType == "both" || iType == "market type" ||
+                                 !iType.contains("paddy"));
+                if (!isMarket) continue;
             }
         }
         list.append(n);
+    }
+    // If filtering yielded 0 items, fallback to all available items so dropdown is never broken
+    if (list.isEmpty()) {
+        for (const QVariant& v : m_data) {
+            QString n = v.toMap().value("name").toString().trimmed();
+            if (!n.isEmpty() && !list.contains(n)) list.append(n);
+        }
     }
     std::sort(list.begin(), list.end(), [](const QString& a, const QString& b) {
         return a.compare(b, Qt::CaseInsensitive) < 0;

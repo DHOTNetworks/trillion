@@ -65,6 +65,9 @@ Rectangle {
                         placeholderText: "Search records..."
                         color: "#0F172A"
                         font.pixelSize: 12
+                        verticalAlignment: TextInput.AlignVCenter
+                        topPadding: 0
+                        bottomPadding: 0
                         background: null
                         Layout.fillWidth: true
                         onTextChanged: root.searchFilter = text.toLowerCase()
@@ -75,13 +78,15 @@ Rectangle {
             // Action Button
             T.Button {
                 id: actionBtn
-                height: 32
+                implicitWidth: 120
+                implicitHeight: 32
                 background: Rectangle {
                     color: actionBtn.hovered ? "#15803D" : "#16A34A"
                     radius: 6
                 }
                 contentItem: RowLayout {
                     spacing: 6
+                    anchors.centerIn: parent
                     Text { text: "+ Add Entry"; color: "#FFFFFF"; font.pixelSize: 12; font.bold: true }
                     KbdBadge { text: "F2"; badgeColor: "#14532D"; textColor: "#86EFAC"; borderColor: "#16A34A" }
                 }

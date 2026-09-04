@@ -112,9 +112,12 @@ T.Popup {
 
                 T.Button {
                     id: cancelBtn
+                    implicitWidth: contentItem.implicitWidth + 24
+                    implicitHeight: 34
                     background: Rectangle { color: cancelBtn.hovered ? "#CBD5E1" : "#E2E8F0"; radius: 6; border.color: "#94A3B8" }
                     contentItem: RowLayout {
                         spacing: 6
+                        anchors.centerIn: parent
                         Text { text: root.cancelBtnText; color: "#334155"; font.bold: true; font.pixelSize: 12 }
                         KbdBadge { text: "Esc / N"; badgeColor: "#64748B"; textColor: "#FFF"; borderColor: "#475569" }
                     }
@@ -123,9 +126,12 @@ T.Popup {
 
                 T.Button {
                     id: confirmBtn
+                    implicitWidth: contentItem.implicitWidth + 24
+                    implicitHeight: 34
                     background: Rectangle { color: confirmBtn.hovered ? "#15803D" : "#16A34A"; radius: 6 }
                     contentItem: RowLayout {
                         spacing: 6
+                        anchors.centerIn: parent
                         Text { text: root.confirmBtnText; color: "#FFFFFF"; font.bold: true; font.pixelSize: 12 }
                         KbdBadge { text: "Enter / Y"; badgeColor: "#15803D"; textColor: "#FFF"; borderColor: "#166534" }
                     }

@@ -23,24 +23,40 @@ ColumnLayout {
     signal upPressed()
     signal downPressed()
 
-    property list<string> rawItems: []
-    property list<string> filteredItems: []
+    property var rawItems: []
+    property var filteredItems: []
 
     function extractArray(m) {
         var res = []
         if (!m) return res
+        function toStr(val) {
+            if (val === undefined || val === null) return ""
+            if (typeof val === "object") {
+                if (val.name !== undefined) return val.name.toString()
+                if (val.parent_group_name !== undefined) return val.parent_group_name.toString()
+                if (val.group_name !== undefined) return val.group_name.toString()
+                if (val.text !== undefined) return val.text.toString()
+                var keys = Object.keys(val)
+                if (keys.length > 0 && val[keys[0]] !== undefined) return val[keys[0]].toString()
+                return ""
+            }
+            return val.toString()
+        }
         if (Array.isArray(m)) {
             for (var i = 0; i < m.length; i++) {
-                if (m[i] !== undefined && m[i] !== null) res.push(m[i].toString())
+                var s = toStr(m[i])
+                if (s !== "") res.push(s)
             }
         } else if (typeof m.length === "number") {
             for (var j = 0; j < m.length; j++) {
-                if (m[j] !== undefined && m[j] !== null) res.push(m[j].toString())
+                var s2 = toStr(m[j])
+                if (s2 !== "") res.push(s2)
             }
         } else if (typeof m.count === "number") {
             for (var k = 0; k < m.count; k++) {
                 var val = (typeof m.get === "function") ? m.get(k) : m[k]
-                if (val !== undefined && val !== null) res.push(val.toString())
+                var s3 = toStr(val)
+                if (s3 !== "") res.push(s3)
             }
         }
         return res
@@ -162,10 +178,13 @@ ColumnLayout {
             id: comboField
             anchors.fill: parent
             anchors.rightMargin: 26
-            leftPadding: 8
+            verticalAlignment: TextInput.AlignVCenter
+            leftPadding: 10
             rightPadding: 4
-            font.pixelSize: 12
-            font.bold: true
+            topPadding: 0
+            bottomPadding: 0
+            font.pixelSize: 13
+            font.bold: false
             color: "#0F172A"
             background: null
             selectByMouse: true
@@ -310,7 +329,7 @@ ColumnLayout {
             id: comboPopup
             y: combo.height + 2
             width: Math.max(combo.width, 240)
-            implicitHeight: Math.min(220, popupListView.contentHeight + 10)
+            height: Math.min(220, Math.max(40, ((root.filteredItems && root.filteredItems.length) ? root.filteredItems.length * 32 + 8 : 40)))
             padding: 4
             clip: true
             closePolicy: T.Popup.CloseOnPressOutside | T.Popup.CloseOnEscape
@@ -324,12 +343,12 @@ ColumnLayout {
 
             ListView {
                 id: popupListView
+                anchors.fill: parent
                 clip: true
-                implicitHeight: contentHeight
                 model: comboPopup.visible ? root.filteredItems : []
                 currentIndex: -1
                 boundsBehavior: Flickable.StopAtBounds
-                T.ScrollIndicator.vertical: T.ScrollIndicator { }
+                T.ScrollBar.vertical: T.ScrollBar { policy: T.ScrollBar.AsNeeded }
 
                 delegate: T.ItemDelegate {
                     width: popupListView.width
@@ -342,7 +361,7 @@ ColumnLayout {
                         font.bold: popupListView.currentIndex === index
                         verticalAlignment: Text.AlignVCenter
                         elide: Text.ElideRight
-                        leftPadding: 6
+                        leftPadding: 8
                     }
                     background: Rectangle {
                         color: popupListView.currentIndex === index ? "#EFF6FF" : (hovered ? "#F8FAFC" : "#FFFFFF")

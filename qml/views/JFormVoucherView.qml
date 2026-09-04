@@ -1084,6 +1084,10 @@ Item {
                                 font.pixelSize: 11; font.bold: true
                                 color: "#0F172A"
                                 horizontalAlignment: Text.AlignRight
+                                verticalAlignment: TextInput.AlignVCenter
+                                topPadding: 0
+                                bottomPadding: 0
+                                rightPadding: 6
                                 background: Rectangle { color: "#FFFFFF"; border.color: "#CBD5E1"; radius: 4 }
                                 onTextChanged: root.recalculateTotals()
                                 Keys.onReturnPressed: reliefInput.forceActiveFocus()
@@ -1104,6 +1108,10 @@ Item {
                                 font.pixelSize: 11; font.bold: true
                                 color: "#0F172A"
                                 horizontalAlignment: Text.AlignRight
+                                verticalAlignment: TextInput.AlignVCenter
+                                topPadding: 0
+                                bottomPadding: 0
+                                rightPadding: 6
                                 background: Rectangle { color: "#FFFFFF"; border.color: "#CBD5E1"; radius: 4 }
                                 onTextChanged: root.recalculateTotals()
                                 Keys.onReturnPressed: labourInput.forceActiveFocus()
@@ -1131,6 +1139,10 @@ Item {
                                 font.pixelSize: 11; font.bold: true
                                 color: "#991B1B"
                                 horizontalAlignment: Text.AlignRight
+                                verticalAlignment: TextInput.AlignVCenter
+                                topPadding: 0
+                                bottomPadding: 0
+                                rightPadding: 6
                                 background: Rectangle { color: "#FEF2F2"; border.color: "#FCA5A5"; radius: 4 }
                                 onTextChanged: root.recalculateTotals()
                                 Keys.onReturnPressed: roundInput.forceActiveFocus()
@@ -1151,6 +1163,10 @@ Item {
                                 font.pixelSize: 11; font.bold: true
                                 color: "#475569"
                                 horizontalAlignment: Text.AlignRight
+                                verticalAlignment: TextInput.AlignVCenter
+                                topPadding: 0
+                                bottomPadding: 0
+                                rightPadding: 6
                                 background: Rectangle { color: "#FFFFFF"; border.color: "#CBD5E1"; radius: 4 }
                                 onTextChanged: root.recalculateTotals()
                                 Keys.onReturnPressed: saveBtn.forceActiveFocus()

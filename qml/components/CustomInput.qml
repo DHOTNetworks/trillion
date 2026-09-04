@@ -36,7 +36,7 @@ ColumnLayout {
         spacing: 4
         visible: root.label !== ""
         Text {
-            text: root.label
+            text: root.isRequired && root.label.endsWith("*") ? root.label.replace(/\s*\*+$/, "").trim() : root.label
             color: "#334155"
             font.pixelSize: 12
             font.bold: true
@@ -61,8 +61,11 @@ ColumnLayout {
         T.TextField {
             id: textInput
             anchors.fill: parent
-            anchors.leftMargin: 10
-            anchors.rightMargin: 10
+            verticalAlignment: TextInput.AlignVCenter
+            leftPadding: 10
+            rightPadding: 10
+            topPadding: 0
+            bottomPadding: 0
             placeholderText: root.placeholderText
             color: "#0F172A"
             font.pixelSize: 13

@@ -10,6 +10,9 @@ T.CheckBox {
     font.pixelSize: 12
     font.bold: true
 
+    implicitWidth: Math.max(18, (contentItem ? contentItem.implicitWidth : 0) + leftPadding + rightPadding)
+    implicitHeight: Math.max(22, indicator ? indicator.implicitHeight : 18, (contentItem ? contentItem.implicitHeight : 0)) + topPadding + bottomPadding
+
     indicator: Rectangle {
         implicitWidth: 18
         implicitHeight: 18

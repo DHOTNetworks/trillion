@@ -39,9 +39,12 @@ Item {
 
             T.Button {
                 id: backBtn
-                background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
+                implicitWidth: contentItem.implicitWidth + 24
+                implicitHeight: 32
+                background: Rectangle { color: backBtn.hovered ? "#E2E8F0" : "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
                 contentItem: RowLayout {
                     spacing: 6
+                    anchors.centerIn: parent
                     Text { text: "← Back to Dashboard"; color: "#475569"; font.pixelSize: 12; font.bold: true }
                     KbdBadge { text: "Esc"; badgeColor: "#DC2626"; textColor: "#FFF"; borderColor: "#B91C1C" }
                 }
@@ -182,10 +185,13 @@ Item {
 
             T.Button {
                 id: cancelBottomBtn
-                background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
+                implicitWidth: 110
+                implicitHeight: 38
+                background: Rectangle { color: cancelBottomBtn.hovered ? "#E2E8F0" : "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
                 contentItem: RowLayout {
                     spacing: 6
-                    Text { text: "Cancel"; color: "#475569"; font.pixelSize: 13 }
+                    anchors.centerIn: parent
+                    Text { text: "Cancel"; color: "#475569"; font.pixelSize: 13; font.bold: true }
                     KbdBadge { text: "Esc"; badgeColor: "#DC2626"; textColor: "#FFF"; borderColor: "#B91C1C" }
                 }
                 onClicked: root.cancelRequested()
@@ -195,9 +201,12 @@ Item {
 
             T.Button {
                 id: submitBtn
+                implicitWidth: 240
+                implicitHeight: 38
                 background: Rectangle { color: (submitBtn.hovered || submitBtn.activeFocus) ? "#1D4ED8" : "#2563EB"; radius: 6; border.color: submitBtn.activeFocus ? "#93C5FD" : "transparent"; border.width: 2 }
                 contentItem: RowLayout {
-                    spacing: 6
+                    spacing: 8
+                    anchors.centerIn: parent
                     Text { text: "💾 Save Account Group"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 14 }
                     KbdBadge { text: "Enter"; badgeColor: "#1E3A8A"; textColor: "#93C5FD"; borderColor: "#2563EB" }
                 }
