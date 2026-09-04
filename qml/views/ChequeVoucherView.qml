@@ -247,6 +247,8 @@ FocusScope {
                 }
 
                 T.Button {
+                    implicitWidth: contentItem.implicitWidth + 24
+                    implicitHeight: 30
                     background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
                     contentItem: RowLayout {
                         spacing: 6
@@ -331,6 +333,8 @@ FocusScope {
                 Item { Layout.fillWidth: true }
 
                 T.Button {
+                    implicitWidth: contentItem.implicitWidth + 24
+                    implicitHeight: 32
                     background: Rectangle { color: "#EFF6FF"; radius: 6; border.color: "#93C5FD" }
                     contentItem: RowLayout {
                         spacing: 4
@@ -641,10 +645,12 @@ FocusScope {
                                     Layout.preferredWidth: 28
                                     T.Button {
                                         anchors.centerIn: parent
+                                        implicitWidth: 24
+                                        implicitHeight: 22
                                         width: 24; height: 22
                                         visible: voucherRowsModel.count > 2
                                         background: Rectangle { color: "#FEE2E2"; radius: 4 }
-                                        contentItem: Text { text: "✕"; color: "#DC2626"; font.bold: true; font.pixelSize: 10; horizontalAlignment: Text.AlignHCenter }
+                                        contentItem: Text { text: "✕"; color: "#DC2626"; font.bold: true; font.pixelSize: 10; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                                         onClicked: root.removeRow(index)
                                     }
                                 }
@@ -721,6 +727,8 @@ FocusScope {
 
                 T.Button {
                     id: saveBtn
+                    implicitWidth: contentItem.implicitWidth + 24
+                    implicitHeight: 34
                     background: Rectangle { color: saveBtn.hovered ? "#1D4ED8" : "#2563EB"; radius: 6 }
                     contentItem: RowLayout {
                         spacing: 6
@@ -732,6 +740,8 @@ FocusScope {
 
                 T.Button {
                     id: cancelBtn
+                    implicitWidth: contentItem.implicitWidth + 24
+                    implicitHeight: 34
                     background: Rectangle { color: cancelBtn.hovered ? "#E2E8F0" : "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
                     contentItem: RowLayout {
                         spacing: 6

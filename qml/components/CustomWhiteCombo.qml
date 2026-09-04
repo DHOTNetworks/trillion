@@ -334,6 +334,14 @@ ColumnLayout {
             clip: true
             closePolicy: T.Popup.CloseOnPressOutside | T.Popup.CloseOnEscape
 
+            signal itemChosen(string val)
+            onItemChosen: function(val) {
+                comboField.text = val
+                root.currentIndex = root.find(val)
+                comboPopup.close()
+                Qt.callLater(root.emitReturn)
+            }
+
             background: Rectangle {
                 color: "#FFFFFF"
                 border.color: "#2563EB"
@@ -368,10 +376,8 @@ ColumnLayout {
                         radius: 4
                     }
                     onClicked: {
-                        comboField.text = modelData ? modelData.toString() : ""
-                        root.currentIndex = root.find(comboField.text)
-                        comboPopup.close()
-                        Qt.callLater(root.emitReturn)
+                        var val = modelData ? modelData.toString() : ""
+                        comboPopup.itemChosen(val)
                     }
                 }
             }

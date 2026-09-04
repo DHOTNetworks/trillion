@@ -493,6 +493,8 @@ Item {
 
                 T.Button {
                     id: backBtn
+                    implicitWidth: contentItem.implicitWidth + 24
+                    implicitHeight: 30
                     background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
                     contentItem: RowLayout {
                         spacing: 6
@@ -815,9 +817,11 @@ Item {
                                     Layout.preferredWidth: 35
                                     T.Button {
                                         anchors.centerIn: parent
+                                        implicitWidth: 28
+                                        implicitHeight: 20
                                         width: 28; height: 20
                                         background: Rectangle { color: "#FEE2E2"; radius: 4 }
-                                        contentItem: Text { text: "✕"; color: "#DC2626"; font.bold: true; font.pixelSize: 10; horizontalAlignment: Text.AlignHCenter }
+                                        contentItem: Text { text: "✕"; color: "#DC2626"; font.bold: true; font.pixelSize: 10; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                                         onClicked: root.removeLineItem(index)
                                     }
                                 }
@@ -935,9 +939,11 @@ Item {
                                 Layout.preferredWidth: 35
                                 T.Button {
                                     anchors.centerIn: parent
+                                    implicitWidth: 28
+                                    implicitHeight: 22
                                     width: 28; height: 22
                                     background: Rectangle { color: "#2563EB"; radius: 4 }
-                                    contentItem: Text { text: "+"; color: "#FFF"; font.bold: true; font.pixelSize: 12; horizontalAlignment: Text.AlignHCenter }
+                                    contentItem: Text { text: "+"; color: "#FFF"; font.bold: true; font.pixelSize: 12; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                                     onClicked: root.addCurrentItemRow()
                                 }
                             }
@@ -1553,9 +1559,11 @@ Item {
                 spacing: 12
 
                 T.Button {
+                    implicitWidth: contentItem.implicitWidth + 24
+                    implicitHeight: 32
                     height: 32
                     background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
-                    contentItem: Text { text: "Reset Form"; color: "#475569"; font.bold: true; font.pixelSize: 11; horizontalAlignment: Text.AlignHCenter }
+                    contentItem: Text { text: "Reset Form"; color: "#475569"; font.bold: true; font.pixelSize: 11; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                     onClicked: root.resetForm()
                 }
 
@@ -1563,8 +1571,11 @@ Item {
 
                 T.Button {
                     id: saveBtn
-                    height: 32
-                    Layout.preferredWidth: 250
+                    implicitWidth: 260
+                    implicitHeight: 34
+                    Layout.preferredWidth: 260
+                    Layout.preferredHeight: 34
+                    height: 34
                     background: Rectangle { color: saveBtn.activeFocus ? "#1D4ED8" : "#2563EB"; radius: 6; border.color: saveBtn.activeFocus ? "#60A5FA" : "transparent"; border.width: 2 }
                     contentItem: RowLayout {
                         anchors.centerIn: parent

@@ -32,6 +32,8 @@ ColumnLayout {
 
         T.Button {
             id: addInvBtn
+            implicitWidth: contentItem.implicitWidth + 24
+            implicitHeight: 32
             background: Rectangle { color: addInvBtn.hovered ? "#1D4ED8" : "#2563EB"; radius: 6 }
             contentItem: RowLayout {
                 spacing: 6

@@ -49,6 +49,8 @@ FocusScope {
 
             T.Button {
                 id: addBatchBtn
+                implicitWidth: contentItem.implicitWidth + 24
+                implicitHeight: 32
                 background: Rectangle { color: addBatchBtn.hovered ? "#15803D" : "#16A34A"; radius: 6 }
                 contentItem: RowLayout {
                     spacing: 6
@@ -60,8 +62,17 @@ FocusScope {
 
             T.Button {
                 id: backBtn
+                implicitWidth: contentItem.implicitWidth + 24
+                implicitHeight: 32
                 background: Rectangle { color: backBtn.hovered ? "#475569" : "#334155"; radius: 6 }
-                contentItem: Text { text: "← Back (Esc)"; color: "#F8FAFC"; font.pixelSize: 12; font.bold: true }
+                contentItem: Text {
+                    text: "← Back (Esc)"
+                    color: "#F8FAFC"
+                    font.pixelSize: 12
+                    font.bold: true
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
                 onClicked: root.cancelRequested()
             }
         }

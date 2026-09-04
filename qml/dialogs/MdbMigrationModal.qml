@@ -131,7 +131,11 @@ Rectangle {
                 }
 
                 T.Button {
-                    text: "📁 Browse File..."
+                    id: browseBtn
+                    implicitWidth: 120
+                    implicitHeight: 34
+                    background: Rectangle { color: browseBtn.hovered ? "#E2E8F0" : "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
+                    contentItem: Text { text: "📁 Browse File..."; color: "#0F172A"; font.bold: true; font.pixelSize: 12; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                     onClicked: fileDialog.open()
                 }
             }
@@ -275,14 +279,22 @@ Rectangle {
             spacing: 12
 
             T.Button {
-                text: hasCompleted ? "Close" : "Cancel"
+                id: closeCancelBtn
+                implicitWidth: 100
+                implicitHeight: 34
+                background: Rectangle { color: closeCancelBtn.hovered ? "#E2E8F0" : "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
+                contentItem: Text { text: hasCompleted ? "Close" : "Cancel"; color: "#475569"; font.bold: true; font.pixelSize: 12; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                 onClicked: root.closeRequested()
             }
 
             Item { Layout.fillWidth: true }
 
             T.Button {
-                text: "⚡ Start In-App Migration"
+                id: startMigrateBtn
+                implicitWidth: 180
+                implicitHeight: 34
+                background: Rectangle { color: (typeof bahiKhataMigrator !== "undefined" && bahiKhataMigrator && bahiKhataMigrator.isMigrating) ? "#94A3B8" : (startMigrateBtn.hovered ? "#1D4ED8" : "#2563EB"); radius: 6 }
+                contentItem: Text { text: "⚡ Start In-App Migration"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 12; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                 visible: (!hasCompleted && inspectionData && inspectionData.valid === true) ? true : false
                 enabled: (typeof bahiKhataMigrator !== "undefined" && bahiKhataMigrator && bahiKhataMigrator.isMigrating) ? false : true
                 onClicked: {

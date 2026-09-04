@@ -220,6 +220,8 @@ FocusScope {
                 }
 
                 T.Button {
+                    implicitWidth: contentItem.implicitWidth + 24
+                    implicitHeight: 30
                     background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
                     contentItem: RowLayout {
                         spacing: 6
@@ -585,7 +587,11 @@ FocusScope {
 
                             // Delete Action Button
                             T.Button {
-                                Layout.preferredWidth: 28; height: 28
+                                implicitWidth: 28
+                                implicitHeight: 28
+                                Layout.preferredWidth: 28
+                                Layout.preferredHeight: 28
+                                height: 28
                                 enabled: voucherRowsModel.count > 2
                                 opacity: enabled ? 1.0 : 0.4
                                 background: Rectangle { color: parent.hovered ? "#FEF2F2" : "#FFFFFF"; radius: 4; border.color: parent.hovered ? "#DC2626" : "#E2E8F0" }
@@ -602,6 +608,8 @@ FocusScope {
                     spacing: 12
 
                     T.Button {
+                        implicitWidth: contentItem.implicitWidth + 24
+                        implicitHeight: 32
                         height: 32
                         background: Rectangle { color: "#EFF6FF"; radius: 6; border.color: "#BFDBFE" }
                         contentItem: RowLayout {
@@ -663,8 +671,9 @@ FocusScope {
                 // Save Action Button
                 T.Button {
                     id: saveVchBtn
+                    implicitWidth: contentItem.implicitWidth + 24
+                    implicitHeight: 38
                     height: 38
-                    implicitWidth: 130
                     background: Rectangle {
                         color: saveVchBtn.hovered ? "#15803D" : "#16A34A"
                         radius: 6

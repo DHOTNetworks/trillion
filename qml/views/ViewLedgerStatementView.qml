@@ -186,6 +186,8 @@ Rectangle {
 
             T.Button {
                 id: backBtn
+                implicitWidth: contentItem.implicitWidth + 24
+                implicitHeight: 32
                 background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
                 contentItem: RowLayout {
                     spacing: 6
@@ -199,20 +201,15 @@ Rectangle {
         // 2. FILTER & PARTY SELECTION BAR (FULL FINANCIAL YEAR BY DEFAULT)
         Rectangle {
             Layout.fillWidth: true
-            height: 48
+            height: 52
             color: "#FFFFFF"
-            border.color: "#2563EB"
-            border.width: 2
+            border.color: "#CBD5E1"
             radius: 8
-            z: 100
 
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 12
-                anchors.rightMargin: 12
+                anchors.margins: 10
                 spacing: 12
-
-                Text { text: "Search Party:"; color: "#2563EB"; font.pixelSize: 12; font.bold: true }
 
                 CustomWhiteCombo {
                     id: partySearch
@@ -227,7 +224,7 @@ Rectangle {
 
                 // Active Financial Year Badge Indicator
                 Rectangle {
-                    height: 28
+                    height: 32
                     Layout.preferredWidth: 180
                     color: "#EFF6FF"
                     border.color: "#93C5FD"
@@ -247,6 +244,8 @@ Rectangle {
 
                 T.Button {
                     id: filterBtn
+                    implicitWidth: contentItem.implicitWidth + 24
+                    implicitHeight: 32
                     height: 32
                     background: Rectangle { color: filterPopup.visible ? "#1D4ED8" : "#2563EB"; radius: 6 }
                     contentItem: RowLayout {
@@ -260,9 +259,11 @@ Rectangle {
                 Item { Layout.fillWidth: true }
 
                 T.Button {
+                    implicitWidth: contentItem.implicitWidth + 24
+                    implicitHeight: 32
                     height: 32
                     background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
-                    contentItem: Text { text: "🖨️ Print PDF"; color: "#475569"; font.bold: true; font.pixelSize: 12 }
+                    contentItem: Text { text: "🖨️ Print PDF"; color: "#475569"; font.bold: true; font.pixelSize: 12; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                 }
             }
         }
@@ -761,7 +762,13 @@ Rectangle {
                     Layout.fillWidth: true
                     Text { text: "📅 Filter Statement Date Range"; color: "#0F172A"; font.pixelSize: 15; font.bold: true }
                     Item { Layout.fillWidth: true }
-                    T.Button { flat: true; text: "✕"; onClicked: filterPopup.close() }
+                    T.Button {
+                        implicitWidth: 28
+                        implicitHeight: 28
+                        flat: true
+                        contentItem: Text { text: "✕"; color: "#64748B"; font.bold: true; font.pixelSize: 12; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                        onClicked: filterPopup.close()
+                    }
                 }
 
                 Rectangle { Layout.fillWidth: true; height: 1; color: "#E2E8F0" }
@@ -793,16 +800,20 @@ Rectangle {
                     spacing: 10
 
                     T.Button {
+                        implicitWidth: contentItem.implicitWidth + 24
+                        implicitHeight: 32
                         background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
-                        contentItem: Text { text: "Clear (Full Year)"; color: "#475569"; font.bold: true; font.pixelSize: 12 }
+                        contentItem: Text { text: "Clear (Full Year)"; color: "#475569"; font.bold: true; font.pixelSize: 12; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                         onClicked: popScope.clearFilter()
                     }
 
                     Item { Layout.fillWidth: true }
 
                     T.Button {
+                        implicitWidth: contentItem.implicitWidth + 24
+                        implicitHeight: 32
                         background: Rectangle { color: "#2563EB"; radius: 6 }
-                        contentItem: Text { text: "Apply Filter (Enter)"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 12 }
+                        contentItem: Text { text: "Apply Filter (Enter)"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 12; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                         onClicked: popScope.applyFilter()
                     }
                 }

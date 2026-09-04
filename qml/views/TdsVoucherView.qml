@@ -287,6 +287,8 @@ Rectangle {
 
             T.Button {
                 id: backBtn
+                implicitWidth: contentItem.implicitWidth + 24
+                implicitHeight: 32
                 height: 32
                 background: Rectangle {
                     color: backBtn.hovered ? "#E2E8F0" : "#FFFFFF"
@@ -328,6 +330,8 @@ Rectangle {
 
             T.Button {
                 id: saveTopBtn
+                implicitWidth: contentItem.implicitWidth + 24
+                implicitHeight: 32
                 height: 32
                 background: Rectangle {
                     color: saveTopBtn.hovered ? "#6D28D9" : "#7C3AED"
@@ -648,7 +652,9 @@ Rectangle {
                                         Item { Layout.fillWidth: true }
                                         T.Button {
                                             id: lastNarrBtn
-                                            height: 20
+                                            implicitWidth: contentItem.implicitWidth + 12
+                                            implicitHeight: 22
+                                            height: 22
                                             background: Rectangle {
                                                 color: lastNarrBtn.hovered ? "#DCFCE7" : "#F0FDF4"
                                                 border.color: "#86EFAC"
@@ -659,6 +665,8 @@ Rectangle {
                                                 color: "#15803D"
                                                 font.pixelSize: 9
                                                 font.bold: true
+                                                horizontalAlignment: Text.AlignHCenter
+                                                verticalAlignment: Text.AlignVCenter
                                             }
                                             onClicked: root.fetchLastNarration()
                                         }
@@ -966,7 +974,9 @@ Rectangle {
 
                 T.Button {
                     id: cancelBtn
-                    height: 32
+                    implicitWidth: contentItem.implicitWidth + 24
+                    implicitHeight: 34
+                    height: 34
                     background: Rectangle {
                         color: cancelBtn.hovered ? "#F1F5F9" : "#FFFFFF"
                         border.color: "#CBD5E1"
@@ -984,8 +994,11 @@ Rectangle {
 
                 T.Button {
                     id: saveBtn
-                    height: 32
+                    implicitWidth: 200
+                    implicitHeight: 34
                     Layout.preferredWidth: 200
+                    Layout.preferredHeight: 34
+                    height: 34
                     background: Rectangle {
                         color: saveBtn.hovered ? "#6D28D9" : "#7C3AED"
                         radius: 6

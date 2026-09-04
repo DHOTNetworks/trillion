@@ -33,6 +33,8 @@ ColumnLayout {
 
         T.Button {
             id: addPaddyBtn
+            implicitWidth: contentItem.implicitWidth + 24
+            implicitHeight: 32
             background: Rectangle { color: addPaddyBtn.hovered ? "#15803D" : "#16A34A"; radius: 6 }
             contentItem: RowLayout {
                 spacing: 6

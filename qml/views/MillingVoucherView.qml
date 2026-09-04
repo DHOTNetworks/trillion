@@ -323,8 +323,17 @@ FocusScope {
                 }
 
                 T.Button {
+                    implicitWidth: contentItem.implicitWidth + 24
+                    implicitHeight: 30
                     background: Rectangle { color: "#334155"; radius: 6 }
-                    contentItem: Text { text: "← Back (Esc)"; color: "#F8FAFC"; font.pixelSize: 11; font.bold: true }
+                    contentItem: Text {
+                        text: "← Back (Esc)"
+                        color: "#F8FAFC"
+                        font.pixelSize: 11
+                        font.bold: true
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
                     onClicked: root.handleBackOrCancel()
                 }
             }
@@ -401,6 +410,8 @@ FocusScope {
 
                 // Auto Pick Items Shortcut Button
                 T.Button {
+                    implicitWidth: contentItem.implicitWidth + 24
+                    implicitHeight: 32
                     background: Rectangle { color: "#EFF6FF"; border.color: "#93C5FD"; radius: 6 }
                     contentItem: RowLayout {
                         spacing: 6
@@ -444,8 +455,17 @@ FocusScope {
                             Text { text: "🔻 ITEMS TO BE CONSUMED (Raw Material Input)"; color: "#DC2626"; font.pixelSize: 12; font.bold: true }
                             Item { Layout.fillWidth: true }
                             T.Button {
+                                implicitWidth: contentItem.implicitWidth + 16
+                                implicitHeight: 24
                                 background: Rectangle { color: "#FEE2E2"; radius: 4 }
-                                contentItem: Text { text: "+ Add Row (Alt+A)"; color: "#991B1B"; font.pixelSize: 10; font.bold: true }
+                                contentItem: Text {
+                                    text: "+ Add Row (Alt+A)"
+                                    color: "#991B1B"
+                                    font.pixelSize: 10
+                                    font.bold: true
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                }
                                 onClicked: root.addConsumedRow()
                             }
                         }
@@ -626,10 +646,12 @@ FocusScope {
                                 }
 
                                 T.Button {
+                                    implicitWidth: 24
+                                    implicitHeight: 24
                                     Layout.preferredWidth: 24
-                                    height: 24
+                                    Layout.preferredHeight: 24
                                     flat: true
-                                    contentItem: Text { text: "✕"; color: "#DC2626"; font.bold: true; font.pixelSize: 11; anchors.centerIn: parent }
+                                    contentItem: Text { text: "✕"; color: "#DC2626"; font.bold: true; font.pixelSize: 11; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                                     onClicked: root.removeConsumedRow(index)
                                 }
                             }
@@ -674,8 +696,17 @@ FocusScope {
                             Text { text: "🔺 ITEMS TO BE PRODUCED (Output Products & Yield)"; color: "#15803D"; font.pixelSize: 12; font.bold: true }
                             Item { Layout.fillWidth: true }
                             T.Button {
+                                implicitWidth: contentItem.implicitWidth + 16
+                                implicitHeight: 24
                                 background: Rectangle { color: "#BBF7D0"; radius: 4 }
-                                contentItem: Text { text: "+ Add Row"; color: "#166534"; font.pixelSize: 10; font.bold: true }
+                                contentItem: Text {
+                                    text: "+ Add Row"
+                                    color: "#166534"
+                                    font.pixelSize: 10
+                                    font.bold: true
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                }
                                 onClicked: root.addProducedRow()
                             }
                         }
@@ -930,10 +961,12 @@ FocusScope {
                                 }
 
                                 T.Button {
+                                    implicitWidth: 24
+                                    implicitHeight: 24
                                     Layout.preferredWidth: 24
-                                    height: 24
+                                    Layout.preferredHeight: 24
                                     flat: true
-                                    contentItem: Text { text: "✕"; color: "#DC2626"; font.bold: true; font.pixelSize: 11; anchors.centerIn: parent }
+                                    contentItem: Text { text: "✕"; color: "#DC2626"; font.bold: true; font.pixelSize: 11; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                                     onClicked: root.removeProducedRow(index)
                                 }
                             }
@@ -995,7 +1028,8 @@ FocusScope {
                     }
 
                     T.Button {
-                        height: 34
+                        implicitWidth: contentItem.implicitWidth + 24
+                        implicitHeight: 34
                         background: Rectangle { color: "#16A34A"; radius: 6 }
                         contentItem: RowLayout {
                             spacing: 6
