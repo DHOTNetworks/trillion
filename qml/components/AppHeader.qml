@@ -1,6 +1,7 @@
 import QtQuick
-import QtQuick.Controls
+import QtQuick.Templates as T
 import QtQuick.Layouts
+import MahadevERP
 
 Rectangle {
     id: root
@@ -142,7 +143,7 @@ Rectangle {
             spacing: 10
 
             // Sync / Import Bahi Khata Button
-            Button {
+            T.Button {
                 id: mdbBtn
                 height: 26
                 background: Rectangle {
@@ -169,9 +170,9 @@ Rectangle {
                 color: "#F1F5F9"
                 border.color: "#CBD5E1"
 
-                ToolTip.visible: dbMouseArea.containsMouse
-                ToolTip.text: "Active SQLite DB:\n" + ((typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.dbPath : "")
-                ToolTip.delay: 200
+                T.ToolTip.visible: dbMouseArea.containsMouse
+                T.ToolTip.text: "Active SQLite DB:\n" + ((typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.dbPath : "")
+                T.ToolTip.delay: 200
 
                 MouseArea {
                     id: dbMouseArea
@@ -198,7 +199,7 @@ Rectangle {
             }
 
             // Keyboard Help Button
-            Button {
+            T.Button {
                 id: helpBtn
                 height: 26
                 background: Rectangle {

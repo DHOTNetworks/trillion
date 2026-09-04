@@ -1,7 +1,7 @@
 import QtQuick
-import QtQuick.Controls
+import QtQuick.Templates as T
 import QtQuick.Layouts
-import "../components"
+import MahadevERP
 
 Rectangle {
     id: root
@@ -176,8 +176,8 @@ Rectangle {
         }
     }
 
-    ListModel { id: inwardModel }
-    ListModel { id: outwardModel }
+    GenericListModel { id: inwardModel }
+    GenericListModel { id: outwardModel }
 
     ColumnLayout {
         anchors.fill: parent
@@ -324,8 +324,8 @@ Rectangle {
                         spacing: 1
                         boundsBehavior: Flickable.StopAtBounds
 
-                        ScrollBar.vertical: ScrollBar {
-                            policy: ScrollBar.AsNeeded
+                        T.ScrollBar.vertical: T.ScrollBar {
+                            policy: T.ScrollBar.AsNeeded
                             active: true
                         }
 
@@ -497,8 +497,8 @@ Rectangle {
                         spacing: 1
                         boundsBehavior: Flickable.StopAtBounds
 
-                        ScrollBar.vertical: ScrollBar {
-                            policy: ScrollBar.AsNeeded
+                        T.ScrollBar.vertical: T.ScrollBar {
+                            policy: T.ScrollBar.AsNeeded
                             active: true
                         }
 

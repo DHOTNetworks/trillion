@@ -1,5 +1,5 @@
 import QtQuick
-import QtQuick.Controls
+import QtQuick.Templates as T
 import QtQuick.Layouts
 import QtQuick.Dialogs
 
@@ -130,7 +130,7 @@ Rectangle {
                     Layout.fillWidth: true
                 }
 
-                Button {
+                T.Button {
                     text: "📁 Browse File..."
                     onClicked: fileDialog.open()
                 }
@@ -263,7 +263,7 @@ Rectangle {
                 Text { text: (bahiKhataMigrator ? bahiKhataMigrator.progressPercent : 0).toString() + "%"; color: "#2563EB"; font.pixelSize: 12; font.bold: true }
             }
 
-            ProgressBar {
+            T.ProgressBar {
                 Layout.fillWidth: true
                 value: (bahiKhataMigrator ? bahiKhataMigrator.progressPercent : 0) / 100.0
             }
@@ -274,14 +274,14 @@ Rectangle {
             Layout.fillWidth: true
             spacing: 12
 
-            Button {
+            T.Button {
                 text: hasCompleted ? "Close" : "Cancel"
                 onClicked: root.closeRequested()
             }
 
             Item { Layout.fillWidth: true }
 
-            Button {
+            T.Button {
                 text: "⚡ Start In-App Migration"
                 visible: (!hasCompleted && inspectionData && inspectionData.valid === true) ? true : false
                 enabled: (typeof bahiKhataMigrator !== "undefined" && bahiKhataMigrator && bahiKhataMigrator.isMigrating) ? false : true

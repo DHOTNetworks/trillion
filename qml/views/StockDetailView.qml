@@ -1,9 +1,9 @@
 import QtQuick
-import QtQuick.Controls
+import QtQuick.Templates as T
 import QtQuick.Layouts
-import "../components"
+import MahadevERP
 
-ScrollView {
+T.ScrollView {
     id: root
     contentWidth: availableWidth
     clip: true
@@ -81,7 +81,7 @@ ScrollView {
         totalItemsCount = count
     }
 
-    ListModel { id: stockRegisterModel }
+    GenericListModel { id: stockRegisterModel }
 
     ColumnLayout {
         width: root.availableWidth > 0 ? root.availableWidth : 1200
@@ -109,7 +109,7 @@ ScrollView {
 
             Item { Layout.fillWidth: true }
 
-            Button {
+            T.Button {
                 id: backBtn
                 background: Rectangle { color: backBtn.hovered ? "#475569" : "#334155"; radius: 6 }
                 contentItem: Text { text: "← Back (Esc)"; color: "#F8FAFC"; font.pixelSize: 12; font.bold: true }
@@ -200,7 +200,7 @@ ScrollView {
 
                                 Text { text: "🔍"; font.pixelSize: 12 }
 
-                                TextField {
+                                T.TextField {
                                     id: searchField
                                     placeholderText: "Search by item name, SKU code or type..."
                                     color: "#0F172A"

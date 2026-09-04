@@ -1,9 +1,9 @@
 import QtQuick
-import QtQuick.Controls
+import QtQuick.Templates as T
 import QtQuick.Layouts
-import "../components"
+import MahadevERP
 
-ScrollView {
+T.ScrollView {
     id: root
     contentWidth: availableWidth
     clip: true
@@ -93,7 +93,7 @@ ScrollView {
         }
     }
 
-    ListModel { id: purchaseRegisterModel }
+    GenericListModel { id: purchaseRegisterModel }
 
     ColumnLayout {
         width: root.availableWidth > 0 ? root.availableWidth : 1200
@@ -121,7 +121,7 @@ ScrollView {
 
             Item { Layout.fillWidth: true }
 
-            Button {
+            T.Button {
                 id: backBtn
                 background: Rectangle { color: backBtn.hovered ? "#475569" : "#334155"; radius: 6 }
                 contentItem: Text { text: "← Back (Esc)"; color: "#F8FAFC"; font.pixelSize: 12; font.bold: true }
@@ -228,7 +228,7 @@ ScrollView {
                             }
                         }
 
-                        Button {
+                        T.Button {
                             text: "Clear"
                             visible: searchInput.text !== ""
                             onClicked: { searchInput.text = ""; searchInput.forceActiveFocus() }
@@ -274,8 +274,8 @@ ScrollView {
                     model: purchaseRegisterModel
                     boundsBehavior: Flickable.StopAtBounds
 
-                    ScrollBar.vertical: ScrollBar {
-                        policy: ScrollBar.AsNeeded
+                    T.ScrollBar.vertical: T.ScrollBar {
+                        policy: T.ScrollBar.AsNeeded
                         active: true
                     }
 

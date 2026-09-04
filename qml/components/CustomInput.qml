@@ -1,5 +1,5 @@
 import QtQuick
-import QtQuick.Controls
+import QtQuick.Templates as T
 import QtQuick.Layouts
 
 ColumnLayout {
@@ -11,16 +11,23 @@ ColumnLayout {
     property alias focusInput: textInput.focus
     property alias isFocused: textInput.activeFocus
     property alias inputMethodHints: textInput.inputMethodHints
+    property alias font: textInput.font
+    property alias horizontalAlignment: textInput.horizontalAlignment
 
     signal returnPressed()
     signal leftPressed()
     signal rightPressed()
     signal upPressed()
     signal downPressed()
+    signal editingFinished()
 
     function focusAndSelect() {
         textInput.forceActiveFocus()
         textInput.selectAll()
+    }
+
+    function forceActiveFocus() {
+        textInput.forceActiveFocus()
     }
 
     spacing: 4
@@ -51,7 +58,7 @@ ColumnLayout {
         border.color: textInput.activeFocus ? "#2563EB" : "#CBD5E1"
         border.width: textInput.activeFocus ? 2 : 1
 
-        TextField {
+        T.TextField {
             id: textInput
             anchors.fill: parent
             anchors.leftMargin: 10
@@ -62,6 +69,7 @@ ColumnLayout {
             font.family: "Segoe UI, Consolas, Menlo, sans-serif"
             background: null
             selectByMouse: true
+            onEditingFinished: root.editingFinished()
 
             Keys.onReturnPressed: function(event) {
                 event.accepted = true

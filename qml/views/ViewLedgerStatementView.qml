@@ -1,7 +1,7 @@
 import QtQuick
-import QtQuick.Controls
+import QtQuick.Templates as T
 import QtQuick.Layouts
-import "../components"
+import MahadevERP
 
 Rectangle {
     id: root
@@ -153,10 +153,10 @@ Rectangle {
         }
     }
 
-    ListModel { id: drMasterModel }
-    ListModel { id: crMasterModel }
-    ListModel { id: drListModel }
-    ListModel { id: crListModel }
+    GenericListModel { id: drMasterModel }
+    GenericListModel { id: crMasterModel }
+    GenericListModel { id: drListModel }
+    GenericListModel { id: crListModel }
 
     ColumnLayout {
         anchors.fill: parent
@@ -184,7 +184,7 @@ Rectangle {
 
             Item { Layout.fillWidth: true }
 
-            Button {
+            T.Button {
                 id: backBtn
                 background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
                 contentItem: RowLayout {
@@ -245,7 +245,7 @@ Rectangle {
                     }
                 }
 
-                Button {
+                T.Button {
                     id: filterBtn
                     height: 32
                     background: Rectangle { color: filterPopup.visible ? "#1D4ED8" : "#2563EB"; radius: 6 }
@@ -259,7 +259,7 @@ Rectangle {
 
                 Item { Layout.fillWidth: true }
 
-                Button {
+                T.Button {
                     height: 32
                     background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
                     contentItem: Text { text: "🖨️ Print PDF"; color: "#475569"; font.bold: true; font.pixelSize: 12 }
@@ -710,15 +710,16 @@ Rectangle {
         onActivated: filterPopup.open()
     }
 
-    Popup {
+    T.Popup {
         id: filterPopup
         width: 380
-        implicitHeight: filterCol.implicitHeight + 36
+        height: 280
         modal: true
         dim: true
-        anchors.centerIn: parent
+        x: Math.round((parent.width - width) / 2)
+        y: Math.round((parent.height - height) / 2)
         focus: true
-        closePolicy: Popup.CloseOnPressOutside | Popup.CloseOnEscape
+        closePolicy: T.Popup.CloseOnPressOutside | T.Popup.CloseOnEscape
 
         background: Rectangle {
             color: "#FFFFFF"
@@ -727,7 +728,7 @@ Rectangle {
             radius: 12
         }
 
-        contentItem: FocusScope {
+        FocusScope {
             id: popScope
             anchors.fill: parent
             focus: true
@@ -760,7 +761,7 @@ Rectangle {
                     Layout.fillWidth: true
                     Text { text: "📅 Filter Statement Date Range"; color: "#0F172A"; font.pixelSize: 15; font.bold: true }
                     Item { Layout.fillWidth: true }
-                    Button { flat: true; text: "✕"; onClicked: filterPopup.close() }
+                    T.Button { flat: true; text: "✕"; onClicked: filterPopup.close() }
                 }
 
                 Rectangle { Layout.fillWidth: true; height: 1; color: "#E2E8F0" }
@@ -791,7 +792,7 @@ Rectangle {
                     Layout.fillWidth: true
                     spacing: 10
 
-                    Button {
+                    T.Button {
                         background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
                         contentItem: Text { text: "Clear (Full Year)"; color: "#475569"; font.bold: true; font.pixelSize: 12 }
                         onClicked: popScope.clearFilter()
@@ -799,7 +800,7 @@ Rectangle {
 
                     Item { Layout.fillWidth: true }
 
-                    Button {
+                    T.Button {
                         background: Rectangle { color: "#2563EB"; radius: 6 }
                         contentItem: Text { text: "Apply Filter (Enter)"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 12 }
                         onClicked: popScope.applyFilter()

@@ -1,7 +1,7 @@
 import QtQuick
-import QtQuick.Controls
+import QtQuick.Templates as T
 import QtQuick.Layouts
-import "../components"
+import MahadevERP
 
 Rectangle {
     id: root
@@ -146,8 +146,8 @@ Rectangle {
         loadFromDatabase()
     }
 
-    ListModel { id: fromListModel }
-    ListModel { id: toListModel }
+    GenericListModel { id: fromListModel }
+    GenericListModel { id: toListModel }
 
     ColumnLayout {
         anchors.fill: parent
@@ -466,7 +466,7 @@ Rectangle {
             Layout.fillWidth: true
             spacing: 10
 
-            Button {
+            T.Button {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 38
                 background: Rectangle {
@@ -499,7 +499,7 @@ Rectangle {
                 }
             }
 
-            Button {
+            T.Button {
                 Layout.preferredWidth: 100
                 Layout.preferredHeight: 38
                 background: Rectangle {

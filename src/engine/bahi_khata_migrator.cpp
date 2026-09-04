@@ -125,6 +125,7 @@ static QString mapVoucherTypeStr(const std::string& raw) {
     if (t == "PY" || t == "PAYMENT" || t == "PYMT" || t == "P" || t == "CHPT" || t == "CHQPYMT") return "Payment";
     if (t == "RC" || t == "RECEIPT" || t == "RCPT" || t == "R" || t == "CHRT" || t == "CHQRCPT") return "Receipt";
     if (t == "CN" || t == "CONTRA" || t == "CNTR" || t == "C") return "Contra";
+    if (t == "JFRM" || t == "J.FORM" || t == "JFORM" || t == "J FORM") return "JFrm";
     if (t == "JV" || t == "JOURNAL" || t == "JRNL" || t == "J") return "Journal";
     return "Journal";
 }
@@ -452,6 +453,8 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
     updateProgress(10, "Extracting Raw JetDB Tables...");
     auto compRows = readTableRows(mdb, "CompanyInfo");
     auto groupRows = readTableRows(mdb, "Groups");
+    auto stockGroupRows = readTableRows(mdb, "StockGroups");
+    auto stockUnitRows = readTableRows(mdb, "StockUnits");
     auto ledgerRows = readTableRows(mdb, "Ledgers");
     auto itemRows = readTableRows(mdb, "StockItems");
     auto stockTransRows = readTableRows(mdb, "StockTransactions");
@@ -459,6 +462,7 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
     auto transRows = readTableRows(mdb, "Transactions");
     auto millingRows = readTableRows(mdb, "MillingVouchers");
     auto customRows = readTableRows(mdb, "CustomClosingStocks");
+    auto tdsRows = readTableRows(mdb, "TDSDeductions");
 
     auto& db = DatabaseManager::instance();
     db.executeNonQuery("PRAGMA foreign_keys = OFF;");
@@ -470,10 +474,17 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
     db.executeNonQuery("DELETE FROM milling_voucher_items;");
     db.executeNonQuery("DELETE FROM milling_batches;");
     db.executeNonQuery("DELETE FROM stock_transactions;");
+    db.executeNonQuery("DELETE FROM jform_vouchers;");
+    db.executeNonQuery("DELETE FROM jform_voucher_items;");
+    db.executeNonQuery("DELETE FROM tds_vouchers;");
+    db.executeNonQuery("DELETE FROM sales_invoice_items;");
+    db.executeNonQuery("DELETE FROM purchase_invoice_items;");
     db.executeNonQuery("DELETE FROM custom_closing_stocks;");
     db.executeNonQuery("DELETE FROM vouchers;");
     db.executeNonQuery("DELETE FROM inventory;");
     db.executeNonQuery("DELETE FROM stock_items;");
+    db.executeNonQuery("DELETE FROM stock_groups;");
+    db.executeNonQuery("DELETE FROM stock_units;");
     db.executeNonQuery("DELETE FROM parties;");
     db.executeNonQuery("DELETE FROM account_groups;");
     db.executeNonQuery("DELETE FROM financial_years;");
@@ -630,6 +641,39 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
     }
 
     // =========================================================
+    // PASS 1.5: STOCK GROUPS & STOCK UNITS
+    // =========================================================
+    std::map<int, std::string> stockGroupMap;
+    std::map<int, std::string> stockUnitMap;
+
+    for (const auto& sg : stockGroupRows) {
+        int code = parseIntVal(getField(sg, "Code1st"));
+        std::string name = cleanText(getField(sg, "GroupName"));
+        if (name.empty()) continue;
+        int qtyNotShow = parseIntVal(getField(sg, "QtyNotShowInTrading"));
+        double clRate = parseDoubleVal(getField(sg, "ClStockRate"));
+        db.executeNonQuery(
+            "INSERT INTO stock_groups (group_name, legacy_code, qty_not_show_in_trading, cl_stock_rate) "
+            "VALUES (?, ?, ?, ?);",
+            {QString::fromStdString(name), code, qtyNotShow, clRate}
+        );
+        stockGroupMap[code] = name;
+    }
+
+    for (const auto& su : stockUnitRows) {
+        int code = parseIntVal(getField(su, "Code1st"));
+        std::string name = cleanText(getField(su, "UnitName"));
+        if (name.empty()) continue;
+        int decimals = parseIntVal(getField(su, "DecimalPlaces", "2"), 2);
+        db.executeNonQuery(
+            "INSERT INTO stock_units (unit_name, legacy_code, decimal_places) "
+            "VALUES (?, ?, ?);",
+            {QString::fromStdString(name), code, decimals}
+        );
+        stockUnitMap[code] = name;
+    }
+
+    // =========================================================
     // PASS 2: LEDGERS (PARTIES & ACCOUNTS)
     // =========================================================
     updateProgress(30, QString("Migrating %1 Ledgers & Parties...").arg(ledgerRows.size()));
@@ -773,19 +817,111 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
 
         int legacyCode = parseIntVal(getField(item, "Code1st"));
         std::string code = cleanText(getField(item, "Code1st"));
+
+        // 1. Item Types
+        std::string rawItemType = cleanText(getField(item, "ItemType", "Both"));
+        std::string itemType = "Both";
+        if (toLowerStr(rawItemType).find("mandi") != std::string::npos) itemType = "Mandi";
+        else if (toLowerStr(rawItemType).find("market") != std::string::npos) itemType = "Market";
+
+        std::string goodsType = cleanText(getField(item, "GoodsType", "Goods"));
+        if (goodsType.empty()) goodsType = "Goods";
+
+        // 2. Trading Group & Unit
+        int groupCode = parseIntVal(getField(item, "GroupCode"));
+        std::string tradingGroup = "";
+        auto itGrp = stockGroupMap.find(groupCode);
+        if (itGrp != stockGroupMap.end()) tradingGroup = itGrp->second;
+        else tradingGroup = "Primary";
+
+        int unitCode = parseIntVal(getField(item, "UnitCode"));
+        std::string unit = "Qtl.";
+        auto itUnit = stockUnitMap.find(unitCode);
+        if (itUnit != stockUnitMap.end()) unit = itUnit->second;
+
+        std::string rateCalcOn = cleanText(getField(item, "RateCalcOn", "N/A"));
+        if (rateCalcOn.empty()) rateCalcOn = "N/A";
+
+        int autoAdjustName = parseIntVal(getField(item, "AutoSplitUpdate", "1"), 1);
+        int calculateStock = parseIntVal(getField(item, "StockCalculate", "1"), 1);
+        int calculateInTrading = parseIntVal(getField(item, "CalculateInTrading", "1"), 1);
+        std::string itemNarration = cleanText(getField(item, "ItemNarration"));
+        int capitalGoods = parseIntVal(getField(item, "CapitalGoods", "0"), 0);
+
+        // 3. Taxes: VAT, CST, GST, HSN
+        double vatRate = parseDoubleVal(getField(item, "VAT"));
+        int vatLedgerCode = parseIntVal(getField(item, "VATLedger"));
+        std::string vatLedger = "VAT A/c";
+        if (ledgerCodeMap.count(vatLedgerCode)) vatLedger = ledgerCodeMap[vatLedgerCode];
+
+        double surchargeOnVat = parseDoubleVal(getField(item, "Surcharge"));
+        double vatAgainstD1 = parseDoubleVal(getField(item, "VATLowerRate"));
+
+        double cstRate = parseDoubleVal(getField(item, "CST"));
+        int cstLedgerCode = parseIntVal(getField(item, "CSTLedger"));
+        std::string cstLedger = "CST A/c";
+        if (ledgerCodeMap.count(cstLedgerCode)) cstLedger = ledgerCodeMap[cstLedgerCode];
+
+        double cstWithoutCForm = parseDoubleVal(getField(item, "CSTWithoutCForm"));
+
         std::string hsn = cleanText(getField(item, "HSNCode", "1006"));
         if (hsn.empty()) hsn = "1006";
 
+        std::string gstSlab = cleanText(getField(item, "GSTRateSlab"));
+        double gstRate = !gstSlab.empty() ? parseDoubleVal(gstSlab) : (vatRate > 0.01 ? vatRate : 5.0);
+        double cessRate = parseDoubleVal(getField(item, "CessRate"));
+
+        // 4. Mandi Rates & Ledgers
+        double damiRate = parseDoubleVal(getField(item, "Dami"));
+        int damiLedgerCode = parseIntVal(getField(item, "DamiLedger"));
+        std::string damiLedger = "Dami A/c";
+        if (ledgerCodeMap.count(damiLedgerCode)) damiLedger = ledgerCodeMap[damiLedgerCode];
+
+        double marketFeeRate = parseDoubleVal(getField(item, "MarketFee"));
+        int mFeeLedgerCode = parseIntVal(getField(item, "MarketFeeLedger"));
+        std::string mFeeLedger = "Market Fee A/c";
+        if (ledgerCodeMap.count(mFeeLedgerCode)) mFeeLedger = ledgerCodeMap[mFeeLedgerCode];
+
+        double hrdfRate = parseDoubleVal(getField(item, "HRDF"));
+        int hrdfLedgerCode = parseIntVal(getField(item, "HRDFLedger"));
+        std::string hrdfLedger = "H.R.D.F. A/c";
+        if (ledgerCodeMap.count(hrdfLedgerCode)) hrdfLedger = ledgerCodeMap[hrdfLedgerCode];
+
+        int mktCommttFormApply = parseIntVal(getField(item, "MarketCommttFormApply"));
+        int mktCommttCouponApply = parseIntVal(getField(item, "MarketCommttCouponApply"));
+        int damiCalcOnWeight = parseIntVal(getField(item, "DamiCalcOnWeight"));
+        int taxOnQty = parseIntVal(getField(item, "TaxPayable", getField(item, "CessCalcOnQty")));
+
+        // 5. Trading Posting Accounts
+        int purcLedgerCode = parseIntVal(getField(item, "PurchaseLedger"));
+        std::string purcLedger = "Purchase Accounts";
+        if (ledgerCodeMap.count(purcLedgerCode)) purcLedger = ledgerCodeMap[purcLedgerCode];
+
+        int purcRetLedgerCode = parseIntVal(getField(item, "PurchaseReturnLedger"));
+        std::string purcRetLedger = purcLedger;
+        if (ledgerCodeMap.count(purcRetLedgerCode)) purcRetLedger = ledgerCodeMap[purcRetLedgerCode];
+
+        int saleLedgerCode = parseIntVal(getField(item, "SaleLedger"));
+        std::string saleLedger = "Sales Accounts";
+        if (ledgerCodeMap.count(saleLedgerCode)) saleLedger = ledgerCodeMap[saleLedgerCode];
+
+        int saleRetLedgerCode = parseIntVal(getField(item, "SaleReturnLedger"));
+        std::string saleRetLedger = saleLedger;
+        if (ledgerCodeMap.count(saleRetLedgerCode)) saleRetLedger = ledgerCodeMap[saleRetLedgerCode];
+
+        int stockLedgerCode = parseIntVal(getField(item, "StockLedger"));
+        std::string stockLedger = "Stock-in-Hand";
+        if (ledgerCodeMap.count(stockLedgerCode)) stockLedger = ledgerCodeMap[stockLedgerCode];
+
+        // 6. Pricing & Packing
+        double packingKg = parseDoubleVal(getField(item, "Packing", "50.0"), 50.0);
         double purRate = parseDoubleVal(getField(item, "PurcRate"));
         double saleRate = parseDoubleVal(getField(item, "SaleRate"));
+        double bonusApproved = parseDoubleVal(getField(item, "DDInsentive"));
         double mrp = parseDoubleVal(getField(item, "MRP"));
         double discount = parseDoubleVal(getField(item, "Discount"));
 
-        std::string gstSlab = cleanText(getField(item, "GSTRateSlab"));
-        double gstRate = !gstSlab.empty() ? parseDoubleVal(gstSlab) : parseDoubleVal(getField(item, "VAT", "5.0"), 5.0);
-        double cessRate = parseDoubleVal(getField(item, "CessRate"));
-        double packingKg = parseDoubleVal(getField(item, "Packing", "50.0"), 50.0);
-
+        // 7. Opening stock
         int opBags = parseIntVal(getField(item, "OpeningBags"));
         double opQty = parseDoubleVal(getField(item, "OpeningQty"));
         double opRate = parseDoubleVal(getField(item, "OpeningRate"));
@@ -793,44 +929,109 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
         double opVal = parseDoubleVal(getField(item, "OpeningValue"));
         if (opVal <= 0.0) opVal = std::round(opQty * opRate * 100.0) / 100.0;
 
-        double damiRate = parseDoubleVal(getField(item, "DamiRate"));
-        double marketFeeRate = parseDoubleVal(getField(item, "MarketFeeRate"));
-        double hrdfRate = parseDoubleVal(getField(item, "HRDFRate"));
-
         std::string millStr = toLowerStr(getField(item, "MillingItem"));
         int isMillingItem = (millStr == "true" || millStr == "1" || millStr == "yes") ? 1 : 0;
 
-        std::string itemType = classifyStockItemStr(iName);
+        // 8. Labour Rates (3 slabs x 7 operations)
+        std::string labourRateUnit = cleanText(getField(item, "LabourRateUnit", "Packing"));
+        if (labourRateUnit.empty()) labourRateUnit = "Packing";
+
+        double utrai1 = parseDoubleVal(getField(item, "UtraiRate1"));
+        double jharai1 = parseDoubleVal(getField(item, "JharaiRate1"));
+        double bharai1 = parseDoubleVal(getField(item, "BharaiRate1"));
+        double tulai1 = parseDoubleVal(getField(item, "TulaiRate1"));
+        double khichai1 = parseDoubleVal(getField(item, "KhichaiRate1"));
+        double silai1 = parseDoubleVal(getField(item, "SilaiRate1"));
+        double loading1 = parseDoubleVal(getField(item, "LoadingRate1"));
+
+        double utrai2 = parseDoubleVal(getField(item, "UtraiRate2"));
+        double jharai2 = parseDoubleVal(getField(item, "JharaiRate2"));
+        double bharai2 = parseDoubleVal(getField(item, "BharaiRate2"));
+        double tulai2 = parseDoubleVal(getField(item, "TulaiRate2"));
+        double khichai2 = parseDoubleVal(getField(item, "KhichaiRate2"));
+        double silai2 = parseDoubleVal(getField(item, "SilaiRate2"));
+        double loading2 = parseDoubleVal(getField(item, "LoadingRate2"));
+
+        double utrai3 = parseDoubleVal(getField(item, "UtraiRate3"));
+        double jharai3 = parseDoubleVal(getField(item, "JharaiRate3"));
+        double bharai3 = parseDoubleVal(getField(item, "BharaiRate3"));
+        double tulai3 = parseDoubleVal(getField(item, "TulaiRate3"));
+        double khichai3 = parseDoubleVal(getField(item, "KhichaiRate3"));
+        double silai3 = parseDoubleVal(getField(item, "SilaiRate3"));
+        double loading3 = parseDoubleVal(getField(item, "LoadingRate3"));
 
         db.executeNonQuery(
             "INSERT INTO stock_items ("
-            "name, code, item_type, goods_type, company_name, category_name, unit, "
-            "purchase_rate, sale_rate, mrp, discount, hsn_code, gst_rate, cess_rate, packing_kg, "
+            "name, code, item_type, goods_type, trading_group, group_code, company_name, category_name, unit, unit_code, "
+            "rate_calc_on, auto_adjust_name, item_narration, capital_goods, hsn_code, gst_rate, cess_rate, "
+            "vat_rate, vat_ledger, surcharge_on_vat, vat_against_d1, cst_rate, cst_ledger, cst_without_cform, "
+            "dami_rate, dami_ledger, market_fee_rate, market_fee_ledger, hrdf_rate, hrdf_ledger, "
+            "market_commtt_form_apply, market_commtt_coupon_apply, dami_calc_on_weight, tax_on_qty, "
+            "purchase_rate, sale_rate, bonus_approved, mrp, discount, packing_kg, "
             "opening_bags, opening_qty, opening_rate, opening_value, "
-            "purchase_ledger, sale_ledger, stock_ledger, is_milling_item, include_in_trading, calculate_stock, "
-            "dami_rate, market_fee_rate, hrdf_rate, legacy_code) "
-            "VALUES (?, ?, ?, 'Goods', 'Mill Master', ?, 'Qtl', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Purchase Accounts', 'Sales Accounts', 'Stock-in-Hand', ?, 1, 1, ?, ?, ?, ?);",
+            "purchase_ledger, purchase_return_ledger, sale_ledger, sale_return_ledger, stock_ledger, "
+            "is_milling_item, include_in_trading, calculate_stock, labour_rate_unit, "
+            "utrai_rate_1, jharai_rate_1, bharai_rate_1, tulai_rate_1, khichai_rate_1, silai_rate_1, loading_rate_1, "
+            "utrai_rate_2, jharai_rate_2, bharai_rate_2, tulai_rate_2, khichai_rate_2, silai_rate_2, loading_rate_2, "
+            "utrai_rate_3, jharai_rate_3, bharai_rate_3, tulai_rate_3, khichai_rate_3, silai_rate_3, loading_rate_3, "
+            "legacy_code) "
+            "VALUES (?, ?, ?, ?, ?, ?, 'Mill Master', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
             {
                 QString::fromStdString(iName),
                 QString::fromStdString(code),
                 QString::fromStdString(itemType),
-                QString::fromStdString(itemType),
-                purRate,
-                saleRate,
-                mrp,
-                discount,
+                QString::fromStdString(goodsType),
+                QString::fromStdString(tradingGroup),
+                groupCode,
+                QString::fromStdString(tradingGroup),
+                QString::fromStdString(unit),
+                unitCode,
+                QString::fromStdString(rateCalcOn),
+                autoAdjustName,
+                QString::fromStdString(itemNarration),
+                capitalGoods,
                 QString::fromStdString(hsn),
                 gstRate,
                 cessRate,
+                vatRate,
+                QString::fromStdString(vatLedger),
+                surchargeOnVat,
+                vatAgainstD1,
+                cstRate,
+                QString::fromStdString(cstLedger),
+                cstWithoutCForm,
+                damiRate,
+                QString::fromStdString(damiLedger),
+                marketFeeRate,
+                QString::fromStdString(mFeeLedger),
+                hrdfRate,
+                QString::fromStdString(hrdfLedger),
+                mktCommttFormApply,
+                mktCommttCouponApply,
+                damiCalcOnWeight,
+                taxOnQty,
+                purRate,
+                saleRate,
+                bonusApproved,
+                mrp,
+                discount,
                 packingKg,
                 opBags,
                 opQty,
                 opRate,
                 opVal,
+                QString::fromStdString(purcLedger),
+                QString::fromStdString(purcRetLedger),
+                QString::fromStdString(saleLedger),
+                QString::fromStdString(saleRetLedger),
+                QString::fromStdString(stockLedger),
                 isMillingItem,
-                damiRate,
-                marketFeeRate,
-                hrdfRate,
+                calculateInTrading,
+                calculateStock,
+                QString::fromStdString(labourRateUnit),
+                utrai1, jharai1, bharai1, tulai1, khichai1, silai1, loading1,
+                utrai2, jharai2, bharai2, tulai2, khichai2, silai2, loading2,
+                utrai3, jharai3, bharai3, tulai3, khichai3, silai3, loading3,
                 legacyCode
             }
         );
@@ -1424,6 +1625,284 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
             }
         );
     }
+
+    // =========================================================
+    // PASS 3.5: J-FORM PROCUREMENT VOUCHERS (TransType == 'JFrm')
+    // =========================================================
+    updateProgress(88, "Migrating J-Form Mandi Procurement Vouchers...");
+    
+    // Group StockTransactions where TransType == 'JFrm' by (VoucherNumber, VoucherDate)
+    std::map<std::pair<std::string, std::string>, std::vector<std::map<std::string, std::string>>> jformStockGroups;
+    for (const auto& st : stockTransRows) {
+        std::string tt = cleanText(getField(st, "TransType"));
+        if (tt != "JFrm") continue;
+        std::string vNo = cleanText(getField(st, "VoucherNumber"));
+        QString vDate = parseDateFormatted(QString::fromStdString(getField(st, "VoucherDate")));
+        jformStockGroups[{vNo, vDate.toStdString()}].push_back(st);
+    }
+
+    // Group Transactions where TransType == 'JFrm' by (VoucherNumber, VoucherDate)
+    std::map<std::pair<std::string, std::string>, std::vector<std::map<std::string, std::string>>> jformTxGroups;
+    for (const auto& tr : transRows) {
+        std::string tt = cleanText(getField(tr, "TransType"));
+        if (tt != "JFrm") continue;
+        std::string vNo = cleanText(getField(tr, "VoucherNumber"));
+        QString vDate = parseDateFormatted(QString::fromStdString(getField(tr, "VoucherDate")));
+        jformTxGroups[{vNo, vDate.toStdString()}].push_back(tr);
+    }
+
+    int jformCount = 0;
+    std::set<std::pair<std::string, std::string>> allJFormKeys;
+    for (const auto& p : jformStockGroups) allJFormKeys.insert(p.first);
+    for (const auto& p : jformTxGroups) allJFormKeys.insert(p.first);
+
+    for (const auto& k : allJFormKeys) {
+        std::string vNo = k.first;
+        QString vDate = QString::fromStdString(k.second);
+        int vchNum = parseIntVal(vNo, 1);
+        QString fyVal = computeFinancialYear(vDate);
+        int fyId = fyNameToId.count(fyVal) ? fyNameToId[fyVal] : 1;
+
+        QString jformNo = QString::fromStdString(vNo);
+        int zimidarId = 0;
+        QString zimidarName = "";
+        int partyId = 0;
+        QString partyName = "Self Purchase";
+        QString auctionStatus = "Zimidara Self Purchase";
+        int dueDays = 0;
+        double goodsAmount = 0.0;
+        double labourAmount = 0.0;
+        double roundOff = 0.0;
+        double grandTotal = 0.0;
+        QString narration = "";
+
+        // Check Transactions for header details
+        auto itTx = jformTxGroups.find(k);
+        if (itTx != jformTxGroups.end()) {
+            for (const auto& tr : itTx->second) {
+                std::string invNo = cleanText(getField(tr, "InvoiceNo"));
+                if (!invNo.empty()) jformNo = QString::fromStdString(invNo);
+
+                std::string stNarr = cleanText(getField(tr, "Narration"));
+                if (!stNarr.empty() && narration.isEmpty()) narration = QString::fromStdString(stNarr);
+
+                std::string zName = cleanText(getField(tr, "ZimidarName"));
+                if (!zName.empty() && zimidarName.isEmpty()) zimidarName = QString::fromStdString(zName);
+
+                std::string jStatus = cleanText(getField(tr, "JFormSaleStatus"));
+                if (!jStatus.empty()) auctionStatus = QString::fromStdString(jStatus);
+
+                int dDays = parseIntVal(getField(tr, "DueDays"));
+                if (dDays > 0) dueDays = dDays;
+
+                std::string entryType = cleanText(getField(tr, "EntryType"));
+                std::string drCr = cleanText(getField(tr, "DrCr"));
+                double amt = parseDoubleVal(getField(tr, "Amount"));
+                int acCode = parseIntVal(getField(tr, "AccountCode"));
+
+                if (entryType == "Ledger" && drCr == "Cr") {
+                    grandTotal = amt;
+                    auto itP = ledgerDetailMap.find(acCode);
+                    if (itP != ledgerDetailMap.end()) {
+                        zimidarId = itP->second.id;
+                        if (zimidarName.isEmpty()) zimidarName = QString::fromStdString(itP->second.name);
+                    }
+                } else if (entryType == "JFormIFormLedger" || drCr == "Dr") {
+                    goodsAmount = amt;
+                    auto itP = ledgerDetailMap.find(acCode);
+                    if (itP != ledgerDetailMap.end()) {
+                        partyId = itP->second.id;
+                        partyName = QString::fromStdString(itP->second.name);
+                    }
+                } else if (entryType == "Labour") {
+                    labourAmount = amt;
+                } else if (entryType == "Round Off") {
+                    roundOff = (drCr == "Dr" ? amt : -amt);
+                }
+            }
+        }
+
+        // Sum items from stock transactions
+        int totalBags = 0;
+        double totalWeight = 0.0;
+        double stockGoodsAmount = 0.0;
+
+        auto itStock = jformStockGroups.find(k);
+        if (itStock != jformStockGroups.end()) {
+            for (const auto& st : itStock->second) {
+                totalBags += parseIntVal(getField(st, "Bags"));
+                totalWeight += parseDoubleVal(getField(st, "Weight"));
+                stockGoodsAmount += parseDoubleVal(getField(st, "Amount"));
+                if (zimidarId == 0) {
+                    int dpCode = parseIntVal(getField(st, "DheriPurchaseFrom"));
+                    if (dpCode == 0) dpCode = parseIntVal(getField(st, "CommissionPartyCode"));
+                    auto itP = ledgerDetailMap.find(dpCode);
+                    if (itP != ledgerDetailMap.end()) {
+                        zimidarId = itP->second.id;
+                        if (zimidarName.isEmpty()) zimidarName = QString::fromStdString(itP->second.name);
+                    }
+                }
+            }
+        }
+
+        if (goodsAmount <= 0.001) goodsAmount = stockGoodsAmount;
+        if (grandTotal <= 0.001) grandTotal = goodsAmount - labourAmount + roundOff;
+        if (zimidarName.isEmpty()) zimidarName = "Farmer / Zimidar";
+
+        db.executeNonQuery(
+            "INSERT INTO jform_vouchers ("
+            "fy_id, financial_year, voucher_no, voucher_date, jform_no, zimidar_id, zimidar_name, "
+            "party_id, party_name, auction_sale_status, due_days, total_bags, total_weight, "
+            "goods_amount, bonus_amount, relief_amount, subtotal_amount, labour_amount, "
+            "round_off, grand_total, narration) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0.0, 0.0, ?, ?, ?, ?, ?);",
+            {
+                fyId, fyVal, vchNum, vDate, jformNo, zimidarId, zimidarName,
+                partyId, partyName, auctionStatus, dueDays, totalBags, totalWeight,
+                goodsAmount, goodsAmount, labourAmount, roundOff, grandTotal, narration
+            }
+        );
+
+        QVariant newJFormId = db.executeScalar("SELECT last_insert_rowid();");
+        int jfVoucherId = newJFormId.toInt();
+
+        // Insert line items
+        if (itStock != jformStockGroups.end()) {
+            for (const auto& st : itStock->second) {
+                int iCode = parseIntVal(getField(st, "ItemCode"));
+                int itemId = 0;
+                std::string itemName = "Paddy";
+                auto itItem = itemCodeMap.find(iCode);
+                if (itItem != itemCodeMap.end()) {
+                    itemId = itItem->second.id;
+                    itemName = itItem->second.name;
+                }
+
+                int bags = parseIntVal(getField(st, "Bags"));
+                double loose = parseDoubleVal(getField(st, "LooseWeight"));
+                double packing = parseDoubleVal(getField(st, "Packing"), 0.500);
+                double wt = parseDoubleVal(getField(st, "Weight"));
+                double rate = parseDoubleVal(getField(st, "Rate"));
+                double amt = parseDoubleVal(getField(st, "Amount"));
+
+                db.executeNonQuery(
+                    "INSERT INTO jform_voucher_items ("
+                    "voucher_id, voucher_no, item_id, item_name, bags, loose_weight, packing, weight, rate, amount) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+                    {
+                        jfVoucherId, vchNum, itemId, QString::fromStdString(itemName),
+                        bags, loose, packing, wt, rate, amt
+                    }
+                );
+            }
+        }
+        jformCount++;
+    }
+    std::cout << "[INFO] Migrated " << jformCount << " J-Form vouchers!" << std::endl;
+
+
+    // =========================================================
+    // PASS 5.4: TDS VOUCHERS (TDSDeductions)
+    // =========================================================
+    updateProgress(93, QString("Migrating %1 Historical TDS Vouchers...").arg(tdsRows.size()));
+
+    // Group Transactions where TransType == 'Jrnl' by (VoucherNumber, VoucherDate)
+    std::map<std::pair<int, std::string>, std::vector<std::map<std::string, std::string>>> jrnlTxGroups;
+    for (const auto& tr : transRows) {
+        std::string tt = cleanText(getField(tr, "TransType"));
+        if (tt != "Jrnl") continue;
+        int vNo = parseIntVal(getField(tr, "VoucherNumber"));
+        QString vDate = parseDateFormatted(QString::fromStdString(getField(tr, "VoucherDate")));
+        jrnlTxGroups[{vNo, vDate.toStdString()}].push_back(tr);
+    }
+
+    int tdsCount = 0;
+    for (const auto& tr : tdsRows) {
+        QString vDate = parseDateFormatted(QString::fromStdString(getField(tr, "VoucherDate")));
+        if (vDate.isEmpty()) continue;
+
+        int vchNum = parseIntVal(getField(tr, "VoucherNumber"));
+        int partyCode = parseIntVal(getField(tr, "AccountCode"));
+        int partyId = 0;
+        QString partyName = "";
+        auto itP = ledgerDetailMap.find(partyCode);
+        if (itP != ledgerDetailMap.end()) {
+            partyId = itP->second.id;
+            partyName = QString::fromStdString(itP->second.name);
+        }
+        if (partyName.isEmpty()) partyName = "TDS Deductee";
+
+        double incAmt = parseDoubleVal(getField(tr, "IncomeAmount"));
+        double prevAmt = parseDoubleVal(getField(tr, "PrevIncomeAmount"));
+        double totTds = incAmt + prevAmt;
+        double rateTds = parseDoubleVal(getField(tr, "RateTDS", getField(tr, "TDSRate")));
+        double amtTds = parseDoubleVal(getField(tr, "TDS"));
+        double rateSur = parseDoubleVal(getField(tr, "RateSurcharge"));
+        double amtSur = parseDoubleVal(getField(tr, "Surcharge"));
+        double rateCess = parseDoubleVal(getField(tr, "RateEducation"));
+        double amtCess = parseDoubleVal(getField(tr, "Education"));
+        double totTaxRate = rateTds + rateSur + rateCess;
+        double totTaxAmt = amtTds + amtSur + amtCess;
+        double netAmt = incAmt - totTaxAmt;
+        if (netAmt < 0.0) netAmt = 0.0;
+
+        QString incType = QString::fromStdString(cleanText(getField(tr, "IncomeType"))).trimmed().toUpper();
+        if (incType.isEmpty()) incType = "RENT";
+
+        QString nonDeductReason = QString::fromStdString(cleanText(getField(tr, "ReasonForNonDeduction")));
+        int postInBooks = parseIntVal(getField(tr, "PostInBooks"), 1);
+        QString narration = QString::fromStdString(cleanText(getField(tr, "IncomeNarration")));
+
+        QDate dt = QDate::fromString(vDate, "yyyy-MM-dd");
+        QString dayOfWeek = dt.toString("dddd");
+
+        QString fyVal = computeFinancialYear(vDate);
+        int fyId = fyNameToId.count(fyVal) ? fyNameToId[fyVal] : 1;
+
+        // Find Expense Dr Ledger and TDS Cr Ledger from Transactions if present
+        int expLedgerId = 0;
+        QString expLedgerName = incType + " Expense";
+        int tdsLedgerId = 0;
+        QString tdsLedgerName = "T D S PEYABAL";
+
+        auto itTrGroup = jrnlTxGroups.find({vchNum, vDate.toStdString()});
+        if (itTrGroup != jrnlTxGroups.end()) {
+            for (const auto& tx : itTrGroup->second) {
+                std::string entryType = cleanText(getField(tx, "EntryType"));
+                int acCode = parseIntVal(getField(tx, "AccountCode"));
+                auto itLedger = ledgerDetailMap.find(acCode);
+                if (itLedger != ledgerDetailMap.end()) {
+                    if (entryType == "Exp.") {
+                        expLedgerId = itLedger->second.id;
+                        expLedgerName = QString::fromStdString(itLedger->second.name);
+                    } else if (entryType == "TDS") {
+                        tdsLedgerId = itLedger->second.id;
+                        tdsLedgerName = QString::fromStdString(itLedger->second.name);
+                    }
+                }
+            }
+        }
+
+        db.executeNonQuery(
+            "INSERT INTO tds_vouchers ("
+            "fy_id, financial_year, voucher_no, voucher_date, day_of_week, post_in_books, tds_type, "
+            "ledger_id, ledger_name, income_amount, previous_amount, total_for_tds, narration, "
+            "rate_tds, tax_amount_tds, rate_surcharge, tax_amount_surcharge, rate_cess, tax_amount_cess, "
+            "use_rounded_total, total_tax_rate, total_tax_amount, net_amount, non_deduction_reason, "
+            "exp_ledger_id, exp_ledger_name, tds_ledger_id, tds_ledger_name) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?);",
+            {
+                fyId, fyVal, vchNum, vDate, dayOfWeek, postInBooks, incType,
+                partyId, partyName, incAmt, prevAmt, totTds, narration,
+                rateTds, amtTds, rateSur, amtSur, rateCess, amtCess,
+                totTaxRate, totTaxAmt, netAmt, nonDeductReason,
+                expLedgerId, expLedgerName, tdsLedgerId, tdsLedgerName
+            }
+        );
+        tdsCount++;
+    }
+    std::cout << "[INFO] Migrated " << tdsCount << " TDS vouchers!" << std::endl;
+
 
     // =========================================================
     // PASS 5.5: CUSTOM CLOSING STOCKS

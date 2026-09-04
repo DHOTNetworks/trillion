@@ -1,17 +1,17 @@
 import QtQuick
-import QtQuick.Controls
+import QtQuick.Templates as T
 import QtQuick.Layouts
-import "../components"
+import MahadevERP
 
-Popup {
+T.Popup {
     id: root
     width: 440
     implicitHeight: mainCol.implicitHeight + 36
     modal: true
     dim: true
     focus: true
-    anchors.centerIn: Overlay.overlay
-    closePolicy: Popup.CloseOnPressOutside | Popup.CloseOnEscape
+    anchors.centerIn: T.Overlay.overlay
+    closePolicy: T.Popup.CloseOnPressOutside | T.Popup.CloseOnEscape
 
     signal actionSelected(string actionName, int selectedIndex)
 
@@ -47,7 +47,7 @@ Popup {
         radius: 12
     }
 
-    contentItem: FocusScope {
+    FocusScope {
         id: menuScope
         anchors.fill: parent
         focus: true

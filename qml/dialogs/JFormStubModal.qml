@@ -1,9 +1,9 @@
 import QtQuick
-import QtQuick.Controls
+import QtQuick.Templates as T
 import QtQuick.Layouts
-import "../components"
+import MahadevERP
 
-Popup {
+T.Popup {
     id: root
     width: 520
     implicitHeight: mainCol.implicitHeight + 36
@@ -11,7 +11,7 @@ Popup {
     dim: true
     focus: true
     anchors.centerIn: parent
-    closePolicy: Popup.CloseOnPressOutside | Popup.CloseOnEscape
+    closePolicy: T.Popup.CloseOnPressOutside | T.Popup.CloseOnEscape
 
     background: Rectangle {
         color: "#FFFFFF"
@@ -20,7 +20,7 @@ Popup {
         radius: 12
     }
 
-    contentItem: FocusScope {
+    FocusScope {
         id: stubScope
         anchors.fill: parent
         focus: true
@@ -63,7 +63,7 @@ Popup {
                     Text { text: "APMC Mandi Sale Slip & Grain Purchase Voucher"; color: "#16A34A"; font.pixelSize: 11; font.bold: true }
                 }
 
-                Button {
+                T.Button {
                     flat: true
                     text: "✕"
                     onClicked: root.close()
@@ -117,7 +117,7 @@ Popup {
 
                 Item { Layout.fillWidth: true }
 
-                Button {
+                T.Button {
                     height: 36
                     background: Rectangle { color: "#16A34A"; radius: 6 }
                     contentItem: RowLayout {

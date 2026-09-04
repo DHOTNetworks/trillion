@@ -1,7 +1,7 @@
 import QtQuick
-import QtQuick.Controls
+import QtQuick.Templates as T
 import QtQuick.Layouts
-import "../components"
+import MahadevERP
 
 ColumnLayout {
     id: root
@@ -31,7 +31,7 @@ ColumnLayout {
 
         Item { Layout.fillWidth: true }
 
-        Button {
+        T.Button {
             id: addPaddyBtn
             background: Rectangle { color: addPaddyBtn.hovered ? "#15803D" : "#16A34A"; radius: 6 }
             contentItem: RowLayout {

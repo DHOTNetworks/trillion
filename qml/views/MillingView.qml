@@ -1,7 +1,7 @@
 import QtQuick
-import QtQuick.Controls
+import QtQuick.Templates as T
 import QtQuick.Layouts
-import "../components"
+import MahadevERP
 
 FocusScope {
     id: root
@@ -47,7 +47,7 @@ FocusScope {
 
             Item { Layout.fillWidth: true }
 
-            Button {
+            T.Button {
                 id: addBatchBtn
                 background: Rectangle { color: addBatchBtn.hovered ? "#15803D" : "#16A34A"; radius: 6 }
                 contentItem: RowLayout {
@@ -58,7 +58,7 @@ FocusScope {
                 onClicked: root.showNewModal()
             }
 
-            Button {
+            T.Button {
                 id: backBtn
                 background: Rectangle { color: backBtn.hovered ? "#475569" : "#334155"; radius: 6 }
                 contentItem: Text { text: "← Back (Esc)"; color: "#F8FAFC"; font.pixelSize: 12; font.bold: true }

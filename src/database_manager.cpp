@@ -273,7 +273,26 @@ void DatabaseManager::ensureTablesExist() {
         ");"
     );
 
-    // 3. Stock Items Master
+    // 3. Stock Items Master & Groups / Units
+    executeNonQuery(
+        "CREATE TABLE IF NOT EXISTS stock_groups ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "group_name TEXT UNIQUE NOT NULL,"
+        "legacy_code INTEGER,"
+        "qty_not_show_in_trading INTEGER DEFAULT 0,"
+        "cl_stock_rate REAL DEFAULT 0.0"
+        ");"
+    );
+
+    executeNonQuery(
+        "CREATE TABLE IF NOT EXISTS stock_units ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "unit_name TEXT UNIQUE NOT NULL,"
+        "legacy_code INTEGER,"
+        "decimal_places INTEGER DEFAULT 2"
+        ");"
+    );
+
     executeNonQuery(
         "CREATE TABLE IF NOT EXISTS stock_items ("
         "id INTEGER PRIMARY KEY AUTOINCREMENT,"
@@ -281,18 +300,43 @@ void DatabaseManager::ensureTablesExist() {
         "code TEXT UNIQUE NOT NULL,"
         "alias TEXT,"
         "print_name TEXT,"
-        "item_type TEXT NOT NULL DEFAULT 'Finished Rice',"
+        "item_type TEXT NOT NULL DEFAULT 'Both',"
         "goods_type TEXT DEFAULT 'Goods',"
+        "trading_group TEXT,"
+        "group_code INTEGER,"
         "company_name TEXT DEFAULT 'Mill Master',"
         "category_name TEXT,"
-        "unit TEXT DEFAULT 'Qtl',"
+        "unit TEXT DEFAULT 'Qtl.',"
+        "unit_code INTEGER,"
         "alt_unit TEXT DEFAULT 'Bags',"
         "conversion_factor REAL DEFAULT 1.0,"
+        "rate_calc_on TEXT DEFAULT 'N/A',"
+        "auto_adjust_name INTEGER DEFAULT 1,"
+        "item_narration TEXT,"
+        "capital_goods INTEGER DEFAULT 0,"
         "hsn_code TEXT DEFAULT '1006',"
         "gst_rate REAL DEFAULT 5.0,"
         "cess_rate REAL DEFAULT 0.0,"
+        "vat_rate REAL DEFAULT 0.0,"
+        "vat_ledger TEXT DEFAULT 'VAT A/c',"
+        "surcharge_on_vat REAL DEFAULT 0.0,"
+        "vat_against_d1 REAL DEFAULT 0.0,"
+        "cst_rate REAL DEFAULT 0.0,"
+        "cst_ledger TEXT DEFAULT 'CST A/c',"
+        "cst_without_cform REAL DEFAULT 0.0,"
+        "dami_rate REAL DEFAULT 0.0,"
+        "dami_ledger TEXT DEFAULT 'Dami A/c',"
+        "market_fee_rate REAL DEFAULT 0.0,"
+        "market_fee_ledger TEXT DEFAULT 'Market Fee A/c',"
+        "hrdf_rate REAL DEFAULT 0.0,"
+        "hrdf_ledger TEXT DEFAULT 'H.R.D.F. A/c',"
+        "market_commtt_form_apply INTEGER DEFAULT 0,"
+        "market_commtt_coupon_apply INTEGER DEFAULT 0,"
+        "dami_calc_on_weight INTEGER DEFAULT 0,"
+        "tax_on_qty INTEGER DEFAULT 0,"
         "purchase_rate REAL DEFAULT 0.0,"
         "sale_rate REAL DEFAULT 0.0,"
+        "bonus_approved REAL DEFAULT 0.0,"
         "mrp REAL DEFAULT 0.0,"
         "min_rate REAL DEFAULT 0.0,"
         "discount REAL DEFAULT 0.0,"
@@ -302,14 +346,36 @@ void DatabaseManager::ensureTablesExist() {
         "opening_rate REAL DEFAULT 0.0,"
         "opening_value REAL DEFAULT 0.0,"
         "purchase_ledger TEXT DEFAULT 'Purchase Accounts',"
+        "purchase_return_ledger TEXT DEFAULT 'Purchase Accounts',"
         "sale_ledger TEXT DEFAULT 'Sales Accounts',"
+        "sale_return_ledger TEXT DEFAULT 'Sales Accounts',"
         "stock_ledger TEXT DEFAULT 'Stock-in-Hand',"
+        "gst_ledger TEXT DEFAULT 'Duties & Taxes',"
         "is_milling_item INTEGER DEFAULT 0,"
         "include_in_trading INTEGER DEFAULT 1,"
         "calculate_stock INTEGER DEFAULT 1,"
-        "dami_rate REAL DEFAULT 0.0,"
-        "market_fee_rate REAL DEFAULT 0.0,"
-        "hrdf_rate REAL DEFAULT 0.0,"
+        "labour_rate_unit TEXT DEFAULT 'Packing',"
+        "utrai_rate_1 REAL DEFAULT 0.0,"
+        "jharai_rate_1 REAL DEFAULT 0.0,"
+        "bharai_rate_1 REAL DEFAULT 0.0,"
+        "tulai_rate_1 REAL DEFAULT 0.0,"
+        "khichai_rate_1 REAL DEFAULT 0.0,"
+        "silai_rate_1 REAL DEFAULT 0.0,"
+        "loading_rate_1 REAL DEFAULT 0.0,"
+        "utrai_rate_2 REAL DEFAULT 0.0,"
+        "jharai_rate_2 REAL DEFAULT 0.0,"
+        "bharai_rate_2 REAL DEFAULT 0.0,"
+        "tulai_rate_2 REAL DEFAULT 0.0,"
+        "khichai_rate_2 REAL DEFAULT 0.0,"
+        "silai_rate_2 REAL DEFAULT 0.0,"
+        "loading_rate_2 REAL DEFAULT 0.0,"
+        "utrai_rate_3 REAL DEFAULT 0.0,"
+        "jharai_rate_3 REAL DEFAULT 0.0,"
+        "bharai_rate_3 REAL DEFAULT 0.0,"
+        "tulai_rate_3 REAL DEFAULT 0.0,"
+        "khichai_rate_3 REAL DEFAULT 0.0,"
+        "silai_rate_3 REAL DEFAULT 0.0,"
+        "loading_rate_3 REAL DEFAULT 0.0,"
         "legacy_code INTEGER"
         ");"
     );
@@ -559,6 +625,126 @@ void DatabaseManager::ensureTablesExist() {
         ");"
     );
 
+    // 7c. J-Form Mandi Procurement Vouchers
+    executeNonQuery(
+        "CREATE TABLE IF NOT EXISTS jform_vouchers ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "fy_id INTEGER,"
+        "financial_year TEXT DEFAULT 'FY 2025-26',"
+        "voucher_no INTEGER NOT NULL,"
+        "voucher_date TEXT NOT NULL,"
+        "jform_no TEXT NOT NULL,"
+        "zimidar_id INTEGER,"
+        "zimidar_name TEXT NOT NULL,"
+        "party_id INTEGER,"
+        "party_name TEXT NOT NULL DEFAULT 'Self Purchase',"
+        "auction_sale_status TEXT DEFAULT 'Zimidara Self Purchase',"
+        "due_days INTEGER DEFAULT 0,"
+        "vehicle_no TEXT,"
+        "driver_name TEXT,"
+        "gate_pass_no TEXT,"
+        "eway_bill_no TEXT,"
+        "bill_time TEXT,"
+        "sauda_date TEXT,"
+        "mandi_place TEXT,"
+        "procurement_mode TEXT,"
+        "lot_no TEXT,"
+        "grade TEXT,"
+        "transport_name TEXT,"
+        "broker_name TEXT,"
+        "challan_no TEXT,"
+        "kanda_weight TEXT,"
+        "total_bags INTEGER DEFAULT 0,"
+        "total_weight REAL DEFAULT 0.0,"
+        "goods_amount REAL DEFAULT 0.0,"
+        "bonus_amount REAL DEFAULT 0.0,"
+        "relief_amount REAL DEFAULT 0.0,"
+        "subtotal_amount REAL DEFAULT 0.0,"
+        "labour_amount REAL DEFAULT 0.0,"
+        "round_off REAL DEFAULT 0.0,"
+        "grand_total REAL DEFAULT 0.0,"
+        "narration TEXT,"
+        "created_at DATETIME DEFAULT CURRENT_TIMESTAMP,"
+        "FOREIGN KEY (zimidar_id) REFERENCES parties(id),"
+        "FOREIGN KEY (party_id) REFERENCES parties(id),"
+        "FOREIGN KEY (fy_id) REFERENCES financial_years(id)"
+        ");"
+    );
+
+    // Ensure columns exist on existing databases
+    executeNonQuery("ALTER TABLE jform_vouchers ADD COLUMN vehicle_no TEXT;");
+    executeNonQuery("ALTER TABLE jform_vouchers ADD COLUMN driver_name TEXT;");
+    executeNonQuery("ALTER TABLE jform_vouchers ADD COLUMN gate_pass_no TEXT;");
+    executeNonQuery("ALTER TABLE jform_vouchers ADD COLUMN eway_bill_no TEXT;");
+    executeNonQuery("ALTER TABLE jform_vouchers ADD COLUMN bill_time TEXT;");
+    executeNonQuery("ALTER TABLE jform_vouchers ADD COLUMN sauda_date TEXT;");
+    executeNonQuery("ALTER TABLE jform_vouchers ADD COLUMN mandi_place TEXT;");
+    executeNonQuery("ALTER TABLE jform_vouchers ADD COLUMN procurement_mode TEXT;");
+    executeNonQuery("ALTER TABLE jform_vouchers ADD COLUMN lot_no TEXT;");
+    executeNonQuery("ALTER TABLE jform_vouchers ADD COLUMN grade TEXT;");
+    executeNonQuery("ALTER TABLE jform_vouchers ADD COLUMN transport_name TEXT;");
+    executeNonQuery("ALTER TABLE jform_vouchers ADD COLUMN broker_name TEXT;");
+    executeNonQuery("ALTER TABLE jform_vouchers ADD COLUMN challan_no TEXT;");
+    executeNonQuery("ALTER TABLE jform_vouchers ADD COLUMN kanda_weight TEXT;");
+
+    // 7d. J-Form Voucher Line Items
+    executeNonQuery(
+        "CREATE TABLE IF NOT EXISTS jform_voucher_items ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "voucher_id INTEGER NOT NULL,"
+        "voucher_no INTEGER,"
+        "item_id INTEGER,"
+        "item_name TEXT NOT NULL,"
+        "bags INTEGER DEFAULT 0,"
+        "loose_weight REAL DEFAULT 0.0,"
+        "packing REAL DEFAULT 0.500,"
+        "weight REAL DEFAULT 0.0,"
+        "rate REAL DEFAULT 0.0,"
+        "amount REAL DEFAULT 0.0,"
+        "FOREIGN KEY (voucher_id) REFERENCES jform_vouchers(id) ON DELETE CASCADE"
+        ");"
+    );
+
+    // 7e. TDS Vouchers
+    executeNonQuery(
+        "CREATE TABLE IF NOT EXISTS tds_vouchers ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "fy_id INTEGER,"
+        "financial_year TEXT DEFAULT 'FY 2025-26',"
+        "voucher_no INTEGER NOT NULL,"
+        "voucher_date TEXT NOT NULL,"
+        "day_of_week TEXT,"
+        "post_in_books INTEGER DEFAULT 1,"
+        "tds_type TEXT NOT NULL DEFAULT 'RENT',"
+        "ledger_id INTEGER,"
+        "ledger_name TEXT NOT NULL,"
+        "income_amount REAL DEFAULT 0.0,"
+        "previous_amount REAL DEFAULT 0.0,"
+        "total_for_tds REAL DEFAULT 0.0,"
+        "narration TEXT,"
+        "rate_tds REAL DEFAULT 0.0,"
+        "tax_amount_tds REAL DEFAULT 0.0,"
+        "rate_surcharge REAL DEFAULT 0.0,"
+        "tax_amount_surcharge REAL DEFAULT 0.0,"
+        "rate_cess REAL DEFAULT 0.0,"
+        "tax_amount_cess REAL DEFAULT 0.0,"
+        "use_rounded_total INTEGER DEFAULT 1,"
+        "total_tax_rate REAL DEFAULT 0.0,"
+        "total_tax_amount REAL DEFAULT 0.0,"
+        "net_amount REAL DEFAULT 0.0,"
+        "non_deduction_reason TEXT,"
+        "exp_ledger_id INTEGER,"
+        "exp_ledger_name TEXT,"
+        "tds_ledger_id INTEGER,"
+        "tds_ledger_name TEXT,"
+        "created_at DATETIME DEFAULT CURRENT_TIMESTAMP,"
+        "FOREIGN KEY (ledger_id) REFERENCES parties(id),"
+        "FOREIGN KEY (exp_ledger_id) REFERENCES parties(id),"
+        "FOREIGN KEY (tds_ledger_id) REFERENCES parties(id),"
+        "FOREIGN KEY (fy_id) REFERENCES financial_years(id)"
+        ");"
+    );
+
     // 8. Vouchers Table
     executeNonQuery(
         "CREATE TABLE IF NOT EXISTS vouchers ("
@@ -709,4 +895,53 @@ void DatabaseManager::ensureTablesExist() {
         "row_no INTEGER DEFAULT 1"
         ");"
     );
+
+    // Ensure all Stock Item columns exist for backward compatibility
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN trading_group TEXT;");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN group_code INTEGER;");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN unit_code INTEGER;");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN rate_calc_on TEXT DEFAULT 'N/A';");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN auto_adjust_name INTEGER DEFAULT 1;");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN item_narration TEXT;");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN capital_goods INTEGER DEFAULT 0;");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN vat_rate REAL DEFAULT 0.0;");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN vat_ledger TEXT DEFAULT 'VAT A/c';");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN surcharge_on_vat REAL DEFAULT 0.0;");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN vat_against_d1 REAL DEFAULT 0.0;");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN cst_rate REAL DEFAULT 0.0;");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN cst_ledger TEXT DEFAULT 'CST A/c';");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN cst_without_cform REAL DEFAULT 0.0;");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN dami_ledger TEXT DEFAULT 'Dami A/c';");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN market_fee_ledger TEXT DEFAULT 'Market Fee A/c';");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN hrdf_ledger TEXT DEFAULT 'H.R.D.F. A/c';");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN market_commtt_form_apply INTEGER DEFAULT 0;");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN market_commtt_coupon_apply INTEGER DEFAULT 0;");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN dami_calc_on_weight INTEGER DEFAULT 0;");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN tax_on_qty INTEGER DEFAULT 0;");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN purchase_return_ledger TEXT DEFAULT 'Purchase Accounts';");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN sale_return_ledger TEXT DEFAULT 'Sales Accounts';");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN gst_ledger TEXT DEFAULT 'Duties & Taxes';");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN bonus_approved REAL DEFAULT 0.0;");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN labour_rate_unit TEXT DEFAULT 'Packing';");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN utrai_rate_1 REAL DEFAULT 0.0;");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN jharai_rate_1 REAL DEFAULT 0.0;");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN bharai_rate_1 REAL DEFAULT 0.0;");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN tulai_rate_1 REAL DEFAULT 0.0;");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN khichai_rate_1 REAL DEFAULT 0.0;");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN silai_rate_1 REAL DEFAULT 0.0;");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN loading_rate_1 REAL DEFAULT 0.0;");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN utrai_rate_2 REAL DEFAULT 0.0;");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN jharai_rate_2 REAL DEFAULT 0.0;");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN bharai_rate_2 REAL DEFAULT 0.0;");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN tulai_rate_2 REAL DEFAULT 0.0;");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN khichai_rate_2 REAL DEFAULT 0.0;");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN silai_rate_2 REAL DEFAULT 0.0;");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN loading_rate_2 REAL DEFAULT 0.0;");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN utrai_rate_3 REAL DEFAULT 0.0;");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN jharai_rate_3 REAL DEFAULT 0.0;");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN bharai_rate_3 REAL DEFAULT 0.0;");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN tulai_rate_3 REAL DEFAULT 0.0;");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN khichai_rate_3 REAL DEFAULT 0.0;");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN silai_rate_3 REAL DEFAULT 0.0;");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN loading_rate_3 REAL DEFAULT 0.0;");
 }

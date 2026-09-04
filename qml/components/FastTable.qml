@@ -1,13 +1,14 @@
 import QtQuick
-import QtQuick.Controls
+import QtQuick.Templates as T
 import QtQuick.Layouts
+import MahadevERP
 
 Rectangle {
     id: root
     property alias model: listView.model
-    property var headers: []
-    property var roleKeys: []
-    property var columnWidths: []
+    property list<string> headers: []
+    property list<string> roleKeys: []
+    property list<real> columnWidths: []
     property string searchFilter: ""
     property string title: "Records"
 
@@ -59,7 +60,7 @@ Rectangle {
                         font.pixelSize: 12
                     }
 
-                    TextField {
+                    T.TextField {
                         id: searchInput
                         placeholderText: "Search records..."
                         color: "#0F172A"
@@ -72,7 +73,7 @@ Rectangle {
             }
 
             // Action Button
-            Button {
+            T.Button {
                 id: actionBtn
                 height: 32
                 background: Rectangle {

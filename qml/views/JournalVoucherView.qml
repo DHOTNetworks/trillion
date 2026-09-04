@@ -1,8 +1,7 @@
 import QtQuick
-import QtQuick.Controls
+import QtQuick.Templates as T
 import QtQuick.Layouts
-import "../components"
-import "../dialogs"
+import MahadevERP
 
 FocusScope {
     id: root
@@ -20,7 +19,7 @@ FocusScope {
     property string statusMessage: ""
     property bool isError: false
 
-    ListModel {
+    GenericListModel {
         id: voucherRowsModel
     }
 
@@ -220,7 +219,7 @@ FocusScope {
                     }
                 }
 
-                Button {
+                T.Button {
                     background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
                     contentItem: RowLayout {
                         spacing: 6
@@ -585,7 +584,7 @@ FocusScope {
                             }
 
                             // Delete Action Button
-                            Button {
+                            T.Button {
                                 Layout.preferredWidth: 28; height: 28
                                 enabled: voucherRowsModel.count > 2
                                 opacity: enabled ? 1.0 : 0.4
@@ -602,7 +601,7 @@ FocusScope {
                     Layout.fillWidth: true
                     spacing: 12
 
-                    Button {
+                    T.Button {
                         height: 32
                         background: Rectangle { color: "#EFF6FF"; radius: 6; border.color: "#BFDBFE" }
                         contentItem: RowLayout {
@@ -662,7 +661,7 @@ FocusScope {
                 }
 
                 // Save Action Button
-                Button {
+                T.Button {
                     id: saveVchBtn
                     height: 38
                     implicitWidth: 130

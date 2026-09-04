@@ -24,6 +24,8 @@
 #include "models/milling_model.h"
 #include "models/financial_years_model.h"
 #include "models/firm_manager.h"
+#include "models/jform_model.h"
+#include "models/tds_model.h"
 #include "engine/bahi_khata_migrator.h"
 
 int main(int argc, char* argv[]) {
@@ -108,6 +110,8 @@ int main(int argc, char* argv[]) {
     StockItemsModel stockItemsModel;
     FinancialYearsModel financialYearsModel;
     BahiKhataMigrator bahiKhataMigrator;
+    JFormModel jformModel;
+    TdsModel tdsModel;
 
     // Reload models automatically when firm switches
     QObject::connect(&firmManager, &FirmManager::firmSwitched, [&](const QString& firmId, const QString& firmName) {
@@ -195,6 +199,8 @@ int main(int argc, char* argv[]) {
     ctx->setContextProperty("financialYearsModel", &financialYearsModel);
     ctx->setContextProperty("bahiKhataMigrator", &bahiKhataMigrator);
     ctx->setContextProperty("firmManager", &firmManager);
+    ctx->setContextProperty("jformModel", &jformModel);
+    ctx->setContextProperty("tdsModel", &tdsModel);
 
     // Add import paths (Embedded QRC + local file fallbacks)
     engine.addImportPath(":/");

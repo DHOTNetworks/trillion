@@ -1,5 +1,5 @@
 import QtQuick
-import QtQuick.Controls
+import QtQuick.Templates as T
 import QtQuick.Layouts
 
 Rectangle {
@@ -12,6 +12,8 @@ Rectangle {
     border.width: searchInput.activeFocus ? 2 : 1
 
     property string selectedPartyName: ""
+    property alias placeholderText: searchInput.placeholderText
+    property alias text: searchInput.text
     property alias focusInput: searchInput.focus
     property var searchResults: []
     signal partySelected(var party)
@@ -59,7 +61,7 @@ Rectangle {
             font.pixelSize: 13
         }
 
-        TextField {
+        T.TextField {
             id: searchInput
             placeholderText: "Type party name to search..."
             color: "#0F172A"

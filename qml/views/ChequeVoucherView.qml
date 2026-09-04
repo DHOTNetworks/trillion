@@ -1,8 +1,7 @@
 import QtQuick
-import QtQuick.Controls
+import QtQuick.Templates as T
 import QtQuick.Layouts
-import "../components"
-import "../dialogs"
+import MahadevERP
 
 FocusScope {
     id: root
@@ -23,7 +22,7 @@ FocusScope {
     property string statusMessage: ""
     property bool isError: false
 
-    ListModel {
+    GenericListModel {
         id: voucherRowsModel
     }
 
@@ -247,7 +246,7 @@ FocusScope {
                     }
                 }
 
-                Button {
+                T.Button {
                     background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
                     contentItem: RowLayout {
                         spacing: 6
@@ -331,7 +330,7 @@ FocusScope {
 
                 Item { Layout.fillWidth: true }
 
-                Button {
+                T.Button {
                     background: Rectangle { color: "#EFF6FF"; radius: 6; border.color: "#93C5FD" }
                     contentItem: RowLayout {
                         spacing: 4
@@ -640,7 +639,7 @@ FocusScope {
                                 // Row Remove Button
                                 Item {
                                     Layout.preferredWidth: 28
-                                    Button {
+                                    T.Button {
                                         anchors.centerIn: parent
                                         width: 24; height: 22
                                         visible: voucherRowsModel.count > 2
@@ -720,7 +719,7 @@ FocusScope {
 
                 Item { Layout.fillWidth: true }
 
-                Button {
+                T.Button {
                     id: saveBtn
                     background: Rectangle { color: saveBtn.hovered ? "#1D4ED8" : "#2563EB"; radius: 6 }
                     contentItem: RowLayout {
@@ -731,7 +730,7 @@ FocusScope {
                     onClicked: root.saveVoucher()
                 }
 
-                Button {
+                T.Button {
                     id: cancelBtn
                     background: Rectangle { color: cancelBtn.hovered ? "#E2E8F0" : "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
                     contentItem: RowLayout {

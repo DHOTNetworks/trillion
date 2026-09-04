@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Controls
 
 FocusScope {
     id: root
@@ -13,10 +12,10 @@ FocusScope {
     property var fieldsGrid: []
     
     // Optional default button to focus/trigger when Enter is pressed on the last field
-    property var submitButton: null
+    property Item submitButton: null
 
     // Optional field to focus initially on view load
-    property var initialFocusField: null
+    property Item initialFocusField: null
 
     // Signal emitted when Escape is pressed
     signal cancelRequested()

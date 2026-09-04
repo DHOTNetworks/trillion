@@ -1,9 +1,8 @@
 import QtQuick
-import QtQuick.Controls
+import QtQuick.Templates as T
 import QtQuick.Layouts
 import QtQuick.Dialogs
-import "../components"
-import "../dialogs"
+import MahadevERP
 
 Rectangle {
     id: root
@@ -81,7 +80,7 @@ Rectangle {
         refreshFirms()
     }
 
-    ListModel {
+    GenericListModel {
         id: firmsModel
     }
 
@@ -168,7 +167,7 @@ Rectangle {
 
                 Item { Layout.fillWidth: true }
 
-                Button {
+                T.Button {
                     visible: (typeof firmManager !== "undefined" && firmManager && firmManager.currentFirmName !== "")
                     background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
                     contentItem: Text { text: "← Back to Dashboard (Esc)"; color: "#475569"; font.pixelSize: 12; font.bold: true }
@@ -198,7 +197,7 @@ Rectangle {
                     font.bold: true
                 }
 
-                TextField {
+                T.TextField {
                     id: folderInput
                     Layout.fillWidth: true
                     text: root.currentFolder
@@ -220,7 +219,7 @@ Rectangle {
                 }
 
                 // App Data Folder Button (when in external view)
-                Button {
+                T.Button {
                     visible: !root.isViewingAppData
                     background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
                     contentItem: Text { text: "📁 App Data Folder"; color: "#1E293B"; font.bold: true; font.pixelSize: 12 }
@@ -228,7 +227,7 @@ Rectangle {
                 }
 
                 // Import from Bahi-Khata Button
-                Button {
+                T.Button {
                     background: Rectangle { 
                         color: root.isViewingAppData ? "#EFF6FF" : "#2563EB"
                         radius: 6
@@ -251,13 +250,13 @@ Rectangle {
                     onClicked: folderDialog.open()
                 }
 
-                Button {
+                T.Button {
                     background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
                     contentItem: Text { text: "Browse (F3)"; color: "#334155"; font.bold: true; font.pixelSize: 12 }
                     onClicked: folderDialog.open()
                 }
 
-                Button {
+                T.Button {
                     background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
                     contentItem: Text { text: "🔄 Rescan (F5)"; color: "#334155"; font.bold: true; font.pixelSize: 12 }
                     onClicked: root.refreshFirms()
@@ -320,7 +319,7 @@ Rectangle {
                                   "No Bahi-Khata Data.* files found in selected directory."
                             color: "#64748B"; font.pixelSize: 14; Layout.alignment: Qt.AlignHCenter 
                         }
-                        Button {
+                        T.Button {
                             Layout.alignment: Qt.AlignHCenter
                             text: root.isViewingAppData ? "Import from Bahi-Khata" : "Return to App Data Folder"
                             onClicked: root.isViewingAppData ? folderDialog.open() : root.resetToAppData()
@@ -339,8 +338,8 @@ Rectangle {
                     currentIndex: root.selectedIndex
                     boundsBehavior: Flickable.StopAtBounds
 
-                    ScrollBar.vertical: ScrollBar {
-                        policy: ScrollBar.AsNeeded
+                    T.ScrollBar.vertical: T.ScrollBar {
+                        policy: T.ScrollBar.AsNeeded
                         active: true
                     }
 
@@ -474,7 +473,7 @@ Rectangle {
             height: 42
             spacing: 12
 
-            Button {
+            T.Button {
                 height: 36
                 background: Rectangle { color: "#16A34A"; radius: 6 }
                 contentItem: RowLayout {
@@ -488,7 +487,7 @@ Rectangle {
 
             Item { Layout.fillWidth: true }
 
-            Button {
+            T.Button {
                 height: 36
                 Layout.preferredWidth: 230
                 background: Rectangle { color: "#2563EB"; radius: 6 }

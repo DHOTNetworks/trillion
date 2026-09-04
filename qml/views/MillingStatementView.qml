@@ -1,7 +1,7 @@
 import QtQuick
-import QtQuick.Controls
+import QtQuick.Templates as T
 import QtQuick.Layouts
-import "../components"
+import MahadevERP
 
 FocusScope {
     id: root
@@ -131,8 +131,8 @@ FocusScope {
         }
     }
 
-    ListModel { id: batchListModel }
-    ListModel { id: activeItemsModel }
+    GenericListModel { id: batchListModel }
+    GenericListModel { id: activeItemsModel }
 
     // Keyboard Shortcuts
     Shortcut { sequence: "F2"; onActivated: root.openNewMillingRequested() }
@@ -185,7 +185,7 @@ FocusScope {
                     }
                 }
 
-                Button {
+                T.Button {
                     background: Rectangle { color: "#16A34A"; radius: 6 }
                     contentItem: RowLayout {
                         spacing: 6
@@ -195,7 +195,7 @@ FocusScope {
                     onClicked: root.openNewMillingRequested()
                 }
 
-                Button {
+                T.Button {
                     background: Rectangle { color: "#334155"; radius: 6 }
                     contentItem: Text { text: "← Back (Esc)"; color: "#F8FAFC"; font.pixelSize: 11; font.bold: true }
                     onClicked: root.cancelRequested()

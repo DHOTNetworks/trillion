@@ -1,9 +1,9 @@
 import QtQuick
-import QtQuick.Controls
+import QtQuick.Templates as T
 import QtQuick.Layouts
-import "../components"
+import MahadevERP
 
-Popup {
+T.Popup {
     id: root
     width: 460
     implicitHeight: mainCol.implicitHeight + 36
@@ -11,7 +11,7 @@ Popup {
     dim: true
     focus: true
     anchors.centerIn: parent
-    closePolicy: Popup.CloseOnPressOutside | Popup.CloseOnEscape
+    closePolicy: T.Popup.CloseOnPressOutside | T.Popup.CloseOnEscape
 
     signal optionSelected(int optionIndex, int selectedIndex)
 
@@ -20,7 +20,6 @@ Popup {
     onOpened: {
         item1.resetMouseTracking()
         item2.resetMouseTracking()
-        item3.resetMouseTracking()
         Qt.callLater(function() { menuScope.forceActiveFocus() })
     }
 
@@ -38,7 +37,7 @@ Popup {
         radius: 12
     }
 
-    contentItem: FocusScope {
+    FocusScope {
         id: menuScope
         anchors.fill: parent
         focus: true
@@ -46,11 +45,11 @@ Popup {
         Keys.onUpPressed: function(event) {
             event.accepted = true
             if (root.selectedIndex > 0) root.selectedIndex--
-            else root.selectedIndex = 2
+            else root.selectedIndex = 1
         }
         Keys.onDownPressed: function(event) {
             event.accepted = true
-            if (root.selectedIndex < 2) root.selectedIndex++
+            if (root.selectedIndex < 1) root.selectedIndex++
             else root.selectedIndex = 0
         }
         Keys.onReturnPressed: function(event) {
@@ -67,7 +66,6 @@ Popup {
         }
         Keys.onDigit1Pressed: function(event) { event.accepted = true; root.selectedIndex = 0; root.triggerSelected() }
         Keys.onDigit2Pressed: function(event) { event.accepted = true; root.selectedIndex = 1; root.triggerSelected() }
-        Keys.onDigit3Pressed: function(event) { event.accepted = true; root.selectedIndex = 2; root.triggerSelected() }
 
         ColumnLayout {
             id: mainCol
@@ -121,12 +119,12 @@ Popup {
 
                     Rectangle {
                         height: 22
-                        width: 55
+                        width: 45
                         radius: 4
                         color: root.selectedIndex === 0 ? "#14532D" : "#DCFCE7"
                         Text {
                             anchors.centerIn: parent
-                            text: "STUB"
+                            text: "F11"
                             color: root.selectedIndex === 0 ? "#86EFAC" : "#15803D"
                             font.pixelSize: 10
                             font.bold: true
@@ -135,30 +133,43 @@ Popup {
                 }
             }
 
-            // Item 2: Journal Voucher
+            // Item 2: TDS Voucher (Tax Deducted at Source)
             NavMenuItem {
                 id: item2
                 index: 1
                 selectedIndex: root.selectedIndex
-                text: "2. Journal Voucher (Contra / Bank & Cash Transfer)"
-                fontPixelSize: 13
                 activeColor: "#7C3AED"
                 activeBorderColor: "#6D28D9"
                 onItemHovered: root.selectedIndex = 1
                 onItemClicked: { root.selectedIndex = 1; root.triggerSelected() }
-            }
 
-            // Item 3: Milling Production Voucher
-            NavMenuItem {
-                id: item3
-                index: 2
-                selectedIndex: root.selectedIndex
-                text: "3. Milling Process Yield Production Voucher"
-                fontPixelSize: 13
-                activeColor: "#2563EB"
-                activeBorderColor: "#1D4ED8"
-                onItemHovered: root.selectedIndex = 2
-                onItemClicked: { root.selectedIndex = 2; root.triggerSelected() }
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 14; anchors.rightMargin: 14
+                    spacing: 10
+
+                    Text {
+                        text: "2. TDS Voucher (Tax Deducted at Source)"
+                        color: root.selectedIndex === 1 ? "#FFFFFF" : "#000000"
+                        font.pixelSize: 13
+                        font.bold: true
+                        Layout.fillWidth: true
+                    }
+
+                    Rectangle {
+                        height: 22
+                        width: 45
+                        radius: 4
+                        color: root.selectedIndex === 1 ? "#4C1D95" : "#EDE9FE"
+                        Text {
+                            anchors.centerIn: parent
+                            text: "F12"
+                            color: root.selectedIndex === 1 ? "#DDD6FE" : "#7C3AED"
+                            font.pixelSize: 10
+                            font.bold: true
+                        }
+                    }
+                }
             }
         }
     }

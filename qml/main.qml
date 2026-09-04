@@ -1,17 +1,15 @@
 import QtQuick
-import QtQuick.Controls
+import QtQuick.Templates as T
 import QtQuick.Layouts
-import "components"
-import "views"
-import "dialogs"
+import MahadevERP
 
-ApplicationWindow {
+T.ApplicationWindow {
     id: window
     width: 1380
     height: 850
     visible: true
     title: (typeof firmManager !== "undefined" && firmManager && firmManager.currentFirmName !== "" ? (firmManager.currentFirmName + " • ") : "") + "Bahi-Khata ERP & Accounting"
-    color: "#F4F6F9"
+    background: Rectangle { color: "#F4F6F9" }
 
     // Active View Index: 
     // 0=Dashboard, 1=Paddy, 2=Milling/Stock, 3=Sales, 4=Vouchers, 5=Reports/LedgerList, 6=NewLedgerPage, 7=ModifyLedgerPage, 8=ViewStatementPage, 9=NewGroup, 10=ModifyGroup, 11=NewStockItem, 12=ModifyStockItem, 13=StockDetail, 14=SalesVoucher, 15=PurchaseVoucher, 22=FirmSelector
@@ -120,8 +118,34 @@ ApplicationWindow {
             }
         }
     }
-    Shortcut { sequence: "F1"; context: Qt.ApplicationShortcut; onActivated: window.isShortcutsModalOpen = !window.isShortcutsModalOpen }
-    Shortcut { sequence: "F2"; context: Qt.ApplicationShortcut; onActivated: window.openAddVoucherMenu() }
+    Shortcut { 
+        sequence: "F2"
+        context: Qt.ApplicationShortcut
+        onActivated: {
+            if (window.currentViewIndex === 14 || window.currentViewIndex === 15 || window.currentViewIndex === 23 || window.currentViewIndex === 24) {
+                if (mainLoader.item && typeof mainLoader.item.saveVoucher !== "undefined") {
+                    mainLoader.item.saveVoucher()
+                } else if (mainLoader.item && typeof mainLoader.item.saveInvoice !== "undefined") {
+                    mainLoader.item.saveInvoice()
+                }
+            } else {
+                window.openAddVoucherMenu()
+            }
+        }
+    }
+    Shortcut {
+        sequence: StandardKey.Save
+        context: Qt.ApplicationShortcut
+        onActivated: {
+            if (window.currentViewIndex === 14 || window.currentViewIndex === 15 || window.currentViewIndex === 23 || window.currentViewIndex === 24) {
+                if (mainLoader.item && typeof mainLoader.item.saveVoucher !== "undefined") {
+                    mainLoader.item.saveVoucher()
+                } else if (mainLoader.item && typeof mainLoader.item.saveInvoice !== "undefined") {
+                    mainLoader.item.saveInvoice()
+                }
+            }
+        }
+    }
     Shortcut { sequence: "Alt+F2"; context: Qt.ApplicationShortcut; onActivated: window.isPeriodModalOpen = true }
     Shortcut { sequence: "Option+F2"; context: Qt.ApplicationShortcut; onActivated: window.isPeriodModalOpen = true }
     property string targetChequeMode: "Payment"
@@ -157,6 +181,8 @@ ApplicationWindow {
     }
     Shortcut { sequence: "F8"; context: Qt.ApplicationShortcut; onActivated: window.currentViewIndex = 14 } // Sales Voucher Entry
     Shortcut { sequence: "F9"; context: Qt.ApplicationShortcut; onActivated: window.currentViewIndex = 15 } // Purchase Voucher Entry
+    Shortcut { sequence: "F11"; context: Qt.ApplicationShortcut; onActivated: window.currentViewIndex = 23 } // J-Form Mandi Procurement Voucher
+    Shortcut { sequence: "F12"; context: Qt.ApplicationShortcut; onActivated: window.currentViewIndex = 24 } // TDS Voucher Entry
     Shortcut { 
         sequence: "Ctrl+S"
         context: Qt.ApplicationShortcut
@@ -263,6 +289,8 @@ ApplicationWindow {
                         case 20: return "views/SalesRegisterView.qml"
                         case 21: return "views/PurchaseRegisterView.qml"
                         case 22: return "views/FirmSelecterView.qml"
+                        case 23: return "views/JFormVoucherView.qml"
+                        case 24: return "views/TdsVoucherView.qml"
                         default: return "views/DashboardView.qml"
                     }
                 }
@@ -302,6 +330,34 @@ ApplicationWindow {
                         if (typeof item.openNewMillingRequested !== "undefined") {
                             item.openNewMillingRequested.connect(function() {
                                 window.currentViewIndex = 18
+                            })
+                        }
+                    }
+
+                    if (window.currentViewIndex === 23 && item) {
+                        if (typeof item.cancelRequested !== "undefined") {
+                            item.cancelRequested.connect(function() {
+                                window.currentViewIndex = 0
+                            })
+                        }
+                        if (typeof item.voucherSaved !== "undefined") {
+                            item.voucherSaved.connect(function() {
+                                window.currentViewIndex = 0
+                                if (typeof dashboardCtrl !== "undefined" && dashboardCtrl) dashboardCtrl.refresh_stats()
+                            })
+                        }
+                    }
+
+                    if (window.currentViewIndex === 24 && item) {
+                        if (typeof item.cancelRequested !== "undefined") {
+                            item.cancelRequested.connect(function() {
+                                window.currentViewIndex = 0
+                            })
+                        }
+                        if (typeof item.voucherSaved !== "undefined") {
+                            item.voucherSaved.connect(function() {
+                                window.currentViewIndex = 0
+                                if (typeof dashboardCtrl !== "undefined" && dashboardCtrl) dashboardCtrl.refresh_stats()
                             })
                         }
                     }
@@ -506,11 +562,9 @@ ApplicationWindow {
             window.lastOtherSubmenuIndex = selIdx
             window.lastDashboardMenuIndex = 3
             if (opt === 1) {
-                jformStubModal.open()
+                window.currentViewIndex = 23
             } else if (opt === 2) {
-                window.currentViewIndex = 17
-            } else if (opt === 3) {
-                window.currentViewIndex = 18
+                window.currentViewIndex = 24
             }
         }
     }

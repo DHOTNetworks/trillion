@@ -1,7 +1,7 @@
 import QtQuick
-import QtQuick.Controls
+import QtQuick.Templates as T
 import QtQuick.Layouts
-import "../components"
+import MahadevERP
 
 Rectangle {
     id: root
@@ -36,7 +36,7 @@ Rectangle {
                 Layout.fillWidth: true
             }
 
-            Button {
+            T.Button {
                 id: closeBtn
                 width: 28
                 height: 28
@@ -56,7 +56,7 @@ Rectangle {
         Rectangle { Layout.fillWidth: true; height: 1; color: "#E2E8F0" }
 
         // Shortcuts Table
-        ScrollView {
+        T.ScrollView {
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true

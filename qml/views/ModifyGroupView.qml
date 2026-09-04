@@ -1,8 +1,7 @@
 import QtQuick
-import QtQuick.Controls
+import QtQuick.Templates as T
 import QtQuick.Layouts
-import "../components"
-import "../dialogs"
+import MahadevERP
 
 Item {
     id: root
@@ -40,7 +39,7 @@ Item {
 
             Item { Layout.fillWidth: true }
 
-            Button {
+            T.Button {
                 id: backBtn
                 background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
                 contentItem: RowLayout {
@@ -219,7 +218,7 @@ Item {
             Layout.fillWidth: true
             spacing: 14
 
-            Button {
+            T.Button {
                 id: cancelBottomBtn
                 background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
                 contentItem: RowLayout {
@@ -232,7 +231,7 @@ Item {
 
             Item { Layout.fillWidth: true }
 
-            Button {
+            T.Button {
                 id: submitBtn
                 background: Rectangle { color: (submitBtn.hovered || submitBtn.activeFocus) ? "#15803D" : "#16A34A"; radius: 6; border.color: submitBtn.activeFocus ? "#86EFAC" : "transparent"; border.width: 2 }
                 contentItem: RowLayout {

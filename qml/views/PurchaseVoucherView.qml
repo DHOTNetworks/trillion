@@ -1,8 +1,7 @@
 import QtQuick
-import QtQuick.Controls
+import QtQuick.Templates as T
 import QtQuick.Layouts
-import "../components"
-import "../dialogs"
+import MahadevERP
 
 Item {
     id: root
@@ -52,7 +51,7 @@ Item {
     property bool isManualGst: false
 
     // Registered Items List Model
-    ListModel {
+    GenericListModel {
         id: lineItemsModel
     }
 
@@ -487,7 +486,7 @@ Item {
 
                 Item { Layout.fillWidth: true }
 
-                Button {
+                T.Button {
                     id: backBtn
                     background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
                     contentItem: RowLayout {
@@ -809,7 +808,7 @@ Item {
                                 
                                 Item {
                                     Layout.preferredWidth: 35
-                                    Button {
+                                    T.Button {
                                         anchors.centerIn: parent
                                         width: 28; height: 20
                                         background: Rectangle { color: "#FEE2E2"; radius: 4 }
@@ -838,7 +837,7 @@ Item {
 
                             CustomWhiteCombo {
                                 id: itemCombo
-                                model: (typeof stockItemsModel !== "undefined" && stockItemsModel) ? stockItemsModel.get_items_list() : []
+                                model: (typeof stockItemsModel !== "undefined" && stockItemsModel) ? stockItemsModel.get_items_list(root.isMandiType ? "Mandi" : "Market") : []
                                 Layout.fillWidth: true
                                 Layout.preferredWidth: 240
                                 onCurrentTextChanged: root.onItemSelected(currentText)
@@ -929,7 +928,7 @@ Item {
 
                             Item {
                                 Layout.preferredWidth: 35
-                                Button {
+                                T.Button {
                                     anchors.centerIn: parent
                                     width: 28; height: 22
                                     background: Rectangle { color: "#16A34A"; radius: 4 }
@@ -1396,7 +1395,7 @@ Item {
                             Layout.fillWidth: true
                             Text { text: "SGST+CGST / IGST Tax:"; color: "#0F172A"; font.pixelSize: 11; font.bold: true }
                             Item { Layout.fillWidth: true }
-                            TextField {
+                            T.TextField {
                                 id: gstTaxInput
                                 text: "0.00"
                                 implicitWidth: 100; implicitHeight: 24
@@ -1416,7 +1415,7 @@ Item {
                             Layout.fillWidth: true
                             Text { text: "(+) Freight Charges:"; color: "#0F172A"; font.pixelSize: 11; font.bold: true }
                             Item { Layout.fillWidth: true }
-                            TextField {
+                            T.TextField {
                                 id: freightInput
                                 text: "0.00"
                                 implicitWidth: 100; implicitHeight: 24
@@ -1436,7 +1435,7 @@ Item {
                             Layout.fillWidth: true
                             Text { text: "(+) Other Expenses:"; color: "#0F172A"; font.pixelSize: 11; font.bold: true }
                             Item { Layout.fillWidth: true }
-                            TextField {
+                            T.TextField {
                                 id: otherExpInput
                                 text: "0.00"
                                 implicitWidth: 100; implicitHeight: 24
@@ -1456,7 +1455,7 @@ Item {
                             Layout.fillWidth: true
                             Text { text: "(-) Discount / Less:"; color: "#0F172A"; font.pixelSize: 11; font.bold: true }
                             Item { Layout.fillWidth: true }
-                            TextField {
+                            T.TextField {
                                 id: lessInput
                                 text: "0.00"
                                 implicitWidth: 100; implicitHeight: 24
@@ -1476,7 +1475,7 @@ Item {
                             Layout.fillWidth: true
                             Text { text: "(+) TCS @ 0.100%:"; color: "#0F172A"; font.pixelSize: 11; font.bold: true }
                             Item { Layout.fillWidth: true }
-                            TextField {
+                            T.TextField {
                                 id: tcsInput
                                 text: "0.00"
                                 implicitWidth: 100; implicitHeight: 24
@@ -1528,7 +1527,7 @@ Item {
                 height: 36
                 spacing: 12
 
-                Button {
+                T.Button {
                     height: 32
                     background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
                     contentItem: Text { text: "Reset Form"; color: "#475569"; font.bold: true; font.pixelSize: 11; horizontalAlignment: Text.AlignHCenter }
@@ -1537,7 +1536,7 @@ Item {
 
                 Item { Layout.fillWidth: true }
 
-                Button {
+                T.Button {
                     id: saveBtn
                     height: 32
                     Layout.preferredWidth: 250

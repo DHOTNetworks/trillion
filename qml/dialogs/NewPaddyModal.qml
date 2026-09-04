@@ -1,7 +1,7 @@
 import QtQuick
-import QtQuick.Controls
+import QtQuick.Templates as T
 import QtQuick.Layouts
-import "../components"
+import MahadevERP
 
 Rectangle {
     id: root
@@ -33,7 +33,7 @@ Rectangle {
 
             Item { Layout.fillWidth: true }
 
-            Button {
+            T.Button {
                 flat: true
                 text: "✕"
                 font.pixelSize: 16
@@ -121,14 +121,14 @@ Rectangle {
             Layout.fillWidth: true
             spacing: 12
 
-            Button {
+            T.Button {
                 text: "Cancel"
                 onClicked: root.closeRequested()
             }
 
             Item { Layout.fillWidth: true }
 
-            Button {
+            T.Button {
                 id: saveBtn
                 background: Rectangle { color: saveBtn.hovered ? "#16A34A" : "#22C55E"; radius: 6 }
                 contentItem: RowLayout {

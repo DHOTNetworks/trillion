@@ -1,7 +1,7 @@
 import QtQuick
-import QtQuick.Controls
+import QtQuick.Templates as T
 import QtQuick.Layouts
-import "../components"
+import MahadevERP
 
 ColumnLayout {
     id: root
@@ -30,7 +30,7 @@ ColumnLayout {
 
         Item { Layout.fillWidth: true }
 
-        Button {
+        T.Button {
             id: addVchBtn
             background: Rectangle { color: addVchBtn.hovered ? "#6D28D9" : "#7C3AED"; radius: 6 }
             contentItem: RowLayout {

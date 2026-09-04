@@ -10,8 +10,28 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
+# Disable private module warning for internal qmltc vtables
+set(QT_NO_PRIVATE_MODULE_WARNING ON)
+
 # Find Qt 6 Packages
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2)
+find_package(Qt6 REQUIRED COMPONENTS
+    Core
+    Gui
+    Qml
+    Quick
+    QuickControls2
+)
+
+# Find private/template/layout packages for cross-platform qmltc compilation (Windows, macOS, Linux)
+find_package(Qt6 OPTIONAL_COMPONENTS
+    CorePrivate
+    QmlPrivate
+    QuickPrivate
+    QuickTemplates2Private
+    QuickLayoutsPrivate
+    QuickDialogs2Private
+    QmlMetaPrivate
+)
 
 # Embedded SQLite Amalgamation
 add_library(sqlite3_embedded STATIC
@@ -79,23 +99,40 @@ set(SOURCES
     src/models/financial_years_model.cpp
     src/models/firm_manager.h
     src/models/firm_manager.cpp
+    src/models/jform_model.h
+    src/models/jform_model.cpp
+    src/models/tds_model.h
+    src/models/tds_model.cpp
+    src/models/generic_list_model.h
+    src/models/generic_list_model.cpp
     src/engine/bahi_khata_migrator.h
     src/engine/bahi_khata_migrator.cpp
 )
 
 qt_add_executable(${PROJECT_NAME} ${SOURCES})
 
-# Qt 6 Ahead-of-Time QML to C++ AOT Compilation (qmlcachegen)
+# Strict QML-to-C++ AOT Type Compilation via qmltc (qmlcachegen disabled to eliminate bytecode caching overhead)
 qt_add_qml_module(${PROJECT_NAME}
     URI MahadevERP
     VERSION 1.0
     RESOURCE_PREFIX /
+    ENABLE_TYPE_COMPILER
+    NO_CACHEGEN
+    DEPENDENCIES
+        QtQuick
+        QtQuick.Layouts
+        QtQuick.Templates
+    SOURCES
+        src/models/generic_list_model.h
+        src/models/generic_list_model.cpp
     QML_FILES
         qml/main.qml
         qml/components/AppHeader.qml
         qml/components/AutoCompletePartySearch.qml
         qml/components/CustomInput.qml
         qml/components/CustomWhiteCombo.qml
+        qml/components/CustomCheckBox.qml
+        qml/components/CustomRadioButton.qml
         qml/components/FastTable.qml
         qml/components/FormNavigationScope.qml
         qml/components/KbdBadge.qml
@@ -119,6 +156,7 @@ qt_add_qml_module(${PROJECT_NAME}
         qml/views/ChequeVoucherView.qml
         qml/views/DashboardView.qml
         qml/views/FirmSelecterView.qml
+        qml/views/JFormVoucherView.qml
         qml/views/JournalVoucherView.qml
         qml/views/MillingStatementView.qml
         qml/views/MillingView.qml
@@ -139,7 +177,41 @@ qt_add_qml_module(${PROJECT_NAME}
         qml/views/StockDetailView.qml
         qml/views/ViewLedgerStatementView.qml
         qml/views/VoucherLedgerView.qml
+        qml/views/TdsVoucherView.qml
 )
+
+# Cross-Platform Qt Private Header Include Resolution
+if(WIN32)
+    # Windows layout (MSVC / MinGW): <QT_DIR>/include/<Module>/<Version>/<Module>
+    file(GLOB WIN_QT_PRIV_DIRS
+        LIST_DIRECTORIES true
+        "${QT6_INSTALL_PREFIX}/include/*/${Qt6Core_VERSION}"
+        "${QT6_INSTALL_PREFIX}/include/*/${Qt6Core_VERSION}/*"
+    )
+    target_include_directories(${PROJECT_NAME} PRIVATE ${WIN_QT_PRIV_DIRS})
+elseif(APPLE)
+    # macOS layout: Homebrew Framework / official SDK layout
+    file(GLOB MAC_QT_PRIV_DIRS
+        LIST_DIRECTORIES true
+        "/opt/homebrew/lib/Qt*.framework/Headers/${Qt6Core_VERSION}"
+        "/opt/homebrew/lib/Qt*.framework/Headers/${Qt6Core_VERSION}/*"
+        "/opt/homebrew/Cellar/*/*/lib/Qt*.framework/Versions/A/Headers/${Qt6Core_VERSION}"
+        "/opt/homebrew/Cellar/*/*/lib/Qt*.framework/Versions/A/Headers/${Qt6Core_VERSION}/*"
+        "${QT6_INSTALL_PREFIX}/lib/Qt*.framework/Headers/${Qt6Core_VERSION}"
+        "${QT6_INSTALL_PREFIX}/lib/Qt*.framework/Headers/${Qt6Core_VERSION}/*"
+    )
+    target_include_directories(${PROJECT_NAME} PRIVATE ${MAC_QT_PRIV_DIRS})
+else()
+    # Linux layout: Distro / Online installer
+    file(GLOB LINUX_QT_PRIV_DIRS
+        LIST_DIRECTORIES true
+        "${QT6_INSTALL_PREFIX}/include/*/${Qt6Core_VERSION}"
+        "${QT6_INSTALL_PREFIX}/include/*/${Qt6Core_VERSION}/*"
+        "/usr/include/qt6/*/${Qt6Core_VERSION}"
+        "/usr/include/qt6/*/${Qt6Core_VERSION}/*"
+    )
+    target_include_directories(${PROJECT_NAME} PRIVATE ${LINUX_QT_PRIV_DIRS})
+endif()
 
 target_include_directories(${PROJECT_NAME} PRIVATE
     src
@@ -159,7 +231,24 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::Qml
     Qt6::Quick
     Qt6::QuickControls2
+    $<$<TARGET_EXISTS:Qt6::CorePrivate>:Qt6::CorePrivate>
+    $<$<TARGET_EXISTS:Qt6::QmlPrivate>:Qt6::QmlPrivate>
+    $<$<TARGET_EXISTS:Qt6::QuickPrivate>:Qt6::QuickPrivate>
+    $<$<TARGET_EXISTS:Qt6::QuickTemplates2Private>:Qt6::QuickTemplates2Private>
+    $<$<TARGET_EXISTS:Qt6::QuickLayoutsPrivate>:Qt6::QuickLayoutsPrivate>
+    $<$<TARGET_EXISTS:Qt6::QuickDialogs2Private>:Qt6::QuickDialogs2Private>
+    $<$<TARGET_EXISTS:Qt6::QmlMetaPrivate>:Qt6::QmlMetaPrivate>
 )
+
+# On macOS Framework installations, ensure required framework binaries link directly
+if(APPLE)
+    target_link_libraries(${PROJECT_NAME} PRIVATE
+        "-framework QtQuickTemplates2"
+        "-framework QtQuickLayouts"
+        "-framework QtQuickDialogs2"
+        "-framework QtQmlMeta"
+    )
+endif()
 
 # Set macOS App Bundle Properties
 set_target_properties(${PROJECT_NAME} PROPERTIES

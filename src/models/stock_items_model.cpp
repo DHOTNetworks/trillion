@@ -40,16 +40,39 @@ void StockItemsModel::reload_data() {
     emit countChanged();
 }
 
-QStringList StockItemsModel::get_items_list() const {
+QStringList StockItemsModel::get_items_list(const QString& filterType) const {
+    QString f = filterType.trimmed().toLower();
     QStringList list;
     for (const QVariant& v : m_data) {
-        QString n = v.toMap().value("name").toString();
-        if (!n.isEmpty()) list.append(n);
+        QVariantMap m = v.toMap();
+        QString n = m.value("name").toString().trimmed();
+        if (n.isEmpty()) continue;
+
+        if (!f.isEmpty()) {
+            QString iType = m.value("item_type").toString().trimmed().toLower();
+            if (f == "mandi") {
+                if (iType != "mandi" && iType != "both" && iType != "mandi type") continue;
+            } else if (f == "market") {
+                if (iType != "market" && iType != "both" && iType != "market type") continue;
+            }
+        }
+        list.append(n);
     }
     std::sort(list.begin(), list.end(), [](const QString& a, const QString& b) {
         return a.compare(b, Qt::CaseInsensitive) < 0;
     });
     return list;
+}
+
+QVariantMap StockItemsModel::get_item_by_id(int itemId) const {
+    QVariantList rows = DatabaseManager::instance().executeQuery(
+        "SELECT * FROM stock_items WHERE id = ? LIMIT 1;",
+        {itemId}
+    );
+    if (!rows.isEmpty()) {
+        return rows.first().toMap();
+    }
+    return QVariantMap();
 }
 
 QVariantMap StockItemsModel::get_item_by_name(const QString& name) const {
@@ -65,15 +88,336 @@ QVariantMap StockItemsModel::get_item_by_name(const QString& name) const {
 }
 
 QStringList StockItemsModel::get_item_types() const {
-    return {"By-Product", "Finished Rice", "General Goods", "Packing Material", "Raw Paddy"};
+    return {"Both", "Market Type", "Mandi Type"};
+}
+
+QStringList StockItemsModel::get_goods_types() const {
+    return {"Goods", "Services", "Capital Goods"};
+}
+
+QStringList StockItemsModel::get_stock_groups() const {
+    QStringList list;
+    QVariantList rows = DatabaseManager::instance().executeQuery(
+        "SELECT DISTINCT group_name FROM stock_groups WHERE group_name IS NOT NULL AND group_name != '' "
+        "UNION "
+        "SELECT DISTINCT trading_group FROM stock_items WHERE trading_group IS NOT NULL AND trading_group != '' "
+        "ORDER BY 1 COLLATE NOCASE ASC;"
+    );
+    for (const auto& r : rows) {
+        QString g = r.toMap().value("group_name").toString().trimmed();
+        if (g.isEmpty()) g = r.toMap().value("trading_group").toString().trimmed();
+        if (!g.isEmpty() && !list.contains(g)) list.append(g);
+    }
+    if (list.isEmpty()) {
+        list = {"Paddy Basmati 1401", "Paddy Parmal", "Rice", "Paddy Husk", "Primary"};
+    }
+    return list;
+}
+
+bool StockItemsModel::add_stock_group(const QString& groupName) {
+    QString g = groupName.trimmed();
+    if (g.isEmpty()) return false;
+    return DatabaseManager::instance().executeNonQuery(
+        "INSERT OR IGNORE INTO stock_groups (group_name) VALUES (?);",
+        {g}
+    );
 }
 
 QStringList StockItemsModel::get_units() const {
-    return {"Bags", "Kg", "Ltr", "MT", "Nos", "Pcs", "Qtl"};
+    QStringList list;
+    QVariantList rows = DatabaseManager::instance().executeQuery(
+        "SELECT DISTINCT unit_name FROM stock_units WHERE unit_name IS NOT NULL AND unit_name != '' "
+        "UNION "
+        "SELECT DISTINCT unit FROM stock_items WHERE unit IS NOT NULL AND unit != '' "
+        "ORDER BY 1 COLLATE NOCASE ASC;"
+    );
+    for (const auto& r : rows) {
+        QString u = r.toMap().value("unit_name").toString().trimmed();
+        if (u.isEmpty()) u = r.toMap().value("unit").toString().trimmed();
+        if (!u.isEmpty() && !list.contains(u)) list.append(u);
+    }
+    if (list.isEmpty()) {
+        list = {"Qtl.", "Bags", "Kg", "Nos", "Pcs", "MT"};
+    }
+    return list;
 }
 
 QStringList StockItemsModel::get_gst_rates() const {
     return {"0%", "5%", "12%", "18%", "28%"};
+}
+
+bool StockItemsModel::save_stock_item_full(const QVariantMap& d) {
+    auto& db = DatabaseManager::instance();
+    QString name = d.value("name").toString().trimmed();
+    if (name.isEmpty()) return false;
+
+    QString code = d.value("code").toString().trimmed();
+    if (code.isEmpty()) {
+        QVariant maxCode = db.executeScalar("SELECT MAX(CAST(code AS INTEGER)) FROM stock_items;");
+        int nextCode = (maxCode.isValid() && !maxCode.isNull()) ? maxCode.toInt() + 1 : 1;
+        code = QString::number(nextCode);
+    }
+
+    QString itemType = d.value("item_type", "Both").toString().trimmed();
+    QString goodsType = d.value("goods_type", "Goods").toString().trimmed();
+    QString tradingGroup = d.value("trading_group", "Primary").toString().trimmed();
+    int groupCode = d.value("group_code", 0).toInt();
+    QString companyName = d.value("company_name", "Mill Master").toString().trimmed();
+    QString unit = d.value("unit", "Qtl.").toString().trimmed();
+    int unitCode = d.value("unit_code", 0).toInt();
+    QString rateCalcOn = d.value("rate_calc_on", "N/A").toString().trimmed();
+    int autoAdjustName = d.value("auto_adjust_name", 1).toInt();
+    QString itemNarration = d.value("item_narration").toString().trimmed();
+    int capitalGoods = d.value("capital_goods", 0).toInt();
+
+    QString hsnCode = d.value("hsn_code", "1006").toString().trimmed();
+    double gstRate = d.value("gst_rate", 5.0).toDouble();
+    double cessRate = d.value("cess_rate", 0.0).toDouble();
+    double vatRate = d.value("vat_rate", 0.0).toDouble();
+    QString vatLedger = d.value("vat_ledger", "VAT A/c").toString().trimmed();
+    double surchargeOnVat = d.value("surcharge_on_vat", 0.0).toDouble();
+    double vatAgainstD1 = d.value("vat_against_d1", 0.0).toDouble();
+    double cstRate = d.value("cst_rate", 0.0).toDouble();
+    QString cstLedger = d.value("cst_ledger", "CST A/c").toString().trimmed();
+    double cstWithoutCForm = d.value("cst_without_cform", 0.0).toDouble();
+
+    double damiRate = d.value("dami_rate", 0.0).toDouble();
+    QString damiLedger = d.value("dami_ledger", "Dami A/c").toString().trimmed();
+    double marketFeeRate = d.value("market_fee_rate", 0.0).toDouble();
+    QString marketFeeLedger = d.value("market_fee_ledger", "Market Fee A/c").toString().trimmed();
+    double hrdfRate = d.value("hrdf_rate", 0.0).toDouble();
+    QString hrdfLedger = d.value("hrdf_ledger", "H.R.D.F. A/c").toString().trimmed();
+
+    int mktCommttFormApply = d.value("market_commtt_form_apply", 0).toInt();
+    int mktCommttCouponApply = d.value("market_commtt_coupon_apply", 0).toInt();
+    int damiCalcOnWeight = d.value("dami_calc_on_weight", 0).toInt();
+    int taxOnQty = d.value("tax_on_qty", 0).toInt();
+
+    double purchaseRate = d.value("purchase_rate", 0.0).toDouble();
+    double saleRate = d.value("sale_rate", 0.0).toDouble();
+    double bonusApproved = d.value("bonus_approved", 0.0).toDouble();
+    double mrp = d.value("mrp", 0.0).toDouble();
+    double discount = d.value("discount", 0.0).toDouble();
+    double packingKg = d.value("packing_kg", 50.0).toDouble();
+
+    int openingBags = d.value("opening_bags", 0).toInt();
+    double openingQty = d.value("opening_qty", 0.0).toDouble();
+    double openingRate = d.value("opening_rate", 0.0).toDouble();
+    double openingValue = d.value("opening_value", 0.0).toDouble();
+    if (openingValue <= 0.0 && openingQty > 0.0) {
+        openingValue = openingQty * (openingRate > 0.0 ? openingRate : purchaseRate);
+    }
+
+    QString purchaseLedger = d.value("purchase_ledger", "Purchase Accounts").toString().trimmed();
+    QString purchaseReturnLedger = d.value("purchase_return_ledger", purchaseLedger).toString().trimmed();
+    QString saleLedger = d.value("sale_ledger", "Sales Accounts").toString().trimmed();
+    QString saleReturnLedger = d.value("sale_return_ledger", saleLedger).toString().trimmed();
+    QString stockLedger = d.value("stock_ledger", "Stock-in-Hand").toString().trimmed();
+    QString gstLedger = d.value("gst_ledger", "Duties & Taxes").toString().trimmed();
+
+    int isMillingItem = d.value("is_milling_item", 0).toInt();
+    int includeInTrading = d.value("include_in_trading", 1).toInt();
+    int calculateStock = d.value("calculate_stock", 1).toInt();
+    QString labourRateUnit = d.value("labour_rate_unit", "Packing").toString().trimmed();
+
+    double utrai1 = d.value("utrai_rate_1", 0.0).toDouble();
+    double jharai1 = d.value("jharai_rate_1", 0.0).toDouble();
+    double bharai1 = d.value("bharai_rate_1", 0.0).toDouble();
+    double tulai1 = d.value("tulai_rate_1", 0.0).toDouble();
+    double khichai1 = d.value("khichai_rate_1", 0.0).toDouble();
+    double silai1 = d.value("silai_rate_1", 0.0).toDouble();
+    double loading1 = d.value("loading_rate_1", 0.0).toDouble();
+
+    double utrai2 = d.value("utrai_rate_2", 0.0).toDouble();
+    double jharai2 = d.value("jharai_rate_2", 0.0).toDouble();
+    double bharai2 = d.value("bharai_rate_2", 0.0).toDouble();
+    double tulai2 = d.value("tulai_rate_2", 0.0).toDouble();
+    double khichai2 = d.value("khichai_rate_2", 0.0).toDouble();
+    double silai2 = d.value("silai_rate_2", 0.0).toDouble();
+    double loading2 = d.value("loading_rate_2", 0.0).toDouble();
+
+    double utrai3 = d.value("utrai_rate_3", 0.0).toDouble();
+    double jharai3 = d.value("jharai_rate_3", 0.0).toDouble();
+    double bharai3 = d.value("bharai_rate_3", 0.0).toDouble();
+    double tulai3 = d.value("tulai_rate_3", 0.0).toDouble();
+    double khichai3 = d.value("khichai_rate_3", 0.0).toDouble();
+    double silai3 = d.value("silai_rate_3", 0.0).toDouble();
+    double loading3 = d.value("loading_rate_3", 0.0).toDouble();
+
+    bool ok = db.executeNonQuery(
+        "INSERT INTO stock_items ("
+        "name, code, item_type, goods_type, trading_group, group_code, company_name, category_name, unit, unit_code, "
+        "rate_calc_on, auto_adjust_name, item_narration, capital_goods, hsn_code, gst_rate, cess_rate, "
+        "vat_rate, vat_ledger, surcharge_on_vat, vat_against_d1, cst_rate, cst_ledger, cst_without_cform, "
+        "dami_rate, dami_ledger, market_fee_rate, market_fee_ledger, hrdf_rate, hrdf_ledger, "
+        "market_commtt_form_apply, market_commtt_coupon_apply, dami_calc_on_weight, tax_on_qty, "
+        "purchase_rate, sale_rate, bonus_approved, mrp, discount, packing_kg, "
+        "opening_bags, opening_qty, opening_rate, opening_value, "
+        "purchase_ledger, purchase_return_ledger, sale_ledger, sale_return_ledger, stock_ledger, gst_ledger, "
+        "is_milling_item, include_in_trading, calculate_stock, labour_rate_unit, "
+        "utrai_rate_1, jharai_rate_1, bharai_rate_1, tulai_rate_1, khichai_rate_1, silai_rate_1, loading_rate_1, "
+        "utrai_rate_2, jharai_rate_2, bharai_rate_2, tulai_rate_2, khichai_rate_2, silai_rate_2, loading_rate_2, "
+        "utrai_rate_3, jharai_rate_3, bharai_rate_3, tulai_rate_3, khichai_rate_3, silai_rate_3, loading_rate_3) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+        {
+            name, code, itemType, goodsType, tradingGroup, groupCode, companyName, tradingGroup, unit, unitCode,
+            rateCalcOn, autoAdjustName, itemNarration, capitalGoods, hsnCode, gstRate, cessRate,
+            vatRate, vatLedger, surchargeOnVat, vatAgainstD1, cstRate, cstLedger, cstWithoutCForm,
+            damiRate, damiLedger, marketFeeRate, marketFeeLedger, hrdfRate, hrdfLedger,
+            mktCommttFormApply, mktCommttCouponApply, damiCalcOnWeight, taxOnQty,
+            purchaseRate, saleRate, bonusApproved, mrp, discount, packingKg,
+            openingBags, openingQty, openingRate, openingValue,
+            purchaseLedger, purchaseReturnLedger, saleLedger, saleReturnLedger, stockLedger, gstLedger,
+            isMillingItem, includeInTrading, calculateStock, labourRateUnit,
+            utrai1, jharai1, bharai1, tulai1, khichai1, silai1, loading1,
+            utrai2, jharai2, bharai2, tulai2, khichai2, silai2, loading2,
+            utrai3, jharai3, bharai3, tulai3, khichai3, silai3, loading3
+        }
+    );
+
+    if (ok) {
+        db.executeNonQuery(
+            "INSERT OR REPLACE INTO inventory (item_code, item_name, category, current_stock_qtl, sale_rate, gst_rate, packing_kg) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?);",
+            {
+                code, name, tradingGroup, openingQty, saleRate, QString("%1%").arg(gstRate), static_cast<int>(packingKg)
+            }
+        );
+        reload_data();
+    }
+    return ok;
+}
+
+bool StockItemsModel::update_stock_item_full(int itemId, const QVariantMap& d) {
+    if (itemId <= 0) return false;
+    auto& db = DatabaseManager::instance();
+    QString name = d.value("name").toString().trimmed();
+    if (name.isEmpty()) return false;
+
+    QString code = d.value("code").toString().trimmed();
+    QString itemType = d.value("item_type", "Both").toString().trimmed();
+    QString goodsType = d.value("goods_type", "Goods").toString().trimmed();
+    QString tradingGroup = d.value("trading_group", "Primary").toString().trimmed();
+    int groupCode = d.value("group_code", 0).toInt();
+    QString companyName = d.value("company_name", "Mill Master").toString().trimmed();
+    QString unit = d.value("unit", "Qtl.").toString().trimmed();
+    int unitCode = d.value("unit_code", 0).toInt();
+    QString rateCalcOn = d.value("rate_calc_on", "N/A").toString().trimmed();
+    int autoAdjustName = d.value("auto_adjust_name", 1).toInt();
+    QString itemNarration = d.value("item_narration").toString().trimmed();
+    int capitalGoods = d.value("capital_goods", 0).toInt();
+
+    QString hsnCode = d.value("hsn_code", "1006").toString().trimmed();
+    double gstRate = d.value("gst_rate", 5.0).toDouble();
+    double cessRate = d.value("cess_rate", 0.0).toDouble();
+    double vatRate = d.value("vat_rate", 0.0).toDouble();
+    QString vatLedger = d.value("vat_ledger", "VAT A/c").toString().trimmed();
+    double surchargeOnVat = d.value("surcharge_on_vat", 0.0).toDouble();
+    double vatAgainstD1 = d.value("vat_against_d1", 0.0).toDouble();
+    double cstRate = d.value("cst_rate", 0.0).toDouble();
+    QString cstLedger = d.value("cst_ledger", "CST A/c").toString().trimmed();
+    double cstWithoutCForm = d.value("cst_without_cform", 0.0).toDouble();
+
+    double damiRate = d.value("dami_rate", 0.0).toDouble();
+    QString damiLedger = d.value("dami_ledger", "Dami A/c").toString().trimmed();
+    double marketFeeRate = d.value("market_fee_rate", 0.0).toDouble();
+    QString marketFeeLedger = d.value("market_fee_ledger", "Market Fee A/c").toString().trimmed();
+    double hrdfRate = d.value("hrdf_rate", 0.0).toDouble();
+    QString hrdfLedger = d.value("hrdf_ledger", "H.R.D.F. A/c").toString().trimmed();
+
+    int mktCommttFormApply = d.value("market_commtt_form_apply", 0).toInt();
+    int mktCommttCouponApply = d.value("market_commtt_coupon_apply", 0).toInt();
+    int damiCalcOnWeight = d.value("dami_calc_on_weight", 0).toInt();
+    int taxOnQty = d.value("tax_on_qty", 0).toInt();
+
+    double purchaseRate = d.value("purchase_rate", 0.0).toDouble();
+    double saleRate = d.value("sale_rate", 0.0).toDouble();
+    double bonusApproved = d.value("bonus_approved", 0.0).toDouble();
+    double mrp = d.value("mrp", 0.0).toDouble();
+    double discount = d.value("discount", 0.0).toDouble();
+    double packingKg = d.value("packing_kg", 50.0).toDouble();
+
+    int openingBags = d.value("opening_bags", 0).toInt();
+    double openingQty = d.value("opening_qty", 0.0).toDouble();
+    double openingRate = d.value("opening_rate", 0.0).toDouble();
+    double openingValue = d.value("opening_value", 0.0).toDouble();
+
+    QString purchaseLedger = d.value("purchase_ledger", "Purchase Accounts").toString().trimmed();
+    QString purchaseReturnLedger = d.value("purchase_return_ledger", purchaseLedger).toString().trimmed();
+    QString saleLedger = d.value("sale_ledger", "Sales Accounts").toString().trimmed();
+    QString saleReturnLedger = d.value("sale_return_ledger", saleLedger).toString().trimmed();
+    QString stockLedger = d.value("stock_ledger", "Stock-in-Hand").toString().trimmed();
+    QString gstLedger = d.value("gst_ledger", "Duties & Taxes").toString().trimmed();
+
+    int isMillingItem = d.value("is_milling_item", 0).toInt();
+    int includeInTrading = d.value("include_in_trading", 1).toInt();
+    int calculateStock = d.value("calculate_stock", 1).toInt();
+    QString labourRateUnit = d.value("labour_rate_unit", "Packing").toString().trimmed();
+
+    double utrai1 = d.value("utrai_rate_1", 0.0).toDouble();
+    double jharai1 = d.value("jharai_rate_1", 0.0).toDouble();
+    double bharai1 = d.value("bharai_rate_1", 0.0).toDouble();
+    double tulai1 = d.value("tulai_rate_1", 0.0).toDouble();
+    double khichai1 = d.value("khichai_rate_1", 0.0).toDouble();
+    double silai1 = d.value("silai_rate_1", 0.0).toDouble();
+    double loading1 = d.value("loading_rate_1", 0.0).toDouble();
+
+    double utrai2 = d.value("utrai_rate_2", 0.0).toDouble();
+    double jharai2 = d.value("jharai_rate_2", 0.0).toDouble();
+    double bharai2 = d.value("bharai_rate_2", 0.0).toDouble();
+    double tulai2 = d.value("tulai_rate_2", 0.0).toDouble();
+    double khichai2 = d.value("khichai_rate_2", 0.0).toDouble();
+    double silai2 = d.value("silai_rate_2", 0.0).toDouble();
+    double loading2 = d.value("loading_rate_2", 0.0).toDouble();
+
+    double utrai3 = d.value("utrai_rate_3", 0.0).toDouble();
+    double jharai3 = d.value("jharai_rate_3", 0.0).toDouble();
+    double bharai3 = d.value("bharai_rate_3", 0.0).toDouble();
+    double tulai3 = d.value("tulai_rate_3", 0.0).toDouble();
+    double khichai3 = d.value("khichai_rate_3", 0.0).toDouble();
+    double silai3 = d.value("silai_rate_3", 0.0).toDouble();
+    double loading3 = d.value("loading_rate_3", 0.0).toDouble();
+
+    bool ok = db.executeNonQuery(
+        "UPDATE stock_items SET "
+        "name = ?, code = ?, item_type = ?, goods_type = ?, trading_group = ?, group_code = ?, company_name = ?, category_name = ?, unit = ?, unit_code = ?, "
+        "rate_calc_on = ?, auto_adjust_name = ?, item_narration = ?, capital_goods = ?, hsn_code = ?, gst_rate = ?, cess_rate = ?, "
+        "vat_rate = ?, vat_ledger = ?, surcharge_on_vat = ?, vat_against_d1 = ?, cst_rate = ?, cst_ledger = ?, cst_without_cform = ?, "
+        "dami_rate = ?, dami_ledger = ?, market_fee_rate = ?, market_fee_ledger = ?, hrdf_rate = ?, hrdf_ledger = ?, "
+        "market_commtt_form_apply = ?, market_commtt_coupon_apply = ?, dami_calc_on_weight = ?, tax_on_qty = ?, "
+        "purchase_rate = ?, sale_rate = ?, bonus_approved = ?, mrp = ?, discount = ?, packing_kg = ?, "
+        "opening_bags = ?, opening_qty = ?, opening_rate = ?, opening_value = ?, "
+        "purchase_ledger = ?, purchase_return_ledger = ?, sale_ledger = ?, sale_return_ledger = ?, stock_ledger = ?, gst_ledger = ?, "
+        "is_milling_item = ?, include_in_trading = ?, calculate_stock = ?, labour_rate_unit = ?, "
+        "utrai_rate_1 = ?, jharai_rate_1 = ?, bharai_rate_1 = ?, tulai_rate_1 = ?, khichai_rate_1 = ?, silai_rate_1 = ?, loading_rate_1 = ?, "
+        "utrai_rate_2 = ?, jharai_rate_2 = ?, bharai_rate_2 = ?, tulai_rate_2 = ?, khichai_rate_2 = ?, silai_rate_2 = ?, loading_rate_2 = ?, "
+        "utrai_rate_3 = ?, jharai_rate_3 = ?, bharai_rate_3 = ?, tulai_rate_3 = ?, khichai_rate_3 = ?, silai_rate_3 = ?, loading_rate_3 = ? "
+        "WHERE id = ?;",
+        {
+            name, code, itemType, goodsType, tradingGroup, groupCode, companyName, tradingGroup, unit, unitCode,
+            rateCalcOn, autoAdjustName, itemNarration, capitalGoods, hsnCode, gstRate, cessRate,
+            vatRate, vatLedger, surchargeOnVat, vatAgainstD1, cstRate, cstLedger, cstWithoutCForm,
+            damiRate, damiLedger, marketFeeRate, marketFeeLedger, hrdfRate, hrdfLedger,
+            mktCommttFormApply, mktCommttCouponApply, damiCalcOnWeight, taxOnQty,
+            purchaseRate, saleRate, bonusApproved, mrp, discount, packingKg,
+            openingBags, openingQty, openingRate, openingValue,
+            purchaseLedger, purchaseReturnLedger, saleLedger, saleReturnLedger, stockLedger, gstLedger,
+            isMillingItem, includeInTrading, calculateStock, labourRateUnit,
+            utrai1, jharai1, bharai1, tulai1, khichai1, silai1, loading1,
+            utrai2, jharai2, bharai2, tulai2, khichai2, silai2, loading2,
+            utrai3, jharai3, bharai3, tulai3, khichai3, silai3, loading3,
+            itemId
+        }
+    );
+
+    if (ok) {
+        db.executeNonQuery(
+            "UPDATE inventory SET item_name = ?, category = ?, sale_rate = ?, gst_rate = ?, packing_kg = ? WHERE item_code = ?;",
+            {name, tradingGroup, saleRate, QString("%1%").arg(gstRate), static_cast<int>(packingKg), code}
+        );
+        reload_data();
+    }
+    return ok;
 }
 
 bool StockItemsModel::add_stock_item(

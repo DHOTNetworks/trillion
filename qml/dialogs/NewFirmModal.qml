@@ -1,15 +1,15 @@
 import QtQuick
-import QtQuick.Controls
+import QtQuick.Templates as T
 import QtQuick.Layouts
-import "../components"
+import MahadevERP
 
-Popup {
+T.Popup {
     id: root
     width: Math.min(parent.width - 40, 920)
     height: Math.min(parent.height - 40, 680)
     modal: true
     focus: true
-    closePolicy: Popup.CloseOnEscape
+    closePolicy: T.Popup.CloseOnEscape
 
     signal firmCreated(string firmId, string firmName)
 
@@ -90,7 +90,7 @@ Popup {
                 id: errorText
                 color: "#DC2626"; font.pixelSize: 12; font.bold: true
             }
-            Button {
+            T.Button {
                 background: Rectangle { color: "#F1F5F9"; radius: 6 }
                 contentItem: Text { text: "✕"; color: "#64748B"; font.bold: true }
                 onClicked: root.close()
@@ -100,7 +100,7 @@ Popup {
         Rectangle { Layout.fillWidth: true; height: 1; color: "#E2E8F0" }
 
         // Form Fields in ScrollView
-        ScrollView {
+        T.ScrollView {
             Layout.fillWidth: true
             Layout.fillHeight: true
             contentWidth: availableWidth
@@ -128,7 +128,7 @@ Popup {
                         spacing: 4
                         Layout.preferredWidth: 240
                         Text { text: "Legal Entity Type"; color: "#0F172A"; font.pixelSize: 11; font.bold: true }
-                        ComboBox {
+                        T.ComboBox {
                             id: firmTypeCombo
                             Layout.fillWidth: true
                             implicitHeight: 32
@@ -280,7 +280,7 @@ Popup {
             Layout.fillWidth: true
             spacing: 12
 
-            Button {
+            T.Button {
                 background: Rectangle { color: "#F1F5F9"; radius: 6 }
                 contentItem: Text { text: "Cancel (Esc)"; color: "#475569"; font.bold: true }
                 onClicked: root.close()
@@ -288,7 +288,7 @@ Popup {
 
             Item { Layout.fillWidth: true }
 
-            Button {
+            T.Button {
                 Layout.preferredWidth: 260
                 height: 36
                 background: Rectangle { color: "#16A34A"; radius: 6 }

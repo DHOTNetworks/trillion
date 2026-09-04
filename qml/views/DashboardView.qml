@@ -1,9 +1,9 @@
 import QtQuick
-import QtQuick.Controls
+import QtQuick.Templates as T
 import QtQuick.Layouts
-import "../components"
+import MahadevERP
 
-ScrollView {
+T.ScrollView {
     id: root
     contentWidth: availableWidth
     focus: true
@@ -123,7 +123,7 @@ ScrollView {
                 spacing: 8
 
                 // Bahi-Khata Financial Year / Accounting Period Selector
-                Button {
+                T.Button {
                     id: btnPeriod
                     background: Rectangle {
                         color: "#F0FDF4"
@@ -143,7 +143,7 @@ ScrollView {
                     onClicked: root.openPeriodModal()
                 }
 
-                Button {
+                T.Button {
                     id: btnPaddy
                     background: Rectangle { color: "#16A34A"; radius: 6 }
                     contentItem: RowLayout {
@@ -154,7 +154,7 @@ ScrollView {
                     onClicked: root.openNewPaddy()
                 }
 
-                Button {
+                T.Button {
                     id: btnSale
                     background: Rectangle { color: "#2563EB"; radius: 6 }
                     contentItem: RowLayout {
@@ -509,7 +509,7 @@ ScrollView {
                                 spacing: 1
                                 Layout.fillWidth: true
                                 Text { text: "4. Other Vouchers"; color: "#0F172A"; font.pixelSize: 13; font.bold: true }
-                                Text { text: "J-Form Mandi Procurement, Journal & Milling Vouchers"; color: "#64748B"; font.pixelSize: 11 }
+                                Text { text: "J-Form Mandi Procurement & TDS Vouchers"; color: "#64748B"; font.pixelSize: 11 }
                             }
 
                             KbdBadge { text: "Alt+5"; badgeColor: "#F3E8FF"; textColor: "#7C3AED"; borderColor: "#E9D5FF" }

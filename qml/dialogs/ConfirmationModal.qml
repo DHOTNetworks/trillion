@@ -1,17 +1,17 @@
 import QtQuick
-import QtQuick.Controls
+import QtQuick.Templates as T
 import QtQuick.Layouts
-import "../components"
+import MahadevERP
 
-Popup {
+T.Popup {
     id: root
     width: 440
     implicitHeight: mainCol.implicitHeight + 36
     modal: true
     dim: true
     focus: true
-    anchors.centerIn: Overlay.overlay
-    closePolicy: Popup.CloseOnPressOutside | Popup.CloseOnEscape
+    anchors.centerIn: T.Overlay.overlay
+    closePolicy: T.Popup.CloseOnPressOutside | T.Popup.CloseOnEscape
 
     property string titleText: "CONFIRM SAVE ENTRY"
     property string messageText: "Are you sure you want to save & post this entry into the database?"
@@ -42,7 +42,7 @@ Popup {
         radius: 12
     }
 
-    contentItem: FocusScope {
+    FocusScope {
         id: focusScope
         anchors.fill: parent
         focus: true
@@ -110,7 +110,7 @@ Popup {
 
                 Item { Layout.fillWidth: true }
 
-                Button {
+                T.Button {
                     id: cancelBtn
                     background: Rectangle { color: cancelBtn.hovered ? "#CBD5E1" : "#E2E8F0"; radius: 6; border.color: "#94A3B8" }
                     contentItem: RowLayout {
@@ -121,7 +121,7 @@ Popup {
                     onClicked: root.doCancel()
                 }
 
-                Button {
+                T.Button {
                     id: confirmBtn
                     background: Rectangle { color: confirmBtn.hovered ? "#15803D" : "#16A34A"; radius: 6 }
                     contentItem: RowLayout {

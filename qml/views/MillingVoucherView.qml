@@ -1,8 +1,7 @@
 import QtQuick
-import QtQuick.Controls
+import QtQuick.Templates as T
 import QtQuick.Layouts
-import "../components"
-import "../dialogs"
+import MahadevERP
 
 FocusScope {
     id: root
@@ -30,11 +29,11 @@ FocusScope {
     property string statusMessage: ""
     property bool isError: false
 
-    ListModel {
+    GenericListModel {
         id: consumedModel
     }
 
-    ListModel {
+    GenericListModel {
         id: producedModel
     }
 
@@ -323,7 +322,7 @@ FocusScope {
                     }
                 }
 
-                Button {
+                T.Button {
                     background: Rectangle { color: "#334155"; radius: 6 }
                     contentItem: Text { text: "← Back (Esc)"; color: "#F8FAFC"; font.pixelSize: 11; font.bold: true }
                     onClicked: root.handleBackOrCancel()
@@ -401,7 +400,7 @@ FocusScope {
                 }
 
                 // Auto Pick Items Shortcut Button
-                Button {
+                T.Button {
                     background: Rectangle { color: "#EFF6FF"; border.color: "#93C5FD"; radius: 6 }
                     contentItem: RowLayout {
                         spacing: 6
@@ -444,7 +443,7 @@ FocusScope {
                             anchors.leftMargin: 10; anchors.rightMargin: 10
                             Text { text: "🔻 ITEMS TO BE CONSUMED (Raw Material Input)"; color: "#DC2626"; font.pixelSize: 12; font.bold: true }
                             Item { Layout.fillWidth: true }
-                            Button {
+                            T.Button {
                                 background: Rectangle { color: "#FEE2E2"; radius: 4 }
                                 contentItem: Text { text: "+ Add Row (Alt+A)"; color: "#991B1B"; font.pixelSize: 10; font.bold: true }
                                 onClicked: root.addConsumedRow()
@@ -626,7 +625,7 @@ FocusScope {
                                     }
                                 }
 
-                                Button {
+                                T.Button {
                                     Layout.preferredWidth: 24
                                     height: 24
                                     flat: true
@@ -674,7 +673,7 @@ FocusScope {
                             anchors.leftMargin: 10; anchors.rightMargin: 10
                             Text { text: "🔺 ITEMS TO BE PRODUCED (Output Products & Yield)"; color: "#15803D"; font.pixelSize: 12; font.bold: true }
                             Item { Layout.fillWidth: true }
-                            Button {
+                            T.Button {
                                 background: Rectangle { color: "#BBF7D0"; radius: 4 }
                                 contentItem: Text { text: "+ Add Row"; color: "#166534"; font.pixelSize: 10; font.bold: true }
                                 onClicked: root.addProducedRow()
@@ -930,7 +929,7 @@ FocusScope {
                                     }
                                 }
 
-                                Button {
+                                T.Button {
                                     Layout.preferredWidth: 24
                                     height: 24
                                     flat: true
@@ -995,7 +994,7 @@ FocusScope {
                         }
                     }
 
-                    Button {
+                    T.Button {
                         height: 34
                         background: Rectangle { color: "#16A34A"; radius: 6 }
                         contentItem: RowLayout {

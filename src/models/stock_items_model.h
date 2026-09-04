@@ -9,11 +9,18 @@ public:
     explicit StockItemsModel(QObject* parent = nullptr);
     Q_INVOKABLE void reload_data() override;
 
-    Q_INVOKABLE QStringList get_items_list() const;
+    Q_INVOKABLE QStringList get_items_list(const QString& filterType = "") const;
     Q_INVOKABLE QVariantMap get_item_by_name(const QString& name) const;
+    Q_INVOKABLE QVariantMap get_item_by_id(int itemId) const;
     Q_INVOKABLE QStringList get_item_types() const;
+    Q_INVOKABLE QStringList get_goods_types() const;
+    Q_INVOKABLE QStringList get_stock_groups() const;
     Q_INVOKABLE QStringList get_units() const;
     Q_INVOKABLE QStringList get_gst_rates() const;
+    Q_INVOKABLE bool add_stock_group(const QString& groupName);
+
+    Q_INVOKABLE bool save_stock_item_full(const QVariantMap& itemData);
+    Q_INVOKABLE bool update_stock_item_full(int itemId, const QVariantMap& itemData);
 
     Q_INVOKABLE bool add_stock_item(
         const QString& name, const QString& code, const QString& item_type,
