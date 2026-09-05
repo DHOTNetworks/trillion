@@ -32,15 +32,6 @@ find_package(Qt6 6.5 REQUIRED COMPONENTS
     Widgets
 )
 
-# Find private/template/layout packages for cross-platform qmltc compilation
-find_package(Qt6CorePrivate 6.5 QUIET)
-find_package(Qt6GuiPrivate 6.5 QUIET)
-find_package(Qt6QmlPrivate 6.5 QUIET)
-find_package(Qt6QuickPrivate 6.5 QUIET)
-find_package(Qt6QuickLayoutsPrivate 6.5 QUIET)
-find_package(Qt6QuickTemplates2Private 6.5 QUIET)
-find_package(Qt6QmlMetaPrivate 6.5 QUIET)
-
 # Embedded SQLite Amalgamation
 add_library(sqlite3_embedded STATIC
     third_party/sqlite/sqlite3.c
@@ -119,13 +110,11 @@ set(SOURCES
 
 qt_add_executable(${PROJECT_NAME} ${SOURCES})
 
-# Strict QML-to-C++ AOT Type Compilation via qmltc (qmlcachegen disabled to eliminate bytecode caching overhead)
+# Standard Qt 6 QML Module Compilation
 qt_add_qml_module(${PROJECT_NAME}
     URI MahadevERP
     VERSION 1.0
     RESOURCE_PREFIX /
-    ENABLE_TYPE_COMPILER
-    NO_CACHEGEN
     DEPENDENCIES
         QtQuick
         QtQuick.Layouts
@@ -188,37 +177,6 @@ qt_add_qml_module(${PROJECT_NAME}
         qml/views/TdsVoucherView.qml
 )
 
-# Cross-Platform Qt Private Header Include Resolution
-if(WIN32)
-    # Windows layout (MSVC / MinGW): <QT_DIR>/include/<Module>/<Version>
-    target_include_directories(${PROJECT_NAME} PRIVATE
-        "${QT6_INSTALL_PREFIX}/include/QtCore/${Qt6Core_VERSION}"
-        "${QT6_INSTALL_PREFIX}/include/QtCore/${Qt6Core_VERSION}/QtCore"
-        "${QT6_INSTALL_PREFIX}/include/QtGui/${Qt6Core_VERSION}"
-        "${QT6_INSTALL_PREFIX}/include/QtGui/${Qt6Core_VERSION}/QtGui"
-        "${QT6_INSTALL_PREFIX}/include/QtQml/${Qt6Core_VERSION}"
-        "${QT6_INSTALL_PREFIX}/include/QtQml/${Qt6Core_VERSION}/QtQml"
-        "${QT6_INSTALL_PREFIX}/include/QtQuick/${Qt6Core_VERSION}"
-        "${QT6_INSTALL_PREFIX}/include/QtQuick/${Qt6Core_VERSION}/QtQuick"
-        "${QT6_INSTALL_PREFIX}/include/QtQuickLayouts/${Qt6Core_VERSION}"
-        "${QT6_INSTALL_PREFIX}/include/QtQuickLayouts/${Qt6Core_VERSION}/QtQuickLayouts"
-        "${QT6_INSTALL_PREFIX}/include/QtQuickTemplates2/${Qt6Core_VERSION}"
-        "${QT6_INSTALL_PREFIX}/include/QtQuickTemplates2/${Qt6Core_VERSION}/QtQuickTemplates2"
-    )
-elseif(APPLE)
-    # macOS layout: Homebrew Framework / official SDK layout
-    file(GLOB MAC_QT_PRIV_DIRS
-        LIST_DIRECTORIES true
-        "/opt/homebrew/lib/Qt*.framework/Headers/${Qt6Core_VERSION}"
-        "/opt/homebrew/lib/Qt*.framework/Headers/${Qt6Core_VERSION}/*"
-        "/opt/homebrew/Cellar/*/*/lib/Qt*.framework/Versions/A/Headers/${Qt6Core_VERSION}"
-        "/opt/homebrew/Cellar/*/*/lib/Qt*.framework/Versions/A/Headers/${Qt6Core_VERSION}/*"
-        "${QT6_INSTALL_PREFIX}/lib/Qt*.framework/Headers/${Qt6Core_VERSION}"
-        "${QT6_INSTALL_PREFIX}/lib/Qt*.framework/Headers/${Qt6Core_VERSION}/*"
-    )
-    target_include_directories(${PROJECT_NAME} PRIVATE ${MAC_QT_PRIV_DIRS})
-endif()
-
 target_include_directories(${PROJECT_NAME} PRIVATE
     src
     src/engine
@@ -239,23 +197,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::QuickControls2
     Qt6::QuickLayouts
     Qt6::Widgets
-    $<$<TARGET_EXISTS:Qt6::CorePrivate>:Qt6::CorePrivate>
-    $<$<TARGET_EXISTS:Qt6::GuiPrivate>:Qt6::GuiPrivate>
-    $<$<TARGET_EXISTS:Qt6::QmlPrivate>:Qt6::QmlPrivate>
-    $<$<TARGET_EXISTS:Qt6::QuickPrivate>:Qt6::QuickPrivate>
-    $<$<TARGET_EXISTS:Qt6::QuickTemplates2Private>:Qt6::QuickTemplates2Private>
-    $<$<TARGET_EXISTS:Qt6::QuickLayoutsPrivate>:Qt6::QuickLayoutsPrivate>
-    $<$<TARGET_EXISTS:Qt6::QmlMetaPrivate>:Qt6::QmlMetaPrivate>
 )
-
-# On macOS Framework installations, ensure required framework binaries link directly
-if(APPLE)
-    target_link_libraries(${PROJECT_NAME} PRIVATE
-        "-framework QtQuickTemplates2"
-        "-framework QtQuickLayouts"
-        "-framework QtQmlMeta"
-    )
-endif()
 
 # Set Target Properties for macOS and Windows
 set_target_properties(${PROJECT_NAME} PROPERTIES
