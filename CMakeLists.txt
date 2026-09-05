@@ -26,21 +26,20 @@ find_package(Qt6 6.5 REQUIRED COMPONENTS
     Quick
     Qml
     QuickControls2
+    QuickLayouts
     Sql
     Svg
     Widgets
 )
 
-# Find private/template/layout packages for cross-platform qmltc compilation (Windows, macOS, Linux)
-find_package(Qt6 OPTIONAL_COMPONENTS
-    CorePrivate
-    QmlPrivate
-    QuickPrivate
-    QuickTemplates2Private
-    QuickLayoutsPrivate
-    QuickDialogs2Private
-    QmlMetaPrivate
-)
+# Find private/template/layout packages for cross-platform qmltc compilation
+find_package(Qt6CorePrivate 6.5 QUIET)
+find_package(Qt6GuiPrivate 6.5 QUIET)
+find_package(Qt6QmlPrivate 6.5 QUIET)
+find_package(Qt6QuickPrivate 6.5 QUIET)
+find_package(Qt6QuickLayoutsPrivate 6.5 QUIET)
+find_package(Qt6QuickTemplates2Private 6.5 QUIET)
+find_package(Qt6QmlMetaPrivate 6.5 QUIET)
 
 # Embedded SQLite Amalgamation
 add_library(sqlite3_embedded STATIC
@@ -190,7 +189,23 @@ qt_add_qml_module(${PROJECT_NAME}
 )
 
 # Cross-Platform Qt Private Header Include Resolution
-if(APPLE)
+if(WIN32)
+    # Windows layout (MSVC / MinGW): <QT_DIR>/include/<Module>/<Version>
+    target_include_directories(${PROJECT_NAME} PRIVATE
+        "${QT6_INSTALL_PREFIX}/include/QtCore/${Qt6Core_VERSION}"
+        "${QT6_INSTALL_PREFIX}/include/QtCore/${Qt6Core_VERSION}/QtCore"
+        "${QT6_INSTALL_PREFIX}/include/QtGui/${Qt6Core_VERSION}"
+        "${QT6_INSTALL_PREFIX}/include/QtGui/${Qt6Core_VERSION}/QtGui"
+        "${QT6_INSTALL_PREFIX}/include/QtQml/${Qt6Core_VERSION}"
+        "${QT6_INSTALL_PREFIX}/include/QtQml/${Qt6Core_VERSION}/QtQml"
+        "${QT6_INSTALL_PREFIX}/include/QtQuick/${Qt6Core_VERSION}"
+        "${QT6_INSTALL_PREFIX}/include/QtQuick/${Qt6Core_VERSION}/QtQuick"
+        "${QT6_INSTALL_PREFIX}/include/QtQuickLayouts/${Qt6Core_VERSION}"
+        "${QT6_INSTALL_PREFIX}/include/QtQuickLayouts/${Qt6Core_VERSION}/QtQuickLayouts"
+        "${QT6_INSTALL_PREFIX}/include/QtQuickTemplates2/${Qt6Core_VERSION}"
+        "${QT6_INSTALL_PREFIX}/include/QtQuickTemplates2/${Qt6Core_VERSION}/QtQuickTemplates2"
+    )
+elseif(APPLE)
     # macOS layout: Homebrew Framework / official SDK layout
     file(GLOB MAC_QT_PRIV_DIRS
         LIST_DIRECTORIES true
@@ -222,6 +237,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::Qml
     Qt6::Quick
     Qt6::QuickControls2
+    Qt6::QuickLayouts
     Qt6::Widgets
     $<$<TARGET_EXISTS:Qt6::CorePrivate>:Qt6::CorePrivate>
     $<$<TARGET_EXISTS:Qt6::GuiPrivate>:Qt6::GuiPrivate>
