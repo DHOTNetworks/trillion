@@ -126,20 +126,25 @@ Item {
     }
 
     function recalculateRowAmount(forceRecalcWeight) {
+        if (typeof bagsInput === "undefined" || !bagsInput) return
         var b = parseInt(bagsInput.text) || 0
-        var l = parseFloat(looseInput.text) || 0.0
-        var pVal = parseFloat(pkngInput.text) || 0.500
+        var l = (typeof looseInput !== "undefined" && looseInput) ? (parseFloat(looseInput.text) || 0.0) : 0.0
+        var pVal = (typeof pkngInput !== "undefined" && pkngInput) ? (parseFloat(pkngInput.text) || 0.500) : 0.500
         var pQtl = pVal > 2.0 ? pVal / 100.0 : pVal
         var autoWeight = Math.round(((b * pQtl) + l) * 1000.0) / 1000.0
 
-        if (forceRecalcWeight || weightInput.text.trim() === "" || bagsInput.focusInput || looseInput.focusInput || pkngInput.focusInput) {
-            weightInput.text = autoWeight > 0 ? autoWeight.toFixed(3) : (b > 0 || l > 0 ? "0.000" : "")
+        if (typeof weightInput !== "undefined" && weightInput) {
+            if (forceRecalcWeight || (weightInput.text || "").trim() === "" || (bagsInput && bagsInput.isFocused) || (typeof looseInput !== "undefined" && looseInput && looseInput.isFocused) || (typeof pkngInput !== "undefined" && pkngInput && pkngInput.isFocused)) {
+                weightInput.text = autoWeight > 0 ? autoWeight.toFixed(3) : (b > 0 || l > 0 ? "0.000" : "")
+            }
         }
 
-        var w = parseFloat(weightInput.text) || autoWeight
-        var r = parseFloat(rateInput.text) || 0.0
+        var w = (typeof weightInput !== "undefined" && weightInput) ? (parseFloat(weightInput.text) || autoWeight) : autoWeight
+        var r = (typeof rateInput !== "undefined" && rateInput) ? (parseFloat(rateInput.text) || 0.0) : 0.0
         var autoAmt = Math.round(w * r * 100.0) / 100.0
-        amountInput.text = autoAmt > 0 ? autoAmt.toFixed(2) : "0.00"
+        if (typeof amountInput !== "undefined" && amountInput) {
+            amountInput.text = autoAmt > 0 ? autoAmt.toFixed(2) : "0.00"
+        }
     }
 
     function addCurrentItemRow() {

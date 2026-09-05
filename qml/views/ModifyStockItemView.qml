@@ -657,7 +657,7 @@ Item {
                                     id: purcLedgerCombo
                                     Layout.fillWidth: true
                                     comboHeight: 34
-                                    model: (typeof partiesModel !== "undefined" && partiesModel) ? partiesModel.get_account_groups() : ["Purchase Accounts", "Trading A/c"]
+                                    model: (typeof partiesModel !== "undefined" && partiesModel) ? partiesModel.get_parties_list() : []
                                 }
                             }
 
@@ -669,7 +669,7 @@ Item {
                                     id: purcRetLedgerCombo
                                     Layout.fillWidth: true
                                     comboHeight: 34
-                                    model: (typeof partiesModel !== "undefined" && partiesModel) ? partiesModel.get_account_groups() : ["Purchase Accounts", "Trading A/c"]
+                                    model: (typeof partiesModel !== "undefined" && partiesModel) ? partiesModel.get_parties_list() : []
                                 }
                             }
 
@@ -681,7 +681,7 @@ Item {
                                     id: saleLedgerCombo
                                     Layout.fillWidth: true
                                     comboHeight: 34
-                                    model: (typeof partiesModel !== "undefined" && partiesModel) ? partiesModel.get_account_groups() : ["Sales Accounts", "Trading A/c"]
+                                    model: (typeof partiesModel !== "undefined" && partiesModel) ? partiesModel.get_parties_list() : []
                                 }
                             }
 
@@ -693,7 +693,7 @@ Item {
                                     id: saleRetLedgerCombo
                                     Layout.fillWidth: true
                                     comboHeight: 34
-                                    model: (typeof partiesModel !== "undefined" && partiesModel) ? partiesModel.get_account_groups() : ["Sales Accounts", "Trading A/c"]
+                                    model: (typeof partiesModel !== "undefined" && partiesModel) ? partiesModel.get_parties_list() : []
                                 }
                             }
 
@@ -705,7 +705,7 @@ Item {
                                     id: stockLedgerCombo
                                     Layout.fillWidth: true
                                     comboHeight: 34
-                                    model: (typeof partiesModel !== "undefined" && partiesModel) ? partiesModel.get_account_groups() : ["Stock-in-Hand", "Trading A/c"]
+                                    model: (typeof partiesModel !== "undefined" && partiesModel) ? partiesModel.get_parties_list() : []
                                 }
                             }
                         }
@@ -1006,10 +1006,10 @@ Item {
         narrationInput.text = item.item_narration ? item.item_narration : ""
         capitalGoodsCheck.checked = (item.capital_goods === 1)
 
-        // Tax
         hsnInput.text = item.hsn_code ? item.hsn_code : "1006"
-        var gstVal = (item.gst_rate !== undefined && item.gst_rate !== null) ? item.gst_rate : 5.0
-        var gstStr = gstVal.toString() + "%"
+        var gstVal = (item.gst_rate !== undefined && item.gst_rate !== null) ? parseFloat(item.gst_rate) : 0.0
+        if (isNaN(gstVal)) gstVal = 0.0
+        var gstStr = (gstVal > 0 ? gstVal.toString() : "0") + "%"
         var gIdx = gstRateCombo.find(gstStr)
         if (gIdx !== -1) gstRateCombo.currentIndex = gIdx
         else gstRateCombo.editText = gstStr

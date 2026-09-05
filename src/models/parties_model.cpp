@@ -125,14 +125,77 @@ QStringList PartiesModel::get_stations() const {
     return result;
 }
 
-QString PartiesModel::get_ledger_live_balance(const QString& ledgerName) {
-    if (ledgerName.trimmed().isEmpty()) return "0.00 Dr";
-    QString cleanName = ledgerName.trimmed().toLower();
+QString PartiesModel::get_party_live_balance_by_id(int partyId) const {
+    if (partyId <= 0) return "0.00 Dr";
 
     // 1. Opening balance
     QVariantList pRows = DatabaseManager::instance().executeQuery(
-        "SELECT opening_balance, balance_type FROM parties WHERE LOWER(name) = ? OR LOWER(name) LIKE ? LIMIT 1;",
-        {cleanName, "%" + cleanName + "%"}
+        "SELECT opening_balance, balance_type, name FROM parties WHERE id = ? LIMIT 1;",
+        {partyId}
+    );
+    if (pRows.isEmpty()) return "0.00 Dr";
+
+    QVariantMap p = pRows.first().toMap();
+    double netDr = 0.0;
+    double netCr = 0.0;
+    double op = p.value("opening_balance").toDouble();
+    QString bType = p.value("balance_type").toString();
+    QString pName = p.value("name").toString().trimmed();
+    if (bType == "Dr") netDr += op;
+    else netCr += op;
+
+    // 2. Sales Invoices (Dr) - match by customer_id or party name fallback
+    QVariant sVal = DatabaseManager::instance().executeScalar(
+        "SELECT SUM(total_amount) FROM sales_invoices WHERE customer_id = ? OR ((customer_id IS NULL OR customer_id = 0) AND LOWER(customer_name) = LOWER(?));",
+        {partyId, pName}
+    );
+    if (sVal.isValid() && !sVal.isNull()) netDr += sVal.toDouble();
+
+    // 3. Paddy Procurement (Dr)
+    QVariant paVal = DatabaseManager::instance().executeScalar(
+        "SELECT SUM(total_amount) FROM paddy_procurement WHERE farmer_id = ? OR ((farmer_id IS NULL OR farmer_id = 0) AND LOWER(farmer_name) = LOWER(?));",
+        {partyId, pName}
+    );
+    if (paVal.isValid() && !paVal.isNull()) netDr += paVal.toDouble();
+
+    // 4. Purchase Invoices (Cr)
+    QVariant purVal = DatabaseManager::instance().executeScalar(
+        "SELECT SUM(total_amount) FROM purchase_invoices WHERE supplier_id = ? OR ((supplier_id IS NULL OR supplier_id = 0) AND LOWER(supplier_name) = LOWER(?));",
+        {partyId, pName}
+    );
+    if (purVal.isValid() && !purVal.isNull()) netCr += purVal.toDouble();
+
+    // 5. Vouchers (Dr/Cr)
+    QVariant vDr = DatabaseManager::instance().executeScalar(
+        "SELECT SUM(amount) FROM vouchers WHERE voucher_type NOT IN ('Sales', 'Purchase') AND (party_id = ? OR ledger_id = ?);",
+        {partyId, partyId}
+    );
+    if (vDr.isValid() && !vDr.isNull()) netDr += vDr.toDouble();
+
+    double diff = netDr - netCr;
+    if (diff >= 0) {
+        return AccountingEngine::formatIndianCurrency(diff, false) + " Dr";
+    } else {
+        return AccountingEngine::formatIndianCurrency(std::abs(diff), false) + " Cr";
+    }
+}
+
+QString PartiesModel::get_ledger_live_balance(const QString& ledgerName) {
+    if (ledgerName.trimmed().isEmpty()) return "0.00 Dr";
+    QString cleanName = ledgerName.trimmed();
+
+    QVariant pIdVal = DatabaseManager::instance().executeScalar(
+        "SELECT id FROM parties WHERE LOWER(name) = LOWER(?) LIMIT 1;",
+        {cleanName}
+    );
+    if (pIdVal.isValid() && pIdVal.toInt() > 0) {
+        return get_party_live_balance_by_id(pIdVal.toInt());
+    }
+
+    // 1. Opening balance fallback
+    QVariantList pRows = DatabaseManager::instance().executeQuery(
+        "SELECT opening_balance, balance_type FROM parties WHERE LOWER(name) = LOWER(?) OR LOWER(name) LIKE ? LIMIT 1;",
+        {cleanName, "%" + cleanName.toLower() + "%"}
     );
 
     double netDr = 0.0;
@@ -148,22 +211,22 @@ QString PartiesModel::get_ledger_live_balance(const QString& ledgerName) {
 
     // 2. Sales Invoices (Dr)
     QVariant sVal = DatabaseManager::instance().executeScalar(
-        "SELECT SUM(total_amount) FROM sales_invoices WHERE LOWER(customer_name) = ? OR LOWER(customer_name) LIKE ?;",
-        {cleanName, "%" + cleanName + "%"}
+        "SELECT SUM(total_amount) FROM sales_invoices WHERE LOWER(customer_name) = LOWER(?) OR LOWER(customer_name) LIKE ?;",
+        {cleanName, "%" + cleanName.toLower() + "%"}
     );
     if (sVal.isValid()) netDr += sVal.toDouble();
 
     // 3. Paddy Procurement (Dr)
     QVariant paVal = DatabaseManager::instance().executeScalar(
-        "SELECT SUM(total_amount) FROM paddy_procurement WHERE LOWER(farmer_name) = ? OR LOWER(farmer_name) LIKE ?;",
-        {cleanName, "%" + cleanName + "%"}
+        "SELECT SUM(total_amount) FROM paddy_procurement WHERE LOWER(farmer_name) = LOWER(?) OR LOWER(farmer_name) LIKE ?;",
+        {cleanName, "%" + cleanName.toLower() + "%"}
     );
     if (paVal.isValid()) netDr += paVal.toDouble();
 
     // 4. Purchase Invoices (Cr)
     QVariant purVal = DatabaseManager::instance().executeScalar(
-        "SELECT SUM(total_amount) FROM purchase_invoices WHERE LOWER(supplier_name) = ? OR LOWER(supplier_name) LIKE ?;",
-        {cleanName, "%" + cleanName + "%"}
+        "SELECT SUM(total_amount) FROM purchase_invoices WHERE LOWER(supplier_name) = LOWER(?) OR LOWER(supplier_name) LIKE ?;",
+        {cleanName, "%" + cleanName.toLower() + "%"}
     );
     if (purVal.isValid()) netCr += purVal.toDouble();
 
@@ -177,8 +240,8 @@ QString PartiesModel::get_ledger_live_balance(const QString& ledgerName) {
         QString crP = row.value("account_type").toString().trimmed().toLower();
         double vAmt = row.value("amount").toDouble();
 
-        if (!drP.isEmpty() && (drP == cleanName || drP.contains(cleanName))) netDr += vAmt;
-        if (!crP.isEmpty() && (crP == cleanName || crP.contains(cleanName))) netCr += vAmt;
+        if (!drP.isEmpty() && (drP == cleanName.toLower() || drP.contains(cleanName.toLower()))) netDr += vAmt;
+        if (!crP.isEmpty() && (crP == cleanName.toLower() || crP.contains(cleanName.toLower()))) netCr += vAmt;
     }
 
     double diff = netDr - netCr;
@@ -189,12 +252,32 @@ QString PartiesModel::get_ledger_live_balance(const QString& ledgerName) {
     }
 }
 
+QVariantMap PartiesModel::get_party_by_id(int partyId) const {
+    if (partyId <= 0) return {};
+    QVariantList rows = DatabaseManager::instance().executeQuery(
+        "SELECT * FROM parties WHERE id = ? LIMIT 1;",
+        {partyId}
+    );
+    if (!rows.isEmpty()) {
+        return rows.first().toMap();
+    }
+    return {};
+}
+
 QVariantMap PartiesModel::get_party_by_name(const QString& name) const {
     QString cleanName = name.trimmed();
+    if (cleanName.isEmpty()) return {};
+
     QVariantList rows = DatabaseManager::instance().executeQuery(
-        "SELECT * FROM parties WHERE name = ? OR name LIKE ? LIMIT 1;",
-        {cleanName, "%" + cleanName + "%"}
+        "SELECT * FROM parties WHERE name = ? COLLATE NOCASE LIMIT 1;",
+        {cleanName}
     );
+    if (rows.isEmpty()) {
+        rows = DatabaseManager::instance().executeQuery(
+            "SELECT * FROM parties WHERE alias = ? COLLATE NOCASE OR name LIKE ? LIMIT 1;",
+            {cleanName, "%" + cleanName + "%"}
+        );
+    }
     if (!rows.isEmpty()) {
         return rows.first().toMap();
     }
@@ -210,7 +293,7 @@ QVariantList PartiesModel::search_parties(const QString& query) const {
     QString wildcard = "%" + pattern + "%";
 
     QVariantList rows = DatabaseManager::instance().executeQuery(
-        "SELECT id, name, group_name, party_type, phone, city, gstin, opening_balance, balance_type FROM parties WHERE name LIKE ? OR alias LIKE ? OR phone LIKE ? OR city LIKE ? ORDER BY name COLLATE NOCASE ASC LIMIT 30;",
+        "SELECT id, legacy_id, name, group_name, party_type, phone, city, gstin, opening_balance, balance_type FROM parties WHERE name LIKE ? OR alias LIKE ? OR phone LIKE ? OR city LIKE ? ORDER BY name COLLATE NOCASE ASC LIMIT 30;",
         {wildcard, wildcard, wildcard, wildcard}
     );
     return rows;

@@ -23,5 +23,10 @@ public:
         const QString& operator_name = "", const QString& notes = ""
     );
 
-    Q_INVOKABLE QVariantList get_milling_statement(const QString& fy = "");
+    Q_INVOKABLE QVariantList get_milling_statement(const QString& from_date = "", const QString& to_date = "", const QString& variety = "");
+    Q_INVOKABLE QVariantMap get_milling_totals(const QString& from_date = "", const QString& to_date = "");
+    Q_INVOKABLE QVariantList get_batch_items(int batch_id = 0, const QString& batch_no = "");
+
+private:
+    void auto_repair_milling_batches();
 };

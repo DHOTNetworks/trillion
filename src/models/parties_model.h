@@ -13,8 +13,10 @@ public:
     Q_INVOKABLE QStringList get_party_list() const;
     Q_INVOKABLE QStringList get_bank_accounts_list() const;
     Q_INVOKABLE QString get_ledger_live_balance(const QString& ledgerName);
+    Q_INVOKABLE QString get_party_live_balance_by_id(int partyId) const;
     Q_INVOKABLE QVariantMap get_party_statement(const QString& partyName);
     Q_INVOKABLE QVariantMap get_party_by_name(const QString& name) const;
+    Q_INVOKABLE QVariantMap get_party_by_id(int partyId) const;
     Q_INVOKABLE QVariantList search_parties(const QString& query) const;
     Q_INVOKABLE QStringList get_account_groups() const;
     Q_INVOKABLE QStringList get_cities() const;

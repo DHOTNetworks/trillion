@@ -371,7 +371,7 @@ Item {
                                     Layout.fillWidth: true
                                     comboHeight: 34
                                     model: (typeof stockItemsModel !== "undefined" && stockItemsModel) ? stockItemsModel.get_gst_rates() : ["0%", "5%", "12%", "18%", "28%"]
-                                    currentIndex: 1 // default 5%
+                                    currentIndex: 0 // default 0%
                                 }
                             }
 
@@ -961,7 +961,8 @@ Item {
     }
 
     function executeSaveStockItem() {
-        var gstVal = parseFloat(gstRateCombo.currentText.replace("%", "")) || 5.0
+        var gstText = gstRateCombo.currentText.replace("%", "").trim()
+        var gstVal = isNaN(parseFloat(gstText)) ? 0.0 : parseFloat(gstText)
         var payload = {
             "name": nameInput.text.trim(),
             "code": "",

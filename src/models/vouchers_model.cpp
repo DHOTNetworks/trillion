@@ -100,7 +100,10 @@ bool VouchersModel::add_cheque_voucher(const QString& vch_type, const QString& d
         fullNarr += fullNarr.isEmpty() ? narration : (" | " + narration);
     }
 
-    QVariant partyRow = DatabaseManager::instance().executeScalar("SELECT id FROM parties WHERE name = ? LIMIT 1;", {dr_party});
+    QVariant partyRow = DatabaseManager::instance().executeScalar("SELECT id FROM parties WHERE name = ? COLLATE NOCASE LIMIT 1;", {dr_party});
+    if (!partyRow.isValid()) {
+        partyRow = DatabaseManager::instance().executeScalar("SELECT id FROM parties WHERE alias = ? COLLATE NOCASE OR name LIKE ? LIMIT 1;", {dr_party, "%" + dr_party + "%"});
+    }
     int partyId = partyRow.isValid() ? partyRow.toInt() : 1;
 
     DatabaseManager::instance().beginTransaction();
@@ -138,7 +141,10 @@ bool VouchersModel::add_journal_voucher(const QString& dr_party, const QString& 
         fullNarr += fullNarr.isEmpty() ? narration : (" | " + narration);
     }
 
-    QVariant partyRow = DatabaseManager::instance().executeScalar("SELECT id FROM parties WHERE name = ? LIMIT 1;", {dr_party});
+    QVariant partyRow = DatabaseManager::instance().executeScalar("SELECT id FROM parties WHERE name = ? COLLATE NOCASE LIMIT 1;", {dr_party});
+    if (!partyRow.isValid()) {
+        partyRow = DatabaseManager::instance().executeScalar("SELECT id FROM parties WHERE alias = ? COLLATE NOCASE OR name LIKE ? LIMIT 1;", {dr_party, "%" + dr_party + "%"});
+    }
     int partyId = partyRow.isValid() ? partyRow.toInt() : 1;
 
     DatabaseManager::instance().beginTransaction();

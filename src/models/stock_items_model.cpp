@@ -157,6 +157,12 @@ QStringList StockItemsModel::get_gst_rates() const {
     return {"0%", "5%", "12%", "18%", "28%"};
 }
 
+static int resolvePartyId(DatabaseManager& db, const QString& name) {
+    if (name.trimmed().isEmpty()) return 0;
+    QVariant v = db.executeScalar("SELECT id FROM parties WHERE name = ? OR alias = ? LIMIT 1;", {name.trimmed(), name.trimmed()});
+    return (v.isValid() && !v.isNull()) ? v.toInt() : 0;
+}
+
 bool StockItemsModel::save_stock_item_full(const QVariantMap& d) {
     auto& db = DatabaseManager::instance();
     QString name = d.value("name").toString().trimmed();
@@ -182,22 +188,36 @@ bool StockItemsModel::save_stock_item_full(const QVariantMap& d) {
     int capitalGoods = d.value("capital_goods", 0).toInt();
 
     QString hsnCode = d.value("hsn_code", "1006").toString().trimmed();
-    double gstRate = d.value("gst_rate", 5.0).toDouble();
+    double gstRate = d.value("gst_rate", 0.0).toDouble();
     double cessRate = d.value("cess_rate", 0.0).toDouble();
     double vatRate = d.value("vat_rate", 0.0).toDouble();
     QString vatLedger = d.value("vat_ledger", "VAT A/c").toString().trimmed();
+    int vatLedgerId = d.value("vat_ledger_id", 0).toInt();
+    if (vatLedgerId <= 0) vatLedgerId = resolvePartyId(db, vatLedger);
+
     double surchargeOnVat = d.value("surcharge_on_vat", 0.0).toDouble();
     double vatAgainstD1 = d.value("vat_against_d1", 0.0).toDouble();
     double cstRate = d.value("cst_rate", 0.0).toDouble();
     QString cstLedger = d.value("cst_ledger", "CST A/c").toString().trimmed();
+    int cstLedgerId = d.value("cst_ledger_id", 0).toInt();
+    if (cstLedgerId <= 0) cstLedgerId = resolvePartyId(db, cstLedger);
+
     double cstWithoutCForm = d.value("cst_without_cform", 0.0).toDouble();
 
     double damiRate = d.value("dami_rate", 0.0).toDouble();
     QString damiLedger = d.value("dami_ledger", "Dami A/c").toString().trimmed();
+    int damiLedgerId = d.value("dami_ledger_id", 0).toInt();
+    if (damiLedgerId <= 0) damiLedgerId = resolvePartyId(db, damiLedger);
+
     double marketFeeRate = d.value("market_fee_rate", 0.0).toDouble();
     QString marketFeeLedger = d.value("market_fee_ledger", "Market Fee A/c").toString().trimmed();
+    int marketFeeLedgerId = d.value("market_fee_ledger_id", 0).toInt();
+    if (marketFeeLedgerId <= 0) marketFeeLedgerId = resolvePartyId(db, marketFeeLedger);
+
     double hrdfRate = d.value("hrdf_rate", 0.0).toDouble();
     QString hrdfLedger = d.value("hrdf_ledger", "H.R.D.F. A/c").toString().trimmed();
+    int hrdfLedgerId = d.value("hrdf_ledger_id", 0).toInt();
+    if (hrdfLedgerId <= 0) hrdfLedgerId = resolvePartyId(db, hrdfLedger);
 
     int mktCommttFormApply = d.value("market_commtt_form_apply", 0).toInt();
     int mktCommttCouponApply = d.value("market_commtt_coupon_apply", 0).toInt();
@@ -220,11 +240,28 @@ bool StockItemsModel::save_stock_item_full(const QVariantMap& d) {
     }
 
     QString purchaseLedger = d.value("purchase_ledger", "Purchase Accounts").toString().trimmed();
+    int purchaseLedgerId = d.value("purchase_ledger_id", 0).toInt();
+    if (purchaseLedgerId <= 0) purchaseLedgerId = resolvePartyId(db, purchaseLedger);
+
     QString purchaseReturnLedger = d.value("purchase_return_ledger", purchaseLedger).toString().trimmed();
+    int purchaseReturnLedgerId = d.value("purchase_return_ledger_id", 0).toInt();
+    if (purchaseReturnLedgerId <= 0) purchaseReturnLedgerId = resolvePartyId(db, purchaseReturnLedger);
+
     QString saleLedger = d.value("sale_ledger", "Sales Accounts").toString().trimmed();
+    int saleLedgerId = d.value("sale_ledger_id", 0).toInt();
+    if (saleLedgerId <= 0) saleLedgerId = resolvePartyId(db, saleLedger);
+
     QString saleReturnLedger = d.value("sale_return_ledger", saleLedger).toString().trimmed();
+    int saleReturnLedgerId = d.value("sale_return_ledger_id", 0).toInt();
+    if (saleReturnLedgerId <= 0) saleReturnLedgerId = resolvePartyId(db, saleReturnLedger);
+
     QString stockLedger = d.value("stock_ledger", "Stock-in-Hand").toString().trimmed();
+    int stockLedgerId = d.value("stock_ledger_id", 0).toInt();
+    if (stockLedgerId <= 0) stockLedgerId = resolvePartyId(db, stockLedger);
+
     QString gstLedger = d.value("gst_ledger", "Duties & Taxes").toString().trimmed();
+    int gstLedgerId = d.value("gst_ledger_id", 0).toInt();
+    if (gstLedgerId <= 0) gstLedgerId = resolvePartyId(db, gstLedger);
 
     int isMillingItem = d.value("is_milling_item", 0).toInt();
     int includeInTrading = d.value("include_in_trading", 1).toInt();
@@ -259,26 +296,28 @@ bool StockItemsModel::save_stock_item_full(const QVariantMap& d) {
         "INSERT INTO stock_items ("
         "name, code, item_type, goods_type, trading_group, group_code, company_name, category_name, unit, unit_code, "
         "rate_calc_on, auto_adjust_name, item_narration, capital_goods, hsn_code, gst_rate, cess_rate, "
-        "vat_rate, vat_ledger, surcharge_on_vat, vat_against_d1, cst_rate, cst_ledger, cst_without_cform, "
-        "dami_rate, dami_ledger, market_fee_rate, market_fee_ledger, hrdf_rate, hrdf_ledger, "
+        "vat_rate, vat_ledger, vat_ledger_id, surcharge_on_vat, vat_against_d1, cst_rate, cst_ledger, cst_ledger_id, cst_without_cform, "
+        "dami_rate, dami_ledger, dami_ledger_id, market_fee_rate, market_fee_ledger, market_fee_ledger_id, hrdf_rate, hrdf_ledger, hrdf_ledger_id, "
         "market_commtt_form_apply, market_commtt_coupon_apply, dami_calc_on_weight, tax_on_qty, "
         "purchase_rate, sale_rate, bonus_approved, mrp, discount, packing_kg, "
         "opening_bags, opening_qty, opening_rate, opening_value, "
-        "purchase_ledger, purchase_return_ledger, sale_ledger, sale_return_ledger, stock_ledger, gst_ledger, "
+        "purchase_ledger, purchase_ledger_id, purchase_return_ledger, purchase_return_ledger_id, "
+        "sale_ledger, sale_ledger_id, sale_return_ledger, sale_return_ledger_id, stock_ledger, stock_ledger_id, gst_ledger, gst_ledger_id, "
         "is_milling_item, include_in_trading, calculate_stock, labour_rate_unit, "
         "utrai_rate_1, jharai_rate_1, bharai_rate_1, tulai_rate_1, khichai_rate_1, silai_rate_1, loading_rate_1, "
         "utrai_rate_2, jharai_rate_2, bharai_rate_2, tulai_rate_2, khichai_rate_2, silai_rate_2, loading_rate_2, "
         "utrai_rate_3, jharai_rate_3, bharai_rate_3, tulai_rate_3, khichai_rate_3, silai_rate_3, loading_rate_3) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
         {
             name, code, itemType, goodsType, tradingGroup, groupCode, companyName, tradingGroup, unit, unitCode,
             rateCalcOn, autoAdjustName, itemNarration, capitalGoods, hsnCode, gstRate, cessRate,
-            vatRate, vatLedger, surchargeOnVat, vatAgainstD1, cstRate, cstLedger, cstWithoutCForm,
-            damiRate, damiLedger, marketFeeRate, marketFeeLedger, hrdfRate, hrdfLedger,
+            vatRate, vatLedger, vatLedgerId, surchargeOnVat, vatAgainstD1, cstRate, cstLedger, cstLedgerId, cstWithoutCForm,
+            damiRate, damiLedger, damiLedgerId, marketFeeRate, marketFeeLedger, marketFeeLedgerId, hrdfRate, hrdfLedger, hrdfLedgerId,
             mktCommttFormApply, mktCommttCouponApply, damiCalcOnWeight, taxOnQty,
             purchaseRate, saleRate, bonusApproved, mrp, discount, packingKg,
             openingBags, openingQty, openingRate, openingValue,
-            purchaseLedger, purchaseReturnLedger, saleLedger, saleReturnLedger, stockLedger, gstLedger,
+            purchaseLedger, purchaseLedgerId, purchaseReturnLedger, purchaseReturnLedgerId,
+            saleLedger, saleLedgerId, saleReturnLedger, saleReturnLedgerId, stockLedger, stockLedgerId, gstLedger, gstLedgerId,
             isMillingItem, includeInTrading, calculateStock, labourRateUnit,
             utrai1, jharai1, bharai1, tulai1, khichai1, silai1, loading1,
             utrai2, jharai2, bharai2, tulai2, khichai2, silai2, loading2,
@@ -319,22 +358,36 @@ bool StockItemsModel::update_stock_item_full(int itemId, const QVariantMap& d) {
     int capitalGoods = d.value("capital_goods", 0).toInt();
 
     QString hsnCode = d.value("hsn_code", "1006").toString().trimmed();
-    double gstRate = d.value("gst_rate", 5.0).toDouble();
+    double gstRate = d.value("gst_rate", 0.0).toDouble();
     double cessRate = d.value("cess_rate", 0.0).toDouble();
     double vatRate = d.value("vat_rate", 0.0).toDouble();
     QString vatLedger = d.value("vat_ledger", "VAT A/c").toString().trimmed();
+    int vatLedgerId = d.value("vat_ledger_id", 0).toInt();
+    if (vatLedgerId <= 0) vatLedgerId = resolvePartyId(db, vatLedger);
+
     double surchargeOnVat = d.value("surcharge_on_vat", 0.0).toDouble();
     double vatAgainstD1 = d.value("vat_against_d1", 0.0).toDouble();
     double cstRate = d.value("cst_rate", 0.0).toDouble();
     QString cstLedger = d.value("cst_ledger", "CST A/c").toString().trimmed();
+    int cstLedgerId = d.value("cst_ledger_id", 0).toInt();
+    if (cstLedgerId <= 0) cstLedgerId = resolvePartyId(db, cstLedger);
+
     double cstWithoutCForm = d.value("cst_without_cform", 0.0).toDouble();
 
     double damiRate = d.value("dami_rate", 0.0).toDouble();
     QString damiLedger = d.value("dami_ledger", "Dami A/c").toString().trimmed();
+    int damiLedgerId = d.value("dami_ledger_id", 0).toInt();
+    if (damiLedgerId <= 0) damiLedgerId = resolvePartyId(db, damiLedger);
+
     double marketFeeRate = d.value("market_fee_rate", 0.0).toDouble();
     QString marketFeeLedger = d.value("market_fee_ledger", "Market Fee A/c").toString().trimmed();
+    int marketFeeLedgerId = d.value("market_fee_ledger_id", 0).toInt();
+    if (marketFeeLedgerId <= 0) marketFeeLedgerId = resolvePartyId(db, marketFeeLedger);
+
     double hrdfRate = d.value("hrdf_rate", 0.0).toDouble();
     QString hrdfLedger = d.value("hrdf_ledger", "H.R.D.F. A/c").toString().trimmed();
+    int hrdfLedgerId = d.value("hrdf_ledger_id", 0).toInt();
+    if (hrdfLedgerId <= 0) hrdfLedgerId = resolvePartyId(db, hrdfLedger);
 
     int mktCommttFormApply = d.value("market_commtt_form_apply", 0).toInt();
     int mktCommttCouponApply = d.value("market_commtt_coupon_apply", 0).toInt();
@@ -354,11 +407,28 @@ bool StockItemsModel::update_stock_item_full(int itemId, const QVariantMap& d) {
     double openingValue = d.value("opening_value", 0.0).toDouble();
 
     QString purchaseLedger = d.value("purchase_ledger", "Purchase Accounts").toString().trimmed();
+    int purchaseLedgerId = d.value("purchase_ledger_id", 0).toInt();
+    if (purchaseLedgerId <= 0) purchaseLedgerId = resolvePartyId(db, purchaseLedger);
+
     QString purchaseReturnLedger = d.value("purchase_return_ledger", purchaseLedger).toString().trimmed();
+    int purchaseReturnLedgerId = d.value("purchase_return_ledger_id", 0).toInt();
+    if (purchaseReturnLedgerId <= 0) purchaseReturnLedgerId = resolvePartyId(db, purchaseReturnLedger);
+
     QString saleLedger = d.value("sale_ledger", "Sales Accounts").toString().trimmed();
+    int saleLedgerId = d.value("sale_ledger_id", 0).toInt();
+    if (saleLedgerId <= 0) saleLedgerId = resolvePartyId(db, saleLedger);
+
     QString saleReturnLedger = d.value("sale_return_ledger", saleLedger).toString().trimmed();
+    int saleReturnLedgerId = d.value("sale_return_ledger_id", 0).toInt();
+    if (saleReturnLedgerId <= 0) saleReturnLedgerId = resolvePartyId(db, saleReturnLedger);
+
     QString stockLedger = d.value("stock_ledger", "Stock-in-Hand").toString().trimmed();
+    int stockLedgerId = d.value("stock_ledger_id", 0).toInt();
+    if (stockLedgerId <= 0) stockLedgerId = resolvePartyId(db, stockLedger);
+
     QString gstLedger = d.value("gst_ledger", "Duties & Taxes").toString().trimmed();
+    int gstLedgerId = d.value("gst_ledger_id", 0).toInt();
+    if (gstLedgerId <= 0) gstLedgerId = resolvePartyId(db, gstLedger);
 
     int isMillingItem = d.value("is_milling_item", 0).toInt();
     int includeInTrading = d.value("include_in_trading", 1).toInt();
@@ -393,12 +463,13 @@ bool StockItemsModel::update_stock_item_full(int itemId, const QVariantMap& d) {
         "UPDATE stock_items SET "
         "name = ?, code = ?, item_type = ?, goods_type = ?, trading_group = ?, group_code = ?, company_name = ?, category_name = ?, unit = ?, unit_code = ?, "
         "rate_calc_on = ?, auto_adjust_name = ?, item_narration = ?, capital_goods = ?, hsn_code = ?, gst_rate = ?, cess_rate = ?, "
-        "vat_rate = ?, vat_ledger = ?, surcharge_on_vat = ?, vat_against_d1 = ?, cst_rate = ?, cst_ledger = ?, cst_without_cform = ?, "
-        "dami_rate = ?, dami_ledger = ?, market_fee_rate = ?, market_fee_ledger = ?, hrdf_rate = ?, hrdf_ledger = ?, "
+        "vat_rate = ?, vat_ledger = ?, vat_ledger_id = ?, surcharge_on_vat = ?, vat_against_d1 = ?, cst_rate = ?, cst_ledger = ?, cst_ledger_id = ?, cst_without_cform = ?, "
+        "dami_rate = ?, dami_ledger = ?, dami_ledger_id = ?, market_fee_rate = ?, market_fee_ledger = ?, market_fee_ledger_id = ?, hrdf_rate = ?, hrdf_ledger = ?, hrdf_ledger_id = ?, "
         "market_commtt_form_apply = ?, market_commtt_coupon_apply = ?, dami_calc_on_weight = ?, tax_on_qty = ?, "
         "purchase_rate = ?, sale_rate = ?, bonus_approved = ?, mrp = ?, discount = ?, packing_kg = ?, "
         "opening_bags = ?, opening_qty = ?, opening_rate = ?, opening_value = ?, "
-        "purchase_ledger = ?, purchase_return_ledger = ?, sale_ledger = ?, sale_return_ledger = ?, stock_ledger = ?, gst_ledger = ?, "
+        "purchase_ledger = ?, purchase_ledger_id = ?, purchase_return_ledger = ?, purchase_return_ledger_id = ?, "
+        "sale_ledger = ?, sale_ledger_id = ?, sale_return_ledger = ?, sale_return_ledger_id = ?, stock_ledger = ?, stock_ledger_id = ?, gst_ledger = ?, gst_ledger_id = ?, "
         "is_milling_item = ?, include_in_trading = ?, calculate_stock = ?, labour_rate_unit = ?, "
         "utrai_rate_1 = ?, jharai_rate_1 = ?, bharai_rate_1 = ?, tulai_rate_1 = ?, khichai_rate_1 = ?, silai_rate_1 = ?, loading_rate_1 = ?, "
         "utrai_rate_2 = ?, jharai_rate_2 = ?, bharai_rate_2 = ?, tulai_rate_2 = ?, khichai_rate_2 = ?, silai_rate_2 = ?, loading_rate_2 = ?, "
@@ -407,12 +478,13 @@ bool StockItemsModel::update_stock_item_full(int itemId, const QVariantMap& d) {
         {
             name, code, itemType, goodsType, tradingGroup, groupCode, companyName, tradingGroup, unit, unitCode,
             rateCalcOn, autoAdjustName, itemNarration, capitalGoods, hsnCode, gstRate, cessRate,
-            vatRate, vatLedger, surchargeOnVat, vatAgainstD1, cstRate, cstLedger, cstWithoutCForm,
-            damiRate, damiLedger, marketFeeRate, marketFeeLedger, hrdfRate, hrdfLedger,
+            vatRate, vatLedger, vatLedgerId, surchargeOnVat, vatAgainstD1, cstRate, cstLedger, cstLedgerId, cstWithoutCForm,
+            damiRate, damiLedger, damiLedgerId, marketFeeRate, marketFeeLedger, marketFeeLedgerId, hrdfRate, hrdfLedger, hrdfLedgerId,
             mktCommttFormApply, mktCommttCouponApply, damiCalcOnWeight, taxOnQty,
             purchaseRate, saleRate, bonusApproved, mrp, discount, packingKg,
             openingBags, openingQty, openingRate, openingValue,
-            purchaseLedger, purchaseReturnLedger, saleLedger, saleReturnLedger, stockLedger, gstLedger,
+            purchaseLedger, purchaseLedgerId, purchaseReturnLedger, purchaseReturnLedgerId,
+            saleLedger, saleLedgerId, saleReturnLedger, saleReturnLedgerId, stockLedger, stockLedgerId, gstLedger, gstLedgerId,
             isMillingItem, includeInTrading, calculateStock, labourRateUnit,
             utrai1, jharai1, bharai1, tulai1, khichai1, silai1, loading1,
             utrai2, jharai2, bharai2, tulai2, khichai2, silai2, loading2,

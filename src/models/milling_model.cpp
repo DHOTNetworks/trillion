@@ -14,7 +14,29 @@ MillingModel::MillingModel(QObject* parent)
     reload_data();
 }
 
+void MillingModel::auto_repair_milling_batches() {
+    QVariant check = DatabaseManager::instance().executeScalar(
+        "SELECT COUNT(*) FROM milling_batches WHERE head_rice_qtl = 0.0 AND paddy_input_qtl > 0.0;"
+    );
+    if (check.isValid() && check.toInt() > 0) {
+        DatabaseManager::instance().executeNonQuery(
+            "UPDATE milling_batches AS mb "
+            "SET "
+            "  head_rice_qtl = IFNULL((SELECT SUM(weight_qtl) FROM milling_voucher_items WHERE batch_id = mb.id AND drcr = 'Dr' AND NOT (LOWER(item_name) LIKE '%bran%' AND LOWER(item_name) NOT LIKE '%brand%') AND LOWER(item_name) NOT LIKE '%broken%' AND LOWER(item_name) NOT LIKE '%nakku%' AND LOWER(item_name) NOT LIKE '%tibar%' AND LOWER(item_name) NOT LIKE '%dubar%' AND LOWER(item_name) NOT LIKE '%mogra%' AND LOWER(item_name) NOT LIKE '%kinki%' AND LOWER(item_name) NOT LIKE '%husk%' AND LOWER(item_name) NOT LIKE '%phak%' AND LOWER(item_name) NOT LIKE '%bhusa%'), 0.0), "
+            "  bran_qtl = IFNULL((SELECT SUM(weight_qtl) FROM milling_voucher_items WHERE batch_id = mb.id AND drcr = 'Dr' AND LOWER(item_name) LIKE '%bran%' AND LOWER(item_name) NOT LIKE '%brand%'), 0.0), "
+            "  broken_rice_qtl = IFNULL((SELECT SUM(weight_qtl) FROM milling_voucher_items WHERE batch_id = mb.id AND drcr = 'Dr' AND (LOWER(item_name) LIKE '%broken%' OR LOWER(item_name) LIKE '%nakku%' OR LOWER(item_name) LIKE '%tibar%' OR LOWER(item_name) LIKE '%dubar%' OR LOWER(item_name) LIKE '%mogra%' OR LOWER(item_name) LIKE '%kinki%')), 0.0), "
+            "  husk_qtl = IFNULL((SELECT SUM(weight_qtl) FROM milling_voucher_items WHERE batch_id = mb.id AND drcr = 'Dr' AND (LOWER(item_name) LIKE '%husk%' OR LOWER(item_name) LIKE '%phak%' OR LOWER(item_name) LIKE '%bhusa%')), 0.0);"
+        );
+        DatabaseManager::instance().executeNonQuery(
+            "UPDATE milling_batches SET "
+            "  wastage_qtl = ROUND(MAX(0.0, paddy_input_qtl - (head_rice_qtl + broken_rice_qtl + bran_qtl + husk_qtl)), 3), "
+            "  yield_pct = CASE WHEN paddy_input_qtl > 0 THEN ROUND((head_rice_qtl / paddy_input_qtl) * 100.0, 2) ELSE 0.0 END;"
+        );
+    }
+}
+
 void MillingModel::reload_data() {
+    auto_repair_milling_batches();
     beginResetModel();
     m_data = DatabaseManager::instance().executeQuery("SELECT * FROM milling_batches ORDER BY id DESC;");
     endResetModel();
@@ -127,6 +149,22 @@ bool MillingModel::add_milling_voucher_full(
         );
     }
 
+    if (nakku_weight > 0) {
+        DatabaseManager::instance().executeNonQuery(
+            "INSERT INTO milling_voucher_items (batch_id, batch_no, batch_date, row_no, drcr, item_name, weight_qtl, bags, narration) "
+            "VALUES (?, ?, ?, ?, 'Dr', ?, ?, ?, 'Rice Nakku / Broken Produced');",
+            {batchId, bNo, dt, rowIdx++, nakku_item.isEmpty() ? "Rice Nakku" : nakku_item, nakku_weight, nakku_bags}
+        );
+    }
+
+    if (other_byproduct_weight > 0) {
+        DatabaseManager::instance().executeNonQuery(
+            "INSERT INTO milling_voucher_items (batch_id, batch_no, batch_date, row_no, drcr, item_name, weight_qtl, bags, narration) "
+            "VALUES (?, ?, ?, ?, 'Dr', ?, ?, ?, 'Other Byproduct Produced');",
+            {batchId, bNo, dt, rowIdx++, other_byproduct_item.isEmpty() ? "Other Byproduct" : other_byproduct_item, other_byproduct_weight, other_byproduct_bags}
+        );
+    }
+
     // 4. Double-Entry Accounting Voucher
     QString vchNarr = QString("Milling Batch %1 - In: %2 (%3 Qtl), Out: %4 (%5 Qtl, %6%)").arg(bNo, paddy_item, QString::number(paddy_weight), rice_item, QString::number(rice_weight), QString::number(outturn_pct));
     if (!notes.isEmpty()) vchNarr += " | " + notes;
@@ -148,31 +186,119 @@ bool MillingModel::add_milling_voucher_full(
     return true;
 }
 
-QVariantList MillingModel::get_milling_statement(const QString& fy) {
-    QString targetFy = fy;
-    if (targetFy.isEmpty()) {
-        QVariant fyVal = DatabaseManager::instance().executeScalar("SELECT year_name FROM financial_years WHERE is_active = 1 LIMIT 1;");
-        targetFy = fyVal.isValid() ? fyVal.toString() : "FY 2026-27";
+QVariantList MillingModel::get_milling_statement(const QString& from_date, const QString& to_date, const QString& variety) {
+    QString sql = "SELECT * FROM milling_batches WHERE 1=1";
+    QVariantList args;
+    if (!from_date.isEmpty()) {
+        sql += " AND batch_date >= ?";
+        args.append(from_date);
     }
+    if (!to_date.isEmpty()) {
+        sql += " AND batch_date <= ?";
+        args.append(to_date);
+    }
+    if (!variety.isEmpty() && variety != "All" && variety != "All Varieties") {
+        sql += " AND (paddy_variety = ? OR paddy_item = ?)";
+        args.append(variety);
+        args.append(variety);
+    }
+    sql += " ORDER BY batch_date DESC, id DESC;";
 
-    QVariantList rawRows = DatabaseManager::instance().executeQuery(
-        "SELECT * FROM milling_batches WHERE financial_year = ? ORDER BY batch_date DESC, id DESC;",
-        {targetFy}
-    );
-
+    QVariantList rawRows = DatabaseManager::instance().executeQuery(sql, args);
     QVariantList result;
     for (const QVariant& r : rawRows) {
         QVariantMap row = r.toMap();
         double pWeight = row.value("paddy_input_qtl").toDouble();
         double rWeight = row.value("head_rice_qtl").toDouble();
+        double broken = row.value("broken_rice_qtl").toDouble();
+        double bran = row.value("bran_qtl").toDouble();
+        double husk = row.value("husk_qtl").toDouble();
+        double wastage = row.value("wastage_qtl").toDouble();
         double outturn = row.value("yield_pct").toDouble();
-        double cost = row.value("wastage_qtl").toDouble();
 
-        row["paddy_weight_fmt"] = AccountingEngine::formatIndianNumber(pWeight, 2, "Qtl");
-        row["rice_weight_fmt"] = AccountingEngine::formatIndianNumber(rWeight, 2, "Qtl");
-        row["outturn_fmt"] = QString::number(outturn, 'f', 2) + "%";
-        row["total_cost_fmt"] = AccountingEngine::formatIndianNumber(cost, 2, "Qtl");
+        row["paddy_input_fmt"] = AccountingEngine::formatIndianNumber(pWeight, 2, "Qtl");
+        row["paddy_weight_fmt"] = row["paddy_input_fmt"];
+        row["head_rice_fmt"] = AccountingEngine::formatIndianNumber(rWeight, 2, "Qtl");
+        row["rice_weight_fmt"] = row["head_rice_fmt"];
+        row["broken_rice_fmt"] = AccountingEngine::formatIndianNumber(broken, 2, "Qtl");
+        row["bran_fmt"] = AccountingEngine::formatIndianNumber(bran, 2, "Qtl");
+        row["husk_fmt"] = AccountingEngine::formatIndianNumber(husk, 2, "Qtl");
+        row["wastage_fmt"] = AccountingEngine::formatIndianNumber(wastage, 2, "Qtl");
+        row["yield_pct_fmt"] = QString::number(outturn, 'f', 2) + "%";
+        row["outturn_fmt"] = row["yield_pct_fmt"];
+        row["total_cost_fmt"] = AccountingEngine::formatIndianNumber(wastage, 2, "Qtl");
         result.append(row);
+    }
+    return result;
+}
+
+QVariantMap MillingModel::get_milling_totals(const QString& from_date, const QString& to_date) {
+    QString sql = "SELECT COUNT(*) as cnt, SUM(paddy_input_qtl) as tot_paddy, SUM(head_rice_qtl) as tot_rice, "
+                  "SUM(broken_rice_qtl) as tot_broken, SUM(bran_qtl) as tot_bran, SUM(husk_qtl) as tot_husk, "
+                  "SUM(wastage_qtl) as tot_wastage FROM milling_batches WHERE 1=1";
+    QVariantList args;
+    if (!from_date.isEmpty()) {
+        sql += " AND batch_date >= ?";
+        args.append(from_date);
+    }
+    if (!to_date.isEmpty()) {
+        sql += " AND batch_date <= ?";
+        args.append(to_date);
+    }
+
+    QVariantList rows = DatabaseManager::instance().executeQuery(sql, args);
+    QVariantMap res;
+    if (!rows.isEmpty()) {
+        QVariantMap r = rows.first().toMap();
+        int cnt = r.value("cnt").toInt();
+        double p = r.value("tot_paddy").toDouble();
+        double rice = r.value("tot_rice").toDouble();
+        double broken = r.value("tot_broken").toDouble();
+        double bran = r.value("tot_bran").toDouble();
+        double husk = r.value("tot_husk").toDouble();
+        double wastage = r.value("tot_wastage").toDouble();
+        double avgYield = p > 0 ? (rice / p * 100.0) : 0.0;
+
+        res["total_batches"] = cnt;
+        res["total_paddy_fmt"] = AccountingEngine::formatIndianNumber(p, 2, "Qtl");
+        res["total_head_rice_fmt"] = AccountingEngine::formatIndianNumber(rice, 2, "Qtl");
+        res["total_broken_fmt"] = AccountingEngine::formatIndianNumber(broken, 2, "Qtl");
+        res["total_bran_fmt"] = AccountingEngine::formatIndianNumber(bran, 2, "Qtl");
+        res["total_husk_fmt"] = AccountingEngine::formatIndianNumber(husk, 2, "Qtl");
+        res["total_wastage_fmt"] = AccountingEngine::formatIndianNumber(wastage, 2, "Qtl");
+        res["avg_yield_fmt"] = QString::number(avgYield, 'f', 2) + "%";
+    }
+    return res;
+}
+
+QVariantList MillingModel::get_batch_items(int batch_id, const QString& batch_no) {
+    QVariantList rawRows;
+    if (batch_id > 0) {
+        rawRows = DatabaseManager::instance().executeQuery(
+            "SELECT * FROM milling_voucher_items WHERE batch_id = ? ORDER BY row_no ASC, id ASC;",
+            {batch_id}
+        );
+    }
+    if (rawRows.isEmpty() && !batch_no.isEmpty()) {
+        rawRows = DatabaseManager::instance().executeQuery(
+            "SELECT * FROM milling_voucher_items WHERE batch_no = ? ORDER BY row_no ASC, id ASC;",
+            {batch_no}
+        );
+    }
+
+    QVariantList result;
+    for (const QVariant& r : rawRows) {
+        QVariantMap item = r.toMap();
+        double wt = item.value("weight_qtl").toDouble();
+        double rate = item.value("rate").toDouble();
+        double amt = item.value("amount").toDouble();
+        double pct = item.value("percentage").toDouble();
+
+        item["weight_fmt"] = AccountingEngine::formatIndianNumber(wt, 2, "Qtl");
+        item["rate_fmt"] = rate > 0.0 ? AccountingEngine::formatIndianCurrency(rate) : "-";
+        item["amount_fmt"] = amt > 0.0 ? AccountingEngine::formatIndianCurrency(amt) : "₹0.00";
+        item["percentage_fmt"] = pct > 0.0 ? QString::number(pct, 'f', 2) + "%" : "-";
+        result.append(item);
     }
     return result;
 }

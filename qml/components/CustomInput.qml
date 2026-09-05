@@ -8,7 +8,14 @@ ColumnLayout {
     property string placeholderText: ""
     property alias text: textInput.text
     property bool isRequired: false
-    property alias focusInput: textInput.focus
+    property bool focusInput: false
+    onFocusInputChanged: {
+        if (focusInput) {
+            textInput.forceActiveFocus()
+            textInput.selectAll()
+            focusInput = false
+        }
+    }
     property alias isFocused: textInput.activeFocus
     property alias inputMethodHints: textInput.inputMethodHints
     property alias font: textInput.font
@@ -120,6 +127,18 @@ ColumnLayout {
             }
             Keys.onEscapePressed: function(event) {
                 event.accepted = false
+            }
+            Keys.onTabPressed: function(event) {
+                event.accepted = true
+                Qt.callLater(function() {
+                    root.returnPressed()
+                })
+            }
+            Keys.onBacktabPressed: function(event) {
+                event.accepted = true
+                Qt.callLater(function() {
+                    root.leftPressed()
+                })
             }
         }
     }

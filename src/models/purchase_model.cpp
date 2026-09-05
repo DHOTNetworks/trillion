@@ -124,18 +124,32 @@ bool PurchaseModel::add_purchase_invoice_full(
     double gst_amount = cgst_amount + sgst_amount + igst_amount;
 
     // Resolve Item ID
+    int itemId = 1;
     QVariant itemRow = DatabaseManager::instance().executeScalar(
-        "SELECT id FROM stock_items WHERE name = ? LIMIT 1;",
+        "SELECT id FROM stock_items WHERE name = ? COLLATE NOCASE LIMIT 1;",
         {item_name}
     );
-    int itemId = itemRow.isValid() ? itemRow.toInt() : 1;
+    if (!itemRow.isValid()) {
+        itemRow = DatabaseManager::instance().executeScalar(
+            "SELECT id FROM stock_items WHERE code = ? OR name LIKE ? LIMIT 1;",
+            {item_name, "%" + item_name + "%"}
+        );
+    }
+    if (itemRow.isValid()) itemId = itemRow.toInt();
 
     // Resolve Supplier ID
+    int supplierId = 1;
     QVariant suppRow = DatabaseManager::instance().executeScalar(
-        "SELECT id FROM parties WHERE name = ? LIMIT 1;",
+        "SELECT id FROM parties WHERE name = ? COLLATE NOCASE LIMIT 1;",
         {party_ledger}
     );
-    int supplierId = suppRow.isValid() ? suppRow.toInt() : 1;
+    if (!suppRow.isValid()) {
+        suppRow = DatabaseManager::instance().executeScalar(
+            "SELECT id FROM parties WHERE alias = ? COLLATE NOCASE OR name LIKE ? LIMIT 1;",
+            {party_ledger, "%" + party_ledger + "%"}
+        );
+    }
+    if (suppRow.isValid()) supplierId = suppRow.toInt();
 
     // --- ATOMIC ACID TRANSACTION ---
     DatabaseManager::instance().beginTransaction();

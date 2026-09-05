@@ -11,6 +11,7 @@ Rectangle {
     border.color: searchInput.activeFocus ? "#2563EB" : "#CBD5E1"
     border.width: searchInput.activeFocus ? 2 : 1
 
+    property int selectedPartyId: -1
     property string selectedPartyName: ""
     property alias placeholderText: searchInput.placeholderText
     property alias text: searchInput.text
@@ -37,14 +38,21 @@ Rectangle {
             var item = searchResults[searchList.currentIndex]
             if (item) {
                 var pName = item.name ? String(item.name) : ""
+                var pId = item.id ? parseInt(item.id) : -1
+                root.selectedPartyId = pId
                 searchInput.text = pName
                 root.selectedPartyName = pName
                 root.searchResults = []
                 root.partySelected({
+                    id: pId,
+                    legacy_id: item.legacy_id || 0,
                     name: pName,
                     group_name: item.group_name ? String(item.group_name) : "Sundry Debtors",
                     phone: item.phone ? String(item.phone) : "",
-                    city: item.city ? String(item.city) : "Raichur"
+                    city: item.city ? String(item.city) : "",
+                    gstin: item.gstin ? String(item.gstin) : "",
+                    opening_balance: item.opening_balance || 0.0,
+                    balance_type: item.balance_type || "Dr"
                 })
             }
         }
@@ -166,6 +174,14 @@ Rectangle {
                         font.family: "Segoe UI, -apple-system, Roboto, sans-serif"
                         Layout.fillWidth: true
                         elide: Text.ElideRight
+                    }
+
+                    Text {
+                        visible: modelData && modelData.city && String(modelData.city).trim() !== ""
+                        text: (modelData && modelData.city) ? String(modelData.city) : ""
+                        color: index === searchList.currentIndex ? "#1E40AF" : "#64748B"
+                        font.pixelSize: 11
+                        font.family: "Segoe UI, -apple-system, Roboto, sans-serif"
                     }
 
                     Rectangle {

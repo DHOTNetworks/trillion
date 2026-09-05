@@ -868,7 +868,15 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
         if (hsn.empty()) hsn = "1006";
 
         std::string gstSlab = cleanText(getField(item, "GSTRateSlab"));
-        double gstRate = !gstSlab.empty() ? parseDoubleVal(gstSlab) : (vatRate > 0.01 ? vatRate : 5.0);
+        std::string gstSlabLower = toLowerStr(gstSlab);
+        double gstRate = 0.0;
+        if (gstSlabLower.find("exempt") != std::string::npos || gstSlabLower == "0" || gstSlabLower == "0%") {
+            gstRate = 0.0;
+        } else if (!gstSlab.empty()) {
+            gstRate = parseDoubleVal(gstSlab);
+        } else if (vatRate > 0.01) {
+            gstRate = vatRate;
+        }
         double cessRate = parseDoubleVal(getField(item, "CessRate"));
 
         // 4. Mandi Rates & Ledgers
@@ -876,16 +884,19 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
         int damiLedgerCode = parseIntVal(getField(item, "DamiLedger"));
         std::string damiLedger = "Dami A/c";
         if (ledgerCodeMap.count(damiLedgerCode)) damiLedger = ledgerCodeMap[damiLedgerCode];
+        int damiLedgerId = legacyIdToPartyId.count(damiLedgerCode) ? legacyIdToPartyId[damiLedgerCode] : 0;
 
         double marketFeeRate = parseDoubleVal(getField(item, "MarketFee"));
         int mFeeLedgerCode = parseIntVal(getField(item, "MarketFeeLedger"));
         std::string mFeeLedger = "Market Fee A/c";
         if (ledgerCodeMap.count(mFeeLedgerCode)) mFeeLedger = ledgerCodeMap[mFeeLedgerCode];
+        int mFeeLedgerId = legacyIdToPartyId.count(mFeeLedgerCode) ? legacyIdToPartyId[mFeeLedgerCode] : 0;
 
         double hrdfRate = parseDoubleVal(getField(item, "HRDF"));
         int hrdfLedgerCode = parseIntVal(getField(item, "HRDFLedger"));
         std::string hrdfLedger = "H.R.D.F. A/c";
         if (ledgerCodeMap.count(hrdfLedgerCode)) hrdfLedger = ledgerCodeMap[hrdfLedgerCode];
+        int hrdfLedgerId = legacyIdToPartyId.count(hrdfLedgerCode) ? legacyIdToPartyId[hrdfLedgerCode] : 0;
 
         int mktCommttFormApply = parseIntVal(getField(item, "MarketCommttFormApply"));
         int mktCommttCouponApply = parseIntVal(getField(item, "MarketCommttCouponApply"));
@@ -896,22 +907,30 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
         int purcLedgerCode = parseIntVal(getField(item, "PurchaseLedger"));
         std::string purcLedger = "Purchase Accounts";
         if (ledgerCodeMap.count(purcLedgerCode)) purcLedger = ledgerCodeMap[purcLedgerCode];
+        int purcLedgerId = legacyIdToPartyId.count(purcLedgerCode) ? legacyIdToPartyId[purcLedgerCode] : 0;
 
         int purcRetLedgerCode = parseIntVal(getField(item, "PurchaseReturnLedger"));
         std::string purcRetLedger = purcLedger;
         if (ledgerCodeMap.count(purcRetLedgerCode)) purcRetLedger = ledgerCodeMap[purcRetLedgerCode];
+        int purcRetLedgerId = legacyIdToPartyId.count(purcRetLedgerCode) ? legacyIdToPartyId[purcRetLedgerCode] : purcLedgerId;
 
         int saleLedgerCode = parseIntVal(getField(item, "SaleLedger"));
         std::string saleLedger = "Sales Accounts";
         if (ledgerCodeMap.count(saleLedgerCode)) saleLedger = ledgerCodeMap[saleLedgerCode];
+        int saleLedgerId = legacyIdToPartyId.count(saleLedgerCode) ? legacyIdToPartyId[saleLedgerCode] : 0;
 
         int saleRetLedgerCode = parseIntVal(getField(item, "SaleReturnLedger"));
         std::string saleRetLedger = saleLedger;
         if (ledgerCodeMap.count(saleRetLedgerCode)) saleRetLedger = ledgerCodeMap[saleRetLedgerCode];
+        int saleRetLedgerId = legacyIdToPartyId.count(saleRetLedgerCode) ? legacyIdToPartyId[saleRetLedgerCode] : saleLedgerId;
 
         int stockLedgerCode = parseIntVal(getField(item, "StockLedger"));
         std::string stockLedger = "Stock-in-Hand";
         if (ledgerCodeMap.count(stockLedgerCode)) stockLedger = ledgerCodeMap[stockLedgerCode];
+        int stockLedgerId = legacyIdToPartyId.count(stockLedgerCode) ? legacyIdToPartyId[stockLedgerCode] : 0;
+
+        int vatLedgerId = legacyIdToPartyId.count(vatLedgerCode) ? legacyIdToPartyId[vatLedgerCode] : 0;
+        int cstLedgerId = legacyIdToPartyId.count(cstLedgerCode) ? legacyIdToPartyId[cstLedgerCode] : 0;
 
         // 6. Pricing & Packing
         double packingKg = parseDoubleVal(getField(item, "Packing", "50.0"), 50.0);
@@ -964,18 +983,19 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
             "INSERT INTO stock_items ("
             "name, code, item_type, goods_type, trading_group, group_code, company_name, category_name, unit, unit_code, "
             "rate_calc_on, auto_adjust_name, item_narration, capital_goods, hsn_code, gst_rate, cess_rate, "
-            "vat_rate, vat_ledger, surcharge_on_vat, vat_against_d1, cst_rate, cst_ledger, cst_without_cform, "
-            "dami_rate, dami_ledger, market_fee_rate, market_fee_ledger, hrdf_rate, hrdf_ledger, "
+            "vat_rate, vat_ledger, vat_ledger_id, surcharge_on_vat, vat_against_d1, cst_rate, cst_ledger, cst_ledger_id, cst_without_cform, "
+            "dami_rate, dami_ledger, dami_ledger_id, market_fee_rate, market_fee_ledger, market_fee_ledger_id, hrdf_rate, hrdf_ledger, hrdf_ledger_id, "
             "market_commtt_form_apply, market_commtt_coupon_apply, dami_calc_on_weight, tax_on_qty, "
             "purchase_rate, sale_rate, bonus_approved, mrp, discount, packing_kg, "
             "opening_bags, opening_qty, opening_rate, opening_value, "
-            "purchase_ledger, purchase_return_ledger, sale_ledger, sale_return_ledger, stock_ledger, "
+            "purchase_ledger, purchase_ledger_id, purchase_return_ledger, purchase_return_ledger_id, "
+            "sale_ledger, sale_ledger_id, sale_return_ledger, sale_return_ledger_id, stock_ledger, stock_ledger_id, "
             "is_milling_item, include_in_trading, calculate_stock, labour_rate_unit, "
             "utrai_rate_1, jharai_rate_1, bharai_rate_1, tulai_rate_1, khichai_rate_1, silai_rate_1, loading_rate_1, "
             "utrai_rate_2, jharai_rate_2, bharai_rate_2, tulai_rate_2, khichai_rate_2, silai_rate_2, loading_rate_2, "
             "utrai_rate_3, jharai_rate_3, bharai_rate_3, tulai_rate_3, khichai_rate_3, silai_rate_3, loading_rate_3, "
             "legacy_code) "
-            "VALUES (?, ?, ?, ?, ?, ?, 'Mill Master', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+            "VALUES (?, ?, ?, ?, ?, ?, 'Mill Master', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
             {
                 QString::fromStdString(iName),
                 QString::fromStdString(code),
@@ -995,17 +1015,22 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
                 cessRate,
                 vatRate,
                 QString::fromStdString(vatLedger),
+                vatLedgerId,
                 surchargeOnVat,
                 vatAgainstD1,
                 cstRate,
                 QString::fromStdString(cstLedger),
+                cstLedgerId,
                 cstWithoutCForm,
                 damiRate,
                 QString::fromStdString(damiLedger),
+                damiLedgerId,
                 marketFeeRate,
                 QString::fromStdString(mFeeLedger),
+                mFeeLedgerId,
                 hrdfRate,
                 QString::fromStdString(hrdfLedger),
+                hrdfLedgerId,
                 mktCommttFormApply,
                 mktCommttCouponApply,
                 damiCalcOnWeight,
@@ -1021,10 +1046,15 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
                 opRate,
                 opVal,
                 QString::fromStdString(purcLedger),
+                purcLedgerId,
                 QString::fromStdString(purcRetLedger),
+                purcRetLedgerId,
                 QString::fromStdString(saleLedger),
+                saleLedgerId,
                 QString::fromStdString(saleRetLedger),
+                saleRetLedgerId,
                 QString::fromStdString(stockLedger),
+                stockLedgerId,
                 isMillingItem,
                 calculateInTrading,
                 calculateStock,
@@ -1405,11 +1435,11 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
                 paddyIn += wt;
                 paddyVariety = iName;
             } else {
-                if (iLower.find("bran") != std::string::npos) {
+                if (iLower.find("bran") != std::string::npos && iLower.find("brand") == std::string::npos) {
                     bran += wt;
-                } else if (iLower.find("broken") != std::string::npos || iLower.find("nakku") != std::string::npos) {
+                } else if (iLower.find("broken") != std::string::npos || iLower.find("nakku") != std::string::npos || iLower.find("tibar") != std::string::npos || iLower.find("dubar") != std::string::npos || iLower.find("mogra") != std::string::npos || iLower.find("kinki") != std::string::npos) {
                     brokenRice += wt;
-                } else if (iLower.find("husk") != std::string::npos || iLower.find("phak") != std::string::npos) {
+                } else if (iLower.find("husk") != std::string::npos || iLower.find("phak") != std::string::npos || iLower.find("bhusa") != std::string::npos) {
                     husk += wt;
                 } else {
                     headRice += wt;

@@ -101,14 +101,14 @@ FocusScope {
             activeBatchNo = row.batchNo
             batchListView.currentIndex = idx
             batchListView.positionViewAtIndex(idx, ListView.Contain)
-            loadBatchItems(activeBatchNo)
+            loadBatchItems(row.id, row.batchNo)
         }
     }
 
-    function loadBatchItems(bNo) {
+    function loadBatchItems(bId, bNo) {
         activeItemsModel.clear()
-        if (typeof millingModel !== "undefined" && millingModel && bNo) {
-            var items = millingModel.get_batch_items(bNo)
+        if (typeof millingModel !== "undefined" && millingModel && (bId || bNo)) {
+            var items = millingModel.get_batch_items(bId || 0, bNo || "")
             for (var i = 0; i < items.length; i++) {
                 var it = items[i]
                 var drcr = it.drcr || (it.row_no === 1 ? "Cr" : "Dr")

@@ -83,7 +83,7 @@ Item {
                         label: "🔍 CHOOSE ACCOUNT GROUP TO MODIFY (Type Name, ↑/↓ Arrows & Enter) *"
                         Layout.fillWidth: true
                         focusInput: true
-                        model: (groupsModel && typeof groupsModel.get_parent_groups === 'function') ? groupsModel.get_parent_groups() : (partiesModel ? partiesModel.get_account_groups() : [])
+                        model: (groupsModel && typeof groupsModel.get_all_group_names === 'function') ? groupsModel.get_all_group_names() : (partiesModel ? partiesModel.get_account_groups() : [])
                         onReturnPressed: root.loadSelectedGroup(selectGroupCombo.currentText)
                         onDownPressed: groupNameInput.focusInput = true
                     }

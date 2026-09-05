@@ -13,7 +13,14 @@ ColumnLayout {
     property alias text: comboField.text
     property alias editText: comboField.text
     property bool editable: true
-    property alias focusInput: comboField.focus
+    property bool focusInput: false
+    onFocusInputChanged: {
+        if (focusInput) {
+            comboField.forceActiveFocus()
+            comboField.selectAll()
+            focusInput = false
+        }
+    }
     readonly property string currentText: comboField.text
 
     signal returnPressed()
@@ -286,6 +293,17 @@ ColumnLayout {
                 } else {
                     event.accepted = false
                 }
+            }
+            Keys.onTabPressed: function(event) {
+                event.accepted = true
+                root.commitSelection()
+                if (comboPopup.visible) comboPopup.close()
+                Qt.callLater(root.emitReturn)
+            }
+            Keys.onBacktabPressed: function(event) {
+                event.accepted = true
+                if (comboPopup.visible) comboPopup.close()
+                Qt.callLater(root.emitLeft)
             }
         }
 

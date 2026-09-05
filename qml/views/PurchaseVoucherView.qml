@@ -169,7 +169,7 @@ Item {
                 packing: (parseFloat(itm.packing) || 0.5).toFixed(3),
                 weight: w,
                 rate: r,
-                gstPct: parseFloat(itm.gst_pct || 5.0),
+                gstPct: (itm.gst_pct !== undefined && itm.gst_pct !== null && itm.gst_pct !== "") ? parseFloat(itm.gst_pct) : 0.0,
                 amount: a
             })
         }
@@ -182,7 +182,7 @@ Item {
         bagsInput.text = ""
         pkngInput.text = "0.500"
         weightInput.text = ""
-        gstInput.text = "5%"
+        gstInput.text = "0%"
         rateInput.text = ""
         amountInput.text = ""
     }
@@ -193,7 +193,7 @@ Item {
         var weightVal = weightInput.text.trim() !== "" ? parseFloat(weightInput.text) : (parseFloat(weightInput.placeholderText) || 0.0)
         var rateVal = rateInput.text.trim() !== "" ? parseFloat(rateInput.text) : (parseFloat(rateInput.placeholderText) || 0.0)
         var gstStr = gstInput.text.replace("%", "").trim()
-        var gstPct = parseFloat(gstStr) || 5.0
+        var gstPct = isNaN(parseFloat(gstStr)) ? 0.0 : parseFloat(gstStr)
         var pkng = pkngInput.text.trim() !== "" ? pkngInput.text.trim() : "0.500"
         var userAmount = parseFloat(amountInput.text) || 0.0
 
@@ -312,7 +312,13 @@ Item {
         if (item) {
             if (item.purchase_rate) rateInput.text = item.purchase_rate.toString()
             else if (item.sale_rate) rateInput.text = item.sale_rate.toString()
-            if (item.gst_rate) gstInput.text = item.gst_rate
+            if (item.gst_rate !== undefined && item.gst_rate !== null && item.gst_rate !== "") {
+                var gVal = parseFloat(item.gst_rate)
+                if (isNaN(gVal)) gVal = 0.0
+                gstInput.text = (gVal > 0 ? gVal.toString() : "0") + "%"
+            } else {
+                gstInput.text = "0%"
+            }
             if (item.packing_kg) {
                 var pVal = parseFloat(item.packing_kg) || 50.0
                 var pQtl = pVal > 2.0 ? pVal / 100.0 : pVal
@@ -380,8 +386,9 @@ Item {
         var eway = ewayInput.text.trim()
         var narr = narrationInput.text.trim()
 
-        var firstItem = lineItemsModel.get(0)
+        var firstItem = lineItemsModel.count > 0 ? lineItemsModel.get(0) : null
         var mainItemName = firstItem ? firstItem.itemName : ""
+        var mainGstPct = firstItem ? (parseFloat(firstItem.gstPct) || 0.0) : (parseFloat(gstInput.text.replace("%", "").trim()) || 0.0)
 
         var cgstVal = selectedTaxStatus === "IGST" ? 0.0 : gstTaxAmount / 2.0
         var sgstVal = selectedTaxStatus === "IGST" ? 0.0 : gstTaxAmount / 2.0
@@ -407,7 +414,7 @@ Item {
                 ok = purchaseModel.update_purchase_invoice_full(
                     root.editingInvoiceId,
                     invNo, invDate, partyLedger, gstinInput.text.trim(), mainItemName, "", totalBags, totalWeight, 0.0,
-                    taxableAmount, 5.0, cgstVal, sgstVal, igstVal, roundOffAmount, grandTotal,
+                    taxableAmount, mainGstPct, cgstVal, sgstVal, igstVal, roundOffAmount, grandTotal,
                     "Credit", vehicle, eway, narr,
                     selectedSaleStatus, selectedMarketFeeStatus, damiAmount, labourAmount, auctionAmount, mFeeAmount, hrdfAmount, otherExpAmount, welfareAmount, dhrmdAmount, sutliAmount, lessAmount,
                     grNoInput.text.trim(), driverInput.text.trim(), billTimeInput.text.trim(), saudaDtInput.text.trim(), shippingInput.text.trim(), poNoInput.text.trim(), gradeInput.text.trim(), kandaWeightInput.text.trim(), transportInput.text.trim(), brokerInput.text.trim(),
@@ -416,7 +423,7 @@ Item {
             } else {
                 ok = purchaseModel.add_purchase_invoice_full(
                     invNo, invDate, partyLedger, gstinInput.text.trim(), mainItemName, "", totalBags, totalWeight, 0.0,
-                    taxableAmount, 5.0, cgstVal, sgstVal, igstVal, roundOffAmount, grandTotal,
+                    taxableAmount, mainGstPct, cgstVal, sgstVal, igstVal, roundOffAmount, grandTotal,
                     "Credit", vehicle, eway, narr,
                     selectedSaleStatus, selectedMarketFeeStatus, damiAmount, labourAmount, auctionAmount, mFeeAmount, hrdfAmount, otherExpAmount, welfareAmount, dhrmdAmount, sutliAmount, lessAmount,
                     grNoInput.text.trim(), driverInput.text.trim(), billTimeInput.text.trim(), saudaDtInput.text.trim(), shippingInput.text.trim(), poNoInput.text.trim(), gradeInput.text.trim(), kandaWeightInput.text.trim(), transportInput.text.trim(), brokerInput.text.trim(),

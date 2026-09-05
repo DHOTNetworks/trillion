@@ -346,11 +346,22 @@ void DatabaseManager::ensureTablesExist() {
         "opening_rate REAL DEFAULT 0.0,"
         "opening_value REAL DEFAULT 0.0,"
         "purchase_ledger TEXT DEFAULT 'Purchase Accounts',"
+        "purchase_ledger_id INTEGER,"
         "purchase_return_ledger TEXT DEFAULT 'Purchase Accounts',"
+        "purchase_return_ledger_id INTEGER,"
         "sale_ledger TEXT DEFAULT 'Sales Accounts',"
+        "sale_ledger_id INTEGER,"
         "sale_return_ledger TEXT DEFAULT 'Sales Accounts',"
+        "sale_return_ledger_id INTEGER,"
         "stock_ledger TEXT DEFAULT 'Stock-in-Hand',"
+        "stock_ledger_id INTEGER,"
         "gst_ledger TEXT DEFAULT 'Duties & Taxes',"
+        "gst_ledger_id INTEGER,"
+        "vat_ledger_id INTEGER,"
+        "cst_ledger_id INTEGER,"
+        "dami_ledger_id INTEGER,"
+        "market_fee_ledger_id INTEGER,"
+        "hrdf_ledger_id INTEGER,"
         "is_milling_item INTEGER DEFAULT 0,"
         "include_in_trading INTEGER DEFAULT 1,"
         "calculate_stock INTEGER DEFAULT 1,"
@@ -942,6 +953,16 @@ void DatabaseManager::ensureTablesExist() {
     executeNonQuery("ALTER TABLE stock_items ADD COLUMN bharai_rate_3 REAL DEFAULT 0.0;");
     executeNonQuery("ALTER TABLE stock_items ADD COLUMN tulai_rate_3 REAL DEFAULT 0.0;");
     executeNonQuery("ALTER TABLE stock_items ADD COLUMN khichai_rate_3 REAL DEFAULT 0.0;");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN silai_rate_3 REAL DEFAULT 0.0;");
     executeNonQuery("ALTER TABLE stock_items ADD COLUMN loading_rate_3 REAL DEFAULT 0.0;");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN purchase_ledger_id INTEGER;");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN purchase_return_ledger_id INTEGER;");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN sale_ledger_id INTEGER;");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN sale_return_ledger_id INTEGER;");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN stock_ledger_id INTEGER;");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN gst_ledger_id INTEGER;");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN vat_ledger_id INTEGER;");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN cst_ledger_id INTEGER;");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN dami_ledger_id INTEGER;");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN market_fee_ledger_id INTEGER;");
+    executeNonQuery("ALTER TABLE stock_items ADD COLUMN hrdf_ledger_id INTEGER;");
 }

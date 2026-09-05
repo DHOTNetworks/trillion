@@ -118,31 +118,28 @@ T.ApplicationWindow {
             }
         }
     }
+    function triggerSaveActiveView() {
+        if (!mainLoader.item) return false
+        var itm = mainLoader.item
+        if (typeof itm.saveVoucher === "function") { itm.saveVoucher(); return true }
+        if (typeof itm.saveInvoice === "function") { itm.saveInvoice(); return true }
+        if (typeof itm.saveMillingVoucher === "function") { itm.saveMillingVoucher(); return true }
+        if (typeof itm.executeSave === "function") { itm.executeSave(); return true }
+        if (typeof itm.saveLedger === "function") { itm.saveLedger(); return true }
+        if (typeof itm.saveUpdateLedger === "function") { itm.saveUpdateLedger(); return true }
+        if (typeof itm.saveStockItem === "function") { itm.saveStockItem(); return true }
+        if (typeof itm.saveUpdateItem === "function") { itm.saveUpdateItem(); return true }
+        return false
+    }
+
     Shortcut { 
         sequence: "F2"
         context: Qt.ApplicationShortcut
         onActivated: {
-            if (window.currentViewIndex === 14 || window.currentViewIndex === 15 || window.currentViewIndex === 23 || window.currentViewIndex === 24) {
-                if (mainLoader.item && typeof mainLoader.item.saveVoucher !== "undefined") {
-                    mainLoader.item.saveVoucher()
-                } else if (mainLoader.item && typeof mainLoader.item.saveInvoice !== "undefined") {
-                    mainLoader.item.saveInvoice()
-                }
+            if (window.currentViewIndex !== 0 && triggerSaveActiveView()) {
+                // saved
             } else {
                 window.openAddVoucherMenu()
-            }
-        }
-    }
-    Shortcut {
-        sequence: StandardKey.Save
-        context: Qt.ApplicationShortcut
-        onActivated: {
-            if (window.currentViewIndex === 14 || window.currentViewIndex === 15 || window.currentViewIndex === 23 || window.currentViewIndex === 24) {
-                if (mainLoader.item && typeof mainLoader.item.saveVoucher !== "undefined") {
-                    mainLoader.item.saveVoucher()
-                } else if (mainLoader.item && typeof mainLoader.item.saveInvoice !== "undefined") {
-                    mainLoader.item.saveInvoice()
-                }
             }
         }
     }
@@ -184,14 +181,10 @@ T.ApplicationWindow {
     Shortcut { sequence: "F11"; context: Qt.ApplicationShortcut; onActivated: window.currentViewIndex = 23 } // J-Form Mandi Procurement Voucher
     Shortcut { sequence: "F12"; context: Qt.ApplicationShortcut; onActivated: window.currentViewIndex = 24 } // TDS Voucher Entry
     Shortcut { 
-        sequence: "Ctrl+S"
+        sequences: ["Ctrl+S", "Ctrl+s", "StandardKey.Save"]
         context: Qt.ApplicationShortcut
         onActivated: {
-            if (mainLoader.item && typeof mainLoader.item.saveVoucher === "function") {
-                mainLoader.item.saveVoucher()
-            } else if (mainLoader.item && typeof mainLoader.item.saveInvoice === "function") {
-                mainLoader.item.saveInvoice()
-            }
+            triggerSaveActiveView()
         }
     }
 

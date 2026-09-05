@@ -145,7 +145,9 @@ Rectangle {
             // Sync / Import Bahi Khata Button
             T.Button {
                 id: mdbBtn
-                height: 26
+                implicitWidth: contentItem.implicitWidth + 20
+                implicitHeight: 28
+                height: 28
                 background: Rectangle {
                     color: mdbBtn.hovered ? "#EFF6FF" : "#F8FAFC"
                     radius: 5
@@ -153,6 +155,7 @@ Rectangle {
                 }
                 contentItem: RowLayout {
                     spacing: 6
+                    anchors.centerIn: parent
                     Text {
                         text: "🔄 Sync MDB"
                         color: "#2563EB"
@@ -164,9 +167,11 @@ Rectangle {
             }
 
             Rectangle {
-                height: 24
-                width: 120
-                radius: 12
+                implicitHeight: 26
+                implicitWidth: dbRow.implicitWidth + 20
+                Layout.preferredHeight: 26
+                Layout.preferredWidth: dbRow.implicitWidth + 20
+                radius: 13
                 color: "#F1F5F9"
                 border.color: "#CBD5E1"
 
@@ -181,6 +186,7 @@ Rectangle {
                 }
 
                 RowLayout {
+                    id: dbRow
                     anchors.centerIn: parent
                     spacing: 6
                     Rectangle {
@@ -201,7 +207,9 @@ Rectangle {
             // Keyboard Help Button
             T.Button {
                 id: helpBtn
-                height: 26
+                implicitWidth: contentItem.implicitWidth + 20
+                implicitHeight: 28
+                height: 28
                 background: Rectangle {
                     color: helpBtn.hovered ? "#EFF6FF" : "#F8FAFC"
                     radius: 5
@@ -209,6 +217,7 @@ Rectangle {
                 }
                 contentItem: RowLayout {
                     spacing: 6
+                    anchors.centerIn: parent
                     Text {
                         text: "⌨ Shortcuts"
                         color: "#2563EB"
