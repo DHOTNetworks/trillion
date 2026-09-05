@@ -4,6 +4,7 @@
 #include <QFileInfo>
 #include <QDir>
 #include <QUrl>
+#include <QFileDialog>
 #include <QDebug>
 #include <iostream>
 #include <vector>
@@ -208,6 +209,11 @@ static std::vector<std::map<std::string, std::string>> readTableRows(MdbHandle* 
 
 BahiKhataMigrator::BahiKhataMigrator(QObject* parent) : QObject(parent) {}
 BahiKhataMigrator::~BahiKhataMigrator() = default;
+
+QString BahiKhataMigrator::choose_mdb_file(const QString& startDir) {
+    QString filter = "Bahi Khata Databases (Data.* *.0* *.001 *.002 *.003 *.004 *.005 *.006 *.007 *.008 *.009 *.mdb *.accdb);;All Files (*)";
+    return QFileDialog::getOpenFileName(nullptr, "Select Bahi Khata Database File (Data.* or *.mdb)", startDir, filter);
+}
 
 void BahiKhataMigrator::updateProgress(int percent, const QString& status) {
     m_progressPercent = percent;

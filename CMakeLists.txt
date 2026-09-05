@@ -20,12 +20,15 @@ if(MSVC)
 endif()
 
 # Find Qt 6 Packages
-find_package(Qt6 REQUIRED COMPONENTS
+find_package(Qt6 6.5 REQUIRED COMPONENTS
     Core
     Gui
-    Qml
     Quick
+    Qml
     QuickControls2
+    Sql
+    Svg
+    Widgets
 )
 
 # Find private/template/layout packages for cross-platform qmltc compilation (Windows, macOS, Linux)
@@ -241,12 +244,12 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::Qml
     Qt6::Quick
     Qt6::QuickControls2
+    Qt6::Widgets
     $<$<TARGET_EXISTS:Qt6::CorePrivate>:Qt6::CorePrivate>
     $<$<TARGET_EXISTS:Qt6::QmlPrivate>:Qt6::QmlPrivate>
     $<$<TARGET_EXISTS:Qt6::QuickPrivate>:Qt6::QuickPrivate>
     $<$<TARGET_EXISTS:Qt6::QuickTemplates2Private>:Qt6::QuickTemplates2Private>
     $<$<TARGET_EXISTS:Qt6::QuickLayoutsPrivate>:Qt6::QuickLayoutsPrivate>
-    $<$<TARGET_EXISTS:Qt6::QuickDialogs2Private>:Qt6::QuickDialogs2Private>
     $<$<TARGET_EXISTS:Qt6::QmlMetaPrivate>:Qt6::QmlMetaPrivate>
 )
 
@@ -255,7 +258,6 @@ if(APPLE)
     target_link_libraries(${PROJECT_NAME} PRIVATE
         "-framework QtQuickTemplates2"
         "-framework QtQuickLayouts"
-        "-framework QtQuickDialogs2"
         "-framework QtQmlMeta"
     )
 endif()

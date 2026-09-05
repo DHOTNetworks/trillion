@@ -1,4 +1,4 @@
-#include <QGuiApplication>
+#include <QApplication>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQmlError>
@@ -34,7 +34,7 @@ int main(int argc, char* argv[]) {
     // Force Basic Style for dark theme
     QQuickStyle::setStyle("Basic");
 
-    QGuiApplication app(argc, argv);
+    QApplication app(argc, argv);
     app.setApplicationName("Mahadev Rice Mill ERP & Accounting");
     app.setOrganizationName("MahadevAgro");
 

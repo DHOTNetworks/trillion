@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Templates as T
 import QtQuick.Layouts
-import QtQuick.Dialogs
 import MahadevERP
 
 Rectangle {
@@ -80,22 +79,19 @@ Rectangle {
         refreshFirms()
     }
 
-    GenericListModel {
-        id: firmsModel
+    function pickFolder() {
+        if (typeof firmManager !== "undefined" && firmManager) {
+            var path = firmManager.choose_firm_folder(root.currentFolder)
+            if (path && path.length > 0) {
+                root.currentFolder = path
+                firmManager.set_active_firm_folder(path)
+                root.refreshFirms()
+            }
+        }
     }
 
-    FolderDialog {
-        id: folderDialog
-        title: "Select Bahi-Khata Firm Data Folder"
-        currentFolder: "file://" + (root.isViewingAppData ? "/Users/karan/Firm Data" : root.currentFolder)
-        onAccepted: {
-            var path = selectedFolder.toString().replace("file://", "")
-            root.currentFolder = path
-            if (typeof firmManager !== "undefined" && firmManager) {
-                firmManager.set_active_firm_folder(path)
-            }
-            root.refreshFirms()
-        }
+    GenericListModel {
+        id: firmsModel
     }
 
     NewFirmModal {
@@ -267,7 +263,7 @@ Rectangle {
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                     }
-                    onClicked: folderDialog.open()
+                    onClicked: root.pickFolder()
                 }
 
                 T.Button {
@@ -282,7 +278,7 @@ Rectangle {
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                     }
-                    onClicked: folderDialog.open()
+                    onClicked: root.pickFolder()
                 }
 
                 T.Button {
@@ -370,7 +366,7 @@ Rectangle {
                                 horizontalAlignment: Text.AlignHCenter
                                 verticalAlignment: Text.AlignVCenter
                             }
-                            onClicked: root.isViewingAppData ? folderDialog.open() : root.resetToAppData()
+                            onClicked: root.isViewingAppData ? root.pickFolder() : root.resetToAppData()
                         }
                     }
                 }
@@ -564,11 +560,11 @@ Rectangle {
     }
     Shortcut {
         sequence: "F3"
-        onActivated: folderDialog.open()
+        onActivated: root.pickFolder()
     }
     Shortcut {
         sequence: "F4"
-        onActivated: folderDialog.open()
+        onActivated: root.pickFolder()
     }
     Shortcut {
         sequence: "F5"

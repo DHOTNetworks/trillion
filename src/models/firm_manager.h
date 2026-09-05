@@ -31,6 +31,7 @@ public:
     Q_INVOKABLE QString get_app_data_folder() const;
     Q_INVOKABLE QString get_active_firm_folder();
     Q_INVOKABLE void set_active_firm_folder(const QString& folderPath);
+    Q_INVOKABLE QString choose_firm_folder(const QString& currentFolder = "");
     Q_INVOKABLE void refresh_registry();
 
 signals:

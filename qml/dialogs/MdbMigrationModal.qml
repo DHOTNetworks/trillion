@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Templates as T
 import QtQuick.Layouts
-import QtQuick.Dialogs
 
 Rectangle {
     id: root
@@ -36,29 +35,6 @@ Rectangle {
                 if (typeof millingModel !== "undefined" && millingModel) millingModel.reload_data()
                 if (typeof paddyModel !== "undefined" && paddyModel) paddyModel.reload_data()
             }
-        }
-    }
-
-    FileDialog {
-        id: fileDialog
-        title: "Select Bahi Khata Database File (Data.* or *.mdb)"
-        nameFilters: ["Bahi Khata Databases (Data.* *.0* *.001 *.002 *.003 *.004 *.005 *.006 *.007 *.008 *.009 *.mdb *.accdb)", "All Files (*)"]
-        onAccepted: {
-            var raw = fileDialog.selectedFile.toString()
-            if (raw.indexOf("file:///") === 0) {
-                raw = raw.substring(8)
-                // If not a Windows drive letter (e.g. Z:), restore leading slash for Unix
-                if (raw.length < 2 || raw.charAt(1) !== ':') {
-                    raw = "/" + raw
-                }
-            } else if (raw.indexOf("file://") === 0) {
-                raw = raw.substring(7)
-                if (raw.length >= 3 && raw.charAt(0) === '/' && raw.charAt(2) === ':') {
-                    raw = raw.substring(1)
-                }
-            }
-            selectedFilePath = raw
-            inspectFile(selectedFilePath)
         }
     }
 
@@ -134,9 +110,16 @@ Rectangle {
                     id: browseBtn
                     implicitWidth: 120
                     implicitHeight: 34
-                    background: Rectangle { color: browseBtn.hovered ? "#E2E8F0" : "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
                     contentItem: Text { text: "📁 Browse File..."; color: "#0F172A"; font.bold: true; font.pixelSize: 12; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                    onClicked: fileDialog.open()
+                    onClicked: {
+                        if (typeof bahiKhataMigrator !== "undefined" && bahiKhataMigrator) {
+                            var picked = bahiKhataMigrator.choose_mdb_file("")
+                            if (picked && picked.length > 0) {
+                                selectedFilePath = picked
+                                inspectFile(picked)
+                            }
+                        }
+                    }
                 }
             }
         }

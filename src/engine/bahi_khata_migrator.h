@@ -25,6 +25,9 @@ public:
     // Full in-process migration of MDB into mahadev_accounting.db
     Q_INVOKABLE bool migrate_mdb_file(const QString& mdbFilePath);
 
+    // Native file picker for MDB/Data.* database files
+    Q_INVOKABLE QString choose_mdb_file(const QString& startDir = "");
+
 signals:
     void migratingChanged();
     void progressChanged(int percent);

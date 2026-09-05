@@ -6,6 +6,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QFileDialog>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
@@ -22,6 +23,11 @@ FirmManager::FirmManager(QObject* parent)
 
 QString FirmManager::get_app_data_folder() const {
     return QDir::current().filePath("data");
+}
+
+QString FirmManager::choose_firm_folder(const QString& currentFolder) {
+    QString start = currentFolder.isEmpty() ? get_app_data_folder() : currentFolder;
+    return QFileDialog::getExistingDirectory(nullptr, "Select Bahi-Khata Firm Data Folder", start);
 }
 
 QString FirmManager::registryFilePath() const {
