@@ -324,11 +324,6 @@ Rectangle {
                         spacing: 1
                         boundsBehavior: Flickable.StopAtBounds
 
-                        T.ScrollBar.vertical: T.ScrollBar {
-                            policy: T.ScrollBar.AsNeeded
-                            active: true
-                        }
-
                         delegate: Rectangle {
                             width: inwardListView.width
                             height: 32
@@ -496,11 +491,6 @@ Rectangle {
                         model: outwardModel
                         spacing: 1
                         boundsBehavior: Flickable.StopAtBounds
-
-                        T.ScrollBar.vertical: T.ScrollBar {
-                            policy: T.ScrollBar.AsNeeded
-                            active: true
-                        }
 
                         delegate: Rectangle {
                             width: outwardListView.width

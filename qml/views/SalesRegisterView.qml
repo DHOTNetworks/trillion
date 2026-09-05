@@ -285,11 +285,6 @@ T.ScrollView {
                     model: salesRegisterModel
                     boundsBehavior: Flickable.StopAtBounds
 
-                    T.ScrollBar.vertical: T.ScrollBar {
-                        policy: T.ScrollBar.AsNeeded
-                        active: true
-                    }
-
                     delegate: Rectangle {
                         width: salesListView.width
                         height: 34

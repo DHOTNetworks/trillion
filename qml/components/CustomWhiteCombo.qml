@@ -374,7 +374,6 @@ ColumnLayout {
                 model: comboPopup.visible ? root.filteredItems : []
                 currentIndex: -1
                 boundsBehavior: Flickable.StopAtBounds
-                T.ScrollBar.vertical: T.ScrollBar { policy: T.ScrollBar.AsNeeded }
 
                 delegate: T.ItemDelegate {
                     width: popupListView.width

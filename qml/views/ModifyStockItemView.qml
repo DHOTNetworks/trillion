@@ -195,7 +195,6 @@ Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
-            T.ScrollBar.vertical: T.ScrollBar { policy: T.ScrollBar.AsNeeded }
 
             ColumnLayout {
                 width: formScroll.width - 12

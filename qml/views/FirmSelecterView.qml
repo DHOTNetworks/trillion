@@ -382,11 +382,6 @@ Rectangle {
                     currentIndex: root.selectedIndex
                     boundsBehavior: Flickable.StopAtBounds
 
-                    T.ScrollBar.vertical: T.ScrollBar {
-                        policy: T.ScrollBar.AsNeeded
-                        active: true
-                    }
-
                     Keys.onReturnPressed: root.openSelectedFirm()
                     Keys.onEnterPressed: root.openSelectedFirm()
                     Keys.onUpPressed: {

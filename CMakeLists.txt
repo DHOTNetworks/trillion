@@ -190,19 +190,7 @@ qt_add_qml_module(${PROJECT_NAME}
 )
 
 # Cross-Platform Qt Private Header Include Resolution
-if(WIN32)
-    # Windows layout (MSVC / MinGW): <QT_DIR>/include/<Module>/<Version>/<Module>
-    file(GLOB WIN_QT_PRIV_DIRS
-        LIST_DIRECTORIES true
-        "${QT6_INSTALL_PREFIX}/include/*/${Qt6Core_VERSION}"
-        "${QT6_INSTALL_PREFIX}/include/*/${Qt6Core_VERSION}/*"
-        "${Qt6_DIR}/../../../include/*/${Qt6Core_VERSION}"
-        "${Qt6_DIR}/../../../include/*/${Qt6Core_VERSION}/*"
-        "${Qt6Core_INCLUDE_DIRS}/*/${Qt6Core_VERSION}"
-        "${Qt6Core_INCLUDE_DIRS}/*/${Qt6Core_VERSION}/*"
-    )
-    target_include_directories(${PROJECT_NAME} PRIVATE ${WIN_QT_PRIV_DIRS})
-elseif(APPLE)
+if(APPLE)
     # macOS layout: Homebrew Framework / official SDK layout
     file(GLOB MAC_QT_PRIV_DIRS
         LIST_DIRECTORIES true
@@ -214,16 +202,6 @@ elseif(APPLE)
         "${QT6_INSTALL_PREFIX}/lib/Qt*.framework/Headers/${Qt6Core_VERSION}/*"
     )
     target_include_directories(${PROJECT_NAME} PRIVATE ${MAC_QT_PRIV_DIRS})
-else()
-    # Linux layout: Distro / Online installer
-    file(GLOB LINUX_QT_PRIV_DIRS
-        LIST_DIRECTORIES true
-        "${QT6_INSTALL_PREFIX}/include/*/${Qt6Core_VERSION}"
-        "${QT6_INSTALL_PREFIX}/include/*/${Qt6Core_VERSION}/*"
-        "/usr/include/qt6/*/${Qt6Core_VERSION}"
-        "/usr/include/qt6/*/${Qt6Core_VERSION}/*"
-    )
-    target_include_directories(${PROJECT_NAME} PRIVATE ${LINUX_QT_PRIV_DIRS})
 endif()
 
 target_include_directories(${PROJECT_NAME} PRIVATE
@@ -246,6 +224,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::QuickControls2
     Qt6::Widgets
     $<$<TARGET_EXISTS:Qt6::CorePrivate>:Qt6::CorePrivate>
+    $<$<TARGET_EXISTS:Qt6::GuiPrivate>:Qt6::GuiPrivate>
     $<$<TARGET_EXISTS:Qt6::QmlPrivate>:Qt6::QmlPrivate>
     $<$<TARGET_EXISTS:Qt6::QuickPrivate>:Qt6::QuickPrivate>
     $<$<TARGET_EXISTS:Qt6::QuickTemplates2Private>:Qt6::QuickTemplates2Private>
