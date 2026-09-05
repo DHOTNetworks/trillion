@@ -13,6 +13,12 @@ set(CMAKE_AUTOUIC ON)
 # Disable private module warning for internal qmltc vtables
 set(QT_NO_PRIVATE_MODULE_WARNING ON)
 
+# Cross-platform compiler flags (MSVC / Clang / GCC)
+if(MSVC)
+    add_compile_options(/utf-8 /MP)
+    add_compile_definitions(NOMINMAX WIN32_LEAN_AND_MEAN _CRT_SECURE_NO_WARNINGS _CRT_NONSTDC_NO_DEPRECATE)
+endif()
+
 # Find Qt 6 Packages
 find_package(Qt6 REQUIRED COMPONENTS
     Core
@@ -187,6 +193,10 @@ if(WIN32)
         LIST_DIRECTORIES true
         "${QT6_INSTALL_PREFIX}/include/*/${Qt6Core_VERSION}"
         "${QT6_INSTALL_PREFIX}/include/*/${Qt6Core_VERSION}/*"
+        "${Qt6_DIR}/../../../include/*/${Qt6Core_VERSION}"
+        "${Qt6_DIR}/../../../include/*/${Qt6Core_VERSION}/*"
+        "${Qt6Core_INCLUDE_DIRS}/*/${Qt6Core_VERSION}"
+        "${Qt6Core_INCLUDE_DIRS}/*/${Qt6Core_VERSION}/*"
     )
     target_include_directories(${PROJECT_NAME} PRIVATE ${WIN_QT_PRIV_DIRS})
 elseif(APPLE)
@@ -250,11 +260,12 @@ if(APPLE)
     )
 endif()
 
-# Set macOS App Bundle Properties
+# Set Target Properties for macOS and Windows
 set_target_properties(${PROJECT_NAME} PROPERTIES
     MACOSX_BUNDLE TRUE
     MACOSX_BUNDLE_BUNDLE_NAME "Mahadev Rice Mill ERP"
     MACOSX_BUNDLE_GUI_IDENTIFIER "com.mahadevagro.ricemill"
     MACOSX_BUNDLE_SHORT_VERSION_STRING "2.0"
     MACOSX_BUNDLE_VERSION "2.0"
+    WIN32_EXECUTABLE $<IF:$<CONFIG:Debug>,FALSE,TRUE>
 )
