@@ -51,12 +51,10 @@ QStringList StockItemsModel::get_items_list(const QString& filterType) const {
         if (!f.isEmpty()) {
             QString iType = m.value("item_type").toString().trimmed().toLower();
             if (f == "mandi") {
-                bool isMandi = (iType == "mandi" || iType == "both" || iType == "mandi type" ||
-                                iType.contains("paddy") || iType.contains("raw"));
+                bool isMandi = (iType == "mandi" || iType == "both" || iType == "mandi type");
                 if (!isMandi) continue;
             } else if (f == "market") {
-                bool isMarket = (iType == "market" || iType == "both" || iType == "market type" ||
-                                 !iType.contains("paddy"));
+                bool isMarket = (iType == "market" || iType == "both" || iType == "market type");
                 if (!isMarket) continue;
             }
         }

@@ -11,6 +11,10 @@ T.ScrollView {
     signal cancelRequested()
     signal openInvoiceRequested(string invoiceNo)
 
+    function handleEscape() {
+        root.cancelRequested()
+    }
+
     property string searchQuery: ""
     property var allInvoices: []
     property int totalInvoicesCount: 0
@@ -22,6 +26,10 @@ T.ScrollView {
 
     Component.onCompleted: {
         reloadPurchaseRegister()
+        Qt.callLater(function() {
+            purchaseListView.forceActiveFocus()
+            if (purchaseRegisterModel.count > 0) purchaseListView.currentIndex = 0
+        })
     }
 
     function reloadPurchaseRegister() {
@@ -52,44 +60,45 @@ T.ScrollView {
                 if (invNo.toLowerCase().indexOf(query) === -1 &&
                     supp.toLowerCase().indexOf(query) === -1 &&
                     item.toLowerCase().indexOf(query) === -1 &&
-                    dt.toLowerCase().indexOf(query) === -1 &&
-                    veh.toLowerCase().indexOf(query) === -1) {
+                    veh.toLowerCase().indexOf(query) === -1 &&
+                    dt.toLowerCase().indexOf(query) === -1) {
                     continue
                 }
             }
 
-            var b = parseInt(inv.bag_count) || 0
-            var w = parseFloat(inv.weight_qtl) || 0.0
-            var t = parseFloat(inv.taxable_amount) || 0.0
-            var g = parseFloat(inv.gst_amount) || 0.0
-            var tot = parseFloat(inv.total_amount) || 0.0
+            var bags = inv.bag_count ? parseInt(inv.bag_count) : 0
+            var w = inv.weight_qtl ? Number(inv.weight_qtl) : 0.0
+            var r = inv.rate_per_qtl ? Number(inv.rate_per_qtl) : 0.0
+            var tax = inv.taxable_amount ? Number(inv.taxable_amount) : 0.0
+            var gAmt = inv.gst_amount ? Number(inv.gst_amount) : 0.0
+            var tot = inv.total_amount ? Number(inv.total_amount) : 0.0
 
             purchaseRegisterModel.append({
-                idVal: inv.id,
-                vchNoVal: inv.voucher_no || ("Purc-" + (i+1)),
+                vchNoVal: inv.voucher_no ? String(inv.voucher_no) : ("Purc-" + (i + 1)),
                 invNoVal: invNo,
                 dateVal: dt,
                 suppVal: supp,
                 itemVal: item,
-                bagsVal: b,
-                weightVal: w,
-                weightFmt: inv.weight_qtl_fmt || (w.toFixed(2) + " Qtl"),
-                rateFmt: inv.rate_fmt || ("₹" + (parseFloat(inv.rate_per_qtl) || 0.0).toFixed(2)),
-                taxableVal: t,
-                taxableFmt: inv.taxable_amount_fmt || ("₹" + t.toFixed(2)),
-                gstFmt: inv.gst_amount_fmt || ("₹" + g.toFixed(2)),
-                totalVal: tot,
-                totalFmt: inv.total_amount_fmt || ("₹" + tot.toFixed(2)),
-                modeVal: inv.payment_mode || "Credit",
-                vehVal: veh
+                bagsVal: bags > 0 ? bags : "-",
+                weightVal: w > 0 ? w.toFixed(3) : "-",
+                rateVal: r > 0 ? r.toFixed(2) : "-",
+                taxableVal: tax > 0 ? tax.toFixed(2) : "-",
+                gstVal: gAmt > 0 ? gAmt.toFixed(2) : "-",
+                totalVal: tot.toFixed(2),
+                vehVal: veh ? veh : "-"
             })
 
             totalInvoicesCount++
-            totalBagsCount += b
+            totalBagsCount += bags
             totalWeightQtl += w
-            totalTaxableAmt += t
-            totalGstAmt += g
+            totalTaxableAmt += tax
+            totalGstAmt += gAmt
             totalGrossAmt += tot
+        }
+        if (purchaseRegisterModel.count > 0) {
+            if (purchaseListView.currentIndex < 0 || purchaseListView.currentIndex >= purchaseRegisterModel.count) {
+                purchaseListView.currentIndex = 0
+            }
         }
     }
 
@@ -226,6 +235,21 @@ T.ScrollView {
                                         root.searchQuery = text
                                         root.filterAndPopulateRegister()
                                     }
+                                    Keys.onDownPressed: function(event) {
+                                        event.accepted = true
+                                        purchaseListView.forceActiveFocus()
+                                        if (purchaseListView.currentIndex < 0 && purchaseRegisterModel.count > 0) purchaseListView.currentIndex = 0
+                                    }
+                                    Keys.onReturnPressed: function(event) {
+                                        event.accepted = true
+                                        purchaseListView.forceActiveFocus()
+                                        if (purchaseListView.currentIndex < 0 && purchaseRegisterModel.count > 0) purchaseListView.currentIndex = 0
+                                    }
+                                    Keys.onEnterPressed: function(event) {
+                                        event.accepted = true
+                                        purchaseListView.forceActiveFocus()
+                                        if (purchaseListView.currentIndex < 0 && purchaseRegisterModel.count > 0) purchaseListView.currentIndex = 0
+                                    }
                                 }
 
                                 Text {
@@ -284,19 +308,59 @@ T.ScrollView {
                     clip: true
                     model: purchaseRegisterModel
                     boundsBehavior: Flickable.StopAtBounds
+                    focus: true
+                    highlightFollowsCurrentItem: true
+                    currentIndex: 0
+
+                    Keys.onReturnPressed: function(event) {
+                        event.accepted = true
+                        if (currentIndex >= 0 && currentIndex < purchaseRegisterModel.count) {
+                            var it = purchaseRegisterModel.get(currentIndex)
+                            if (it && it.invNoVal) root.openInvoiceRequested(it.invNoVal)
+                        }
+                    }
+                    Keys.onEnterPressed: function(event) {
+                        event.accepted = true
+                        if (currentIndex >= 0 && currentIndex < purchaseRegisterModel.count) {
+                            var it = purchaseRegisterModel.get(currentIndex)
+                            if (it && it.invNoVal) root.openInvoiceRequested(it.invNoVal)
+                        }
+                    }
+                    Keys.onUpPressed: function(event) {
+                        event.accepted = true
+                        if (currentIndex > 0) {
+                            currentIndex--
+                            positionViewAtIndex(currentIndex, ListView.Contain)
+                        } else {
+                            searchInput.forceActiveFocus()
+                        }
+                    }
+                    Keys.onDownPressed: function(event) {
+                        event.accepted = true
+                        if (currentIndex < purchaseRegisterModel.count - 1) {
+                            currentIndex++
+                            positionViewAtIndex(currentIndex, ListView.Contain)
+                        }
+                    }
 
                     delegate: Rectangle {
                         width: purchaseListView.width
                         height: 34
-                        color: rowMouseArea.containsMouse ? "#EFF6FF" : (index % 2 === 0 ? "#FFFFFF" : "#F8FAFC")
-                        border.color: "#F1F5F9"
+                        color: ListView.isCurrentItem ? "#DBEAFE" : (rowMouseArea.containsMouse ? "#EFF6FF" : (index % 2 === 0 ? "#FFFFFF" : "#F8FAFC"))
+                        border.color: ListView.isCurrentItem ? "#2563EB" : "#F1F5F9"
+                        border.width: ListView.isCurrentItem ? 2 : 1
 
                         MouseArea {
                             id: rowMouseArea
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                purchaseListView.currentIndex = index
+                                purchaseListView.forceActiveFocus()
+                            }
                             onDoubleClicked: {
+                                purchaseListView.currentIndex = index
                                 if (model.invNoVal) {
                                     root.openInvoiceRequested(model.invNoVal)
                                 }
@@ -315,7 +379,7 @@ T.ScrollView {
                             Text { text: model.suppVal; color: "#0F172A"; font.pixelSize: 11; font.bold: true; Layout.fillWidth: true; elide: Text.ElideRight }
                             Text { text: model.itemVal; color: "#475569"; font.pixelSize: 11; Layout.preferredWidth: 150; elide: Text.ElideRight }
                             Text { text: model.bagsVal.toString(); color: "#334155"; font.pixelSize: 11; Layout.preferredWidth: 45; horizontalAlignment: Text.AlignRight }
-                            Text { text: model.weightVal.toFixed(2); color: "#16A34A"; font.pixelSize: 11; font.bold: true; Layout.preferredWidth: 70; horizontalAlignment: Text.AlignRight }
+                            Text { text: Number(model.weightVal || 0).toFixed(2); color: "#16A34A"; font.pixelSize: 11; font.bold: true; Layout.preferredWidth: 70; horizontalAlignment: Text.AlignRight }
                             Text { text: model.rateFmt; color: "#334155"; font.pixelSize: 11; Layout.preferredWidth: 70; horizontalAlignment: Text.AlignRight }
                             Text { text: model.taxableFmt; color: "#0F172A"; font.pixelSize: 11; font.bold: true; Layout.preferredWidth: 95; horizontalAlignment: Text.AlignRight }
                             Text { text: model.gstFmt; color: "#64748B"; font.pixelSize: 11; Layout.preferredWidth: 75; horizontalAlignment: Text.AlignRight }

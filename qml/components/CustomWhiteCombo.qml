@@ -104,10 +104,36 @@ ColumnLayout {
         return -1
     }
 
+    function ensureVisibleInScroll() {
+        var p = root.parent
+        while (p) {
+            if (p.contentY !== undefined && p.contentHeight !== undefined && p.height !== undefined) {
+                var mapped = root.mapToItem(p.contentItem || p, 0, 0)
+                if (mapped) {
+                    var itemY = mapped.y
+                    var itemH = root.height > 0 ? root.height : 36
+                    if (itemY < p.contentY + 10) {
+                        p.contentY = Math.max(0, itemY - 20)
+                    } else if (itemY + itemH > p.contentY + p.height - 10) {
+                        var maxScroll = (p.contentHeight > p.height) ? (p.contentHeight - p.height) : 0
+                        p.contentY = Math.min(maxScroll, itemY + itemH - p.height + 40)
+                    }
+                }
+                break
+            }
+            p = p.parent
+        }
+    }
+
     function focusAndOpen() {
         combo.forceActiveFocus()
         comboField.forceActiveFocus()
         comboField.selectAll()
+        ensureVisibleInScroll()
+    }
+
+    function forceActiveFocus() {
+        focusAndOpen()
     }
 
     function emitReturn() {
@@ -199,6 +225,7 @@ ColumnLayout {
             onActiveFocusChanged: {
                 if (activeFocus) {
                     comboField.selectAll()
+                    root.ensureVisibleInScroll()
                 }
             }
 
@@ -267,15 +294,7 @@ ColumnLayout {
                     }
                 } else {
                     event.accepted = true
-                    filteredItems = rawItems.slice()
-                    var curIdx = root.find(comboField.text)
-                    if (curIdx >= 0) {
-                        if (popupListView) popupListView.currentIndex = curIdx
-                        if (popupListView) popupListView.positionViewAtIndex(curIdx, ListView.Center)
-                    } else {
-                        if (popupListView) popupListView.currentIndex = 0
-                    }
-                    comboPopup.open()
+                    Qt.callLater(root.emitDown)
                 }
             }
             Keys.onLeftPressed: function(event) {
@@ -290,6 +309,14 @@ ColumnLayout {
                 if (!comboPopup.visible && (comboField.cursorPosition === comboField.text.length || comboField.selectedText.length > 0 || comboField.text.length === 0)) {
                     event.accepted = true
                     Qt.callLater(root.emitRight)
+                } else {
+                    event.accepted = false
+                }
+            }
+            Keys.onEscapePressed: function(event) {
+                if (comboPopup.visible) {
+                    event.accepted = true
+                    comboPopup.close()
                 } else {
                     event.accepted = false
                 }

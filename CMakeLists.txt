@@ -104,6 +104,7 @@ set(SOURCES
     src/models/tds_model.cpp
     src/models/generic_list_model.h
     src/models/generic_list_model.cpp
+    src/models/global_key_filter.h
     src/engine/bahi_khata_migrator.h
     src/engine/bahi_khata_migrator.cpp
 )

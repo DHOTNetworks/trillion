@@ -213,16 +213,20 @@ T.ApplicationWindow {
             window.isPeriodModalOpen = false
         } else if (mainLoader.item && typeof mainLoader.item.hasActivePopup === "function" && mainLoader.item.hasActivePopup()) {
             mainLoader.item.closeActivePopup()
+        } else if (mainLoader.item && typeof mainLoader.item.handleEscape === "function") {
+            mainLoader.item.handleEscape()
+        } else if (mainLoader.item && typeof mainLoader.item.cancelRequested !== "undefined") {
+            mainLoader.item.cancelRequested()
         } else if (window.currentViewIndex !== 0) {
             window.currentViewIndex = 0 // Go back to Dashboard
         }
     }
 
-    // UNIVERSAL ESCAPE KEY - CLOSE ACTIVE POPUPS, MODALS, OR RETURN TO DASHBOARD
-    Shortcut {
-        sequence: "Esc"
-        context: Qt.ApplicationShortcut
-        onActivated: window.handleUniversalEscape()
+    Connections {
+        target: typeof globalKeyFilter !== "undefined" ? globalKeyFilter : null
+        function onEscapePressed() {
+            window.handleUniversalEscape()
+        }
     }
 
     FocusScope {
@@ -231,6 +235,12 @@ T.ApplicationWindow {
         Keys.onEscapePressed: function(event) {
             event.accepted = true
             window.handleUniversalEscape()
+        }
+        Keys.onPressed: function(event) {
+            if (event.key === Qt.Key_Escape) {
+                event.accepted = true
+                window.handleUniversalEscape()
+            }
         }
 
         ColumnLayout {

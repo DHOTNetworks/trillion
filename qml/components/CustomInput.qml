@@ -28,13 +28,37 @@ ColumnLayout {
     signal downPressed()
     signal editingFinished()
 
+    function ensureVisibleInScroll() {
+        var p = root.parent
+        while (p) {
+            if (p.contentY !== undefined && p.contentHeight !== undefined && p.height !== undefined) {
+                var mapped = root.mapToItem(p.contentItem || p, 0, 0)
+                if (mapped) {
+                    var itemY = mapped.y
+                    var itemH = root.height > 0 ? root.height : 36
+                    if (itemY < p.contentY + 10) {
+                        p.contentY = Math.max(0, itemY - 20)
+                    } else if (itemY + itemH > p.contentY + p.height - 10) {
+                        var maxScroll = (p.contentHeight > p.height) ? (p.contentHeight - p.height) : 0
+                        p.contentY = Math.min(maxScroll, itemY + itemH - p.height + 40)
+                    }
+                }
+                break
+            }
+            p = p.parent
+        }
+    }
+
     function focusAndSelect() {
         textInput.forceActiveFocus()
         textInput.selectAll()
+        ensureVisibleInScroll()
     }
 
     function forceActiveFocus() {
         textInput.forceActiveFocus()
+        textInput.selectAll()
+        ensureVisibleInScroll()
     }
 
     spacing: 4
@@ -80,6 +104,12 @@ ColumnLayout {
             background: null
             selectByMouse: true
             onEditingFinished: root.editingFinished()
+
+            onActiveFocusChanged: {
+                if (activeFocus) {
+                    root.ensureVisibleInScroll()
+                }
+            }
 
             Keys.onReturnPressed: function(event) {
                 event.accepted = true

@@ -114,12 +114,23 @@ Item {
         if (!itemName) return
         var item = (typeof stockItemsModel !== "undefined" && stockItemsModel) ? stockItemsModel.get_item_by_name(itemName) : null
         if (item) {
-            if (item.purchase_rate) rateInput.text = item.purchase_rate.toString()
-            else if (item.sale_rate) rateInput.text = item.sale_rate.toString()
-            if (item.packing_kg) {
-                var pVal = parseFloat(item.packing_kg) || 50.0
-                var pQtl = pVal > 2.0 ? pVal / 100.0 : pVal
-                pkngInput.text = pQtl.toFixed(3)
+            if (item.purchase_rate !== undefined && item.purchase_rate !== null && item.purchase_rate !== "" && parseFloat(item.purchase_rate) > 0) {
+                rateInput.text = item.purchase_rate.toString()
+            } else if (item.sale_rate !== undefined && item.sale_rate !== null && item.sale_rate !== "" && parseFloat(item.sale_rate) > 0) {
+                rateInput.text = item.sale_rate.toString()
+            } else {
+                rateInput.text = ""
+            }
+            if (item.packing_kg !== undefined && item.packing_kg !== null && item.packing_kg !== "") {
+                var pVal = parseFloat(item.packing_kg) || 0.0
+                if (pVal > 0) {
+                    var pQtl = pVal > 2.0 ? pVal / 100.0 : pVal
+                    pkngInput.text = pQtl.toFixed(3)
+                } else {
+                    pkngInput.text = ""
+                }
+            } else {
+                pkngInput.text = ""
             }
             recalculateRowAmount(true)
         }
@@ -129,21 +140,27 @@ Item {
         if (typeof bagsInput === "undefined" || !bagsInput) return
         var b = parseInt(bagsInput.text) || 0
         var l = (typeof looseInput !== "undefined" && looseInput) ? (parseFloat(looseInput.text) || 0.0) : 0.0
-        var pVal = (typeof pkngInput !== "undefined" && pkngInput) ? (parseFloat(pkngInput.text) || 0.500) : 0.500
+        var pVal = (typeof pkngInput !== "undefined" && pkngInput) ? (parseFloat(pkngInput.text) || 0.0) : 0.0
         var pQtl = pVal > 2.0 ? pVal / 100.0 : pVal
-        var autoWeight = Math.round(((b * pQtl) + l) * 1000.0) / 1000.0
+        var autoWeight = (b > 0 || l > 0) && (pQtl > 0 || l > 0) ? (Math.round(((b * pQtl) + l) * 1000.0) / 1000.0) : 0.0
 
         if (typeof weightInput !== "undefined" && weightInput) {
             if (forceRecalcWeight || (weightInput.text || "").trim() === "" || (bagsInput && bagsInput.isFocused) || (typeof looseInput !== "undefined" && looseInput && looseInput.isFocused) || (typeof pkngInput !== "undefined" && pkngInput && pkngInput.isFocused)) {
-                weightInput.text = autoWeight > 0 ? autoWeight.toFixed(3) : (b > 0 || l > 0 ? "0.000" : "")
+                if (autoWeight > 0) {
+                    weightInput.text = autoWeight.toFixed(3)
+                }
             }
         }
 
-        var w = (typeof weightInput !== "undefined" && weightInput) ? (parseFloat(weightInput.text) || autoWeight) : autoWeight
+        var w = (typeof weightInput !== "undefined" && weightInput) ? (parseFloat(weightInput.text) || (autoWeight > 0 ? autoWeight : 0.0)) : (autoWeight > 0 ? autoWeight : 0.0)
         var r = (typeof rateInput !== "undefined" && rateInput) ? (parseFloat(rateInput.text) || 0.0) : 0.0
-        var autoAmt = Math.round(w * r * 100.0) / 100.0
         if (typeof amountInput !== "undefined" && amountInput) {
-            amountInput.text = autoAmt > 0 ? autoAmt.toFixed(2) : "0.00"
+            if (w > 0 && r > 0) {
+                var autoAmt = Math.round(w * r * 100.0) / 100.0
+                amountInput.text = autoAmt.toFixed(2)
+            } else {
+                amountInput.text = ""
+            }
         }
     }
 
@@ -151,10 +168,15 @@ Item {
         var itemName = itemCombo.currentText.trim()
         var bCount = parseInt(bagsInput.text) || 0
         var looseVal = parseFloat(looseInput.text) || 0.0
-        var pkngVal = parseFloat(pkngInput.text) || 0.500
-        var weightVal = parseFloat(weightInput.text) || ((bCount * pkngVal) + looseVal)
+        var pkngVal = parseFloat(pkngInput.text) || 0.0
+        var weightVal = parseFloat(weightInput.text) || 0.0
+        if (weightVal <= 0 && (bCount > 0 || looseVal > 0)) {
+            var pQtl = pkngVal > 2.0 ? pkngVal / 100.0 : pkngVal
+            weightVal = Math.round(((bCount * pQtl) + looseVal) * 1000.0) / 1000.0
+        }
         var rateVal = parseFloat(rateInput.text) || 0.0
-        var amountVal = parseFloat(amountInput.text) || (weightVal * rateVal)
+        var userAmt = parseFloat(amountInput.text) || 0.0
+        var amountVal = userAmt > 0 ? userAmt : (Math.round(weightVal * rateVal * 100.0) / 100.0)
 
         if (!itemName) {
             statusMessage = "❌ Please select an Item."
@@ -163,7 +185,7 @@ Item {
             return
         }
 
-        if (weightVal <= 0 && bCount <= 0) {
+        if (weightVal <= 0 && bCount <= 0 && looseVal <= 0) {
             statusMessage = "❌ Please enter valid Bags, Loose or Weight."
             isError = true
             bagsInput.focusInput = true
@@ -174,7 +196,7 @@ Item {
             "itemName": itemName,
             "bags": bCount,
             "loose": looseVal,
-            "packing": pkngVal,
+            "packing": pkngVal > 0 ? pkngVal.toFixed(3) : "",
             "weight": weightVal,
             "rate": rateVal,
             "amount": amountVal
@@ -194,7 +216,7 @@ Item {
         itemCombo.editText = ""
         bagsInput.text = ""
         looseInput.text = ""
-        pkngInput.text = "0.500"
+        pkngInput.text = ""
         weightInput.text = ""
         rateInput.text = ""
         amountInput.text = ""
@@ -368,15 +390,11 @@ Item {
             if (typeof window !== "undefined") window.currentViewIndex = 6 // New Ledger
         }
     }
-    Shortcut {
-        sequence: "Esc"
-        context: Qt.WindowShortcut
-        onActivated: {
-            if (saveConfirmModal.opened) {
-                saveConfirmModal.close()
-            } else {
-                root.cancelRequested()
-            }
+    function handleEscape() {
+        if (saveConfirmModal.opened) {
+            saveConfirmModal.close()
+        } else {
+            root.cancelRequested()
         }
     }
 
@@ -725,7 +743,7 @@ Item {
 
                             CustomInput {
                                 id: bagsInput
-                                placeholderText: "100"
+                                placeholderText: "0"
                                 Layout.preferredWidth: 70
                                 onTextChanged: root.recalculateRowAmount(true)
                                 onReturnPressed: looseInput.focusInput = true
@@ -745,8 +763,8 @@ Item {
 
                             CustomInput {
                                 id: pkngInput
-                                text: "0.500"
-                                placeholderText: "0.500"
+                                text: ""
+                                placeholderText: "0.000"
                                 Layout.preferredWidth: 75
                                 onTextChanged: root.recalculateRowAmount(true)
                                 onReturnPressed: weightInput.focusInput = true
@@ -756,7 +774,7 @@ Item {
 
                             CustomInput {
                                 id: weightInput
-                                placeholderText: "50.000"
+                                placeholderText: "0.000"
                                 Layout.preferredWidth: 100
                                 onTextChanged: root.recalculateRowAmount(false)
                                 onReturnPressed: rateInput.focusInput = true
@@ -766,7 +784,7 @@ Item {
 
                             CustomInput {
                                 id: rateInput
-                                placeholderText: "3820"
+                                placeholderText: "0.00"
                                 Layout.preferredWidth: 100
                                 onTextChanged: root.recalculateRowAmount(false)
                                 onReturnPressed: amountInput.focusInput = true
@@ -776,6 +794,7 @@ Item {
 
                             CustomInput {
                                 id: amountInput
+                                text: ""
                                 placeholderText: "0.00"
                                 Layout.preferredWidth: 120
                                 onReturnPressed: root.addCurrentItemRow()

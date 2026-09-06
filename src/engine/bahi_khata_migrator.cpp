@@ -1183,6 +1183,7 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
 
     int salesInvoiceCount = 0;
     int purchaseInvoiceCount = 0;
+    std::map<std::pair<std::string, std::string>, int> fyTypeVoucherCount;
 
     for (const auto& pair : voucherGroups) {
         const std::string& key = pair.first;
@@ -1197,12 +1198,15 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
         QString fyVal = computeFinancialYear(vDate);
         int fyId = fyNameToId.count(fyVal) ? fyNameToId[fyVal] : 1;
 
+        int seqNo = ++fyTypeVoucherCount[{fyVal.toStdString(), vType.toStdString()}];
+        QString vchNumStr = QString("%1-%2").arg(vType.left(4)).arg(seqNo);
+
         std::string narration = cleanText(getField(firstR, "Narration"));
         if (narration.empty()) narration = cleanText(getField(firstR, "Narrtn"));
 
         std::string invNo = cleanText(getField(firstR, "InvoiceNo"));
         if (invNo.empty()) invNo = cleanText(getField(firstR, "TaxInvoiceNo"));
-        if (invNo.empty()) invNo = QString("VCH-%1").arg(QString::fromStdString(vNo)).toStdString();
+        if (invNo.empty()) invNo = QString("%1/%2").arg(vType.left(3).toUpper()).arg(seqNo).toStdString();
 
         ResolvedVoucherParty partyRes = resolveVoucherParty(vType, rows, ledgerDetailMap, ledgerCodeMap);
 
@@ -1225,9 +1229,6 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
         std::string ewayBill = (itLog != transportMap.end() && !itLog->second.eway_bill_no.empty()) ? itLog->second.eway_bill_no : cleanText(getField(firstR, "EWayBillNo"));
         std::string brokerName = cleanText(getField(firstR, "BrokerName"));
         std::string farmerName = cleanText(getField(firstR, "ZimidarName"));
-
-        QString vchNumStr = !rawType.empty() ? QString("%1-%2").arg(QString::fromStdString(rawType)).arg(QString::fromStdString(vNo)) :
-                                               QString("%1-%2").arg(vType).arg(QString::fromStdString(vNo));
 
         // 1. Insert Consolidated Double-Entry Voucher
         db.executeNonQuery(
@@ -1296,15 +1297,16 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
         if (vType == "Sales") {
             db.executeNonQuery(
                 "INSERT INTO sales_invoices ("
-                "fy_id, financial_year, invoice_no, invoice_date, customer_id, customer_name, "
+                "fy_id, financial_year, voucher_no, invoice_no, invoice_date, customer_id, customer_name, "
                 "item_id, item_name, hsn_code, "
                 "bag_count, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, "
                 "cgst_amount, sgst_amount, igst_amount, "
                 "total_amount, payment_mode, vehicle_no, eway_bill_no, narration, gr_no, driver, broker_name) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Credit', ?, ?, ?, ?, ?, ?);",
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Credit', ?, ?, ?, ?, ?, ?);",
                 {
                     fyId,
                     fyVal,
+                    vchNumStr,
                     QString::fromStdString(invNo),
                     vDate,
                     partyRes.primary_party_id,
@@ -1333,15 +1335,16 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
         } else if (vType == "Purchase") {
             db.executeNonQuery(
                 "INSERT INTO purchase_invoices ("
-                "fy_id, financial_year, invoice_no, invoice_date, supplier_id, supplier_name, "
+                "fy_id, financial_year, voucher_no, invoice_no, invoice_date, supplier_id, supplier_name, "
                 "item_id, item_name, hsn_code, "
                 "bag_count, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, "
                 "cgst_amount, sgst_amount, igst_amount, "
                 "total_amount, payment_mode, vehicle_no, eway_bill_no, narration, gr_no, driver, broker_name) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Credit', ?, ?, ?, ?, ?, ?);",
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Credit', ?, ?, ?, ?, ?, ?);",
                 {
                     fyId,
                     fyVal,
+                    vchNumStr,
                     QString::fromStdString(invNo),
                     vDate,
                     partyRes.primary_party_id,

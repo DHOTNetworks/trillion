@@ -22,6 +22,8 @@ public:
     QHash<int, QByteArray> roleNames() const override;
 
     Q_INVOKABLE QVariantMap get_row(int row) const;
+    Q_INVOKABLE QVariantMap get(int row) const { return get_row(row); }
+    Q_INVOKABLE QVariant get_value(int row, const QString& roleKey) const;
     Q_INVOKABLE QVariantList get_all_data() const;
     virtual void reload_data() = 0;
 

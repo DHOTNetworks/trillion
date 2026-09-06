@@ -565,14 +565,11 @@ Rectangle {
         sequence: "F5"
         onActivated: root.refreshFirms()
     }
-    Shortcut {
-        sequence: "Escape"
-        onActivated: {
-            if (!root.isViewingAppData) {
-                root.resetToAppData()
-            } else if (typeof firmManager !== "undefined" && firmManager && firmManager.currentFirmName !== "") {
-                root.cancelRequested()
-            }
+    function handleEscape() {
+        if (!root.isViewingAppData) {
+            root.resetToAppData()
+        } else if (typeof firmManager !== "undefined" && firmManager && firmManager.currentFirmName !== "") {
+            root.cancelRequested()
         }
     }
 }

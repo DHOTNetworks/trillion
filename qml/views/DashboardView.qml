@@ -93,7 +93,7 @@ T.ScrollView {
     }
 
     ColumnLayout {
-        anchors.fill: parent
+        width: root.availableWidth
         anchors.margins: 14
         spacing: 14
 
@@ -558,15 +558,8 @@ T.ScrollView {
                     }
                 }
 
-                // Procurement Slips FastTable
-                FastTable {
-                    Layout.fillWidth: true
+                Item {
                     Layout.fillHeight: true
-                    title: "Recent Paddy Procurement Slips"
-                    model: paddyModel
-                    headers: ["Slip No", "Date", "Farmer", "Variety", "Bags", "Net (Qtl)", "Net Amt (₹)", "Status"]
-                    roleKeys: ["slip_no", "arrival_date", "farmer_name", "paddy_variety", "bag_count", "net_weight_qtl", "net_amount", "payment_status"]
-                    onNewEntryRequested: root.openNewPaddy()
                 }
             }
 

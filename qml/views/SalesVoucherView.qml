@@ -180,9 +180,9 @@ Item {
         itemCombo.currentIndex = -1
         itemCombo.editText = ""
         bagsInput.text = ""
-        pkngInput.text = "0.500"
+        pkngInput.text = ""
         weightInput.text = ""
-        gstInput.text = "0%"
+        gstInput.text = ""
         rateInput.text = ""
         amountInput.text = ""
     }
@@ -190,11 +190,11 @@ Item {
     function addCurrentItemRow() {
         var itemName = itemCombo.currentText.trim()
         var bCount = parseInt(bagsInput.text) || 0
-        var weightVal = weightInput.text.trim() !== "" ? parseFloat(weightInput.text) : (parseFloat(weightInput.placeholderText) || 0.0)
-        var rateVal = rateInput.text.trim() !== "" ? parseFloat(rateInput.text) : (parseFloat(rateInput.placeholderText) || 0.0)
+        var weightVal = parseFloat(weightInput.text) || 0.0
+        var rateVal = parseFloat(rateInput.text) || 0.0
         var gstStr = gstInput.text.replace("%", "").trim()
         var gstPct = isNaN(parseFloat(gstStr)) ? 0.0 : parseFloat(gstStr)
-        var pkng = pkngInput.text.trim() !== "" ? pkngInput.text.trim() : "0.500"
+        var pkng = pkngInput.text.trim()
         var userAmount = parseFloat(amountInput.text) || 0.0
 
         if (!itemName) {
@@ -310,18 +310,28 @@ Item {
         if (!itemName) return
         var item = (typeof stockItemsModel !== "undefined" && stockItemsModel) ? stockItemsModel.get_item_by_name(itemName) : null
         if (item) {
-            if (item.sale_rate) rateInput.text = item.sale_rate.toString()
+            if (item.sale_rate !== undefined && item.sale_rate !== null && item.sale_rate !== "" && parseFloat(item.sale_rate) > 0) {
+                rateInput.text = item.sale_rate.toString()
+            } else {
+                rateInput.text = ""
+            }
             if (item.gst_rate !== undefined && item.gst_rate !== null && item.gst_rate !== "") {
                 var gVal = parseFloat(item.gst_rate)
                 if (isNaN(gVal)) gVal = 0.0
-                gstInput.text = (gVal > 0 ? gVal.toString() : "0") + "%"
+                gstInput.text = gVal > 0 ? (gVal.toString() + "%") : "0%"
             } else {
-                gstInput.text = "0%"
+                gstInput.text = ""
             }
-            if (item.packing_kg) {
-                var pVal = parseFloat(item.packing_kg) || 50.0
-                var pQtl = pVal > 2.0 ? pVal / 100.0 : pVal
-                pkngInput.text = pQtl.toFixed(3)
+            if (item.packing_kg !== undefined && item.packing_kg !== null && item.packing_kg !== "") {
+                var pVal = parseFloat(item.packing_kg) || 0.0
+                if (pVal > 0) {
+                    var pQtl = pVal > 2.0 ? pVal / 100.0 : pVal
+                    pkngInput.text = pQtl.toFixed(3)
+                } else {
+                    pkngInput.text = ""
+                }
+            } else {
+                pkngInput.text = ""
             }
             isManualGst = false
             recalculateRowAmount(true)
@@ -332,22 +342,30 @@ Item {
         if (!weightInput || !bagsInput || !pkngInput || !amountInput || !rateInput) return
         if (root.isWithoutStock) {
             var rWithout = parseFloat(rateInput.text) || 0.0
-            amountInput.text = rWithout > 0 ? rWithout.toFixed(2) : "0.00"
+            amountInput.text = rWithout > 0 ? rWithout.toFixed(2) : ""
             return
         }
         var b = parseInt(bagsInput.text) || 0
-        var pVal = parseFloat(pkngInput.text) || 0.500
+        var pVal = parseFloat(pkngInput.text) || 0.0
         var pQtl = pVal > 2.0 ? pVal / 100.0 : pVal
-        var autoWeight = Math.round((b * pQtl) * 1000.0) / 1000.0
+        var autoWeight = (b > 0 && pQtl > 0) ? (Math.round((b * pQtl) * 1000.0) / 1000.0) : 0.0
 
         if (forceRecalcWeight || weightInput.text.trim() === "" || (bagsInput.activeFocus || pkngInput.activeFocus)) {
-            weightInput.text = autoWeight > 0 ? autoWeight.toFixed(3) : (b > 0 ? "0.000" : "")
+            if (autoWeight > 0) {
+                weightInput.text = autoWeight.toFixed(3)
+            } else if (b === 0 && pVal === 0.0 && (bagsInput.activeFocus || pkngInput.activeFocus)) {
+                // Keep empty if bags/pkng are not set
+            }
         }
 
-        var w = parseFloat(weightInput.text) || autoWeight
+        var w = parseFloat(weightInput.text) || (autoWeight > 0 ? autoWeight : 0.0)
         var r = parseFloat(rateInput.text) || 0.0
-        var a = Math.round(w * r * 100.0) / 100.0
-        amountInput.text = a > 0 ? a.toFixed(2) : "0.00"
+        if (w > 0 && r > 0) {
+            var a = Math.round(w * r * 100.0) / 100.0
+            amountInput.text = a.toFixed(2)
+        } else {
+            amountInput.text = ""
+        }
     }
 
     function saveInvoice() {
@@ -881,7 +899,7 @@ Item {
                             CustomInput {
                                 id: bagsInput
                                 visible: !root.isWithoutStock
-                                placeholderText: "100"
+                                placeholderText: "0"
                                 Layout.preferredWidth: 60
                                 onTextChanged: root.recalculateRowAmount(true)
                                 onReturnPressed: pkngInput.focusInput = true
@@ -892,8 +910,8 @@ Item {
                             CustomInput {
                                 id: pkngInput
                                 visible: !root.isWithoutStock
-                                text: "0.500"
-                                placeholderText: "0.500"
+                                text: ""
+                                placeholderText: "0.000"
                                 Layout.preferredWidth: 70
                                 onTextChanged: root.recalculateRowAmount(true)
                                 onReturnPressed: weightInput.focusInput = true
@@ -904,7 +922,7 @@ Item {
                             CustomInput {
                                 id: weightInput
                                 visible: !root.isWithoutStock
-                                placeholderText: "50.000"
+                                placeholderText: "0.000"
                                 Layout.preferredWidth: 90
                                 onTextChanged: root.recalculateRowAmount(false)
                                 onReturnPressed: gstInput.focusInput = true
@@ -914,8 +932,8 @@ Item {
 
                             CustomInput {
                                 id: gstInput
-                                text: "5%"
-                                placeholderText: "5%"
+                                text: ""
+                                placeholderText: "0%"
                                 Layout.preferredWidth: 50
                                 onReturnPressed: rateInput.focusInput = true
                                 onRightPressed: rateInput.focusInput = true
@@ -924,7 +942,7 @@ Item {
 
                             CustomInput {
                                 id: rateInput
-                                placeholderText: "2800"
+                                placeholderText: "0.00"
                                 Layout.preferredWidth: 95
                                 onTextChanged: root.recalculateRowAmount(false)
                                 onReturnPressed: amountInput.focusInput = true
@@ -934,7 +952,7 @@ Item {
 
                             CustomInput {
                                 id: amountInput
-                                text: "0.00"
+                                text: ""
                                 placeholderText: "0.00"
                                 Layout.preferredWidth: 110
                                 onReturnPressed: root.addCurrentItemRow()

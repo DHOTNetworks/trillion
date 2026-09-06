@@ -26,6 +26,7 @@
 #include "models/firm_manager.h"
 #include "models/jform_model.h"
 #include "models/tds_model.h"
+#include "models/global_key_filter.h"
 #include "engine/bahi_khata_migrator.h"
 
 int main(int argc, char* argv[]) {
@@ -188,8 +189,12 @@ int main(int argc, char* argv[]) {
         }
     });
 
+    GlobalKeyFilter globalKeyFilter;
+    app.installEventFilter(&globalKeyFilter);
+
     // Register all Context Properties (100% 1-to-1 match with Python PySide6)
     QQmlContext* ctx = engine.rootContext();
+    ctx->setContextProperty("globalKeyFilter", &globalKeyFilter);
     ctx->setContextProperty("dashboardCtrl", &dashboardCtrl);
     ctx->setContextProperty("paddyModel", &paddyModel);
     ctx->setContextProperty("millingModel", &millingModel);

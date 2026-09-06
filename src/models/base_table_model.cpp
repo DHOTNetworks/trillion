@@ -57,6 +57,14 @@ QVariantMap BaseTableModel::get_row(int row) const {
     return QVariantMap();
 }
 
+QVariant BaseTableModel::get_value(int row, const QString& roleKey) const {
+    if (row >= 0 && row < m_data.size()) {
+        const QVariantMap rowMap = m_data.at(row).toMap();
+        return rowMap.value(roleKey);
+    }
+    return QVariant();
+}
+
 QVariantList BaseTableModel::get_all_data() const {
     return m_data;
 }

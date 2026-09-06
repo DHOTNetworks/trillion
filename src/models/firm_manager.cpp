@@ -12,6 +12,7 @@
 #include <QJsonArray>
 #include <QRegularExpression>
 #include <QDateTime>
+#include <QSettings>
 #include <QDebug>
 #include <iostream>
 
@@ -39,6 +40,7 @@ QString FirmManager::registryFilePath() const {
 QString FirmManager::sanitizeSlug(const QString& name) {
     QString slug = name.toLower();
     slug.remove(QRegularExpression("^m/s\\s*"));
+    slug.remove(QRegularExpression("^ms\\s*"));
     slug.replace(QRegularExpression("[^a-z0-9]+"), "_");
     slug.remove(QRegularExpression("^_+|_+$"));
     if (slug.isEmpty()) slug = "firm_" + QString::number(QDateTime::currentMSecsSinceEpoch());
@@ -49,12 +51,17 @@ void FirmManager::loadRegistry() {
     QFile regFile(registryFilePath());
     QVariantList registeredFirms;
 
+    QSettings settings("MahadevAgro", "Mahadev Rice Mill ERP");
+    QString settingsFirmId = settings.value("active_firm_id").toString();
+
     if (regFile.exists() && regFile.open(QIODevice::ReadOnly)) {
         QJsonDocument doc = QJsonDocument::fromJson(regFile.readAll());
         regFile.close();
         if (doc.isObject()) {
             QJsonObject root = doc.object();
-            m_activeFirmId = root.value("active_firm_id").toString();
+            if (settingsFirmId.isEmpty()) {
+                m_activeFirmId = root.value("active_firm_id").toString();
+            }
             m_activeFolder = QDir::cleanPath(QDir::current().filePath("data"));
             QJsonArray arr = root.value("firms").toArray();
             for (const auto& v : arr) {
@@ -63,61 +70,74 @@ void FirmManager::loadRegistry() {
         }
     }
 
-    // If registry is empty or missing Mahadev Rice, initialize defaults
-    bool hasMahadev = false;
-    for (const auto& f : registeredFirms) {
-        if (f.toMap().value("id").toString() == "mahadev_rice") {
-            hasMahadev = true;
-            break;
+    if (!settingsFirmId.isEmpty()) {
+        m_activeFirmId = settingsFirmId;
+    }
+
+    // Auto-discover any .db databases present in data/ that are not yet in registry
+    QDir dataDir(QDir::current().filePath("data"));
+    if (dataDir.exists()) {
+        QStringList dbFiles = dataDir.entryList({"*.db"}, QDir::Files, QDir::Name);
+        for (const QString& dbName : dbFiles) {
+            if (dbName == "mahadev_accounting.db") continue;
+            if (dbName.endsWith("-wal") || dbName.endsWith("-shm")) continue;
+            QString slug = dbName;
+            slug.remove(".db");
+
+            bool existsInReg = false;
+            for (const auto& f : registeredFirms) {
+                if (f.toMap().value("id").toString() == slug || f.toMap().value("db_name").toString() == dbName) {
+                    existsInReg = true;
+                    break;
+                }
+            }
+
+            if (!existsInReg) {
+                QString fullPath = dataDir.filePath(dbName);
+                QVariantMap firm;
+                firm["id"] = slug;
+                firm["db_name"] = dbName;
+                firm["db_path"] = "data/" + dbName;
+                firm["source_file"] = dbName;
+                firm["folder"] = dataDir.absolutePath();
+                firm["is_imported"] = true;
+
+                sqlite3* db = nullptr;
+                if (sqlite3_open_v2(fullPath.toUtf8().constData(), &db, SQLITE_OPEN_READONLY, nullptr) == SQLITE_OK) {
+                    sqlite3_stmt* stmt = nullptr;
+                    if (sqlite3_prepare_v2(db, "SELECT company_name, gstin, pan_no, city, state, firm_type, business_type FROM company_info LIMIT 1;", -1, &stmt, nullptr) == SQLITE_OK) {
+                        if (sqlite3_step(stmt) == SQLITE_ROW) {
+                            const char* c_name = (const char*)sqlite3_column_text(stmt, 0);
+                            const char* c_gst = (const char*)sqlite3_column_text(stmt, 1);
+                            const char* c_pan = (const char*)sqlite3_column_text(stmt, 2);
+                            const char* c_city = (const char*)sqlite3_column_text(stmt, 3);
+                            const char* c_state = (const char*)sqlite3_column_text(stmt, 4);
+                            const char* c_type = (const char*)sqlite3_column_text(stmt, 5);
+                            const char* c_biz = (const char*)sqlite3_column_text(stmt, 6);
+
+                            if (c_name && strlen(c_name) > 0) firm["name"] = QString::fromUtf8(c_name);
+                            if (c_gst) firm["gstin"] = QString::fromUtf8(c_gst);
+                            if (c_pan) firm["pan"] = QString::fromUtf8(c_pan);
+                            if (c_city) firm["city"] = QString::fromUtf8(c_city);
+                            if (c_state) firm["state"] = QString::fromUtf8(c_state);
+                            if (c_type) firm["firm_type"] = QString::fromUtf8(c_type);
+                            if (c_biz) firm["business"] = QString::fromUtf8(c_biz);
+                        }
+                        sqlite3_finalize(stmt);
+                    }
+                    sqlite3_close(db);
+                }
+
+                if (!firm.contains("name") || firm["name"].toString().isEmpty()) {
+                    firm["name"] = slug.replace("_", " ").toUpper();
+                }
+                registeredFirms.append(firm);
+            }
         }
     }
 
-    if (!hasMahadev) {
-        QVariantMap mahadev;
-        mahadev["id"] = "mahadev_rice";
-        mahadev["name"] = "M/S MAHADEV RICE INDUSTRY";
-        mahadev["db_name"] = "mahadev_rice.db";
-        mahadev["db_path"] = "data/mahadev_rice.db";
-        mahadev["source_file"] = "Data.004";
-        mahadev["folder"] = m_activeFolder;
-        mahadev["gstin"] = "06ABKFM5928Q1ZG";
-        mahadev["pan"] = "ABKFM5928Q";
-        mahadev["city"] = "SIRSA";
-        mahadev["state"] = "HARYANA";
-        mahadev["firm_type"] = "Partnership Firm";
-        mahadev["period"] = "01-04-2023 To 31-03-2027";
-        mahadev["is_imported"] = true;
-        registeredFirms.prepend(mahadev);
-    }
-
-    // Check if Haritage Harvestor exists or register it
-    bool hasHaritage = false;
-    for (const auto& f : registeredFirms) {
-        if (f.toMap().value("id").toString() == "haritage_harvestor") {
-            hasHaritage = true;
-            break;
-        }
-    }
-    if (!hasHaritage) {
-        QVariantMap haritage;
-        haritage["id"] = "haritage_harvestor";
-        haritage["name"] = "M/S HARITAGE HARVESTOR AGRO PRODUCTS";
-        haritage["db_name"] = "haritage_harvestor.db";
-        haritage["db_path"] = "data/haritage_harvestor.db";
-        haritage["source_file"] = "Data.001";
-        haritage["folder"] = m_activeFolder;
-        haritage["gstin"] = "06BCUPK4267Q2ZL";
-        haritage["pan"] = "BCUPK4267Q";
-        haritage["city"] = "SIRSA";
-        haritage["state"] = "HARYANA";
-        haritage["firm_type"] = "Proprietorship Firm";
-        haritage["period"] = "01-04-2024 To 31-03-2027";
-        haritage["is_imported"] = QFile::exists("data/haritage_harvestor.db");
-        registeredFirms.append(haritage);
-    }
-
-    if (m_activeFirmId.isEmpty()) {
-        m_activeFirmId = "mahadev_rice";
+    if (m_activeFirmId.isEmpty() && !registeredFirms.isEmpty()) {
+        m_activeFirmId = registeredFirms.first().toMap().value("id").toString();
     }
 
     saveRegistry(registeredFirms);
@@ -137,6 +157,12 @@ void FirmManager::saveRegistry(const QVariantList& firms) {
         regFile.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
         regFile.close();
     }
+
+    QSettings settings("MahadevAgro", "Mahadev Rice Mill ERP");
+    if (!m_activeFirmId.isEmpty()) {
+        settings.setValue("active_firm_id", m_activeFirmId);
+    }
+
     emit registryUpdated();
 }
 
@@ -315,10 +341,12 @@ QVariantList FirmManager::scan_folder_for_firms(const QString& folderPath) {
         }
         firm["name"] = compName;
 
-        QString slug = sanitizeSlug(compName);
-        if (fName == "Data.004" || slug.contains("mahadev")) slug = "mahadev_rice";
-        else if (fName == "Data.001" || slug.contains("haritage")) slug = "haritage_harvestor";
-        else if (fName == "Data.018" || slug.contains("sushil")) slug = "sushil_trading";
+        QString fileStem = QFileInfo(fName).fileName().toLower().replace(".", "_");
+        QString compSlug = sanitizeSlug(compName);
+        QString slug = compSlug;
+        if (!fileStem.isEmpty() && !slug.endsWith(fileStem)) {
+            slug += "_" + fileStem;
+        }
 
         firm["id"] = slug;
         firm["db_name"] = slug + ".db";
@@ -342,7 +370,7 @@ QVariantList FirmManager::scan_folder_for_firms(const QString& folderPath) {
 
         bool isImported = QFile::exists(firm["db_path"].toString());
         firm["is_imported"] = isImported;
-        firm["isActive"] = (firm["id"].toString() == m_activeFirmId);
+        firm["isActive"] = false; // Never auto-activate external files before user explicitly opens or imports
 
         results.append(firm);
     }
@@ -421,10 +449,12 @@ bool FirmManager::prepare_firm_for_import(const QString& mdbFilePath, const QStr
 
     QString slug = explicitFirmId;
     if (slug.isEmpty()) {
-        slug = sanitizeSlug(firmName);
-        if (fi.fileName() == "Data.004" || slug.contains("mahadev")) slug = "mahadev_rice";
-        else if (fi.fileName() == "Data.001" || slug.contains("haritage")) slug = "haritage_harvestor";
-        else if (fi.fileName() == "Data.018" || slug.contains("sushil")) slug = "sushil_trading";
+        QString fileStem = fi.fileName().toLower().replace(".", "_");
+        QString compSlug = sanitizeSlug(firmName);
+        slug = compSlug;
+        if (!fileStem.isEmpty() && !slug.endsWith(fileStem)) {
+            slug += "_" + fileStem;
+        }
     }
 
     QString targetDbPath = "data/" + slug + ".db";

@@ -11,6 +11,10 @@ T.ScrollView {
     signal cancelRequested()
     signal openItemMovement(string itemName)
 
+    function handleEscape() {
+        root.cancelRequested()
+    }
+
     property int totalItemsCount: 0
     property real totalClosingQty: 0.0
     property real totalClosingVal: 0.0
@@ -19,6 +23,12 @@ T.ScrollView {
 
     Component.onCompleted: {
         reloadStockRegister()
+        Qt.callLater(function() {
+            gridListView.forceActiveFocus()
+            if (stockRegisterModel.count > 0) {
+                gridListView.currentIndex = 0
+            }
+        })
     }
 
     function reloadStockRegister() {
@@ -79,6 +89,11 @@ T.ScrollView {
             count++
         }
         totalItemsCount = count
+        if (stockRegisterModel.count > 0) {
+            if (gridListView.currentIndex < 0 || gridListView.currentIndex >= stockRegisterModel.count) {
+                gridListView.currentIndex = 0
+            }
+        }
     }
 
     GenericListModel { id: stockRegisterModel }
@@ -207,22 +222,47 @@ T.ScrollView {
                                 anchors.rightMargin: 8
                                 spacing: 6
 
-                                Text { text: "🔍"; font.pixelSize: 12 }
-
-                                T.TextField {
+                                TextInput {
                                     id: searchField
-                                    placeholderText: "Search by item name, SKU code or type..."
                                     color: "#0F172A"
-                                    placeholderTextColor: "#94A3B8"
                                     font.pixelSize: 12
+                                    font.family: "Segoe UI, Consolas, Menlo, sans-serif"
                                     verticalAlignment: TextInput.AlignVCenter
-                                    topPadding: 0
-                                    bottomPadding: 0
-                                    background: null
                                     Layout.fillWidth: true
+                                    selectByMouse: true
+                                    clip: true
+
+                                    Text {
+                                        anchors.fill: parent
+                                        verticalAlignment: Text.AlignVCenter
+                                        text: "Search by item name, SKU code or type..."
+                                        color: "#94A3B8"
+                                        font.pixelSize: 12
+                                        font.family: "Segoe UI, Consolas, Menlo, sans-serif"
+                                        visible: !searchField.text && !searchField.activeFocus
+                                    }
+
                                     onTextChanged: {
                                         root.searchQuery = text
                                         root.filterAndPopulateRegister()
+                                    }
+                                    Keys.onDownPressed: function(event) {
+                                        event.accepted = true
+                                        gridListView.forceActiveFocus()
+                                        if (gridListView.currentIndex < 0 && stockRegisterModel.count > 0) gridListView.currentIndex = 0
+                                    }
+                                    Keys.onReturnPressed: function(event) {
+                                        event.accepted = true
+                                        gridListView.forceActiveFocus()
+                                        if (gridListView.currentIndex < 0 && stockRegisterModel.count > 0) gridListView.currentIndex = 0
+                                    }
+                                    Keys.onEnterPressed: function(event) {
+                                        event.accepted = true
+                                        gridListView.forceActiveFocus()
+                                        if (gridListView.currentIndex < 0 && stockRegisterModel.count > 0) gridListView.currentIndex = 0
+                                    }
+                                    Keys.onEscapePressed: function(event) {
+                                        event.accepted = false
                                     }
                                 }
 
@@ -300,21 +340,62 @@ T.ScrollView {
                     clip: true
                     spacing: 1
                     boundsBehavior: Flickable.StopAtBounds
+                    focus: true
+                    highlightFollowsCurrentItem: true
+                    currentIndex: 0
+
+                    Keys.onReturnPressed: function(event) {
+                        event.accepted = true
+                        if (currentIndex >= 0 && currentIndex < stockRegisterModel.count) {
+                            var it = stockRegisterModel.get(currentIndex)
+                            if (it && it.nameVal) root.openItemMovement(it.nameVal)
+                        }
+                    }
+                    Keys.onEnterPressed: function(event) {
+                        event.accepted = true
+                        if (currentIndex >= 0 && currentIndex < stockRegisterModel.count) {
+                            var it = stockRegisterModel.get(currentIndex)
+                            if (it && it.nameVal) root.openItemMovement(it.nameVal)
+                        }
+                    }
+                    Keys.onUpPressed: function(event) {
+                        event.accepted = true
+                        if (currentIndex > 0) {
+                            currentIndex--
+                            positionViewAtIndex(currentIndex, ListView.Contain)
+                        } else {
+                            searchField.forceActiveFocus()
+                        }
+                    }
+                    Keys.onDownPressed: function(event) {
+                        event.accepted = true
+                        if (currentIndex < stockRegisterModel.count - 1) {
+                            currentIndex++
+                            positionViewAtIndex(currentIndex, ListView.Contain)
+                        }
+                    }
 
                     delegate: Rectangle {
                         id: rowRect
                         width: gridListView.width
                         height: 34
-                        color: index % 2 === 0 ? "#FFFFFF" : "#F8FAFC"
-                        border.color: mouseArea.containsMouse ? "#2563EB" : "#E2E8F0"
-                        border.width: 1
+                        color: ListView.isCurrentItem ? "#DBEAFE" : (index % 2 === 0 ? "#FFFFFF" : "#F8FAFC")
+                        border.color: (ListView.isCurrentItem || mouseArea.containsMouse) ? "#2563EB" : "#E2E8F0"
+                        border.width: ListView.isCurrentItem ? 2 : 1
                         radius: 2
 
                         MouseArea {
                             id: mouseArea
                             anchors.fill: parent
                             hoverEnabled: true
-                            onClicked: root.openItemMovement(model.nameVal)
+                            onClicked: {
+                                gridListView.currentIndex = index
+                                gridListView.forceActiveFocus()
+                            }
+                            onDoubleClicked: {
+                                gridListView.currentIndex = index
+                                root.openItemMovement(model.nameVal)
+                            }
                         }
 
                         RowLayout {

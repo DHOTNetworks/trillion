@@ -18,22 +18,38 @@ Item {
     readonly property bool isMarketOrBoth: selectedItemType === "Market" || selectedItemType === "Both"
 
     // -------------------------------------------------------------
-    // KEYBOARD SHORTCUTS
+    // KEYBOARD SHORTCUTS & POPUP MANAGEMENT
     // -------------------------------------------------------------
-    Shortcut {
-        sequence: "Esc"
-        onActivated: root.cancelRequested()
+    function hasActivePopup() {
+        return (typeof newGroupPopup !== "undefined" && newGroupPopup && newGroupPopup.opened)
+    }
+
+    function closeActivePopup() {
+        if (typeof newGroupPopup !== "undefined" && newGroupPopup && newGroupPopup.opened) {
+            newGroupPopup.close()
+        }
+    }
+
+    function handleEscape() {
+        if (hasActivePopup()) {
+            closeActivePopup()
+        } else {
+            root.cancelRequested()
+        }
     }
     Shortcut {
         sequence: "F2"
+        context: Qt.WindowShortcut
         onActivated: root.saveStockItem()
     }
     Shortcut {
         sequence: "F5"
+        context: Qt.WindowShortcut
         onActivated: root.copyAllLedgersFromPurchase()
     }
     Shortcut {
         sequence: "Alt+T"
+        context: Qt.WindowShortcut
         onActivated: {
             if (selectedItemType === "Both") selectedItemType = "Market"
             else if (selectedItemType === "Market") selectedItemType = "Mandi"
@@ -42,6 +58,7 @@ Item {
     }
     Shortcut {
         sequence: "Alt+C"
+        context: Qt.WindowShortcut
         onActivated: newGroupPopup.open()
     }
 
@@ -168,7 +185,8 @@ Item {
                                 isRequired: true
                                 focusInput: true
                                 Layout.fillWidth: true
-                                onReturnPressed: autoAdjustCheck.focus = true
+                                onReturnPressed: groupCombo.forceActiveFocus()
+                                onDownPressed: groupCombo.forceActiveFocus()
                             }
 
                             CustomCheckBox {
@@ -263,6 +281,9 @@ Item {
                                             model = stockItemsModel.get_stock_groups()
                                         }
                                     }
+                                    onReturnPressed: unitCombo.forceActiveFocus()
+                                    onDownPressed: unitCombo.forceActiveFocus()
+                                    onUpPressed: nameInput.forceActiveFocus()
                                 }
                             }
 
@@ -276,6 +297,9 @@ Item {
                                     comboHeight: 34
                                     model: (typeof stockItemsModel !== "undefined" && stockItemsModel) ? stockItemsModel.get_units() : ["Qtl.", "Bags", "Kg", "Nos"]
                                     currentIndex: 0
+                                    onReturnPressed: rateCalcCombo.forceActiveFocus()
+                                    onDownPressed: rateCalcCombo.forceActiveFocus()
+                                    onUpPressed: groupCombo.forceActiveFocus()
                                 }
                             }
 
@@ -289,6 +313,9 @@ Item {
                                     comboHeight: 34
                                     model: ["N/A", "Weight", "Unit", "Bags"]
                                     currentIndex: 0
+                                    onReturnPressed: narrationInput.forceActiveFocus()
+                                    onDownPressed: narrationInput.forceActiveFocus()
+                                    onUpPressed: unitCombo.forceActiveFocus()
                                 }
                             }
 
@@ -316,6 +343,9 @@ Item {
                                 label: "Printing Narration (Prints on Bills / Invoices)"
                                 placeholderText: "Leave blank or add custom printing remark for this item..."
                                 Layout.fillWidth: true
+                                onReturnPressed: gstRateCombo.forceActiveFocus()
+                                onDownPressed: gstRateCombo.forceActiveFocus()
+                                onUpPressed: rateCalcCombo.forceActiveFocus()
                             }
                         }
                     }
@@ -371,6 +401,9 @@ Item {
                                     comboHeight: 34
                                     model: (typeof stockItemsModel !== "undefined" && stockItemsModel) ? stockItemsModel.get_gst_rates() : ["0%", "5%", "12%", "18%", "28%"]
                                     currentIndex: 0 // default 0%
+                                    onReturnPressed: hsnInput.forceActiveFocus()
+                                    onDownPressed: hsnInput.forceActiveFocus()
+                                    onUpPressed: narrationInput.forceActiveFocus()
                                 }
                             }
 
@@ -380,6 +413,9 @@ Item {
                                 text: "1006"
                                 placeholderText: "1006"
                                 Layout.preferredWidth: 120
+                                onReturnPressed: cessInput.forceActiveFocus()
+                                onDownPressed: cessInput.forceActiveFocus()
+                                onUpPressed: gstRateCombo.forceActiveFocus()
                             }
 
                             CustomInput {
@@ -389,6 +425,9 @@ Item {
                                 placeholderText: "0.00"
                                 inputMethodHints: Qt.ImhFormattedNumbersOnly
                                 Layout.preferredWidth: 90
+                                onReturnPressed: gstLedgerCombo.forceActiveFocus()
+                                onDownPressed: gstLedgerCombo.forceActiveFocus()
+                                onUpPressed: hsnInput.forceActiveFocus()
                             }
 
                             CustomWhiteCombo {
@@ -398,6 +437,9 @@ Item {
                                 comboHeight: 34
                                 model: (typeof partiesModel !== "undefined" && partiesModel) ? partiesModel.get_parties_list() : ["Duties & Taxes"]
                                 text: "Duties & Taxes"
+                                onReturnPressed: vatInput.forceActiveFocus()
+                                onDownPressed: vatInput.forceActiveFocus()
+                                onUpPressed: cessInput.forceActiveFocus()
                             }
                         }
 
@@ -411,6 +453,9 @@ Item {
                                 text: "0.00"
                                 inputMethodHints: Qt.ImhFormattedNumbersOnly
                                 Layout.preferredWidth: 80
+                                onReturnPressed: vatLedgerCombo.forceActiveFocus()
+                                onDownPressed: vatLedgerCombo.forceActiveFocus()
+                                onUpPressed: gstLedgerCombo.forceActiveFocus()
                             }
 
                             CustomWhiteCombo {
@@ -420,6 +465,9 @@ Item {
                                 comboHeight: 34
                                 model: (typeof partiesModel !== "undefined" && partiesModel) ? partiesModel.get_parties_list() : ["VAT A/c"]
                                 text: "VAT A/c"
+                                onReturnPressed: surVatInput.forceActiveFocus()
+                                onDownPressed: surVatInput.forceActiveFocus()
+                                onUpPressed: vatInput.forceActiveFocus()
                             }
 
                             CustomInput {
@@ -428,6 +476,9 @@ Item {
                                 text: "0.00"
                                 inputMethodHints: Qt.ImhFormattedNumbersOnly
                                 Layout.preferredWidth: 95
+                                onReturnPressed: cstInput.forceActiveFocus()
+                                onDownPressed: cstInput.forceActiveFocus()
+                                onUpPressed: vatLedgerCombo.forceActiveFocus()
                             }
 
                             CustomInput {
@@ -436,6 +487,9 @@ Item {
                                 text: "0.00"
                                 inputMethodHints: Qt.ImhFormattedNumbersOnly
                                 Layout.preferredWidth: 80
+                                onReturnPressed: cstLedgerCombo.forceActiveFocus()
+                                onDownPressed: cstLedgerCombo.forceActiveFocus()
+                                onUpPressed: surVatInput.forceActiveFocus()
                             }
 
                             CustomWhiteCombo {
@@ -445,6 +499,15 @@ Item {
                                 comboHeight: 34
                                 model: (typeof partiesModel !== "undefined" && partiesModel) ? partiesModel.get_parties_list() : ["CST A/c"]
                                 text: "CST A/c"
+                                onReturnPressed: {
+                                    if (root.isMandiOrBoth) damiInput.forceActiveFocus()
+                                    else purcLedgerCombo.forceActiveFocus()
+                                }
+                                onDownPressed: {
+                                    if (root.isMandiOrBoth) damiInput.forceActiveFocus()
+                                    else purcLedgerCombo.forceActiveFocus()
+                                }
+                                onUpPressed: cstInput.forceActiveFocus()
                             }
                         }
                     }
@@ -488,6 +551,9 @@ Item {
                                 text: "2.50"
                                 inputMethodHints: Qt.ImhFormattedNumbersOnly
                                 Layout.preferredWidth: 90
+                                onReturnPressed: damiLedgerCombo.forceActiveFocus()
+                                onDownPressed: damiLedgerCombo.forceActiveFocus()
+                                onUpPressed: cstLedgerCombo.forceActiveFocus()
                             }
 
                             CustomWhiteCombo {
@@ -497,6 +563,9 @@ Item {
                                 comboHeight: 34
                                 model: (typeof partiesModel !== "undefined" && partiesModel) ? partiesModel.get_parties_list() : ["Dami A/c"]
                                 text: "Dami A/c"
+                                onReturnPressed: mktFeeInput.forceActiveFocus()
+                                onDownPressed: mktFeeInput.forceActiveFocus()
+                                onUpPressed: damiInput.forceActiveFocus()
                             }
 
                             CustomInput {
@@ -505,6 +574,9 @@ Item {
                                 text: "2.00"
                                 inputMethodHints: Qt.ImhFormattedNumbersOnly
                                 Layout.preferredWidth: 90
+                                onReturnPressed: mFeeLedgerCombo.forceActiveFocus()
+                                onDownPressed: mFeeLedgerCombo.forceActiveFocus()
+                                onUpPressed: damiLedgerCombo.forceActiveFocus()
                             }
 
                             CustomWhiteCombo {
@@ -514,6 +586,9 @@ Item {
                                 comboHeight: 34
                                 model: (typeof partiesModel !== "undefined" && partiesModel) ? partiesModel.get_parties_list() : ["Market Fee A/c"]
                                 text: "Market Fee A/c"
+                                onReturnPressed: hrdfInput.forceActiveFocus()
+                                onDownPressed: hrdfInput.forceActiveFocus()
+                                onUpPressed: mktFeeInput.forceActiveFocus()
                             }
 
                             CustomInput {
@@ -522,6 +597,9 @@ Item {
                                 text: "2.00"
                                 inputMethodHints: Qt.ImhFormattedNumbersOnly
                                 Layout.preferredWidth: 90
+                                onReturnPressed: hrdfLedgerCombo.forceActiveFocus()
+                                onDownPressed: hrdfLedgerCombo.forceActiveFocus()
+                                onUpPressed: mFeeLedgerCombo.forceActiveFocus()
                             }
 
                             CustomWhiteCombo {
@@ -531,6 +609,9 @@ Item {
                                 comboHeight: 34
                                 model: (typeof partiesModel !== "undefined" && partiesModel) ? partiesModel.get_parties_list() : ["H.R.D.F. A/c"]
                                 text: "H.R.D.F. A/c"
+                                onReturnPressed: purcLedgerCombo.forceActiveFocus()
+                                onDownPressed: purcLedgerCombo.forceActiveFocus()
+                                onUpPressed: hrdfInput.forceActiveFocus()
                             }
                         }
 
@@ -629,6 +710,12 @@ Item {
                                             purcRetLedgerCombo.editText = editText
                                         }
                                     }
+                                    onReturnPressed: purcRetLedgerCombo.forceActiveFocus()
+                                    onDownPressed: purcRetLedgerCombo.forceActiveFocus()
+                                    onUpPressed: {
+                                        if (root.isMandiOrBoth) hrdfLedgerCombo.forceActiveFocus()
+                                        else cstLedgerCombo.forceActiveFocus()
+                                    }
                                 }
                             }
 
@@ -642,6 +729,9 @@ Item {
                                     comboHeight: 34
                                     model: (typeof partiesModel !== "undefined" && partiesModel) ? partiesModel.get_parties_list() : ["Purchase Accounts"]
                                     text: "Purchase Accounts"
+                                    onReturnPressed: saleLedgerCombo.forceActiveFocus()
+                                    onDownPressed: saleLedgerCombo.forceActiveFocus()
+                                    onUpPressed: purcLedgerCombo.forceActiveFocus()
                                 }
                             }
                         }
@@ -665,6 +755,9 @@ Item {
                                             saleRetLedgerCombo.editText = editText
                                         }
                                     }
+                                    onReturnPressed: saleRetLedgerCombo.forceActiveFocus()
+                                    onDownPressed: saleRetLedgerCombo.forceActiveFocus()
+                                    onUpPressed: purcRetLedgerCombo.forceActiveFocus()
                                 }
                             }
 
@@ -678,6 +771,9 @@ Item {
                                     comboHeight: 34
                                     model: (typeof partiesModel !== "undefined" && partiesModel) ? partiesModel.get_parties_list() : ["Sales Accounts"]
                                     text: "Sales Accounts"
+                                    onReturnPressed: stockLedgerCombo.forceActiveFocus()
+                                    onDownPressed: stockLedgerCombo.forceActiveFocus()
+                                    onUpPressed: saleLedgerCombo.forceActiveFocus()
                                 }
                             }
                         }
@@ -696,6 +792,9 @@ Item {
                                     comboHeight: 34
                                     model: (typeof partiesModel !== "undefined" && partiesModel) ? partiesModel.get_parties_list() : ["Stock-in-Hand"]
                                     text: "Stock-in-Hand"
+                                    onReturnPressed: packingInput.forceActiveFocus()
+                                    onDownPressed: packingInput.forceActiveFocus()
+                                    onUpPressed: saleRetLedgerCombo.forceActiveFocus()
                                 }
                             }
 
@@ -742,6 +841,9 @@ Item {
                                 placeholderText: "50.0"
                                 inputMethodHints: Qt.ImhFormattedNumbersOnly
                                 Layout.preferredWidth: 130
+                                onReturnPressed: purcRateInput.forceActiveFocus()
+                                onDownPressed: purcRateInput.forceActiveFocus()
+                                onUpPressed: stockLedgerCombo.forceActiveFocus()
                             }
 
                             CustomInput {
@@ -751,6 +853,9 @@ Item {
                                 placeholderText: "0.00"
                                 inputMethodHints: Qt.ImhFormattedNumbersOnly
                                 Layout.fillWidth: true
+                                onReturnPressed: saleRateInput.forceActiveFocus()
+                                onDownPressed: saleRateInput.forceActiveFocus()
+                                onUpPressed: packingInput.forceActiveFocus()
                             }
 
                             CustomInput {
@@ -760,6 +865,9 @@ Item {
                                 placeholderText: "0.00"
                                 inputMethodHints: Qt.ImhFormattedNumbersOnly
                                 Layout.fillWidth: true
+                                onReturnPressed: bonusInput.forceActiveFocus()
+                                onDownPressed: bonusInput.forceActiveFocus()
+                                onUpPressed: purcRateInput.forceActiveFocus()
                             }
 
                             CustomInput {
@@ -769,6 +877,9 @@ Item {
                                 placeholderText: "0.00"
                                 inputMethodHints: Qt.ImhFormattedNumbersOnly
                                 Layout.fillWidth: true
+                                onReturnPressed: opBagsInput.forceActiveFocus()
+                                onDownPressed: opBagsInput.forceActiveFocus()
+                                onUpPressed: saleRateInput.forceActiveFocus()
                             }
 
                             CustomInput {
@@ -777,6 +888,9 @@ Item {
                                 text: "0"
                                 inputMethodHints: Qt.ImhDigitsOnly
                                 Layout.preferredWidth: 100
+                                onReturnPressed: opQtyInput.forceActiveFocus()
+                                onDownPressed: opQtyInput.forceActiveFocus()
+                                onUpPressed: bonusInput.forceActiveFocus()
                             }
 
                             CustomInput {
@@ -785,6 +899,15 @@ Item {
                                 text: "0.000"
                                 inputMethodHints: Qt.ImhFormattedNumbersOnly
                                 Layout.preferredWidth: 110
+                                onReturnPressed: {
+                                    if (root.isMandiOrBoth) u1.forceActiveFocus()
+                                    else saveBtn.forceActiveFocus()
+                                }
+                                onDownPressed: {
+                                    if (root.isMandiOrBoth) u1.forceActiveFocus()
+                                    else saveBtn.forceActiveFocus()
+                                }
+                                onUpPressed: opBagsInput.forceActiveFocus()
                             }
                         }
                     }
@@ -852,33 +975,33 @@ Item {
 
                             // Slab 1: 01 - 40 Kg
                             Text { text: "01 - 40 Kg. @"; color: "#334155"; font.pixelSize: 11; font.bold: true }
-                            CustomInput { id: u1; text: "0.00"; Layout.fillWidth: true }
-                            CustomInput { id: j1; text: "0.00"; Layout.fillWidth: true }
-                            CustomInput { id: b1; text: "0.00"; Layout.fillWidth: true }
-                            CustomInput { id: t1; text: "0.00"; Layout.fillWidth: true }
-                            CustomInput { id: k1; text: "0.00"; Layout.fillWidth: true }
-                            CustomInput { id: s1; text: "0.00"; Layout.fillWidth: true }
-                            CustomInput { id: l1; text: "0.00"; Layout.fillWidth: true }
+                            CustomInput { id: u1; text: "0.00"; Layout.fillWidth: true; onReturnPressed: j1.forceActiveFocus(); onUpPressed: opQtyInput.forceActiveFocus() }
+                            CustomInput { id: j1; text: "0.00"; Layout.fillWidth: true; onReturnPressed: b1.forceActiveFocus(); onUpPressed: u1.forceActiveFocus() }
+                            CustomInput { id: b1; text: "0.00"; Layout.fillWidth: true; onReturnPressed: t1.forceActiveFocus(); onUpPressed: j1.forceActiveFocus() }
+                            CustomInput { id: t1; text: "0.00"; Layout.fillWidth: true; onReturnPressed: k1.forceActiveFocus(); onUpPressed: b1.forceActiveFocus() }
+                            CustomInput { id: k1; text: "0.00"; Layout.fillWidth: true; onReturnPressed: s1.forceActiveFocus(); onUpPressed: t1.forceActiveFocus() }
+                            CustomInput { id: s1; text: "0.00"; Layout.fillWidth: true; onReturnPressed: l1.forceActiveFocus(); onUpPressed: k1.forceActiveFocus() }
+                            CustomInput { id: l1; text: "0.00"; Layout.fillWidth: true; onReturnPressed: u2.forceActiveFocus(); onUpPressed: s1.forceActiveFocus() }
 
                             // Slab 2: 41 - 70 Kg
                             Text { text: "41 - 70 Kg. @"; color: "#334155"; font.pixelSize: 11; font.bold: true }
-                            CustomInput { id: u2; text: "0.00"; Layout.fillWidth: true }
-                            CustomInput { id: j2; text: "0.00"; Layout.fillWidth: true }
-                            CustomInput { id: b2; text: "0.00"; Layout.fillWidth: true }
-                            CustomInput { id: t2; text: "0.00"; Layout.fillWidth: true }
-                            CustomInput { id: k2; text: "0.00"; Layout.fillWidth: true }
-                            CustomInput { id: s2; text: "0.00"; Layout.fillWidth: true }
-                            CustomInput { id: l2; text: "0.00"; Layout.fillWidth: true }
+                            CustomInput { id: u2; text: "0.00"; Layout.fillWidth: true; onReturnPressed: j2.forceActiveFocus(); onUpPressed: l1.forceActiveFocus() }
+                            CustomInput { id: j2; text: "0.00"; Layout.fillWidth: true; onReturnPressed: b2.forceActiveFocus(); onUpPressed: u2.forceActiveFocus() }
+                            CustomInput { id: b2; text: "0.00"; Layout.fillWidth: true; onReturnPressed: t2.forceActiveFocus(); onUpPressed: j2.forceActiveFocus() }
+                            CustomInput { id: t2; text: "0.00"; Layout.fillWidth: true; onReturnPressed: k2.forceActiveFocus(); onUpPressed: b2.forceActiveFocus() }
+                            CustomInput { id: k2; text: "0.00"; Layout.fillWidth: true; onReturnPressed: s2.forceActiveFocus(); onUpPressed: t2.forceActiveFocus() }
+                            CustomInput { id: s2; text: "0.00"; Layout.fillWidth: true; onReturnPressed: l2.forceActiveFocus(); onUpPressed: k2.forceActiveFocus() }
+                            CustomInput { id: l2; text: "0.00"; Layout.fillWidth: true; onReturnPressed: u3.forceActiveFocus(); onUpPressed: s2.forceActiveFocus() }
 
                             // Slab 3: 71 - 100 Kg
                             Text { text: "71 - 100 Kg. @"; color: "#334155"; font.pixelSize: 11; font.bold: true }
-                            CustomInput { id: u3; text: "0.00"; Layout.fillWidth: true }
-                            CustomInput { id: j3; text: "0.00"; Layout.fillWidth: true }
-                            CustomInput { id: b3; text: "0.00"; Layout.fillWidth: true }
-                            CustomInput { id: t3; text: "0.00"; Layout.fillWidth: true }
-                            CustomInput { id: k3; text: "0.00"; Layout.fillWidth: true }
-                            CustomInput { id: s3; text: "0.00"; Layout.fillWidth: true }
-                            CustomInput { id: l3; text: "0.00"; Layout.fillWidth: true }
+                            CustomInput { id: u3; text: "0.00"; Layout.fillWidth: true; onReturnPressed: j3.forceActiveFocus(); onUpPressed: l2.forceActiveFocus() }
+                            CustomInput { id: j3; text: "0.00"; Layout.fillWidth: true; onReturnPressed: b3.forceActiveFocus(); onUpPressed: u3.forceActiveFocus() }
+                            CustomInput { id: b3; text: "0.00"; Layout.fillWidth: true; onReturnPressed: t3.forceActiveFocus(); onUpPressed: j3.forceActiveFocus() }
+                            CustomInput { id: t3; text: "0.00"; Layout.fillWidth: true; onReturnPressed: k3.forceActiveFocus(); onUpPressed: b3.forceActiveFocus() }
+                            CustomInput { id: k3; text: "0.00"; Layout.fillWidth: true; onReturnPressed: s3.forceActiveFocus(); onUpPressed: t3.forceActiveFocus() }
+                            CustomInput { id: s3; text: "0.00"; Layout.fillWidth: true; onReturnPressed: l3.forceActiveFocus(); onUpPressed: k3.forceActiveFocus() }
+                            CustomInput { id: l3; text: "0.00"; Layout.fillWidth: true; onReturnPressed: saveBtn.forceActiveFocus(); onUpPressed: s3.forceActiveFocus() }
                         }
                     }
                 }
@@ -916,6 +1039,8 @@ Item {
                 id: saveBtn
                 implicitWidth: 260
                 implicitHeight: 38
+                Keys.onReturnPressed: function(event) { event.accepted = true; root.saveStockItem(); }
+                Keys.onEnterPressed: function(event) { event.accepted = true; root.saveStockItem(); }
                 background: Rectangle {
                     color: (saveBtn.hovered || saveBtn.activeFocus) ? "#15803D" : "#16A34A"
                     radius: 6

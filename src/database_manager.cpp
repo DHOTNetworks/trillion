@@ -682,21 +682,31 @@ void DatabaseManager::ensureTablesExist() {
         ");"
     );
 
+    auto addColumnIfNotExists = [this](const QString& table, const QString& column, const QString& type) {
+        QVariantList cols = executeQuery(QString("PRAGMA table_info(%1);").arg(table));
+        for (const auto& c : cols) {
+            if (c.toMap().value("name").toString().compare(column, Qt::CaseInsensitive) == 0) {
+                return;
+            }
+        }
+        executeNonQuery(QString("ALTER TABLE %1 ADD COLUMN %2 %3;").arg(table, column, type));
+    };
+
     // Ensure columns exist on existing databases
-    executeNonQuery("ALTER TABLE jform_vouchers ADD COLUMN vehicle_no TEXT;");
-    executeNonQuery("ALTER TABLE jform_vouchers ADD COLUMN driver_name TEXT;");
-    executeNonQuery("ALTER TABLE jform_vouchers ADD COLUMN gate_pass_no TEXT;");
-    executeNonQuery("ALTER TABLE jform_vouchers ADD COLUMN eway_bill_no TEXT;");
-    executeNonQuery("ALTER TABLE jform_vouchers ADD COLUMN bill_time TEXT;");
-    executeNonQuery("ALTER TABLE jform_vouchers ADD COLUMN sauda_date TEXT;");
-    executeNonQuery("ALTER TABLE jform_vouchers ADD COLUMN mandi_place TEXT;");
-    executeNonQuery("ALTER TABLE jform_vouchers ADD COLUMN procurement_mode TEXT;");
-    executeNonQuery("ALTER TABLE jform_vouchers ADD COLUMN lot_no TEXT;");
-    executeNonQuery("ALTER TABLE jform_vouchers ADD COLUMN grade TEXT;");
-    executeNonQuery("ALTER TABLE jform_vouchers ADD COLUMN transport_name TEXT;");
-    executeNonQuery("ALTER TABLE jform_vouchers ADD COLUMN broker_name TEXT;");
-    executeNonQuery("ALTER TABLE jform_vouchers ADD COLUMN challan_no TEXT;");
-    executeNonQuery("ALTER TABLE jform_vouchers ADD COLUMN kanda_weight TEXT;");
+    addColumnIfNotExists("jform_vouchers", "vehicle_no", "TEXT");
+    addColumnIfNotExists("jform_vouchers", "driver_name", "TEXT");
+    addColumnIfNotExists("jform_vouchers", "gate_pass_no", "TEXT");
+    addColumnIfNotExists("jform_vouchers", "eway_bill_no", "TEXT");
+    addColumnIfNotExists("jform_vouchers", "bill_time", "TEXT");
+    addColumnIfNotExists("jform_vouchers", "sauda_date", "TEXT");
+    addColumnIfNotExists("jform_vouchers", "mandi_place", "TEXT");
+    addColumnIfNotExists("jform_vouchers", "procurement_mode", "TEXT");
+    addColumnIfNotExists("jform_vouchers", "lot_no", "TEXT");
+    addColumnIfNotExists("jform_vouchers", "grade", "TEXT");
+    addColumnIfNotExists("jform_vouchers", "transport_name", "TEXT");
+    addColumnIfNotExists("jform_vouchers", "broker_name", "TEXT");
+    addColumnIfNotExists("jform_vouchers", "challan_no", "TEXT");
+    addColumnIfNotExists("jform_vouchers", "kanda_weight", "TEXT");
 
     // 7d. J-Form Voucher Line Items
     executeNonQuery(
@@ -908,61 +918,61 @@ void DatabaseManager::ensureTablesExist() {
     );
 
     // Ensure all Stock Item columns exist for backward compatibility
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN trading_group TEXT;");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN group_code INTEGER;");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN unit_code INTEGER;");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN rate_calc_on TEXT DEFAULT 'N/A';");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN auto_adjust_name INTEGER DEFAULT 1;");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN item_narration TEXT;");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN capital_goods INTEGER DEFAULT 0;");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN vat_rate REAL DEFAULT 0.0;");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN vat_ledger TEXT DEFAULT 'VAT A/c';");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN surcharge_on_vat REAL DEFAULT 0.0;");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN vat_against_d1 REAL DEFAULT 0.0;");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN cst_rate REAL DEFAULT 0.0;");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN cst_ledger TEXT DEFAULT 'CST A/c';");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN cst_without_cform REAL DEFAULT 0.0;");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN dami_ledger TEXT DEFAULT 'Dami A/c';");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN market_fee_ledger TEXT DEFAULT 'Market Fee A/c';");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN hrdf_ledger TEXT DEFAULT 'H.R.D.F. A/c';");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN market_commtt_form_apply INTEGER DEFAULT 0;");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN market_commtt_coupon_apply INTEGER DEFAULT 0;");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN dami_calc_on_weight INTEGER DEFAULT 0;");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN tax_on_qty INTEGER DEFAULT 0;");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN purchase_return_ledger TEXT DEFAULT 'Purchase Accounts';");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN sale_return_ledger TEXT DEFAULT 'Sales Accounts';");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN gst_ledger TEXT DEFAULT 'Duties & Taxes';");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN bonus_approved REAL DEFAULT 0.0;");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN labour_rate_unit TEXT DEFAULT 'Packing';");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN utrai_rate_1 REAL DEFAULT 0.0;");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN jharai_rate_1 REAL DEFAULT 0.0;");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN bharai_rate_1 REAL DEFAULT 0.0;");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN tulai_rate_1 REAL DEFAULT 0.0;");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN khichai_rate_1 REAL DEFAULT 0.0;");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN silai_rate_1 REAL DEFAULT 0.0;");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN loading_rate_1 REAL DEFAULT 0.0;");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN utrai_rate_2 REAL DEFAULT 0.0;");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN jharai_rate_2 REAL DEFAULT 0.0;");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN bharai_rate_2 REAL DEFAULT 0.0;");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN tulai_rate_2 REAL DEFAULT 0.0;");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN khichai_rate_2 REAL DEFAULT 0.0;");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN silai_rate_2 REAL DEFAULT 0.0;");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN loading_rate_2 REAL DEFAULT 0.0;");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN utrai_rate_3 REAL DEFAULT 0.0;");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN jharai_rate_3 REAL DEFAULT 0.0;");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN bharai_rate_3 REAL DEFAULT 0.0;");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN tulai_rate_3 REAL DEFAULT 0.0;");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN khichai_rate_3 REAL DEFAULT 0.0;");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN loading_rate_3 REAL DEFAULT 0.0;");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN purchase_ledger_id INTEGER;");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN purchase_return_ledger_id INTEGER;");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN sale_ledger_id INTEGER;");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN sale_return_ledger_id INTEGER;");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN stock_ledger_id INTEGER;");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN gst_ledger_id INTEGER;");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN vat_ledger_id INTEGER;");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN cst_ledger_id INTEGER;");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN dami_ledger_id INTEGER;");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN market_fee_ledger_id INTEGER;");
-    executeNonQuery("ALTER TABLE stock_items ADD COLUMN hrdf_ledger_id INTEGER;");
+    addColumnIfNotExists("stock_items", "trading_group", "TEXT");
+    addColumnIfNotExists("stock_items", "group_code", "INTEGER");
+    addColumnIfNotExists("stock_items", "unit_code", "INTEGER");
+    addColumnIfNotExists("stock_items", "rate_calc_on", "TEXT DEFAULT 'N/A'");
+    addColumnIfNotExists("stock_items", "auto_adjust_name", "INTEGER DEFAULT 1");
+    addColumnIfNotExists("stock_items", "item_narration", "TEXT");
+    addColumnIfNotExists("stock_items", "capital_goods", "INTEGER DEFAULT 0");
+    addColumnIfNotExists("stock_items", "vat_rate", "REAL DEFAULT 0.0");
+    addColumnIfNotExists("stock_items", "vat_ledger", "TEXT DEFAULT 'VAT A/c'");
+    addColumnIfNotExists("stock_items", "surcharge_on_vat", "REAL DEFAULT 0.0");
+    addColumnIfNotExists("stock_items", "vat_against_d1", "REAL DEFAULT 0.0");
+    addColumnIfNotExists("stock_items", "cst_rate", "REAL DEFAULT 0.0");
+    addColumnIfNotExists("stock_items", "cst_ledger", "TEXT DEFAULT 'CST A/c'");
+    addColumnIfNotExists("stock_items", "cst_without_cform", "REAL DEFAULT 0.0");
+    addColumnIfNotExists("stock_items", "dami_ledger", "TEXT DEFAULT 'Dami A/c'");
+    addColumnIfNotExists("stock_items", "market_fee_ledger", "TEXT DEFAULT 'Market Fee A/c'");
+    addColumnIfNotExists("stock_items", "hrdf_ledger", "TEXT DEFAULT 'H.R.D.F. A/c'");
+    addColumnIfNotExists("stock_items", "market_commtt_form_apply", "INTEGER DEFAULT 0");
+    addColumnIfNotExists("stock_items", "market_commtt_coupon_apply", "INTEGER DEFAULT 0");
+    addColumnIfNotExists("stock_items", "dami_calc_on_weight", "INTEGER DEFAULT 0");
+    addColumnIfNotExists("stock_items", "tax_on_qty", "INTEGER DEFAULT 0");
+    addColumnIfNotExists("stock_items", "purchase_return_ledger", "TEXT DEFAULT 'Purchase Accounts'");
+    addColumnIfNotExists("stock_items", "sale_return_ledger", "TEXT DEFAULT 'Sales Accounts'");
+    addColumnIfNotExists("stock_items", "gst_ledger", "TEXT DEFAULT 'Duties & Taxes'");
+    addColumnIfNotExists("stock_items", "bonus_approved", "REAL DEFAULT 0.0");
+    addColumnIfNotExists("stock_items", "labour_rate_unit", "TEXT DEFAULT 'Packing'");
+    addColumnIfNotExists("stock_items", "utrai_rate_1", "REAL DEFAULT 0.0");
+    addColumnIfNotExists("stock_items", "jharai_rate_1", "REAL DEFAULT 0.0");
+    addColumnIfNotExists("stock_items", "bharai_rate_1", "REAL DEFAULT 0.0");
+    addColumnIfNotExists("stock_items", "tulai_rate_1", "REAL DEFAULT 0.0");
+    addColumnIfNotExists("stock_items", "khichai_rate_1", "REAL DEFAULT 0.0");
+    addColumnIfNotExists("stock_items", "silai_rate_1", "REAL DEFAULT 0.0");
+    addColumnIfNotExists("stock_items", "loading_rate_1", "REAL DEFAULT 0.0");
+    addColumnIfNotExists("stock_items", "utrai_rate_2", "REAL DEFAULT 0.0");
+    addColumnIfNotExists("stock_items", "jharai_rate_2", "REAL DEFAULT 0.0");
+    addColumnIfNotExists("stock_items", "bharai_rate_2", "REAL DEFAULT 0.0");
+    addColumnIfNotExists("stock_items", "tulai_rate_2", "REAL DEFAULT 0.0");
+    addColumnIfNotExists("stock_items", "khichai_rate_2", "REAL DEFAULT 0.0");
+    addColumnIfNotExists("stock_items", "silai_rate_2", "REAL DEFAULT 0.0");
+    addColumnIfNotExists("stock_items", "loading_rate_2", "REAL DEFAULT 0.0");
+    addColumnIfNotExists("stock_items", "utrai_rate_3", "REAL DEFAULT 0.0");
+    addColumnIfNotExists("stock_items", "jharai_rate_3", "REAL DEFAULT 0.0");
+    addColumnIfNotExists("stock_items", "bharai_rate_3", "REAL DEFAULT 0.0");
+    addColumnIfNotExists("stock_items", "tulai_rate_3", "REAL DEFAULT 0.0");
+    addColumnIfNotExists("stock_items", "khichai_rate_3", "REAL DEFAULT 0.0");
+    addColumnIfNotExists("stock_items", "loading_rate_3", "REAL DEFAULT 0.0");
+    addColumnIfNotExists("stock_items", "purchase_ledger_id", "INTEGER");
+    addColumnIfNotExists("stock_items", "purchase_return_ledger_id", "INTEGER");
+    addColumnIfNotExists("stock_items", "sale_ledger_id", "INTEGER");
+    addColumnIfNotExists("stock_items", "sale_return_ledger_id", "INTEGER");
+    addColumnIfNotExists("stock_items", "stock_ledger_id", "INTEGER");
+    addColumnIfNotExists("stock_items", "gst_ledger_id", "INTEGER");
+    addColumnIfNotExists("stock_items", "vat_ledger_id", "INTEGER");
+    addColumnIfNotExists("stock_items", "cst_ledger_id", "INTEGER");
+    addColumnIfNotExists("stock_items", "dami_ledger_id", "INTEGER");
+    addColumnIfNotExists("stock_items", "market_fee_ledger_id", "INTEGER");
+    addColumnIfNotExists("stock_items", "hrdf_ledger_id", "INTEGER");
 }
