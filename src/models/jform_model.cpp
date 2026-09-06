@@ -246,15 +246,16 @@ QVariantMap JFormModel::get_jform_voucher(int voucherId) {
     auto& db = DatabaseManager::instance();
 
     QVariantList rows = db.executeQuery(
-        "SELECT * FROM jform_vouchers WHERE id = ? LIMIT 1;",
-        {voucherId}
+        "SELECT * FROM jform_vouchers WHERE id = ? OR voucher_no = ? LIMIT 1;",
+        {voucherId, voucherId}
     );
     if (rows.isEmpty()) return res;
 
     res = rows.first().toMap();
+    int vId = res.value("id").toInt();
     QVariantList items = db.executeQuery(
         "SELECT * FROM jform_voucher_items WHERE voucher_id = ? ORDER BY id ASC;",
-        {voucherId}
+        {vId}
     );
     res["items"] = items;
     return res;

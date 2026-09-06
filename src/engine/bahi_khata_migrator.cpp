@@ -1163,28 +1163,126 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
     }
 
     // =========================================================
-    // PASS 5: TRANSACTIONS & VOUCHERS (INTELLIGENT PARTY RESOLUTION)
+    // PASS 5: TRANSACTIONS & VOUCHERS (100% DOUBLE-ENTRY PARITY)
     // =========================================================
-    updateProgress(60, "Migrating Transactions & Reconstructing Double-Entry Invoices...");
+    updateProgress(60, "Migrating All Transactions & Reconstructing Double-Entry Invoices...");
+    db.executeNonQuery("DELETE FROM transactions;");
+    db.executeNonQuery("DELETE FROM vouchers;");
+    db.executeNonQuery("DELETE FROM sales_invoices;");
+    db.executeNonQuery("DELETE FROM sales_invoice_items;");
+    db.executeNonQuery("DELETE FROM purchase_invoices;");
+    db.executeNonQuery("DELETE FROM purchase_invoice_items;");
+    db.executeNonQuery("DELETE FROM paddy_arrivals;");
+    db.executeNonQuery("DELETE FROM jform_vouchers;");
+    db.executeNonQuery("DELETE FROM jform_voucher_items;");
+
+    int salesInvoiceCount = 0;
+    int purchaseInvoiceCount = 0;
+
+    // Group transactions by (rawType, vNo, vDate)
     std::map<std::string, std::vector<std::map<std::string, std::string>>> voucherGroups;
     for (const auto& r : transRows) {
         std::string vNo = cleanText(getField(r, "VoucherNumber"));
         if (vNo.empty()) continue;
-        QString vType = mapVoucherTypeStr(getField(r, "TransType"));
+        std::string rawType = cleanText(getField(r, "TransType"));
+        QString vType = mapVoucherTypeStr(rawType);
         QString vDate = parseDateFormatted(QString::fromStdString(getField(r, "VoucherDate")));
         std::string key = QString("%1-%2-%3").arg(vType).arg(QString::fromStdString(vNo)).arg(vDate).toStdString();
         voucherGroups[key].push_back(r);
     }
 
-    db.executeNonQuery("DELETE FROM vouchers;");
-    db.executeNonQuery("DELETE FROM sales_invoices;");
-    db.executeNonQuery("DELETE FROM purchase_invoices;");
-    db.executeNonQuery("DELETE FROM paddy_arrivals;");
+    // 1. Direct 1-to-1 Migration of every Transaction row into 'transactions' table
+    for (const auto& r : transRows) {
+        std::string vNo = cleanText(getField(r, "VoucherNumber"));
+        if (vNo.empty()) continue;
+        std::string rawType = cleanText(getField(r, "TransType"));
+        QString vType = mapVoucherTypeStr(rawType);
+        QString vDate = parseDateFormatted(QString::fromStdString(getField(r, "VoucherDate")));
+        QString fyVal = computeFinancialYear(vDate);
+        int fyId = fyNameToId.count(fyVal) ? fyNameToId[fyVal] : 1;
 
-    int salesInvoiceCount = 0;
-    int purchaseInvoiceCount = 0;
-    std::map<std::pair<std::string, std::string>, int> fyTypeVoucherCount;
+        int acCode = parseIntVal(getField(r, "AccountCode"));
+        auto itDetail = ledgerDetailMap.find(acCode);
+        std::string partyName = (itDetail != ledgerDetailMap.end()) ? itDetail->second.name : ("Party #" + std::to_string(acCode));
+        int partyId = (itDetail != ledgerDetailMap.end()) ? itDetail->second.id : 0;
 
+        std::string drCr = cleanText(getField(r, "DrCr"));
+        double amt = parseDoubleVal(getField(r, "Amount"));
+        std::string invNo = cleanText(getField(r, "InvoiceNo"));
+        if (invNo.empty()) invNo = cleanText(getField(r, "TaxInvoiceNo"));
+        std::string narration = cleanText(getField(r, "Narration"));
+        if (narration.empty()) narration = cleanText(getField(r, "Narrtn"));
+
+        std::string saudaDate = cleanText(getField(r, "SaudaDate"));
+        std::string bankDate = parseDateFormatted(QString::fromStdString(getField(r, "BankDate"))).toStdString();
+        std::string brokerName = cleanText(getField(r, "BrokerName"));
+        std::string vehicleNo = cleanText(getField(r, "VehicleNo"));
+        std::string grNo = cleanText(getField(r, "GRNo"));
+        int rowNo = parseIntVal(getField(r, "RowNo"), 1);
+
+        double taxableAmt = parseDoubleVal(getField(r, "Taxable194Q"));
+        double tdsRate = parseDoubleVal(getField(r, "TDSRate194Q"));
+        double tdsAmt = (tdsRate > 0.0 && taxableAmt > 0.0) ? std::round((taxableAmt * tdsRate / 100.0) * 100.0) / 100.0 : 0.0;
+
+        // Resolve opposing account from the same voucher group
+        std::string key = QString("%1-%2-%3").arg(vType).arg(QString::fromStdString(vNo)).arg(vDate).toStdString();
+        const auto& group = voucherGroups[key];
+        std::vector<std::string> opposingList;
+        for (const auto& other : group) {
+            int otherCode = parseIntVal(getField(other, "AccountCode"));
+            if (otherCode != acCode) {
+                auto itO = ledgerDetailMap.find(otherCode);
+                std::string oName = (itO != ledgerDetailMap.end()) ? itO->second.name : ("Account #" + std::to_string(otherCode));
+                opposingList.push_back(oName);
+            }
+        }
+        std::string opposingStr;
+        if (!opposingList.empty()) {
+            opposingStr = opposingList[0];
+            if (opposingList.size() > 1) opposingStr += " & Others";
+        } else {
+            if (rawType == "Sale" || rawType == "SLRN") opposingStr = "Sales Accounts";
+            else if (rawType == "Purc" || rawType == "PRRN") opposingStr = "Purchase Accounts";
+            else if (rawType == "JFrm") opposingStr = "Paddy Purchase";
+            else opposingStr = "Bank/Cash";
+        }
+
+        db.executeNonQuery(
+            "INSERT INTO transactions ("
+            "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
+            "account_code, party_id, party_name, opposing_account, dr_cr, amount, "
+            "invoice_no, narration, sauda_date, bank_date, broker_name, vehicle_no, gr_no, "
+            "taxable_amount, tds_amount, tds_rate, row_no) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+            {
+                fyId,
+                fyVal,
+                QString::fromStdString(vNo),
+                vDate,
+                vType,
+                QString::fromStdString(rawType),
+                acCode,
+                partyId,
+                QString::fromStdString(partyName),
+                QString::fromStdString(opposingStr),
+                QString::fromStdString(drCr),
+                amt,
+                QString::fromStdString(invNo),
+                QString::fromStdString(narration),
+                QString::fromStdString(saudaDate),
+                QString::fromStdString(bankDate),
+                QString::fromStdString(brokerName),
+                QString::fromStdString(vehicleNo),
+                QString::fromStdString(grNo),
+                taxableAmt,
+                tdsAmt,
+                tdsRate,
+                rowNo
+            }
+        );
+    }
+
+    // 2. Reconstruct Invoices & Vouchers for Edit Entry Pages
     for (const auto& pair : voucherGroups) {
         const std::string& key = pair.first;
         const auto& rows = pair.second;
@@ -1198,15 +1296,13 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
         QString fyVal = computeFinancialYear(vDate);
         int fyId = fyNameToId.count(fyVal) ? fyNameToId[fyVal] : 1;
 
-        int seqNo = ++fyTypeVoucherCount[{fyVal.toStdString(), vType.toStdString()}];
-        QString vchNumStr = QString("%1-%2").arg(vType.left(4)).arg(seqNo);
-
+        QString vchNumStr = QString::fromStdString(vNo);
         std::string narration = cleanText(getField(firstR, "Narration"));
         if (narration.empty()) narration = cleanText(getField(firstR, "Narrtn"));
 
         std::string invNo = cleanText(getField(firstR, "InvoiceNo"));
         if (invNo.empty()) invNo = cleanText(getField(firstR, "TaxInvoiceNo"));
-        if (invNo.empty()) invNo = QString("%1/%2").arg(vType.left(3).toUpper()).arg(seqNo).toStdString();
+        if (invNo.empty()) invNo = vNo;
 
         ResolvedVoucherParty partyRes = resolveVoucherParty(vType, rows, ledgerDetailMap, ledgerCodeMap);
 
@@ -1229,14 +1325,16 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
         std::string ewayBill = (itLog != transportMap.end() && !itLog->second.eway_bill_no.empty()) ? itLog->second.eway_bill_no : cleanText(getField(firstR, "EWayBillNo"));
         std::string brokerName = cleanText(getField(firstR, "BrokerName"));
         std::string farmerName = cleanText(getField(firstR, "ZimidarName"));
+        std::string bankDate = parseDateFormatted(QString::fromStdString(getField(firstR, "BankDate"))).toStdString();
+        std::string saudaDate = cleanText(getField(firstR, "SaudaDate"));
 
-        // 1. Insert Consolidated Double-Entry Voucher
+        // Insert Header Voucher
         db.executeNonQuery(
             "INSERT INTO vouchers ("
             "fy_id, financial_year, voucher_no, voucher_date, voucher_type, legacy_type, "
             "ledger_id, party_name, account_type, amount, narration, "
-            "vehicle_no, gr_no, driver_name, eway_bill_no, broker_name, farmer_name) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+            "vehicle_no, gr_no, driver_name, eway_bill_no, broker_name, farmer_name, bank_date, sauda_date) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
             {
                 fyId,
                 fyVal,
@@ -1254,11 +1352,13 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
                 QString::fromStdString(driverName),
                 QString::fromStdString(ewayBill),
                 QString::fromStdString(brokerName),
-                QString::fromStdString(farmerName)
+                QString::fromStdString(farmerName),
+                QString::fromStdString(bankDate),
+                QString::fromStdString(saudaDate)
             }
         );
 
-        // 2. Reconstruct Invoices with Line Items
+        // Line Items from StockTransactions
         auto itStockLines = stockTransMap.find(key);
         int itemId = 1;
         std::string itemName = (vType == "Sales") ? "Rice Basmati(Non Branded)" : "Paddy Basmati";
@@ -1301,8 +1401,8 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
                 "item_id, item_name, hsn_code, "
                 "bag_count, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, "
                 "cgst_amount, sgst_amount, igst_amount, "
-                "total_amount, payment_mode, vehicle_no, eway_bill_no, narration, gr_no, driver, broker_name) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Credit', ?, ?, ?, ?, ?, ?);",
+                "total_amount, payment_mode, vehicle_no, eway_bill_no, narration, gr_no, driver, broker_name, sauda_date) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Credit', ?, ?, ?, ?, ?, ?, ?);",
                 {
                     fyId,
                     fyVal,
@@ -1328,19 +1428,45 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
                     QString::fromStdString(narration),
                     QString::fromStdString(grNo),
                     QString::fromStdString(driverName),
-                    QString::fromStdString(brokerName)
+                    QString::fromStdString(brokerName),
+                    QString::fromStdString(saudaDate)
                 }
             );
+            long long salesInvId = db.lastInsertedId();
+
+            // Insert line items
+            if (itStockLines != stockTransMap.end() && !itStockLines->second.empty()) {
+                for (const auto& sLine : itStockLines->second) {
+                    db.executeNonQuery(
+                        "INSERT INTO sales_invoice_items ("
+                        "invoice_id, invoice_no, item_id, item_name, bag_count, packing, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, total_amount) "
+                        "VALUES (?, ?, ?, ?, ?, '0.500', ?, ?, ?, ?, ?);",
+                        {
+                            salesInvId,
+                            QString::fromStdString(invNo),
+                            sLine.item_id,
+                            QString::fromStdString(sLine.item_name),
+                            sLine.bags,
+                            sLine.weight_qtl,
+                            sLine.rate,
+                            sLine.taxable_amount,
+                            sLine.gst_pct,
+                            sLine.amount
+                        }
+                    );
+                }
+            }
             salesInvoiceCount++;
         } else if (vType == "Purchase") {
+            purchaseInvoiceCount++;
             db.executeNonQuery(
                 "INSERT INTO purchase_invoices ("
                 "fy_id, financial_year, voucher_no, invoice_no, invoice_date, supplier_id, supplier_name, "
                 "item_id, item_name, hsn_code, "
                 "bag_count, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, "
                 "cgst_amount, sgst_amount, igst_amount, "
-                "total_amount, payment_mode, vehicle_no, eway_bill_no, narration, gr_no, driver, broker_name) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Credit', ?, ?, ?, ?, ?, ?);",
+                "total_amount, payment_mode, vehicle_no, eway_bill_no, narration, gr_no, driver, broker_name, sauda_date) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Credit', ?, ?, ?, ?, ?, ?, ?);",
                 {
                     fyId,
                     fyVal,
@@ -1366,10 +1492,34 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
                     QString::fromStdString(narration),
                     QString::fromStdString(grNo),
                     QString::fromStdString(driverName),
-                    QString::fromStdString(brokerName)
+                    QString::fromStdString(brokerName),
+                    QString::fromStdString(saudaDate)
                 }
             );
-            purchaseInvoiceCount++;
+            long long purcInvId = db.lastInsertedId();
+
+            // Insert line items
+            if (itStockLines != stockTransMap.end() && !itStockLines->second.empty()) {
+                for (const auto& pLine : itStockLines->second) {
+                    db.executeNonQuery(
+                        "INSERT INTO purchase_invoice_items ("
+                        "invoice_id, invoice_no, item_id, item_name, bag_count, packing, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, total_amount) "
+                        "VALUES (?, ?, ?, ?, ?, '0.500', ?, ?, ?, ?, ?);",
+                        {
+                            purcInvId,
+                            QString::fromStdString(invNo),
+                            pLine.item_id,
+                            QString::fromStdString(pLine.item_name),
+                            pLine.bags,
+                            pLine.weight_qtl,
+                            pLine.rate,
+                            pLine.taxable_amount,
+                            pLine.gst_pct,
+                            pLine.amount
+                        }
+                    );
+                }
+            }
 
             // Register in paddy arrivals if purchase item is Paddy
             std::string itemLower = toLowerStr(itemName);

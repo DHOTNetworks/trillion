@@ -73,6 +73,14 @@ bool VouchersModel::add_voucher(const QString& vch_type, const QString& party_na
     );
 
     if (ok) {
+        // Insert into transactions
+        QString rawType = (vch_type == "Payment" ? "ChPt" : (vch_type == "Receipt" ? "ChRt" : vch_type));
+        QString drCr = (vch_type == "Payment" ? "Dr" : "Cr");
+        DatabaseManager::instance().executeNonQuery(
+            "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, party_id, party_name, opposing_account, dr_cr, amount, narration) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+            {fyId, fyLabel, vchNo, dt, vch_type, rawType, partyId, party_name, account_type, drCr, amount, narration}
+        );
         DatabaseManager::instance().commit();
         reload_data();
     } else {
@@ -114,6 +122,17 @@ bool VouchersModel::add_cheque_voucher(const QString& vch_type, const QString& d
     );
 
     if (ok) {
+        // Multi-leg transaction entries
+        DatabaseManager::instance().executeNonQuery(
+            "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, party_id, party_name, opposing_account, dr_cr, amount, narration) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Dr', ?, ?);",
+            {fyId, fyLabel, vchNo, dt, vch_type, vch_type, partyId, dr_party, cr_party, amount, fullNarr}
+        );
+        DatabaseManager::instance().executeNonQuery(
+            "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, party_id, party_name, opposing_account, dr_cr, amount, narration) "
+            "VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, 'Cr', ?, ?);",
+            {fyId, fyLabel, vchNo, dt, vch_type, vch_type, cr_party, dr_party, amount, fullNarr}
+        );
         DatabaseManager::instance().commit();
         reload_data();
     } else {
@@ -155,10 +174,83 @@ bool VouchersModel::add_journal_voucher(const QString& dr_party, const QString& 
     );
 
     if (ok) {
+        // Multi-leg transaction entries
+        DatabaseManager::instance().executeNonQuery(
+            "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, party_id, party_name, opposing_account, dr_cr, amount, narration) "
+            "VALUES (?, ?, ?, ?, 'Journal', 'Jrnl', ?, ?, ?, 'Dr', ?, ?);",
+            {fyId, fyLabel, vchNo, dt, partyId, dr_party, cr_party, amount, fullNarr}
+        );
+        DatabaseManager::instance().executeNonQuery(
+            "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, party_id, party_name, opposing_account, dr_cr, amount, narration) "
+            "VALUES (?, ?, ?, ?, 'Journal', 'Jrnl', 0, ?, ?, 'Cr', ?, ?);",
+            {fyId, fyLabel, vchNo, dt, cr_party, dr_party, amount, fullNarr}
+        );
         DatabaseManager::instance().commit();
         reload_data();
     } else {
         DatabaseManager::instance().rollback();
     }
     return ok;
+}
+
+QVariantMap VouchersModel::get_voucher(const QString& vchNoOrId) {
+    QVariantList rows = DatabaseManager::instance().executeQuery(
+        "SELECT * FROM vouchers WHERE voucher_no = ? OR id = ? LIMIT 1;",
+        {vchNoOrId, vchNoOrId}
+    );
+    if (rows.isEmpty()) return {};
+    return rows.first().toMap();
+}
+
+QVariantMap VouchersModel::get_cheque_voucher(const QString& vchNoOrId) {
+    QVariantList rows = DatabaseManager::instance().executeQuery(
+        "SELECT * FROM vouchers WHERE voucher_no = ? OR id = ? LIMIT 1;",
+        {vchNoOrId, vchNoOrId}
+    );
+    if (rows.isEmpty()) return {};
+    QVariantMap v = rows.first().toMap();
+    QString vNo = v.value("voucher_no").toString();
+    QString vDate = v.value("voucher_date").toString();
+
+    QVariantList txRows = DatabaseManager::instance().executeQuery(
+        "SELECT * FROM transactions WHERE voucher_no = ? AND voucher_date = ? ORDER BY id ASC;",
+        {vNo, vDate}
+    );
+    v["transactions"] = txRows;
+    return v;
+}
+
+QVariantMap VouchersModel::get_journal_voucher(const QString& vchNoOrId) {
+    QVariantList rows = DatabaseManager::instance().executeQuery(
+        "SELECT * FROM vouchers WHERE voucher_no = ? OR id = ? LIMIT 1;",
+        {vchNoOrId, vchNoOrId}
+    );
+    if (rows.isEmpty()) return {};
+    QVariantMap v = rows.first().toMap();
+    QString vNo = v.value("voucher_no").toString();
+    QString vDate = v.value("voucher_date").toString();
+
+    QVariantList txRows = DatabaseManager::instance().executeQuery(
+        "SELECT * FROM transactions WHERE voucher_no = ? AND voucher_date = ? ORDER BY id ASC;",
+        {vNo, vDate}
+    );
+    QVariantList items;
+    for (const auto& tr : txRows) {
+        QVariantMap t = tr.toMap();
+        QVariantMap item;
+        item["drcr"] = t.value("dr_cr").toString();
+        item["ledgerName"] = t.value("party_name").toString();
+        double amt = t.value("amount").toDouble();
+        if (item["drcr"] == "Dr") {
+            item["debitAmt"] = QString::number(amt, 'f', 2);
+            item["creditAmt"] = "";
+        } else {
+            item["debitAmt"] = "";
+            item["creditAmt"] = QString::number(amt, 'f', 2);
+        }
+        item["refNo"] = t.value("invoice_no").toString();
+        items.append(item);
+    }
+    v["rows"] = items;
+    return v;
 }

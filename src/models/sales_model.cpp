@@ -285,8 +285,8 @@ QVariantList SalesModel::get_sales_register(const QString& param1, const QString
 
 QVariantMap SalesModel::get_sales_invoice(const QString& invoiceNoOrId) {
     QVariantList rows = DatabaseManager::instance().executeQuery(
-        "SELECT * FROM sales_invoices WHERE invoice_no = ? OR id = ? LIMIT 1;",
-        {invoiceNoOrId, invoiceNoOrId}
+        "SELECT * FROM sales_invoices WHERE invoice_no = ? OR voucher_no = ? OR id = ? LIMIT 1;",
+        {invoiceNoOrId, invoiceNoOrId, invoiceNoOrId}
     );
     if (rows.isEmpty()) return {};
     QVariantMap inv = rows.first().toMap();

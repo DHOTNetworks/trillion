@@ -278,8 +278,8 @@ QVariantList PurchaseModel::get_purchase_register(const QString& param1, const Q
 
 QVariantMap PurchaseModel::get_purchase_invoice(const QString& invoiceNoOrId) {
     QVariantList rows = DatabaseManager::instance().executeQuery(
-        "SELECT * FROM purchase_invoices WHERE invoice_no = ? OR id = ? LIMIT 1;",
-        {invoiceNoOrId, invoiceNoOrId}
+        "SELECT * FROM purchase_invoices WHERE invoice_no = ? OR voucher_no = ? OR id = ? LIMIT 1;",
+        {invoiceNoOrId, invoiceNoOrId, invoiceNoOrId}
     );
     if (rows.isEmpty()) return {};
     QVariantMap inv = rows.first().toMap();

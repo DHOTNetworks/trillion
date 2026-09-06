@@ -814,6 +814,43 @@ void DatabaseManager::ensureTablesExist() {
         ");"
     );
 
+    // 8b. Unified Double-Entry Ledger Transactions Table
+    executeNonQuery(
+        "CREATE TABLE IF NOT EXISTS transactions ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "fy_id INTEGER,"
+        "financial_year TEXT,"
+        "voucher_no TEXT NOT NULL,"
+        "voucher_date TEXT NOT NULL,"
+        "voucher_type TEXT NOT NULL,"
+        "trans_type TEXT,"
+        "account_code INTEGER,"
+        "party_id INTEGER,"
+        "party_name TEXT NOT NULL,"
+        "opposing_account TEXT,"
+        "dr_cr TEXT NOT NULL,"
+        "amount REAL NOT NULL,"
+        "invoice_no TEXT,"
+        "narration TEXT,"
+        "sauda_date TEXT,"
+        "bank_date TEXT,"
+        "broker_name TEXT,"
+        "vehicle_no TEXT,"
+        "gr_no TEXT,"
+        "taxable_amount REAL DEFAULT 0.0,"
+        "tds_amount REAL DEFAULT 0.0,"
+        "tds_rate REAL DEFAULT 0.0,"
+        "gst_pct REAL DEFAULT 0.0,"
+        "row_no INTEGER DEFAULT 1,"
+        "FOREIGN KEY (party_id) REFERENCES parties(id),"
+        "FOREIGN KEY (fy_id) REFERENCES financial_years(id)"
+        ");"
+    );
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_transactions_party ON transactions(party_name, voucher_date);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_transactions_account_code ON transactions(account_code, voucher_date);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_transactions_voucher ON transactions(voucher_no, voucher_type, voucher_date);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_transactions_fy ON transactions(financial_year);");
+
     // 9. Account Groups Table
     executeNonQuery(
         "CREATE TABLE IF NOT EXISTS account_groups ("
