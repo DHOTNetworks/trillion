@@ -294,6 +294,7 @@ T.ApplicationWindow {
                         case 22: return "views/FirmSelecterView.qml"
                         case 23: return "views/JFormVoucherView.qml"
                         case 24: return "views/TdsVoucherView.qml"
+                        case 25: return "views/InterestCalculatorView.qml"
                         default: return "views/DashboardView.qml"
                     }
                 }
@@ -359,6 +360,20 @@ T.ApplicationWindow {
                         }
                         if (typeof item.voucherSaved !== "undefined") {
                             item.voucherSaved.connect(function() {
+                                window.currentViewIndex = 0
+                                if (typeof dashboardCtrl !== "undefined" && dashboardCtrl) dashboardCtrl.refresh_stats()
+                            })
+                        }
+                    }
+
+                    if (window.currentViewIndex === 25 && item) {
+                        if (typeof item.cancelRequested !== "undefined") {
+                            item.cancelRequested.connect(function() {
+                                window.currentViewIndex = 0
+                            })
+                        }
+                        if (typeof item.interestVoucherSaved !== "undefined") {
+                            item.interestVoucherSaved.connect(function() {
                                 window.currentViewIndex = 0
                                 if (typeof dashboardCtrl !== "undefined" && dashboardCtrl) dashboardCtrl.refresh_stats()
                             })
@@ -595,6 +610,8 @@ T.ApplicationWindow {
                 window.currentViewIndex = 20
             } else if (act === "Purchase Register") {
                 window.currentViewIndex = 21
+            } else if (act === "Interest Calculator") {
+                window.currentViewIndex = 25
             }
         }
     }

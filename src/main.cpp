@@ -26,6 +26,7 @@
 #include "models/firm_manager.h"
 #include "models/jform_model.h"
 #include "models/tds_model.h"
+#include "models/interest_model.h"
 #include "models/global_key_filter.h"
 #include "engine/bahi_khata_migrator.h"
 
@@ -116,6 +117,7 @@ int main(int argc, char* argv[]) {
     BahiKhataMigrator bahiKhataMigrator;
     JFormModel jformModel;
     TdsModel tdsModel;
+    InterestModel interestModel;
 
     // Reload models automatically when firm switches
     QObject::connect(&firmManager, &FirmManager::firmSwitched, [&](const QString& firmId, const QString& firmName) {
@@ -209,6 +211,7 @@ int main(int argc, char* argv[]) {
     ctx->setContextProperty("firmManager", &firmManager);
     ctx->setContextProperty("jformModel", &jformModel);
     ctx->setContextProperty("tdsModel", &tdsModel);
+    ctx->setContextProperty("interestModel", &interestModel);
 
     // Add import paths (Embedded QRC + local file fallbacks)
     engine.addImportPath(":/");

@@ -102,6 +102,8 @@ set(SOURCES
     src/models/jform_model.cpp
     src/models/tds_model.h
     src/models/tds_model.cpp
+    src/models/interest_model.h
+    src/models/interest_model.cpp
     src/models/generic_list_model.h
     src/models/generic_list_model.cpp
     src/models/global_key_filter.h
@@ -154,6 +156,7 @@ qt_add_qml_module(${PROJECT_NAME}
         qml/views/ChequeVoucherView.qml
         qml/views/DashboardView.qml
         qml/views/FirmSelecterView.qml
+        qml/views/InterestCalculatorView.qml
         qml/views/JFormVoucherView.qml
         qml/views/JournalVoucherView.qml
         qml/views/MillingStatementView.qml

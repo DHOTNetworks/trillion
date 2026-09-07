@@ -35,6 +35,7 @@ T.Popup {
         else if (selectedIndex === 3) act = "Ledger Statement"
         else if (selectedIndex === 4) act = "Sales Register"
         else if (selectedIndex === 5) act = "Purchase Register"
+        else if (selectedIndex === 6) act = "Interest Calculator"
         var sel = selectedIndex
         root.close()
         root.actionSelected(act, sel)
@@ -55,11 +56,11 @@ T.Popup {
         Keys.onUpPressed: function(event) {
             event.accepted = true
             if (root.selectedIndex > 0) root.selectedIndex--
-            else root.selectedIndex = 5
+            else root.selectedIndex = 6
         }
         Keys.onDownPressed: function(event) {
             event.accepted = true
-            if (root.selectedIndex < 5) root.selectedIndex++
+            if (root.selectedIndex < 6) root.selectedIndex++
             else root.selectedIndex = 0
         }
         Keys.onReturnPressed: function(event) {
@@ -80,6 +81,7 @@ T.Popup {
         Keys.onDigit4Pressed: function(event) { event.accepted = true; root.selectedIndex = 3; root.triggerSelected() }
         Keys.onDigit5Pressed: function(event) { event.accepted = true; root.selectedIndex = 4; root.triggerSelected() }
         Keys.onDigit6Pressed: function(event) { event.accepted = true; root.selectedIndex = 5; root.triggerSelected() }
+        Keys.onDigit7Pressed: function(event) { event.accepted = true; root.selectedIndex = 6; root.triggerSelected() }
 
         ColumnLayout {
             id: mainCol
@@ -178,6 +180,18 @@ T.Popup {
                 activeBorderColor: "#047857"
                 onItemHovered: root.selectedIndex = 5
                 onItemClicked: { root.selectedIndex = 5; root.triggerSelected() }
+            }
+
+            // Item 7: Interest Calculator
+            NavMenuItem {
+                id: item7
+                index: 6
+                selectedIndex: root.selectedIndex
+                text: "7. Interest Calculator (Bahi Khata)"
+                activeColor: "#059669"
+                activeBorderColor: "#047857"
+                onItemHovered: root.selectedIndex = 6
+                onItemClicked: { root.selectedIndex = 6; root.triggerSelected() }
             }
         }
     }
