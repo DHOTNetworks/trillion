@@ -522,30 +522,70 @@ QVariantMap PartiesModel::get_party_statement(const QString& partyName) {
             if (!broker.isEmpty()) desc += " | Broker: " + broker;
             if (!narr.isEmpty()) desc += " | " + narr;
 
-            QVariantMap item;
-            item["isSelected"] = false;
-            item["vIso"] = isoD;
-            item["vDate"] = fmtD;
-            item["refNo"] = displayRef;
-            item["voucher_no"] = vNo;
-            item["invoice_no"] = invNo;
-            item["voucher_type"] = vType;
-            item["legacy_type"] = rawType;
-            item["trans_type"] = rawType;
-            item["particulars"] = desc;
-            item["amount"] = amt;
-            item["financial_year"] = fyStr;
-            item["fy"] = fyStr;
-
-            if (drCr.compare("Dr", Qt::CaseInsensitive) == 0) {
-                drItems.append(item);
-            } else {
+            double tdsAmt = t.value("tds_amount").toDouble();
+            if ((rawType == "Purc" || vType == "Purchase") && tdsAmt > 0.0) {
+                // Gross up purchase bill on Cr side
+                QVariantMap item;
+                item["isSelected"] = false;
+                item["vIso"] = isoD;
+                item["vDate"] = fmtD;
+                item["refNo"] = displayRef;
+                item["voucher_no"] = vNo;
+                item["invoice_no"] = invNo;
+                item["voucher_type"] = vType;
+                item["legacy_type"] = rawType;
+                item["trans_type"] = rawType;
+                item["particulars"] = QString("B.No. %1").arg(!invNo.isEmpty() ? invNo : vNo);
+                if (!veh.isEmpty()) item["particulars"] = item["particulars"].toString() + " | Veh: " + veh;
+                if (!broker.isEmpty()) item["particulars"] = item["particulars"].toString() + " | Broker: " + broker;
+                if (!narr.isEmpty()) item["particulars"] = item["particulars"].toString() + " | " + narr;
+                item["amount"] = amt + tdsAmt;
+                item["financial_year"] = fyStr;
+                item["fy"] = fyStr;
                 crItems.append(item);
+
+                // Add separate TDS deduction on Dr side matching Bahi Khata
+                QVariantMap tdsItem;
+                tdsItem["isSelected"] = false;
+                tdsItem["vIso"] = isoD;
+                tdsItem["vDate"] = fmtD;
+                tdsItem["refNo"] = displayRef;
+                tdsItem["voucher_no"] = vNo;
+                tdsItem["invoice_no"] = invNo;
+                tdsItem["voucher_type"] = "TDS";
+                tdsItem["legacy_type"] = "TDS";
+                tdsItem["trans_type"] = "TDS";
+                tdsItem["particulars"] = QString("T.D.S. U/S 194Q (B.No. %1)").arg(!invNo.isEmpty() ? invNo : vNo);
+                tdsItem["amount"] = tdsAmt;
+                tdsItem["financial_year"] = fyStr;
+                tdsItem["fy"] = fyStr;
+                drItems.append(tdsItem);
+            } else {
+                QVariantMap item;
+                item["isSelected"] = false;
+                item["vIso"] = isoD;
+                item["vDate"] = fmtD;
+                item["refNo"] = displayRef;
+                item["voucher_no"] = vNo;
+                item["invoice_no"] = invNo;
+                item["voucher_type"] = vType;
+                item["legacy_type"] = rawType;
+                item["trans_type"] = rawType;
+                item["particulars"] = desc;
+                item["amount"] = amt;
+                item["financial_year"] = fyStr;
+                item["fy"] = fyStr;
+
+                if (drCr.compare("Dr", Qt::CaseInsensitive) == 0) {
+                    drItems.append(item);
+                } else {
+                    crItems.append(item);
+                }
             }
         }
     } else {
         // Load all transactions across all parties
-        QString sql = "SELECT voucher_no, voucher_date, voucher_type, trans_type, party_name, opposing_account, dr_cr, amount, invoice_no, narration, financial_year, broker_name, vehicle_no FROM transactions";
+        QString sql = "SELECT voucher_no, voucher_date, voucher_type, trans_type, party_name, opposing_account, dr_cr, amount, invoice_no, narration, financial_year, broker_name, vehicle_no, taxable_amount, tds_amount FROM transactions";
         QVariantList params;
         if (!activeFromDate.isEmpty() && !activeToDate.isEmpty()) {
             sql += " WHERE voucher_date >= ? AND voucher_date <= ?";
@@ -567,35 +607,51 @@ QVariantMap PartiesModel::get_party_statement(const QString& partyName) {
             QString narr = t.value("narration").toString().trimmed();
             QString veh = t.value("vehicle_no").toString().trimmed();
             QString broker = t.value("broker_name").toString().trimmed();
+            double tdsAmt = t.value("tds_amount").toDouble();
             auto [isoD, fmtD] = parseDates(t.value("voucher_date").toString());
             QString fyStr = computeFyForDate(isoD, t.value("financial_year").toString());
 
             QString displayRef = !rawType.isEmpty() ? QString("%1 %2").arg(rawType, vNo).trimmed() : QString("%1 %2").arg(vType, vNo).trimmed();
 
-            QString desc = QString("[%1] %2").arg(pName, !opposing.isEmpty() ? opposing : vType);
-            if (!veh.isEmpty()) desc += " | Veh: " + veh;
-            if (!broker.isEmpty()) desc += " | Broker: " + broker;
-            if (!narr.isEmpty()) desc += " | " + narr;
+            if ((rawType == "Purc" || vType == "Purchase") && tdsAmt > 0.0) {
+                QString desc = QString("[%1] B.No. %2").arg(pName, !invNo.isEmpty() ? invNo : vNo);
+                if (!veh.isEmpty()) desc += " | Veh: " + veh;
+                if (!broker.isEmpty()) desc += " | Broker: " + broker;
+                if (!narr.isEmpty()) desc += " | " + narr;
 
-            QVariantMap item;
-            item["isSelected"] = false;
-            item["vIso"] = isoD;
-            item["vDate"] = fmtD;
-            item["refNo"] = displayRef;
-            item["voucher_no"] = vNo;
-            item["invoice_no"] = invNo;
-            item["voucher_type"] = vType;
-            item["legacy_type"] = rawType;
-            item["trans_type"] = rawType;
-            item["particulars"] = desc;
-            item["amount"] = amt;
-            item["financial_year"] = fyStr;
-            item["fy"] = fyStr;
-
-            if (drCr.compare("Dr", Qt::CaseInsensitive) == 0) {
-                drItems.append(item);
-            } else {
+                QVariantMap item;
+                item["isSelected"] = false; item["vIso"] = isoD; item["vDate"] = fmtD;
+                item["refNo"] = displayRef; item["voucher_no"] = vNo; item["invoice_no"] = invNo;
+                item["voucher_type"] = vType; item["legacy_type"] = rawType; item["trans_type"] = rawType;
+                item["particulars"] = desc; item["amount"] = amt + tdsAmt;
+                item["financial_year"] = fyStr; item["fy"] = fyStr;
                 crItems.append(item);
+
+                QVariantMap tdsItem;
+                tdsItem["isSelected"] = false; tdsItem["vIso"] = isoD; tdsItem["vDate"] = fmtD;
+                tdsItem["refNo"] = displayRef; tdsItem["voucher_no"] = vNo; tdsItem["invoice_no"] = invNo;
+                tdsItem["voucher_type"] = "TDS"; tdsItem["legacy_type"] = "TDS"; tdsItem["trans_type"] = "TDS";
+                tdsItem["particulars"] = QString("[%1] T.D.S. U/S 194Q (B.No. %2)").arg(pName, !invNo.isEmpty() ? invNo : vNo);
+                tdsItem["amount"] = tdsAmt; tdsItem["financial_year"] = fyStr; tdsItem["fy"] = fyStr;
+                drItems.append(tdsItem);
+            } else {
+                QString desc = QString("[%1] %2").arg(pName, !opposing.isEmpty() ? opposing : vType);
+                if (!veh.isEmpty()) desc += " | Veh: " + veh;
+                if (!broker.isEmpty()) desc += " | Broker: " + broker;
+                if (!narr.isEmpty()) desc += " | " + narr;
+
+                QVariantMap item;
+                item["isSelected"] = false; item["vIso"] = isoD; item["vDate"] = fmtD;
+                item["refNo"] = displayRef; item["voucher_no"] = vNo; item["invoice_no"] = invNo;
+                item["voucher_type"] = vType; item["legacy_type"] = rawType; item["trans_type"] = rawType;
+                item["particulars"] = desc; item["amount"] = amt;
+                item["financial_year"] = fyStr; item["fy"] = fyStr;
+
+                if (drCr.compare("Dr", Qt::CaseInsensitive) == 0) {
+                    drItems.append(item);
+                } else {
+                    crItems.append(item);
+                }
             }
         }
     }

@@ -1220,12 +1220,25 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
         std::string grNo = cleanText(getField(r, "GRNo"));
         int rowNo = parseIntVal(getField(r, "RowNo"), 1);
 
+        std::string key = QString("%1-%2-%3").arg(vType).arg(QString::fromStdString(vNo)).arg(vDate).toStdString();
         double taxableAmt = parseDoubleVal(getField(r, "Taxable194Q"));
         double tdsRate = parseDoubleVal(getField(r, "TDSRate194Q"));
-        double tdsAmt = (tdsRate > 0.0 && taxableAmt > 0.0) ? std::round((taxableAmt * tdsRate / 100.0) * 100.0) / 100.0 : 0.0;
-
-        // Resolve opposing account from the same voucher group
-        std::string key = QString("%1-%2-%3").arg(vType).arg(QString::fromStdString(vNo)).arg(vDate).toStdString();
+        double tdsAmt = 0.0;
+        if (tdsRate > 0.0 || taxableAmt > 0.0) {
+            auto itSt = stockTransMap.find(key);
+            if (itSt != stockTransMap.end() && !itSt->second.empty()) {
+                double stockTotal = 0.0;
+                for (const auto& sl : itSt->second) {
+                    stockTotal += sl.amount;
+                }
+                if (stockTotal > amt) {
+                    tdsAmt = std::round((stockTotal - amt) * 100.0) / 100.0;
+                }
+            }
+            if (tdsAmt <= 0.0 && tdsRate > 0.0 && taxableAmt > 0.0) {
+                tdsAmt = std::round(taxableAmt * tdsRate / 100.0);
+            }
+        }
         const auto& group = voucherGroups[key];
         std::vector<std::string> opposingList;
         for (const auto& other : group) {
