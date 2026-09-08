@@ -56,7 +56,7 @@ Rectangle {
                     spacing: 6
 
                     Text {
-                        text: "🔍"
+                        text: ""
                         font.pixelSize: 12
                     }
 
@@ -155,7 +155,7 @@ Rectangle {
                     spacing: 6
 
                     Text {
-                        text: "📂"
+                        text: ""
                         font.pixelSize: 28
                         Layout.alignment: Qt.AlignHCenter
                     }

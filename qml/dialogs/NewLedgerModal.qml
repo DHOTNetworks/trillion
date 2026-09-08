@@ -25,7 +25,7 @@ Rectangle {
             Layout.fillWidth: true
 
             Text {
-                text: "👤 Quick Create Ledger Account"
+                text: "Quick Create Ledger Account"
                 color: "#0F172A"
                 font.pixelSize: 18
                 font.bold: true
@@ -35,7 +35,7 @@ Rectangle {
 
             T.Button {
                 flat: true
-                text: "✕"
+                text: "X"
                 font.pixelSize: 16
                 font.bold: true
                 onClicked: root.closeRequested()
@@ -137,7 +137,7 @@ Rectangle {
                 background: Rectangle { color: saveBtn.hovered ? "#1D4ED8" : "#2563EB"; radius: 6 }
                 contentItem: RowLayout {
                     spacing: 6
-                    Text { text: "💾 Save Party Ledger"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 13 }
+                    Text { text: "Save Party Ledger"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 13 }
                     KbdBadge { text: "Enter"; badgeColor: "#1E3A8A"; textColor: "#93C5FD"; borderColor: "#2563EB" }
                 }
                 onClicked: {

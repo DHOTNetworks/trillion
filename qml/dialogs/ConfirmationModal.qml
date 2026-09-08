@@ -75,7 +75,7 @@ T.Popup {
                     width: 32; height: 32; radius: 6
                     color: "#EFF6FF"
                     border.color: "#93C5FD"
-                    Text { anchors.centerIn: parent; text: "💾"; font.pixelSize: 16 }
+                    Text { anchors.centerIn: parent; text: ""; font.pixelSize: 16 }
                 }
 
                 Text {

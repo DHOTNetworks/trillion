@@ -58,12 +58,12 @@ Rectangle {
 
             Rectangle {
                 width: 40; height: 40; radius: 10; color: "#EFF6FF"
-                Text { anchors.centerIn: parent; text: "🔄"; font.pixelSize: 20 }
+                Text { anchors.centerIn: parent; text: ""; font.pixelSize: 20 }
             }
 
             ColumnLayout {
                 spacing: 2
-                Text { text: "BAHI KHATA MIGRATION & SYNC"; color: "#2563EB"; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.0 }
+                Text { text: "DATABASE MIGRATION & SYNC"; color: "#2563EB"; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.0 }
                 Text { text: "In-App Database Importer (Data.004)"; color: "#0F172A"; font.pixelSize: 17; font.bold: true }
             }
 
@@ -72,7 +72,7 @@ Rectangle {
             Rectangle {
                 width: 32; height: 32; radius: 16
                 color: closeMouse.containsMouse ? "#FEE2E2" : "#F1F5F9"
-                Text { anchors.centerIn: parent; text: "✕"; color: closeMouse.containsMouse ? "#EF4444" : "#64748B"; font.bold: true }
+                Text { anchors.centerIn: parent; text: "X"; color: closeMouse.containsMouse ? "#EF4444" : "#64748B"; font.bold: true }
                 MouseArea {
                     id: closeMouse
                     anchors.fill: parent
@@ -110,7 +110,7 @@ Rectangle {
                     id: browseBtn
                     implicitWidth: 120
                     implicitHeight: 34
-                    contentItem: Text { text: "📁 Browse File..."; color: "#0F172A"; font.bold: true; font.pixelSize: 12; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                    contentItem: Text { text: "Browse File..."; color: "#0F172A"; font.bold: true; font.pixelSize: 12; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                     onClicked: {
                         if (typeof bahiKhataMigrator !== "undefined" && bahiKhataMigrator) {
                             var picked = bahiKhataMigrator.choose_mdb_file("")
@@ -140,7 +140,7 @@ Rectangle {
                 spacing: 10
 
                 Text {
-                    text: "📊 Detected Database Information"
+                    text: " Detected Database Information"
                     color: "#334155"
                     font.pixelSize: 13
                     font.bold: true
@@ -154,10 +154,10 @@ Rectangle {
                         anchors.centerIn: parent
                         visible: (!inspectionData || inspectionData.valid !== true) && !hasCompleted
                         spacing: 8
-                        Text { Layout.alignment: Qt.AlignHCenter; text: (inspectionData && inspectionData.error) ? "⚠️" : "📂"; font.pixelSize: 32 }
+                        Text { Layout.alignment: Qt.AlignHCenter; text: (inspectionData && inspectionData.error) ? "" : ""; font.pixelSize: 32 }
                         Text {
                             Layout.alignment: Qt.AlignHCenter
-                            text: (inspectionData && inspectionData.error) ? inspectionData.error : "Select a Bahi Khata file (e.g. Data.004, Data.001) to inspect and migrate"
+                            text: (inspectionData && inspectionData.error) ? inspectionData.error : "Select a database file (e.g. Data.004, Data.001) to inspect and migrate"
                             color: (inspectionData && inspectionData.error) ? "#DC2626" : "#64748B"
                             font.pixelSize: 13
                             font.bold: (inspectionData && inspectionData.error) ? true : false
@@ -221,7 +221,7 @@ Rectangle {
                         anchors.centerIn: parent
                         visible: hasCompleted
                         spacing: 10
-                        Text { Layout.alignment: Qt.AlignHCenter; text: "✅"; font.pixelSize: 40 }
+                        Text { Layout.alignment: Qt.AlignHCenter; text: ""; font.pixelSize: 40 }
                         Text {
                             Layout.alignment: Qt.AlignHCenter
                             text: completionMessage
@@ -277,7 +277,7 @@ Rectangle {
                 implicitWidth: 180
                 implicitHeight: 34
                 background: Rectangle { color: (typeof bahiKhataMigrator !== "undefined" && bahiKhataMigrator && bahiKhataMigrator.isMigrating) ? "#94A3B8" : (startMigrateBtn.hovered ? "#1D4ED8" : "#2563EB"); radius: 6 }
-                contentItem: Text { text: "⚡ Start In-App Migration"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 12; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                contentItem: Text { text: "Start In-App Migration"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 12; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                 visible: (!hasCompleted && inspectionData && inspectionData.valid === true) ? true : false
                 enabled: (typeof bahiKhataMigrator !== "undefined" && bahiKhataMigrator && bahiKhataMigrator.isMigrating) ? false : true
                 onClicked: {

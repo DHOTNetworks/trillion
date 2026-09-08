@@ -184,7 +184,7 @@ QVariantMap InterestModel::get_interest_data(
         sql += " AND voucher_date >= ? AND voucher_date <= ?";
         params << fIso << tIso;
     }
-    sql += " ORDER BY voucher_date ASC, id ASC;";
+    sql += " ORDER BY voucher_date ASC, CAST(voucher_no AS INTEGER) ASC, id ASC;";
 
     QVariantList txRows = DatabaseManager::instance().executeQuery(sql, params);
 

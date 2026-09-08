@@ -53,7 +53,7 @@ T.Popup {
                     width: 42; height: 42; radius: 10
                     color: "#DCFCE7"
                     border.color: "#86EFAC"
-                    Text { anchors.centerIn: parent; text: "🌾"; font.pixelSize: 22 }
+                    Text { anchors.centerIn: parent; text: ""; font.pixelSize: 22 }
                 }
 
                 ColumnLayout {
@@ -65,7 +65,7 @@ T.Popup {
 
                 T.Button {
                     flat: true
-                    text: "✕"
+                    text: "X"
                     onClicked: root.close()
                 }
             }
@@ -87,7 +87,7 @@ T.Popup {
                     spacing: 8
 
                     Text {
-                        text: "📋 J-Form Module Stub Initialized"
+                        text: "J-Form Module Stub Initialized"
                         color: "#15803D"
                         font.pixelSize: 13
                         font.bold: true
@@ -102,7 +102,7 @@ T.Popup {
                     }
 
                     Text {
-                        text: "⚡ Features configured for upcoming build:\n • Mandi Tax (1% / 2%) & Market Fee calculation\n • Rural Development Fund (RDF) & Infrastructure cess\n • Damami & Commission Agent charges\n • Net Bag Weight & Quality Grade deduction"
+                        text: " Features configured for upcoming build:\n • Mandi Tax (1% / 2%) & Market Fee calculation\n • Rural Development Fund (RDF) & Infrastructure cess\n • Damami & Commission Agent charges\n • Net Bag Weight & Quality Grade deduction"
                         color: "#475569"
                         font.pixelSize: 11
                         wrapMode: Text.WordWrap
@@ -122,7 +122,7 @@ T.Popup {
                     background: Rectangle { color: "#16A34A"; radius: 6 }
                     contentItem: RowLayout {
                         spacing: 6
-                        Text { text: "✓ Understood (Close)"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 12 }
+                        Text { text: "Understood (Close)"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 12 }
                         KbdBadge { text: "Esc"; badgeColor: "#14532D"; textColor: "#86EFAC"; borderColor: "#16A34A" }
                     }
                     onClicked: root.close()

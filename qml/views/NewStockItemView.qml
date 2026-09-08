@@ -91,7 +91,7 @@ Item {
             ColumnLayout {
                 spacing: 1
                 Text {
-                    text: "📦 STOCK ITEM CREATION (Single Slate Master)"
+                    text: "STOCK ITEM CREATION (Single Slate Master)"
                     color: "#0F172A"
                     font.pixelSize: 16
                     font.bold: true
@@ -1050,7 +1050,7 @@ Item {
                 contentItem: RowLayout {
                     spacing: 8
                     anchors.centerIn: parent
-                    Text { text: "💾 Save Stock Item"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 14 }
+                    Text { text: "Save Stock Item"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 14 }
                     KbdBadge { text: "F2"; badgeColor: "#14532D"; textColor: "#86EFAC"; borderColor: "#166534" }
                 }
                 onClicked: root.saveStockItem()

@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Templates as T
 import QtQuick.Layouts
 import MahadevERP
+import "../components"
 
 Rectangle {
     id: root
@@ -192,7 +193,7 @@ Rectangle {
                 spacing: 10
                 Rectangle {
                     width: 36; height: 36; radius: 8; color: "#EFF6FF"
-                    Text { anchors.centerIn: parent; text: "📦"; font.pixelSize: 18 }
+                    Text { anchors.centerIn: parent; text: ""; font.pixelSize: 18 }
                 }
                 ColumnLayout {
                     spacing: 0
@@ -217,7 +218,7 @@ Rectangle {
                 id: closeBtn
                 width: 32; height: 32; radius: 16
                 color: closeBtnArea.containsMouse ? "#DC2626" : "#F1F5F9"
-                Text { anchors.centerIn: parent; text: "✕"; color: closeBtnArea.containsMouse ? "#FFF" : "#475569"; font.bold: true }
+                Text { anchors.centerIn: parent; text: "X"; color: closeBtnArea.containsMouse ? "#FFF" : "#475569"; font.bold: true }
                 MouseArea {
                     id: closeBtnArea
                     anchors.fill: parent
@@ -260,7 +261,7 @@ Rectangle {
                         RowLayout {
                             anchors.fill: parent
                             anchors.leftMargin: 12; anchors.rightMargin: 12
-                            Text { text: "📥 INWARDS / ARRIVALS & PURCHASES"; color: "#1D4ED8"; font.pixelSize: 12; font.bold: true }
+                            Text { text: "INWARDS / ARRIVALS & PURCHASES"; color: "#1D4ED8"; font.pixelSize: 12; font.bold: true }
                             Item { Layout.fillWidth: true }
                             Text { text: inwardModel.count.toString() + " Entries"; color: "#2563EB"; font.pixelSize: 11; font.bold: true }
                         }
@@ -280,28 +281,16 @@ Rectangle {
                             spacing: 6
 
                             // Master Inwards Checkbox
-                            Rectangle {
-                                width: 22; height: parent.height
-                                color: "transparent"
-                                Rectangle {
-                                    anchors.centerIn: parent
-                                    width: 16; height: 16; radius: 3
-                                    color: inMasterCheck.containsMouse ? "#DBEAFE" : "#FFFFFF"
-                                    border.color: "#2563EB"; border.width: 1.5
-
-                                    MouseArea {
-                                        id: inMasterCheck
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        onClicked: {
-                                            var newState = !(root.selectedInwardCount === inwardModel.count && inwardModel.count > 0)
-                                            root.toggleSelectAllInwards(newState)
-                                        }
-                                    }
-                                    Text {
-                                        anchors.centerIn: parent; text: "✓"; color: "#2563EB"; font.bold: true; font.pixelSize: 11
-                                        visible: root.selectedInwardCount === inwardModel.count && inwardModel.count > 0
-                                    }
+                            CustomCheckBox {
+                                Layout.preferredWidth: 22
+                                Layout.alignment: Qt.AlignVCenter
+                                boxSize: 16
+                                boxRadius: 3
+                                checkedColor: "#2563EB"
+                                checked: root.selectedInwardCount === inwardModel.count && inwardModel.count > 0
+                                onToggled: {
+                                    var newState = !(root.selectedInwardCount === inwardModel.count && inwardModel.count > 0)
+                                    root.toggleSelectAllInwards(newState)
                                 }
                             }
 
@@ -336,26 +325,16 @@ Rectangle {
                                 spacing: 6
 
                                 // Row Checkbox
-                                Rectangle {
-                                    width: 22; height: parent.height
-                                    color: "transparent"
-                                    Rectangle {
-                                        anchors.centerIn: parent
-                                        width: 16; height: 16; radius: 3
-                                        color: model.isSelected ? "#2563EB" : "#FFFFFF"
-                                        border.color: "#2563EB"; border.width: 1.5
-
-                                        MouseArea {
-                                            anchors.fill: parent
-                                            onClicked: {
-                                                inwardModel.setProperty(index, "isSelected", !model.isSelected)
-                                                root.recalculateInwardTotals()
-                                            }
-                                        }
-                                        Text {
-                                            anchors.centerIn: parent; text: "✓"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 11
-                                            visible: model.isSelected
-                                        }
+                                CustomCheckBox {
+                                    Layout.preferredWidth: 22
+                                    Layout.alignment: Qt.AlignVCenter
+                                    boxSize: 16
+                                    boxRadius: 3
+                                    checkedColor: "#2563EB"
+                                    checked: Boolean(model.isSelected)
+                                    onToggled: {
+                                        inwardModel.setProperty(index, "isSelected", !model.isSelected)
+                                        root.recalculateInwardTotals()
                                     }
                                 }
 
@@ -428,7 +407,7 @@ Rectangle {
                         RowLayout {
                             anchors.fill: parent
                             anchors.leftMargin: 12; anchors.rightMargin: 12
-                            Text { text: "📤 OUTWARDS / SALES & DISPATCHES"; color: "#C2410C"; font.pixelSize: 12; font.bold: true }
+                            Text { text: "OUTWARDS / SALES & DISPATCHES"; color: "#C2410C"; font.pixelSize: 12; font.bold: true }
                             Item { Layout.fillWidth: true }
                             Text { text: outwardModel.count.toString() + " Entries"; color: "#EA580C"; font.pixelSize: 11; font.bold: true }
                         }
@@ -448,28 +427,16 @@ Rectangle {
                             spacing: 6
 
                             // Master Outwards Checkbox
-                            Rectangle {
-                                width: 22; height: parent.height
-                                color: "transparent"
-                                Rectangle {
-                                    anchors.centerIn: parent
-                                    width: 16; height: 16; radius: 3
-                                    color: outMasterCheck.containsMouse ? "#FFEDD5" : "#FFFFFF"
-                                    border.color: "#EA580C"; border.width: 1.5
-
-                                    MouseArea {
-                                        id: outMasterCheck
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        onClicked: {
-                                            var newState = !(root.selectedOutwardCount === outwardModel.count && outwardModel.count > 0)
-                                            root.toggleSelectAllOutwards(newState)
-                                        }
-                                    }
-                                    Text {
-                                        anchors.centerIn: parent; text: "✓"; color: "#EA580C"; font.bold: true; font.pixelSize: 11
-                                        visible: root.selectedOutwardCount === outwardModel.count && outwardModel.count > 0
-                                    }
+                            CustomCheckBox {
+                                Layout.preferredWidth: 22
+                                Layout.alignment: Qt.AlignVCenter
+                                boxSize: 16
+                                boxRadius: 3
+                                checkedColor: "#EA580C"
+                                checked: root.selectedOutwardCount === outwardModel.count && outwardModel.count > 0
+                                onToggled: {
+                                    var newState = !(root.selectedOutwardCount === outwardModel.count && outwardModel.count > 0)
+                                    root.toggleSelectAllOutwards(newState)
                                 }
                             }
 
@@ -504,26 +471,16 @@ Rectangle {
                                 spacing: 6
 
                                 // Row Checkbox
-                                Rectangle {
-                                    width: 22; height: parent.height
-                                    color: "transparent"
-                                    Rectangle {
-                                        anchors.centerIn: parent
-                                        width: 16; height: 16; radius: 3
-                                        color: model.isSelected ? "#EA580C" : "#FFFFFF"
-                                        border.color: "#EA580C"; border.width: 1.5
-
-                                        MouseArea {
-                                            anchors.fill: parent
-                                            onClicked: {
-                                                outwardModel.setProperty(index, "isSelected", !model.isSelected)
-                                                root.recalculateOutwardTotals()
-                                            }
-                                        }
-                                        Text {
-                                            anchors.centerIn: parent; text: "✓"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 11
-                                            visible: model.isSelected
-                                        }
+                                CustomCheckBox {
+                                    Layout.preferredWidth: 22
+                                    Layout.alignment: Qt.AlignVCenter
+                                    boxSize: 16
+                                    boxRadius: 3
+                                    checkedColor: "#EA580C"
+                                    checked: Boolean(model.isSelected)
+                                    onToggled: {
+                                        outwardModel.setProperty(index, "isSelected", !model.isSelected)
+                                        root.recalculateOutwardTotals()
                                     }
                                 }
 

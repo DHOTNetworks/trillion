@@ -110,7 +110,16 @@ bool SalesModel::add_sales_invoice_full(
     const QString& driver, const QString& bill_time, const QString& sauda_date,
     const QString& shipping_address, const QString& po_no, const QString& grade,
     const QString& kanda_weight, const QString& transport, const QString& broker_name,
-    const QString& voucher_no
+    const QString& voucher_no,
+    const QVariantList& items,
+    const QString& market_type,
+    int due_days,
+    const QString& challan_no,
+    double freight_charges,
+    double tcs_amount,
+    double tcs_rate,
+    const QString& tax_status,
+    const QString& place_of_supply
 ) {
     QString dt = invoice_date.isEmpty() ? QDate::currentDate().toString("yyyy-MM-dd") : invoice_date;
     
@@ -168,20 +177,42 @@ bool SalesModel::add_sales_invoice_full(
         "bag_count, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount, round_off, gst_amount, "
         "total_amount, payment_mode, vehicle_no, eway_bill_no, narration, sale_status, market_fee_status, dami, labour, auction, "
         "m_fee, hrdf, other_exp, welfare, dhrmd, sutli, less_amount, gr_no, driver, bill_time, sauda_date, shipping_address, "
-        "po_no, grade, kanda_weight, transport, broker_name"
-        ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+        "po_no, grade, kanda_weight, transport, broker_name, market_type, due_days, tax_status, challan_no, freight_charges, "
+        "tcs_amount, tcs_rate, place_of_supply"
+        ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
         {
             fyId, fyLabel, vchNo, invNo, dt, customerId, party_ledger, gstin, itemId, item_name, hsn_code,
             bag_count, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount, round_off, gst_amount,
             total_amount, payment_mode, vehicle_no, eway_bill_no, narration, sale_status, market_fee_status,
             dami, labour, auction, m_fee, hrdf, other_exp, welfare, dhrmd, sutli, less_amount,
-            gr_no, driver, bill_time, sauda_date, shipping_address, po_no, grade, kanda_weight, transport, broker_name
+            gr_no, driver, bill_time, sauda_date, shipping_address, po_no, grade, kanda_weight, transport, broker_name,
+            market_type, due_days, tax_status, challan_no, freight_charges, tcs_amount, tcs_rate, place_of_supply
         }
     );
 
     if (!okInv) {
         DatabaseManager::instance().rollback();
         return false;
+    }
+
+    long long newInvId = DatabaseManager::instance().lastInsertedId();
+
+    // Insert line items if present
+    if (!items.isEmpty()) {
+        for (const QVariant& itmV : items) {
+            QVariantMap itm = itmV.toMap();
+            DatabaseManager::instance().executeNonQuery(
+                "INSERT INTO sales_invoice_items (invoice_id, invoice_no, item_id, item_name, bag_count, packing, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, total_amount) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+                {
+                    newInvId, invNo, itemId, itm.value("item_name").toString(),
+                    itm.value("bags").toInt(), itm.value("packing").toDouble(),
+                    itm.value("weight").toDouble(), itm.value("rate").toDouble(),
+                    itm.value("amount").toDouble(), itm.value("gst_pct").toDouble(),
+                    itm.value("amount").toDouble()
+                }
+            );
+        }
     }
 
     // 2. Guaranteed Double-Entry Ledger Posting:
@@ -194,12 +225,14 @@ bool SalesModel::add_sales_invoice_full(
         "INSERT INTO vouchers ("
         "fy_id, financial_year, voucher_no, instrument_no, voucher_date, voucher_type, legacy_type, ledger_id, party_id, party_name, "
         "account_type, amount, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount, round_off, vehicle_no, eway_bill_no, "
-        "broker_name, sauda_date, dami, labour, auction, m_fee, hrdf, other_exp, welfare, dhrmd, sutli, less_amount, narration"
-        ") VALUES (?, ?, ?, ?, ?, 'Sales', 'Sale', ?, ?, ?, 'Sales Account', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+        "broker_name, sauda_date, dami, labour, auction, m_fee, hrdf, other_exp, welfare, dhrmd, sutli, less_amount, narration, "
+        "due_days, market_type, tax_status, place_of_supply, challan_no"
+        ") VALUES (?, ?, ?, ?, ?, 'Sales', 'Sale', ?, ?, ?, 'Sales Account', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
         {
             fyId, fyLabel, vchNo, invNo, dt, customerId, customerId, party_ledger,
             total_amount, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount, round_off, vehicle_no, eway_bill_no,
-            broker_name, sauda_date, dami, labour, auction, m_fee, hrdf, other_exp, welfare, dhrmd, sutli, less_amount, vchNarr
+            broker_name, sauda_date, dami, labour, auction, m_fee, hrdf, other_exp, welfare, dhrmd, sutli, less_amount, vchNarr,
+            due_days, market_type, tax_status, place_of_supply, challan_no
         }
     );
 
@@ -252,13 +285,13 @@ QVariantList SalesModel::get_sales_register(const QString& param1, const QString
     }
 
     if (!fromDate.isEmpty() && !toDate.isEmpty()) {
-        sql = "SELECT id, voucher_no, invoice_no, invoice_date, customer_name, item_name, bag_count, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount, gst_amount, round_off, total_amount, payment_mode, vehicle_no, eway_bill_no, financial_year, narration FROM sales_invoices WHERE invoice_date >= ? AND invoice_date <= ? ORDER BY invoice_date DESC, id DESC;";
+        sql = "SELECT id, voucher_no, invoice_no, invoice_date, customer_name, item_name, bag_count, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount, gst_amount, round_off, total_amount, payment_mode, vehicle_no, eway_bill_no, financial_year, narration, market_type, due_days, tax_status, challan_no, freight_charges, tcs_amount, place_of_supply FROM sales_invoices WHERE invoice_date >= ? AND invoice_date <= ? ORDER BY invoice_date DESC, id DESC;";
         params << fromDate << toDate;
     } else if (!fyLabel.isEmpty()) {
-        sql = "SELECT id, voucher_no, invoice_no, invoice_date, customer_name, item_name, bag_count, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount, gst_amount, round_off, total_amount, payment_mode, vehicle_no, eway_bill_no, financial_year, narration FROM sales_invoices WHERE financial_year = ? ORDER BY invoice_date DESC, id DESC;";
+        sql = "SELECT id, voucher_no, invoice_no, invoice_date, customer_name, item_name, bag_count, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount, gst_amount, round_off, total_amount, payment_mode, vehicle_no, eway_bill_no, financial_year, narration, market_type, due_days, tax_status, challan_no, freight_charges, tcs_amount, place_of_supply FROM sales_invoices WHERE financial_year = ? ORDER BY invoice_date DESC, id DESC;";
         params << fyLabel;
     } else {
-        sql = "SELECT id, voucher_no, invoice_no, invoice_date, customer_name, item_name, bag_count, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount, gst_amount, round_off, total_amount, payment_mode, vehicle_no, eway_bill_no, financial_year, narration FROM sales_invoices ORDER BY invoice_date DESC, id DESC;";
+        sql = "SELECT id, voucher_no, invoice_no, invoice_date, customer_name, item_name, bag_count, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount, gst_amount, round_off, total_amount, payment_mode, vehicle_no, eway_bill_no, financial_year, narration, market_type, due_days, tax_status, challan_no, freight_charges, tcs_amount, place_of_supply FROM sales_invoices ORDER BY invoice_date DESC, id DESC;";
     }
 
     QVariantList rawRows = DatabaseManager::instance().executeQuery(sql, params);
@@ -291,6 +324,32 @@ QVariantMap SalesModel::get_sales_invoice(const QString& invoiceNoOrId) {
     if (rows.isEmpty()) return {};
     QVariantMap inv = rows.first().toMap();
     int invId = inv.value("id").toInt();
+
+    // Auto-resolve party metadata if gstin or address is missing
+    QString custName = inv.value("customer_name").toString().trimmed();
+    if (!custName.isEmpty()) {
+        QVariantList pRows = DatabaseManager::instance().executeQuery(
+            "SELECT gstin, address, city, state, phone FROM parties WHERE name = ? COLLATE NOCASE OR alias = ? COLLATE NOCASE LIMIT 1;",
+            {custName, custName}
+        );
+        if (pRows.isEmpty() && custName.contains('[')) {
+            QString cleanName = custName.left(custName.indexOf('[')).trimmed();
+            pRows = DatabaseManager::instance().executeQuery(
+                "SELECT gstin, address, city, state, phone FROM parties WHERE name LIKE ? LIMIT 1;",
+                {cleanName + "%"}
+            );
+        }
+        if (!pRows.isEmpty()) {
+            QVariantMap pMap = pRows.first().toMap();
+            if (inv.value("gstin").toString().trimmed().isEmpty()) {
+                inv["gstin"] = pMap.value("gstin");
+            }
+            inv["party_address"] = pMap.value("address");
+            inv["party_city"] = pMap.value("city");
+            inv["party_state"] = pMap.value("state");
+            inv["party_phone"] = pMap.value("phone");
+        }
+    }
 
     // Fetch line items from sales_invoice_items
     QVariantList itemRows = DatabaseManager::instance().executeQuery(
@@ -339,7 +398,15 @@ bool SalesModel::update_sales_invoice_full(
     const QString& shipping_address, const QString& po_no, const QString& grade,
     const QString& kanda_weight, const QString& transport, const QString& broker_name,
     const QString& voucher_no,
-    const QVariantList& items
+    const QVariantList& items,
+    const QString& market_type,
+    int due_days,
+    const QString& challan_no,
+    double freight_charges,
+    double tcs_amount,
+    double tcs_rate,
+    const QString& tax_status,
+    const QString& place_of_supply
 ) {
     QString dt = invoice_date.isEmpty() ? QDate::currentDate().toString("yyyy-MM-dd") : invoice_date;
     QVariant itemRow = DatabaseManager::instance().executeScalar(
@@ -363,7 +430,8 @@ bool SalesModel::update_sales_invoice_full(
         "sale_status = ?, market_fee_status = ?, dami = ?, labour = ?, auction = ?, m_fee = ?, hrdf = ?, "
         "other_exp = ?, welfare = ?, dhrmd = ?, sutli = ?, less_amount = ?, gr_no = ?, driver = ?, "
         "bill_time = ?, sauda_date = ?, shipping_address = ?, po_no = ?, grade = ?, kanda_weight = ?, "
-        "transport = ?, broker_name = ? WHERE id = ?;",
+        "transport = ?, broker_name = ?, market_type = ?, due_days = ?, tax_status = ?, challan_no = ?, "
+        "freight_charges = ?, tcs_amount = ?, tcs_rate = ?, place_of_supply = ? WHERE id = ?;",
         {
             voucher_no, invoice_no, dt, customerId, party_ledger, gstin,
             itemId, item_name, hsn_code, bag_count, weight_qtl, rate_per_qtl,
@@ -372,7 +440,8 @@ bool SalesModel::update_sales_invoice_full(
             sale_status, market_fee_status, dami, labour, auction, m_fee, hrdf,
             other_exp, welfare, dhrmd, sutli, less_amount, gr_no, driver,
             bill_time, sauda_date, shipping_address, po_no, grade, kanda_weight,
-            transport, broker_name, invoice_id
+            transport, broker_name, market_type, due_days, tax_status, challan_no,
+            freight_charges, tcs_amount, tcs_rate, place_of_supply, invoice_id
         }
     );
 
@@ -399,6 +468,26 @@ bool SalesModel::update_sales_invoice_full(
             );
         }
     }
+
+    // Update vouchers
+    DatabaseManager::instance().executeNonQuery(
+        "UPDATE vouchers SET "
+        "voucher_no = ?, instrument_no = ?, voucher_date = ?, party_id = ?, party_name = ?, "
+        "amount = ?, taxable_amount = ?, gst_pct = ?, cgst_amount = ?, sgst_amount = ?, igst_amount = ?, "
+        "round_off = ?, vehicle_no = ?, eway_bill_no = ?, broker_name = ?, sauda_date = ?, "
+        "dami = ?, labour = ?, auction = ?, m_fee = ?, hrdf = ?, other_exp = ?, welfare = ?, "
+        "dhrmd = ?, sutli = ?, less_amount = ?, narration = ?, due_days = ?, market_type = ?, "
+        "tax_status = ?, place_of_supply = ?, challan_no = ? "
+        "WHERE instrument_no = ? AND voucher_type = 'Sales';",
+        {
+            voucher_no, invoice_no, dt, customerId, party_ledger,
+            total_amount, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount,
+            round_off, vehicle_no, eway_bill_no, broker_name, sauda_date,
+            dami, labour, auction, m_fee, hrdf, other_exp, welfare,
+            dhrmd, sutli, less_amount, narration, due_days, market_type,
+            tax_status, place_of_supply, challan_no, invoice_no
+        }
+    );
 
     // Update stock_transactions
     DatabaseManager::instance().executeNonQuery(

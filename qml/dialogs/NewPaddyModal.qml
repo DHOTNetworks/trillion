@@ -25,7 +25,7 @@ Rectangle {
             Layout.fillWidth: true
 
             Text {
-                text: "🌾 New Paddy Arrival Entry"
+                text: "New Paddy Arrival Entry"
                 color: "#0F172A"
                 font.pixelSize: 18
                 font.bold: true
@@ -35,7 +35,7 @@ Rectangle {
 
             T.Button {
                 flat: true
-                text: "✕"
+                text: "X"
                 font.pixelSize: 16
                 font.bold: true
                 onClicked: root.closeRequested()
@@ -133,7 +133,7 @@ Rectangle {
                 background: Rectangle { color: saveBtn.hovered ? "#16A34A" : "#22C55E"; radius: 6 }
                 contentItem: RowLayout {
                     spacing: 6
-                    Text { text: "💾 Record Arrival Slip"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 13 }
+                    Text { text: "Record Arrival Slip"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 13 }
                     KbdBadge { text: "Enter"; badgeColor: "#14532D"; textColor: "#86EFAC"; borderColor: "#22C55E" }
                 }
                 onClicked: {

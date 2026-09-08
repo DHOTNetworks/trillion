@@ -27,7 +27,16 @@ public:
         const QString& driver = "", const QString& bill_time = "", const QString& sauda_date = "",
         const QString& shipping_address = "", const QString& po_no = "", const QString& grade = "",
         const QString& kanda_weight = "", const QString& transport = "", const QString& broker_name = "",
-        const QString& voucher_no = ""
+        const QString& voucher_no = "",
+        const QVariantList& items = QVariantList(),
+        const QString& market_type = "Market Type (With Stock)",
+        int due_days = 0,
+        const QString& challan_no = "",
+        double freight_charges = 0.0,
+        double tcs_amount = 0.0,
+        double tcs_rate = 0.0,
+        const QString& tax_status = "GST",
+        const QString& place_of_supply = ""
     );
 
     Q_INVOKABLE QVariantList get_sales_register(const QString& param1 = "", const QString& param2 = "");
@@ -48,6 +57,14 @@ public:
         const QString& shipping_address = "", const QString& po_no = "", const QString& grade = "",
         const QString& kanda_weight = "", const QString& transport = "", const QString& broker_name = "",
         const QString& voucher_no = "",
-        const QVariantList& items = QVariantList()
+        const QVariantList& items = QVariantList(),
+        const QString& market_type = "Market Type (With Stock)",
+        int due_days = 0,
+        const QString& challan_no = "",
+        double freight_charges = 0.0,
+        double tcs_amount = 0.0,
+        double tcs_rate = 0.0,
+        const QString& tax_status = "GST",
+        const QString& place_of_supply = ""
     );
 };

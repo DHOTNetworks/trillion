@@ -27,7 +27,7 @@ T.Popup {
     function createFirm() {
         var name = compNameInput.text.trim()
         if (!name) {
-            errorText.text = "❌ Company / Firm Name is required."
+            errorText.text = "Company / Firm Name is required."
             return
         }
         errorText.text = ""
@@ -62,7 +62,7 @@ T.Popup {
                 root.close()
                 root.firmCreated(firmManager.currentFirmId, name)
             } else {
-                errorText.text = "❌ Failed to create firm. Check if database already exists."
+                errorText.text = "Failed to create firm. Check if database already exists."
             }
         }
     }
@@ -78,7 +78,7 @@ T.Popup {
             Rectangle {
                 width: 36; height: 36; radius: 8
                 color: "#EFF6FF"; border.color: "#BFDBFE"
-                Text { anchors.centerIn: parent; text: "🏢"; font.pixelSize: 18 }
+                Text { anchors.centerIn: parent; text: ""; font.pixelSize: 18 }
             }
             ColumnLayout {
                 spacing: 2
@@ -92,7 +92,7 @@ T.Popup {
             }
             T.Button {
                 background: Rectangle { color: "#F1F5F9"; radius: 6 }
-                contentItem: Text { text: "✕"; color: "#64748B"; font.bold: true }
+                contentItem: Text { text: "X"; color: "#64748B"; font.bold: true }
                 onClicked: root.close()
             }
         }
@@ -292,7 +292,7 @@ T.Popup {
                 Layout.preferredWidth: 260
                 height: 36
                 background: Rectangle { color: "#16A34A"; radius: 6 }
-                contentItem: Text { text: "💾 Create & Open Firm (F2)"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 12; horizontalAlignment: Text.AlignHCenter }
+                contentItem: Text { text: "Create & Open Firm (F2)"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 12; horizontalAlignment: Text.AlignHCenter }
                 onClicked: root.createFirm()
             }
         }

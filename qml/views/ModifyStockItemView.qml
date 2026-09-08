@@ -99,7 +99,7 @@ Item {
             ColumnLayout {
                 spacing: 1
                 Text {
-                    text: "✏️ STOCK ITEM ALTERATION (Single Slate Master)"
+                    text: "STOCK ITEM ALTERATION (Single Slate Master)"
                     color: "#0F172A"
                     font.pixelSize: 16
                     font.bold: true
@@ -177,7 +177,7 @@ Item {
 
                     CustomWhiteCombo {
                         id: selectItemCombo
-                        label: "🔍 CHOOSE STOCK ITEM TO ALTER / MODIFY (Type Name, ↑/↓ Arrows & Enter) *"
+                        label: "CHOOSE STOCK ITEM TO ALTER / MODIFY (Type Name, ↑/↓ Arrows & Enter) *"
                         Layout.fillWidth: true
                         focusInput: true
                         model: (typeof stockItemsModel !== "undefined" && stockItemsModel) ? stockItemsModel.get_items_list() : []
@@ -1075,7 +1075,7 @@ Item {
                 contentItem: RowLayout {
                     spacing: 6
                     anchors.centerIn: parent
-                    Text { text: "🗑️ Delete Item"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 13 }
+                    Text { text: "Delete Item"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 13 }
                     KbdBadge { text: "Del"; badgeColor: "#7F1D1D"; textColor: "#FECACA"; borderColor: "#991B1B" }
                 }
                 onClicked: deleteConfirmModal.open()
@@ -1098,7 +1098,7 @@ Item {
                 contentItem: RowLayout {
                     spacing: 8
                     anchors.centerIn: parent
-                    Text { text: "💾 Update Complete Stock Item"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 14 }
+                    Text { text: "Update Complete Stock Item"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 14 }
                     KbdBadge { text: "F2"; badgeColor: "#14532D"; textColor: "#86EFAC"; borderColor: "#166534" }
                 }
                 onClicked: root.updateStockItem()

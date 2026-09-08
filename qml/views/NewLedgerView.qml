@@ -23,7 +23,7 @@ Item {
             ColumnLayout {
                 spacing: 1
                 Text {
-                    text: "📖 Create New Ledger Account"
+                    text: "Create New Ledger Account"
                     color: "#0F172A"
                     font.pixelSize: 18
                     font.bold: true
@@ -559,7 +559,7 @@ Item {
                 contentItem: RowLayout {
                     spacing: 8
                     anchors.centerIn: parent
-                    Text { text: "💾 Save Complete Ledger Account"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 14 }
+                    Text { text: "Save Complete Ledger Account"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 14 }
                     KbdBadge { text: "Enter"; badgeColor: "#1E3A8A"; textColor: "#93C5FD"; borderColor: "#2563EB" }
                 }
                 Keys.onReturnPressed: root.saveLedger()

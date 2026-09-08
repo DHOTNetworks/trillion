@@ -23,15 +23,54 @@ FocusScope {
         id: voucherRowsModel
     }
 
+    Shortcut {
+        sequence: "F2"
+        context: Qt.WindowShortcut
+        onActivated: root.openDateModal()
+    }
+
+    Shortcut {
+        sequence: "Alt+S"
+        context: Qt.WindowShortcut
+        onActivated: {
+            var cur = rowsListView.currentIndex >= 0 ? rowsListView.currentIndex : 0
+            rowsListView.focusRowItem(cur, "ledger")
+        }
+    }
+
+    Shortcut {
+        sequence: "Alt+L"
+        context: Qt.WindowShortcut
+        onActivated: {
+            var cur = rowsListView.currentIndex >= 0 ? rowsListView.currentIndex : 0
+            rowsListView.focusRowItem(cur, "ledger")
+        }
+    }
+
+    Shortcut {
+        sequence: "Alt+P"
+        context: Qt.WindowShortcut
+        onActivated: {
+            var cur = rowsListView.currentIndex >= 0 ? rowsListView.currentIndex : 0
+            rowsListView.focusRowItem(cur, "ledger")
+        }
+    }
+
+    function openDateModal() {
+        voucherDateModal.openWithDate(voucherDateInput.text)
+    }
+
     Component.onCompleted: {
         resetForm()
         Qt.callLater(function() {
-            voucherDateInput.focusInput = true
+            root.openDateModal()
         })
     }
 
     function resetForm() {
         cursorMax()
+        var wDate = (typeof financialYearsModel !== "undefined" && financialYearsModel) ? financialYearsModel.get_working_date() : Qt.formatDate(new Date(), "dd-MM-yyyy")
+        voucherDateInput.text = wDate
         voucherRowsModel.clear()
         // Clean empty entries (zero prefilled data)
         voucherRowsModel.append({ drcr: "Dr", ledgerName: "", debitAmt: "", creditAmt: "", refNo: "" })
@@ -93,19 +132,19 @@ FocusScope {
         statusMessage = ""
 
         if (voucherRowsModel.count < 2) {
-            statusMessage = "❌ Please enter at least two transaction rows."
+            statusMessage = "Please enter at least two transaction rows."
             isError = true
             return
         }
 
         if (Math.abs(totalDebit - totalCredit) > 0.01) {
-            statusMessage = "❌ Total Debit (₹" + totalDebit.toFixed(2) + ") does not equal Total Credit (₹" + totalCredit.toFixed(2) + ")."
+            statusMessage = "Total Debit (₹" + totalDebit.toFixed(2) + ") does not equal Total Credit (₹" + totalCredit.toFixed(2) + ")."
             isError = true
             return
         }
 
         if (totalDebit <= 0) {
-            statusMessage = "❌ Please enter a valid Voucher Amount."
+            statusMessage = "Please enter a valid Voucher Amount."
             isError = true
             return
         }
@@ -113,7 +152,7 @@ FocusScope {
         for (var i = 0; i < voucherRowsModel.count; i++) {
             var row = voucherRowsModel.get(i)
             if (!row.ledgerName.trim()) {
-                statusMessage = "❌ Please select a Ledger Account for Row " + (i + 1) + "."
+                statusMessage = "Please select a Ledger Account for Row " + (i + 1) + "."
                 isError = true
                 return
             }
@@ -123,6 +162,18 @@ FocusScope {
     }
 
     function executeSaveVoucher() {
+        if (typeof financialYearsModel !== "undefined" && financialYearsModel) {
+            var valCheck = financialYearsModel.validate_voucher_date(voucherDateInput.text)
+            if (!valCheck.valid) {
+                statusMessage = "" + valCheck.error
+                isError = true
+                voucherDateInput.focusAndSelect()
+                return
+            }
+            voucherDateInput.text = valCheck.formattedDate
+            financialYearsModel.set_working_date(valCheck.formattedDate)
+        }
+
         var vchDate = voucherDateInput.text.trim()
         
         var drParty = ""
@@ -140,23 +191,35 @@ FocusScope {
             var ok = vouchersModel.add_journal_voucher(drParty, crParty, totalDebit, refNote, narrationInput.text.trim(), vchDate, "Journal")
 
             if (ok) {
-                statusMessage = "✅ Journal Voucher " + autoVchCode + " saved & posted successfully!"
+                statusMessage = "Journal Voucher " + autoVchCode + " saved & posted successfully!"
                 isError = false
                 resetForm()
                 root.voucherSaved()
             } else {
-                statusMessage = "❌ Failed to save Journal Voucher."
+                statusMessage = "Failed to save Journal Voucher."
                 isError = true
             }
         }
     }
 
     function hasActivePopup() {
-        return saveConfirmModal.opened
+        return saveConfirmModal.opened || voucherDateModal.opened
     }
 
     function closeActivePopup() {
         if (saveConfirmModal.opened) saveConfirmModal.close()
+        if (voucherDateModal.opened) voucherDateModal.close()
+    }
+
+    VoucherDateModal {
+        id: voucherDateModal
+        anchors.centerIn: parent
+        onDateConfirmed: function(fmtDate, isoDate) {
+            voucherDateInput.text = fmtDate
+            Qt.callLater(function() {
+                rowsListView.focusRowItem(0, "ledger")
+            })
+        }
     }
 
     ConfirmationModal {
@@ -193,7 +256,7 @@ FocusScope {
                 ColumnLayout {
                     spacing: 1
                     Text {
-                        text: "📓 Journal Voucher Entry (F5)"
+                        text: "Journal Voucher Entry (F5)"
                         color: "#0F172A"
                         font.pixelSize: 18
                         font.bold: true
@@ -275,10 +338,25 @@ FocusScope {
                 CustomInput {
                     id: voucherDateInput
                     label: "Voucher Date (DD-MM-YYYY)"
-                    text: Qt.formatDate(new Date(), "dd-MM-yyyy")
+                    text: (typeof financialYearsModel !== "undefined" && financialYearsModel) ? financialYearsModel.get_working_date() : Qt.formatDate(new Date(), "dd-MM-yyyy")
                     isRequired: true
                     Layout.preferredWidth: 160
-                    onReturnPressed: rowsListView.focusRowItem(0, "ledger")
+                    onReturnPressed: function() {
+                        if (typeof financialYearsModel !== "undefined" && financialYearsModel) {
+                            var valRes = financialYearsModel.validate_voucher_date(voucherDateInput.text)
+                            if (!valRes.valid) {
+                                statusMessage = "" + valRes.error
+                                isError = true
+                                voucherDateInput.focusAndSelect()
+                                return
+                            }
+                            voucherDateInput.text = valRes.formattedDate
+                            financialYearsModel.set_working_date(valRes.formattedDate)
+                            statusMessage = ""
+                            isError = false
+                        }
+                        rowsListView.focusRowItem(0, "ledger")
+                    }
                     onDownPressed: rowsListView.focusRowItem(0, "ledger")
                 }
 
@@ -595,7 +673,7 @@ FocusScope {
                                 enabled: voucherRowsModel.count > 2
                                 opacity: enabled ? 1.0 : 0.4
                                 background: Rectangle { color: parent.hovered ? "#FEF2F2" : "#FFFFFF"; radius: 4; border.color: parent.hovered ? "#DC2626" : "#E2E8F0" }
-                                contentItem: Text { text: "✕"; color: parent.hovered ? "#DC2626" : "#94A3B8"; font.pixelSize: 12; font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                                contentItem: Text { text: "X"; color: parent.hovered ? "#DC2626" : "#94A3B8"; font.pixelSize: 12; font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                                 onClicked: root.removeRow(index)
                             }
                         }
@@ -614,7 +692,7 @@ FocusScope {
                         background: Rectangle { color: "#EFF6FF"; radius: 6; border.color: "#BFDBFE" }
                         contentItem: RowLayout {
                             spacing: 6
-                            Text { text: "➕ Add Journal Row"; color: "#2563EB"; font.bold: true; font.pixelSize: 12 }
+                            Text { text: "+ Add Journal Row"; color: "#2563EB"; font.bold: true; font.pixelSize: 12 }
                         }
                         onClicked: root.addNewRow()
                     }
@@ -647,7 +725,7 @@ FocusScope {
 
                     Text {
                         anchors.centerIn: parent
-                        text: Math.abs(root.totalDebit - root.totalCredit) < 0.01 && root.totalDebit > 0 ? "✓ BALANCED" : "⚠️ UNBALANCED"
+                        text: Math.abs(root.totalDebit - root.totalCredit) < 0.01 && root.totalDebit > 0 ? "BALANCED" : "UNBALANCED"
                         color: Math.abs(root.totalDebit - root.totalCredit) < 0.01 && root.totalDebit > 0 ? "#16A34A" : "#DC2626"
                         font.pixelSize: 12
                         font.bold: true
@@ -680,7 +758,7 @@ FocusScope {
                     }
                     contentItem: RowLayout {
                         spacing: 6
-                        Text { text: "💾 Save (Ctrl+S)"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 13 }
+                        Text { text: "Save (Ctrl+S)"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 13 }
                     }
                     onClicked: root.saveVoucher()
                 }

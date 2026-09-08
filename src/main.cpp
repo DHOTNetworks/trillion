@@ -27,6 +27,12 @@
 #include "models/jform_model.h"
 #include "models/tds_model.h"
 #include "models/interest_model.h"
+#include "models/ledger_statement_model.h"
+#include "models/purchase_register_model.h"
+#include "models/sales_register_model.h"
+#include "models/stock_register_model.h"
+#include "models/milling_statement_model.h"
+#include "services/print_export_controller.h"
 #include "models/global_key_filter.h"
 #include "engine/bahi_khata_migrator.h"
 
@@ -118,6 +124,23 @@ int main(int argc, char* argv[]) {
     JFormModel jformModel;
     TdsModel tdsModel;
     InterestModel interestModel;
+    LedgerStatementController ledgerStatementCtrl;
+    PurchaseRegisterController purchaseRegisterCtrl;
+    SalesRegisterController salesRegisterCtrl;
+    StockRegisterController stockRegisterCtrl;
+    MillingStatementController millingStatementCtrl;
+    PrintExportController printExportCtrl;
+
+    for (int i = 1; i < argc; ++i) {
+        if (QString(argv[i]) == "--render-preview") {
+            QString origPdf = "/tmp/final_sales_preview.pdf";
+            printExportCtrl.export_sales_invoice_pdf("12640", origPdf, "ORIGINAL FOR RECIPIENT");
+            QString dupPdf = "/tmp/duplicate_sales_preview.pdf";
+            printExportCtrl.export_sales_invoice_duplicate_pdf("12640", dupPdf);
+            std::cout << "[RENDER] Exported previews to " << origPdf.toStdString() << " and " << dupPdf.toStdString() << std::endl;
+            return 0;
+        }
+    }
 
     // Reload models automatically when firm switches
     QObject::connect(&firmManager, &FirmManager::firmSwitched, [&](const QString& firmId, const QString& firmName) {
@@ -132,6 +155,11 @@ int main(int argc, char* argv[]) {
         groupsModel.reload_data();
         stockItemsModel.reload_data();
         financialYearsModel.reload_data();
+        ledgerStatementCtrl.refresh();
+        purchaseRegisterCtrl.reload();
+        salesRegisterCtrl.reload();
+        stockRegisterCtrl.reload();
+        millingStatementCtrl.reload();
     });
 
     for (int i = 1; i < argc; ++i) {
@@ -212,6 +240,12 @@ int main(int argc, char* argv[]) {
     ctx->setContextProperty("jformModel", &jformModel);
     ctx->setContextProperty("tdsModel", &tdsModel);
     ctx->setContextProperty("interestModel", &interestModel);
+    ctx->setContextProperty("ledgerStatementCtrl", &ledgerStatementCtrl);
+    ctx->setContextProperty("purchaseRegisterCtrl", &purchaseRegisterCtrl);
+    ctx->setContextProperty("salesRegisterCtrl", &salesRegisterCtrl);
+    ctx->setContextProperty("stockRegisterCtrl", &stockRegisterCtrl);
+    ctx->setContextProperty("millingStatementCtrl", &millingStatementCtrl);
+    ctx->setContextProperty("printExportCtrl", &printExportCtrl);
 
     // Add import paths (Embedded QRC + local file fallbacks)
     engine.addImportPath(":/");

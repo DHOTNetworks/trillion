@@ -140,7 +140,7 @@ Rectangle {
                 Rectangle {
                     width: 40; height: 40; radius: 8
                     color: "#EFF6FF"; border.color: "#BFDBFE"; border.width: 1
-                    Text { anchors.centerIn: parent; text: "🏛️"; font.pixelSize: 20 }
+                    Text { anchors.centerIn: parent; text: ""; font.pixelSize: 20 }
                 }
 
                 ColumnLayout {
@@ -155,7 +155,7 @@ Rectangle {
                     Text {
                         text: root.isViewingAppData ? 
                               "App Working Directory • Managing native SQLite company databases in data/" :
-                              "Bahi-Khata External Import • Select a firm to import into the app's working directory"
+                              "External Database Import • Select a firm to import into the app's working directory"
                         color: "#64748B"
                         font.pixelSize: 11
                     }
@@ -196,7 +196,7 @@ Rectangle {
                 spacing: 12
 
                 Text {
-                    text: root.isViewingAppData ? "📁 App Data Directory:" : "📂 Bahi-Khata Folder:"
+                    text: root.isViewingAppData ? " App Data Directory:" : " External Data Folder:"
                     color: root.isViewingAppData ? "#334155" : "#B45309"
                     font.pixelSize: 12
                     font.bold: true
@@ -236,7 +236,7 @@ Rectangle {
                     implicitHeight: 34
                     background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
                     contentItem: Text { 
-                        text: "📁 App Data Folder"
+                        text: " App Data Folder"
                         color: "#1E293B"
                         font.bold: true
                         font.pixelSize: 12
@@ -246,7 +246,7 @@ Rectangle {
                     onClicked: root.resetToAppData()
                 }
 
-                // Import from Bahi-Khata Button
+                // Import from External DB Button
                 T.Button {
                     implicitWidth: 200
                     implicitHeight: 34
@@ -256,7 +256,7 @@ Rectangle {
                         border.color: root.isViewingAppData ? "#BFDBFE" : "#2563EB"
                     }
                     contentItem: Text { 
-                        text: "📥 Import from Bahi-Khata (F4)"
+                        text: " Import External MDB (F4)"
                         color: root.isViewingAppData ? "#1D4ED8" : "#FFFFFF"
                         font.bold: true
                         font.pixelSize: 12 
@@ -286,7 +286,7 @@ Rectangle {
                     implicitHeight: 34
                     background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
                     contentItem: Text { 
-                        text: "🔄 Rescan (F5)"
+                        text: " Rescan (F5)"
                         color: "#334155"
                         font.bold: true
                         font.pixelSize: 12
@@ -346,11 +346,11 @@ Rectangle {
                     ColumnLayout {
                         anchors.centerIn: parent
                         spacing: 12
-                        Text { text: "📂"; font.pixelSize: 36; Layout.alignment: Qt.AlignHCenter }
+                        Text { text: ""; font.pixelSize: 36; Layout.alignment: Qt.AlignHCenter }
                         Text { 
                             text: root.isViewingAppData ? 
                                   "No native databases found in data/ folder." :
-                                  "No Bahi-Khata Data.* files found in selected directory."
+                                  "No Data.* files found in selected directory."
                             color: "#64748B"; font.pixelSize: 14; Layout.alignment: Qt.AlignHCenter 
                         }
                         T.Button {
@@ -359,7 +359,7 @@ Rectangle {
                             implicitHeight: 36
                             background: Rectangle { color: "#EFF6FF"; radius: 6; border.color: "#BFDBFE" }
                             contentItem: Text { 
-                                text: root.isViewingAppData ? "Import from Bahi-Khata" : "Return to App Data Folder"
+                                text: root.isViewingAppData ? "Import External Data" : "Return to App Data Folder"
                                 color: "#1D4ED8"
                                 font.bold: true
                                 font.pixelSize: 12
@@ -482,7 +482,7 @@ Rectangle {
                                 border.color: (!root.isViewingAppData && !model.is_imported) ? "#1D4ED8" : (model.is_imported ? "#BBF7D0" : "#FDE68A")
                                 Text {
                                     anchors.centerIn: parent
-                                    text: (!root.isViewingAppData && !model.is_imported) ? "⚡ Import" : (model.is_imported ? "Ready" : "Import")
+                                    text: (!root.isViewingAppData && !model.is_imported) ? " Import" : (model.is_imported ? "Ready" : "Import")
                                     color: (!root.isViewingAppData && !model.is_imported) ? "#FFFFFF" : (model.is_imported ? "#15803D" : "#B45309")
                                     font.pixelSize: 10
                                     font.bold: true
@@ -517,7 +517,7 @@ Rectangle {
                 implicitHeight: 36
                 background: Rectangle { color: "#16A34A"; radius: 6 }
                 contentItem: Text { 
-                    text: "➕ Create New Firm (F2)"
+                    text: "+ Create New Firm (F2)"
                     color: "#FFFFFF"
                     font.bold: true
                     font.pixelSize: 12 
@@ -535,8 +535,8 @@ Rectangle {
                 background: Rectangle { color: "#2563EB"; radius: 6 }
                 contentItem: Text { 
                     text: (!root.isViewingAppData && selectedIndex >= 0 && selectedIndex < firmsModel.count && !firmsModel.get(selectedIndex).is_imported) ?
-                          "✓ Import & Open Firm (Enter)" :
-                          "✓ Open Selected Firm (Enter)"
+                          "Selected Import & Open Firm (Enter)" :
+                          "Selected Open Selected Firm (Enter)"
                     color: "#FFFFFF"
                     font.bold: true
                     font.pixelSize: 12 

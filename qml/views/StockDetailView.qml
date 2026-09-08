@@ -15,94 +15,49 @@ T.ScrollView {
         root.cancelRequested()
     }
 
-    property int totalItemsCount: 0
-    property real totalClosingQty: 0.0
-    property real totalClosingVal: 0.0
-    property string searchQuery: ""
-    property var allStockItems: []
+    Shortcut {
+        sequence: "Ctrl+P"
+        context: Qt.WindowShortcut
+        onActivated: {
+            if (typeof printExportCtrl !== "undefined" && printExportCtrl) {
+                printExportCtrl.print_stock_register()
+            }
+        }
+    }
+
+    Shortcut {
+        sequence: "Alt+P"
+        context: Qt.WindowShortcut
+        onActivated: {
+            if (typeof printExportCtrl !== "undefined" && printExportCtrl) {
+                printExportCtrl.export_stock_register_pdf()
+            }
+        }
+    }
 
     Component.onCompleted: {
-        reloadStockRegister()
+        if (typeof stockRegisterCtrl !== "undefined" && stockRegisterCtrl) {
+            stockRegisterCtrl.reload()
+        }
         Qt.callLater(function() {
             gridListView.forceActiveFocus()
-            if (stockRegisterModel.count > 0) {
+            if (stockRegisterCtrl && stockRegisterCtrl.model.count > 0) {
                 gridListView.currentIndex = 0
             }
         })
     }
 
-    function reloadStockRegister() {
-        allStockItems = (typeof stockItemsModel !== "undefined" && stockItemsModel) ? stockItemsModel.get_stock_register() : []
-        filterAndPopulateRegister()
-    }
-
-    function filterAndPopulateRegister() {
-        stockRegisterModel.clear()
-        totalClosingQty = 0.0
-        totalClosingVal = 0.0
-        var count = 0
-        
-        var query = searchQuery.trim().toLowerCase()
-        
-        for (var i = 0; i < allStockItems.length; i++) {
-            var it = allStockItems[i]
-            var name = it.name ? it.name : ""
-            var code = it.code ? it.code : ""
-            var typeStr = it.item_type ? it.item_type : ""
-            
-            if (query !== "") {
-                if (name.toLowerCase().indexOf(query) === -1 &&
-                    code.toLowerCase().indexOf(query) === -1 &&
-                    typeStr.toLowerCase().indexOf(query) === -1) {
-                    continue
-                }
-            }
-
-            var opQ = (it.opening_qty !== undefined && it.opening_qty !== null) ? Number(it.opening_qty) : 0.0
-            var inQ = (it.inward_qty !== undefined && it.inward_qty !== null) ? Number(it.inward_qty) : 0.0
-            var outQ = (it.outward_qty !== undefined && it.outward_qty !== null) ? Number(it.outward_qty) : 0.0
-            var closeQ = (it.closing_qty !== undefined && it.closing_qty !== null) ? Number(it.closing_qty) : 0.0
-            var rVal = (it.rate !== undefined && it.rate !== null) ? Number(it.rate) : 0.0
-            var closeV = (it.closing_value !== undefined && it.closing_value !== null) ? Number(it.closing_value) : 0.0
-
-            stockRegisterModel.append({
-                idVal: it.id,
-                nameVal: name,
-                codeVal: code ? code : "-",
-                typeVal: typeStr ? typeStr : "-",
-                unitVal: it.unit ? it.unit : "Qtl",
-                opBags: it.opening_bags || 0,
-                inBags: it.inward_bags || 0,
-                outBags: it.outward_bags || 0,
-                closeBags: it.closing_bags || 0,
-                opQtyVal: it.opening_qty_fmt || opQ.toFixed(2),
-                inQtyVal: it.inward_qty_fmt || inQ.toFixed(2),
-                outQtyVal: it.outward_qty_fmt || outQ.toFixed(2),
-                closeQtyVal: it.closing_qty_fmt || closeQ.toFixed(2),
-                closeQtyNum: closeQ,
-                rateVal: it.rate_fmt || ("₹" + rVal.toFixed(2)),
-                closeValVal: it.closing_value_fmt || ("₹" + closeV.toFixed(2)),
-                closeValNum: closeV
-            })
-            totalClosingQty += closeQ
-            totalClosingVal += closeV
-            count++
-        }
-        totalItemsCount = count
-        if (stockRegisterModel.count > 0) {
-            if (gridListView.currentIndex < 0 || gridListView.currentIndex >= stockRegisterModel.count) {
-                gridListView.currentIndex = 0
-            }
+    onVisibleChanged: {
+        if (visible && typeof stockRegisterCtrl !== "undefined" && stockRegisterCtrl) {
+            stockRegisterCtrl.reload()
         }
     }
-
-    GenericListModel { id: stockRegisterModel }
 
     ColumnLayout {
         width: root.availableWidth > 0 ? root.availableWidth : 1200
         spacing: 16
 
-        // Page Header Bar
+        // 1. PAGE HEADER BAR
         RowLayout {
             Layout.fillWidth: true
             spacing: 12
@@ -110,19 +65,69 @@ T.ScrollView {
             ColumnLayout {
                 spacing: 2
                 Text {
-                    text: "📊 Real-time Stock Register & Audited Inventory"
+                    text: "Comprehensive Stock Detail & Register"
                     color: "#0F172A"
                     font.pixelSize: 20
                     font.bold: true
                 }
                 Text {
-                    text: "Itemized tracking of Opening, Inward, Outward & Closing Balances across all grains and commodities."
+                    text: "Real-time itemized physical inventory ledger with opening, inward, outward, and closing stock valuation."
                     color: "#64748B"
                     font.pixelSize: 12
                 }
             }
 
             Item { Layout.fillWidth: true }
+
+            T.Button {
+                id: printStockBtn
+                implicitWidth: contentItem.implicitWidth + 20
+                implicitHeight: 32
+                background: Rectangle { color: printStockBtn.hovered ? "#047857" : "#059669"; radius: 6 }
+                contentItem: RowLayout {
+                    spacing: 6
+                    Text { text: "Print Register"; color: "#FFFFFF"; font.pixelSize: 12; font.bold: true }
+                    KbdBadge { text: "Ctrl+P"; badgeColor: "#064E3B"; textColor: "#A7F3D0"; borderColor: "#059669" }
+                }
+                onClicked: {
+                    if (typeof printExportCtrl !== "undefined" && printExportCtrl) {
+                        printExportCtrl.print_stock_register()
+                    }
+                }
+            }
+
+            T.Button {
+                id: exportStockPdfBtn
+                implicitWidth: contentItem.implicitWidth + 20
+                implicitHeight: 32
+                background: Rectangle { color: exportStockPdfBtn.hovered ? "#0284C7" : "#0EA5E9"; radius: 6 }
+                contentItem: RowLayout {
+                    spacing: 6
+                    Text { text: "Export PDF"; color: "#FFFFFF"; font.pixelSize: 12; font.bold: true }
+                    KbdBadge { text: "Alt+P"; badgeColor: "#075985"; textColor: "#BAE6FD"; borderColor: "#0EA5E9" }
+                }
+                onClicked: {
+                    if (typeof printExportCtrl !== "undefined" && printExportCtrl) {
+                        printExportCtrl.export_stock_register_pdf()
+                    }
+                }
+            }
+
+            T.Button {
+                id: exportStockCsvBtn
+                implicitWidth: contentItem.implicitWidth + 16
+                implicitHeight: 32
+                background: Rectangle { color: "#F8FAFC"; radius: 6; border.color: "#CBD5E1" }
+                contentItem: RowLayout {
+                    spacing: 6
+                    Text { text: "Excel CSV"; color: "#334155"; font.pixelSize: 12; font.bold: true }
+                }
+                onClicked: {
+                    if (typeof printExportCtrl !== "undefined" && printExportCtrl) {
+                        printExportCtrl.export_stock_csv()
+                    }
+                }
+            }
 
             T.Button {
                 id: backBtn
@@ -143,131 +148,105 @@ T.ScrollView {
 
         Rectangle { Layout.fillWidth: true; height: 1; color: "#E2E8F0" }
 
-        // STATS STRIP
+        // 2. STATS STRIP
         RowLayout {
             Layout.fillWidth: true
             spacing: 12
 
             StatCard {
-                title: "TOTAL COMMODITIES"
-                value: root.totalItemsCount.toString()
+                title: "TOTAL INVENTORY ITEMS"
+                value: (typeof stockRegisterCtrl !== "undefined" && stockRegisterCtrl) ? stockRegisterCtrl.totalItemsCount.toString() : "0"
                 accentColor: "#2563EB"
                 Layout.fillWidth: true
             }
 
             StatCard {
-                title: "NET CLOSING STOCK"
-                value: (typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.format_qty(root.totalClosingQty) : (root.totalClosingQty.toFixed(1) + " Qtl")
+                title: "TOTAL CLOSING QUANTITY"
+                value: (typeof stockRegisterCtrl !== "undefined" && stockRegisterCtrl) ? stockRegisterCtrl.totalClosingQtyFmt : "0.00 Qtl"
                 accentColor: "#16A34A"
                 Layout.fillWidth: true
             }
 
             StatCard {
                 title: "TOTAL STOCK VALUATION"
-                value: (typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.format_inr(root.totalClosingVal) : ("₹" + root.totalClosingVal.toFixed(2))
+                value: (typeof stockRegisterCtrl !== "undefined" && stockRegisterCtrl) ? stockRegisterCtrl.totalClosingValFmt : "₹0.00"
                 accentColor: "#D97706"
                 Layout.fillWidth: true
             }
         }
 
-        // PROPER GRID TABLE CONTAINER CARD WITH LIVE SEARCH BAR
+        // 3. TABLE GRID CONTAINER WITH SEARCH BAR
         Rectangle {
             Layout.fillWidth: true
             implicitHeight: 520
             color: "#FFFFFF"
-            border.color: "#3B82F6"
-            border.width: 2
-            radius: 10
+            border.color: "#CBD5E1"
+            border.width: 1
+            radius: 8
 
             ColumnLayout {
                 anchors.fill: parent
-                anchors.margins: 12
-                spacing: 8
+                spacing: 0
 
-                // Grid Card Title & Live Search Bar
+                // Search Toolbar
                 Rectangle {
                     Layout.fillWidth: true
-                    height: 42
-                    color: "#EFF6FF"
-                    radius: 6
+                    height: 52
+                    color: "#F8FAFC"
+                    border.color: "#E2E8F0"
+                    border.width: 1
+                    radius: 8
 
                     RowLayout {
                         anchors.fill: parent
-                        anchors.leftMargin: 12
-                        anchors.rightMargin: 12
+                        anchors.leftMargin: 16; anchors.rightMargin: 16
                         spacing: 12
 
-                        Text {
-                            text: "📊 INVENTORY STOCK REGISTER GRID"
-                            color: "#1D4ED8"
-                            font.pixelSize: 12
-                            font.bold: true
-                            font.letterSpacing: 1.0
-                        }
+                        Text { text: "Search Stock Items:"; color: "#334155"; font.pixelSize: 12; font.bold: true }
 
-                        Item { Layout.fillWidth: true }
-
-                        // SEARCH BAR CONTROL
                         Rectangle {
-                            width: 320
-                            height: 32
-                            radius: 6
+                            Layout.fillWidth: true
+                            height: 34
                             color: "#FFFFFF"
                             border.color: searchField.activeFocus ? "#2563EB" : "#CBD5E1"
                             border.width: searchField.activeFocus ? 2 : 1
+                            radius: 6
 
                             RowLayout {
                                 anchors.fill: parent
-                                anchors.leftMargin: 10
-                                anchors.rightMargin: 8
+                                anchors.leftMargin: 10; anchors.rightMargin: 10
                                 spacing: 6
 
                                 TextInput {
                                     id: searchField
-                                    color: "#0F172A"
-                                    font.pixelSize: 12
-                                    font.family: "Segoe UI, Consolas, Menlo, sans-serif"
-                                    verticalAlignment: TextInput.AlignVCenter
                                     Layout.fillWidth: true
+                                    font.pixelSize: 12
+                                    color: "#0F172A"
                                     selectByMouse: true
-                                    clip: true
-
-                                    Text {
-                                        anchors.fill: parent
-                                        verticalAlignment: Text.AlignVCenter
-                                        text: "Search by item name, SKU code or type..."
-                                        color: "#94A3B8"
-                                        font.pixelSize: 12
-                                        font.family: "Segoe UI, Consolas, Menlo, sans-serif"
-                                        visible: !searchField.text && !searchField.activeFocus
-                                    }
-
                                     onTextChanged: {
-                                        root.searchQuery = text
-                                        root.filterAndPopulateRegister()
+                                        if (typeof stockRegisterCtrl !== "undefined" && stockRegisterCtrl) {
+                                            stockRegisterCtrl.searchQuery = text
+                                        }
                                     }
                                     Keys.onDownPressed: function(event) {
                                         event.accepted = true
                                         gridListView.forceActiveFocus()
-                                        if (gridListView.currentIndex < 0 && stockRegisterModel.count > 0) gridListView.currentIndex = 0
+                                        if (gridListView.currentIndex < 0 && gridListView.count > 0) gridListView.currentIndex = 0
                                     }
                                     Keys.onReturnPressed: function(event) {
                                         event.accepted = true
                                         gridListView.forceActiveFocus()
-                                        if (gridListView.currentIndex < 0 && stockRegisterModel.count > 0) gridListView.currentIndex = 0
+                                        if (gridListView.currentIndex < 0 && gridListView.count > 0) gridListView.currentIndex = 0
                                     }
                                     Keys.onEnterPressed: function(event) {
                                         event.accepted = true
                                         gridListView.forceActiveFocus()
-                                        if (gridListView.currentIndex < 0 && stockRegisterModel.count > 0) gridListView.currentIndex = 0
-                                    }
-                                    Keys.onEscapePressed: function(event) {
-                                        event.accepted = false
+                                        if (gridListView.currentIndex < 0 && gridListView.count > 0) gridListView.currentIndex = 0
                                     }
                                 }
 
                                 Text {
-                                    text: "✕"
+                                    text: "X"
                                     color: "#94A3B8"
                                     font.pixelSize: 12
                                     font.bold: true
@@ -276,8 +255,9 @@ T.ScrollView {
                                         anchors.fill: parent
                                         onClicked: {
                                             searchField.text = ""
-                                            root.searchQuery = ""
-                                            root.filterAndPopulateRegister()
+                                            if (typeof stockRegisterCtrl !== "undefined" && stockRegisterCtrl) {
+                                                stockRegisterCtrl.searchQuery = ""
+                                            }
                                         }
                                     }
                                 }
@@ -336,7 +316,7 @@ T.ScrollView {
                     id: gridListView
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    model: stockRegisterModel
+                    model: (typeof stockRegisterCtrl !== "undefined" && stockRegisterCtrl) ? stockRegisterCtrl.model : null
                     clip: true
                     spacing: 1
                     boundsBehavior: Flickable.StopAtBounds
@@ -346,15 +326,15 @@ T.ScrollView {
 
                     Keys.onReturnPressed: function(event) {
                         event.accepted = true
-                        if (currentIndex >= 0 && currentIndex < stockRegisterModel.count) {
-                            var it = stockRegisterModel.get(currentIndex)
+                        if (currentIndex >= 0 && currentIndex < count) {
+                            var it = stockRegisterCtrl.model.get(currentIndex)
                             if (it && it.nameVal) root.openItemMovement(it.nameVal)
                         }
                     }
                     Keys.onEnterPressed: function(event) {
                         event.accepted = true
-                        if (currentIndex >= 0 && currentIndex < stockRegisterModel.count) {
-                            var it = stockRegisterModel.get(currentIndex)
+                        if (currentIndex >= 0 && currentIndex < count) {
+                            var it = stockRegisterCtrl.model.get(currentIndex)
                             if (it && it.nameVal) root.openItemMovement(it.nameVal)
                         }
                     }
@@ -369,7 +349,7 @@ T.ScrollView {
                     }
                     Keys.onDownPressed: function(event) {
                         event.accepted = true
-                        if (currentIndex < stockRegisterModel.count - 1) {
+                        if (currentIndex < count - 1) {
                             currentIndex++
                             positionViewAtIndex(currentIndex, ListView.Contain)
                         }

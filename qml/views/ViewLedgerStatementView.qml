@@ -9,29 +9,55 @@ Rectangle {
 
     signal cancelRequested()
 
-    property string currentPartyName: ""
-    property real drTotalAll: 0.0
-    property real crTotalAll: 0.0
-    property real drSelectedTotal: 0.0
-    property real crSelectedTotal: 0.0
-    property real netBalance: 0.0
-    property string netBalanceType: "Dr (Debit Balance)"
+    property string currentPartyName: (typeof ledgerStatementCtrl !== "undefined" && ledgerStatementCtrl) ? ledgerStatementCtrl.currentPartyName : ""
+
+    function focusSearch() {
+        partySearchInput.forceActiveFocus()
+        partySearchInput.selectAll()
+        partySearchBox.updateSearch()
+        if (!partySearchPopup.visible) {
+            partySearchPopup.open()
+        }
+    }
+
+    function resetSearchAndFocus() {
+        partySearchInput.text = ""
+        currentPartyName = ""
+        if (typeof window !== "undefined") {
+            window.lastViewedPartyName = ""
+            window.targetStatementParty = ""
+        }
+        if (typeof ledgerStatementCtrl !== "undefined" && ledgerStatementCtrl) {
+            ledgerStatementCtrl.loadPartyStatement("")
+        }
+        Qt.callLater(focusSearch)
+    }
 
     Component.onCompleted: {
         syncDateInputsWithActivePeriod()
-        loadPartyStatement("")
-        Qt.callLater(function() {
-            partySearch.focusAndOpen()
-        })
+        var initParty = (typeof window !== "undefined" && typeof window.targetStatementParty !== "undefined" && window.targetStatementParty) ? window.targetStatementParty : ""
+        if (initParty !== "") {
+            window.targetStatementParty = ""
+            partySearchInput.text = initParty
+            loadPartyStatement(initParty)
+        } else {
+            resetSearchAndFocus()
+        }
+        Qt.callLater(focusSearch)
     }
 
     onVisibleChanged: {
         if (visible) {
             syncDateInputsWithActivePeriod()
-            loadPartyStatement(currentPartyName)
-            Qt.callLater(function() {
-                partySearch.focusAndOpen()
-            })
+            var pToLoad = (typeof window !== "undefined" && typeof window.targetStatementParty !== "undefined" && window.targetStatementParty) ? window.targetStatementParty : ""
+            if (pToLoad !== "") {
+                window.targetStatementParty = ""
+                partySearchInput.text = pToLoad
+                loadPartyStatement(pToLoad)
+            } else if (!currentPartyName) {
+                resetSearchAndFocus()
+            }
+            Qt.callLater(focusSearch)
         }
     }
 
@@ -61,102 +87,135 @@ Rectangle {
     }
 
     function loadPartyStatement(pName) {
-        currentPartyName = pName
-        drMasterModel.clear()
-        crMasterModel.clear()
-        drSelectedTotal = 0.0
-        crSelectedTotal = 0.0
-
-        if (typeof partiesModel !== "undefined" && partiesModel && partiesModel.get_party_statement) {
-            var res = partiesModel.get_party_statement(pName)
-            if (res && res.dr_items) {
-                for (var d = 0; d < res.dr_items.length; d++) {
-                    drMasterModel.append(res.dr_items[d])
-                }
-            }
-            if (res && res.cr_items) {
-                for (var c = 0; c < res.cr_items.length; c++) {
-                    crMasterModel.append(res.cr_items[c])
-                }
-            }
+        if (pName && typeof window !== "undefined") {
+            window.lastViewedPartyName = pName
         }
-
-        applyDateFilterAndSort()
+        var fIso = toIso(fromDateInput.text)
+        var tIso = toIso(toDateInput.text)
+        if (typeof ledgerStatementCtrl !== "undefined" && ledgerStatementCtrl) {
+            ledgerStatementCtrl.loadPartyStatement(pName, fIso, tIso)
+        }
     }
 
     function applyDateFilterAndSort() {
         var fIso = toIso(fromDateInput.text)
         var tIso = toIso(toDateInput.text)
-
-        drListModel.clear()
-        crListModel.clear()
-
-        var drTemp = []
-        for (var i = 0; i < drMasterModel.count; i++) {
-            var dItem = drMasterModel.get(i)
-            var dIso = toIso(dItem.vDate)
-            if ((!fIso || dIso >= fIso) && (!tIso || dIso <= tIso)) {
-                drTemp.push(dItem)
-            }
-        }
-        // Sort chronologically by date ISO
-        drTemp.sort(function(a, b) { return toIso(a.vDate).localeCompare(toIso(b.vDate)) })
-        for (var k = 0; k < drTemp.length; k++) {
-            drListModel.append(drTemp[k])
-        }
-
-        var crTemp = []
-        for (var j = 0; j < crMasterModel.count; j++) {
-            var cItem = crMasterModel.get(j)
-            var cIso = toIso(cItem.vDate)
-            if ((!fIso || cIso >= fIso) && (!tIso || cIso <= tIso)) {
-                crTemp.push(cItem)
-            }
-        }
-        // Sort chronologically by date ISO
-        crTemp.sort(function(a, b) { return toIso(a.vDate).localeCompare(toIso(b.vDate)) })
-        for (var m = 0; m < crTemp.length; m++) {
-            crListModel.append(crTemp[m])
-        }
-
-        recalcTotals()
-    }
-
-    function recalcTotals() {
-        var drSum = 0.0
-        var drSel = 0.0
-        for (var i = 0; i < drListModel.count; i++) {
-            var item = drListModel.get(i)
-            drSum += item.amount
-            if (item.isSelected) drSel += item.amount
-        }
-        drTotalAll = drSum
-        drSelectedTotal = drSel
-
-        var crSum = 0.0
-        var crSel = 0.0
-        for (var j = 0; j < crListModel.count; j++) {
-            var cItem = crListModel.get(j)
-            crSum += cItem.amount
-            if (cItem.isSelected) crSel += cItem.amount
-        }
-        crTotalAll = crSum
-        crSelectedTotal = crSel
-
-        netBalance = Math.abs(drTotalAll - crTotalAll)
-        if (drTotalAll > crTotalAll) {
-            netBalanceType = "Dr (Debit Balance)"
-        } else if (crTotalAll > drTotalAll) {
-            netBalanceType = "Cr (Credit Balance)"
-        } else {
-            netBalanceType = "Nil Balance"
+        if (typeof ledgerStatementCtrl !== "undefined" && ledgerStatementCtrl) {
+            ledgerStatementCtrl.applyDateFilter(fIso, tIso)
         }
     }
 
-    GenericListModel { id: drMasterModel }
-    GenericListModel { id: crMasterModel }
-    GenericListModel { id: drListModel }
-    GenericListModel { id: crListModel }
+    function printStatement() {
+        if (typeof printExportCtrl !== "undefined" && printExportCtrl && partySearchInput.text.trim() !== "") {
+            var fIso = toIso(fromDateInput.text)
+            var tIso = toIso(toDateInput.text)
+            printExportCtrl.print_ledger_statement(partySearchInput.text.trim(), fIso, tIso)
+        }
+    }
+
+    function exportPdf() {
+        if (typeof printExportCtrl !== "undefined" && printExportCtrl && partySearchInput.text.trim() !== "") {
+            var fIso = toIso(fromDateInput.text)
+            var tIso = toIso(toDateInput.text)
+            printExportCtrl.export_ledger_statement_pdf(partySearchInput.text.trim(), fIso, tIso)
+        }
+    }
+
+    function exportCsv() {
+        if (typeof printExportCtrl !== "undefined" && printExportCtrl && partySearchInput.text.trim() !== "") {
+            var fIso = toIso(fromDateInput.text)
+            var tIso = toIso(toDateInput.text)
+            printExportCtrl.export_ledger_csv(partySearchInput.text.trim(), fIso, tIso)
+        }
+    }
+
+    function openVoucherEntry(item) {
+        if (!item) return
+        var vType = item.voucher_type || item.trans_type || ""
+        var rawType = item.legacy_type || item.trans_type || ""
+        var vNoStr = (item.voucher_no || item.refNo || "").toString()
+        var vNo = parseInt(vNoStr.replace(/\D/g, "")) || 0
+        var vDate = item.vIso || toIso(item.vDate)
+
+        // Check if it's a TDS voucher
+        if (vType === "TDS" || rawType === "TDS" || (item.particulars && item.particulars.indexOf("T.D.S.") !== -1)) {
+            if (typeof tdsModel !== "undefined" && tdsModel) {
+                var tdsVch = tdsModel.get_tds_voucher_by_ref(vNo, vDate)
+                if (tdsVch && tdsVch.id) {
+                    if (typeof window !== "undefined") {
+                        window.targetTdsVoucherId = tdsVch.id
+                        if (typeof window.navigateToView === "function") {
+                            window.navigateToView(24) // TDS Voucher View
+                        } else {
+                            window.currentViewIndex = 24
+                        }
+                    }
+                    return
+                }
+            }
+            if (typeof window !== "undefined") {
+                if (typeof window.navigateToView === "function") {
+                    window.navigateToView(24)
+                } else {
+                    window.currentViewIndex = 24
+                }
+            }
+            return
+        }
+
+        if (vType === "Sales" || rawType === "Sale") {
+            if (typeof window !== "undefined") {
+                window.pendingEditInvoiceNo = item.invoice_no || vNoStr
+                if (typeof window.navigateToView === "function") {
+                    window.navigateToView(14) // Sales Voucher
+                } else {
+                    window.currentViewIndex = 14
+                }
+            }
+            return
+        }
+        if (vType === "Purchase" || rawType === "Purc") {
+            if (typeof window !== "undefined") {
+                window.pendingEditInvoiceNo = item.invoice_no || vNoStr
+                if (typeof window.navigateToView === "function") {
+                    window.navigateToView(15) // Purchase Voucher
+                } else {
+                    window.currentViewIndex = 15
+                }
+            }
+            return
+        }
+        if (vType === "Payment" || vType === "Receipt" || rawType === "ChPt" || rawType === "ChRt" || rawType === "Pymt" || rawType === "Rcpt") {
+            if (typeof window !== "undefined") {
+                if (typeof window.navigateToView === "function") {
+                    window.navigateToView(16) // Cheque Voucher
+                } else {
+                    window.currentViewIndex = 16
+                }
+            }
+            return
+        }
+        if (vType === "Journal" || rawType === "Jrnl") {
+            if (typeof window !== "undefined") {
+                if (typeof window.navigateToView === "function") {
+                    window.navigateToView(17) // Journal Voucher
+                } else {
+                    window.currentViewIndex = 17
+                }
+            }
+            return
+        }
+        if (vType === "J-Form" || rawType === "JFrm") {
+            if (typeof window !== "undefined") {
+                if (typeof window.navigateToView === "function") {
+                    window.navigateToView(23) // J-Form Voucher
+                } else {
+                    window.currentViewIndex = 23
+                }
+            }
+            return
+        }
+    }
 
     ColumnLayout {
         anchors.fill: parent
@@ -170,19 +229,57 @@ Rectangle {
             ColumnLayout {
                 spacing: 2
                 Text {
-                    text: "👁️ Traditional Bahi Khata Ledger Statement (2-Column Dr / Cr)"
+                    text: "Account Ledger Statement (2-Column Dr / Cr)"
                     color: "#0F172A"
                     font.pixelSize: 18
                     font.bold: true
                 }
                 Text {
-                    text: "Side-by-side Jama (Debit) and Nama (Credit) accounting ledger with interactive reconciliation."
+                    text: "Side-by-side Credit (Cr) and Debit (Dr) accounting ledger with interactive reconciliation."
                     color: "#64748B"
                     font.pixelSize: 11
                 }
             }
 
             Item { Layout.fillWidth: true }
+
+            T.Button {
+                id: printBtn
+                implicitWidth: contentItem.implicitWidth + 20
+                implicitHeight: 32
+                background: Rectangle { color: printBtn.hovered ? "#1D4ED8" : "#2563EB"; radius: 6 }
+                contentItem: RowLayout {
+                    spacing: 6
+                    Text { text: "Print Statement"; color: "#FFFFFF"; font.pixelSize: 12; font.bold: true }
+                    KbdBadge { text: "Ctrl+P"; badgeColor: "#1E3A8A"; textColor: "#93C5FD"; borderColor: "#2563EB" }
+                }
+                onClicked: root.printStatement()
+            }
+
+            T.Button {
+                id: pdfBtn
+                implicitWidth: contentItem.implicitWidth + 20
+                implicitHeight: 32
+                background: Rectangle { color: pdfBtn.hovered ? "#047857" : "#059669"; radius: 6 }
+                contentItem: RowLayout {
+                    spacing: 6
+                    Text { text: "Export PDF"; color: "#FFFFFF"; font.pixelSize: 12; font.bold: true }
+                    KbdBadge { text: "Alt+P"; badgeColor: "#064E3B"; textColor: "#A7F3D0"; borderColor: "#059669" }
+                }
+                onClicked: root.exportPdf()
+            }
+
+            T.Button {
+                id: csvBtn
+                implicitWidth: contentItem.implicitWidth + 16
+                implicitHeight: 32
+                background: Rectangle { color: "#F8FAFC"; radius: 6; border.color: "#CBD5E1" }
+                contentItem: RowLayout {
+                    spacing: 6
+                    Text { text: "Excel CSV"; color: "#334155"; font.pixelSize: 12; font.bold: true }
+                }
+                onClicked: root.exportCsv()
+            }
 
             T.Button {
                 id: backBtn
@@ -205,20 +302,227 @@ Rectangle {
             color: "#FFFFFF"
             border.color: "#CBD5E1"
             radius: 8
+            z: 10
 
             RowLayout {
                 anchors.fill: parent
                 anchors.margins: 10
                 spacing: 12
 
-                CustomWhiteCombo {
-                    id: partySearch
-                    Layout.preferredWidth: 320
-                    model: (typeof partiesModel !== "undefined" && partiesModel) ? partiesModel.get_parties_list() : []
-                    onCurrentTextChanged: root.loadPartyStatement(currentText)
-                    onReturnPressed: {
+                // Native Ultra-Fast Party Search Field
+                Rectangle {
+                    id: partySearchBox
+                    Layout.preferredWidth: 520
+                    height: 36
+                    color: "#FFFFFF"
+                    radius: 6
+                    border.color: partySearchInput.activeFocus ? "#2563EB" : "#CBD5E1"
+                    border.width: partySearchInput.activeFocus ? 2 : 1
+
+                    property var searchResults: []
+
+                    function updateSearch() {
+                        var q = partySearchInput.text.trim()
+                        if (typeof ledgerStatementCtrl !== "undefined" && ledgerStatementCtrl) {
+                            searchResults = ledgerStatementCtrl.searchParties(q)
+                            if (searchResults.length > 0) {
+                                partySearchList.currentIndex = 0
+                            }
+                        }
+                    }
+
+                    function selectParty(pName) {
+                        if (!pName) return
+                        partySearchInput.text = pName
+                        searchResults = []
+                        partySearchPopup.close()
+                        root.loadPartyStatement(pName)
                         crListView.forceActiveFocus()
-                        if (crListView.count > 0 && crListView.currentIndex < 0) crListView.currentIndex = 0
+                        if (typeof ledgerStatementCtrl !== "undefined" && ledgerStatementCtrl && ledgerStatementCtrl.crModel.count > 0) {
+                            crListView.currentIndex = 0
+                        }
+                    }
+
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 10; anchors.rightMargin: 10
+                        spacing: 8
+
+                        Text { text: ""; font.pixelSize: 13 }
+
+                        Item {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+
+                            TextInput {
+                                id: partySearchInput
+                                anchors.fill: parent
+                                verticalAlignment: TextInput.AlignVCenter
+                                color: "#000000"
+                                selectionColor: "#2563EB"
+                                selectedTextColor: "#FFFFFF"
+                                font.pixelSize: 13
+                                font.bold: true
+                                font.family: "Segoe UI, -apple-system, Roboto, sans-serif"
+                                selectByMouse: true
+                                clip: true
+                                focus: true
+
+                                onActiveFocusChanged: {
+                                    if (activeFocus) {
+                                        partySearchBox.updateSearch()
+                                        partySearchPopup.open()
+                                        partySearchInput.selectAll()
+                                    }
+                                }
+
+                                onTextChanged: {
+                                    if (activeFocus) {
+                                        partySearchBox.updateSearch()
+                                        if (!partySearchPopup.visible) {
+                                            partySearchPopup.open()
+                                        }
+                                    }
+                                }
+
+                                Keys.onDownPressed: function(event) {
+                                    event.accepted = true
+                                    if (partySearchPopup.visible && partySearchBox.searchResults.length > 0) {
+                                        partySearchList.currentIndex = Math.min(partySearchBox.searchResults.length - 1, partySearchList.currentIndex + 1)
+                                    } else {
+                                        crListView.forceActiveFocus()
+                                        if (crListView.currentIndex < 0 && ledgerStatementCtrl && ledgerStatementCtrl.crModel.count > 0) {
+                                            crListView.currentIndex = 0
+                                        }
+                                    }
+                                }
+
+                                Keys.onUpPressed: function(event) {
+                                    event.accepted = true
+                                    if (partySearchPopup.visible && partySearchBox.searchResults.length > 0) {
+                                        partySearchList.currentIndex = Math.max(0, partySearchList.currentIndex - 1)
+                                    }
+                                }
+
+                                Keys.onReturnPressed: function(event) {
+                                    event.accepted = true
+                                    if (partySearchPopup.visible && partySearchBox.searchResults.length > 0 && partySearchList.currentIndex >= 0) {
+                                        var item = partySearchBox.searchResults[partySearchList.currentIndex]
+                                        partySearchBox.selectParty(item.name)
+                                    } else if (partySearchInput.text.trim() !== "") {
+                                        partySearchBox.selectParty(partySearchInput.text.trim())
+                                    }
+                                }
+
+                                Keys.onEnterPressed: function(event) {
+                                    event.accepted = true
+                                    if (partySearchPopup.visible && partySearchBox.searchResults.length > 0 && partySearchList.currentIndex >= 0) {
+                                        var item = partySearchBox.searchResults[partySearchList.currentIndex]
+                                        partySearchBox.selectParty(item.name)
+                                    } else if (partySearchInput.text.trim() !== "") {
+                                        partySearchBox.selectParty(partySearchInput.text.trim())
+                                    }
+                                }
+
+                                Keys.onEscapePressed: function(event) {
+                                    if (partySearchPopup.visible) {
+                                        event.accepted = true
+                                        partySearchPopup.close()
+                                    } else {
+                                        root.cancelRequested()
+                                    }
+                                }
+                            }
+
+                            Text {
+                                anchors.fill: parent
+                                verticalAlignment: Text.AlignVCenter
+                                text: "Search Party Name / Ledger... (Alt+S)"
+                                color: "#64748B"
+                                font.pixelSize: 13
+                                font.bold: false
+                                font.family: "Segoe UI, -apple-system, Roboto, sans-serif"
+                                visible: partySearchInput.text === "" && !partySearchInput.inputMethodComposing
+                            }
+                        }
+
+                        T.Button {
+                            implicitWidth: 20
+                            implicitHeight: 20
+                            flat: true
+                            visible: partySearchInput.text.length > 0
+                            contentItem: Text { text: "X"; color: "#94A3B8"; font.pixelSize: 11; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                            onClicked: {
+                                root.resetSearchAndFocus()
+                            }
+                        }
+                    }
+
+                    T.Popup {
+                        id: partySearchPopup
+                        y: partySearchBox.height + 4
+                        width: partySearchBox.width
+                        height: Math.min(320, partySearchBox.searchResults.length * 44 + 10)
+                        padding: 4
+                        closePolicy: T.Popup.CloseOnPressOutside | T.Popup.CloseOnEscape
+                        focus: false
+
+                        background: Rectangle {
+                            color: "#FFFFFF"
+                            border.color: "#2563EB"
+                            border.width: 1.5
+                            radius: 8
+                        }
+
+                        ListView {
+                            id: partySearchList
+                            anchors.fill: parent
+                            clip: true
+                            model: partySearchBox.searchResults
+                            currentIndex: 0
+                            spacing: 2
+
+                            delegate: Rectangle {
+                                width: partySearchList.width
+                                height: 40
+                                radius: 4
+                                color: index === partySearchList.currentIndex ? "#EFF6FF" : (hoverArea.containsMouse ? "#F8FAFC" : "#FFFFFF")
+                                border.color: index === partySearchList.currentIndex ? "#BFDBFE" : "transparent"
+
+                                MouseArea {
+                                    id: hoverArea
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    onClicked: {
+                                        partySearchBox.selectParty(modelData.name)
+                                    }
+                                }
+
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 12; anchors.rightMargin: 12
+                                    spacing: 8
+
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 1
+                                        Text {
+                                            text: modelData.name || ""
+                                            color: "#000000"
+                                            font.pixelSize: 13
+                                            font.bold: true
+                                            elide: Text.ElideRight
+                                        }
+                                        Text {
+                                            text: (modelData.group_name || "") + (modelData.city ? " • " + modelData.city : "")
+                                            color: "#64748B"
+                                            font.pixelSize: 11
+                                            elide: Text.ElideRight
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -234,7 +538,7 @@ Rectangle {
                         anchors.centerIn: parent
                         spacing: 6
                         Text {
-                            text: "📅 " + ((typeof stockItemsModel !== "undefined" && stockItemsModel) ? stockItemsModel.get_financial_year() : "Active Period")
+                            text: " " + ((typeof stockItemsModel !== "undefined" && stockItemsModel) ? stockItemsModel.get_financial_year() : "Active Period")
                             color: "#1D4ED8"
                             font.pixelSize: 11
                             font.bold: true
@@ -250,7 +554,7 @@ Rectangle {
                     background: Rectangle { color: filterPopup.visible ? "#1D4ED8" : "#2563EB"; radius: 6 }
                     contentItem: RowLayout {
                         spacing: 6
-                        Text { text: "🔍 Filter Dates"; color: "#FFF"; font.bold: true; font.pixelSize: 12 }
+                        Text { text: "Filter Dates"; color: "#FFF"; font.bold: true; font.pixelSize: 12 }
                         KbdBadge { text: "Alt+F"; badgeColor: "#1E3A8A"; textColor: "#93C5FD"; borderColor: "#2563EB" }
                     }
                     onClicked: filterPopup.open()
@@ -263,7 +567,7 @@ Rectangle {
                     implicitHeight: 32
                     height: 32
                     background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
-                    contentItem: Text { text: "🖨️ Print PDF"; color: "#475569"; font.bold: true; font.pixelSize: 12; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                    contentItem: Text { text: "Print PDF"; color: "#475569"; font.bold: true; font.pixelSize: 12; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                 }
             }
         }
@@ -283,6 +587,14 @@ Rectangle {
                 border.width: crListView.activeFocus ? 2 : 1
                 radius: 8
 
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: {
+                        crListView.forceActiveFocus()
+                        if (ledgerStatementCtrl && ledgerStatementCtrl.crModel.count > 0 && crListView.currentIndex < 0) crListView.currentIndex = 0
+                    }
+                }
+
                 ColumnLayout {
                     anchors.fill: parent
                     anchors.margins: 10
@@ -299,7 +611,7 @@ Rectangle {
                             anchors.fill: parent
                             anchors.leftMargin: 10
                             anchors.rightMargin: 10
-                            Text { text: "🟢 CREDIT SIDE (JAMA / Cr) - " + root.currentPartyName; color: "#15803D"; font.pixelSize: 12; font.bold: true; elide: Text.ElideRight; Layout.fillWidth: true }
+                            Text { text: "CREDIT SIDE (JAMA / Cr) - " + root.currentPartyName; color: "#15803D"; font.pixelSize: 12; font.bold: true; elide: Text.ElideRight; Layout.fillWidth: true }
                             Text { text: "Takes / Payables"; color: "#16A34A"; font.pixelSize: 11; font.bold: true }
                         }
                     }
@@ -330,40 +642,58 @@ Rectangle {
                         id: crListView
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        model: crListModel
+                        model: (typeof ledgerStatementCtrl !== "undefined" && ledgerStatementCtrl) ? ledgerStatementCtrl.crModel : null
                         clip: true
                         spacing: 2
                         boundsBehavior: Flickable.StopAtBounds
-                        focus: true
+                        focus: false
                         activeFocusOnTab: true
                         currentIndex: -1
 
                         Keys.onUpPressed: function(event) {
+                            event.accepted = true
                             if (crListView.currentIndex > 0) {
-                                event.accepted = true
                                 crListView.currentIndex--
-                                crListView.positionViewAtIndex(crListView.currentIndex, ListView.Contain)
+                            } else if (crListView.currentIndex === -1 && count > 0) {
+                                crListView.currentIndex = 0
                             }
+                            crListView.positionViewAtIndex(crListView.currentIndex, ListView.Contain)
                         }
                         Keys.onDownPressed: function(event) {
-                            if (crListView.currentIndex < crListModel.count - 1) {
-                                event.accepted = true
+                            event.accepted = true
+                            if (crListView.currentIndex < 0 && count > 0) {
+                                crListView.currentIndex = 0
+                            } else if (crListView.currentIndex < count - 1) {
                                 crListView.currentIndex++
-                                crListView.positionViewAtIndex(crListView.currentIndex, ListView.Contain)
                             }
+                            crListView.positionViewAtIndex(crListView.currentIndex, ListView.Contain)
                         }
                         Keys.onSpacePressed: function(event) {
-                            if (crListView.currentIndex >= 0 && crListView.currentIndex < crListModel.count) {
-                                event.accepted = true
-                                var cur = crListModel.get(crListView.currentIndex)
-                                crListModel.setProperty(crListView.currentIndex, "isSelected", !cur.isSelected)
-                                root.recalcTotals()
+                            event.accepted = true
+                            if (crListView.currentIndex >= 0 && crListView.currentIndex < count) {
+                                ledgerStatementCtrl.crModel.toggleSelection(crListView.currentIndex)
                             }
                         }
                         Keys.onRightPressed: function(event) {
                             event.accepted = true
                             drListView.forceActiveFocus()
-                            if (drListView.currentIndex < 0 && drListModel.count > 0) drListView.currentIndex = 0
+                            if (drListView.count > 0) {
+                                if (drListView.currentIndex < 0 || drListView.currentIndex >= drListView.count) {
+                                    drListView.currentIndex = 0
+                                }
+                            }
+                        }
+                        Keys.onReturnPressed: function(event) {
+                            event.accepted = true
+                            if (crListView.currentIndex >= 0 && crListView.currentIndex < count) {
+                                root.openVoucherEntry(ledgerStatementCtrl.crModel.get(crListView.currentIndex))
+                            }
+                        }
+                        Keys.onEnterPressed: function(event) {
+                            event.accepted = true
+                            if (crListView.currentIndex >= 0 && crListView.currentIndex < count) {
+                                root.openVoucherEntry(ledgerStatementCtrl.crModel.get(crListView.currentIndex))
+                            }
                         }
 
                         delegate: Rectangle {
@@ -380,6 +710,11 @@ Rectangle {
                                     crListView.forceActiveFocus()
                                     crListView.currentIndex = index
                                 }
+                                onDoubleClicked: {
+                                    crListView.forceActiveFocus()
+                                    crListView.currentIndex = index
+                                    root.openVoucherEntry(ledgerStatementCtrl.crModel.get(index))
+                                }
                             }
 
                             RowLayout {
@@ -388,39 +723,21 @@ Rectangle {
                                 anchors.rightMargin: 6
                                 spacing: 6
 
-                                // CUSTOM CLEAN WHITE CHECKBOX
-                                Rectangle {
-                                    width: 20
-                                    height: 20
-                                    radius: 4
-                                    color: model.isSelected ? "#16A34A" : "#FFFFFF"
-                                    border.color: model.isSelected ? "#15803D" : "#CBD5E1"
-                                    border.width: 1
-
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: "✓"
-                                        color: "#FFFFFF"
-                                        font.pixelSize: 12
-                                        font.bold: true
-                                        visible: model.isSelected
-                                    }
-
-                                    MouseArea {
-                                        anchors.fill: parent
-                                        onClicked: {
-                                            crListView.forceActiveFocus()
-                                            crListView.currentIndex = index
-                                            crListModel.setProperty(index, "isSelected", !model.isSelected)
-                                            root.recalcTotals()
-                                        }
+                                CustomCheckBox {
+                                    boxSize: 20
+                                    checkedColor: "#16A34A"
+                                    checked: model.isSelected
+                                    onToggled: {
+                                        crListView.forceActiveFocus()
+                                        crListView.currentIndex = index
+                                        ledgerStatementCtrl.crModel.toggleSelection(index)
                                     }
                                 }
 
                                 Text { text: model.vDate; color: "#334155"; font.pixelSize: 11; font.family: "Segoe UI, Consolas, Menlo, sans-serif"; width: 85 }
                                 Text { text: model.refNo; color: "#16A34A"; font.pixelSize: 11; font.bold: true; font.family: "Segoe UI, Consolas, Menlo, sans-serif"; width: 75 }
                                 Text { text: model.particulars; color: "#0F172A"; font.pixelSize: 11; Layout.fillWidth: true; elide: Text.ElideRight }
-                                Text { text: (typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.format_inr(model.amount) : ("₹" + model.amount.toFixed(2)); color: "#15803D"; font.pixelSize: 12; font.bold: true; horizontalAlignment: Text.AlignRight; width: 95 }
+                                Text { text: model.amountFmt; color: "#15803D"; font.pixelSize: 12; font.bold: true; horizontalAlignment: Text.AlignRight; width: 95 }
                             }
                         }
                     }
@@ -436,23 +753,33 @@ Rectangle {
                             Layout.fillWidth: true
                             Text { text: "Total Cr Entries:"; color: "#475569"; font.pixelSize: 11; font.bold: true }
                             Item { Layout.fillWidth: true }
-                            Text { text: (typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.format_inr(root.crTotalAll) : ("₹" + root.crTotalAll.toFixed(2)); color: "#0F172A"; font.pixelSize: 13; font.bold: true }
+                            Text {
+                                text: (typeof ledgerStatementCtrl !== "undefined" && ledgerStatementCtrl) ? ledgerStatementCtrl.crTotalFmt : "₹0.00"
+                                color: "#0F172A"
+                                font.pixelSize: 13
+                                font.bold: true
+                            }
                         }
 
                         Rectangle {
                             Layout.fillWidth: true
                             height: 28
-                            color: root.crSelectedTotal > 0 ? "#DCFCE7" : "#F8FAFC"
+                            color: (typeof ledgerStatementCtrl !== "undefined" && ledgerStatementCtrl && ledgerStatementCtrl.crSelectedTotal > 0) ? "#DCFCE7" : "#F8FAFC"
                             radius: 4
-                            border.color: root.crSelectedTotal > 0 ? "#86EFAC" : "#E2E8F0"
+                            border.color: (typeof ledgerStatementCtrl !== "undefined" && ledgerStatementCtrl && ledgerStatementCtrl.crSelectedTotal > 0) ? "#86EFAC" : "#E2E8F0"
 
                             RowLayout {
                                 anchors.fill: parent
                                 anchors.leftMargin: 8
                                 anchors.rightMargin: 8
-                                Text { text: "☑ Checked Cr Total:"; color: "#166534"; font.pixelSize: 11; font.bold: true }
+                                Text { text: "Checked Cr Total:"; color: "#166534"; font.pixelSize: 11; font.bold: true }
                                 Item { Layout.fillWidth: true }
-                                Text { text: (typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.format_inr(root.crSelectedTotal) : ("₹" + root.crSelectedTotal.toFixed(2)); color: "#15803D"; font.pixelSize: 12; font.bold: true }
+                                Text {
+                                    text: (typeof ledgerStatementCtrl !== "undefined" && ledgerStatementCtrl) ? ledgerStatementCtrl.crSelectedTotalFmt : "₹0.00"
+                                    color: "#15803D"
+                                    font.pixelSize: 12
+                                    font.bold: true
+                                }
                             }
                         }
                     }
@@ -467,6 +794,14 @@ Rectangle {
                 border.color: drListView.activeFocus ? "#2563EB" : "#CBD5E1"
                 border.width: drListView.activeFocus ? 2 : 1
                 radius: 8
+
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: {
+                        drListView.forceActiveFocus()
+                        if (ledgerStatementCtrl && ledgerStatementCtrl.drModel.count > 0 && drListView.currentIndex < 0) drListView.currentIndex = 0
+                    }
+                }
 
                 ColumnLayout {
                     anchors.fill: parent
@@ -484,7 +819,7 @@ Rectangle {
                             anchors.fill: parent
                             anchors.leftMargin: 10
                             anchors.rightMargin: 10
-                            Text { text: "🔴 DEBIT SIDE (NAAME / Dr) - " + root.currentPartyName; color: "#1D4ED8"; font.pixelSize: 12; font.bold: true; elide: Text.ElideRight; Layout.fillWidth: true }
+                            Text { text: "DEBIT SIDE (NAAME / Dr) - " + root.currentPartyName; color: "#1D4ED8"; font.pixelSize: 12; font.bold: true; elide: Text.ElideRight; Layout.fillWidth: true }
                             Text { text: "Gives / Receivables"; color: "#3B82F6"; font.pixelSize: 11; font.bold: true }
                         }
                     }
@@ -515,7 +850,7 @@ Rectangle {
                         id: drListView
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        model: drListModel
+                        model: (typeof ledgerStatementCtrl !== "undefined" && ledgerStatementCtrl) ? ledgerStatementCtrl.drModel : null
                         clip: true
                         spacing: 2
                         boundsBehavior: Flickable.StopAtBounds
@@ -524,31 +859,49 @@ Rectangle {
                         currentIndex: -1
 
                         Keys.onUpPressed: function(event) {
+                            event.accepted = true
                             if (drListView.currentIndex > 0) {
-                                event.accepted = true
                                 drListView.currentIndex--
-                                drListView.positionViewAtIndex(drListView.currentIndex, ListView.Contain)
+                            } else if (drListView.currentIndex === -1 && count > 0) {
+                                drListView.currentIndex = 0
                             }
+                            drListView.positionViewAtIndex(drListView.currentIndex, ListView.Contain)
                         }
                         Keys.onDownPressed: function(event) {
-                            if (drListView.currentIndex < drListModel.count - 1) {
-                                event.accepted = true
+                            event.accepted = true
+                            if (drListView.currentIndex < 0 && count > 0) {
+                                drListView.currentIndex = 0
+                            } else if (drListView.currentIndex < count - 1) {
                                 drListView.currentIndex++
-                                drListView.positionViewAtIndex(drListView.currentIndex, ListView.Contain)
                             }
+                            drListView.positionViewAtIndex(drListView.currentIndex, ListView.Contain)
                         }
                         Keys.onSpacePressed: function(event) {
-                            if (drListView.currentIndex >= 0 && drListView.currentIndex < drListModel.count) {
-                                event.accepted = true
-                                var cur = drListModel.get(drListView.currentIndex)
-                                drListModel.setProperty(drListView.currentIndex, "isSelected", !cur.isSelected)
-                                root.recalcTotals()
+                            event.accepted = true
+                            if (drListView.currentIndex >= 0 && drListView.currentIndex < count) {
+                                ledgerStatementCtrl.drModel.toggleSelection(drListView.currentIndex)
                             }
                         }
                         Keys.onLeftPressed: function(event) {
                             event.accepted = true
                             crListView.forceActiveFocus()
-                            if (crListView.currentIndex < 0 && crListModel.count > 0) crListView.currentIndex = 0
+                            if (crListView.count > 0) {
+                                if (crListView.currentIndex < 0 || crListView.currentIndex >= crListView.count) {
+                                    crListView.currentIndex = 0
+                                }
+                            }
+                        }
+                        Keys.onReturnPressed: function(event) {
+                            event.accepted = true
+                            if (drListView.currentIndex >= 0 && drListView.currentIndex < count) {
+                                root.openVoucherEntry(ledgerStatementCtrl.drModel.get(drListView.currentIndex))
+                            }
+                        }
+                        Keys.onEnterPressed: function(event) {
+                            event.accepted = true
+                            if (drListView.currentIndex >= 0 && drListView.currentIndex < count) {
+                                root.openVoucherEntry(ledgerStatementCtrl.drModel.get(drListView.currentIndex))
+                            }
                         }
 
                         delegate: Rectangle {
@@ -565,6 +918,11 @@ Rectangle {
                                     drListView.forceActiveFocus()
                                     drListView.currentIndex = index
                                 }
+                                onDoubleClicked: {
+                                    drListView.forceActiveFocus()
+                                    drListView.currentIndex = index
+                                    root.openVoucherEntry(ledgerStatementCtrl.drModel.get(index))
+                                }
                             }
 
                             RowLayout {
@@ -574,38 +932,21 @@ Rectangle {
                                 spacing: 6
 
                                 // CUSTOM CLEAN WHITE CHECKBOX
-                                Rectangle {
-                                    width: 20
-                                    height: 20
-                                    radius: 4
-                                    color: model.isSelected ? "#2563EB" : "#FFFFFF"
-                                    border.color: model.isSelected ? "#1D4ED8" : "#CBD5E1"
-                                    border.width: 1
-
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: "✓"
-                                        color: "#FFFFFF"
-                                        font.pixelSize: 12
-                                        font.bold: true
-                                        visible: model.isSelected
-                                    }
-
-                                    MouseArea {
-                                        anchors.fill: parent
-                                        onClicked: {
-                                            drListView.forceActiveFocus()
-                                            drListView.currentIndex = index
-                                            drListModel.setProperty(index, "isSelected", !model.isSelected)
-                                            root.recalcTotals()
-                                        }
+                                CustomCheckBox {
+                                    boxSize: 20
+                                    checkedColor: "#2563EB"
+                                    checked: model.isSelected
+                                    onToggled: {
+                                        drListView.forceActiveFocus()
+                                        drListView.currentIndex = index
+                                        ledgerStatementCtrl.drModel.toggleSelection(index)
                                     }
                                 }
 
                                 Text { text: model.vDate; color: "#334155"; font.pixelSize: 11; font.family: "Segoe UI, Consolas, Menlo, sans-serif"; width: 85 }
                                 Text { text: model.refNo; color: "#2563EB"; font.pixelSize: 11; font.bold: true; font.family: "Segoe UI, Consolas, Menlo, sans-serif"; width: 75 }
                                 Text { text: model.particulars; color: "#0F172A"; font.pixelSize: 11; Layout.fillWidth: true; elide: Text.ElideRight }
-                                Text { text: (typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.format_inr(model.amount) : ("₹" + model.amount.toFixed(2)); color: "#1D4ED8"; font.pixelSize: 12; font.bold: true; horizontalAlignment: Text.AlignRight; width: 95 }
+                                Text { text: model.amountFmt; color: "#1D4ED8"; font.pixelSize: 12; font.bold: true; horizontalAlignment: Text.AlignRight; width: 95 }
                             }
                         }
                     }
@@ -621,23 +962,33 @@ Rectangle {
                             Layout.fillWidth: true
                             Text { text: "Total Dr Entries:"; color: "#475569"; font.pixelSize: 11; font.bold: true }
                             Item { Layout.fillWidth: true }
-                            Text { text: (typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.format_inr(root.drTotalAll) : ("₹" + root.drTotalAll.toFixed(2)); color: "#0F172A"; font.pixelSize: 13; font.bold: true }
+                            Text {
+                                text: (typeof ledgerStatementCtrl !== "undefined" && ledgerStatementCtrl) ? ledgerStatementCtrl.drTotalFmt : "₹0.00"
+                                color: "#0F172A"
+                                font.pixelSize: 13
+                                font.bold: true
+                            }
                         }
 
                         Rectangle {
                             Layout.fillWidth: true
                             height: 28
-                            color: root.drSelectedTotal > 0 ? "#DBEAFE" : "#F8FAFC"
+                            color: (typeof ledgerStatementCtrl !== "undefined" && ledgerStatementCtrl && ledgerStatementCtrl.drSelectedTotal > 0) ? "#DBEAFE" : "#F8FAFC"
                             radius: 4
-                            border.color: root.drSelectedTotal > 0 ? "#93C5FD" : "#E2E8F0"
+                            border.color: (typeof ledgerStatementCtrl !== "undefined" && ledgerStatementCtrl && ledgerStatementCtrl.drSelectedTotal > 0) ? "#93C5FD" : "#E2E8F0"
 
                             RowLayout {
                                 anchors.fill: parent
                                 anchors.leftMargin: 8
                                 anchors.rightMargin: 8
-                                Text { text: "☑ Checked Dr Total:"; color: "#1E40AF"; font.pixelSize: 11; font.bold: true }
+                                Text { text: "Checked Dr Total:"; color: "#1E40AF"; font.pixelSize: 11; font.bold: true }
                                 Item { Layout.fillWidth: true }
-                                Text { text: (typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.format_inr(root.drSelectedTotal) : ("₹" + root.drSelectedTotal.toFixed(2)); color: "#1D4ED8"; font.pixelSize: 12; font.bold: true }
+                                Text {
+                                    text: (typeof ledgerStatementCtrl !== "undefined" && ledgerStatementCtrl) ? ledgerStatementCtrl.drSelectedTotalFmt : "₹0.00"
+                                    color: "#1D4ED8"
+                                    font.pixelSize: 12
+                                    font.bold: true
+                                }
                             }
                         }
                     }
@@ -663,7 +1014,7 @@ Rectangle {
                     spacing: 2
                     Text { text: "CHECKED ENTRIES RECONCILIATION"; color: "#94A3B8"; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8 }
                     Text {
-                        text: "Selected Cr: " + ((typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.format_inr(root.crSelectedTotal) : ("₹" + root.crSelectedTotal.toFixed(2))) + "  |  Selected Dr: " + ((typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.format_inr(root.drSelectedTotal) : ("₹" + root.drSelectedTotal.toFixed(2)))
+                        text: "Selected Cr: " + ((typeof ledgerStatementCtrl !== "undefined" && ledgerStatementCtrl) ? ledgerStatementCtrl.crSelectedTotalFmt : "₹0.00") + "  |  Selected Dr: " + ((typeof ledgerStatementCtrl !== "undefined" && ledgerStatementCtrl) ? ledgerStatementCtrl.drSelectedTotalFmt : "₹0.00")
                         color: "#E2E8F0"
                         font.pixelSize: 13
                         font.bold: true
@@ -679,7 +1030,7 @@ Rectangle {
                         spacing: 0
                         Text { text: "FINAL STATEMENT NET BALANCE"; color: "#94A3B8"; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8; Layout.alignment: Qt.AlignRight }
                         Text {
-                            text: (typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.format_inr(root.netBalance) : ("₹" + root.netBalance.toFixed(2))
+                            text: (typeof ledgerStatementCtrl !== "undefined" && ledgerStatementCtrl) ? ledgerStatementCtrl.netBalanceFmt : "₹0.00"
                             color: "#38BDF8"
                             font.pixelSize: 20
                             font.bold: true
@@ -690,11 +1041,11 @@ Rectangle {
                         height: 26
                         implicitWidth: balTypeTxt.implicitWidth + 14
                         radius: 6
-                        color: root.netBalanceType.indexOf("Nil") !== -1 ? "#16A34A" : "#0284C7"
+                        color: ((typeof ledgerStatementCtrl !== "undefined" && ledgerStatementCtrl ? ledgerStatementCtrl.netBalanceType : "").indexOf("Nil") !== -1) ? "#16A34A" : "#0284C7"
                         Text {
                             id: balTypeTxt
                             anchors.centerIn: parent
-                            text: root.netBalanceType
+                            text: (typeof ledgerStatementCtrl !== "undefined" && ledgerStatementCtrl) ? ledgerStatementCtrl.netBalanceType : "Nil Balance"
                             color: "#FFFFFF"
                             font.pixelSize: 11
                             font.bold: true
@@ -706,9 +1057,39 @@ Rectangle {
     }
 
     Shortcut {
+        sequence: "Alt+S"
+        context: Qt.WindowShortcut
+        onActivated: {
+            partySearchInput.forceActiveFocus()
+            partySearchInput.selectAll()
+        }
+    }
+
+    Shortcut {
+        sequence: "Alt+L"
+        context: Qt.WindowShortcut
+        onActivated: {
+            partySearchInput.forceActiveFocus()
+            partySearchInput.selectAll()
+        }
+    }
+
+    Shortcut {
         sequence: "Alt+F"
         context: Qt.WindowShortcut
         onActivated: filterPopup.open()
+    }
+
+    Shortcut {
+        sequence: "Ctrl+P"
+        context: Qt.WindowShortcut
+        onActivated: root.printStatement()
+    }
+
+    Shortcut {
+        sequence: "Alt+P"
+        context: Qt.WindowShortcut
+        onActivated: root.exportPdf()
     }
 
     T.Popup {
@@ -760,13 +1141,13 @@ Rectangle {
 
                 RowLayout {
                     Layout.fillWidth: true
-                    Text { text: "📅 Filter Statement Date Range"; color: "#0F172A"; font.pixelSize: 15; font.bold: true }
+                    Text { text: "Filter Statement Date Range"; color: "#0F172A"; font.pixelSize: 15; font.bold: true }
                     Item { Layout.fillWidth: true }
                     T.Button {
                         implicitWidth: 28
                         implicitHeight: 28
                         flat: true
-                        contentItem: Text { text: "✕"; color: "#64748B"; font.bold: true; font.pixelSize: 12; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                        contentItem: Text { text: "X"; color: "#64748B"; font.bold: true; font.pixelSize: 12; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                         onClicked: filterPopup.close()
                     }
                 }

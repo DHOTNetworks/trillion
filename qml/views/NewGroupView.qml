@@ -23,7 +23,7 @@ Item {
             ColumnLayout {
                 spacing: 1
                 Text {
-                    text: "📁 Create New Account Group"
+                    text: "Create New Account Group"
                     color: "#0F172A"
                     font.pixelSize: 18
                     font.bold: true
@@ -138,39 +138,10 @@ Item {
                     spacing: 10
                     Layout.topMargin: 4
 
-                    Rectangle {
+                    CustomCheckBox {
                         id: bsCheck
-                        width: 22
-                        height: 22
-                        radius: 5
-                        color: bsCheckMouse.checked ? "#2563EB" : "#FFFFFF"
-                        border.color: bsCheckMouse.checked ? "#1D4ED8" : "#CBD5E1"
-                        border.width: 1
-
-                        property alias checked: bsCheckMouse.checked
-
-                        Text {
-                            anchors.centerIn: parent
-                            text: "✓"
-                            color: "#FFFFFF"
-                            font.pixelSize: 13
-                            font.bold: true
-                            visible: bsCheckMouse.checked
-                        }
-
-                        MouseArea {
-                            id: bsCheckMouse
-                            anchors.fill: parent
-                            property bool checked: true
-                            onClicked: checked = !checked
-                        }
-                    }
-
-                    Text {
+                        checked: true
                         text: "Extract in Financial Statements (Balance Sheet & Profit / Loss Statement)"
-                        color: "#0F172A"
-                        font.pixelSize: 12
-                        font.bold: true
                     }
                 }
             }
@@ -207,7 +178,7 @@ Item {
                 contentItem: RowLayout {
                     spacing: 8
                     anchors.centerIn: parent
-                    Text { text: "💾 Save Account Group"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 14 }
+                    Text { text: "Save Account Group"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 14 }
                     KbdBadge { text: "Enter"; badgeColor: "#1E3A8A"; textColor: "#93C5FD"; borderColor: "#2563EB" }
                 }
                 Keys.onReturnPressed: root.saveGroup()

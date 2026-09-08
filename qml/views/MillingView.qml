@@ -33,7 +33,7 @@ FocusScope {
             ColumnLayout {
                 spacing: 2
                 Text {
-                    text: "🌾 Milling Process & Yield Analytics"
+                    text: "Milling Process & Yield Analytics"
                     color: "#0F172A"
                     font.pixelSize: 20
                     font.bold: true

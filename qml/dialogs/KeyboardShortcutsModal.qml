@@ -29,7 +29,7 @@ Rectangle {
         RowLayout {
             Layout.fillWidth: true
             Text {
-                text: "⌨ Keyboard Shortcuts Reference"
+                text: "Keyboard Shortcuts Reference"
                 color: "#0F172A"
                 font.pixelSize: 18
                 font.bold: true
@@ -42,7 +42,7 @@ Rectangle {
                 height: 28
                 background: Rectangle { color: closeBtn.hovered ? "#DC2626" : "#F1F5F9"; radius: 14 }
                 contentItem: Text {
-                    text: "✕"
+                    text: "X"
                     color: closeBtn.hovered ? "#FFF" : "#475569"
                     font.pixelSize: 13
                     font.bold: true

@@ -93,7 +93,7 @@ T.Popup {
             RowLayout {
                 Layout.fillWidth: true
                 Text {
-                    text: "📊 FINANCIAL & MILLING REPORTS MENU"
+                    text: "FINANCIAL & MILLING REPORTS MENU"
                     color: "#059669"
                     font.pixelSize: 13
                     font.bold: true
@@ -187,7 +187,7 @@ T.Popup {
                 id: item7
                 index: 6
                 selectedIndex: root.selectedIndex
-                text: "7. Interest Calculator (Bahi Khata)"
+                text: "7. Interest Calculator"
                 activeColor: "#059669"
                 activeBorderColor: "#047857"
                 onItemHovered: root.selectedIndex = 6

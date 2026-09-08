@@ -30,6 +30,7 @@ find_package(Qt6 6.5 REQUIRED COMPONENTS
     Sql
     Svg
     Widgets
+    PrintSupport
 )
 
 # Embedded SQLite Amalgamation
@@ -104,6 +105,18 @@ set(SOURCES
     src/models/tds_model.cpp
     src/models/interest_model.h
     src/models/interest_model.cpp
+    src/models/ledger_statement_model.h
+    src/models/ledger_statement_model.cpp
+    src/models/purchase_register_model.h
+    src/models/purchase_register_model.cpp
+    src/models/sales_register_model.h
+    src/models/sales_register_model.cpp
+    src/models/stock_register_model.h
+    src/models/stock_register_model.cpp
+    src/models/milling_statement_model.h
+    src/models/milling_statement_model.cpp
+    src/services/print_export_controller.h
+    src/services/print_export_controller.cpp
     src/models/generic_list_model.h
     src/models/generic_list_model.cpp
     src/models/global_key_filter.h
@@ -153,6 +166,8 @@ qt_add_qml_module(${PROJECT_NAME}
         qml/dialogs/ReportsMenuModal.qml
         qml/dialogs/StockMasterMenuModal.qml
         qml/dialogs/NewFirmModal.qml
+        qml/dialogs/PrintCopyOptionsModal.qml
+        qml/dialogs/VoucherDateModal.qml
         qml/views/ChequeVoucherView.qml
         qml/views/DashboardView.qml
         qml/views/FirmSelecterView.qml
@@ -185,6 +200,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     src
     src/engine
     src/models
+    src/services
     third_party/sqlite
     third_party/libmdb
 )
@@ -201,6 +217,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::QuickControls2
     Qt6::QuickLayouts
     Qt6::Widgets
+    Qt6::PrintSupport
 )
 
 # Set Target Properties for macOS and Windows

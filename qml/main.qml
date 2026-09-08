@@ -8,12 +8,14 @@ T.ApplicationWindow {
     width: 1380
     height: 850
     visible: true
-    title: (typeof firmManager !== "undefined" && firmManager && firmManager.currentFirmName !== "" ? (firmManager.currentFirmName + " • ") : "") + "Bahi-Khata ERP & Accounting"
+    title: (typeof firmManager !== "undefined" && firmManager && firmManager.currentFirmName !== "" ? (firmManager.currentFirmName + " • ") : "") + "ERP & Accounting System"
     background: Rectangle { color: "#F4F6F9" }
 
     // Active View Index: 
     // 0=Dashboard, 1=Paddy, 2=Milling/Stock, 3=Sales, 4=Vouchers, 5=Reports/LedgerList, 6=NewLedgerPage, 7=ModifyLedgerPage, 8=ViewStatementPage, 9=NewGroup, 10=ModifyGroup, 11=NewStockItem, 12=ModifyStockItem, 13=StockDetail, 14=SalesVoucher, 15=PurchaseVoucher, 22=FirmSelector
     property int currentViewIndex: 22
+    property var navigationHistory: []
+    property string lastViewedPartyName: ""
     property int lastDashboardMenuIndex: 0
     property int lastActiveMenuType: 0 // 0=Dashboard Root, 1=Ledger Menu, 2=Stock Menu, 3=AddVoucher Menu
     property int lastLedgerSubmenuIndex: 0
@@ -28,6 +30,26 @@ T.ApplicationWindow {
     property bool isMdbModalOpen: false
     property string activePeriodLabel: "FY 2026-27"
     property string pendingEditInvoiceNo: ""
+    property int targetTdsVoucherId: 0
+    property string targetStatementParty: ""
+
+    function navigateToView(targetIndex) {
+        if (window.currentViewIndex !== targetIndex) {
+            if (window.currentViewIndex !== 22) {
+                window.navigationHistory.push(window.currentViewIndex)
+            }
+            window.currentViewIndex = targetIndex
+        }
+    }
+
+    function navigateBack() {
+        if (window.navigationHistory.length > 0) {
+            var prevIndex = window.navigationHistory.pop()
+            window.currentViewIndex = prevIndex
+        } else {
+            window.currentViewIndex = 0
+        }
+    }
 
     Component.onCompleted: {
         var fy = (typeof stockItemsModel !== "undefined" && stockItemsModel) ? stockItemsModel.get_financial_year() : ""
@@ -100,21 +122,21 @@ T.ApplicationWindow {
     }
 
     // GLOBAL KEYBOARD SHORTCUTS WITH APPLICATION SCOPE
-    Shortcut { sequence: "Alt+1"; context: Qt.ApplicationShortcut; onActivated: window.currentViewIndex = 0 }
-    Shortcut { sequence: "Alt+2"; context: Qt.ApplicationShortcut; onActivated: window.currentViewIndex = 1 }
-    Shortcut { sequence: "Alt+3"; context: Qt.ApplicationShortcut; onActivated: window.currentViewIndex = 14 } // Sales Voucher
-    Shortcut { sequence: "Alt+4"; context: Qt.ApplicationShortcut; onActivated: window.currentViewIndex = 2 } // Stock/Milling
+    Shortcut { sequence: "Alt+1"; context: Qt.ApplicationShortcut; onActivated: { window.navigationHistory = []; window.currentViewIndex = 0; } }
+    Shortcut { sequence: "Alt+2"; context: Qt.ApplicationShortcut; onActivated: window.navigateToView(1) }
+    Shortcut { sequence: "Alt+3"; context: Qt.ApplicationShortcut; onActivated: window.navigateToView(14) } // Sales Voucher
+    Shortcut { sequence: "Alt+4"; context: Qt.ApplicationShortcut; onActivated: window.navigateToView(2) } // Stock/Milling
     Shortcut { sequence: "Alt+5"; context: Qt.ApplicationShortcut; onActivated: window.openOtherVoucherMenu() } // Other Vouchers Menu
-    Shortcut { sequence: "Alt+6"; context: Qt.ApplicationShortcut; onActivated: window.currentViewIndex = 5 } // Ledger List / Reports
+    Shortcut { sequence: "Alt+6"; context: Qt.ApplicationShortcut; onActivated: window.navigateToView(5) } // Ledger List / Reports
     Shortcut { sequence: "Alt+7"; context: Qt.ApplicationShortcut; onActivated: window.openReportsMenu() } // Reports Menu
     Shortcut { 
         sequence: "Alt+F1"
         context: Qt.ApplicationShortcut
         onActivated: {
             if (window.currentViewIndex === 22) {
-                window.currentViewIndex = 0
+                window.navigateBack()
             } else {
-                window.currentViewIndex = 22
+                window.navigateToView(22)
             }
         }
     }
@@ -152,7 +174,7 @@ T.ApplicationWindow {
         context: Qt.ApplicationShortcut
         onActivated: {
             window.targetChequeMode = "Payment"
-            window.currentViewIndex = 16
+            window.navigateToView(16)
             if (mainLoader.item && typeof mainLoader.item.voucherMode !== "undefined") {
                 mainLoader.item.voucherMode = "Payment"
             }
@@ -163,7 +185,7 @@ T.ApplicationWindow {
         context: Qt.ApplicationShortcut
         onActivated: {
             window.targetChequeMode = "Receipt"
-            window.currentViewIndex = 16
+            window.navigateToView(16)
             if (mainLoader.item && typeof mainLoader.item.voucherMode !== "undefined") {
                 mainLoader.item.voucherMode = "Receipt"
             }
@@ -173,13 +195,13 @@ T.ApplicationWindow {
         sequence: "F5"
         context: Qt.ApplicationShortcut
         onActivated: {
-            window.currentViewIndex = 17
+            window.navigateToView(17)
         } 
     }
-    Shortcut { sequence: "F8"; context: Qt.ApplicationShortcut; onActivated: window.currentViewIndex = 14 } // Sales Voucher Entry
-    Shortcut { sequence: "F9"; context: Qt.ApplicationShortcut; onActivated: window.currentViewIndex = 15 } // Purchase Voucher Entry
-    Shortcut { sequence: "F11"; context: Qt.ApplicationShortcut; onActivated: window.currentViewIndex = 23 } // J-Form Mandi Procurement Voucher
-    Shortcut { sequence: "F12"; context: Qt.ApplicationShortcut; onActivated: window.currentViewIndex = 24 } // TDS Voucher Entry
+    Shortcut { sequence: "F8"; context: Qt.ApplicationShortcut; onActivated: window.navigateToView(14) } // Sales Voucher Entry
+    Shortcut { sequence: "F9"; context: Qt.ApplicationShortcut; onActivated: window.navigateToView(15) } // Purchase Voucher Entry
+    Shortcut { sequence: "F11"; context: Qt.ApplicationShortcut; onActivated: window.navigateToView(23) } // J-Form Mandi Procurement Voucher
+    Shortcut { sequence: "F12"; context: Qt.ApplicationShortcut; onActivated: window.navigateToView(24) } // TDS Voucher Entry
     Shortcut { 
         sequences: ["Ctrl+S", "Ctrl+s", "StandardKey.Save"]
         context: Qt.ApplicationShortcut
@@ -218,7 +240,7 @@ T.ApplicationWindow {
         } else if (mainLoader.item && typeof mainLoader.item.cancelRequested !== "undefined") {
             mainLoader.item.cancelRequested()
         } else if (window.currentViewIndex !== 0) {
-            window.currentViewIndex = 0 // Go back to Dashboard
+            window.navigateBack()
         }
     }
 
@@ -303,9 +325,13 @@ T.ApplicationWindow {
                     if (window.currentViewIndex === 2 && item) {
                         if (typeof item.showNewModal !== "undefined") {
                             item.showNewModal.connect(function() {
-                                window.currentViewIndex = 18
+                                window.navigateToView(18)
                             })
                         }
+                    }
+
+                    if (window.currentViewIndex === 8 && item && typeof item.focusSearch === "function") {
+                        Qt.callLater(item.focusSearch)
                     }
 
                     if (window.currentViewIndex === 16 && item && typeof item.voucherMode !== "undefined") {
@@ -315,12 +341,12 @@ T.ApplicationWindow {
                     if (window.currentViewIndex === 18 && item) {
                         if (typeof item.cancelRequested !== "undefined") {
                             item.cancelRequested.connect(function() {
-                                window.currentViewIndex = 2
+                                window.navigateBack()
                             })
                         }
                         if (typeof item.voucherSaved !== "undefined") {
                             item.voucherSaved.connect(function() {
-                                window.currentViewIndex = 2
+                                window.navigateBack()
                             })
                         }
                     }
@@ -328,12 +354,12 @@ T.ApplicationWindow {
                     if (window.currentViewIndex === 19 && item) {
                         if (typeof item.cancelRequested !== "undefined") {
                             item.cancelRequested.connect(function() {
-                                window.currentViewIndex = 0
+                                window.navigateBack()
                             })
                         }
                         if (typeof item.openNewMillingRequested !== "undefined") {
                             item.openNewMillingRequested.connect(function() {
-                                window.currentViewIndex = 18
+                                window.navigateToView(18)
                             })
                         }
                     }
@@ -341,26 +367,33 @@ T.ApplicationWindow {
                     if (window.currentViewIndex === 23 && item) {
                         if (typeof item.cancelRequested !== "undefined") {
                             item.cancelRequested.connect(function() {
-                                window.currentViewIndex = 0
+                                window.navigateBack()
                             })
                         }
                         if (typeof item.voucherSaved !== "undefined") {
                             item.voucherSaved.connect(function() {
-                                window.currentViewIndex = 0
+                                window.navigateBack()
                                 if (typeof dashboardCtrl !== "undefined" && dashboardCtrl) dashboardCtrl.refresh_stats()
                             })
                         }
                     }
 
                     if (window.currentViewIndex === 24 && item) {
+                        if (window.targetTdsVoucherId > 0) {
+                            if (typeof item.loadVoucher !== "undefined" && typeof tdsModel !== "undefined" && tdsModel) {
+                                var vch = tdsModel.get_tds_voucher_by_id(window.targetTdsVoucherId)
+                                item.loadVoucher(vch)
+                            }
+                            window.targetTdsVoucherId = 0
+                        }
                         if (typeof item.cancelRequested !== "undefined") {
                             item.cancelRequested.connect(function() {
-                                window.currentViewIndex = 0
+                                window.navigateBack()
                             })
                         }
                         if (typeof item.voucherSaved !== "undefined") {
                             item.voucherSaved.connect(function() {
-                                window.currentViewIndex = 0
+                                window.navigateBack()
                                 if (typeof dashboardCtrl !== "undefined" && dashboardCtrl) dashboardCtrl.refresh_stats()
                             })
                         }
@@ -369,12 +402,12 @@ T.ApplicationWindow {
                     if (window.currentViewIndex === 25 && item) {
                         if (typeof item.cancelRequested !== "undefined") {
                             item.cancelRequested.connect(function() {
-                                window.currentViewIndex = 0
+                                window.navigateBack()
                             })
                         }
                         if (typeof item.interestVoucherSaved !== "undefined") {
                             item.interestVoucherSaved.connect(function() {
-                                window.currentViewIndex = 0
+                                window.navigateBack()
                                 if (typeof dashboardCtrl !== "undefined" && dashboardCtrl) dashboardCtrl.refresh_stats()
                             })
                         }
@@ -424,19 +457,20 @@ T.ApplicationWindow {
                     if (item.openReportsMenu) item.openReportsMenu.connect(function() { window.openReportsMenu() })
                     if (item.openLedgers) item.openLedgers.connect(function() { window.openLedgerMasterMenu() })
                     if (item.openStock) item.openStock.connect(function() { window.openStockMasterMenu() })
-                    if (item.openPaddy) item.openPaddy.connect(function() { window.currentViewIndex = 1 })
+                    if (item.openPaddy) item.openPaddy.connect(function() { window.navigateToView(1) })
                     if (item.openLedgerMenu) item.openLedgerMenu.connect(function() { window.openLedgerMasterMenu() })
                     if (item.openStockMenu) item.openStockMenu.connect(function() { window.openStockMasterMenu() })
                     if (item.openPeriodModal) item.openPeriodModal.connect(function() { window.isPeriodModalOpen = true })
-                    if (item.cancelRequested) item.cancelRequested.connect(function() { window.currentViewIndex = 0 })
-                    if (item.savedSuccess) item.savedSuccess.connect(function() { window.currentViewIndex = 0 })
-                    if (item.invoiceSaved) item.invoiceSaved.connect(function() { window.currentViewIndex = 0 })
+                    if (item.cancelRequested) item.cancelRequested.connect(function() { window.navigateBack() })
+                    if (item.savedSuccess) item.savedSuccess.connect(function() { window.navigateBack() })
+                    if (item.invoiceSaved) item.invoiceSaved.connect(function() { window.navigateBack() })
+                    if (item.voucherSaved) item.voucherSaved.connect(function() { window.navigateBack() })
                     if (item.openInvoiceRequested) item.openInvoiceRequested.connect(function(invNo) {
                         window.pendingEditInvoiceNo = invNo
                         if (window.currentViewIndex === 21) {
-                            window.currentViewIndex = 15 // Purchase Voucher View
+                            window.navigateToView(15) // Purchase Voucher View
                         } else {
-                            window.currentViewIndex = 14 // Sales Voucher View
+                            window.navigateToView(14) // Sales Voucher View
                         }
                     })
                     if (item.openItemMovement) item.openItemMovement.connect(function(itemName) {
@@ -460,6 +494,7 @@ T.ApplicationWindow {
                     if (window.currentViewIndex === 22 && item) {
                         if (typeof item.firmOpened !== "undefined") {
                             item.firmOpened.connect(function(firmId, firmName) {
+                                window.navigationHistory = []
                                 window.currentViewIndex = 0
                                 var fy = (typeof stockItemsModel !== "undefined" && stockItemsModel) ? stockItemsModel.get_financial_year() : ""
                                 var sd = (typeof stockItemsModel !== "undefined" && stockItemsModel) ? stockItemsModel.get_from_date() : ""
@@ -476,7 +511,7 @@ T.ApplicationWindow {
                         }
                         if (typeof item.cancelRequested !== "undefined") {
                             item.cancelRequested.connect(function() {
-                                window.currentViewIndex = 0
+                                window.navigateBack()
                             })
                         }
                     }
@@ -499,17 +534,17 @@ T.ApplicationWindow {
             window.lastLedgerSubmenuIndex = selIdx
             window.lastDashboardMenuIndex = 0
             if (act === "New Ledger") {
-                window.currentViewIndex = 6
+                window.navigateToView(6)
             } else if (act === "Modify Ledger") {
-                window.currentViewIndex = 7
+                window.navigateToView(7)
             } else if (act === "View Ledger") {
-                window.currentViewIndex = 8
+                window.navigateToView(8)
             } else if (act === "New Group") {
-                window.currentViewIndex = 9
+                window.navigateToView(9)
             } else if (act === "Modify Group") {
-                window.currentViewIndex = 10
+                window.navigateToView(10)
             } else {
-                window.currentViewIndex = 5
+                window.navigateToView(5)
             }
         }
     }
@@ -526,13 +561,13 @@ T.ApplicationWindow {
             window.lastStockSubmenuIndex = selIdx
             window.lastDashboardMenuIndex = 1
             if (act === "New Stock Item") {
-                window.currentViewIndex = 11
+                window.navigateToView(11)
             } else if (act === "Modify Stock Item") {
-                window.currentViewIndex = 12
+                window.navigateToView(12)
             } else if (act === "Stock Details") {
-                window.currentViewIndex = 13
+                window.navigateToView(13)
             } else {
-                window.currentViewIndex = 2
+                window.navigateToView(2)
             }
         }
     }
@@ -549,21 +584,21 @@ T.ApplicationWindow {
             window.lastVoucherSubmenuIndex = selIdx
             window.lastDashboardMenuIndex = 2
             if (opt === 1) {
-                window.currentViewIndex = 14
+                window.navigateToView(14)
             } else if (opt === 2) {
-                window.currentViewIndex = 15
+                window.navigateToView(15)
             } else if (opt === 3) {
                 window.targetChequeMode = "Payment"
-                window.currentViewIndex = 16
+                window.navigateToView(16)
                 if (mainLoader.item && typeof mainLoader.item.voucherMode !== "undefined") mainLoader.item.voucherMode = "Payment"
             } else if (opt === 4) {
                 window.targetChequeMode = "Receipt"
-                window.currentViewIndex = 16
+                window.navigateToView(16)
                 if (mainLoader.item && typeof mainLoader.item.voucherMode !== "undefined") mainLoader.item.voucherMode = "Receipt"
             } else if (opt === 5) {
-                window.currentViewIndex = 17
+                window.navigateToView(17)
             } else if (opt === 6) {
-                window.currentViewIndex = 18
+                window.navigateToView(18)
             }
         }
     }
@@ -580,9 +615,9 @@ T.ApplicationWindow {
             window.lastOtherSubmenuIndex = selIdx
             window.lastDashboardMenuIndex = 3
             if (opt === 1) {
-                window.currentViewIndex = 23
+                window.navigateToView(23)
             } else if (opt === 2) {
-                window.currentViewIndex = 24
+                window.navigateToView(24)
             }
         }
     }
@@ -599,19 +634,19 @@ T.ApplicationWindow {
             window.lastReportsSubmenuIndex = selIdx
             window.lastDashboardMenuIndex = 4
             if (act === "Milling Statement") {
-                window.currentViewIndex = 19
+                window.navigateToView(19)
             } else if (act === "Stock Register") {
-                window.currentViewIndex = 13
+                window.navigateToView(13)
             } else if (act === "Item Movement") {
-                window.currentViewIndex = 13
+                window.navigateToView(13)
             } else if (act === "Ledger Statement") {
-                window.currentViewIndex = 8
+                window.navigateToView(8)
             } else if (act === "Sales Register") {
-                window.currentViewIndex = 20
+                window.navigateToView(20)
             } else if (act === "Purchase Register") {
-                window.currentViewIndex = 21
+                window.navigateToView(21)
             } else if (act === "Interest Calculator") {
-                window.currentViewIndex = 25
+                window.navigateToView(25)
             }
         }
     }
@@ -684,6 +719,12 @@ T.ApplicationWindow {
                 }
                 if (mainLoader.item && typeof mainLoader.item.syncDateInputsWithActivePeriod === "function") {
                     mainLoader.item.syncDateInputsWithActivePeriod()
+                }
+                if (mainLoader.item && typeof mainLoader.item.syncWithActivePeriod === "function") {
+                    mainLoader.item.syncWithActivePeriod()
+                }
+                if (mainLoader.item && typeof mainLoader.item.reloadStatementData === "function") {
+                    mainLoader.item.reloadStatementData()
                 }
                 if (mainLoader.item && typeof mainLoader.item.loadPartyStatement !== "undefined") {
                     mainLoader.item.loadPartyStatement(mainLoader.item.currentPartyName || "")

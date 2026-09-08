@@ -15,6 +15,7 @@ Rectangle {
     // -------------------------------------------------------------
     // PROPERTIES & STATE
     // -------------------------------------------------------------
+    property int editVoucherId: 0
     property int currentVoucherNo: 1
     property string voucherDate: ""
     property string dayOfWeek: ""
@@ -43,22 +44,120 @@ Rectangle {
     property string statusMessage: ""
     property bool isError: false
 
+    Shortcut {
+        sequence: "F2"
+        context: Qt.WindowShortcut
+        onActivated: root.openDateModal()
+    }
+
+    Shortcut {
+        sequence: "Ctrl+S"
+        context: Qt.WindowShortcut
+        onActivated: root.saveVoucher()
+    }
+
+    Shortcut {
+        sequence: "Alt+S"
+        context: Qt.WindowShortcut
+        onActivated: deducteeCombo.focusAndOpen()
+    }
+
+    Shortcut {
+        sequence: "Alt+L"
+        context: Qt.WindowShortcut
+        onActivated: deducteeCombo.focusAndOpen()
+    }
+
+    Shortcut {
+        sequence: "Alt+P"
+        context: Qt.WindowShortcut
+        onActivated: deducteeCombo.focusAndOpen()
+    }
+
+    function openDateModal() {
+        voucherDateModal.openWithDate(vchDateInput.text)
+    }
+
     // -------------------------------------------------------------
     // INITIALIZATION & CALCULATIONS
     // -------------------------------------------------------------
     Component.onCompleted: {
         Qt.callLater(function() {
-            initializeVoucher()
-            if (incomeInput) incomeInput.forceActiveFocus()
+            if (editVoucherId > 0 && typeof tdsModel !== "undefined" && tdsModel) {
+                var vch = tdsModel.get_tds_voucher_by_id(editVoucherId)
+                loadVoucher(vch)
+            } else if (typeof window !== "undefined" && window.targetTdsVoucherId > 0 && typeof tdsModel !== "undefined" && tdsModel) {
+                var vchId = window.targetTdsVoucherId
+                window.targetTdsVoucherId = 0
+                var vch2 = tdsModel.get_tds_voucher_by_id(vchId)
+                loadVoucher(vch2)
+            } else {
+                initializeVoucher()
+                root.openDateModal()
+            }
         })
     }
 
+    function loadVoucher(vch) {
+        if (!vch || typeof vch !== "object") return
+        editVoucherId = vch.id || 0
+        currentVoucherNo = vch.voucher_no || 1
+        if (vchNoInput) vchNoInput.text = currentVoucherNo.toString()
+
+        var rawDate = vch.voucher_date || ""
+        if (rawDate.indexOf("-") !== -1) {
+            var pts = rawDate.split("-")
+            if (pts.length === 3) rawDate = pts[2] + "/" + pts[1] + "/" + pts[0]
+        }
+        voucherDate = rawDate
+        if (vchDateInput) vchDateInput.text = voucherDate
+        dayOfWeek = vch.day_of_week || ""
+
+        currentTdsType = (vch.tds_type || "RENT").toUpperCase()
+        if (typeCombo) typeCombo.editText = currentTdsType
+
+        postInBooks = vch.post_in_books !== undefined ? (vch.post_in_books == 1 || vch.post_in_books === true) : true
+        if (typeof postCheck !== "undefined" && postCheck) postCheck.checked = postInBooks
+
+        selectedPartyName = (vch.ledger_name || "").trim()
+        selectedPartyId = vch.ledger_id || 0
+        if (deducteeCombo) deducteeCombo.editText = selectedPartyName
+
+        incomeAmount = vch.income_amount || 0.0
+        if (incomeInput) incomeInput.text = incomeAmount > 0.001 ? incomeAmount.toFixed(2) : ""
+
+        previousAmount = vch.previous_amount || 0.0
+        if (prevAmtInput) prevAmtInput.text = previousAmount > 0.001 ? previousAmount.toFixed(2) : "0.00"
+
+        tdsRate = vch.rate_tds !== undefined ? vch.rate_tds : 10.0
+        if (tdsRateInput) tdsRateInput.text = tdsRate.toFixed(2)
+
+        surchargeRate = vch.rate_surcharge !== undefined ? vch.rate_surcharge : 0.0
+        if (surchargeRateInput) surchargeRateInput.text = surchargeRate.toFixed(2)
+
+        cessRate = vch.rate_cess !== undefined ? vch.rate_cess : 0.0
+        if (cessRateInput) cessRateInput.text = cessRate.toFixed(2)
+
+        if (vch.exp_ledger_name && expLedgerCombo) expLedgerCombo.editText = vch.exp_ledger_name
+        if (vch.tds_ledger_name && tdsLedgerCombo) tdsLedgerCombo.editText = vch.tds_ledger_name
+
+        if (narrationInput) narrationInput.text = vch.narration || ""
+        if (nonDeductionInput) nonDeductionInput.text = vch.non_deduction_reason || ""
+
+        updatePartyInfo(selectedPartyName)
+        if (vch.narration && narrationInput) narrationInput.text = vch.narration
+        recalculateTotals()
+    }
+
     function initializeVoucher() {
+        if (typeof financialYearsModel !== "undefined" && financialYearsModel) {
+            voucherDate = financialYearsModel.get_working_date()
+        }
         if (typeof tdsModel !== "undefined" && tdsModel) {
             var info = tdsModel.get_next_voucher_info(currentTdsType)
             currentVoucherNo = info.next_voucher_no || 1
             if (vchNoInput) vchNoInput.text = currentVoucherNo.toString()
-            voucherDate = info.date_display || ""
+            if (!voucherDate) voucherDate = info.date_display || ""
             if (vchDateInput) vchDateInput.text = voucherDate
             dayOfWeek = info.day_name || ""
             if (typeCombo) typeCombo.editText = currentTdsType
@@ -166,13 +265,13 @@ Rectangle {
 
     function saveVoucher() {
         if (!selectedPartyName) {
-            statusMessage = "⚠️ Please select a Deductee / Party Ledger!"
+            statusMessage = "Please select a Deductee / Party Ledger!"
             isError = true
             deducteeCombo.focusAndOpen()
             return
         }
         if (incomeAmount <= 0.001) {
-            statusMessage = "⚠️ Please enter a valid Income Amount greater than 0!"
+            statusMessage = "Please enter a valid Income Amount greater than 0!"
             isError = true
             incomeInput.forceActiveFocus()
             return
@@ -187,6 +286,18 @@ Rectangle {
     }
 
     function executeSave() {
+        if (typeof financialYearsModel !== "undefined" && financialYearsModel) {
+            var valCheck = financialYearsModel.validate_voucher_date(vchDateInput.text)
+            if (!valCheck.valid) {
+                statusMessage = "" + valCheck.error
+                isError = true
+                vchDateInput.focusAndSelect()
+                return
+            }
+            vchDateInput.text = valCheck.formattedDate
+            financialYearsModel.set_working_date(valCheck.formattedDate)
+        }
+
         var vchNo = parseInt(vchNoInput.text) || currentVoucherNo
         var vDate = vchDateInput.text.trim()
 
@@ -205,6 +316,7 @@ Rectangle {
         }
 
         var payload = {
+            "id": editVoucherId,
             "voucher_no": vchNo,
             "voucher_date": vDate,
             "day_of_week": dayOfWeek,
@@ -236,28 +348,34 @@ Rectangle {
         if (typeof tdsModel !== "undefined" && tdsModel) {
             var ok = tdsModel.save_tds_voucher(payload)
             if (ok) {
-                statusMessage = "✅ TDS Voucher #" + vchNo + " saved & posted successfully!"
+                statusMessage = "TDS Voucher #" + vchNo + " saved & posted successfully!"
                 isError = false
                 root.voucherSaved()
             } else {
-                statusMessage = "❌ Failed to save TDS Voucher. Please check inputs."
+                statusMessage = "Failed to save TDS Voucher. Please check inputs."
                 isError = true
             }
         }
     }
 
     // -------------------------------------------------------------
-    // KEYBOARD NAVIGATION
+    // KEYBOARD & ESCAPE NAVIGATION
     // -------------------------------------------------------------
-    Keys.onEscapePressed: function(event) {
-        event.accepted = true
-        if (confirmModal.opened) {
+    function handleEscape() {
+        if (typeof confirmModal !== "undefined" && confirmModal && confirmModal.opened) {
             confirmModal.close()
-        } else if (newLedgerPopup.opened) {
+        } else if (typeof voucherDateModal !== "undefined" && voucherDateModal && voucherDateModal.opened) {
+            voucherDateModal.close()
+        } else if (typeof newLedgerPopup !== "undefined" && newLedgerPopup && newLedgerPopup.opened) {
             newLedgerPopup.close()
         } else {
             root.cancelRequested()
         }
+    }
+
+    Keys.onEscapePressed: function(event) {
+        event.accepted = true
+        root.handleEscape()
     }
 
     Shortcut {
@@ -299,16 +417,16 @@ Rectangle {
                     spacing: 4
                     Text { text: "← Back (Esc)"; color: "#0F172A"; font.bold: true; font.pixelSize: 12 }
                 }
-                onClicked: root.cancelRequested()
+                onClicked: root.handleEscape()
             }
 
             ColumnLayout {
                 spacing: 1
                 Text {
-                    text: "TDS VOUCHER (CREATION)"
+                    text: root.editVoucherId > 0 ? "TDS VOUCHER (ALTERATION)" : "TDS VOUCHER (CREATION)"
                     font.pixelSize: 15
                     font.bold: true
-                    color: "#7C3AED"
+                    color: root.editVoucherId > 0 ? "#2563EB" : "#7C3AED"
                     font.letterSpacing: 0.5
                 }
                 Text {
@@ -339,7 +457,7 @@ Rectangle {
                 }
                 contentItem: RowLayout {
                     spacing: 6
-                    Text { text: "💾 Save Voucher (F2)"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 12 }
+                    Text { text: "Save Voucher (F2)"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 12 }
                 }
                 onClicked: root.saveVoucher()
             }
@@ -422,11 +540,28 @@ Rectangle {
                                 text: root.voucherDate
                                 Layout.preferredWidth: 105
                                 placeholderText: "DD/MM/YYYY"
-                                onReturnPressed: typeCombo.focusAndOpen()
+                                onReturnPressed: function() {
+                                    if (typeof financialYearsModel !== "undefined" && financialYearsModel) {
+                                        var valRes = financialYearsModel.validate_voucher_date(vchDateInput.text)
+                                        if (!valRes.valid) {
+                                            statusMessage = "" + valRes.error
+                                            isError = true
+                                            vchDateInput.focusAndSelect()
+                                            return
+                                        }
+                                        vchDateInput.text = valRes.formattedDate
+                                        root.voucherDate = valRes.formattedDate
+                                        financialYearsModel.set_working_date(valRes.formattedDate)
+                                        statusMessage = ""
+                                        isError = false
+                                    }
+                                    typeCombo.focusAndOpen()
+                                }
                                 onEditingFinished: {
                                     root.voucherDate = text.trim()
                                     // Update day of week if valid
-                                    var parts = text.split("/")
+                                    var parts = text.split("-")
+                                    if (parts.length === 1) parts = text.split("/")
                                     if (parts.length === 3) {
                                         var d = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]))
                                         var days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
@@ -503,7 +638,7 @@ Rectangle {
                         spacing: 10
 
                         Text {
-                            text: "Ledger Name :"
+                            text: "Ledger Name (Alt+S) :"
                             color: "#B91C1C"
                             font.bold: true
                             font.pixelSize: 13
@@ -1005,7 +1140,7 @@ Rectangle {
                     }
                     contentItem: Text {
                         anchors.centerIn: parent
-                        text: "💾 Save TDS Voucher (F2)"
+                        text: "Save TDS Voucher (Ctrl+S)"
                         color: "#FFFFFF"
                         font.bold: true
                         font.pixelSize: 12
@@ -1021,6 +1156,25 @@ Rectangle {
     // -------------------------------------------------------------
     // MODALS
     // -------------------------------------------------------------
+    VoucherDateModal {
+        id: voucherDateModal
+        anchors.centerIn: parent
+        onDateConfirmed: function(fmtDate, isoDate) {
+            vchDateInput.text = fmtDate
+            root.voucherDate = fmtDate
+            var parts = fmtDate.split("-")
+            if (parts.length === 1) parts = fmtDate.split("/")
+            if (parts.length === 3) {
+                var d = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]))
+                var days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+                root.dayOfWeek = days[d.getDay()]
+            }
+            Qt.callLater(function() {
+                typeCombo.focusAndOpen()
+            })
+        }
+    }
+
     ConfirmationModal {
         id: confirmModal
         onConfirmed: root.executeSave()

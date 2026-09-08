@@ -25,7 +25,7 @@ Item {
             ColumnLayout {
                 spacing: 1
                 Text {
-                    text: "✏️ Modify Existing Ledger Account"
+                    text: "Modify Existing Ledger Account"
                     color: "#0F172A"
                     font.pixelSize: 18
                     font.bold: true
@@ -80,7 +80,7 @@ Item {
 
                     CustomWhiteCombo {
                         id: partySearchCombo
-                        label: "🔍 SEARCH & SELECT PARTY ACCOUNT TO MODIFY (Type Name, ↑/↓ Arrows & Enter) *"
+                        label: "SEARCH & SELECT PARTY ACCOUNT TO MODIFY (Alt+S) (Type Name, ↑/↓ Arrows & Enter) *"
                         Layout.fillWidth: true
                         focusInput: true
                         model: (typeof partiesModel !== "undefined" && partiesModel) ? partiesModel.get_party_list() : []
@@ -600,7 +600,7 @@ Item {
                 contentItem: RowLayout {
                     spacing: 8
                     anchors.centerIn: parent
-                    Text { text: "💾 Update Complete Ledger Account"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 14 }
+                    Text { text: "Update Complete Ledger Account"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 14 }
                     KbdBadge { text: "Enter"; badgeColor: "#14532D"; textColor: "#86EFAC"; borderColor: "#16A34A" }
                 }
                 Keys.onReturnPressed: root.saveUpdateLedger()
@@ -701,6 +701,24 @@ Item {
         titleText: "CONFIRM LEDGER UPDATE"
         messageText: "Are you sure you want to update Ledger Account '" + nameInput.text.trim() + "' under group '" + groupCombo.currentText + "'?"
         onConfirmed: root.executeUpdateLedger()
+    }
+
+    Shortcut {
+        sequence: "Alt+S"
+        context: Qt.WindowShortcut
+        onActivated: partySearchCombo.focusAndOpen()
+    }
+
+    Shortcut {
+        sequence: "Alt+L"
+        context: Qt.WindowShortcut
+        onActivated: partySearchCombo.focusAndOpen()
+    }
+
+    Shortcut {
+        sequence: "Alt+P"
+        context: Qt.WindowShortcut
+        onActivated: partySearchCombo.focusAndOpen()
     }
 
     Component.onCompleted: {

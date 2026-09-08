@@ -165,7 +165,7 @@ Rectangle {
                 border.color: "#A7F3D0"
                 Text {
                     anchors.centerIn: parent
-                    text: "📅"
+                    text: ""
                     font.pixelSize: 20
                 }
             }
@@ -192,7 +192,7 @@ Rectangle {
                 color: closeHover.containsMouse ? "#F1F5F9" : "transparent"
                 Text {
                     anchors.centerIn: parent
-                    text: "✕"
+                    text: "X"
                     font.pixelSize: 13
                     font.bold: true
                     color: "#64748B"
@@ -436,7 +436,7 @@ Rectangle {
                 }
 
                 Text {
-                    text: (root.selectedFromDate || "—") + "  ➔  " + (root.selectedToDate || "—")
+                    text: (root.selectedFromDate || "—") + "  ->  " + (root.selectedToDate || "—")
                     font.pixelSize: 13
                     font.bold: true
                     color: "#34D399"
@@ -477,7 +477,7 @@ Rectangle {
                     spacing: 6
                     Item { Layout.fillWidth: true }
                     Text {
-                        text: "✓ Apply Period"
+                        text: "Apply Period"
                         font.pixelSize: 13
                         font.bold: true
                         color: "#FFFFFF"

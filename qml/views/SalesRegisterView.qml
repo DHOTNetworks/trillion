@@ -15,94 +15,57 @@ T.ScrollView {
         root.cancelRequested()
     }
 
-    property string searchQuery: ""
-    property var allInvoices: []
-    property int totalInvoicesCount: 0
-    property int totalBagsCount: 0
-    property real totalWeightQtl: 0.0
-    property real totalTaxableAmt: 0.0
-    property real totalGstAmt: 0.0
-    property real totalGrossAmt: 0.0
-
     Component.onCompleted: {
-        reloadSalesRegister()
+        if (typeof salesRegisterCtrl !== "undefined" && salesRegisterCtrl) {
+            salesRegisterCtrl.reload()
+        }
         Qt.callLater(function() {
             salesListView.forceActiveFocus()
-            if (salesRegisterModel.count > 0) salesListView.currentIndex = 0
+            if (salesRegisterCtrl && salesRegisterCtrl.model.count > 0) {
+                salesListView.currentIndex = 0
+            }
         })
     }
 
-    function reloadSalesRegister() {
-        allInvoices = (typeof salesModel !== "undefined" && salesModel) ? salesModel.get_sales_register() : []
-        filterAndPopulateRegister()
-    }
-
-    function filterAndPopulateRegister() {
-        salesRegisterModel.clear()
-        totalInvoicesCount = 0
-        totalBagsCount = 0
-        totalWeightQtl = 0.0
-        totalTaxableAmt = 0.0
-        totalGstAmt = 0.0
-        totalGrossAmt = 0.0
-
-        var query = searchQuery.trim().toLowerCase()
-
-        for (var i = 0; i < allInvoices.length; i++) {
-            var inv = allInvoices[i]
-            var invNo = inv.invoice_no ? String(inv.invoice_no) : ""
-            var dt = inv.invoice_date ? String(inv.invoice_date) : ""
-            var cust = inv.customer_name ? String(inv.customer_name) : ""
-            var item = inv.item_name ? String(inv.item_name) : ""
-            var veh = inv.vehicle_no ? String(inv.vehicle_no) : ""
-
-            if (query !== "") {
-                if (invNo.toLowerCase().indexOf(query) === -1 &&
-                    cust.toLowerCase().indexOf(query) === -1 &&
-                    item.toLowerCase().indexOf(query) === -1 &&
-                    veh.toLowerCase().indexOf(query) === -1 &&
-                    dt.toLowerCase().indexOf(query) === -1) {
-                    continue
-                }
-            }
-
-            var bags = inv.bag_count ? parseInt(inv.bag_count) : 0
-            var w = inv.weight_qtl ? Number(inv.weight_qtl) : 0.0
-            var r = inv.rate_per_qtl ? Number(inv.rate_per_qtl) : 0.0
-            var tax = inv.taxable_amount ? Number(inv.taxable_amount) : 0.0
-            var gAmt = inv.gst_amount ? Number(inv.gst_amount) : 0.0
-            var tot = inv.total_amount ? Number(inv.total_amount) : 0.0
-
-            salesRegisterModel.append({
-                vchNoVal: inv.voucher_no ? String(inv.voucher_no) : ("Sale-" + (i + 1)),
-                invNoVal: invNo,
-                dateVal: dt,
-                custVal: cust,
-                itemVal: item,
-                bagsVal: bags > 0 ? bags : "-",
-                weightVal: w > 0 ? w.toFixed(3) : "-",
-                rateVal: r > 0 ? r.toFixed(2) : "-",
-                taxableVal: tax > 0 ? tax.toFixed(2) : "-",
-                gstVal: gAmt > 0 ? gAmt.toFixed(2) : "-",
-                totalVal: tot.toFixed(2),
-                vehVal: veh ? veh : "-"
-            })
-
-            totalInvoicesCount++
-            totalBagsCount += bags
-            totalWeightQtl += w
-            totalTaxableAmt += tax
-            totalGstAmt += gAmt
-            totalGrossAmt += tot
-        }
-        if (salesRegisterModel.count > 0) {
-            if (salesListView.currentIndex < 0 || salesListView.currentIndex >= salesRegisterModel.count) {
-                salesListView.currentIndex = 0
-            }
+    onVisibleChanged: {
+        if (visible && typeof salesRegisterCtrl !== "undefined" && salesRegisterCtrl) {
+            salesRegisterCtrl.reload()
         }
     }
 
-    GenericListModel { id: salesRegisterModel }
+    function openPrintModal() {
+        if (!salesRegisterCtrl || salesListView.currentIndex < 0) return
+        var it = salesRegisterCtrl.model.get(salesListView.currentIndex)
+        if (!it) return
+        regCopyModal.mode = "print"
+        regCopyModal.invoiceNo = it.invNoVal || ""
+        regCopyModal.customerName = it.partyNameVal || ""
+        regCopyModal.open()
+    }
+
+    function openPdfModal() {
+        if (!salesRegisterCtrl || salesListView.currentIndex < 0) return
+        var it = salesRegisterCtrl.model.get(salesListView.currentIndex)
+        if (!it) return
+        regCopyModal.mode = "pdf"
+        regCopyModal.invoiceNo = it.invNoVal || ""
+        regCopyModal.customerName = it.partyNameVal || ""
+        regCopyModal.open()
+    }
+
+    PrintCopyOptionsModal {
+        id: regCopyModal
+        onSelected: function(copyType) {
+            if (!salesRegisterCtrl || salesListView.currentIndex < 0) return
+            var it = salesRegisterCtrl.model.get(salesListView.currentIndex)
+            if (!it || !it.invNoVal || typeof printExportCtrl === "undefined" || !printExportCtrl) return
+            if (regCopyModal.mode === "print") {
+                printExportCtrl.print_sales_invoice(it.invNoVal, copyType)
+            } else {
+                printExportCtrl.export_sales_invoice_pdf(it.invNoVal, "", copyType)
+            }
+        }
+    }
 
     ColumnLayout {
         width: root.availableWidth > 0 ? root.availableWidth : 1200
@@ -116,19 +79,61 @@ T.ScrollView {
             ColumnLayout {
                 spacing: 2
                 Text {
-                    text: "📊 Sales Invoices Register (Bahi-Khata Bill Book)"
+                    text: " Sales Invoices Register (Commercial Sales Bills)"
                     color: "#0F172A"
                     font.pixelSize: 20
                     font.bold: true
                 }
                 Text {
-                    text: "Complete audit ledger of customer invoices, taxable revenue, taxes, and rice dispatches."
+                    text: "Complete audit ledger of customer invoices, rice & byproduct dispatch billing, and output GST."
                     color: "#64748B"
                     font.pixelSize: 12
                 }
             }
 
             Item { Layout.fillWidth: true }
+
+            T.Button {
+                id: printSelectedBtn
+                implicitWidth: contentItem.implicitWidth + 20
+                implicitHeight: 32
+                background: Rectangle { color: printSelectedBtn.hovered ? "#047857" : "#059669"; radius: 6 }
+                contentItem: RowLayout {
+                    spacing: 6
+                    Text { text: "Print Invoice"; color: "#FFFFFF"; font.pixelSize: 12; font.bold: true }
+                    KbdBadge { text: "Ctrl+P"; badgeColor: "#064E3B"; textColor: "#A7F3D0"; borderColor: "#059669" }
+                }
+                onClicked: root.openPrintModal()
+            }
+
+            T.Button {
+                id: exportPdfSelectedBtn
+                implicitWidth: contentItem.implicitWidth + 20
+                implicitHeight: 32
+                background: Rectangle { color: exportPdfSelectedBtn.hovered ? "#0284C7" : "#0EA5E9"; radius: 6 }
+                contentItem: RowLayout {
+                    spacing: 6
+                    Text { text: "Save PDF"; color: "#FFFFFF"; font.pixelSize: 12; font.bold: true }
+                    KbdBadge { text: "Alt+P"; badgeColor: "#075985"; textColor: "#BAE6FD"; borderColor: "#0EA5E9" }
+                }
+                onClicked: root.openPdfModal()
+            }
+
+            T.Button {
+                id: exportCsvBtn
+                implicitWidth: contentItem.implicitWidth + 16
+                implicitHeight: 32
+                background: Rectangle { color: "#F8FAFC"; radius: 6; border.color: "#CBD5E1" }
+                contentItem: RowLayout {
+                    spacing: 6
+                    Text { text: "Excel CSV"; color: "#334155"; font.pixelSize: 12; font.bold: true }
+                }
+                onClicked: {
+                    if (typeof printExportCtrl !== "undefined" && printExportCtrl) {
+                        printExportCtrl.export_sales_register_csv()
+                    }
+                }
+            }
 
             T.Button {
                 id: backBtn
@@ -155,30 +160,30 @@ T.ScrollView {
             spacing: 12
 
             StatCard {
-                title: "TOTAL INVOICES"
-                value: root.totalInvoicesCount.toString()
+                title: "TOTAL SALES BILLS"
+                value: (typeof salesRegisterCtrl !== "undefined" && salesRegisterCtrl) ? salesRegisterCtrl.totalInvoicesCount.toString() : "0"
                 accentColor: "#2563EB"
                 Layout.fillWidth: true
             }
 
             StatCard {
-                title: "TOTAL DISPATCH WEIGHT"
-                value: (typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.format_qty(root.totalWeightQtl) : (root.totalWeightQtl.toFixed(2) + " Qtl")
+                title: "TOTAL OUTWARD WEIGHT"
+                value: (typeof salesRegisterCtrl !== "undefined" && salesRegisterCtrl) ? salesRegisterCtrl.totalWeightFmt : "0.00 Qtl"
                 accentColor: "#16A34A"
                 Layout.fillWidth: true
             }
 
             StatCard {
-                title: "TAXABLE SALES (TURNOVER)"
-                value: (typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.format_inr(root.totalTaxableAmt) : ("₹" + root.totalTaxableAmt.toFixed(2))
+                title: "TAXABLE BILL VALUE"
+                value: (typeof salesRegisterCtrl !== "undefined" && salesRegisterCtrl) ? salesRegisterCtrl.totalTaxableFmt : "₹0.00"
                 accentColor: "#D97706"
                 Layout.fillWidth: true
             }
 
             StatCard {
-                title: "GROSS INVOICED REVENUE"
-                value: (typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.format_inr(root.totalGrossAmt) : ("₹" + root.totalGrossAmt.toFixed(2))
-                accentColor: "#7C3AED"
+                title: "GROSS REVENUE TOTAL"
+                value: (typeof salesRegisterCtrl !== "undefined" && salesRegisterCtrl) ? salesRegisterCtrl.totalGrossFmt : "₹0.00"
+                accentColor: "#059669"
                 Layout.fillWidth: true
             }
         }
@@ -210,7 +215,7 @@ T.ScrollView {
                         anchors.leftMargin: 16; anchors.rightMargin: 16
                         spacing: 12
 
-                        Text { text: "🔍 Search Invoices:"; color: "#334155"; font.pixelSize: 12; font.bold: true }
+                        Text { text: "Search Sales Bills:"; color: "#334155"; font.pixelSize: 12; font.bold: true }
 
                         Rectangle {
                             Layout.fillWidth: true
@@ -232,29 +237,30 @@ T.ScrollView {
                                     color: "#0F172A"
                                     selectByMouse: true
                                     onTextChanged: {
-                                        root.searchQuery = text
-                                        root.filterAndPopulateRegister()
+                                        if (typeof salesRegisterCtrl !== "undefined" && salesRegisterCtrl) {
+                                            salesRegisterCtrl.searchQuery = text
+                                        }
                                     }
                                     Keys.onDownPressed: function(event) {
                                         event.accepted = true
                                         salesListView.forceActiveFocus()
-                                        if (salesListView.currentIndex < 0 && salesRegisterModel.count > 0) salesListView.currentIndex = 0
+                                        if (salesListView.currentIndex < 0 && salesListView.count > 0) salesListView.currentIndex = 0
                                     }
                                     Keys.onReturnPressed: function(event) {
                                         event.accepted = true
                                         salesListView.forceActiveFocus()
-                                        if (salesListView.currentIndex < 0 && salesRegisterModel.count > 0) salesListView.currentIndex = 0
+                                        if (salesListView.currentIndex < 0 && salesListView.count > 0) salesListView.currentIndex = 0
                                     }
                                     Keys.onEnterPressed: function(event) {
                                         event.accepted = true
                                         salesListView.forceActiveFocus()
-                                        if (salesListView.currentIndex < 0 && salesRegisterModel.count > 0) salesListView.currentIndex = 0
+                                        if (salesListView.currentIndex < 0 && salesListView.count > 0) salesListView.currentIndex = 0
                                     }
                                 }
 
                                 Text {
                                     visible: searchInput.text === ""
-                                    text: "Filter by invoice no, customer name, item, date, vehicle..."
+                                    text: "Filter by invoice no, customer name, commodity item, date..."
                                     color: "#94A3B8"
                                     font.pixelSize: 12
                                 }
@@ -306,7 +312,7 @@ T.ScrollView {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     clip: true
-                    model: salesRegisterModel
+                    model: (typeof salesRegisterCtrl !== "undefined" && salesRegisterCtrl) ? salesRegisterCtrl.model : null
                     boundsBehavior: Flickable.StopAtBounds
                     focus: true
                     highlightFollowsCurrentItem: true
@@ -314,15 +320,15 @@ T.ScrollView {
 
                     Keys.onReturnPressed: function(event) {
                         event.accepted = true
-                        if (currentIndex >= 0 && currentIndex < salesRegisterModel.count) {
-                            var it = salesRegisterModel.get(currentIndex)
+                        if (currentIndex >= 0 && currentIndex < count) {
+                            var it = salesRegisterCtrl.model.get(currentIndex)
                             if (it && it.invNoVal) root.openInvoiceRequested(it.invNoVal)
                         }
                     }
                     Keys.onEnterPressed: function(event) {
                         event.accepted = true
-                        if (currentIndex >= 0 && currentIndex < salesRegisterModel.count) {
-                            var it = salesRegisterModel.get(currentIndex)
+                        if (currentIndex >= 0 && currentIndex < count) {
+                            var it = salesRegisterCtrl.model.get(currentIndex)
                             if (it && it.invNoVal) root.openInvoiceRequested(it.invNoVal)
                         }
                     }
@@ -337,7 +343,7 @@ T.ScrollView {
                     }
                     Keys.onDownPressed: function(event) {
                         event.accepted = true
-                        if (currentIndex < salesRegisterModel.count - 1) {
+                        if (currentIndex < count - 1) {
                             currentIndex++
                             positionViewAtIndex(currentIndex, ListView.Contain)
                         }
@@ -379,7 +385,7 @@ T.ScrollView {
                             Text { text: model.custVal; color: "#0F172A"; font.pixelSize: 11; font.bold: true; Layout.fillWidth: true; elide: Text.ElideRight }
                             Text { text: model.itemVal; color: "#475569"; font.pixelSize: 11; Layout.preferredWidth: 150; elide: Text.ElideRight }
                             Text { text: model.bagsVal.toString(); color: "#334155"; font.pixelSize: 11; Layout.preferredWidth: 45; horizontalAlignment: Text.AlignRight }
-                            Text { text: Number(model.weightVal || 0).toFixed(2); color: "#16A34A"; font.pixelSize: 11; font.bold: true; Layout.preferredWidth: 70; horizontalAlignment: Text.AlignRight }
+                            Text { text: model.weightVal ? model.weightVal.toString() : "-"; color: "#16A34A"; font.pixelSize: 11; font.bold: true; Layout.preferredWidth: 70; horizontalAlignment: Text.AlignRight }
                             Text { text: model.rateFmt; color: "#334155"; font.pixelSize: 11; Layout.preferredWidth: 70; horizontalAlignment: Text.AlignRight }
                             Text { text: model.taxableFmt; color: "#0F172A"; font.pixelSize: 11; font.bold: true; Layout.preferredWidth: 95; horizontalAlignment: Text.AlignRight }
                             Text { text: model.gstFmt; color: "#64748B"; font.pixelSize: 11; Layout.preferredWidth: 75; horizontalAlignment: Text.AlignRight }
@@ -402,12 +408,12 @@ T.ScrollView {
                         anchors.leftMargin: 16; anchors.rightMargin: 16
                         spacing: 12
 
-                        Text { text: "GRAND TOTAL (" + root.totalInvoicesCount.toString() + " Invoices):"; color: "#166534"; font.pixelSize: 12; font.bold: true }
-                        Text { text: root.totalBagsCount.toString() + " Bags (" + root.totalWeightQtl.toFixed(2) + " Qtl)"; color: "#15803D"; font.pixelSize: 12; font.bold: true }
+                        Text { text: "GRAND TOTAL (" + ((typeof salesRegisterCtrl !== "undefined" && salesRegisterCtrl) ? salesRegisterCtrl.totalInvoicesCount.toString() : "0") + " Invoices):"; color: "#166534"; font.pixelSize: 12; font.bold: true }
+                        Text { text: ((typeof salesRegisterCtrl !== "undefined" && salesRegisterCtrl) ? (salesRegisterCtrl.totalBagsCount.toString() + " Bags (" + salesRegisterCtrl.totalWeightFmt + ")") : ""); color: "#15803D"; font.pixelSize: 12; font.bold: true }
                         Item { Layout.fillWidth: true }
-                        Text { text: "Taxable: " + ((typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.format_inr(root.totalTaxableAmt) : ("₹" + root.totalTaxableAmt.toFixed(2))); color: "#9A3412"; font.pixelSize: 12; font.bold: true }
+                        Text { text: "Taxable: " + ((typeof salesRegisterCtrl !== "undefined" && salesRegisterCtrl) ? salesRegisterCtrl.totalTaxableFmt : "₹0.00"); color: "#9A3412"; font.pixelSize: 12; font.bold: true }
                         Item { implicitWidth: 16 }
-                        Text { text: "Gross Revenue: " + ((typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.format_inr(root.totalGrossAmt) : ("₹" + root.totalGrossAmt.toFixed(2))); color: "#166534"; font.pixelSize: 13; font.bold: true }
+                        Text { text: "Gross Revenue: " + ((typeof salesRegisterCtrl !== "undefined" && salesRegisterCtrl) ? salesRegisterCtrl.totalGrossFmt : "₹0.00"); color: "#166534"; font.pixelSize: 13; font.bold: true }
                     }
                 }
             }

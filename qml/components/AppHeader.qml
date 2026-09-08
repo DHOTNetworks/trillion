@@ -39,7 +39,7 @@ Rectangle {
                 color: "#1E3A8A"
                 Text {
                     anchors.centerIn: parent
-                    text: "🌾"
+                    text: ""
                     font.pixelSize: 16
                 }
             }
@@ -54,7 +54,7 @@ Rectangle {
                     font.letterSpacing: 0.5
                 }
                 Text {
-                    text: "Enterprise Resource Planning & Bahi-Khata"
+                    text: "Enterprise Resource Planning & Accounting"
                     color: "#64748B"
                     font.pixelSize: 10
                 }
@@ -73,7 +73,7 @@ Rectangle {
                     id: switchFirmRow
                     anchors.centerIn: parent
                     spacing: 4
-                    Text { text: "🏛️"; font.pixelSize: 10 }
+                    Text { text: ""; font.pixelSize: 10 }
                     Text {
                         text: "Switch Firm (Alt+F1)"
                         color: switchFirmMouse.containsMouse ? "#2563EB" : "#475569"
@@ -108,7 +108,7 @@ Rectangle {
                 spacing: 6
 
                 Text {
-                    text: "📅"
+                    text: ""
                     font.pixelSize: 11
                 }
 
@@ -157,7 +157,7 @@ Rectangle {
                     spacing: 6
                     anchors.centerIn: parent
                     Text {
-                        text: "🔄 Sync MDB"
+                        text: "Sync MDB"
                         color: "#2563EB"
                         font.pixelSize: 11
                         font.bold: true
@@ -219,7 +219,7 @@ Rectangle {
                     spacing: 6
                     anchors.centerIn: parent
                     Text {
-                        text: "⌨ Shortcuts"
+                        text: "Shortcuts"
                         color: "#2563EB"
                         font.pixelSize: 11
                         font.bold: true

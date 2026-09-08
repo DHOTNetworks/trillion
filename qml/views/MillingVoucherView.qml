@@ -37,10 +37,20 @@ FocusScope {
         id: producedModel
     }
 
+    Shortcut {
+        sequence: "F2"
+        context: Qt.WindowShortcut
+        onActivated: root.openDateModal()
+    }
+
+    function openDateModal() {
+        voucherDateModal.openWithDate(vchDateInput.text)
+    }
+
     Component.onCompleted: {
         resetForm()
         Qt.callLater(function() {
-            vchDateInput.focusInput = true
+            root.openDateModal()
         })
     }
 
@@ -53,7 +63,7 @@ FocusScope {
             autoVoucherNo = ""
         }
 
-        vchDateInput.text = Qt.formatDate(new Date(), "dd-MM-yyyy")
+        vchDateInput.text = (typeof financialYearsModel !== "undefined" && financialYearsModel) ? financialYearsModel.get_working_date() : Qt.formatDate(new Date(), "dd-MM-yyyy")
         particularsInput.text = ""
         
         consumedModel.clear()
@@ -193,13 +203,13 @@ FocusScope {
     function saveMillingVoucher() {
         statusMessage = ""
         if (totalConsumedWeight <= 0) {
-            statusMessage = "❌ Please enter valid Consumed Paddy Weight."
+            statusMessage = "Please enter valid Consumed Paddy Weight."
             isError = true
             return
         }
 
         if (totalProducedWeight <= 0) {
-            statusMessage = "❌ Please enter valid Produced Items Weight."
+            statusMessage = "Please enter valid Produced Items Weight."
             isError = true
             return
         }
@@ -208,6 +218,18 @@ FocusScope {
     }
 
     function executeSave() {
+        if (typeof financialYearsModel !== "undefined" && financialYearsModel) {
+            var valCheck = financialYearsModel.validate_voucher_date(vchDateInput.text)
+            if (!valCheck.valid) {
+                statusMessage = "" + valCheck.error
+                isError = true
+                vchDateInput.focusAndSelect()
+                return
+            }
+            vchDateInput.text = valCheck.formattedDate
+            financialYearsModel.set_working_date(valCheck.formattedDate)
+        }
+
         var cList = []
         for (var i = 0; i < consumedModel.count; i++) {
             var cr = consumedModel.get(i)
@@ -244,23 +266,27 @@ FocusScope {
         ) : false
 
         if (ok) {
-            statusMessage = "✅ Milling Production Voucher " + root.autoVchCode + " saved & posted successfully!"
+            statusMessage = "Milling Production Voucher " + root.autoVchCode + " saved & posted successfully!"
             isError = false
             root.voucherSaved()
             resetForm()
         } else {
-            statusMessage = "❌ Error saving Milling Voucher. Please verify entries."
+            statusMessage = "Error saving Milling Voucher. Please verify entries."
             isError = true
         }
     }
 
     function hasActivePopup() {
-        return saveConfirmModal.opened
+        return saveConfirmModal.opened || voucherDateModal.opened
     }
 
     function closeActivePopup() {
         if (saveConfirmModal.opened) {
             saveConfirmModal.close()
+            return true
+        }
+        if (voucherDateModal.opened) {
+            voucherDateModal.close()
             return true
         }
         return false
@@ -269,13 +295,14 @@ FocusScope {
     function handleBackOrCancel() {
         if (saveConfirmModal.opened) {
             saveConfirmModal.close()
+        } else if (voucherDateModal.opened) {
+            voucherDateModal.close()
         } else {
             root.cancelRequested()
         }
     }
 
     // Keyboard Shortcuts
-    Shortcut { sequence: "F2"; onActivated: saveMillingVoucher() }
     Shortcut { sequence: "Ctrl+S"; onActivated: saveMillingVoucher() }
     Shortcut { sequence: "Alt+P"; onActivated: autoPickStandardItems() }
     Shortcut { sequence: "Alt+A"; onActivated: addConsumedRow() }
@@ -298,7 +325,7 @@ FocusScope {
                 spacing: 12
 
                 Text {
-                    text: "🌾 Milling Voucher Entry (Production & Stock Movement)"
+                    text: "Milling Voucher Entry (Production & Stock Movement)"
                     color: "#FFFFFF"
                     font.pixelSize: 15
                     font.bold: true
@@ -384,7 +411,7 @@ FocusScope {
                             anchors.leftMargin: 8; anchors.rightMargin: 8
                             Text { text: root.autoVchCode; color: "#2563EB"; font.pixelSize: 12; font.bold: true }
                             Item { Layout.fillWidth: true }
-                            Text { text: "🔒"; font.pixelSize: 10 }
+                            Text { text: ""; font.pixelSize: 10 }
                         }
                     }
                 }
@@ -393,10 +420,25 @@ FocusScope {
                 CustomInput {
                     id: vchDateInput
                     label: "Voucher Date"
-                    text: Qt.formatDate(new Date(), "dd-MM-yyyy")
+                    text: (typeof financialYearsModel !== "undefined" && financialYearsModel) ? financialYearsModel.get_working_date() : Qt.formatDate(new Date(), "dd-MM-yyyy")
                     Layout.preferredWidth: 120
                     focusInput: true
-                    onReturnPressed: particularsInput.focusInput = true
+                    onReturnPressed: function() {
+                        if (typeof financialYearsModel !== "undefined" && financialYearsModel) {
+                            var valRes = financialYearsModel.validate_voucher_date(vchDateInput.text)
+                            if (!valRes.valid) {
+                                statusMessage = "" + valRes.error
+                                isError = true
+                                vchDateInput.focusAndSelect()
+                                return
+                            }
+                            vchDateInput.text = valRes.formattedDate
+                            financialYearsModel.set_working_date(valRes.formattedDate)
+                            statusMessage = ""
+                            isError = false
+                        }
+                        particularsInput.focusInput = true
+                    }
                 }
 
                 // Particulars / Narration
@@ -415,7 +457,7 @@ FocusScope {
                     background: Rectangle { color: "#EFF6FF"; border.color: "#93C5FD"; radius: 6 }
                     contentItem: RowLayout {
                         spacing: 6
-                        Text { text: "⚡ Auto Pick Recipe"; color: "#1D4ED8"; font.pixelSize: 11; font.bold: true }
+                        Text { text: "Auto Pick Recipe"; color: "#1D4ED8"; font.pixelSize: 11; font.bold: true }
                         KbdBadge { text: "Alt+P"; badgeColor: "#1E40AF"; textColor: "#93C5FD"; borderColor: "#2563EB" }
                     }
                     onClicked: root.autoPickStandardItems()
@@ -452,7 +494,7 @@ FocusScope {
                         RowLayout {
                             anchors.fill: parent
                             anchors.leftMargin: 10; anchors.rightMargin: 10
-                            Text { text: "🔻 ITEMS TO BE CONSUMED (Raw Material Input)"; color: "#DC2626"; font.pixelSize: 12; font.bold: true }
+                            Text { text: "ITEMS TO BE CONSUMED (Raw Material Input)"; color: "#DC2626"; font.pixelSize: 12; font.bold: true }
                             Item { Layout.fillWidth: true }
                             T.Button {
                                 implicitWidth: contentItem.implicitWidth + 16
@@ -651,7 +693,7 @@ FocusScope {
                                     Layout.preferredWidth: 24
                                     Layout.preferredHeight: 24
                                     flat: true
-                                    contentItem: Text { text: "✕"; color: "#DC2626"; font.bold: true; font.pixelSize: 11; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                                    contentItem: Text { text: "X"; color: "#DC2626"; font.bold: true; font.pixelSize: 11; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                                     onClicked: root.removeConsumedRow(index)
                                 }
                             }
@@ -693,7 +735,7 @@ FocusScope {
                         RowLayout {
                             anchors.fill: parent
                             anchors.leftMargin: 10; anchors.rightMargin: 10
-                            Text { text: "🔺 ITEMS TO BE PRODUCED (Output Products & Yield)"; color: "#15803D"; font.pixelSize: 12; font.bold: true }
+                            Text { text: "ITEMS TO BE PRODUCED (Output Products & Yield)"; color: "#15803D"; font.pixelSize: 12; font.bold: true }
                             Item { Layout.fillWidth: true }
                             T.Button {
                                 implicitWidth: contentItem.implicitWidth + 16
@@ -966,7 +1008,7 @@ FocusScope {
                                     Layout.preferredWidth: 24
                                     Layout.preferredHeight: 24
                                     flat: true
-                                    contentItem: Text { text: "✕"; color: "#DC2626"; font.bold: true; font.pixelSize: 11; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                                    contentItem: Text { text: "X"; color: "#DC2626"; font.bold: true; font.pixelSize: 11; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                                     onClicked: root.removeProducedRow(index)
                                 }
                             }
@@ -1033,13 +1075,24 @@ FocusScope {
                         background: Rectangle { color: "#16A34A"; radius: 6 }
                         contentItem: RowLayout {
                             spacing: 6
-                            Text { text: "💾 Save Voucher"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 12 }
-                            KbdBadge { text: "F2"; badgeColor: "#14532D"; textColor: "#86EFAC"; borderColor: "#16A34A" }
+                            Text { text: "Save Voucher"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 12 }
+                            KbdBadge { text: "Ctrl+S"; badgeColor: "#14532D"; textColor: "#86EFAC"; borderColor: "#16A34A" }
                         }
                         onClicked: root.saveMillingVoucher()
                     }
                 }
             }
+        }
+    }
+
+    VoucherDateModal {
+        id: voucherDateModal
+        anchors.centerIn: parent
+        onDateConfirmed: function(fmtDate, isoDate) {
+            vchDateInput.text = fmtDate
+            Qt.callLater(function() {
+                particularsInput.focusInput = true
+            })
         }
     }
 

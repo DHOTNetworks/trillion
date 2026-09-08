@@ -268,19 +268,43 @@ QVariantMap PartiesModel::get_party_by_name(const QString& name) const {
     QString cleanName = name.trimmed();
     if (cleanName.isEmpty()) return {};
 
+    // 1. Exact match
     QVariantList rows = DatabaseManager::instance().executeQuery(
         "SELECT * FROM parties WHERE name = ? COLLATE NOCASE LIMIT 1;",
         {cleanName}
     );
-    if (rows.isEmpty()) {
+    if (!rows.isEmpty()) return rows.first().toMap();
+
+    // 2. Match with non-breaking space replaced
+    QString normName = cleanName;
+    normName.replace(QChar(0x00A0), ' ');
+    rows = DatabaseManager::instance().executeQuery(
+        "SELECT * FROM parties WHERE REPLACE(name, char(160), ' ') = ? COLLATE NOCASE LIMIT 1;",
+        {normName}
+    );
+    if (!rows.isEmpty()) return rows.first().toMap();
+
+    // 3. Space-wildcard match
+    QString pattern = normName;
+    pattern.replace(' ', '%');
+    rows = DatabaseManager::instance().executeQuery(
+        "SELECT * FROM parties WHERE name LIKE ? OR alias LIKE ? LIMIT 1;",
+        {"%" + pattern + "%", "%" + pattern + "%"}
+    );
+    if (!rows.isEmpty()) return rows.first().toMap();
+
+    // 4. Base name without bracket [City]
+    QString baseName = normName;
+    int bIdx = baseName.indexOf('[');
+    if (bIdx > 0) baseName = baseName.left(bIdx).trimmed();
+    if (!baseName.isEmpty()) {
         rows = DatabaseManager::instance().executeQuery(
-            "SELECT * FROM parties WHERE alias = ? COLLATE NOCASE OR name LIKE ? LIMIT 1;",
-            {cleanName, "%" + cleanName + "%"}
+            "SELECT * FROM parties WHERE name LIKE ? OR alias LIKE ? OR mailing_name LIKE ? LIMIT 1;",
+            {"%" + baseName + "%", "%" + baseName + "%", "%" + baseName + "%"}
         );
+        if (!rows.isEmpty()) return rows.first().toMap();
     }
-    if (!rows.isEmpty()) {
-        return rows.first().toMap();
-    }
+
     return QVariantMap();
 }
 
@@ -480,7 +504,7 @@ QVariantMap PartiesModel::get_party_statement(const QString& partyName) {
             sql += " AND voucher_date >= ? AND voucher_date <= ?";
             params << activeFromDate << activeToDate;
         }
-        sql += " ORDER BY voucher_date ASC, id ASC;";
+        sql += " ORDER BY voucher_date ASC, CAST(voucher_no AS INTEGER) ASC, id ASC;";
 
         QVariantList rows = DatabaseManager::instance().executeQuery(sql, params);
         for (const auto& r : rows) {
@@ -498,6 +522,10 @@ QVariantMap PartiesModel::get_party_statement(const QString& partyName) {
             auto [isoD, fmtD] = parseDates(t.value("voucher_date").toString());
             QString fyStr = computeFyForDate(isoD, t.value("financial_year").toString());
 
+            if (rawType == "TDS" || vType == "TDS") {
+                rawType = "TDS";
+                vType = "TDS";
+            }
             QString displayRef = !rawType.isEmpty() ? QString("%1 %2").arg(rawType, vNo).trimmed() : QString("%1 %2").arg(vType, vNo).trimmed();
             if (displayRef.isEmpty()) displayRef = vNo;
 
@@ -510,6 +538,8 @@ QVariantMap PartiesModel::get_party_statement(const QString& partyName) {
                 desc = QString("Receipt via %1").arg(!opposing.isEmpty() ? opposing : "Bank/Cash");
             } else if (rawType == "ChPt" || rawType == "Pymt" || vType == "Payment") {
                 desc = QString("Payment to %1").arg(!opposing.isEmpty() ? opposing : "Bank/Cash");
+            } else if (rawType == "TDS" || vType == "TDS") {
+                desc = !narr.isEmpty() ? narr : QString("TDS: %1").arg(!opposing.isEmpty() ? opposing : "TDS");
             } else if (rawType == "Jrnl" || vType == "Journal") {
                 desc = QString("Journal: %1").arg(!opposing.isEmpty() ? opposing : "A/c");
             } else if (rawType == "JFrm" || vType == "J-Form") {
@@ -520,7 +550,7 @@ QVariantMap PartiesModel::get_party_statement(const QString& partyName) {
 
             if (!veh.isEmpty()) desc += " | Veh: " + veh;
             if (!broker.isEmpty()) desc += " | Broker: " + broker;
-            if (!narr.isEmpty()) desc += " | " + narr;
+            if (!narr.isEmpty() && rawType != "TDS" && vType != "TDS" && !desc.contains(narr)) desc += " | " + narr;
 
             double tdsAmt = t.value("tds_amount").toDouble();
             if ((rawType == "Purc" || vType == "Purchase") && tdsAmt > 0.0) {
@@ -591,7 +621,7 @@ QVariantMap PartiesModel::get_party_statement(const QString& partyName) {
             sql += " WHERE voucher_date >= ? AND voucher_date <= ?";
             params << activeFromDate << activeToDate;
         }
-        sql += " ORDER BY voucher_date ASC, id ASC;";
+        sql += " ORDER BY voucher_date ASC, CAST(voucher_no AS INTEGER) ASC, id ASC;";
 
         QVariantList rows = DatabaseManager::instance().executeQuery(sql, params);
         for (const auto& r : rows) {

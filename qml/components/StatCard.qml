@@ -6,7 +6,7 @@ Rectangle {
     property string title: "Metric"
     property string value: "0.00"
     property string subtext: ""
-    property string icon: "📈"
+    property string icon: ""
     property color accentColor: "#2563EB"
 
     implicitWidth: 200
@@ -35,10 +35,6 @@ Rectangle {
 
         RowLayout {
             spacing: 8
-            Text {
-                text: root.icon
-                font.pixelSize: 16
-            }
             Text {
                 text: root.title
                 color: "#64748B"

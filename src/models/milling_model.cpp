@@ -189,18 +189,30 @@ bool MillingModel::add_milling_voucher_full(
 QVariantList MillingModel::get_milling_statement(const QString& from_date, const QString& to_date, const QString& variety) {
     QString sql = "SELECT * FROM milling_batches WHERE 1=1";
     QVariantList args;
-    if (!from_date.isEmpty()) {
-        sql += " AND batch_date >= ?";
-        args.append(from_date);
+
+    QString fDate = from_date.trimmed();
+    QString tDate = to_date.trimmed();
+
+    if (fDate.isEmpty() && tDate.isEmpty()) {
+        QVariantList fyRows = DatabaseManager::instance().executeQuery("SELECT start_date, end_date FROM financial_years WHERE is_active = 1 LIMIT 1;");
+        if (!fyRows.isEmpty()) {
+            fDate = fyRows.first().toMap().value("start_date").toString();
+            tDate = fyRows.first().toMap().value("end_date").toString();
+        }
     }
-    if (!to_date.isEmpty()) {
+
+    if (fDate != "ALL" && fDate != "All" && !fDate.isEmpty()) {
+        sql += " AND batch_date >= ?";
+        args.append(fDate);
+    }
+    if (tDate != "ALL" && tDate != "All" && !tDate.isEmpty()) {
         sql += " AND batch_date <= ?";
-        args.append(to_date);
+        args.append(tDate);
     }
     if (!variety.isEmpty() && variety != "All" && variety != "All Varieties") {
-        sql += " AND (paddy_variety = ? OR paddy_item = ?)";
+        sql += " AND (paddy_variety = ? OR paddy_variety LIKE ?)";
         args.append(variety);
-        args.append(variety);
+        args.append("%" + variety + "%");
     }
     sql += " ORDER BY batch_date DESC, id DESC;";
 
@@ -237,13 +249,25 @@ QVariantMap MillingModel::get_milling_totals(const QString& from_date, const QSt
                   "SUM(broken_rice_qtl) as tot_broken, SUM(bran_qtl) as tot_bran, SUM(husk_qtl) as tot_husk, "
                   "SUM(wastage_qtl) as tot_wastage FROM milling_batches WHERE 1=1";
     QVariantList args;
-    if (!from_date.isEmpty()) {
-        sql += " AND batch_date >= ?";
-        args.append(from_date);
+
+    QString fDate = from_date.trimmed();
+    QString tDate = to_date.trimmed();
+
+    if (fDate.isEmpty() && tDate.isEmpty()) {
+        QVariantList fyRows = DatabaseManager::instance().executeQuery("SELECT start_date, end_date FROM financial_years WHERE is_active = 1 LIMIT 1;");
+        if (!fyRows.isEmpty()) {
+            fDate = fyRows.first().toMap().value("start_date").toString();
+            tDate = fyRows.first().toMap().value("end_date").toString();
+        }
     }
-    if (!to_date.isEmpty()) {
+
+    if (fDate != "ALL" && fDate != "All" && !fDate.isEmpty()) {
+        sql += " AND batch_date >= ?";
+        args.append(fDate);
+    }
+    if (tDate != "ALL" && tDate != "All" && !tDate.isEmpty()) {
         sql += " AND batch_date <= ?";
-        args.append(to_date);
+        args.append(tDate);
     }
 
     QVariantList rows = DatabaseManager::instance().executeQuery(sql, args);

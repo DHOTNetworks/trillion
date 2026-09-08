@@ -9,142 +9,113 @@ FocusScope {
 
     signal cancelRequested()
     signal openNewMillingRequested()
+    signal openPeriodModal()
 
-    property string searchQuery: ""
-    property string selectedVariety: "All Varieties"
-    property var allBatches: []
-    property int selectedBatchIndex: -1
-    property string activeBatchNo: ""
-    property var activeBatchItems: []
+    function handleEscape() {
+        root.cancelRequested()
+    }
 
-    property int totalBatchesCount: 0
-    property string totalPaddyMilledFmt: "0.00"
-    property string totalHeadRiceProducedFmt: "0.00"
-    property string totalBranProducedFmt: "0.00"
-    property string totalBrokenProducedFmt: "0.00"
-    property string totalHuskProducedFmt: "0.00"
-    property string totalWastageMilledFmt: "0.00"
-    property string avgYieldPctFmt: "0.00%"
+    property string activePeriodText: ""
+    property string fromDateText: ""
+    property string toDateText: ""
+
+    function toIsoDate(dStr) {
+        if (!dStr) return ""
+        var str = dStr.trim()
+        if (str === "ALL" || str === "All") return "ALL"
+        if (str.indexOf("-") !== -1) {
+            var parts = str.split("-")
+            if (parts.length === 3) {
+                if (parts[0].length === 4) return str
+                if (parts[2].length === 4) return parts[2] + "-" + parts[1] + "-" + parts[0]
+            }
+        }
+        return str
+    }
+
+    function toDisplayDate(dStr) {
+        if (!dStr) return ""
+        var str = dStr.trim()
+        if (str === "ALL" || str === "All") return "All Financial Years"
+        if (str.indexOf("-") !== -1) {
+            var parts = str.split("-")
+            if (parts.length === 3) {
+                if (parts[0].length === 4) return parts[2] + "-" + parts[1] + "-" + parts[0]
+                if (parts[2].length === 4) return str
+            }
+        }
+        return str
+    }
+
+    function syncWithActivePeriod() {
+        if (typeof stockItemsModel !== "undefined" && stockItemsModel) {
+            var fIso = stockItemsModel.get_from_date()
+            var tIso = stockItemsModel.get_to_date()
+            var fy = stockItemsModel.get_financial_year()
+            if (fIso && tIso) {
+                fromDateText = toDisplayDate(fIso)
+                toDateText = toDisplayDate(tIso)
+                activePeriodText = fromDateText + " To " + toDateText + " (" + fy + ")"
+            } else {
+                activePeriodText = fy || "Active Period"
+            }
+        }
+    }
 
     Component.onCompleted: {
+        syncWithActivePeriod()
         reloadStatementData()
         Qt.callLater(function() { root.forceActiveFocus() })
     }
 
+    onVisibleChanged: {
+        if (visible) {
+            syncWithActivePeriod()
+            reloadStatementData()
+            Qt.callLater(function() { root.forceActiveFocus() })
+        }
+    }
+
     function reloadStatementData() {
-        if (typeof millingModel !== "undefined" && millingModel) {
-            allBatches = millingModel.get_milling_statement("", "", selectedVariety)
-            var totals = millingModel.get_milling_totals("", "")
-            totalBatchesCount = totals.total_batches || allBatches.length
-            totalPaddyMilledFmt = totals.total_paddy_fmt || "0.00"
-            totalHeadRiceProducedFmt = totals.total_head_rice_fmt || "0.00"
-            totalBranProducedFmt = totals.total_bran_fmt || "0.00"
-            totalBrokenProducedFmt = totals.total_broken_fmt || "0.00"
-            totalHuskProducedFmt = totals.total_husk_fmt || "0.00"
-            totalWastageMilledFmt = totals.total_wastage_fmt || "0.00"
-            avgYieldPctFmt = totals.avg_yield_fmt || "0.00%"
-        } else {
-            allBatches = []
-        }
-        filterAndPopulateBatches()
-    }
-
-    function filterAndPopulateBatches() {
-        batchListModel.clear()
-        var query = searchQuery.trim().toLowerCase()
-
-        for (var i = 0; i < allBatches.length; i++) {
-            var b = allBatches[i]
-            var bNo = b.batch_no ? b.batch_no.toString() : ""
-            var bDate = b.batch_date ? b.batch_date.toString() : ""
-            var bVar = b.paddy_variety ? b.paddy_variety.toString() : "Paddy Basmati"
-            var bNarr = b.narration ? b.narration.toString() : ""
-
-            if (query !== "") {
-                if (bNo.toLowerCase().indexOf(query) === -1 &&
-                    bDate.toLowerCase().indexOf(query) === -1 &&
-                    bVar.toLowerCase().indexOf(query) === -1 &&
-                    bNarr.toLowerCase().indexOf(query) === -1) {
-                    continue
-                }
-            }
-
-            batchListModel.append({
-                "id": b.id || (i + 1),
-                "batchNo": bNo,
-                "batchDate": bDate,
-                "paddyVariety": bVar,
-                "paddyInput": b.paddy_input_fmt || (parseFloat(b.paddy_input_qtl) || 0.0).toFixed(3),
-                "headRice": b.head_rice_fmt || (parseFloat(b.head_rice_qtl) || 0.0).toFixed(3),
-                "brokenRice": b.broken_rice_fmt || (parseFloat(b.broken_rice_qtl) || 0.0).toFixed(3),
-                "bran": b.bran_fmt || (parseFloat(b.bran_qtl) || 0.0).toFixed(3),
-                "husk": b.husk_fmt || (parseFloat(b.husk_qtl) || 0.0).toFixed(3),
-                "wastage": b.wastage_fmt || (parseFloat(b.wastage_qtl) || 0.0).toFixed(3),
-                "yieldPct": b.yield_pct_fmt || ((parseFloat(b.yield_pct) || 0.0).toFixed(2) + "%"),
-                "narration": bNarr
-            })
-        }
-
-        if (batchListModel.count > 0) {
-            selectBatch(0)
-        } else {
-            selectedBatchIndex = -1
-            activeBatchNo = ""
-            activeItemsModel.clear()
+        var fIso = toIsoDate(fromDateText)
+        var tIso = toIsoDate(toDateText)
+        if (typeof millingStatementCtrl !== "undefined" && millingStatementCtrl) {
+            millingStatementCtrl.reload(fIso, tIso)
         }
     }
-
-    function selectBatch(idx) {
-        if (idx >= 0 && idx < batchListModel.count) {
-            selectedBatchIndex = idx
-            var row = batchListModel.get(idx)
-            activeBatchNo = row.batchNo
-            batchListView.currentIndex = idx
-            batchListView.positionViewAtIndex(idx, ListView.Contain)
-            loadBatchItems(row.id, row.batchNo)
-        }
-    }
-
-    function loadBatchItems(bId, bNo) {
-        activeItemsModel.clear()
-        if (typeof millingModel !== "undefined" && millingModel && (bId || bNo)) {
-            var items = millingModel.get_batch_items(bId || 0, bNo || "")
-            for (var i = 0; i < items.length; i++) {
-                var it = items[i]
-                var drcr = it.drcr || (it.row_no === 1 ? "Cr" : "Dr")
-                var bg = parseInt(it.bags) || 0
-                var pct = parseFloat(it.percentage) || 0.0
-
-                activeItemsModel.append({
-                    "rowNo": it.row_no || (i + 1),
-                    "drcr": drcr,
-                    "isInput": drcr === "Cr",
-                    "itemName": it.item_name || ("Item #" + it.item_code),
-                    "yieldPct": pct > 0 ? (pct.toFixed(2) + "%") : "-",
-                    "bags": bg.toString(),
-                    "weight": it.weight_fmt || (parseFloat(it.weight_qtl) || 0.0).toFixed(3),
-                    "rate": it.rate_fmt || "-",
-                    "amount": it.amount_fmt || "₹0.00",
-                    "narration": it.narration || ""
-                })
-            }
-        }
-    }
-
-    GenericListModel { id: batchListModel }
-    GenericListModel { id: activeItemsModel }
 
     // Keyboard Shortcuts
     Shortcut { sequence: "F2"; onActivated: root.openNewMillingRequested() }
     Shortcut { sequence: "Ctrl+F"; onActivated: searchInput.focusInput = true }
+    Shortcut {
+        sequence: "Alt+F"
+        context: Qt.WindowShortcut
+        onActivated: filterPopup.open()
+    }
 
+    Keys.onEscapePressed: function(event) {
+        event.accepted = true
+        root.cancelRequested()
+    }
     Keys.onUpPressed: function(event) {
         event.accepted = true
-        if (selectedBatchIndex > 0) selectBatch(selectedBatchIndex - 1)
+        if (typeof millingStatementCtrl !== "undefined" && millingStatementCtrl) {
+            var idx = millingStatementCtrl.selectedBatchIndex
+            if (idx > 0) {
+                millingStatementCtrl.selectBatch(idx - 1)
+                batchListView.positionViewAtIndex(idx - 1, ListView.Contain)
+            }
+        }
     }
     Keys.onDownPressed: function(event) {
         event.accepted = true
-        if (selectedBatchIndex < batchListModel.count - 1) selectBatch(selectedBatchIndex + 1)
+        if (typeof millingStatementCtrl !== "undefined" && millingStatementCtrl) {
+            var idx = millingStatementCtrl.selectedBatchIndex
+            if (idx < millingStatementCtrl.batchModel.count - 1) {
+                millingStatementCtrl.selectBatch(idx + 1)
+                batchListView.positionViewAtIndex(idx + 1, ListView.Contain)
+            }
+        }
     }
 
     ColumnLayout {
@@ -165,7 +136,7 @@ FocusScope {
                 spacing: 12
 
                 Text {
-                    text: "🌾 Milling Statement & Production Register"
+                    text: " Milling Statement & Production Register"
                     color: "#FFFFFF"
                     font.pixelSize: 16
                     font.bold: true
@@ -176,13 +147,56 @@ FocusScope {
                 // Search Box
                 CustomInput {
                     id: searchInput
-                    Layout.preferredWidth: 260
-                    placeholderText: "🔍 Search Batch No, Date, Variety..."
-                    text: root.searchQuery
+                    Layout.preferredWidth: 240
+                    placeholderText: "Search Batch No, Date..."
+                    text: (typeof millingStatementCtrl !== "undefined" && millingStatementCtrl) ? millingStatementCtrl.searchQuery : ""
                     onTextChanged: {
-                        root.searchQuery = text
-                        root.filterAndPopulateBatches()
+                        if (typeof millingStatementCtrl !== "undefined" && millingStatementCtrl) {
+                            millingStatementCtrl.searchQuery = text
+                        }
                     }
+                }
+
+                // Active Financial Year Badge
+                Rectangle {
+                    implicitWidth: periodRow.implicitWidth + 20
+                    implicitHeight: 30
+                    color: "#1E293B"
+                    radius: 6
+                    border.color: "#38BDF8"
+                    border.width: 1
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            root.openPeriodModal()
+                        }
+                    }
+                    RowLayout {
+                        id: periodRow
+                        anchors.centerIn: parent
+                        spacing: 6
+                        Text {
+                            text: " " + (root.activePeriodText !== "" ? root.activePeriodText : ((typeof stockItemsModel !== "undefined" && stockItemsModel) ? stockItemsModel.get_financial_year() : "Active Period"))
+                            color: "#38BDF8"
+                            font.pixelSize: 11
+                            font.bold: true
+                        }
+                    }
+                }
+
+                // Filter Dates Button
+                T.Button {
+                    id: filterBtn
+                    implicitWidth: contentItem.implicitWidth + 20
+                    implicitHeight: 30
+                    background: Rectangle { color: filterPopup.visible ? "#1D4ED8" : "#2563EB"; radius: 6 }
+                    contentItem: RowLayout {
+                        spacing: 6
+                        Text { text: "Filter Dates"; color: "#FFF"; font.bold: true; font.pixelSize: 11 }
+                        KbdBadge { text: "Alt+F"; badgeColor: "#1E3A8A"; textColor: "#93C5FD"; borderColor: "#2563EB" }
+                    }
+                    onClicked: filterPopup.open()
                 }
 
                 T.Button {
@@ -214,7 +228,7 @@ FocusScope {
             }
         }
 
-        // 2. SUMMARY METRICS STRIP (INDIAN NUMBERING SYSTEM)
+        // 2. SUMMARY METRICS STRIP
         RowLayout {
             Layout.fillWidth: true
             spacing: 8
@@ -230,7 +244,7 @@ FocusScope {
                     anchors.centerIn: parent
                     spacing: 2
                     Text { text: "TOTAL BATCHES"; color: "#1D4ED8"; font.pixelSize: 9; font.bold: true; font.letterSpacing: 0.5; Layout.alignment: Qt.AlignHCenter }
-                    Text { text: root.totalBatchesCount + " Batches"; color: "#1E3A8A"; font.pixelSize: 14; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+                    Text { text: ((typeof millingStatementCtrl !== "undefined" && millingStatementCtrl) ? millingStatementCtrl.totalBatchesCount.toString() : "0") + " Batches"; color: "#1E3A8A"; font.pixelSize: 14; font.bold: true; Layout.alignment: Qt.AlignHCenter }
                 }
             }
 
@@ -245,7 +259,7 @@ FocusScope {
                     anchors.centerIn: parent
                     spacing: 2
                     Text { text: "RAW PADDY INPUT"; color: "#DC2626"; font.pixelSize: 9; font.bold: true; font.letterSpacing: 0.5; Layout.alignment: Qt.AlignHCenter }
-                    Text { text: root.totalPaddyMilledFmt + " Qtl"; color: "#991B1B"; font.pixelSize: 14; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+                    Text { text: ((typeof millingStatementCtrl !== "undefined" && millingStatementCtrl) ? millingStatementCtrl.totalPaddyMilledFmt : "0.00") + " Qtl"; color: "#991B1B"; font.pixelSize: 14; font.bold: true; Layout.alignment: Qt.AlignHCenter }
                 }
             }
 
@@ -260,7 +274,7 @@ FocusScope {
                     anchors.centerIn: parent
                     spacing: 2
                     Text { text: "HEAD RICE RECOVERY"; color: "#059669"; font.pixelSize: 9; font.bold: true; font.letterSpacing: 0.5; Layout.alignment: Qt.AlignHCenter }
-                    Text { text: root.totalHeadRiceProducedFmt + " Qtl (" + root.avgYieldPctFmt + ")"; color: "#065F46"; font.pixelSize: 14; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+                    Text { text: ((typeof millingStatementCtrl !== "undefined" && millingStatementCtrl) ? (millingStatementCtrl.totalHeadRiceProducedFmt + " Qtl (" + millingStatementCtrl.avgYieldPctFmt + ")") : "0.00 Qtl (0.00%)"); color: "#065F46"; font.pixelSize: 14; font.bold: true; Layout.alignment: Qt.AlignHCenter }
                 }
             }
 
@@ -275,7 +289,7 @@ FocusScope {
                     anchors.centerIn: parent
                     spacing: 2
                     Text { text: "RICE BRAN"; color: "#D97706"; font.pixelSize: 9; font.bold: true; font.letterSpacing: 0.5; Layout.alignment: Qt.AlignHCenter }
-                    Text { text: root.totalBranProducedFmt + " Qtl"; color: "#92400E"; font.pixelSize: 14; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+                    Text { text: ((typeof millingStatementCtrl !== "undefined" && millingStatementCtrl) ? millingStatementCtrl.totalBranProducedFmt : "0.00") + " Qtl"; color: "#92400E"; font.pixelSize: 14; font.bold: true; Layout.alignment: Qt.AlignHCenter }
                 }
             }
 
@@ -290,7 +304,7 @@ FocusScope {
                     anchors.centerIn: parent
                     spacing: 2
                     Text { text: "BROKEN / NAKKU"; color: "#7C3AED"; font.pixelSize: 9; font.bold: true; font.letterSpacing: 0.5; Layout.alignment: Qt.AlignHCenter }
-                    Text { text: root.totalBrokenProducedFmt + " Qtl"; color: "#5B21B6"; font.pixelSize: 14; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+                    Text { text: ((typeof millingStatementCtrl !== "undefined" && millingStatementCtrl) ? millingStatementCtrl.totalBrokenProducedFmt : "0.00") + " Qtl"; color: "#5B21B6"; font.pixelSize: 14; font.bold: true; Layout.alignment: Qt.AlignHCenter }
                 }
             }
 
@@ -305,7 +319,7 @@ FocusScope {
                     anchors.centerIn: parent
                     spacing: 2
                     Text { text: "MILLING LOSS / WASTAGE"; color: "#64748B"; font.pixelSize: 9; font.bold: true; font.letterSpacing: 0.5; Layout.alignment: Qt.AlignHCenter }
-                    Text { text: root.totalWastageMilledFmt + " Qtl"; color: "#334155"; font.pixelSize: 14; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+                    Text { text: ((typeof millingStatementCtrl !== "undefined" && millingStatementCtrl) ? millingStatementCtrl.totalWastageMilledFmt : "0.00") + " Qtl"; color: "#334155"; font.pixelSize: 14; font.bold: true; Layout.alignment: Qt.AlignHCenter }
                 }
             }
         }
@@ -359,7 +373,7 @@ FocusScope {
                         id: batchListView
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        model: batchListModel
+                        model: (typeof millingStatementCtrl !== "undefined" && millingStatementCtrl) ? millingStatementCtrl.batchModel : null
                         clip: true
                         spacing: 2
 
@@ -367,14 +381,18 @@ FocusScope {
                             id: batchRow
                             width: batchListView.width
                             height: 30
-                            color: root.selectedBatchIndex === index ? "#EFF6FF" : (index % 2 === 0 ? "#FFFFFF" : "#F8FAFC")
-                            border.color: root.selectedBatchIndex === index ? "#3B82F6" : "#E2E8F0"
-                            border.width: root.selectedBatchIndex === index ? 1.5 : 1
+                            color: ((typeof millingStatementCtrl !== "undefined" && millingStatementCtrl) && millingStatementCtrl.selectedBatchIndex === index) ? "#EFF6FF" : (index % 2 === 0 ? "#FFFFFF" : "#F8FAFC")
+                            border.color: ((typeof millingStatementCtrl !== "undefined" && millingStatementCtrl) && millingStatementCtrl.selectedBatchIndex === index) ? "#3B82F6" : "#E2E8F0"
+                            border.width: ((typeof millingStatementCtrl !== "undefined" && millingStatementCtrl) && millingStatementCtrl.selectedBatchIndex === index) ? 1.5 : 1
                             radius: 4
 
                             MouseArea {
                                 anchors.fill: parent
-                                onClicked: root.selectBatch(index)
+                                onClicked: {
+                                    if (typeof millingStatementCtrl !== "undefined" && millingStatementCtrl) {
+                                        millingStatementCtrl.selectBatch(index)
+                                    }
+                                }
                             }
 
                             RowLayout {
@@ -404,7 +422,7 @@ FocusScope {
                         RowLayout {
                             anchors.fill: parent
                             anchors.leftMargin: 8; anchors.rightMargin: 8
-                            Text { text: "Showing " + batchListModel.count + " batches (Use ↑ / ↓ arrow keys to navigate)"; color: "#64748B"; font.pixelSize: 10 }
+                            Text { text: "Showing " + ((typeof millingStatementCtrl !== "undefined" && millingStatementCtrl) ? millingStatementCtrl.batchModel.count : 0) + " batches (Use ↑ / ↓ arrow keys to navigate)"; color: "#64748B"; font.pixelSize: 10 }
                         }
                     }
                 }
@@ -435,14 +453,14 @@ FocusScope {
                             anchors.fill: parent
                             anchors.leftMargin: 8; anchors.rightMargin: 8
                             Text {
-                                text: "📋 Batch Details: " + (root.activeBatchNo !== "" ? root.activeBatchNo : "Select a batch")
+                                text: "Batch Details: " + ((typeof millingStatementCtrl !== "undefined" && millingStatementCtrl && millingStatementCtrl.activeBatchNo !== "") ? millingStatementCtrl.activeBatchNo : "Select a batch")
                                 color: "#FFFFFF"
                                 font.pixelSize: 12
                                 font.bold: true
                             }
                             Item { Layout.fillWidth: true }
                             Text {
-                                text: activeItemsModel.count + " Items"
+                                text: ((typeof millingStatementCtrl !== "undefined" && millingStatementCtrl) ? millingStatementCtrl.itemModel.count : 0) + " Items"
                                 color: "#A7F3D0"
                                 font.pixelSize: 11
                                 font.bold: true
@@ -476,7 +494,7 @@ FocusScope {
                         id: activeItemsListView
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        model: activeItemsModel
+                        model: (typeof millingStatementCtrl !== "undefined" && millingStatementCtrl) ? millingStatementCtrl.itemModel : null
                         clip: true
                         spacing: 2
 
@@ -514,6 +532,141 @@ FocusScope {
                                 Text { Layout.preferredWidth: 65; text: model.amount; color: "#0F172A"; font.pixelSize: 11; font.bold: true; horizontalAlignment: Text.AlignRight }
                             }
                         }
+                    }
+                }
+            }
+        }
+    }
+
+    T.Popup {
+        id: filterPopup
+        width: 420
+        height: 320
+        modal: true
+        dim: true
+        x: Math.round((parent.width - width) / 2)
+        y: Math.round((parent.height - height) / 2)
+        focus: true
+        closePolicy: T.Popup.CloseOnPressOutside | T.Popup.CloseOnEscape
+
+        background: Rectangle {
+            color: "#FFFFFF"
+            border.color: "#2563EB"
+            border.width: 2
+            radius: 12
+        }
+
+        onOpened: {
+            filterFromDateInput.text = root.fromDateText !== "" ? root.fromDateText : (typeof stockItemsModel !== "undefined" && stockItemsModel ? root.toDisplayDate(stockItemsModel.get_from_date()) : "01-04-2026")
+            filterToDateInput.text = root.toDateText !== "" ? root.toDateText : (typeof stockItemsModel !== "undefined" && stockItemsModel ? root.toDisplayDate(stockItemsModel.get_to_date()) : "31-03-2027")
+            Qt.callLater(function() { filterFromDateInput.focusInput = true })
+        }
+
+        FocusScope {
+            id: filterScope
+            anchors.fill: parent
+            focus: true
+
+            Keys.onReturnPressed: function(event) { event.accepted = true; filterScope.applyFilter() }
+            Keys.onEnterPressed: function(event) { event.accepted = true; filterScope.applyFilter() }
+            Keys.onEscapePressed: function(event) { event.accepted = true; filterPopup.close() }
+
+            function applyFilter() {
+                root.fromDateText = filterFromDateInput.text.trim()
+                root.toDateText = filterToDateInput.text.trim()
+                root.activePeriodText = root.fromDateText + " To " + root.toDateText
+                filterPopup.close()
+                root.reloadStatementData()
+                root.forceActiveFocus()
+            }
+
+            function resetToActiveFY() {
+                root.syncWithActivePeriod()
+                filterFromDateInput.text = root.fromDateText
+                filterToDateInput.text = root.toDateText
+                filterPopup.close()
+                root.reloadStatementData()
+                root.forceActiveFocus()
+            }
+
+            function showAllBatches() {
+                root.fromDateText = "ALL"
+                root.toDateText = "ALL"
+                root.activePeriodText = "All Financial Years (All Batches)"
+                filterPopup.close()
+                root.reloadStatementData()
+                root.forceActiveFocus()
+            }
+
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 18
+                spacing: 12
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Text { text: " Filter Milling Statement Dates"; color: "#0F172A"; font.pixelSize: 15; font.bold: true }
+                    Item { Layout.fillWidth: true }
+                    T.Button {
+                        implicitWidth: 28
+                        implicitHeight: 28
+                        flat: true
+                        contentItem: Text { text: "X"; color: "#64748B"; font.bold: true; font.pixelSize: 12; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                        onClicked: filterPopup.close()
+                    }
+                }
+
+                Rectangle { Layout.fillWidth: true; height: 1; color: "#E2E8F0" }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 10
+
+                    CustomInput {
+                        id: filterFromDateInput
+                        label: "From Date (DD-MM-YYYY)"
+                        text: "01-04-2026"
+                        Layout.fillWidth: true
+                        onReturnPressed: filterToDateInput.focusInput = true
+                    }
+
+                    CustomInput {
+                        id: filterToDateInput
+                        label: "To Date (DD-MM-YYYY)"
+                        text: "31-03-2027"
+                        Layout.fillWidth: true
+                        onReturnPressed: filterScope.applyFilter()
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+
+                    T.Button {
+                        implicitWidth: contentItem.implicitWidth + 16
+                        implicitHeight: 30
+                        background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
+                        contentItem: Text { text: "Active FY"; color: "#1E293B"; font.bold: true; font.pixelSize: 11; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                        onClicked: filterScope.resetToActiveFY()
+                    }
+
+                    T.Button {
+                        implicitWidth: contentItem.implicitWidth + 16
+                        implicitHeight: 30
+                        background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
+                        contentItem: Text { text: "All Batches (All FYs)"; color: "#6366F1"; font.bold: true; font.pixelSize: 11; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                        onClicked: filterScope.showAllBatches()
+                    }
+
+                    Item { Layout.fillWidth: true }
+
+                    T.Button {
+                        implicitWidth: contentItem.implicitWidth + 20
+                        implicitHeight: 30
+                        background: Rectangle { color: "#2563EB"; radius: 6 }
+                        contentItem: Text { text: "Apply (Enter)"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 11; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                        onClicked: filterScope.applyFilter()
                     }
                 }
             }

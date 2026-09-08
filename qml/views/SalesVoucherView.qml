@@ -55,11 +55,81 @@ Item {
         id: lineItemsModel
     }
 
+    Shortcut {
+        sequence: "F2"
+        context: Qt.WindowShortcut
+        onActivated: root.openDateModal()
+    }
+
+    Shortcut {
+        sequence: "Alt+S"
+        context: Qt.WindowShortcut
+        onActivated: partyCombo.focusAndOpen()
+    }
+
+    Shortcut {
+        sequence: "Alt+L"
+        context: Qt.WindowShortcut
+        onActivated: partyCombo.focusAndOpen()
+    }
+
+    Shortcut {
+        sequence: "Ctrl+P"
+        context: Qt.WindowShortcut
+        onActivated: root.openPrintModal()
+    }
+
+    Shortcut {
+        sequence: "Alt+P"
+        context: Qt.WindowShortcut
+        onActivated: root.openPdfModal()
+    }
+
+    function openDateModal() {
+        voucherDateModal.openWithDate(invoiceDateInput.text)
+    }
+
+    function openPrintModal() {
+        var invNo = invNoInput.text.trim() || invNoInput.placeholderText.trim()
+        copyOptionsModal.mode = "print"
+        copyOptionsModal.invoiceNo = invNo
+        copyOptionsModal.customerName = partyCombo.currentText
+        copyOptionsModal.open()
+    }
+
+    function openPdfModal() {
+        var invNo = invNoInput.text.trim() || invNoInput.placeholderText.trim()
+        copyOptionsModal.mode = "pdf"
+        copyOptionsModal.invoiceNo = invNo
+        copyOptionsModal.customerName = partyCombo.currentText
+        copyOptionsModal.open()
+    }
+
+    function printCurrentInvoice(copyType) {
+        var invNo = invNoInput.text.trim() || invNoInput.placeholderText.trim()
+        if (typeof printExportCtrl !== "undefined" && printExportCtrl && invNo) {
+            printExportCtrl.print_sales_invoice(invNo, copyType ? copyType : "ORIGINAL FOR RECIPIENT")
+        }
+    }
+
+    function exportCurrentInvoicePdf(copyType) {
+        var invNo = invNoInput.text.trim() || invNoInput.placeholderText.trim()
+        if (typeof printExportCtrl !== "undefined" && printExportCtrl && invNo) {
+            printExportCtrl.export_sales_invoice_pdf(invNo, "", copyType ? copyType : "ORIGINAL FOR RECIPIENT")
+        }
+    }
+
     Component.onCompleted: {
         resetForm()
-        Qt.callLater(function() {
-            partyCombo.focusAndOpen()
-        })
+        if (!root.isEditMode) {
+            Qt.callLater(function() {
+                root.openDateModal()
+            })
+        } else {
+            Qt.callLater(function() {
+                partyCombo.focusAndOpen()
+            })
+        }
     }
 
     function resetForm() {
@@ -74,6 +144,8 @@ Item {
             autoVoucherNo = ""
         }
 
+        var wDate = (typeof financialYearsModel !== "undefined" && financialYearsModel) ? financialYearsModel.get_working_date() : Qt.formatDate(new Date(), "dd-MM-yyyy")
+        invoiceDateInput.text = wDate
         invNoInput.text = ""
         invNoInput.placeholderText = nextInv ? nextInv : "e.g. MRI/2627-244"
         dueDaysInput.text = "0"
@@ -155,6 +227,31 @@ Item {
 
         otherExpInput.text = (parseFloat(inv.other_exp) || 0.0).toFixed(2)
         lessInput.text = (parseFloat(inv.less_amount) || 0.0).toFixed(2)
+        freightInput.text = (parseFloat(inv.freight_charges) || 0.0).toFixed(2)
+        tcsInput.text = (parseFloat(inv.tcs_amount) || 0.0).toFixed(2)
+        challanInput.text = inv.challan_no || ""
+        dueDaysInput.text = (inv.due_days !== undefined && inv.due_days !== null) ? String(inv.due_days) : "0"
+
+        if (inv.market_type) {
+            if (inv.market_type === "Mandi Type") {
+                marketTypeCombo.currentIndex = 1
+            } else if (inv.market_type === "Market Type (Without Stock)") {
+                marketTypeCombo.currentIndex = 2
+            } else {
+                marketTypeCombo.currentIndex = 0
+            }
+        } else {
+            marketTypeCombo.currentIndex = 0
+        }
+
+        if (inv.place_of_supply) {
+            posCombo.editText = inv.place_of_supply
+        }
+        if (inv.tax_status) {
+            taxStatusCombo.currentIndex = (inv.tax_status === "IGST") ? 1 : (inv.tax_status === "Export" ? 2 : 0)
+        } else if (parseFloat(inv.igst_amount) > 0) {
+            taxStatusCombo.currentIndex = 1
+        }
         
         lineItemsModel.clear()
         var items = inv.items || []
@@ -198,13 +295,13 @@ Item {
         var userAmount = parseFloat(amountInput.text) || 0.0
 
         if (!itemName) {
-            statusMessage = "❌ Please select an Item."
+            statusMessage = "Please select an Item."
             isError = true
             return
         }
 
         if (!root.isWithoutStock && weightVal <= 0 && bCount <= 0) {
-            statusMessage = "❌ Please enter valid Bags or Weight."
+            statusMessage = "Please enter valid Bags or Weight."
             isError = true
             return
         }
@@ -373,7 +470,7 @@ Item {
         var partyLedger = partyCombo.currentText.trim()
 
         if (!partyLedger) {
-            statusMessage = "❌ Please select a Party Ledger Account."
+            statusMessage = "Please select a Party Ledger Account."
             isError = true
             return
         }
@@ -383,7 +480,7 @@ Item {
         }
 
         if (lineItemsModel.count === 0) {
-            statusMessage = "❌ Please enter at least one Stock Item in the grid."
+            statusMessage = "Please enter at least one Stock Item in the grid."
             isError = true
             return
         }
@@ -392,6 +489,18 @@ Item {
     }
 
     function executeSaveInvoice() {
+        if (typeof financialYearsModel !== "undefined" && financialYearsModel) {
+            var valCheck = financialYearsModel.validate_voucher_date(invoiceDateInput.text)
+            if (!valCheck.valid) {
+                statusMessage = "" + valCheck.error
+                isError = true
+                invoiceDateInput.focusAndSelect()
+                return
+            }
+            invoiceDateInput.text = valCheck.formattedDate
+            financialYearsModel.set_working_date(valCheck.formattedDate)
+        }
+
         var partyLedger = partyCombo.currentText.trim()
         var invNo = invNoInput.text.trim()
         if (!invNo && typeof salesModel !== "undefined" && salesModel) {
@@ -427,6 +536,10 @@ Item {
 
         if (typeof salesModel !== "undefined" && salesModel) {
             var ok = false
+            var mktType = marketTypeCombo.currentText
+            var dDays = parseInt(dueDaysInput.text) || 0
+            var chNo = challanInput.text.trim()
+            var posVal = posCombo.editText || ""
             if (root.editingInvoiceId > 0) {
                 ok = salesModel.update_sales_invoice_full(
                     root.editingInvoiceId,
@@ -438,7 +551,8 @@ Item {
                     driverInput.text.trim(), billTimeInput.text.trim(), saudaDtInput.text.trim(),
                     shippingInput.text.trim(), poNoInput.text.trim(), gradeInput.text.trim(),
                     kandaWeightInput.text.trim(), transportInput.text.trim(), brokerInput.text.trim(),
-                    autoVoucherNo, itemsList
+                    autoVoucherNo, itemsList,
+                    mktType, dDays, chNo, freightAmount, tcsAmount, 0.0, selectedTaxStatus, posVal
                 )
             } else {
                 ok = salesModel.add_sales_invoice_full(
@@ -450,27 +564,41 @@ Item {
                     driverInput.text.trim(), billTimeInput.text.trim(), saudaDtInput.text.trim(),
                     shippingInput.text.trim(), poNoInput.text.trim(), gradeInput.text.trim(),
                     kandaWeightInput.text.trim(), transportInput.text.trim(), brokerInput.text.trim(),
-                    autoVoucherNo
+                    autoVoucherNo, itemsList,
+                    mktType, dDays, chNo, freightAmount, tcsAmount, 0.0, selectedTaxStatus, posVal
                 )
             }
             if (ok) {
-                statusMessage = root.editingInvoiceId > 0 ? ("✅ Sales Voucher " + invNo + " updated successfully!") : ("✅ Sales Voucher " + (invNo ? invNo : autoVchCode) + " saved & posted successfully!")
+                statusMessage = root.editingInvoiceId > 0 ? ("Sales Voucher " + invNo + " updated successfully!") : ("Sales Voucher " + (invNo ? invNo : autoVchCode) + " saved & posted successfully!")
                 isError = false
                 resetForm()
                 root.invoiceSaved()
             } else {
-                statusMessage = "❌ Failed to save Sales Voucher."
+                statusMessage = "Failed to save Sales Voucher."
                 isError = true
             }
         }
     }
 
     function hasActivePopup() {
-        return saveConfirmModal.opened
+        return saveConfirmModal.opened || copyOptionsModal.opened || voucherDateModal.opened
     }
 
     function closeActivePopup() {
         if (saveConfirmModal.opened) saveConfirmModal.close()
+        if (copyOptionsModal.opened) copyOptionsModal.close()
+        if (voucherDateModal.opened) voucherDateModal.close()
+    }
+
+    VoucherDateModal {
+        id: voucherDateModal
+        anchors.centerIn: parent
+        onDateConfirmed: function(fmtDate, isoDate) {
+            invoiceDateInput.text = fmtDate
+            Qt.callLater(function() {
+                partyCombo.focusAndOpen()
+            })
+        }
     }
 
     ConfirmationModal {
@@ -479,6 +607,17 @@ Item {
         titleText: "CONFIRM SALES VOUCHER SAVE"
         messageText: "Are you sure you want to save & post Sales Voucher " + (invNoInput.text.trim() || (typeof salesModel !== "undefined" ? salesModel.get_next_invoice_no() : autoVchCode)) + " for ₹" + grandTotal.toFixed(2) + "?"
         onConfirmed: root.executeSaveInvoice()
+    }
+
+    PrintCopyOptionsModal {
+        id: copyOptionsModal
+        onSelected: function(copyType) {
+            if (copyOptionsModal.mode === "print") {
+                root.printCurrentInvoice(copyType)
+            } else {
+                root.exportCurrentInvoicePdf(copyType)
+            }
+        }
     }
 
     // MAIN SINGLE SLATE CARD CONTAINER
@@ -583,7 +722,7 @@ Item {
                                 anchors.leftMargin: 8; anchors.rightMargin: 8
                                 Text { text: root.autoVchCode; color: "#2563EB"; font.pixelSize: 11; font.bold: true }
                                 Item { Layout.fillWidth: true }
-                                Text { text: "🔒"; font.pixelSize: 9 }
+                                Text { text: ""; font.pixelSize: 9 }
                             }
                         }
                     }
@@ -603,13 +742,28 @@ Item {
 
                     ColumnLayout {
                         spacing: 1
-                        Text { text: "Invoice Date"; color: "#0F172A"; font.pixelSize: 10; font.bold: true }
+                        Text { text: "Invoice Date (F2)"; color: "#0F172A"; font.pixelSize: 10; font.bold: true }
                         CustomInput {
                             id: invoiceDateInput
-                            text: Qt.formatDate(new Date(), "dd-MM-yyyy")
+                            text: (typeof financialYearsModel !== "undefined" && financialYearsModel) ? financialYearsModel.get_working_date() : Qt.formatDate(new Date(), "dd-MM-yyyy")
                             placeholderText: "DD-MM-YYYY"
                             Layout.preferredWidth: 110
-                            onReturnPressed: dueDaysInput.focusInput = true
+                            onReturnPressed: function() {
+                                if (typeof financialYearsModel !== "undefined" && financialYearsModel) {
+                                    var valRes = financialYearsModel.validate_voucher_date(invoiceDateInput.text)
+                                    if (!valRes.valid) {
+                                        statusMessage = "" + valRes.error
+                                        isError = true
+                                        invoiceDateInput.focusAndSelect()
+                                        return
+                                    }
+                                    invoiceDateInput.text = valRes.formattedDate
+                                    financialYearsModel.set_working_date(valRes.formattedDate)
+                                    statusMessage = ""
+                                    isError = false
+                                }
+                                dueDaysInput.focusInput = true
+                            }
                             onRightPressed: dueDaysInput.focusInput = true
                             onLeftPressed: invNoInput.focusInput = true
                         }
@@ -634,7 +788,7 @@ Item {
                     ColumnLayout {
                         spacing: 1
                         visible: root.isMandiType
-                        Text { text: "Sale Status : (Alt+S)"; color: "#D97706"; font.pixelSize: 10; font.bold: true }
+                        Text { text: "Sale Status :"; color: "#D97706"; font.pixelSize: 10; font.bold: true }
                         RowLayout {
                             spacing: 4
 
@@ -741,7 +895,7 @@ Item {
                         spacing: 1
                         Layout.fillWidth: true
                         Layout.preferredWidth: 600
-                        Text { text: "Sale To Party Ledger Account *"; color: "#0F172A"; font.pixelSize: 10; font.bold: true }
+                        Text { text: "Sale To Party Ledger Account (Alt+S) *"; color: "#0F172A"; font.pixelSize: 10; font.bold: true }
                         CustomWhiteCombo {
                             id: partyCombo
                             model: (typeof partiesModel !== "undefined" && partiesModel) ? partiesModel.get_parties_list() : []
@@ -846,7 +1000,7 @@ Item {
                                         implicitHeight: 20
                                         width: 28; height: 20
                                         background: Rectangle { color: "#FEE2E2"; radius: 4 }
-                                        contentItem: Text { text: "✕"; color: "#DC2626"; font.bold: true; font.pixelSize: 10; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                                        contentItem: Text { text: "X"; color: "#DC2626"; font.bold: true; font.pixelSize: 10; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                                         onClicked: root.removeLineItem(index)
                                     }
                                 }
@@ -1595,6 +1749,32 @@ Item {
                 Item { Layout.fillWidth: true }
 
                 T.Button {
+                    id: printTaxBtn
+                    implicitWidth: contentItem.implicitWidth + 20
+                    implicitHeight: 34
+                    background: Rectangle { color: printTaxBtn.hovered ? "#047857" : "#059669"; radius: 6 }
+                    contentItem: RowLayout {
+                        spacing: 6
+                        Text { text: "Print Tax Invoice"; color: "#FFF"; font.bold: true; font.pixelSize: 12 }
+                        KbdBadge { text: "Ctrl+P"; badgeColor: "#064E3B"; textColor: "#A7F3D0"; borderColor: "#059669" }
+                    }
+                    onClicked: root.openPrintModal()
+                }
+
+                T.Button {
+                    id: exportTaxPdfBtn
+                    implicitWidth: contentItem.implicitWidth + 20
+                    implicitHeight: 34
+                    background: Rectangle { color: exportTaxPdfBtn.hovered ? "#0284C7" : "#0EA5E9"; radius: 6 }
+                    contentItem: RowLayout {
+                        spacing: 6
+                        Text { text: "Save PDF"; color: "#FFF"; font.bold: true; font.pixelSize: 12 }
+                        KbdBadge { text: "Alt+P"; badgeColor: "#075985"; textColor: "#BAE6FD"; borderColor: "#0EA5E9" }
+                    }
+                    onClicked: root.openPdfModal()
+                }
+
+                T.Button {
                     id: saveBtn
                     implicitWidth: 260
                     implicitHeight: 34
@@ -1605,7 +1785,7 @@ Item {
                     contentItem: RowLayout {
                         anchors.centerIn: parent
                         spacing: 6
-                        Text { text: root.isEditMode ? "💾 Update Sales Voucher (F2)" : "💾 Save & Post Sales Voucher (F2)"; color: "#FFF"; font.bold: true; font.pixelSize: 12 }
+                        Text { text: root.isEditMode ? "Update Sales Voucher (F2)" : "Save & Post Sales Voucher (F2)"; color: "#FFF"; font.bold: true; font.pixelSize: 12 }
                     }
                     onClicked: root.saveInvoice()
                     Keys.onReturnPressed: root.saveInvoice()

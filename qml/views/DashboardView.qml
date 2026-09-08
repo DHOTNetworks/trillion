@@ -135,12 +135,8 @@ T.ScrollView {
                     }
                     contentItem: RowLayout {
                         spacing: 6
-                        Text { text: "📅 Period:"; color: "#166534"; font.pixelSize: 11; font.bold: true }
+                        Text { text: "Period:"; color: "#166534"; font.pixelSize: 11; font.bold: true }
                         Text { text: root.activePeriodText; color: "#15803D"; font.pixelSize: 12; font.bold: true }
-                        Rectangle {
-                            width: 16; height: 16; radius: 8; color: "#16A34A"
-                            Text { anchors.centerIn: parent; text: "⚙"; color: "#FFF"; font.pixelSize: 9 }
-                        }
                     }
                     onClicked: root.openPeriodModal()
                 }
@@ -152,7 +148,7 @@ T.ScrollView {
                     background: Rectangle { color: "#16A34A"; radius: 6 }
                     contentItem: RowLayout {
                         spacing: 6
-                        Text { text: "🌾 New Paddy Slip"; color: "#FFF"; font.bold: true; font.pixelSize: 12 }
+                        Text { text: "New Paddy Slip"; color: "#FFF"; font.bold: true; font.pixelSize: 12 }
                         KbdBadge { text: "F2"; badgeColor: "#14532D"; textColor: "#86EFAC"; borderColor: "#16A34A" }
                     }
                     onClicked: root.openNewPaddy()
@@ -165,7 +161,7 @@ T.ScrollView {
                     background: Rectangle { color: "#2563EB"; radius: 6 }
                     contentItem: RowLayout {
                         spacing: 6
-                        Text { text: "🧾 New Invoice"; color: "#FFF"; font.bold: true; font.pixelSize: 12 }
+                        Text { text: "New Invoice"; color: "#FFF"; font.bold: true; font.pixelSize: 12 }
                     }
                     onClicked: root.openNewSale()
                 }
@@ -204,7 +200,7 @@ T.ScrollView {
                             radius: 8
                             color: "#EFF6FF"
                             border.color: "#BFDBFE"
-                            Text { anchors.centerIn: parent; text: "🏛️"; font.pixelSize: 18 }
+                            Text { anchors.centerIn: parent; text: "FP"; color: "#2563EB"; font.pixelSize: 12; font.bold: true }
                         }
                         ColumnLayout {
                             spacing: 0
@@ -241,7 +237,7 @@ T.ScrollView {
                                 anchors.leftMargin: 10
                                 anchors.rightMargin: 10
                                 spacing: 8
-                                Text { text: "📅"; font.pixelSize: 16 }
+                                Text { text: "FY"; color: "#16A34A"; font.pixelSize: 11; font.bold: true }
                                 ColumnLayout {
                                     spacing: 0
                                     Text { 
@@ -345,7 +341,7 @@ T.ScrollView {
                         title: "Raw Paddy Stock"
                         value: (typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.paddyStock : "0.0 Qtl"
                         subtext: "In Godowns A & B"
-                        icon: "🌾"
+                        icon: ""
                         accentColor: "#D97706"
                         Layout.fillWidth: true
                     }
@@ -354,7 +350,7 @@ T.ScrollView {
                         title: "Finished Rice Stock"
                         value: (typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.riceStock : "0.0 Qtl"
                         subtext: "Ready for Dispatch"
-                        icon: "🍚"
+                        icon: ""
                         accentColor: "#16A34A"
                         Layout.fillWidth: true
                     }
@@ -363,7 +359,7 @@ T.ScrollView {
                         title: "Total Revenue"
                         value: (typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.totalSales : "₹0.0"
                         subtext: "Sales Invoices"
-                        icon: "🧾"
+                        icon: ""
                         accentColor: "#2563EB"
                         Layout.fillWidth: true
                     }
@@ -403,7 +399,7 @@ T.ScrollView {
 
                             Rectangle {
                                 width: 36; height: 36; radius: 8; color: "#DBEAFE"
-                                Text { anchors.centerIn: parent; text: "📖"; font.pixelSize: 18 }
+                                Text { anchors.centerIn: parent; text: "1"; color: "#2563EB"; font.pixelSize: 15; font.bold: true }
                             }
 
                             ColumnLayout {
@@ -438,7 +434,7 @@ T.ScrollView {
 
                             Rectangle {
                                 width: 36; height: 36; radius: 8; color: "#DCFCE7"
-                                Text { anchors.centerIn: parent; text: "📦"; font.pixelSize: 18 }
+                                Text { anchors.centerIn: parent; text: "2"; color: "#16A34A"; font.pixelSize: 15; font.bold: true }
                             }
 
                             ColumnLayout {
@@ -473,7 +469,7 @@ T.ScrollView {
 
                             Rectangle {
                                 width: 36; height: 36; radius: 8; color: "#FEF3C7"
-                                Text { anchors.centerIn: parent; text: "📝"; font.pixelSize: 18 }
+                                Text { anchors.centerIn: parent; text: "3"; color: "#D97706"; font.pixelSize: 15; font.bold: true }
                             }
 
                             ColumnLayout {
@@ -508,7 +504,7 @@ T.ScrollView {
 
                             Rectangle {
                                 width: 36; height: 36; radius: 8; color: "#F3E8FF"
-                                Text { anchors.centerIn: parent; text: "📑"; font.pixelSize: 18 }
+                                Text { anchors.centerIn: parent; text: "4"; color: "#7C3AED"; font.pixelSize: 15; font.bold: true }
                             }
 
                             ColumnLayout {
@@ -543,7 +539,7 @@ T.ScrollView {
 
                             Rectangle {
                                 width: 36; height: 36; radius: 8; color: "#DCFCE7"
-                                Text { anchors.centerIn: parent; text: "📊"; font.pixelSize: 18 }
+                                Text { anchors.centerIn: parent; text: "5"; color: "#059669"; font.pixelSize: 15; font.bold: true }
                             }
 
                             ColumnLayout {
@@ -597,7 +593,7 @@ T.ScrollView {
                         Layout.alignment: Qt.AlignHCenter
                         spacing: 8
                         Text {
-                            text: "⚡"
+                            text: ""
                             font.pixelSize: 28
                             horizontalAlignment: Text.AlignHCenter
                             Layout.alignment: Qt.AlignHCenter

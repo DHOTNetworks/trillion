@@ -693,6 +693,34 @@ void DatabaseManager::ensureTablesExist() {
     };
 
     // Ensure columns exist on existing databases
+    addColumnIfNotExists("sales_invoices", "market_type", "TEXT DEFAULT 'Market Type (With Stock)'");
+    addColumnIfNotExists("sales_invoices", "due_days", "INTEGER DEFAULT 0");
+    addColumnIfNotExists("sales_invoices", "tax_status", "TEXT DEFAULT 'GST / Exempt'");
+    addColumnIfNotExists("sales_invoices", "challan_no", "TEXT");
+    addColumnIfNotExists("sales_invoices", "freight_charges", "REAL DEFAULT 0.0");
+    addColumnIfNotExists("sales_invoices", "tcs_amount", "REAL DEFAULT 0.0");
+    addColumnIfNotExists("sales_invoices", "tcs_rate", "REAL DEFAULT 0.0");
+    addColumnIfNotExists("sales_invoices", "place_of_supply", "TEXT");
+
+    addColumnIfNotExists("purchase_invoices", "market_type", "TEXT DEFAULT 'Market Type (With Stock)'");
+    addColumnIfNotExists("purchase_invoices", "due_days", "INTEGER DEFAULT 0");
+    addColumnIfNotExists("purchase_invoices", "tax_status", "TEXT DEFAULT 'GST / Exempt'");
+    addColumnIfNotExists("purchase_invoices", "challan_no", "TEXT");
+    addColumnIfNotExists("purchase_invoices", "freight_charges", "REAL DEFAULT 0.0");
+    addColumnIfNotExists("purchase_invoices", "tcs_amount", "REAL DEFAULT 0.0");
+    addColumnIfNotExists("purchase_invoices", "tcs_rate", "REAL DEFAULT 0.0");
+    addColumnIfNotExists("purchase_invoices", "place_of_supply", "TEXT");
+
+    addColumnIfNotExists("vouchers", "due_days", "INTEGER DEFAULT 0");
+    addColumnIfNotExists("vouchers", "market_type", "TEXT");
+    addColumnIfNotExists("vouchers", "tax_status", "TEXT");
+    addColumnIfNotExists("vouchers", "place_of_supply", "TEXT");
+    addColumnIfNotExists("vouchers", "challan_no", "TEXT");
+
+    addColumnIfNotExists("transactions", "due_days", "INTEGER DEFAULT 0");
+    addColumnIfNotExists("transactions", "place_of_supply", "TEXT");
+    addColumnIfNotExists("transactions", "market_type", "TEXT");
+
     addColumnIfNotExists("jform_vouchers", "vehicle_no", "TEXT");
     addColumnIfNotExists("jform_vouchers", "driver_name", "TEXT");
     addColumnIfNotExists("jform_vouchers", "gate_pass_no", "TEXT");

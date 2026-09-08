@@ -38,10 +38,20 @@ Item {
         id: lineItemsModel
     }
 
+    Shortcut {
+        sequence: "F2"
+        context: Qt.WindowShortcut
+        onActivated: root.openDateModal()
+    }
+
+    function openDateModal() {
+        voucherDateModal.openWithDate(vchDateInput.text)
+    }
+
     Component.onCompleted: {
         resetForm()
         Qt.callLater(function() {
-            zimidarCombo.focusAndOpen()
+            root.openDateModal()
         })
     }
 
@@ -50,12 +60,12 @@ Item {
             var info = jformModel.get_next_voucher_info()
             root.nextVchNo = info.next_voucher_no || 1
             root.nextJFormNo = info.next_jform_no || "1"
-            root.vchDate = info.date_display || Qt.formatDate(new Date(), "dd-MM-yyyy")
+            root.vchDate = (typeof financialYearsModel !== "undefined" && financialYearsModel) ? financialYearsModel.get_working_date() : (info.date_display || Qt.formatDate(new Date(), "dd-MM-yyyy"))
             root.dayName = info.day_name || ""
         } else {
             root.nextVchNo = 1
             root.nextJFormNo = "1"
-            root.vchDate = Qt.formatDate(new Date(), "dd-MM-yyyy")
+            root.vchDate = (typeof financialYearsModel !== "undefined" && financialYearsModel) ? financialYearsModel.get_working_date() : Qt.formatDate(new Date(), "dd-MM-yyyy")
             root.dayName = ""
         }
         jformNoInput.text = root.nextJFormNo
@@ -179,14 +189,14 @@ Item {
         var amountVal = userAmt > 0 ? userAmt : (Math.round(weightVal * rateVal * 100.0) / 100.0)
 
         if (!itemName) {
-            statusMessage = "❌ Please select an Item."
+            statusMessage = "Please select an Item."
             isError = true
             itemCombo.focusAndOpen()
             return
         }
 
         if (weightVal <= 0 && bCount <= 0 && looseVal <= 0) {
-            statusMessage = "❌ Please enter valid Bags, Loose or Weight."
+            statusMessage = "Please enter valid Bags, Loose or Weight."
             isError = true
             bagsInput.focusInput = true
             return
@@ -272,7 +282,7 @@ Item {
         statusMessage = ""
         var zimidarName = zimidarCombo.currentText.trim()
         if (!zimidarName) {
-            statusMessage = "❌ Please select a Zimidar (Farmer) Ledger Account."
+            statusMessage = "Please select a Zimidar (Farmer) Ledger Account."
             isError = true
             zimidarCombo.focusAndOpen()
             return
@@ -283,7 +293,7 @@ Item {
         }
 
         if (lineItemsModel.count === 0) {
-            statusMessage = "❌ Please enter at least one Item in the grid."
+            statusMessage = "Please enter at least one Item in the grid."
             isError = true
             itemCombo.focusAndOpen()
             return
@@ -293,8 +303,20 @@ Item {
     }
 
     function executeSaveVoucher() {
+        if (typeof financialYearsModel !== "undefined" && financialYearsModel) {
+            var valCheck = financialYearsModel.validate_voucher_date(vchDateInput.text)
+            if (!valCheck.valid) {
+                statusMessage = "" + valCheck.error
+                isError = true
+                vchDateInput.focusAndSelect()
+                return
+            }
+            vchDateInput.text = valCheck.formattedDate
+            financialYearsModel.set_working_date(valCheck.formattedDate)
+        }
+
         if (typeof jformModel === "undefined" || !jformModel) {
-            statusMessage = "❌ Error: JForm backend model not available."
+            statusMessage = "Error: JForm backend model not available."
             isError = true
             return
         }
@@ -355,12 +377,12 @@ Item {
 
         var ok = jformModel.save_jform_voucher(headerData, items)
         if (ok) {
-            statusMessage = "✅ J-Form Voucher #" + root.nextVchNo + " (Form J: " + (jformNoInput.text.trim() || root.nextJFormNo) + ") posted successfully!"
+            statusMessage = "J-Form Voucher #" + root.nextVchNo + " (Form J: " + (jformNoInput.text.trim() || root.nextJFormNo) + ") posted successfully!"
             isError = false
             resetForm()
             root.voucherSaved()
         } else {
-            statusMessage = "❌ Failed to save J-Form Voucher."
+            statusMessage = "Failed to save J-Form Voucher."
             isError = true
         }
     }
@@ -372,12 +394,27 @@ Item {
         onActivated: root.saveVoucher()
     }
     Shortcut {
-        sequence: StandardKey.Save
+        sequences: [ StandardKey.Save ]
         context: Qt.WindowShortcut
         onActivated: root.saveVoucher()
     }
     Shortcut {
         sequence: "Alt+S"
+        context: Qt.WindowShortcut
+        onActivated: zimidarCombo.focusAndOpen()
+    }
+    Shortcut {
+        sequence: "Alt+L"
+        context: Qt.WindowShortcut
+        onActivated: zimidarCombo.focusAndOpen()
+    }
+    Shortcut {
+        sequence: "Alt+P"
+        context: Qt.WindowShortcut
+        onActivated: zimidarCombo.focusAndOpen()
+    }
+    Shortcut {
+        sequence: "Alt+M"
         context: Qt.WindowShortcut
         onActivated: {
             root.selectedSaleStatus = root.selectedSaleStatus === "Zimidara Self Purchase" ? "Party" : "Zimidara Self Purchase"
@@ -393,8 +430,21 @@ Item {
     function handleEscape() {
         if (saveConfirmModal.opened) {
             saveConfirmModal.close()
+        } else if (voucherDateModal.opened) {
+            voucherDateModal.close()
         } else {
             root.cancelRequested()
+        }
+    }
+
+    VoucherDateModal {
+        id: voucherDateModal
+        anchors.centerIn: parent
+        onDateConfirmed: function(fmtDate, isoDate) {
+            vchDateInput.text = fmtDate
+            Qt.callLater(function() {
+                dueDaysInput.focusInput = true
+            })
         }
     }
 
@@ -500,7 +550,7 @@ Item {
                                 anchors.leftMargin: 8; anchors.rightMargin: 8
                                 Text { text: "JFrm-" + root.nextVchNo; color: "#2563EB"; font.pixelSize: 11; font.bold: true }
                                 Item { Layout.fillWidth: true }
-                                Text { text: "🔒"; font.pixelSize: 9 }
+                                Text { text: ""; font.pixelSize: 9 }
                             }
                         }
                     }
@@ -525,7 +575,22 @@ Item {
                             text: root.vchDate
                             placeholderText: "DD-MM-YYYY"
                             Layout.preferredWidth: 110
-                            onReturnPressed: dueDaysInput.focusInput = true
+                            onReturnPressed: function() {
+                                if (typeof financialYearsModel !== "undefined" && financialYearsModel) {
+                                    var valRes = financialYearsModel.validate_voucher_date(vchDateInput.text)
+                                    if (!valRes.valid) {
+                                        statusMessage = "" + valRes.error
+                                        isError = true
+                                        vchDateInput.focusAndSelect()
+                                        return
+                                    }
+                                    vchDateInput.text = valRes.formattedDate
+                                    financialYearsModel.set_working_date(valRes.formattedDate)
+                                    statusMessage = ""
+                                    isError = false
+                                }
+                                dueDaysInput.focusInput = true
+                            }
                             onRightPressed: dueDaysInput.focusInput = true
                             onLeftPressed: jformNoInput.focusInput = true
                         }
@@ -549,7 +614,7 @@ Item {
                     // Auction Sale Status Badges (Alt+S)
                     ColumnLayout {
                         spacing: 1
-                        Text { text: "Auction Sale Status : (Alt+S)"; color: "#D97706"; font.pixelSize: 10; font.bold: true }
+                        Text { text: "Auction Sale Status : (Alt+M)"; color: "#D97706"; font.pixelSize: 10; font.bold: true }
                         RowLayout {
                             spacing: 4
 
@@ -584,7 +649,7 @@ Item {
 
                         RowLayout {
                             Layout.fillWidth: true
-                            Text { text: "Zimidar (Farmer) Ledger Account *"; color: "#0F172A"; font.pixelSize: 10; font.bold: true }
+                            Text { text: "Zimidar (Farmer) Ledger Account (Alt+S) *"; color: "#0F172A"; font.pixelSize: 10; font.bold: true }
                             Item { Layout.fillWidth: true }
                             Text {
                                 text: root.zimidarBalanceText
@@ -695,7 +760,7 @@ Item {
                                         implicitHeight: 20
                                         width: 28; height: 20
                                         background: Rectangle { color: "#FEE2E2"; radius: 4 }
-                                        contentItem: Text { text: "✕"; color: "#DC2626"; font.bold: true; font.pixelSize: 10; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                                        contentItem: Text { text: "X"; color: "#DC2626"; font.bold: true; font.pixelSize: 10; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                                         onClicked: root.removeLineItem(index)
                                     }
                                 }
@@ -1264,7 +1329,7 @@ Item {
                     contentItem: RowLayout {
                         anchors.centerIn: parent
                         spacing: 6
-                        Text { text: "💾 Save & Post J-Form Voucher (F2)"; color: "#FFF"; font.bold: true; font.pixelSize: 12 }
+                        Text { text: "Save & Post J-Form Voucher (Ctrl+S)"; color: "#FFF"; font.bold: true; font.pixelSize: 12 }
                     }
                     onClicked: root.saveVoucher()
                     Keys.onReturnPressed: root.saveVoucher()

@@ -65,7 +65,7 @@ Rectangle {
         spacing: 8
 
         Text {
-            text: "🔍"
+            text: ""
             font.pixelSize: 13
         }
 
