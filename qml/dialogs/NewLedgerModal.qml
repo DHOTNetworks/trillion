@@ -147,7 +147,8 @@ Rectangle {
                         phoneInput.text,
                         placeCombo.currentText,
                         gstinInput.text,
-                        parseFloat(balInput.text) || 0.0
+                        parseFloat(balInput.text) || 0.0,
+                        "Dr"
                     )
                     if (success) {
                         root.savedSuccess()

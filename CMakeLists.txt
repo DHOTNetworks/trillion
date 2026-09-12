@@ -181,7 +181,6 @@ qt_add_qml_module(${PROJECT_NAME}
         qml/dialogs/AddVoucherMenuModal.qml
         qml/dialogs/ConfirmationModal.qml
         qml/dialogs/ItemMovementModal.qml
-        qml/dialogs/JFormStubModal.qml
         qml/dialogs/KeyboardShortcutsModal.qml
         qml/dialogs/LedgerMasterMenuModal.qml
         qml/dialogs/MdbMigrationModal.qml

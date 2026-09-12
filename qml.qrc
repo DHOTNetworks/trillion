@@ -17,7 +17,6 @@
         <file>qml/dialogs/AddVoucherMenuModal.qml</file>
         <file>qml/dialogs/ConfirmationModal.qml</file>
         <file>qml/dialogs/ItemMovementModal.qml</file>
-        <file>qml/dialogs/JFormStubModal.qml</file>
         <file>qml/dialogs/KeyboardShortcutsModal.qml</file>
         <file>qml/dialogs/LedgerMasterMenuModal.qml</file>
         <file>qml/dialogs/NewLedgerModal.qml</file>

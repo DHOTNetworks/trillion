@@ -226,8 +226,6 @@ T.ApplicationWindow {
         } else if (reportsMenu.opened) {
             window.lastActiveMenuType = 0
             reportsMenu.close()
-        } else if (jformStubModal.opened) {
-            jformStubModal.close()
         } else if (window.isShortcutsModalOpen || window.isPaddyModalOpen || window.isItemMovementModalOpen || window.isPeriodModalOpen) {
             window.isShortcutsModalOpen = false
             window.isPaddyModalOpen = false
@@ -649,11 +647,6 @@ T.ApplicationWindow {
                 window.navigateToView(25)
             }
         }
-    }
-
-    JFormStubModal {
-        id: jformStubModal
-        anchors.centerIn: parent
     }
 
     // Modal Overlays Container for custom full dialogs
