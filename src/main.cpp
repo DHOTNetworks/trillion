@@ -33,6 +33,18 @@
 #include "models/stock_register_model.h"
 #include "models/milling_statement_model.h"
 #include "services/print_export_controller.h"
+#include "services/accounting_date_service.h"
+#include "services/financial_math_service.h"
+#include "models/sales_voucher_controller.h"
+#include "models/purchase_voucher_controller.h"
+#include "models/journal_voucher_controller.h"
+#include "models/cheque_voucher_controller.h"
+#include "models/tds_voucher_controller.h"
+#include "models/jform_voucher_controller.h"
+#include "models/milling_batch_controller.h"
+#include "models/paddy_procurement_controller.h"
+#include "models/ledger_master_controller.h"
+#include "models/stock_master_controller.h"
 #include "models/global_key_filter.h"
 #include "engine/bahi_khata_migrator.h"
 
@@ -44,6 +56,7 @@ int main(int argc, char* argv[]) {
 
     QApplication app(argc, argv);
     app.setApplicationName("Mahadev Rice Mill ERP & Accounting");
+    app.setApplicationVersion("0.2.0");
     app.setOrganizationName("MahadevAgro");
 
     QString appDir = QCoreApplication::applicationDirPath();
@@ -130,6 +143,18 @@ int main(int argc, char* argv[]) {
     StockRegisterController stockRegisterCtrl;
     MillingStatementController millingStatementCtrl;
     PrintExportController printExportCtrl;
+    AccountingDateService dateService;
+    FinancialMathService mathService;
+    SalesVoucherController salesVoucherCtrl;
+    PurchaseVoucherController purchaseVoucherCtrl;
+    JournalVoucherController journalVoucherCtrl;
+    ChequeVoucherController chequeVoucherCtrl;
+    TdsVoucherController tdsVoucherCtrl;
+    JFormVoucherController jformVoucherCtrl;
+    MillingBatchController millingBatchCtrl;
+    PaddyProcurementController paddyProcurementCtrl;
+    LedgerMasterController ledgerMasterCtrl;
+    StockMasterController stockMasterCtrl;
 
     for (int i = 1; i < argc; ++i) {
         if (QString(argv[i]) == "--render-preview") {
@@ -246,6 +271,18 @@ int main(int argc, char* argv[]) {
     ctx->setContextProperty("stockRegisterCtrl", &stockRegisterCtrl);
     ctx->setContextProperty("millingStatementCtrl", &millingStatementCtrl);
     ctx->setContextProperty("printExportCtrl", &printExportCtrl);
+    ctx->setContextProperty("dateService", &dateService);
+    ctx->setContextProperty("mathService", &mathService);
+    ctx->setContextProperty("salesVoucherCtrl", &salesVoucherCtrl);
+    ctx->setContextProperty("purchaseVoucherCtrl", &purchaseVoucherCtrl);
+    ctx->setContextProperty("journalVoucherCtrl", &journalVoucherCtrl);
+    ctx->setContextProperty("chequeVoucherCtrl", &chequeVoucherCtrl);
+    ctx->setContextProperty("tdsVoucherCtrl", &tdsVoucherCtrl);
+    ctx->setContextProperty("jformVoucherCtrl", &jformVoucherCtrl);
+    ctx->setContextProperty("millingBatchCtrl", &millingBatchCtrl);
+    ctx->setContextProperty("paddyProcurementCtrl", &paddyProcurementCtrl);
+    ctx->setContextProperty("ledgerMasterCtrl", &ledgerMasterCtrl);
+    ctx->setContextProperty("stockMasterCtrl", &stockMasterCtrl);
 
     // Add import paths (Embedded QRC + local file fallbacks)
     engine.addImportPath(":/");

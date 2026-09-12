@@ -135,8 +135,8 @@ FocusScope {
             }
         }
 
-        totalDebit = sumDr
-        totalCredit = sumCr
+        totalDebit = (typeof mathService !== "undefined" && mathService) ? mathService.round2(sumDr) : Math.round(sumDr * 100.0) / 100.0
+        totalCredit = (typeof mathService !== "undefined" && mathService) ? mathService.round2(sumCr) : Math.round(sumCr * 100.0) / 100.0
     }
 
     function saveVoucher() {
@@ -183,6 +183,11 @@ FocusScope {
     }
 
     function executeSaveVoucher() {
+        var rawDate = voucherDateInput.text.trim()
+        if (typeof dateService !== "undefined" && dateService) {
+            rawDate = dateService.resolveDate(rawDate)
+            voucherDateInput.text = rawDate
+        }
         if (typeof financialYearsModel !== "undefined" && financialYearsModel) {
             var valCheck = financialYearsModel.validate_voucher_date(voucherDateInput.text)
             if (!valCheck.valid) {

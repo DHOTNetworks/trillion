@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(MahadevRiceMillERP VERSION 2.0 LANGUAGES C CXX)
+project(MahadevRiceMillERP VERSION 0.2.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -31,6 +31,7 @@ find_package(Qt6 6.5 REQUIRED COMPONENTS
     Svg
     Widgets
     PrintSupport
+    Test
 )
 
 # Embedded SQLite Amalgamation
@@ -115,6 +116,30 @@ set(SOURCES
     src/models/stock_register_model.cpp
     src/models/milling_statement_model.h
     src/models/milling_statement_model.cpp
+    src/services/accounting_date_service.h
+    src/services/accounting_date_service.cpp
+    src/services/financial_math_service.h
+    src/services/financial_math_service.cpp
+    src/models/sales_voucher_controller.h
+    src/models/sales_voucher_controller.cpp
+    src/models/purchase_voucher_controller.h
+    src/models/purchase_voucher_controller.cpp
+    src/models/journal_voucher_controller.h
+    src/models/journal_voucher_controller.cpp
+    src/models/cheque_voucher_controller.h
+    src/models/cheque_voucher_controller.cpp
+    src/models/tds_voucher_controller.h
+    src/models/tds_voucher_controller.cpp
+    src/models/jform_voucher_controller.h
+    src/models/jform_voucher_controller.cpp
+    src/models/milling_batch_controller.h
+    src/models/milling_batch_controller.cpp
+    src/models/paddy_procurement_controller.h
+    src/models/paddy_procurement_controller.cpp
+    src/models/ledger_master_controller.h
+    src/models/ledger_master_controller.cpp
+    src/models/stock_master_controller.h
+    src/models/stock_master_controller.cpp
     src/services/print_export_controller.h
     src/services/print_export_controller.cpp
     src/models/generic_list_model.h
@@ -225,7 +250,111 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
     MACOSX_BUNDLE TRUE
     MACOSX_BUNDLE_BUNDLE_NAME "Mahadev Rice Mill ERP"
     MACOSX_BUNDLE_GUI_IDENTIFIER "com.mahadevagro.ricemill"
-    MACOSX_BUNDLE_SHORT_VERSION_STRING "2.0"
-    MACOSX_BUNDLE_VERSION "2.0"
+    MACOSX_BUNDLE_SHORT_VERSION_STRING "0.2.0"
+    MACOSX_BUNDLE_VERSION "0.2.0"
     WIN32_EXECUTABLE $<IF:$<CONFIG:Debug>,FALSE,TRUE>
 )
+
+# ==============================================================================
+# Native LogicBoard Automated Test Suite
+# ==============================================================================
+enable_testing()
+
+set(TEST_SOURCES
+    tests/test_logicboard_suite.cpp
+    src/database_manager.h
+    src/database_manager.cpp
+    src/services/accounting_date_service.h
+    src/services/accounting_date_service.cpp
+    src/services/financial_math_service.h
+    src/services/financial_math_service.cpp
+    src/models/base_table_model.h
+    src/models/base_table_model.cpp
+    src/models/generic_list_model.h
+    src/models/generic_list_model.cpp
+    src/models/sales_voucher_controller.h
+    src/models/sales_voucher_controller.cpp
+    src/models/purchase_voucher_controller.h
+    src/models/purchase_voucher_controller.cpp
+    src/models/journal_voucher_controller.h
+    src/models/journal_voucher_controller.cpp
+    src/models/cheque_voucher_controller.h
+    src/models/cheque_voucher_controller.cpp
+    src/models/tds_voucher_controller.h
+    src/models/tds_voucher_controller.cpp
+    src/models/jform_voucher_controller.h
+    src/models/jform_voucher_controller.cpp
+    src/models/milling_batch_controller.h
+    src/models/milling_batch_controller.cpp
+    src/models/paddy_procurement_controller.h
+    src/models/paddy_procurement_controller.cpp
+    src/models/ledger_master_controller.h
+    src/models/ledger_master_controller.cpp
+    src/models/stock_master_controller.h
+    src/models/stock_master_controller.cpp
+    src/models/parties_model.h
+    src/models/parties_model.cpp
+    src/models/sales_model.h
+    src/models/sales_model.cpp
+    src/models/purchase_model.h
+    src/models/purchase_model.cpp
+    src/models/vouchers_model.h
+    src/models/vouchers_model.cpp
+    src/models/stock_items_model.h
+    src/models/stock_items_model.cpp
+    src/models/paddy_arrivals_model.h
+    src/models/paddy_arrivals_model.cpp
+    src/models/jform_model.h
+    src/models/jform_model.cpp
+    src/models/tds_model.h
+    src/models/tds_model.cpp
+    src/models/interest_model.h
+    src/models/interest_model.cpp
+    src/models/milling_model.h
+    src/models/milling_model.cpp
+    src/models/account_groups_model.h
+    src/models/account_groups_model.cpp
+    src/models/ledger_statement_model.h
+    src/models/ledger_statement_model.cpp
+    src/models/purchase_register_model.h
+    src/models/purchase_register_model.cpp
+    src/models/sales_register_model.h
+    src/models/sales_register_model.cpp
+    src/models/stock_register_model.h
+    src/models/stock_register_model.cpp
+    src/models/milling_statement_model.h
+    src/models/milling_statement_model.cpp
+    src/models/dashboard_controller.h
+    src/models/dashboard_controller.cpp
+    src/models/firm_manager.h
+    src/models/firm_manager.cpp
+    src/models/financial_years_model.h
+    src/models/financial_years_model.cpp
+    src/engine/accounting_engine.h
+    src/services/print_export_controller.h
+    src/services/print_export_controller.cpp
+    src/engine/bahi_khata_migrator.h
+    src/engine/bahi_khata_migrator.cpp
+)
+
+add_executable(LogicBoardTestSuite ${TEST_SOURCES})
+target_include_directories(LogicBoardTestSuite PRIVATE
+    src
+    src/engine
+    src/models
+    src/services
+    third_party/sqlite
+    third_party/libmdb
+)
+target_compile_definitions(LogicBoardTestSuite PRIVATE HAS_LIBMDB=1)
+target_link_libraries(LogicBoardTestSuite PRIVATE
+    sqlite3_embedded
+    libmdb_embedded
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::PrintSupport
+    Qt6::Test
+)
+add_test(NAME LogicBoardTestSuite COMMAND LogicBoardTestSuite)
+

@@ -165,8 +165,8 @@ FocusScope {
         }
 
         totalConsumedBags = cBags
-        totalConsumedWeight = cWt
-        totalConsumedAmount = cAmt
+        totalConsumedWeight = Math.round(cWt * 1000.0) / 1000.0
+        totalConsumedAmount = (typeof mathService !== "undefined" && mathService) ? mathService.round2(cAmt) : Math.round(cAmt * 100.0) / 100.0
 
         var pPct = 0.0
         var pBags = 0
@@ -193,7 +193,7 @@ FocusScope {
         totalProducedYieldPct = Math.round(pPct * 1000.0) / 1000.0
         totalProducedBags = pBags
         totalProducedWeight = Math.round(pWt * 1000.0) / 1000.0
-        totalProducedAmount = pAmt
+        totalProducedAmount = (typeof mathService !== "undefined" && mathService) ? mathService.round2(pAmt) : Math.round(pAmt * 100.0) / 100.0
 
         shortagePct = Math.max(0.0, Math.round((100.0 - totalProducedYieldPct) * 1000.0) / 1000.0)
         shortageWeight = Math.max(0.0, Math.round((totalConsumedWeight - totalProducedWeight) * 1000.0) / 1000.0)
@@ -218,6 +218,11 @@ FocusScope {
     }
 
     function executeSave() {
+        var rawDate = vchDateInput.text.trim()
+        if (typeof dateService !== "undefined" && dateService) {
+            rawDate = dateService.resolveDate(rawDate)
+            vchDateInput.text = rawDate
+        }
         if (typeof financialYearsModel !== "undefined" && financialYearsModel) {
             var valCheck = financialYearsModel.validate_voucher_date(vchDateInput.text)
             if (!valCheck.valid) {

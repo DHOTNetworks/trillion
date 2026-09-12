@@ -253,24 +253,24 @@ Item {
 
         root.totalBags = sumBags
         root.totalWeight = Math.round(sumWeight * 1000.0) / 1000.0
-        root.goodsAmount = Math.round(sumAmount * 100.0) / 100.0
+        root.goodsAmount = (typeof mathService !== "undefined" && mathService) ? mathService.round2(sumAmount) : Math.round(sumAmount * 100.0) / 100.0
 
         var bonus = parseFloat(bonusInput.text) || 0.0
         var relief = parseFloat(reliefInput.text) || 0.0
         root.bonusAmount = bonus
         root.reliefAmount = relief
-        root.subtotalAmount = Math.round((root.goodsAmount + bonus + relief) * 100.0) / 100.0
+        root.subtotalAmount = (typeof mathService !== "undefined" && mathService) ? mathService.round2(root.goodsAmount + bonus + relief) : Math.round((root.goodsAmount + bonus + relief) * 100.0) / 100.0
 
         var labour = parseFloat(labourInput.text) || 0.0
         root.labourAmount = labour
 
         var netBeforeRound = root.subtotalAmount - labour
         var rounded = Math.round(netBeforeRound)
-        var autoRound = Math.round((rounded - netBeforeRound) * 100.0) / 100.0
+        var autoRound = (typeof mathService !== "undefined" && mathService) ? mathService.round2(rounded - netBeforeRound) : Math.round((rounded - netBeforeRound) * 100.0) / 100.0
 
         if (roundInput.activeFocus) {
             root.roundOffAmount = parseFloat(roundInput.text) || 0.0
-            root.grandTotal = Math.round((netBeforeRound + root.roundOffAmount) * 100.0) / 100.0
+            root.grandTotal = (typeof mathService !== "undefined" && mathService) ? mathService.round2(netBeforeRound + root.roundOffAmount) : Math.round((netBeforeRound + root.roundOffAmount) * 100.0) / 100.0
         } else {
             root.roundOffAmount = autoRound
             roundInput.text = autoRound !== 0 ? autoRound.toFixed(2) : "0.00"
@@ -303,6 +303,11 @@ Item {
     }
 
     function executeSaveVoucher() {
+        var rawDate = vchDateInput.text.trim()
+        if (typeof dateService !== "undefined" && dateService) {
+            rawDate = dateService.resolveDate(rawDate)
+            vchDateInput.text = rawDate
+        }
         if (typeof financialYearsModel !== "undefined" && financialYearsModel) {
             var valCheck = financialYearsModel.validate_voucher_date(vchDateInput.text)
             if (!valCheck.valid) {
@@ -321,8 +326,11 @@ Item {
             return
         }
 
-        var dParts = vchDateInput.text.trim().split("-")
-        var formattedDate = dParts.length === 3 ? (dParts[2] + "-" + dParts[1] + "-" + dParts[0]) : Qt.formatDate(new Date(), "yyyy-MM-dd")
+        var formattedDate = (typeof dateService !== "undefined" && dateService) ? dateService.toIso(vchDateInput.text.trim()) : ""
+        if (!formattedDate) {
+            var dParts = vchDateInput.text.trim().split("-")
+            formattedDate = dParts.length === 3 ? (dParts[2] + "-" + dParts[1] + "-" + dParts[0]) : Qt.formatDate(new Date(), "yyyy-MM-dd")
+        }
 
         var headerData = {
             "voucher_no": root.nextVchNo,

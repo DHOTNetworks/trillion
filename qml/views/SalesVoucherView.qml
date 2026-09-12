@@ -308,6 +308,19 @@ Item {
 
         var amount = userAmount > 0 ? userAmount : (root.isWithoutStock ? rateVal : Math.round(weightVal * rateVal * 100.0) / 100.0)
 
+        if (typeof salesVoucherCtrl !== "undefined" && salesVoucherCtrl) {
+            salesVoucherCtrl.lineItemsModel.appendRow(
+                itemName,
+                "",
+                "QTL",
+                root.isWithoutStock ? 0 : bCount,
+                parseFloat(pkng) || 0.0,
+                root.isWithoutStock ? 0.0 : weightVal,
+                rateVal,
+                amount
+            )
+        }
+
         lineItemsModel.append({
             "itemName": itemName,
             "bags": root.isWithoutStock ? 0 : bCount,
@@ -328,6 +341,9 @@ Item {
     }
 
     function removeLineItem(index) {
+        if (typeof salesVoucherCtrl !== "undefined" && salesVoucherCtrl) {
+            salesVoucherCtrl.lineItemsModel.removeRowAt(index)
+        }
         if (index >= 0 && index < lineItemsModel.count) {
             lineItemsModel.remove(index)
             recalculateTotals()
@@ -532,6 +548,44 @@ Item {
                 gst_pct: it.gstPct,
                 amount: it.amount
             })
+        }
+
+        if (typeof salesVoucherCtrl !== "undefined" && salesVoucherCtrl) {
+            salesVoucherCtrl.editingInvoiceId = root.editingInvoiceId
+            salesVoucherCtrl.invoiceNo = invNo
+            salesVoucherCtrl.voucherNo = autoVoucherNo
+            salesVoucherCtrl.invoiceDate = invoiceDateInput.text.trim()
+            salesVoucherCtrl.partyLedger = partyLedger
+            salesVoucherCtrl.gstin = gstinInput.text.trim()
+            salesVoucherCtrl.dueDays = parseInt(dueDaysInput.text) || 30
+            salesVoucherCtrl.vehicleNo = vehicle
+            salesVoucherCtrl.ewayBillNo = eway
+            salesVoucherCtrl.grNo = grNoInput.text.trim()
+            salesVoucherCtrl.shippingAddress = shippingInput.text.trim()
+            salesVoucherCtrl.poNo = poNoInput.text.trim()
+            salesVoucherCtrl.narration = narr
+            salesVoucherCtrl.freightCharges = freightAmount
+            salesVoucherCtrl.otherExp = otherExpAmount
+            salesVoucherCtrl.tcsRate = parseFloat(tcsInput.text) || 0.0
+            salesVoucherCtrl.dami = damiAmount
+            salesVoucherCtrl.labour = labourAmount
+            salesVoucherCtrl.auction = auctionAmount
+            salesVoucherCtrl.marketFee = mFeeAmount
+            salesVoucherCtrl.hrdf = hrdfAmount
+            salesVoucherCtrl.saleStatus = selectedSaleStatus
+            salesVoucherCtrl.taxStatus = selectedTaxStatus
+
+            var ok = salesVoucherCtrl.saveVoucher()
+            if (ok) {
+                statusMessage = salesVoucherCtrl.statusMessage
+                isError = false
+                resetForm()
+                return
+            } else {
+                statusMessage = salesVoucherCtrl.statusMessage
+                isError = true
+                return
+            }
         }
 
         if (typeof salesModel !== "undefined" && salesModel) {

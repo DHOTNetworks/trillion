@@ -256,10 +256,10 @@ Rectangle {
         if (useRoundedTotal) {
             totalTaxAmount = Math.round(rawTotalTax)
         } else {
-            totalTaxAmount = Math.round(rawTotalTax * 100.0) / 100.0
+            totalTaxAmount = (typeof mathService !== "undefined" && mathService) ? mathService.round2(rawTotalTax) : Math.round(rawTotalTax * 100.0) / 100.0
         }
 
-        netAmount = inc - totalTaxAmount
+        netAmount = (typeof mathService !== "undefined" && mathService) ? mathService.round2(inc - totalTaxAmount) : (inc - totalTaxAmount)
         if (netAmount < 0.0) netAmount = 0.0
     }
 
@@ -286,6 +286,11 @@ Rectangle {
     }
 
     function executeSave() {
+        var rawDate = vchDateInput.text.trim()
+        if (typeof dateService !== "undefined" && dateService) {
+            rawDate = dateService.resolveDate(rawDate)
+            vchDateInput.text = rawDate
+        }
         if (typeof financialYearsModel !== "undefined" && financialYearsModel) {
             var valCheck = financialYearsModel.validate_voucher_date(vchDateInput.text)
             if (!valCheck.valid) {

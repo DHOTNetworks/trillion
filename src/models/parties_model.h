@@ -28,6 +28,18 @@ public:
         const QString& place, const QString& gstin, double op_bal, const QString& bal_type
     );
 
+    Q_INVOKABLE bool add_ledger_full(
+        const QString& name, const QString& alias, const QString& prefix,
+        const QString& group_name, const QString& party_type, const QString& special_type,
+        double opening_balance, const QString& balance_type, const QString& mailing_name,
+        const QString& address, const QString& city, const QString& district,
+        const QString& state, const QString& pincode, const QString& phone,
+        const QString& mobile, const QString& whatsapp, const QString& email,
+        const QString& contact_person, const QString& gstin, const QString& pan,
+        const QString& aadhaar, double credit_limit, int credit_days,
+        const QString& bank_name = "", const QString& bank_account = "", const QString& ifsc_code = ""
+    );
+
     Q_INVOKABLE bool update_ledger_full(
         int party_id, const QString& name, const QString& alias, const QString& prefix,
         const QString& group_name, const QString& party_type, const QString& special_type,

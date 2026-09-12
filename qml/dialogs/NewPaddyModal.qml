@@ -137,14 +137,29 @@ Rectangle {
                     KbdBadge { text: "Enter"; badgeColor: "#14532D"; textColor: "#86EFAC"; borderColor: "#22C55E" }
                 }
                 onClicked: {
-                    var success = paddyModel.add_arrival(
-                        farmerInput.text,
-                        varietyCombo.currentText,
-                        parseInt(bagsInput.text) || 0,
-                        parseFloat(grossInput.text) || 0.0,
-                        parseFloat(moistureInput.text) || 14.0,
-                        parseFloat(rateInput.text) || 0.0
-                    )
+                    var success = false
+                    if (typeof paddyProcurementCtrl !== "undefined" && paddyProcurementCtrl) {
+                        paddyProcurementCtrl.farmerName = farmerInput.text.trim()
+                        paddyProcurementCtrl.paddyVariety = varietyCombo.currentText
+                        paddyProcurementCtrl.bagCount = parseInt(bagsInput.text) || 0
+                        paddyProcurementCtrl.grossWeightQtl = parseFloat(grossInput.text) || 0.0
+                        paddyProcurementCtrl.moisturePct = parseFloat(moistureInput.text) || 14.0
+                        paddyProcurementCtrl.ratePerQtl = parseFloat(rateInput.text) || 0.0
+                        paddyProcurementCtrl.hamaliPerBag = 0.0
+                        success = paddyProcurementCtrl.saveArrivalSlip()
+                    } else if (typeof paddyModel !== "undefined" && paddyModel) {
+                        success = paddyModel.add_arrival(
+                            farmerInput.text.trim(),
+                            varietyCombo.currentText,
+                            "",
+                            parseInt(bagsInput.text) || 0,
+                            parseFloat(grossInput.text) || 0.0,
+                            parseFloat(moistureInput.text) || 14.0,
+                            parseFloat(rateInput.text) || 0.0,
+                            0.0,
+                            "Pending"
+                        )
+                    }
                     if (success) {
                         root.savedSuccess()
                     }

@@ -272,6 +272,19 @@ Item {
 
         var amount = userAmount > 0 ? userAmount : (root.isWithoutStock ? rateVal : Math.round(weightVal * rateVal * 100.0) / 100.0)
 
+        if (typeof purchaseVoucherCtrl !== "undefined" && purchaseVoucherCtrl) {
+            purchaseVoucherCtrl.lineItemsModel.appendRow(
+                itemName,
+                "",
+                "QTL",
+                root.isWithoutStock ? 0 : bCount,
+                parseFloat(pkng) || 0.0,
+                root.isWithoutStock ? 0.0 : weightVal,
+                rateVal,
+                amount
+            )
+        }
+
         lineItemsModel.append({
             "itemName": itemName,
             "bags": root.isWithoutStock ? 0 : bCount,
@@ -292,6 +305,9 @@ Item {
     }
 
     function removeLineItem(index) {
+        if (typeof purchaseVoucherCtrl !== "undefined" && purchaseVoucherCtrl) {
+            purchaseVoucherCtrl.lineItemsModel.removeRowAt(index)
+        }
         if (index >= 0 && index < lineItemsModel.count) {
             lineItemsModel.remove(index)
             recalculateTotals()
@@ -498,6 +514,45 @@ Item {
                 gst_pct: it.gstPct,
                 amount: it.amount
             })
+        }
+
+        if (typeof purchaseVoucherCtrl !== "undefined" && purchaseVoucherCtrl) {
+            purchaseVoucherCtrl.editingInvoiceId = root.editingInvoiceId
+            purchaseVoucherCtrl.invoiceNo = invNo
+            purchaseVoucherCtrl.voucherNo = autoVoucherNo
+            purchaseVoucherCtrl.invoiceDate = invoiceDateInput.text.trim()
+            purchaseVoucherCtrl.partyLedger = partyLedger
+            purchaseVoucherCtrl.gstin = gstinInput.text.trim()
+            purchaseVoucherCtrl.dueDays = parseInt(dueDaysInput.text) || 30
+            purchaseVoucherCtrl.vehicleNo = vehicle
+            purchaseVoucherCtrl.ewayBillNo = eway
+            purchaseVoucherCtrl.grNo = grNoInput.text.trim()
+            purchaseVoucherCtrl.shippingAddress = shippingInput.text.trim()
+            purchaseVoucherCtrl.poNo = poNoInput.text.trim()
+            purchaseVoucherCtrl.narration = narr
+            purchaseVoucherCtrl.freightCharges = freightAmount
+            purchaseVoucherCtrl.otherExp = otherExpAmount
+            purchaseVoucherCtrl.tcsRate = parseFloat(tcsInput.text) || 0.0
+            purchaseVoucherCtrl.dami = damiAmount
+            purchaseVoucherCtrl.labour = labourAmount
+            purchaseVoucherCtrl.auction = auctionAmount
+            purchaseVoucherCtrl.marketFee = mFeeAmount
+            purchaseVoucherCtrl.hrdf = hrdfAmount
+            purchaseVoucherCtrl.saleStatus = selectedSaleStatus
+            purchaseVoucherCtrl.taxStatus = selectedTaxStatus
+
+            var ok = purchaseVoucherCtrl.saveVoucher()
+            if (ok) {
+                statusMessage = purchaseVoucherCtrl.statusMessage
+                isError = false
+                resetForm()
+                root.invoiceSaved()
+                return
+            } else {
+                statusMessage = purchaseVoucherCtrl.statusMessage
+                isError = true
+                return
+            }
         }
 
         if (typeof purchaseModel !== "undefined" && purchaseModel) {

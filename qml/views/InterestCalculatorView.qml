@@ -77,6 +77,10 @@ FocusScope {
 
     function toIso(dStr) {
         if (!dStr) return ""
+        if (typeof dateService !== "undefined" && dateService) {
+            var res = dateService.toIso(dStr)
+            if (res) return res
+        }
         var s = dStr.trim()
         if (s.indexOf("-") !== -1) {
             var parts = s.split("-")
@@ -156,7 +160,7 @@ FocusScope {
             var dueD = parseInt(ci.dueDays) || 0
             var effD = Math.max(0, baseD - dueD)
             var r = parseFloat(ci.rate) || globalCrRate
-            var rowInt = Math.round(ci.amount * (r / 100.0) * effD / divisor * 100.0) / 100.0
+            var rowInt = (typeof mathService !== "undefined" && mathService) ? mathService.round2(ci.amount * (r / 100.0) * effD / divisor) : (Math.round(ci.amount * (r / 100.0) * effD / divisor * 100.0) / 100.0)
 
             crItemsModel.setProperty(i, "days", effD)
             crItemsModel.setProperty(i, "interestAmt", rowInt)
@@ -171,7 +175,7 @@ FocusScope {
             var dueDr = parseInt(di.dueDays) || 0
             var effDr = Math.max(0, baseDr - dueDr)
             var drR = parseFloat(di.rate) || globalDrRate
-            var rowDrInt = Math.round(di.amount * (drR / 100.0) * effDr / divisor * 100.0) / 100.0
+            var rowDrInt = (typeof mathService !== "undefined" && mathService) ? mathService.round2(di.amount * (drR / 100.0) * effDr / divisor) : (Math.round(di.amount * (drR / 100.0) * effDr / divisor * 100.0) / 100.0)
 
             drItemsModel.setProperty(j, "days", effDr)
             drItemsModel.setProperty(j, "interestAmt", rowDrInt)
@@ -179,20 +183,20 @@ FocusScope {
             drIntSum += rowDrInt
         }
 
-        crTotalAmount = crAmtSum
-        crTotalInterest = crIntSum
-        drTotalAmount = drAmtSum
-        drTotalInterest = drIntSum
+        crTotalAmount = (typeof mathService !== "undefined" && mathService) ? mathService.round2(crAmtSum) : crAmtSum
+        crTotalInterest = (typeof mathService !== "undefined" && mathService) ? mathService.round2(crIntSum) : crIntSum
+        drTotalAmount = (typeof mathService !== "undefined" && mathService) ? mathService.round2(drAmtSum) : drAmtSum
+        drTotalInterest = (typeof mathService !== "undefined" && mathService) ? mathService.round2(drIntSum) : drIntSum
 
-        var netI = drTotalInterest - crTotalInterest
+        var netI = (typeof mathService !== "undefined" && mathService) ? mathService.round2(drTotalInterest - crTotalInterest) : (drTotalInterest - crTotalInterest)
         netInterest = Math.abs(netI)
         netInterestType = netI >= 0 ? "Dr (Receivable)" : "Cr (Payable)"
 
-        var ledgB = drTotalAmount - crTotalAmount
+        var ledgB = (typeof mathService !== "undefined" && mathService) ? mathService.round2(drTotalAmount - crTotalAmount) : (drTotalAmount - crTotalAmount)
         ledgerBalance = Math.abs(ledgB)
         ledgerBalanceType = ledgB >= 0 ? "Dr" : "Cr"
 
-        var finB = ledgB + netI
+        var finB = (typeof mathService !== "undefined" && mathService) ? mathService.round2(ledgB + netI) : (ledgB + netI)
         finalNetBalance = Math.abs(finB)
         finalNetBalanceType = finB >= 0 ? "Dr" : "Cr"
     }
