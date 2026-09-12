@@ -34,8 +34,6 @@ find_package(Qt6 6.5 REQUIRED COMPONENTS
     Test
 )
 
-find_package(ZLIB REQUIRED)
-
 # Embedded SQLite Amalgamation
 add_library(sqlite3_embedded STATIC
     third_party/sqlite/sqlite3.c
@@ -71,6 +69,20 @@ target_compile_definitions(libmdb_embedded PRIVATE
 if (MSVC)
     target_compile_options(libmdb_embedded PRIVATE $<$<COMPILE_LANGUAGE:C>:/std:c11>)
 endif()
+
+# Embedded Miniz (ZLIB / Flate Decompression Engine) - 100% In-Tree Standalone C
+file(GLOB MINIZ_SOURCES "third_party/miniz/*.c")
+add_library(miniz_embedded STATIC ${MINIZ_SOURCES})
+set_target_properties(miniz_embedded PROPERTIES
+    AUTOMOC OFF
+    AUTORCC OFF
+    AUTOUIC OFF
+)
+target_include_directories(miniz_embedded PUBLIC third_party/miniz)
+target_compile_definitions(miniz_embedded PRIVATE
+    _CRT_SECURE_NO_WARNINGS
+    _CRT_NONSTDC_NO_DEPRECATE
+)
 
 # Application Sources
 set(SOURCES
@@ -234,6 +246,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     src/services
     third_party/sqlite
     third_party/libmdb
+    third_party/miniz
 )
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE HAS_LIBMDB=1)
@@ -241,7 +254,7 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE HAS_LIBMDB=1)
 target_link_libraries(${PROJECT_NAME} PRIVATE
     sqlite3_embedded
     libmdb_embedded
-    ZLIB::ZLIB
+    miniz_embedded
     Qt6::Core
     Qt6::Gui
     Qt6::Qml
@@ -357,12 +370,13 @@ target_include_directories(LogicBoardTestSuite PRIVATE
     src/services
     third_party/sqlite
     third_party/libmdb
+    third_party/miniz
 )
 target_compile_definitions(LogicBoardTestSuite PRIVATE HAS_LIBMDB=1)
 target_link_libraries(LogicBoardTestSuite PRIVATE
     sqlite3_embedded
     libmdb_embedded
-    ZLIB::ZLIB
+    miniz_embedded
     Qt6::Core
     Qt6::Gui
     Qt6::Widgets

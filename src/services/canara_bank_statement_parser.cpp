@@ -3,7 +3,7 @@
 #include <QFileInfo>
 #include <QRegularExpression>
 #include <QDebug>
-#include <zlib.h>
+#include "miniz.h"
 #include <algorithm>
 
 CanaraBankStatementParser::CanaraBankStatementParser() {
