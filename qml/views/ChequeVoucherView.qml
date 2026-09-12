@@ -527,18 +527,17 @@ FocusScope {
                                     Layout.preferredWidth: 65
                                     model: ["Dr", "Cr"]
                                     currentIndex: drcr === "Cr" ? 1 : 0
-                                    onActivated: function(idx) {
-                                        var newDrCr = idx === 1 ? "Cr" : "Dr"
-                                        if (newDrCr !== drcr) {
+                                    onCurrentTextChanged: {
+                                        if (currentText !== drcr) {
                                             var oldDrCr = drcr
                                             var oldDb = debitAmt
                                             var oldCr = creditAmt
-                                            voucherRowsModel.setProperty(index, "drcr", newDrCr)
+                                            voucherRowsModel.setProperty(index, "drcr", currentText)
 
-                                            if (newDrCr === "Cr" && oldDrCr === "Dr") {
+                                            if (currentText === "Cr" && oldDrCr === "Dr") {
                                                 voucherRowsModel.setProperty(index, "creditAmt", oldDb)
                                                 voucherRowsModel.setProperty(index, "debitAmt", "")
-                                            } else if (newDrCr === "Dr" && oldDrCr === "Cr") {
+                                            } else if (currentText === "Dr" && oldDrCr === "Cr") {
                                                 voucherRowsModel.setProperty(index, "debitAmt", oldCr)
                                                 voucherRowsModel.setProperty(index, "creditAmt", "")
                                             }

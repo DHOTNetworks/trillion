@@ -20,7 +20,18 @@
 #include "../src/models/sales_model.h"
 #include "../src/models/purchase_model.h"
 #include "../src/models/vouchers_model.h"
+#include "../src/models/parties_model.h"
+#include "../src/models/financial_years_model.h"
+#include "../src/models/milling_model.h"
+#include "../src/models/jform_model.h"
+#include "../src/models/tds_model.h"
+#include "../src/models/stock_items_model.h"
+#include "../src/models/account_groups_model.h"
+#include "../src/models/generic_list_model.h"
 #include "../src/database_manager.h"
+#include <QQmlEngine>
+#include <QQmlComponent>
+#include <QQmlContext>
 
 class LogicBoardTestSuite : public QObject {
     Q_OBJECT
@@ -54,6 +65,7 @@ private slots:
     // 4. Masters & Regulatory Validations
     void testGstinValidationAndPanExtraction();
     void testStockItemOpeningValuation();
+    void testQmlViewsInstantiation();
 };
 
 void LogicBoardTestSuite::initTestCase() {
@@ -371,6 +383,74 @@ void LogicBoardTestSuite::testStockItemOpeningValuation() {
     ctrl.setOpeningRate(3500.0);
     // Opening value = 50 * 3500 = 1,75,000.00
     QCOMPARE(ctrl.openingValue(), 175000.00);
+}
+
+extern int qInitResources_MahadevRiceMillERP_raw_qml_0();
+
+void LogicBoardTestSuite::testQmlViewsInstantiation() {
+    qInitResources_MahadevRiceMillERP_raw_qml_0();
+
+    QQmlEngine engine;
+    qmlRegisterType<GenericListModel>("MahadevERP", 1, 0, "GenericListModel");
+
+    PartiesModel partiesModel;
+    VouchersModel vouchersModel;
+    SalesModel salesModel;
+    PurchaseModel purchaseModel;
+    FinancialYearsModel financialYearsModel;
+    MillingModel millingModel;
+    JFormModel jformModel;
+    TdsModel tdsModel;
+    StockItemsModel stockItemsModel;
+    AccountGroupsModel accountGroupsModel;
+
+    engine.rootContext()->setContextProperty("partiesModel", &partiesModel);
+    engine.rootContext()->setContextProperty("vouchersModel", &vouchersModel);
+    engine.rootContext()->setContextProperty("salesModel", &salesModel);
+    engine.rootContext()->setContextProperty("purchaseModel", &purchaseModel);
+    engine.rootContext()->setContextProperty("financialYearsModel", &financialYearsModel);
+    engine.rootContext()->setContextProperty("millingModel", &millingModel);
+    engine.rootContext()->setContextProperty("jformModel", &jformModel);
+    engine.rootContext()->setContextProperty("tdsModel", &tdsModel);
+    engine.rootContext()->setContextProperty("stockItemsModel", &stockItemsModel);
+    engine.rootContext()->setContextProperty("accountGroupsModel", &accountGroupsModel);
+
+    QStringList viewsToTest = {
+        "ChequeVoucherView.qml",
+        "JournalVoucherView.qml",
+        "SalesVoucherView.qml",
+        "PurchaseVoucherView.qml",
+        "JFormVoucherView.qml",
+        "MillingVoucherView.qml",
+        "TdsVoucherView.qml",
+        "NewLedgerView.qml",
+        "ModifyLedgerView.qml",
+        "NewStockItemView.qml",
+        "ModifyStockItemView.qml",
+        "DashboardView.qml",
+        "PaddyProcurementView.qml",
+        "MillingView.qml",
+        "SalesInvoicingView.qml",
+        "VoucherLedgerView.qml",
+        "ReportsView.qml",
+        "SalesRegisterView.qml",
+        "PurchaseRegisterView.qml",
+        "MillingStatementView.qml",
+        "StockDetailView.qml",
+        "ViewLedgerStatementView.qml"
+    };
+
+    for (const QString& vName : viewsToTest) {
+        QUrl qrcUrl(QString("qrc:/MahadevERP/qml/views/%1").arg(vName));
+        QQmlComponent comp(&engine, qrcUrl);
+        if (!comp.isReady()) {
+            qCritical() << "Failed to load view:" << vName << comp.errors();
+        }
+        QVERIFY2(comp.isReady(), qPrintable(QString("Failed to compile view: %1 (errors: %2)").arg(vName, comp.errorString())));
+        QObject* obj = comp.create();
+        QVERIFY2(obj != nullptr, qPrintable(QString("Failed to instantiate view: %1").arg(vName)));
+        delete obj;
+    }
 }
 
 QTEST_MAIN(LogicBoardTestSuite)

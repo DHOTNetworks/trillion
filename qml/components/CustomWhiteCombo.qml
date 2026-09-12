@@ -25,6 +25,8 @@ ColumnLayout {
 
     signal returnPressed()
     signal accepted()
+    signal activated(int index)
+    signal textActivated(string text)
     signal leftPressed()
     signal rightPressed()
     signal upPressed()
@@ -166,6 +168,8 @@ ColumnLayout {
             if (sel !== undefined && sel !== null) {
                 comboField.text = sel.toString()
                 root.currentIndex = root.find(sel)
+                root.activated(root.currentIndex)
+                root.textActivated(comboField.text)
                 comboPopup.close()
                 return
             }
@@ -181,6 +185,8 @@ ColumnLayout {
         if (exactIdx >= 0) {
             root.currentIndex = exactIdx
             comboField.text = rawItems[exactIdx]
+            root.activated(root.currentIndex)
+            root.textActivated(comboField.text)
         } else {
             root.currentIndex = -1
         }
@@ -386,6 +392,8 @@ ColumnLayout {
             onItemChosen: function(val) {
                 comboField.text = val
                 root.currentIndex = root.find(val)
+                root.activated(root.currentIndex)
+                root.textActivated(val)
                 comboPopup.close()
                 Qt.callLater(root.emitReturn)
             }

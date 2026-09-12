@@ -334,6 +334,7 @@ set(TEST_SOURCES
     src/services/print_export_controller.cpp
     src/engine/bahi_khata_migrator.h
     src/engine/bahi_khata_migrator.cpp
+    ${CMAKE_CURRENT_BINARY_DIR}/.qt/rcc/qrc_MahadevRiceMillERP_raw_qml_0.cpp
 )
 
 add_executable(LogicBoardTestSuite ${TEST_SOURCES})
@@ -353,6 +354,8 @@ target_link_libraries(LogicBoardTestSuite PRIVATE
     Qt6::Gui
     Qt6::Widgets
     Qt6::PrintSupport
+    Qt6::Qml
+    Qt6::Quick
     Qt6::Test
 )
 add_test(NAME LogicBoardTestSuite COMMAND LogicBoardTestSuite)
