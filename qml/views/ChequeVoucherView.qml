@@ -91,10 +91,11 @@ FocusScope {
         recalculateTotals()
     }
 
-    function cursorMax() {
+    function cursorMax(dateStr) {
         if (typeof vouchersModel !== "undefined" && vouchersModel) {
             var prefix = (root.voucherMode === "Receipt" || root.voucherMode === "ChRt") ? "ChRt" : "ChPt"
-            autoVchCode = vouchersModel.get_next_voucher_no(prefix)
+            var d = dateStr || (voucherDateInput ? voucherDateInput.text.trim() : "")
+            autoVchCode = vouchersModel.get_next_voucher_no(prefix, d)
             autoVoucherNo = autoVchCode
         } else {
             autoVchCode = ""
@@ -242,6 +243,7 @@ FocusScope {
         anchors.centerIn: parent
         onDateConfirmed: function(fmtDate, isoDate) {
             voucherDateInput.text = fmtDate
+            root.cursorMax(fmtDate)
             Qt.callLater(function() {
                 rowsListView.focusRowItem(0, "ledger")
             })
@@ -322,10 +324,11 @@ FocusScope {
                     implicitHeight: 30
                     background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
                     contentItem: RowLayout {
-                        anchors.centerIn: parent
                         spacing: 6
+                        Item { Layout.fillWidth: true }
                         Text { text: "← Back to Dashboard"; color: "#475569"; font.pixelSize: 11; font.bold: true }
                         KbdBadge { text: "Esc"; badgeColor: "#DC2626"; textColor: "#FFF"; borderColor: "#B91C1C" }
+                        Item { Layout.fillWidth: true }
                     }
                     onClicked: root.cancelRequested()
                 }
@@ -423,9 +426,13 @@ FocusScope {
                     implicitWidth: contentItem.implicitWidth + 24
                     implicitHeight: 32
                     background: Rectangle { color: "#EFF6FF"; radius: 6; border.color: "#93C5FD" }
-                    contentItem: RowLayout {
-                        spacing: 4
-                        Text { text: "+ Add Ledger Line"; color: "#2563EB"; font.bold: true; font.pixelSize: 11 }
+                    contentItem: Text {
+                        text: "+ Add Ledger Line"
+                        color: "#2563EB"
+                        font.bold: true
+                        font.pixelSize: 11
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
                     }
                     onClicked: {
                         root.addNewRow()
@@ -819,10 +826,11 @@ FocusScope {
                     implicitHeight: 34
                     background: Rectangle { color: saveBtn.hovered ? "#1D4ED8" : "#2563EB"; radius: 6 }
                     contentItem: RowLayout {
-                        anchors.centerIn: parent
                         spacing: 6
+                        Item { Layout.fillWidth: true }
                         Text { text: "Save Voucher"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 12 }
                         KbdBadge { text: "Ctrl+S"; badgeColor: "#1E40AF"; textColor: "#93C5FD"; borderColor: "#2563EB" }
+                        Item { Layout.fillWidth: true }
                     }
                     onClicked: root.saveVoucher()
                 }
@@ -833,10 +841,11 @@ FocusScope {
                     implicitHeight: 34
                     background: Rectangle { color: cancelBtn.hovered ? "#E2E8F0" : "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
                     contentItem: RowLayout {
-                        anchors.centerIn: parent
                         spacing: 6
+                        Item { Layout.fillWidth: true }
                         Text { text: "Cancel"; color: "#475569"; font.bold: true; font.pixelSize: 12 }
                         KbdBadge { text: "Esc"; badgeColor: "#DC2626"; textColor: "#FFF"; borderColor: "#B91C1C" }
+                        Item { Layout.fillWidth: true }
                     }
                     onClicked: root.cancelRequested()
                 }

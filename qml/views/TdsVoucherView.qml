@@ -149,12 +149,14 @@ Rectangle {
         recalculateTotals()
     }
 
-    function initializeVoucher() {
-        if (typeof financialYearsModel !== "undefined" && financialYearsModel) {
+    function initializeVoucher(dateStr) {
+        if (dateStr) {
+            voucherDate = dateStr
+        } else if (typeof financialYearsModel !== "undefined" && financialYearsModel) {
             voucherDate = financialYearsModel.get_working_date()
         }
         if (typeof tdsModel !== "undefined" && tdsModel) {
-            var info = tdsModel.get_next_voucher_info(currentTdsType)
+            var info = tdsModel.get_next_voucher_info(currentTdsType, voucherDate)
             currentVoucherNo = info.next_voucher_no || 1
             if (vchNoInput) vchNoInput.text = currentVoucherNo.toString()
             if (!voucherDate) voucherDate = info.date_display || ""
@@ -183,7 +185,7 @@ Rectangle {
     function onTdsTypeChanged(newType) {
         currentTdsType = newType
         if (typeof tdsModel !== "undefined" && tdsModel) {
-            var info = tdsModel.get_next_voucher_info(currentTdsType)
+            var info = tdsModel.get_next_voucher_info(currentTdsType, voucherDate)
             tdsRate = info.default_tds_rate !== undefined ? info.default_tds_rate : 10.0
             if (tdsRateInput) tdsRateInput.text = tdsRate.toFixed(2)
 
@@ -1181,6 +1183,11 @@ Rectangle {
                 var d = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]))
                 var days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
                 root.dayOfWeek = days[d.getDay()]
+            }
+            if (typeof tdsModel !== "undefined" && tdsModel) {
+                var info = tdsModel.get_next_voucher_info(currentTdsType, root.voucherDate)
+                currentVoucherNo = info.next_voucher_no || 1
+                if (vchNoInput) vchNoInput.text = currentVoucherNo.toString()
             }
             Qt.callLater(function() {
                 typeCombo.focusAndOpen()

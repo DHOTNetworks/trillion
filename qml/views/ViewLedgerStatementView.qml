@@ -249,10 +249,11 @@ Rectangle {
                 implicitHeight: 32
                 background: Rectangle { color: printBtn.hovered ? "#1D4ED8" : "#2563EB"; radius: 6 }
                 contentItem: RowLayout {
-                    anchors.centerIn: parent
                     spacing: 6
+                    Item { Layout.fillWidth: true }
                     Text { text: "Print Statement"; color: "#FFFFFF"; font.pixelSize: 12; font.bold: true }
                     KbdBadge { text: "Ctrl+P"; badgeColor: "#1E3A8A"; textColor: "#93C5FD"; borderColor: "#2563EB" }
+                    Item { Layout.fillWidth: true }
                 }
                 onClicked: root.printStatement()
             }
@@ -263,10 +264,11 @@ Rectangle {
                 implicitHeight: 32
                 background: Rectangle { color: pdfBtn.hovered ? "#047857" : "#059669"; radius: 6 }
                 contentItem: RowLayout {
-                    anchors.centerIn: parent
                     spacing: 6
+                    Item { Layout.fillWidth: true }
                     Text { text: "Export PDF"; color: "#FFFFFF"; font.pixelSize: 12; font.bold: true }
                     KbdBadge { text: "Alt+P"; badgeColor: "#064E3B"; textColor: "#A7F3D0"; borderColor: "#059669" }
+                    Item { Layout.fillWidth: true }
                 }
                 onClicked: root.exportPdf()
             }
@@ -293,10 +295,11 @@ Rectangle {
                 implicitHeight: 32
                 background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
                 contentItem: RowLayout {
-                    anchors.centerIn: parent
                     spacing: 6
+                    Item { Layout.fillWidth: true }
                     Text { text: "← Back to Dashboard"; color: "#475569"; font.pixelSize: 12; font.bold: true }
                     KbdBadge { text: "Esc"; badgeColor: "#DC2626"; textColor: "#FFF"; borderColor: "#B91C1C" }
+                    Item { Layout.fillWidth: true }
                 }
                 onClicked: root.cancelRequested()
             }
@@ -561,8 +564,10 @@ Rectangle {
                     background: Rectangle { color: filterPopup.visible ? "#1D4ED8" : "#2563EB"; radius: 6 }
                     contentItem: RowLayout {
                         spacing: 6
+                        Item { Layout.fillWidth: true }
                         Text { text: "Filter Dates"; color: "#FFF"; font.bold: true; font.pixelSize: 12 }
                         KbdBadge { text: "Alt+F"; badgeColor: "#1E3A8A"; textColor: "#93C5FD"; borderColor: "#2563EB" }
+                        Item { Layout.fillWidth: true }
                     }
                     onClicked: filterPopup.open()
                 }

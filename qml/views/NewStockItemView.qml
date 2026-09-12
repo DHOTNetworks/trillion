@@ -81,9 +81,10 @@ Item {
                 background: Rectangle { color: backBtn.hovered ? "#E2E8F0" : "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
                 contentItem: RowLayout {
                     spacing: 6
-                    anchors.centerIn: parent
+                    Item { Layout.fillWidth: true }
                     Text { text: "← Back"; color: "#475569"; font.pixelSize: 12; font.bold: true }
                     KbdBadge { text: "Esc"; badgeColor: "#DC2626"; textColor: "#FFF"; borderColor: "#B91C1C" }
+                    Item { Layout.fillWidth: true }
                 }
                 onClicked: root.cancelRequested()
             }
@@ -684,8 +685,10 @@ Item {
                                 background: Rectangle { color: "#EEF2FF"; radius: 4; border.color: "#C7D2FE" }
                                 contentItem: RowLayout {
                                     spacing: 4
+                                    Item { Layout.fillWidth: true }
                                     Text { text: "Copy Purchase A/c to All"; color: "#4338CA"; font.pixelSize: 11; font.bold: true }
                                     KbdBadge { text: "F5"; badgeColor: "#4338CA"; textColor: "#FFF"; borderColor: "#3730A3" }
+                                    Item { Layout.fillWidth: true }
                                 }
                                 onClicked: root.copyAllLedgersFromPurchase()
                             }
@@ -1026,9 +1029,10 @@ Item {
                 background: Rectangle { color: cancelBtn.hovered ? "#E2E8F0" : "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
                 contentItem: RowLayout {
                     spacing: 6
-                    anchors.centerIn: parent
+                    Item { Layout.fillWidth: true }
                     Text { text: "Cancel"; color: "#475569"; font.pixelSize: 13; font.bold: true }
                     KbdBadge { text: "Esc"; badgeColor: "#DC2626"; textColor: "#FFF"; borderColor: "#B91C1C" }
+                    Item { Layout.fillWidth: true }
                 }
                 onClicked: root.cancelRequested()
             }
@@ -1049,9 +1053,10 @@ Item {
                 }
                 contentItem: RowLayout {
                     spacing: 8
-                    anchors.centerIn: parent
+                    Item { Layout.fillWidth: true }
                     Text { text: "Save Stock Item"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 14 }
                     KbdBadge { text: "F2"; badgeColor: "#14532D"; textColor: "#86EFAC"; borderColor: "#166534" }
+                    Item { Layout.fillWidth: true }
                 }
                 onClicked: root.saveStockItem()
             }

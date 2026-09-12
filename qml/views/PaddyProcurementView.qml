@@ -37,10 +37,11 @@ ColumnLayout {
             implicitHeight: 32
             background: Rectangle { color: addPaddyBtn.hovered ? "#15803D" : "#16A34A"; radius: 6 }
             contentItem: RowLayout {
-                anchors.centerIn: parent
                 spacing: 6
+                Item { Layout.fillWidth: true }
                 Text { text: "+ New Paddy Arrival Slip"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 13 }
                 KbdBadge { text: "F2"; badgeColor: "#14532D"; textColor: "#86EFAC"; borderColor: "#16A34A" }
+                Item { Layout.fillWidth: true }
             }
             onClicked: root.showNewModal()
         }

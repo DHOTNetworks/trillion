@@ -153,15 +153,13 @@ Rectangle {
                     radius: 5
                     border.color: mdbBtn.hovered ? "#2563EB" : "#CBD5E1"
                 }
-                contentItem: RowLayout {
-                    spacing: 6
-                    anchors.centerIn: parent
-                    Text {
-                        text: "Sync MDB"
-                        color: "#2563EB"
-                        font.pixelSize: 11
-                        font.bold: true
-                    }
+                contentItem: Text {
+                    text: "Sync MDB"
+                    color: "#2563EB"
+                    font.pixelSize: 11
+                    font.bold: true
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
                 }
                 onClicked: root.openMdbMigrationRequested()
             }
@@ -217,7 +215,7 @@ Rectangle {
                 }
                 contentItem: RowLayout {
                     spacing: 6
-                    anchors.centerIn: parent
+                    Item { Layout.fillWidth: true }
                     Text {
                         text: "Shortcuts"
                         color: "#2563EB"
@@ -230,6 +228,7 @@ Rectangle {
                         textColor: "#FFFFFF"
                         borderColor: "#1D4ED8"
                     }
+                    Item { Layout.fillWidth: true }
                 }
                 onClicked: root.showHelpRequested()
             }

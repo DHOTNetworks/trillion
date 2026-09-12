@@ -45,15 +45,12 @@ void MillingModel::reload_data() {
 }
 
 QString MillingModel::get_next_batch_no(const QString& fy) {
-    QString targetFy = fy;
-    if (targetFy.isEmpty()) {
-        QVariant fyVal = DatabaseManager::instance().executeScalar("SELECT year_name FROM financial_years WHERE is_active = 1 LIMIT 1;");
-        targetFy = fyVal.isValid() ? fyVal.toString() : "FY 2026-27";
-    }
+    QString targetFy = AccountingEngine::resolveFinancialYear(fy);
+    QString fyPattern = "%" + targetFy.mid(3).trimmed() + "%";
 
     QVariantList rows = DatabaseManager::instance().executeQuery(
-        "SELECT batch_no FROM milling_batches WHERE financial_year = ?;",
-        {targetFy}
+        "SELECT batch_no FROM milling_batches WHERE financial_year = ? OR financial_year LIKE ?;",
+        {targetFy, fyPattern}
     );
 
     long long maxId = 0;

@@ -17,6 +17,9 @@
 #include "../src/models/paddy_procurement_controller.h"
 #include "../src/models/ledger_master_controller.h"
 #include "../src/models/stock_master_controller.h"
+#include "../src/models/sales_model.h"
+#include "../src/models/purchase_model.h"
+#include "../src/models/vouchers_model.h"
 #include "../src/database_manager.h"
 
 class LogicBoardTestSuite : public QObject {
@@ -46,6 +49,7 @@ private slots:
     void testJFormYieldAndDeductionCalculations();
     void testMillingBatchYieldDistribution();
     void testPaddyProcurementMoistureDeductions();
+    void testPerFinancialYearVoucherNumbering();
 
     // 4. Masters & Regulatory Validations
     void testGstinValidationAndPanExtraction();
@@ -54,9 +58,11 @@ private slots:
 
 void LogicBoardTestSuite::initTestCase() {
     qDebug() << "[TEST INIT] Initializing LogicBoard Test Suite...";
-    // Initialize temporary database if needed
-    QDir().mkpath("data");
-    DatabaseManager::instance().initDatabase("data/mahadev_rice_industry_data_004.db");
+    QString dbPath = "data/mahadev_rice_industry_data_004.db";
+    if (QFile::exists("../data/mahadev_rice_industry_data_004.db")) {
+        dbPath = "../data/mahadev_rice_industry_data_004.db";
+    }
+    DatabaseManager::instance().initDatabase(dbPath);
 }
 
 void LogicBoardTestSuite::cleanupTestCase() {
@@ -318,6 +324,23 @@ void LogicBoardTestSuite::testPaddyProcurementMoistureDeductions() {
     QCOMPARE(ctrl.netWeightQtl(), 98.0);
     QCOMPARE(ctrl.hamaliTotal(), 2000.0);
     QCOMPARE(ctrl.netAmount(), 243000.00); // 2,45,000 - 2,000
+}
+
+void LogicBoardTestSuite::testPerFinancialYearVoucherNumbering() {
+    SalesModel salesModel;
+    // For FY 2026-27 (244 existing invoices, max 245), next voucher must be Sale-246, next invoice MRI/2627-245
+    QString vch2627 = salesModel.get_next_voucher_no("FY 2026-27");
+    QCOMPARE(vch2627, QString("Sale-246"));
+    QString inv2627 = salesModel.get_next_invoice_no("FY 2026-27");
+    QCOMPARE(inv2627, QString("MRI/2627-245"));
+
+    // For FY 2025-26 (1090 existing invoices, max 1093), next voucher must be Sale-1094
+    QString vch2526 = salesModel.get_next_voucher_no("FY 2025-26");
+    QCOMPARE(vch2526, QString("Sale-1094"));
+
+    // Date string resolution: 01-05-2026 belongs to FY 2026-27
+    QString vchByDate = salesModel.get_next_voucher_no("01-05-2026");
+    QCOMPARE(vchByDate, QString("Sale-246"));
 }
 
 // -------------------------------------------------------------

@@ -1,19 +1,29 @@
 #include "jform_model.h"
 #include "../database_manager.h"
+#include "../engine/accounting_engine.h"
 #include <QDate>
 #include <QLocale>
 #include <iostream>
 
 JFormModel::JFormModel(QObject* parent) : QObject(parent) {}
 
-QVariantMap JFormModel::get_next_voucher_info() {
+QVariantMap JFormModel::get_next_voucher_info(const QString& fy) {
     QVariantMap res;
     auto& db = DatabaseManager::instance();
 
-    QVariant maxVch = db.executeScalar("SELECT MAX(voucher_no) FROM jform_vouchers;");
+    QString targetFy = AccountingEngine::resolveFinancialYear(fy);
+    QString fyPattern = "%" + targetFy.mid(3).trimmed() + "%";
+
+    QVariant maxVch = db.executeScalar(
+        "SELECT MAX(voucher_no) FROM jform_vouchers WHERE financial_year = ? OR financial_year LIKE ?;",
+        {targetFy, fyPattern}
+    );
     int nextVch = maxVch.isValid() && !maxVch.isNull() ? maxVch.toInt() + 1 : 1;
 
-    QVariant maxJForm = db.executeScalar("SELECT MAX(CAST(jform_no AS INTEGER)) FROM jform_vouchers;");
+    QVariant maxJForm = db.executeScalar(
+        "SELECT MAX(CAST(jform_no AS INTEGER)) FROM jform_vouchers WHERE financial_year = ? OR financial_year LIKE ?;",
+        {targetFy, fyPattern}
+    );
     int nextJForm = maxJForm.isValid() && !maxJForm.isNull() ? maxJForm.toInt() + 1 : 1;
 
     QDate today = QDate::currentDate();
@@ -64,9 +74,17 @@ bool JFormModel::save_jform_voucher(const QVariantMap& data, const QVariantList&
     auto& db = DatabaseManager::instance();
     db.beginTransaction();
 
+    QString vchDate = data.value("voucher_date").toString().trimmed();
+    if (vchDate.isEmpty()) vchDate = QDate::currentDate().toString("yyyy-MM-dd");
+    QString fy = AccountingEngine::resolveFinancialYear(vchDate);
+    QString fyPattern = "%" + fy.mid(3).trimmed() + "%";
+
     int vchNo = data.value("voucher_no").toInt();
     if (vchNo <= 0) {
-        QVariant maxVch = db.executeScalar("SELECT MAX(voucher_no) FROM jform_vouchers;");
+        QVariant maxVch = db.executeScalar(
+            "SELECT MAX(voucher_no) FROM jform_vouchers WHERE financial_year = ? OR financial_year LIKE ?;",
+            {fy, fyPattern}
+        );
         vchNo = maxVch.isValid() && !maxVch.isNull() ? maxVch.toInt() + 1 : 1;
     }
 
@@ -74,9 +92,6 @@ bool JFormModel::save_jform_voucher(const QVariantMap& data, const QVariantList&
     if (jformNo.isEmpty()) {
         jformNo = QString::number(vchNo);
     }
-
-    QString vchDate = data.value("voucher_date").toString().trimmed();
-    if (vchDate.isEmpty()) vchDate = QDate::currentDate().toString("yyyy-MM-dd");
 
     int zimidarId = data.value("zimidar_id").toInt();
     if (zimidarId <= 0) {
@@ -129,14 +144,14 @@ bool JFormModel::save_jform_voucher(const QVariantMap& data, const QVariantList&
     // 1. Insert into jform_vouchers
     bool ok = db.executeNonQuery(
         "INSERT INTO jform_vouchers ("
-        "voucher_no, voucher_date, jform_no, zimidar_id, zimidar_name, party_id, party_name, "
+        "voucher_no, voucher_date, financial_year, jform_no, zimidar_id, zimidar_name, party_id, party_name, "
         "auction_sale_status, due_days, vehicle_no, driver_name, gate_pass_no, eway_bill_no, "
         "bill_time, sauda_date, mandi_place, procurement_mode, lot_no, grade, transport_name, "
         "broker_name, challan_no, kanda_weight, total_bags, total_weight, goods_amount, bonus_amount, "
         "relief_amount, subtotal_amount, labour_amount, round_off, grand_total, narration"
-        ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+        ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
         {
-            vchNo, vchDate, jformNo, zimidarId, zimidarName, partyId, partyName,
+            vchNo, vchDate, fy, jformNo, zimidarId, zimidarName, partyId, partyName,
             auctionSaleStatus, dueDays, vehicleNo, driverName, gatePassNo, ewayBillNo,
             billTime, saudaDate, mandiPlace, procurementMode, lotNo, grade, transportName,
             brokerName, challanNo, kandaWeight, totalBags, totalWeight, goodsAmount, bonusAmount,

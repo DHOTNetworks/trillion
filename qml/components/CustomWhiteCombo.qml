@@ -76,6 +76,9 @@ ColumnLayout {
 
     onModelChanged: {
         updateRawItems()
+        if (comboField.text === "" && root.currentIndex >= 0 && root.currentIndex < rawItems.length) {
+            comboField.text = rawItems[root.currentIndex] || ""
+        }
     }
 
     onCurrentIndexChanged: {

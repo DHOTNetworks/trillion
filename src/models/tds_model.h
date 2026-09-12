@@ -12,7 +12,7 @@ public:
     explicit TdsModel(QObject* parent = nullptr);
     ~TdsModel() override = default;
 
-    Q_INVOKABLE QVariantMap get_next_voucher_info(const QString& tdsType = "RENT");
+    Q_INVOKABLE QVariantMap get_next_voucher_info(const QString& tdsType = "RENT", const QString& fy = "");
     Q_INVOKABLE QVariantMap get_party_info(int partyId, const QString& tdsType = "RENT");
     Q_INVOKABLE QString get_last_narration(int partyId, const QString& tdsType = "");
     Q_INVOKABLE bool save_tds_voucher(const QVariantMap& data);

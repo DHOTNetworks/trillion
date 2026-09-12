@@ -89,9 +89,10 @@ Item {
                 background: Rectangle { color: backBtn.hovered ? "#E2E8F0" : "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
                 contentItem: RowLayout {
                     spacing: 6
-                    anchors.centerIn: parent
+                    Item { Layout.fillWidth: true }
                     Text { text: "← Back"; color: "#475569"; font.pixelSize: 12; font.bold: true }
                     KbdBadge { text: "Esc"; badgeColor: "#DC2626"; textColor: "#FFF"; borderColor: "#B91C1C" }
+                    Item { Layout.fillWidth: true }
                 }
                 onClicked: root.cancelRequested()
             }
@@ -728,9 +729,13 @@ Item {
                             T.Button {
                                 id: allSameBtn
                                 background: Rectangle { color: "#EDE9FE"; radius: 4; border.color: "#C4B5FD" }
-                                contentItem: RowLayout {
-                                    spacing: 4
-                                    Text { text: "F5: All Same Accounts"; color: "#6D28D9"; font.pixelSize: 11; font.bold: true }
+                                contentItem: Text {
+                                    text: "F5: All Same Accounts"
+                                    color: "#6D28D9"
+                                    font.pixelSize: 11
+                                    font.bold: true
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
                                 }
                                 onClicked: root.copyAllLedgersFromPurchase()
                             }
@@ -1056,9 +1061,10 @@ Item {
                 background: Rectangle { color: cancelBtn.hovered ? "#E2E8F0" : "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
                 contentItem: RowLayout {
                     spacing: 6
-                    anchors.centerIn: parent
+                    Item { Layout.fillWidth: true }
                     Text { text: "Cancel"; color: "#475569"; font.pixelSize: 13; font.bold: true }
                     KbdBadge { text: "Esc"; badgeColor: "#DC2626"; textColor: "#FFF"; borderColor: "#B91C1C" }
+                    Item { Layout.fillWidth: true }
                 }
                 onClicked: root.cancelRequested()
             }
@@ -1074,9 +1080,10 @@ Item {
                 }
                 contentItem: RowLayout {
                     spacing: 6
-                    anchors.centerIn: parent
+                    Item { Layout.fillWidth: true }
                     Text { text: "Delete Item"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 13 }
                     KbdBadge { text: "Del"; badgeColor: "#7F1D1D"; textColor: "#FECACA"; borderColor: "#991B1B" }
+                    Item { Layout.fillWidth: true }
                 }
                 onClicked: deleteConfirmModal.open()
             }
@@ -1097,9 +1104,10 @@ Item {
                 }
                 contentItem: RowLayout {
                     spacing: 8
-                    anchors.centerIn: parent
+                    Item { Layout.fillWidth: true }
                     Text { text: "Update Complete Stock Item"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 14 }
                     KbdBadge { text: "F2"; badgeColor: "#14532D"; textColor: "#86EFAC"; borderColor: "#166534" }
+                    Item { Layout.fillWidth: true }
                 }
                 onClicked: root.updateStockItem()
             }

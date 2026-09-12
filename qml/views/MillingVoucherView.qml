@@ -54,16 +54,20 @@ FocusScope {
         })
     }
 
-    function resetForm() {
+    function updateNextNumbers(dateStr) {
+        var d = dateStr || (vchDateInput ? vchDateInput.text.trim() : "")
         if (typeof millingModel !== "undefined" && millingModel) {
-            autoVchCode = millingModel.get_next_batch_no()
+            autoVchCode = millingModel.get_next_batch_no(d)
             autoVoucherNo = autoVchCode
         } else {
             autoVchCode = ""
             autoVoucherNo = ""
         }
+    }
 
+    function resetForm() {
         vchDateInput.text = (typeof financialYearsModel !== "undefined" && financialYearsModel) ? financialYearsModel.get_working_date() : Qt.formatDate(new Date(), "dd-MM-yyyy")
+        updateNextNumbers(vchDateInput.text)
         particularsInput.text = ""
         
         consumedModel.clear()
@@ -462,8 +466,10 @@ FocusScope {
                     background: Rectangle { color: "#EFF6FF"; border.color: "#93C5FD"; radius: 6 }
                     contentItem: RowLayout {
                         spacing: 6
+                        Item { Layout.fillWidth: true }
                         Text { text: "Auto Pick Recipe"; color: "#1D4ED8"; font.pixelSize: 11; font.bold: true }
                         KbdBadge { text: "Alt+P"; badgeColor: "#1E40AF"; textColor: "#93C5FD"; borderColor: "#2563EB" }
+                        Item { Layout.fillWidth: true }
                     }
                     onClicked: root.autoPickStandardItems()
                 }
@@ -1079,10 +1085,11 @@ FocusScope {
                         implicitHeight: 34
                         background: Rectangle { color: "#16A34A"; radius: 6 }
                         contentItem: RowLayout {
-                            anchors.centerIn: parent
                             spacing: 6
+                            Item { Layout.fillWidth: true }
                             Text { text: "Save Voucher"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 12 }
                             KbdBadge { text: "Ctrl+S"; badgeColor: "#14532D"; textColor: "#86EFAC"; borderColor: "#16A34A" }
+                            Item { Layout.fillWidth: true }
                         }
                         onClicked: root.saveMillingVoucher()
                     }
@@ -1096,6 +1103,7 @@ FocusScope {
         anchors.centerIn: parent
         onDateConfirmed: function(fmtDate, isoDate) {
             vchDateInput.text = fmtDate
+            root.updateNextNumbers(fmtDate)
             Qt.callLater(function() {
                 particularsInput.focusInput = true
             })

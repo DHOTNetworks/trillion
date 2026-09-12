@@ -132,22 +132,25 @@ Item {
         }
     }
 
+    function updateNextNumbers(dateStr) {
+        if (root.isEditMode) return
+        var d = dateStr || invoiceDateInput.text.trim()
+        if (typeof salesModel !== "undefined" && salesModel) {
+            autoVchCode = salesModel.get_next_voucher_no(d)
+            autoVoucherNo = autoVchCode
+            var nextInv = salesModel.get_next_invoice_no(d)
+            if (!invNoInput.text.trim()) {
+                invNoInput.placeholderText = nextInv ? nextInv : "e.g. MRI/2627-244"
+            }
+        }
+    }
+
     function resetForm() {
         editingInvoiceId = 0
-        var nextInv = ""
-        if (typeof salesModel !== "undefined" && salesModel) {
-            autoVchCode = salesModel.get_next_voucher_no()
-            autoVoucherNo = autoVchCode
-            nextInv = salesModel.get_next_invoice_no()
-        } else {
-            autoVchCode = ""
-            autoVoucherNo = ""
-        }
-
         var wDate = (typeof financialYearsModel !== "undefined" && financialYearsModel) ? financialYearsModel.get_working_date() : Qt.formatDate(new Date(), "dd-MM-yyyy")
         invoiceDateInput.text = wDate
         invNoInput.text = ""
-        invNoInput.placeholderText = nextInv ? nextInv : "e.g. MRI/2627-244"
+        updateNextNumbers(wDate)
         dueDaysInput.text = "0"
         marketTypeCombo.currentIndex = 0
         posCombo.currentIndex = 0
@@ -649,6 +652,7 @@ Item {
         anchors.centerIn: parent
         onDateConfirmed: function(fmtDate, isoDate) {
             invoiceDateInput.text = fmtDate
+            root.updateNextNumbers(fmtDate)
             Qt.callLater(function() {
                 partyCombo.focusAndOpen()
             })
@@ -715,10 +719,11 @@ Item {
                     implicitHeight: 30
                     background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
                     contentItem: RowLayout {
-                        anchors.centerIn: parent
                         spacing: 6
+                        Item { Layout.fillWidth: true }
                         Text { text: "← Back to Dashboard"; color: "#475569"; font.pixelSize: 11; font.bold: true }
                         KbdBadge { text: "Esc"; badgeColor: "#DC2626"; textColor: "#FFF"; borderColor: "#B91C1C" }
+                        Item { Layout.fillWidth: true }
                     }
                     onClicked: root.cancelRequested()
                 }
@@ -1809,10 +1814,11 @@ Item {
                     implicitHeight: 34
                     background: Rectangle { color: printTaxBtn.hovered ? "#047857" : "#059669"; radius: 6 }
                     contentItem: RowLayout {
-                        anchors.centerIn: parent
                         spacing: 6
+                        Item { Layout.fillWidth: true }
                         Text { text: "Print Tax Invoice"; color: "#FFF"; font.bold: true; font.pixelSize: 12 }
                         KbdBadge { text: "Ctrl+P"; badgeColor: "#064E3B"; textColor: "#A7F3D0"; borderColor: "#059669" }
+                        Item { Layout.fillWidth: true }
                     }
                     onClicked: root.openPrintModal()
                 }
@@ -1823,10 +1829,11 @@ Item {
                     implicitHeight: 34
                     background: Rectangle { color: exportTaxPdfBtn.hovered ? "#0284C7" : "#0EA5E9"; radius: 6 }
                     contentItem: RowLayout {
-                        anchors.centerIn: parent
                         spacing: 6
+                        Item { Layout.fillWidth: true }
                         Text { text: "Save PDF"; color: "#FFF"; font.bold: true; font.pixelSize: 12 }
                         KbdBadge { text: "Alt+P"; badgeColor: "#075985"; textColor: "#BAE6FD"; borderColor: "#0EA5E9" }
+                        Item { Layout.fillWidth: true }
                     }
                     onClicked: root.openPdfModal()
                 }
@@ -1839,10 +1846,13 @@ Item {
                     Layout.preferredHeight: 34
                     height: 34
                     background: Rectangle { color: saveBtn.activeFocus ? "#1D4ED8" : "#2563EB"; radius: 6; border.color: saveBtn.activeFocus ? "#60A5FA" : "transparent"; border.width: 2 }
-                    contentItem: RowLayout {
-                        anchors.centerIn: parent
-                        spacing: 6
-                        Text { text: root.isEditMode ? "Update Sales Voucher (F2)" : "Save & Post Sales Voucher (F2)"; color: "#FFF"; font.bold: true; font.pixelSize: 12 }
+                    contentItem: Text {
+                        text: root.isEditMode ? "Update Sales Voucher (F2)" : "Save & Post Sales Voucher (F2)"
+                        color: "#FFF"
+                        font.bold: true
+                        font.pixelSize: 12
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
                     }
                     onClicked: root.saveInvoice()
                     Keys.onReturnPressed: root.saveInvoice()

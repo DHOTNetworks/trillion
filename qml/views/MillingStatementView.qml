@@ -192,10 +192,11 @@ FocusScope {
                     implicitHeight: 30
                     background: Rectangle { color: filterPopup.visible ? "#1D4ED8" : "#2563EB"; radius: 6 }
                     contentItem: RowLayout {
-                        anchors.centerIn: parent
                         spacing: 6
+                        Item { Layout.fillWidth: true }
                         Text { text: "Filter Dates"; color: "#FFF"; font.bold: true; font.pixelSize: 11 }
                         KbdBadge { text: "Alt+F"; badgeColor: "#1E3A8A"; textColor: "#93C5FD"; borderColor: "#2563EB" }
+                        Item { Layout.fillWidth: true }
                     }
                     onClicked: filterPopup.open()
                 }
@@ -205,10 +206,11 @@ FocusScope {
                     implicitHeight: 30
                     background: Rectangle { color: "#16A34A"; radius: 6 }
                     contentItem: RowLayout {
-                        anchors.centerIn: parent
                         spacing: 6
+                        Item { Layout.fillWidth: true }
                         Text { text: "+ Log Milling Batch"; color: "#FFFFFF"; font.pixelSize: 11; font.bold: true }
                         KbdBadge { text: "F2"; badgeColor: "#14532D"; textColor: "#86EFAC"; borderColor: "#16A34A" }
+                        Item { Layout.fillWidth: true }
                     }
                     onClicked: root.openNewMillingRequested()
                 }

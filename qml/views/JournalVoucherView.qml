@@ -81,9 +81,10 @@ FocusScope {
         recalculateTotals()
     }
 
-    function cursorMax() {
+    function cursorMax(dateStr) {
         if (typeof vouchersModel !== "undefined" && vouchersModel) {
-            autoVchCode = vouchersModel.get_next_voucher_no("Jrnl")
+            var d = dateStr || (voucherDateInput ? voucherDateInput.text.trim() : "")
+            autoVchCode = vouchersModel.get_next_voucher_no("Jrnl", d)
             autoVoucherNo = autoVchCode
         } else {
             autoVchCode = ""
@@ -221,6 +222,7 @@ FocusScope {
         anchors.centerIn: parent
         onDateConfirmed: function(fmtDate, isoDate) {
             voucherDateInput.text = fmtDate
+            root.cursorMax(fmtDate)
             Qt.callLater(function() {
                 rowsListView.focusRowItem(0, "ledger")
             })
@@ -292,10 +294,11 @@ FocusScope {
                     implicitHeight: 30
                     background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
                     contentItem: RowLayout {
-                        anchors.centerIn: parent
                         spacing: 6
+                        Item { Layout.fillWidth: true }
                         Text { text: "← Dashboard"; color: "#475569"; font.pixelSize: 12; font.bold: true }
                         KbdBadge { text: "Esc"; badgeColor: "#DC2626"; textColor: "#FFF"; borderColor: "#B91C1C" }
+                        Item { Layout.fillWidth: true }
                     }
                     onClicked: root.cancelRequested()
                 }
@@ -696,9 +699,13 @@ FocusScope {
                         implicitHeight: 32
                         height: 32
                         background: Rectangle { color: "#EFF6FF"; radius: 6; border.color: "#BFDBFE" }
-                        contentItem: RowLayout {
-                            spacing: 6
-                            Text { text: "+ Add Journal Row"; color: "#2563EB"; font.bold: true; font.pixelSize: 12 }
+                        contentItem: Text {
+                            text: "+ Add Journal Row"
+                            color: "#2563EB"
+                            font.bold: true
+                            font.pixelSize: 12
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
                         }
                         onClicked: root.addNewRow()
                     }

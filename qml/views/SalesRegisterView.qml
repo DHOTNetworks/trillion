@@ -99,10 +99,11 @@ T.ScrollView {
                 implicitHeight: 32
                 background: Rectangle { color: printSelectedBtn.hovered ? "#047857" : "#059669"; radius: 6 }
                 contentItem: RowLayout {
-                    anchors.centerIn: parent
                     spacing: 6
+                    Item { Layout.fillWidth: true }
                     Text { text: "Print Invoice"; color: "#FFFFFF"; font.pixelSize: 12; font.bold: true }
                     KbdBadge { text: "Ctrl+P"; badgeColor: "#064E3B"; textColor: "#A7F3D0"; borderColor: "#059669" }
+                    Item { Layout.fillWidth: true }
                 }
                 onClicked: root.openPrintModal()
             }
@@ -113,10 +114,11 @@ T.ScrollView {
                 implicitHeight: 32
                 background: Rectangle { color: exportPdfSelectedBtn.hovered ? "#0284C7" : "#0EA5E9"; radius: 6 }
                 contentItem: RowLayout {
-                    anchors.centerIn: parent
                     spacing: 6
+                    Item { Layout.fillWidth: true }
                     Text { text: "Save PDF"; color: "#FFFFFF"; font.pixelSize: 12; font.bold: true }
                     KbdBadge { text: "Alt+P"; badgeColor: "#075985"; textColor: "#BAE6FD"; borderColor: "#0EA5E9" }
+                    Item { Layout.fillWidth: true }
                 }
                 onClicked: root.openPdfModal()
             }

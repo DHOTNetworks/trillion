@@ -1,5 +1,6 @@
 #include "tds_model.h"
 #include "../database_manager.h"
+#include "../engine/accounting_engine.h"
 #include <QDate>
 #include <QLocale>
 #include <cmath>
@@ -7,11 +8,17 @@
 
 TdsModel::TdsModel(QObject* parent) : QObject(parent) {}
 
-QVariantMap TdsModel::get_next_voucher_info(const QString& tdsType) {
+QVariantMap TdsModel::get_next_voucher_info(const QString& tdsType, const QString& fy) {
     QVariantMap res;
     auto& db = DatabaseManager::instance();
 
-    QVariant maxVch = db.executeScalar("SELECT MAX(voucher_no) FROM tds_vouchers;");
+    QString targetFy = AccountingEngine::resolveFinancialYear(fy);
+    QString fyPattern = "%" + targetFy.mid(3).trimmed() + "%";
+
+    QVariant maxVch = db.executeScalar(
+        "SELECT MAX(voucher_no) FROM tds_vouchers WHERE financial_year = ? OR financial_year LIKE ?;",
+        {targetFy, fyPattern}
+    );
     int nextVch = (maxVch.isValid() && !maxVch.isNull()) ? maxVch.toInt() + 1 : 1;
 
     QDate today = QDate::currentDate();

@@ -1,9 +1,11 @@
 #pragma once
-
 #include <QString>
 #include <QStringList>
 #include <QVariantMap>
 #include <cmath>
+#include "../database_manager.h"
+#include <QRegularExpression>
+#include <QDate>
 
 class AccountingEngine {
 public:
@@ -20,6 +22,53 @@ public:
     static QString getActiveFromDate() { return s_activeFromDate; }
     static QString getActiveToDate() { return s_activeToDate; }
     static QString getActiveFyLabel() { return s_activeFyLabel; }
+
+    static QString resolveFinancialYear(const QString& input = "") {
+        QString raw = input.trimmed();
+        if (raw.isEmpty()) {
+            QVariant fyVal = DatabaseManager::instance().executeScalar("SELECT year_name FROM financial_years WHERE is_active = 1 LIMIT 1;");
+            if (fyVal.isValid() && !fyVal.toString().trimmed().isEmpty()) {
+                s_activeFyLabel = fyVal.toString().trimmed();
+                return s_activeFyLabel;
+            }
+            if (!s_activeFyLabel.isEmpty()) return s_activeFyLabel;
+            QVariant lastFy = DatabaseManager::instance().executeScalar("SELECT year_name FROM financial_years ORDER BY start_date DESC LIMIT 1;");
+            return lastFy.isValid() ? lastFy.toString().trimmed() : "FY 2026-27";
+        }
+
+        if (raw.startsWith("FY ")) return raw;
+        if (QRegularExpression("^\\d{4}-\\d{2,4}$").match(raw).hasMatch()) {
+            return "FY " + raw;
+        }
+
+        QString isoDate = raw;
+        QStringList parts = raw.split('-');
+        if (parts.size() == 1) parts = raw.split('/');
+        if (parts.size() == 3) {
+            if (parts[0].length() == 4) {
+                isoDate = QString("%1-%2-%3").arg(parts[0], parts[1].rightJustified(2, '0'), parts[2].rightJustified(2, '0'));
+            } else {
+                isoDate = QString("%1-%2-%3").arg(parts[2], parts[1].rightJustified(2, '0'), parts[0].rightJustified(2, '0'));
+            }
+            QVariant fyVal = DatabaseManager::instance().executeScalar(
+                "SELECT year_name FROM financial_years WHERE start_date <= ? AND end_date >= ? LIMIT 1;",
+                {isoDate, isoDate}
+            );
+            if (fyVal.isValid() && !fyVal.toString().trimmed().isEmpty()) {
+                return fyVal.toString().trimmed();
+            }
+        }
+
+        QVariant directMatch = DatabaseManager::instance().executeScalar(
+            "SELECT year_name FROM financial_years WHERE year_name = ? OR year_name LIKE ? LIMIT 1;",
+            {raw, "%" + raw + "%"}
+        );
+        if (directMatch.isValid() && !directMatch.toString().trimmed().isEmpty()) {
+            return directMatch.toString().trimmed();
+        }
+
+        return raw;
+    }
 
     static double calculateMoistureDeduction(double grossWeightQtl, double moisturePct, double baseMoistureLimit = 14.0) {
         if (moisturePct <= baseMoistureLimit) return 0.0;

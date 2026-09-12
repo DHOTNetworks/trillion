@@ -55,21 +55,25 @@ Item {
         })
     }
 
-    function resetForm() {
+    function updateNextNumbers(dateStr) {
+        var d = dateStr || (vchDateInput ? vchDateInput.text.trim() : "")
         if (typeof jformModel !== "undefined" && jformModel) {
-            var info = jformModel.get_next_voucher_info()
+            var info = jformModel.get_next_voucher_info(d)
             root.nextVchNo = info.next_voucher_no || 1
             root.nextJFormNo = info.next_jform_no || "1"
-            root.vchDate = (typeof financialYearsModel !== "undefined" && financialYearsModel) ? financialYearsModel.get_working_date() : (info.date_display || Qt.formatDate(new Date(), "dd-MM-yyyy"))
             root.dayName = info.day_name || ""
         } else {
             root.nextVchNo = 1
             root.nextJFormNo = "1"
-            root.vchDate = (typeof financialYearsModel !== "undefined" && financialYearsModel) ? financialYearsModel.get_working_date() : Qt.formatDate(new Date(), "dd-MM-yyyy")
             root.dayName = ""
         }
-        jformNoInput.text = root.nextJFormNo
+        if (jformNoInput) jformNoInput.text = root.nextJFormNo
+    }
+
+    function resetForm() {
+        root.vchDate = (typeof financialYearsModel !== "undefined" && financialYearsModel) ? financialYearsModel.get_working_date() : Qt.formatDate(new Date(), "dd-MM-yyyy")
         vchDateInput.text = root.vchDate
+        updateNextNumbers(root.vchDate)
         dueDaysInput.text = "0"
         zimidarCombo.currentIndex = -1
         zimidarCombo.editText = ""
@@ -450,6 +454,7 @@ Item {
         anchors.centerIn: parent
         onDateConfirmed: function(fmtDate, isoDate) {
             vchDateInput.text = fmtDate
+            root.updateNextNumbers(fmtDate)
             Qt.callLater(function() {
                 dueDaysInput.focusInput = true
             })
@@ -507,10 +512,11 @@ Item {
                     implicitHeight: 30
                     background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
                     contentItem: RowLayout {
-                        anchors.centerIn: parent
                         spacing: 6
+                        Item { Layout.fillWidth: true }
                         Text { text: "← Back to Dashboard"; color: "#475569"; font.pixelSize: 11; font.bold: true }
                         KbdBadge { text: "Esc"; badgeColor: "#DC2626"; textColor: "#FFF"; borderColor: "#B91C1C" }
+                        Item { Layout.fillWidth: true }
                     }
                     onClicked: root.cancelRequested()
                 }
@@ -1335,10 +1341,13 @@ Item {
                         border.color: saveBtn.activeFocus ? "#60A5FA" : "transparent"
                         border.width: 2
                     }
-                    contentItem: RowLayout {
-                        anchors.centerIn: parent
-                        spacing: 6
-                        Text { text: "Save & Post J-Form Voucher (Ctrl+S)"; color: "#FFF"; font.bold: true; font.pixelSize: 12 }
+                    contentItem: Text {
+                        text: "Save & Post J-Form Voucher (Ctrl+S)"
+                        color: "#FFF"
+                        font.bold: true
+                        font.pixelSize: 12
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
                     }
                     onClicked: root.saveVoucher()
                     Keys.onReturnPressed: root.saveVoucher()

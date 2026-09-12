@@ -81,14 +81,15 @@ T.ScrollView {
 
             T.Button {
                 id: printStockBtn
-                implicitWidth: contentItem.implicitWidth + 24
+                implicitWidth: 144
                 implicitHeight: 32
                 background: Rectangle { color: printStockBtn.hovered ? "#047857" : "#059669"; radius: 6 }
                 contentItem: RowLayout {
-                    anchors.centerIn: parent
                     spacing: 6
+                    Item { Layout.fillWidth: true }
                     Text { text: "Print Register"; color: "#FFFFFF"; font.pixelSize: 12; font.bold: true }
                     KbdBadge { text: "Ctrl+P"; badgeColor: "#064E3B"; textColor: "#A7F3D0"; borderColor: "#059669" }
+                    Item { Layout.fillWidth: true }
                 }
                 onClicked: {
                     if (typeof printExportCtrl !== "undefined" && printExportCtrl) {
@@ -99,14 +100,15 @@ T.ScrollView {
 
             T.Button {
                 id: exportStockPdfBtn
-                implicitWidth: contentItem.implicitWidth + 24
+                implicitWidth: 130
                 implicitHeight: 32
                 background: Rectangle { color: exportStockPdfBtn.hovered ? "#0284C7" : "#0EA5E9"; radius: 6 }
                 contentItem: RowLayout {
-                    anchors.centerIn: parent
                     spacing: 6
+                    Item { Layout.fillWidth: true }
                     Text { text: "Export PDF"; color: "#FFFFFF"; font.pixelSize: 12; font.bold: true }
                     KbdBadge { text: "Alt+P"; badgeColor: "#075985"; textColor: "#BAE6FD"; borderColor: "#0EA5E9" }
+                    Item { Layout.fillWidth: true }
                 }
                 onClicked: {
                     if (typeof printExportCtrl !== "undefined" && printExportCtrl) {

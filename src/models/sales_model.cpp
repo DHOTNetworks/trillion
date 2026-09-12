@@ -43,51 +43,80 @@ static QString incrementInvoiceStr(const QString& invStr, const QString& default
 }
 
 QString SalesModel::get_next_voucher_no(const QString& fy) {
-    QString targetFy = fy;
-    if (targetFy.isEmpty()) {
-        QVariant fyVal = DatabaseManager::instance().executeScalar("SELECT year_name FROM financial_years WHERE is_active = 1 LIMIT 1;");
-        targetFy = fyVal.isValid() ? fyVal.toString() : "FY 2026-27";
-    }
+    QString targetFy = AccountingEngine::resolveFinancialYear(fy);
+    QString fyPattern = "%" + targetFy.mid(3).trimmed() + "%";
 
-    QVariantList rows = DatabaseManager::instance().executeQuery(
-        "SELECT voucher_no FROM vouchers WHERE voucher_no LIKE 'Sale-%' AND financial_year = ?;",
-        {targetFy}
+    QVariantList siRows = DatabaseManager::instance().executeQuery(
+        "SELECT voucher_no FROM sales_invoices WHERE financial_year = ? OR financial_year LIKE ?;",
+        {targetFy, fyPattern}
+    );
+
+    QVariantList vRows = DatabaseManager::instance().executeQuery(
+        "SELECT voucher_no FROM vouchers WHERE (voucher_type = 'Sales' OR voucher_no LIKE 'Sale-%') AND (financial_year = ? OR financial_year LIKE ?);",
+        {targetFy, fyPattern}
     );
 
     long long maxId = 0;
-    QRegularExpression re("-(\\d+)$");
-    for (const QVariant& r : rows) {
-        QString v = r.toMap().value("voucher_no").toString();
-        QRegularExpressionMatch m = re.match(v);
-        if (m.hasMatch()) {
-            long long num = m.captured(1).toLongLong();
-            if (num > maxId) maxId = num;
+    QRegularExpression re("(\\d+)$");
+    for (const QVariantList* list : {&siRows, &vRows}) {
+        for (const QVariant& r : *list) {
+            QString v = r.toMap().value("voucher_no").toString().trimmed();
+            if (v.isEmpty()) continue;
+            QRegularExpressionMatch m = re.match(v);
+            if (m.hasMatch()) {
+                long long num = m.captured(1).toLongLong();
+                if (num > maxId) maxId = num;
+            }
         }
     }
     return QString("Sale-%1").arg(maxId + 1);
 }
 
 QString SalesModel::get_next_invoice_no(const QString& fy) {
-    QString targetFy = fy;
-    if (targetFy.isEmpty()) {
-        QVariant fyVal = DatabaseManager::instance().executeScalar("SELECT year_name FROM financial_years WHERE is_active = 1 LIMIT 1;");
-        targetFy = fyVal.isValid() ? fyVal.toString() : "FY 2026-27";
-    }
+    QString targetFy = AccountingEngine::resolveFinancialYear(fy);
+    QString fyPattern = "%" + targetFy.mid(3).trimmed() + "%";
 
-    QVariant lastInv = DatabaseManager::instance().executeScalar(
-        "SELECT invoice_no FROM sales_invoices WHERE financial_year = ? AND invoice_no IS NOT NULL AND invoice_no != '' ORDER BY id DESC LIMIT 1;",
-        {targetFy}
+    QVariantList rows = DatabaseManager::instance().executeQuery(
+        "SELECT invoice_no FROM sales_invoices WHERE (financial_year = ? OR financial_year LIKE ?) AND invoice_no IS NOT NULL AND invoice_no != '';",
+        {targetFy, fyPattern}
     );
 
     QString defaultPrefix = "MRI/2627-";
     QRegularExpression fyRe("(\\d{2})(\\d{2})-(\\d{2})");
-    QRegularExpressionMatch m = fyRe.match(targetFy);
-    if (m.hasMatch()) {
-        defaultPrefix = QString("MRI/%1%2-").arg(m.captured(2), m.captured(3));
+    QRegularExpressionMatch mFy = fyRe.match(targetFy);
+    if (mFy.hasMatch()) {
+        defaultPrefix = QString("MRI/%1%2-").arg(mFy.captured(2), mFy.captured(3));
     }
 
-    if (lastInv.isValid() && !lastInv.toString().isEmpty()) {
-        return incrementInvoiceStr(lastInv.toString(), defaultPrefix);
+    QString prefix = "";
+    long long maxNum = 0;
+    int numDigits = 0;
+
+    QRegularExpression re("^(.*?)(\\d+)$");
+    for (const QVariant& r : rows) {
+        QString inv = r.toMap().value("invoice_no").toString().trimmed();
+        if (inv.isEmpty()) continue;
+        QRegularExpressionMatch m = re.match(inv);
+        if (m.hasMatch()) {
+            QString pfx = m.captured(1);
+            QString digits = m.captured(2);
+            long long num = digits.toLongLong();
+            if (num > maxNum) {
+                maxNum = num;
+                prefix = pfx;
+                numDigits = digits.length();
+            }
+        }
+    }
+
+    if (maxNum > 0) {
+        if (prefix.isEmpty()) prefix = defaultPrefix;
+        long long nextNum = maxNum + 1;
+        QString nextNumStr = QString::number(nextNum);
+        if (numDigits > 1 && nextNumStr.length() < numDigits) {
+            nextNumStr = nextNumStr.rightJustified(numDigits, '0');
+        }
+        return prefix + nextNumStr;
     }
     return defaultPrefix + "1";
 }

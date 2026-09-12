@@ -44,9 +44,10 @@ Item {
                 background: Rectangle { color: backBtn.hovered ? "#E2E8F0" : "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
                 contentItem: RowLayout {
                     spacing: 6
-                    anchors.centerIn: parent
+                    Item { Layout.fillWidth: true }
                     Text { text: "← Back to Dashboard"; color: "#475569"; font.pixelSize: 12; font.bold: true }
                     KbdBadge { text: "Esc"; badgeColor: "#DC2626"; textColor: "#FFF"; borderColor: "#B91C1C" }
+                    Item { Layout.fillWidth: true }
                 }
                 onClicked: root.cancelRequested()
             }
@@ -143,6 +144,8 @@ Item {
                                 label: "Dr / Cr *"
                                 Layout.preferredWidth: 85
                                 model: ["Dr", "Cr"]
+                                currentIndex: 0
+                                editText: "Dr"
                                 onReturnPressed: opBalInput.focusInput = true
                                 onRightPressed: opBalInput.focusInput = true
                                 onLeftPressed: groupCombo.focusAndOpen()
@@ -542,9 +545,10 @@ Item {
                 background: Rectangle { color: cancelBottomBtn.hovered ? "#E2E8F0" : "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
                 contentItem: RowLayout {
                     spacing: 6
-                    anchors.centerIn: parent
+                    Item { Layout.fillWidth: true }
                     Text { text: "Cancel"; color: "#475569"; font.pixelSize: 13; font.bold: true }
                     KbdBadge { text: "Esc"; badgeColor: "#DC2626"; textColor: "#FFF"; borderColor: "#B91C1C" }
+                    Item { Layout.fillWidth: true }
                 }
                 onClicked: root.cancelRequested()
             }
@@ -558,9 +562,10 @@ Item {
                 background: Rectangle { color: (submitBtn.hovered || submitBtn.activeFocus) ? "#1D4ED8" : "#2563EB"; radius: 6; border.color: submitBtn.activeFocus ? "#93C5FD" : "transparent"; border.width: 2 }
                 contentItem: RowLayout {
                     spacing: 8
-                    anchors.centerIn: parent
+                    Item { Layout.fillWidth: true }
                     Text { text: "Save Complete Ledger Account"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 14 }
                     KbdBadge { text: "Enter"; badgeColor: "#1E3A8A"; textColor: "#93C5FD"; borderColor: "#2563EB" }
+                    Item { Layout.fillWidth: true }
                 }
                 Keys.onReturnPressed: root.saveLedger()
                 Keys.onEnterPressed: root.saveLedger()

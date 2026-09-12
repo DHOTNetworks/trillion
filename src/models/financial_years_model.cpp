@@ -1,5 +1,6 @@
 #include "financial_years_model.h"
 #include "../database_manager.h"
+#include "../engine/accounting_engine.h"
 #include <QDate>
 #include <QRegularExpression>
 
@@ -37,6 +38,7 @@ bool FinancialYearsModel::set_active_year(const QString& yearName) {
     );
     if (ok) {
         m_workingDate = "";
+        AccountingEngine::setActivePeriod("", "", yearName);
         reload_data();
     }
     return ok;

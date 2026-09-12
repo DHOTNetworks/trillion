@@ -433,10 +433,11 @@ FocusScope {
                             implicitWidth: contentItem.implicitWidth + 20
                             background: Rectangle { color: "#EEF2FF"; radius: 6; border.color: "#C7D2FE" }
                             contentItem: RowLayout {
-                                anchors.centerIn: parent
                                 spacing: 4
+                                Item { Layout.fillWidth: true }
                                 Text { text: "Hisab Date"; color: "#3730A3"; font.bold: true; font.pixelSize: 11 }
                                 KbdBadge { text: "F6"; badgeColor: "#C7D2FE"; textColor: "#312E81"; borderColor: "#818CF8" }
+                                Item { Layout.fillWidth: true }
                             }
                             onClicked: hisabDatePopup.open()
                         }
@@ -447,10 +448,11 @@ FocusScope {
                             implicitWidth: contentItem.implicitWidth + 20
                             background: Rectangle { color: "#16A34A"; radius: 6 }
                             contentItem: RowLayout {
-                                anchors.centerIn: parent
                                 spacing: 4
+                                Item { Layout.fillWidth: true }
                                 Text { text: "Done Voucher"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 11 }
                                 KbdBadge { text: "Ctrl+Enter"; badgeColor: "#15803D"; textColor: "#BBF7D0"; borderColor: "#16A34A" }
+                                Item { Layout.fillWidth: true }
                             }
                             onClicked: postConfirmModal.open()
                         }
@@ -477,10 +479,11 @@ FocusScope {
                             implicitWidth: contentItem.implicitWidth + 20
                             background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
                             contentItem: RowLayout {
-                                anchors.centerIn: parent
                                 spacing: 4
+                                Item { Layout.fillWidth: true }
                                 Text { text: "← Back"; color: "#475569"; font.bold: true; font.pixelSize: 11 }
                                 KbdBadge { text: "Esc"; badgeColor: "#E2E8F0"; textColor: "#475569"; borderColor: "#CBD5E1" }
+                                Item { Layout.fillWidth: true }
                             }
                             onClicked: root.cancelRequested()
                         }

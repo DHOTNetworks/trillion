@@ -1,5 +1,6 @@
 #include "vouchers_model.h"
 #include "../database_manager.h"
+#include "../engine/accounting_engine.h"
 #include <QDate>
 #include <QRegularExpression>
 
@@ -23,21 +24,42 @@ void VouchersModel::reload_data() {
 
 QString VouchersModel::get_next_voucher_no(const QString& v_type, const QString& fy) {
     QString prefix = v_type.isEmpty() ? "ChPt" : v_type;
-    QString targetFy = fy;
-    if (targetFy.isEmpty()) {
-        QVariant fyVal = DatabaseManager::instance().executeScalar("SELECT year_name FROM financial_years WHERE is_active = 1 LIMIT 1;");
-        targetFy = fyVal.isValid() ? fyVal.toString() : "FY 2026-27";
+    QString targetFy = AccountingEngine::resolveFinancialYear(fy);
+    QString fyPattern = "%" + targetFy.mid(3).trimmed() + "%";
+
+    QStringList aliases;
+    aliases << prefix;
+    if (prefix == "ChPt" || prefix == "Pymt" || prefix == "Payment") {
+        aliases << "ChPt" << "Pymt" << "Payment" << "Paym";
+    } else if (prefix == "ChRt" || prefix == "Rcpt" || prefix == "Receipt") {
+        aliases << "ChRt" << "Rcpt" << "Receipt" << "Rece";
+    } else if (prefix == "Jrnl" || prefix == "Jour" || prefix == "Journal") {
+        aliases << "Jrnl" << "Jour" << "Journal";
+    } else if (prefix == "Purc" || prefix == "Purchase") {
+        aliases << "Purc" << "Purchase";
+    } else if (prefix == "Sale" || prefix == "Sales") {
+        aliases << "Sale" << "Sales";
+    }
+    aliases.removeDuplicates();
+
+    QStringList whereClauses;
+    QVariantList params;
+    for (const QString& a : aliases) {
+        whereClauses << "voucher_type = ?" << "voucher_no LIKE ?";
+        params << a << (a + "-%");
     }
 
-    QVariantList rows = DatabaseManager::instance().executeQuery(
-        "SELECT voucher_no FROM vouchers WHERE voucher_no LIKE ? AND financial_year = ?;",
-        {prefix + "-%", targetFy}
-    );
+    QString sql = QString("SELECT voucher_no FROM vouchers WHERE (%1) AND (financial_year = ? OR financial_year LIKE ?);")
+                      .arg(whereClauses.join(" OR "));
+    params << targetFy << fyPattern;
+
+    QVariantList rows = DatabaseManager::instance().executeQuery(sql, params);
 
     long long maxId = 0;
-    QRegularExpression re("-(\\d+)$");
+    QRegularExpression re("(\\d+)$");
     for (const QVariant& r : rows) {
-        QString v = r.toMap().value("voucher_no").toString();
+        QString v = r.toMap().value("voucher_no").toString().trimmed();
+        if (v.isEmpty()) continue;
         QRegularExpressionMatch m = re.match(v);
         if (m.hasMatch()) {
             long long num = m.captured(1).toLongLong();

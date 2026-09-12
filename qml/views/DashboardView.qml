@@ -135,8 +135,10 @@ T.ScrollView {
                     }
                     contentItem: RowLayout {
                         spacing: 6
+                        Item { Layout.fillWidth: true }
                         Text { text: "Period:"; color: "#166534"; font.pixelSize: 11; font.bold: true }
                         Text { text: root.activePeriodText; color: "#15803D"; font.pixelSize: 12; font.bold: true }
+                        Item { Layout.fillWidth: true }
                     }
                     onClicked: root.openPeriodModal()
                 }
@@ -148,8 +150,10 @@ T.ScrollView {
                     background: Rectangle { color: "#16A34A"; radius: 6 }
                     contentItem: RowLayout {
                         spacing: 6
+                        Item { Layout.fillWidth: true }
                         Text { text: "New Paddy Slip"; color: "#FFF"; font.bold: true; font.pixelSize: 12 }
                         KbdBadge { text: "F2"; badgeColor: "#14532D"; textColor: "#86EFAC"; borderColor: "#16A34A" }
+                        Item { Layout.fillWidth: true }
                     }
                     onClicked: root.openNewPaddy()
                 }
@@ -159,9 +163,13 @@ T.ScrollView {
                     implicitWidth: contentItem.implicitWidth + 20
                     implicitHeight: 36
                     background: Rectangle { color: "#2563EB"; radius: 6 }
-                    contentItem: RowLayout {
-                        spacing: 6
-                        Text { text: "New Invoice"; color: "#FFF"; font.bold: true; font.pixelSize: 12 }
+                    contentItem: Text {
+                        text: "New Invoice"
+                        color: "#FFF"
+                        font.bold: true
+                        font.pixelSize: 12
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
                     }
                     onClicked: root.openNewSale()
                 }
