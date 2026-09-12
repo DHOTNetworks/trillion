@@ -95,10 +95,11 @@ T.ScrollView {
 
             T.Button {
                 id: printSelectedBtn
-                implicitWidth: contentItem.implicitWidth + 20
+                implicitWidth: contentItem.implicitWidth + 24
                 implicitHeight: 32
                 background: Rectangle { color: printSelectedBtn.hovered ? "#047857" : "#059669"; radius: 6 }
                 contentItem: RowLayout {
+                    anchors.centerIn: parent
                     spacing: 6
                     Text { text: "Print Invoice"; color: "#FFFFFF"; font.pixelSize: 12; font.bold: true }
                     KbdBadge { text: "Ctrl+P"; badgeColor: "#064E3B"; textColor: "#A7F3D0"; borderColor: "#059669" }
@@ -108,10 +109,11 @@ T.ScrollView {
 
             T.Button {
                 id: exportPdfSelectedBtn
-                implicitWidth: contentItem.implicitWidth + 20
+                implicitWidth: contentItem.implicitWidth + 24
                 implicitHeight: 32
                 background: Rectangle { color: exportPdfSelectedBtn.hovered ? "#0284C7" : "#0EA5E9"; radius: 6 }
                 contentItem: RowLayout {
+                    anchors.centerIn: parent
                     spacing: 6
                     Text { text: "Save PDF"; color: "#FFFFFF"; font.pixelSize: 12; font.bold: true }
                     KbdBadge { text: "Alt+P"; badgeColor: "#075985"; textColor: "#BAE6FD"; borderColor: "#0EA5E9" }
@@ -121,12 +123,16 @@ T.ScrollView {
 
             T.Button {
                 id: exportCsvBtn
-                implicitWidth: contentItem.implicitWidth + 16
+                implicitWidth: contentItem.implicitWidth + 24
                 implicitHeight: 32
-                background: Rectangle { color: "#F8FAFC"; radius: 6; border.color: "#CBD5E1" }
-                contentItem: RowLayout {
-                    spacing: 6
-                    Text { text: "Excel CSV"; color: "#334155"; font.pixelSize: 12; font.bold: true }
+                background: Rectangle { color: exportCsvBtn.hovered ? "#F1F5F9" : "#FFFFFF"; radius: 6; border.color: "#CBD5E1" }
+                contentItem: Text {
+                    text: "Export CSV"
+                    color: "#334155"
+                    font.pixelSize: 12
+                    font.bold: true
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
                 }
                 onClicked: {
                     if (typeof printExportCtrl !== "undefined" && printExportCtrl) {

@@ -1079,6 +1079,7 @@ FocusScope {
                         implicitHeight: 34
                         background: Rectangle { color: "#16A34A"; radius: 6 }
                         contentItem: RowLayout {
+                            anchors.centerIn: parent
                             spacing: 6
                             Text { text: "Save Voucher"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 12 }
                             KbdBadge { text: "Ctrl+S"; badgeColor: "#14532D"; textColor: "#86EFAC"; borderColor: "#16A34A" }

@@ -36,6 +36,7 @@ ColumnLayout {
             implicitHeight: 32
             background: Rectangle { color: addInvBtn.hovered ? "#1D4ED8" : "#2563EB"; radius: 6 }
             contentItem: RowLayout {
+                anchors.centerIn: parent
                 spacing: 6
                 Text { text: "+ Create Sales Invoice"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 13 }
                 KbdBadge { text: "F2"; badgeColor: "#1E3A8A"; textColor: "#93C5FD"; borderColor: "#2563EB" }

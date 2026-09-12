@@ -322,6 +322,7 @@ FocusScope {
                     implicitHeight: 30
                     background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
                     contentItem: RowLayout {
+                        anchors.centerIn: parent
                         spacing: 6
                         Text { text: "← Back to Dashboard"; color: "#475569"; font.pixelSize: 11; font.bold: true }
                         KbdBadge { text: "Esc"; badgeColor: "#DC2626"; textColor: "#FFF"; borderColor: "#B91C1C" }
@@ -519,17 +520,18 @@ FocusScope {
                                     Layout.preferredWidth: 65
                                     model: ["Dr", "Cr"]
                                     currentIndex: drcr === "Cr" ? 1 : 0
-                                    onCurrentTextChanged: {
-                                        if (currentText !== drcr) {
+                                    onActivated: function(idx) {
+                                        var newDrCr = idx === 1 ? "Cr" : "Dr"
+                                        if (newDrCr !== drcr) {
                                             var oldDrCr = drcr
                                             var oldDb = debitAmt
                                             var oldCr = creditAmt
-                                            voucherRowsModel.setProperty(index, "drcr", currentText)
+                                            voucherRowsModel.setProperty(index, "drcr", newDrCr)
 
-                                            if (currentText === "Cr" && oldDrCr === "Dr") {
+                                            if (newDrCr === "Cr" && oldDrCr === "Dr") {
                                                 voucherRowsModel.setProperty(index, "creditAmt", oldDb)
                                                 voucherRowsModel.setProperty(index, "debitAmt", "")
-                                            } else if (currentText === "Dr" && oldDrCr === "Cr") {
+                                            } else if (newDrCr === "Dr" && oldDrCr === "Cr") {
                                                 voucherRowsModel.setProperty(index, "debitAmt", oldCr)
                                                 voucherRowsModel.setProperty(index, "creditAmt", "")
                                             }
@@ -817,6 +819,7 @@ FocusScope {
                     implicitHeight: 34
                     background: Rectangle { color: saveBtn.hovered ? "#1D4ED8" : "#2563EB"; radius: 6 }
                     contentItem: RowLayout {
+                        anchors.centerIn: parent
                         spacing: 6
                         Text { text: "Save Voucher"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 12 }
                         KbdBadge { text: "Ctrl+S"; badgeColor: "#1E40AF"; textColor: "#93C5FD"; borderColor: "#2563EB" }
@@ -830,6 +833,7 @@ FocusScope {
                     implicitHeight: 34
                     background: Rectangle { color: cancelBtn.hovered ? "#E2E8F0" : "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
                     contentItem: RowLayout {
+                        anchors.centerIn: parent
                         spacing: 6
                         Text { text: "Cancel"; color: "#475569"; font.bold: true; font.pixelSize: 12 }
                         KbdBadge { text: "Esc"; badgeColor: "#DC2626"; textColor: "#FFF"; borderColor: "#B91C1C" }

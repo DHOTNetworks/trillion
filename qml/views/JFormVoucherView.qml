@@ -507,6 +507,7 @@ Item {
                     implicitHeight: 30
                     background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
                     contentItem: RowLayout {
+                        anchors.centerIn: parent
                         spacing: 6
                         Text { text: "← Back to Dashboard"; color: "#475569"; font.pixelSize: 11; font.bold: true }
                         KbdBadge { text: "Esc"; badgeColor: "#DC2626"; textColor: "#FFF"; borderColor: "#B91C1C" }

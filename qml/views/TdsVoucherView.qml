@@ -418,9 +418,13 @@ Rectangle {
                     border.color: "#CBD5E1"
                     radius: 6
                 }
-                contentItem: RowLayout {
-                    spacing: 4
-                    Text { text: "← Back (Esc)"; color: "#0F172A"; font.bold: true; font.pixelSize: 12 }
+                contentItem: Text {
+                    text: "← Back (Esc)"
+                    color: "#0F172A"
+                    font.bold: true
+                    font.pixelSize: 12
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
                 }
                 onClicked: root.handleEscape()
             }
@@ -460,9 +464,13 @@ Rectangle {
                     color: saveTopBtn.hovered ? "#6D28D9" : "#7C3AED"
                     radius: 6
                 }
-                contentItem: RowLayout {
-                    spacing: 6
-                    Text { text: "Save Voucher (F2)"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 12 }
+                contentItem: Text {
+                    text: "Save Voucher (F2)"
+                    color: "#FFFFFF"
+                    font.bold: true
+                    font.pixelSize: 12
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
                 }
                 onClicked: root.saveVoucher()
             }

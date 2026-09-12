@@ -188,10 +188,11 @@ FocusScope {
                 // Filter Dates Button
                 T.Button {
                     id: filterBtn
-                    implicitWidth: contentItem.implicitWidth + 20
+                    implicitWidth: contentItem.implicitWidth + 24
                     implicitHeight: 30
                     background: Rectangle { color: filterPopup.visible ? "#1D4ED8" : "#2563EB"; radius: 6 }
                     contentItem: RowLayout {
+                        anchors.centerIn: parent
                         spacing: 6
                         Text { text: "Filter Dates"; color: "#FFF"; font.bold: true; font.pixelSize: 11 }
                         KbdBadge { text: "Alt+F"; badgeColor: "#1E3A8A"; textColor: "#93C5FD"; borderColor: "#2563EB" }
@@ -204,6 +205,7 @@ FocusScope {
                     implicitHeight: 30
                     background: Rectangle { color: "#16A34A"; radius: 6 }
                     contentItem: RowLayout {
+                        anchors.centerIn: parent
                         spacing: 6
                         Text { text: "+ Log Milling Batch"; color: "#FFFFFF"; font.pixelSize: 11; font.bold: true }
                         KbdBadge { text: "F2"; badgeColor: "#14532D"; textColor: "#86EFAC"; borderColor: "#16A34A" }

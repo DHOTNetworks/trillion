@@ -715,6 +715,7 @@ Item {
                     implicitHeight: 30
                     background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
                     contentItem: RowLayout {
+                        anchors.centerIn: parent
                         spacing: 6
                         Text { text: "← Back to Dashboard"; color: "#475569"; font.pixelSize: 11; font.bold: true }
                         KbdBadge { text: "Esc"; badgeColor: "#DC2626"; textColor: "#FFF"; borderColor: "#B91C1C" }
@@ -1804,10 +1805,11 @@ Item {
 
                 T.Button {
                     id: printTaxBtn
-                    implicitWidth: contentItem.implicitWidth + 20
+                    implicitWidth: contentItem.implicitWidth + 24
                     implicitHeight: 34
                     background: Rectangle { color: printTaxBtn.hovered ? "#047857" : "#059669"; radius: 6 }
                     contentItem: RowLayout {
+                        anchors.centerIn: parent
                         spacing: 6
                         Text { text: "Print Tax Invoice"; color: "#FFF"; font.bold: true; font.pixelSize: 12 }
                         KbdBadge { text: "Ctrl+P"; badgeColor: "#064E3B"; textColor: "#A7F3D0"; borderColor: "#059669" }
@@ -1817,10 +1819,11 @@ Item {
 
                 T.Button {
                     id: exportTaxPdfBtn
-                    implicitWidth: contentItem.implicitWidth + 20
+                    implicitWidth: contentItem.implicitWidth + 24
                     implicitHeight: 34
                     background: Rectangle { color: exportTaxPdfBtn.hovered ? "#0284C7" : "#0EA5E9"; radius: 6 }
                     contentItem: RowLayout {
+                        anchors.centerIn: parent
                         spacing: 6
                         Text { text: "Save PDF"; color: "#FFF"; font.bold: true; font.pixelSize: 12 }
                         KbdBadge { text: "Alt+P"; badgeColor: "#075985"; textColor: "#BAE6FD"; borderColor: "#0EA5E9" }

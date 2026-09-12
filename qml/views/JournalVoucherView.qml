@@ -292,6 +292,7 @@ FocusScope {
                     implicitHeight: 30
                     background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
                     contentItem: RowLayout {
+                        anchors.centerIn: parent
                         spacing: 6
                         Text { text: "← Dashboard"; color: "#475569"; font.pixelSize: 12; font.bold: true }
                         KbdBadge { text: "Esc"; badgeColor: "#DC2626"; textColor: "#FFF"; borderColor: "#B91C1C" }
@@ -761,9 +762,13 @@ FocusScope {
                         color: saveVchBtn.hovered ? "#15803D" : "#16A34A"
                         radius: 6
                     }
-                    contentItem: RowLayout {
-                        spacing: 6
-                        Text { text: "Save (Ctrl+S)"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 13 }
+                    contentItem: Text {
+                        text: "Save (Ctrl+S)"
+                        color: "#FFFFFF"
+                        font.bold: true
+                        font.pixelSize: 13
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
                     }
                     onClicked: root.saveVoucher()
                 }

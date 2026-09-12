@@ -245,10 +245,11 @@ Rectangle {
 
             T.Button {
                 id: printBtn
-                implicitWidth: contentItem.implicitWidth + 20
+                implicitWidth: contentItem.implicitWidth + 24
                 implicitHeight: 32
                 background: Rectangle { color: printBtn.hovered ? "#1D4ED8" : "#2563EB"; radius: 6 }
                 contentItem: RowLayout {
+                    anchors.centerIn: parent
                     spacing: 6
                     Text { text: "Print Statement"; color: "#FFFFFF"; font.pixelSize: 12; font.bold: true }
                     KbdBadge { text: "Ctrl+P"; badgeColor: "#1E3A8A"; textColor: "#93C5FD"; borderColor: "#2563EB" }
@@ -258,10 +259,11 @@ Rectangle {
 
             T.Button {
                 id: pdfBtn
-                implicitWidth: contentItem.implicitWidth + 20
+                implicitWidth: contentItem.implicitWidth + 24
                 implicitHeight: 32
                 background: Rectangle { color: pdfBtn.hovered ? "#047857" : "#059669"; radius: 6 }
                 contentItem: RowLayout {
+                    anchors.centerIn: parent
                     spacing: 6
                     Text { text: "Export PDF"; color: "#FFFFFF"; font.pixelSize: 12; font.bold: true }
                     KbdBadge { text: "Alt+P"; badgeColor: "#064E3B"; textColor: "#A7F3D0"; borderColor: "#059669" }
@@ -271,12 +273,16 @@ Rectangle {
 
             T.Button {
                 id: csvBtn
-                implicitWidth: contentItem.implicitWidth + 16
+                implicitWidth: contentItem.implicitWidth + 24
                 implicitHeight: 32
-                background: Rectangle { color: "#F8FAFC"; radius: 6; border.color: "#CBD5E1" }
-                contentItem: RowLayout {
-                    spacing: 6
-                    Text { text: "Excel CSV"; color: "#334155"; font.pixelSize: 12; font.bold: true }
+                background: Rectangle { color: csvBtn.hovered ? "#F1F5F9" : "#FFFFFF"; radius: 6; border.color: "#CBD5E1" }
+                contentItem: Text {
+                    text: "Export CSV"
+                    color: "#334155"
+                    font.pixelSize: 12
+                    font.bold: true
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
                 }
                 onClicked: root.exportCsv()
             }
@@ -287,6 +293,7 @@ Rectangle {
                 implicitHeight: 32
                 background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
                 contentItem: RowLayout {
+                    anchors.centerIn: parent
                     spacing: 6
                     Text { text: "← Back to Dashboard"; color: "#475569"; font.pixelSize: 12; font.bold: true }
                     KbdBadge { text: "Esc"; badgeColor: "#DC2626"; textColor: "#FFF"; borderColor: "#B91C1C" }

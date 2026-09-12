@@ -36,6 +36,7 @@ ColumnLayout {
             implicitHeight: 32
             background: Rectangle { color: addVchBtn.hovered ? "#6D28D9" : "#7C3AED"; radius: 6 }
             contentItem: RowLayout {
+                anchors.centerIn: parent
                 spacing: 6
                 Text { text: "+ Post Voucher"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 13 }
                 KbdBadge { text: "F2"; badgeColor: "#4C1D95"; textColor: "#C4B5FD"; borderColor: "#7C3AED" }

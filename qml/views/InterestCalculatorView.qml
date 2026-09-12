@@ -430,9 +430,10 @@ FocusScope {
                         // Set Hisab Date
                         T.Button {
                             height: 32
-                            implicitWidth: contentItem.implicitWidth + 16
+                            implicitWidth: contentItem.implicitWidth + 20
                             background: Rectangle { color: "#EEF2FF"; radius: 6; border.color: "#C7D2FE" }
                             contentItem: RowLayout {
+                                anchors.centerIn: parent
                                 spacing: 4
                                 Text { text: "Hisab Date"; color: "#3730A3"; font.bold: true; font.pixelSize: 11 }
                                 KbdBadge { text: "F6"; badgeColor: "#C7D2FE"; textColor: "#312E81"; borderColor: "#818CF8" }
@@ -443,11 +444,12 @@ FocusScope {
                         // Done Interest Voucher
                         T.Button {
                             height: 32
-                            implicitWidth: contentItem.implicitWidth + 16
+                            implicitWidth: contentItem.implicitWidth + 20
                             background: Rectangle { color: "#16A34A"; radius: 6 }
                             contentItem: RowLayout {
+                                anchors.centerIn: parent
                                 spacing: 4
-                                Text { text: " Done Voucher"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 11 }
+                                Text { text: "Done Voucher"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 11 }
                                 KbdBadge { text: "Ctrl+Enter"; badgeColor: "#15803D"; textColor: "#BBF7D0"; borderColor: "#16A34A" }
                             }
                             onClicked: postConfirmModal.open()
@@ -456,18 +458,26 @@ FocusScope {
                         // Refresh
                         T.Button {
                             height: 32
-                            implicitWidth: contentItem.implicitWidth + 14
+                            implicitWidth: contentItem.implicitWidth + 20
                             background: Rectangle { color: "#2563EB"; radius: 6 }
-                            contentItem: Text { text: " Refresh"; color: "#FFF"; font.bold: true; font.pixelSize: 11 }
+                            contentItem: Text {
+                                text: "Refresh"
+                                color: "#FFF"
+                                font.bold: true
+                                font.pixelSize: 11
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                            }
                             onClicked: root.loadInterestStatement(root.currentPartyName)
                         }
 
                         // Back / Esc
                         T.Button {
                             height: 32
-                            implicitWidth: contentItem.implicitWidth + 14
+                            implicitWidth: contentItem.implicitWidth + 20
                             background: Rectangle { color: "#F1F5F9"; radius: 6; border.color: "#CBD5E1" }
                             contentItem: RowLayout {
+                                anchors.centerIn: parent
                                 spacing: 4
                                 Text { text: "← Back"; color: "#475569"; font.bold: true; font.pixelSize: 11 }
                                 KbdBadge { text: "Esc"; badgeColor: "#E2E8F0"; textColor: "#475569"; borderColor: "#CBD5E1" }
