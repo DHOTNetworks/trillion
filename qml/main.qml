@@ -202,6 +202,7 @@ T.ApplicationWindow {
     Shortcut { sequence: "F9"; context: Qt.ApplicationShortcut; onActivated: window.navigateToView(15) } // Purchase Voucher Entry
     Shortcut { sequence: "F11"; context: Qt.ApplicationShortcut; onActivated: window.navigateToView(23) } // J-Form Mandi Procurement Voucher
     Shortcut { sequence: "F12"; context: Qt.ApplicationShortcut; onActivated: window.navigateToView(24) } // TDS Voucher Entry
+    Shortcut { sequence: "Ctrl+B"; context: Qt.ApplicationShortcut; onActivated: window.navigateToView(26) } // Bank Statement Auto-Entry
     Shortcut { 
         sequences: ["Ctrl+S", "Ctrl+s", "StandardKey.Save"]
         context: Qt.ApplicationShortcut
@@ -315,6 +316,7 @@ T.ApplicationWindow {
                         case 23: return "views/JFormVoucherView.qml"
                         case 24: return "views/TdsVoucherView.qml"
                         case 25: return "views/InterestCalculatorView.qml"
+                        case 26: return "views/BankStatementImportView.qml"
                         default: return "views/DashboardView.qml"
                     }
                 }
@@ -616,6 +618,8 @@ T.ApplicationWindow {
                 window.navigateToView(23)
             } else if (opt === 2) {
                 window.navigateToView(24)
+            } else if (opt === 3) {
+                window.navigateToView(26)
             }
         }
     }

@@ -35,7 +35,10 @@ dist/
 data/
 *.bak
 *.md
+*.db
+*.pdf
 aqtinstall.log
 debug_log.txt
 generated_cpp/
 Bahi-Khata-Data/
+CMakeFiles/

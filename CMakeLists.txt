@@ -34,6 +34,8 @@ find_package(Qt6 6.5 REQUIRED COMPONENTS
     Test
 )
 
+find_package(ZLIB REQUIRED)
+
 # Embedded SQLite Amalgamation
 add_library(sqlite3_embedded STATIC
     third_party/sqlite/sqlite3.c
@@ -145,6 +147,10 @@ set(SOURCES
     src/models/generic_list_model.h
     src/models/generic_list_model.cpp
     src/models/global_key_filter.h
+    src/services/canara_bank_statement_parser.h
+    src/services/canara_bank_statement_parser.cpp
+    src/models/bank_statement_controller.h
+    src/models/bank_statement_controller.cpp
     src/engine/bahi_khata_migrator.h
     src/engine/bahi_khata_migrator.cpp
 )
@@ -218,6 +224,7 @@ qt_add_qml_module(${PROJECT_NAME}
         qml/views/ViewLedgerStatementView.qml
         qml/views/VoucherLedgerView.qml
         qml/views/TdsVoucherView.qml
+        qml/views/BankStatementImportView.qml
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE
@@ -234,6 +241,7 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE HAS_LIBMDB=1)
 target_link_libraries(${PROJECT_NAME} PRIVATE
     sqlite3_embedded
     libmdb_embedded
+    ZLIB::ZLIB
     Qt6::Core
     Qt6::Gui
     Qt6::Qml
@@ -332,6 +340,10 @@ set(TEST_SOURCES
     src/engine/accounting_engine.h
     src/services/print_export_controller.h
     src/services/print_export_controller.cpp
+    src/services/canara_bank_statement_parser.h
+    src/services/canara_bank_statement_parser.cpp
+    src/models/bank_statement_controller.h
+    src/models/bank_statement_controller.cpp
     src/engine/bahi_khata_migrator.h
     src/engine/bahi_khata_migrator.cpp
     ${CMAKE_CURRENT_BINARY_DIR}/.qt/rcc/qrc_MahadevRiceMillERP_raw_qml_0.cpp
@@ -350,6 +362,7 @@ target_compile_definitions(LogicBoardTestSuite PRIVATE HAS_LIBMDB=1)
 target_link_libraries(LogicBoardTestSuite PRIVATE
     sqlite3_embedded
     libmdb_embedded
+    ZLIB::ZLIB
     Qt6::Core
     Qt6::Gui
     Qt6::Widgets

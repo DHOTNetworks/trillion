@@ -28,6 +28,8 @@
 #include "../src/models/stock_items_model.h"
 #include "../src/models/account_groups_model.h"
 #include "../src/models/generic_list_model.h"
+#include "../src/services/canara_bank_statement_parser.h"
+#include "../src/models/bank_statement_controller.h"
 #include "../src/database_manager.h"
 #include <QQmlEngine>
 #include <QQmlComponent>
@@ -65,7 +67,11 @@ private slots:
     // 4. Masters & Regulatory Validations
     void testGstinValidationAndPanExtraction();
     void testStockItemOpeningValuation();
-    void testQmlViewsInstantiation();
+
+    // 6. View Compilation Test
+    void testCanaraBankStatementPdfParser();
+    void testBankStatementControllerPosting();
+    void testAllQmlViewsInstantiable();
 };
 
 void LogicBoardTestSuite::initTestCase() {
@@ -385,9 +391,67 @@ void LogicBoardTestSuite::testStockItemOpeningValuation() {
     QCOMPARE(ctrl.openingValue(), 175000.00);
 }
 
+void LogicBoardTestSuite::testCanaraBankStatementPdfParser() {
+    QString pdfPath = "322157558_unlocked.pdf";
+    if (!QFile::exists(pdfPath)) {
+        QSKIP("Sample PDF 322157558_unlocked.pdf not found in working directory.");
+    }
+
+    CanaraBankStatementParser parser;
+    CanaraBankStatementHeader header;
+    QVector<CanaraBankTransaction> txns;
+    QString errMsg;
+
+    bool ok = parser.parsePdf(pdfPath, header, txns, errMsg);
+    QVERIFY2(ok, qPrintable(errMsg));
+    QVERIFY(txns.size() > 500); // Expect ~577 transactions
+    QCOMPARE(header.accountNo, QString("128001400717"));
+
+    double sumW = 0.0;
+    double sumD = 0.0;
+    int receipts = 0;
+    int payments = 0;
+    int charges = 0;
+
+    for (const auto &t : txns) {
+        sumW += t.withdrawal;
+        sumD += t.deposit;
+        if (t.deposit > 0.001) receipts++;
+        else payments++;
+        if (t.category == "BANK_CHARGES" || t.category == "INTEREST_DEBIT") charges++;
+    }
+
+    // Verify sums match within precision (~25.45 Cr debits, ~24.98 Cr credits)
+    QVERIFY(sumW > 250000000.0);
+    QVERIFY(sumD > 240000000.0);
+    QVERIFY(receipts > 100);
+    QVERIFY(payments > 300);
+    QVERIFY(charges > 150);
+}
+
+void LogicBoardTestSuite::testBankStatementControllerPosting() {
+    QString pdfPath = "322157558_unlocked.pdf";
+    if (!QFile::exists(pdfPath)) {
+        QSKIP("Sample PDF 322157558_unlocked.pdf not found.");
+    }
+
+    BankStatementController ctrl;
+    bool ok = ctrl.loadStatement(pdfPath);
+    QVERIFY(ok);
+    QVERIFY(ctrl.totalCount() > 500);
+    QVERIFY(!ctrl.bankLedgerName().isEmpty());
+
+    // Test alias persistence
+    ctrl.saveAlias("TEST BANK NARRATION ALIAS", "Anand Agro Foods [Batala]");
+    QVariant val = DatabaseManager::instance().executeScalar(
+        "SELECT mapped_party_name FROM bank_narration_aliases WHERE narration_pattern = 'TEST BANK NARRATION ALIAS';"
+    );
+    QCOMPARE(val.toString(), QString("Anand Agro Foods [Batala]"));
+}
+
 extern int qInitResources_MahadevRiceMillERP_raw_qml_0();
 
-void LogicBoardTestSuite::testQmlViewsInstantiation() {
+void LogicBoardTestSuite::testAllQmlViewsInstantiable() {
     qInitResources_MahadevRiceMillERP_raw_qml_0();
 
     QQmlEngine engine;
@@ -403,6 +467,7 @@ void LogicBoardTestSuite::testQmlViewsInstantiation() {
     TdsModel tdsModel;
     StockItemsModel stockItemsModel;
     AccountGroupsModel accountGroupsModel;
+    BankStatementController bankStatementCtrl;
 
     engine.rootContext()->setContextProperty("partiesModel", &partiesModel);
     engine.rootContext()->setContextProperty("vouchersModel", &vouchersModel);
@@ -414,6 +479,7 @@ void LogicBoardTestSuite::testQmlViewsInstantiation() {
     engine.rootContext()->setContextProperty("tdsModel", &tdsModel);
     engine.rootContext()->setContextProperty("stockItemsModel", &stockItemsModel);
     engine.rootContext()->setContextProperty("accountGroupsModel", &accountGroupsModel);
+    engine.rootContext()->setContextProperty("bankStatementCtrl", &bankStatementCtrl);
 
     QStringList viewsToTest = {
         "ChequeVoucherView.qml",
@@ -437,7 +503,8 @@ void LogicBoardTestSuite::testQmlViewsInstantiation() {
         "PurchaseRegisterView.qml",
         "MillingStatementView.qml",
         "StockDetailView.qml",
-        "ViewLedgerStatementView.qml"
+        "ViewLedgerStatementView.qml",
+        "BankStatementImportView.qml"
     };
 
     for (const QString& vName : viewsToTest) {

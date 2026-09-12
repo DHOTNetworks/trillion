@@ -45,6 +45,7 @@
 #include "models/paddy_procurement_controller.h"
 #include "models/ledger_master_controller.h"
 #include "models/stock_master_controller.h"
+#include "models/bank_statement_controller.h"
 #include "models/global_key_filter.h"
 #include "engine/bahi_khata_migrator.h"
 
@@ -155,6 +156,7 @@ int main(int argc, char* argv[]) {
     PaddyProcurementController paddyProcurementCtrl;
     LedgerMasterController ledgerMasterCtrl;
     StockMasterController stockMasterCtrl;
+    BankStatementController bankStatementCtrl;
 
     for (int i = 1; i < argc; ++i) {
         if (QString(argv[i]) == "--render-preview") {
@@ -283,6 +285,7 @@ int main(int argc, char* argv[]) {
     ctx->setContextProperty("paddyProcurementCtrl", &paddyProcurementCtrl);
     ctx->setContextProperty("ledgerMasterCtrl", &ledgerMasterCtrl);
     ctx->setContextProperty("stockMasterCtrl", &stockMasterCtrl);
+    ctx->setContextProperty("bankStatementCtrl", &bankStatementCtrl);
 
     // Add import paths (Embedded QRC + local file fallbacks)
     engine.addImportPath(":/");

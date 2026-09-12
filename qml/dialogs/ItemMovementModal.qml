@@ -34,6 +34,26 @@ Rectangle {
     property int selectedInwardCount: 0
     property int selectedOutwardCount: 0
 
+    // Focus state management
+    Keys.onEscapePressed: function(event) {
+        event.accepted = true
+        root.closeRequested()
+    }
+
+    onVisibleChanged: {
+        if (visible) {
+            Qt.callLater(function() {
+                if (inwardListView && inwardModel.count > 0) {
+                    inwardListView.currentIndex = 0
+                    inwardListView.forceActiveFocus()
+                } else if (outwardListView && outwardModel.count > 0) {
+                    outwardListView.currentIndex = 0
+                    outwardListView.forceActiveFocus()
+                }
+            })
+        }
+    }
+
     function loadItemMovements(name, fDate, tDate) {
         itemName = name
         inwardModel.clear()
@@ -93,14 +113,30 @@ Rectangle {
         recalculateInwardTotals()
         recalculateOutwardTotals()
 
-        if (inwardListView) {
-            inwardListView.contentY = 0
-            inwardListView.positionViewAtBeginning()
-        }
-        if (outwardListView) {
-            outwardListView.contentY = 0
-            outwardListView.positionViewAtBeginning()
-        }
+        Qt.callLater(function() {
+            if (inwardListView) {
+                inwardListView.contentY = 0
+                inwardListView.positionViewAtBeginning()
+                if (inwardModel.count > 0) {
+                    inwardListView.currentIndex = 0
+                    inwardListView.forceActiveFocus()
+                } else {
+                    inwardListView.currentIndex = -1
+                }
+            }
+            if (outwardListView) {
+                outwardListView.contentY = 0
+                outwardListView.positionViewAtBeginning()
+                if (outwardModel.count > 0) {
+                    outwardListView.currentIndex = 0
+                    if (inwardModel.count === 0) {
+                        outwardListView.forceActiveFocus()
+                    }
+                } else {
+                    outwardListView.currentIndex = -1
+                }
+            }
+        })
     }
 
     function toggleSelectAllInwards(state) {
@@ -193,7 +229,7 @@ Rectangle {
                 spacing: 10
                 Rectangle {
                     width: 36; height: 36; radius: 8; color: "#EFF6FF"
-                    Text { anchors.centerIn: parent; text: ""; font.pixelSize: 18 }
+                    Text { anchors.centerIn: parent; text: "📦"; font.pixelSize: 18 }
                 }
                 ColumnLayout {
                     spacing: 0
@@ -214,15 +250,27 @@ Rectangle {
 
             Item { Layout.fillWidth: true }
 
+            // Keyboard hints
+            RowLayout {
+                spacing: 6
+                Layout.alignment: Qt.AlignVCenter
+                KbdBadge { text: "←/→ Switch Table"; badgeColor: "#F1F5F9"; textColor: "#475569"; borderColor: "#CBD5E1" }
+                KbdBadge { text: "↑/↓ Move"; badgeColor: "#F1F5F9"; textColor: "#475569"; borderColor: "#CBD5E1" }
+                KbdBadge { text: "Space: Select"; badgeColor: "#EFF6FF"; textColor: "#1D4ED8"; borderColor: "#BFDBFE" }
+                KbdBadge { text: "Enter: Open Voucher"; badgeColor: "#F0FDF4"; textColor: "#15803D"; borderColor: "#BBF7D0" }
+                KbdBadge { text: "Esc: Close"; badgeColor: "#FEF2F2"; textColor: "#B91C1C"; borderColor: "#FECACA" }
+            }
+
             Rectangle {
                 id: closeBtn
                 width: 32; height: 32; radius: 16
                 color: closeBtnArea.containsMouse ? "#DC2626" : "#F1F5F9"
-                Text { anchors.centerIn: parent; text: "X"; color: closeBtnArea.containsMouse ? "#FFF" : "#475569"; font.bold: true }
+                Text { anchors.centerIn: parent; text: "✕"; color: closeBtnArea.containsMouse ? "#FFF" : "#475569"; font.bold: true; font.pixelSize: 13 }
                 MouseArea {
                     id: closeBtnArea
                     anchors.fill: parent
                     hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
                     onClicked: root.closeRequested()
                 }
             }
@@ -238,11 +286,12 @@ Rectangle {
 
             // LEFT COLUMN: INWARDS / ARRIVALS & PURCHASES
             Rectangle {
+                id: inwardContainer
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 color: "#FFFFFF"
-                border.color: "#BFDBFE"
-                border.width: 1.5
+                border.color: inwardListView.activeFocus ? "#2563EB" : "#BFDBFE"
+                border.width: inwardListView.activeFocus ? 2 : 1.5
                 radius: 10
                 clip: true
 
@@ -254,7 +303,7 @@ Rectangle {
                     Rectangle {
                         Layout.fillWidth: true
                         height: 36
-                        color: "#EFF6FF"
+                        color: inwardListView.activeFocus ? "#DBEAFE" : "#EFF6FF"
                         border.color: "#BFDBFE"
                         border.width: 1
 
@@ -312,12 +361,80 @@ Rectangle {
                         model: inwardModel
                         spacing: 1
                         boundsBehavior: Flickable.StopAtBounds
+                        focus: true
+                        activeFocusOnTab: true
+                        currentIndex: 0
+                        highlightFollowsCurrentItem: true
+
+                        Keys.onUpPressed: function(event) {
+                            event.accepted = true
+                            if (inwardListView.currentIndex > 0) {
+                                inwardListView.currentIndex--
+                            } else if (inwardListView.currentIndex === -1 && count > 0) {
+                                inwardListView.currentIndex = 0
+                            }
+                            inwardListView.positionViewAtIndex(inwardListView.currentIndex, ListView.Contain)
+                        }
+
+                        Keys.onDownPressed: function(event) {
+                            event.accepted = true
+                            if (inwardListView.currentIndex < 0 && count > 0) {
+                                inwardListView.currentIndex = 0
+                            } else if (inwardListView.currentIndex < count - 1) {
+                                inwardListView.currentIndex++
+                            }
+                            inwardListView.positionViewAtIndex(inwardListView.currentIndex, ListView.Contain)
+                        }
+
+                        Keys.onSpacePressed: function(event) {
+                            event.accepted = true
+                            if (inwardListView.currentIndex >= 0 && inwardListView.currentIndex < inwardModel.count) {
+                                var cur = inwardModel.get(inwardListView.currentIndex)
+                                inwardModel.setProperty(inwardListView.currentIndex, "isSelected", !cur.isSelected)
+                                root.recalculateInwardTotals()
+                            }
+                        }
+
+                        Keys.onRightPressed: function(event) {
+                            event.accepted = true
+                            outwardListView.forceActiveFocus()
+                            if (outwardModel.count > 0) {
+                                if (outwardListView.currentIndex < 0 || outwardListView.currentIndex >= outwardModel.count) {
+                                    outwardListView.currentIndex = 0
+                                }
+                            }
+                        }
+
+                        Keys.onReturnPressed: function(event) {
+                            event.accepted = true
+                            if (inwardListView.currentIndex >= 0 && inwardListView.currentIndex < inwardModel.count) {
+                                var r = inwardModel.get(inwardListView.currentIndex)
+                                if (r && r.refNo) root.openInvoiceRequested(r.refNo, "Purchase")
+                            }
+                        }
+
+                        Keys.onEnterPressed: function(event) {
+                            event.accepted = true
+                            if (inwardListView.currentIndex >= 0 && inwardListView.currentIndex < inwardModel.count) {
+                                var r = inwardModel.get(inwardListView.currentIndex)
+                                if (r && r.refNo) root.openInvoiceRequested(r.refNo, "Purchase")
+                            }
+                        }
+
+                        Keys.onEscapePressed: function(event) {
+                            event.accepted = true
+                            root.closeRequested()
+                        }
 
                         delegate: Rectangle {
+                            id: inwardRowRect
                             width: inwardListView.width
                             height: 32
-                            color: model.isSelected ? "#EFF6FF" : (index % 2 === 0 ? "#FFFFFF" : "#F8FAFC")
-                            border.color: "#F1F5F9"
+                            property bool isCurrent: inwardListView.activeFocus && inwardListView.currentIndex === index
+                            color: isCurrent ? (model.isSelected ? "#DBEAFE" : "#EFF6FF") : (model.isSelected ? "#EFF6FF" : (index % 2 === 0 ? "#FFFFFF" : "#F8FAFC"))
+                            border.color: isCurrent ? "#2563EB" : (model.isSelected ? "#93C5FD" : "#F1F5F9")
+                            border.width: isCurrent ? 2 : 1
+                            radius: 3
 
                             RowLayout {
                                 anchors.fill: parent
@@ -349,8 +466,15 @@ Rectangle {
                             MouseArea {
                                 anchors.fill: parent
                                 anchors.leftMargin: 35
+                                hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    inwardListView.currentIndex = index
+                                    inwardListView.forceActiveFocus()
+                                }
                                 onDoubleClicked: {
+                                    inwardListView.currentIndex = index
+                                    inwardListView.forceActiveFocus()
                                     if (model.refNo) {
                                         root.openInvoiceRequested(model.refNo, "Purchase")
                                     }
@@ -384,11 +508,12 @@ Rectangle {
 
             // RIGHT COLUMN: OUTWARDS / DISPATCHES & SALES
             Rectangle {
+                id: outwardContainer
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 color: "#FFFFFF"
-                border.color: "#FED7AA"
-                border.width: 1.5
+                border.color: outwardListView.activeFocus ? "#EA580C" : "#FED7AA"
+                border.width: outwardListView.activeFocus ? 2 : 1.5
                 radius: 10
                 clip: true
 
@@ -400,7 +525,7 @@ Rectangle {
                     Rectangle {
                         Layout.fillWidth: true
                         height: 36
-                        color: "#FFF7ED"
+                        color: outwardListView.activeFocus ? "#FFEDD5" : "#FFF7ED"
                         border.color: "#FED7AA"
                         border.width: 1
 
@@ -458,12 +583,80 @@ Rectangle {
                         model: outwardModel
                         spacing: 1
                         boundsBehavior: Flickable.StopAtBounds
+                        focus: false
+                        activeFocusOnTab: true
+                        currentIndex: 0
+                        highlightFollowsCurrentItem: true
+
+                        Keys.onUpPressed: function(event) {
+                            event.accepted = true
+                            if (outwardListView.currentIndex > 0) {
+                                outwardListView.currentIndex--
+                            } else if (outwardListView.currentIndex === -1 && count > 0) {
+                                outwardListView.currentIndex = 0
+                            }
+                            outwardListView.positionViewAtIndex(outwardListView.currentIndex, ListView.Contain)
+                        }
+
+                        Keys.onDownPressed: function(event) {
+                            event.accepted = true
+                            if (outwardListView.currentIndex < 0 && count > 0) {
+                                outwardListView.currentIndex = 0
+                            } else if (outwardListView.currentIndex < count - 1) {
+                                outwardListView.currentIndex++
+                            }
+                            outwardListView.positionViewAtIndex(outwardListView.currentIndex, ListView.Contain)
+                        }
+
+                        Keys.onSpacePressed: function(event) {
+                            event.accepted = true
+                            if (outwardListView.currentIndex >= 0 && outwardListView.currentIndex < outwardModel.count) {
+                                var cur = outwardModel.get(outwardListView.currentIndex)
+                                outwardModel.setProperty(outwardListView.currentIndex, "isSelected", !cur.isSelected)
+                                root.recalculateOutwardTotals()
+                            }
+                        }
+
+                        Keys.onLeftPressed: function(event) {
+                            event.accepted = true
+                            inwardListView.forceActiveFocus()
+                            if (inwardModel.count > 0) {
+                                if (inwardListView.currentIndex < 0 || inwardListView.currentIndex >= inwardModel.count) {
+                                    inwardListView.currentIndex = 0
+                                }
+                            }
+                        }
+
+                        Keys.onReturnPressed: function(event) {
+                            event.accepted = true
+                            if (outwardListView.currentIndex >= 0 && outwardListView.currentIndex < outwardModel.count) {
+                                var r = outwardModel.get(outwardListView.currentIndex)
+                                if (r && r.refNo) root.openInvoiceRequested(r.refNo, "Sale")
+                            }
+                        }
+
+                        Keys.onEnterPressed: function(event) {
+                            event.accepted = true
+                            if (outwardListView.currentIndex >= 0 && outwardListView.currentIndex < outwardModel.count) {
+                                var r = outwardModel.get(outwardListView.currentIndex)
+                                if (r && r.refNo) root.openInvoiceRequested(r.refNo, "Sale")
+                            }
+                        }
+
+                        Keys.onEscapePressed: function(event) {
+                            event.accepted = true
+                            root.closeRequested()
+                        }
 
                         delegate: Rectangle {
+                            id: outwardRowRect
                             width: outwardListView.width
                             height: 32
-                            color: model.isSelected ? "#FFF7ED" : (index % 2 === 0 ? "#FFFFFF" : "#F8FAFC")
-                            border.color: "#F1F5F9"
+                            property bool isCurrent: outwardListView.activeFocus && outwardListView.currentIndex === index
+                            color: isCurrent ? (model.isSelected ? "#FED7AA" : "#FFF7ED") : (model.isSelected ? "#FFF7ED" : (index % 2 === 0 ? "#FFFFFF" : "#F8FAFC"))
+                            border.color: isCurrent ? "#EA580C" : (model.isSelected ? "#FDBA74" : "#F1F5F9")
+                            border.width: isCurrent ? 2 : 1
+                            radius: 3
 
                             RowLayout {
                                 anchors.fill: parent
@@ -495,8 +688,15 @@ Rectangle {
                             MouseArea {
                                 anchors.fill: parent
                                 anchors.leftMargin: 35
+                                hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    outwardListView.currentIndex = index
+                                    outwardListView.forceActiveFocus()
+                                }
                                 onDoubleClicked: {
+                                    outwardListView.currentIndex = index
+                                    outwardListView.forceActiveFocus()
                                     if (model.refNo) {
                                         root.openInvoiceRequested(model.refNo, "Sale")
                                     }

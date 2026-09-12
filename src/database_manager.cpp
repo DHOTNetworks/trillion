@@ -1040,4 +1040,16 @@ void DatabaseManager::ensureTablesExist() {
     addColumnIfNotExists("stock_items", "dami_ledger_id", "INTEGER");
     addColumnIfNotExists("stock_items", "market_fee_ledger_id", "INTEGER");
     addColumnIfNotExists("stock_items", "hrdf_ledger_id", "INTEGER");
+
+    // 13. Bank Narration Aliases & Mapping Memory
+    executeNonQuery(
+        "CREATE TABLE IF NOT EXISTS bank_narration_aliases ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "bank_code TEXT DEFAULT 'CNRB',"
+        "narration_pattern TEXT UNIQUE COLLATE NOCASE,"
+        "mapped_party_name TEXT NOT NULL,"
+        "voucher_type TEXT,"
+        "created_at TEXT"
+        ");"
+    );
 }

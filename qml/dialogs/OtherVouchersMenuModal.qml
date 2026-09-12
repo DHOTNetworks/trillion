@@ -20,6 +20,7 @@ T.Popup {
     onOpened: {
         item1.resetMouseTracking()
         item2.resetMouseTracking()
+        item3.resetMouseTracking()
         Qt.callLater(function() { menuScope.forceActiveFocus() })
     }
 
@@ -45,11 +46,11 @@ T.Popup {
         Keys.onUpPressed: function(event) {
             event.accepted = true
             if (root.selectedIndex > 0) root.selectedIndex--
-            else root.selectedIndex = 1
+            else root.selectedIndex = 2
         }
         Keys.onDownPressed: function(event) {
             event.accepted = true
-            if (root.selectedIndex < 1) root.selectedIndex++
+            if (root.selectedIndex < 2) root.selectedIndex++
             else root.selectedIndex = 0
         }
         Keys.onReturnPressed: function(event) {
@@ -66,6 +67,7 @@ T.Popup {
         }
         Keys.onDigit1Pressed: function(event) { event.accepted = true; root.selectedIndex = 0; root.triggerSelected() }
         Keys.onDigit2Pressed: function(event) { event.accepted = true; root.selectedIndex = 1; root.triggerSelected() }
+        Keys.onDigit3Pressed: function(event) { event.accepted = true; root.selectedIndex = 2; root.triggerSelected() }
 
         ColumnLayout {
             id: mainCol
@@ -165,6 +167,45 @@ T.Popup {
                             anchors.centerIn: parent
                             text: "F12"
                             color: root.selectedIndex === 1 ? "#DDD6FE" : "#7C3AED"
+                            font.pixelSize: 10
+                            font.bold: true
+                        }
+                    }
+                }
+            }
+
+            // Item 3: Bank Statement Auto-Entry & Reconciliation
+            NavMenuItem {
+                id: item3
+                index: 2
+                selectedIndex: root.selectedIndex
+                activeColor: "#1D4ED8"
+                activeBorderColor: "#1E40AF"
+                onItemHovered: root.selectedIndex = 2
+                onItemClicked: { root.selectedIndex = 2; root.triggerSelected() }
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 14; anchors.rightMargin: 14
+                    spacing: 10
+
+                    Text {
+                        text: "3. Canara Bank Statement Auto-Entry (PDF)"
+                        color: root.selectedIndex === 2 ? "#FFFFFF" : "#000000"
+                        font.pixelSize: 13
+                        font.bold: true
+                        Layout.fillWidth: true
+                    }
+
+                    Rectangle {
+                        height: 22
+                        width: 45
+                        radius: 4
+                        color: root.selectedIndex === 2 ? "#1E3A8A" : "#DBEAFE"
+                        Text {
+                            anchors.centerIn: parent
+                            text: "Ctrl+B"
+                            color: root.selectedIndex === 2 ? "#BFDBFE" : "#1D4ED8"
                             font.pixelSize: 10
                             font.bold: true
                         }
