@@ -55,8 +55,10 @@ public:
     // Extract text lines from PDF raw data
     static QVector<QString> extractPdfTextLines(const QByteArray &pdfData);
 
+    // Classify category and extract party from raw narration
+    static void classifyAndExtractParty(CanaraBankTransaction &txn);
+
 private:
     static QString decompressStream(const QByteArray &compressedData);
     static QVector<QString> parseTextFromContentStream(const QString &streamContent);
-    static void classifyAndExtractParty(CanaraBankTransaction &txn);
 };

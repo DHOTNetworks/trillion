@@ -21,6 +21,8 @@ T.Popup {
         item1.resetMouseTracking()
         item2.resetMouseTracking()
         item3.resetMouseTracking()
+        item4.resetMouseTracking()
+        item5.resetMouseTracking()
         Qt.callLater(function() { menuScope.forceActiveFocus() })
     }
 
@@ -46,11 +48,11 @@ T.Popup {
         Keys.onUpPressed: function(event) {
             event.accepted = true
             if (root.selectedIndex > 0) root.selectedIndex--
-            else root.selectedIndex = 2
+            else root.selectedIndex = 4
         }
         Keys.onDownPressed: function(event) {
             event.accepted = true
-            if (root.selectedIndex < 2) root.selectedIndex++
+            if (root.selectedIndex < 4) root.selectedIndex++
             else root.selectedIndex = 0
         }
         Keys.onReturnPressed: function(event) {
@@ -68,6 +70,8 @@ T.Popup {
         Keys.onDigit1Pressed: function(event) { event.accepted = true; root.selectedIndex = 0; root.triggerSelected() }
         Keys.onDigit2Pressed: function(event) { event.accepted = true; root.selectedIndex = 1; root.triggerSelected() }
         Keys.onDigit3Pressed: function(event) { event.accepted = true; root.selectedIndex = 2; root.triggerSelected() }
+        Keys.onDigit4Pressed: function(event) { event.accepted = true; root.selectedIndex = 3; root.triggerSelected() }
+        Keys.onDigit5Pressed: function(event) { event.accepted = true; root.selectedIndex = 4; root.triggerSelected() }
 
         ColumnLayout {
             id: mainCol
@@ -206,6 +210,84 @@ T.Popup {
                             anchors.centerIn: parent
                             text: "Ctrl+B"
                             color: root.selectedIndex === 2 ? "#BFDBFE" : "#1D4ED8"
+                            font.pixelSize: 10
+                            font.bold: true
+                        }
+                    }
+                }
+            }
+
+            // Item 4: Transport, Weighbridge (Kanda) & e-Way Register
+            NavMenuItem {
+                id: item4
+                index: 3
+                selectedIndex: root.selectedIndex
+                activeColor: "#059669"
+                activeBorderColor: "#047857"
+                onItemHovered: root.selectedIndex = 3
+                onItemClicked: { root.selectedIndex = 3; root.triggerSelected() }
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 14; anchors.rightMargin: 14
+                    spacing: 10
+
+                    Text {
+                        text: "4. Transport, Weighbridge (Kanda) & e-Way Register"
+                        color: root.selectedIndex === 3 ? "#FFFFFF" : "#000000"
+                        font.pixelSize: 13
+                        font.bold: true
+                        Layout.fillWidth: true
+                    }
+
+                    Rectangle {
+                        height: 22
+                        width: 45
+                        radius: 4
+                        color: root.selectedIndex === 3 ? "#064E3B" : "#D1FAE5"
+                        Text {
+                            anchors.centerIn: parent
+                            text: "Alt+T"
+                            color: root.selectedIndex === 3 ? "#A7F3D0" : "#059669"
+                            font.pixelSize: 10
+                            font.bold: true
+                        }
+                    }
+                }
+            }
+
+            // Item 5: GST Debit Notes & Credit Notes
+            NavMenuItem {
+                id: item5
+                index: 4
+                selectedIndex: root.selectedIndex
+                activeColor: "#DC2626"
+                activeBorderColor: "#B91C1C"
+                onItemHovered: root.selectedIndex = 4
+                onItemClicked: { root.selectedIndex = 4; root.triggerSelected() }
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 14; anchors.rightMargin: 14
+                    spacing: 10
+
+                    Text {
+                        text: "5. GST Debit Notes & Credit Notes (DebitCreditNotes)"
+                        color: root.selectedIndex === 4 ? "#FFFFFF" : "#000000"
+                        font.pixelSize: 13
+                        font.bold: true
+                        Layout.fillWidth: true
+                    }
+
+                    Rectangle {
+                        height: 22
+                        width: 45
+                        radius: 4
+                        color: root.selectedIndex === 4 ? "#7F1D1D" : "#FEE2E2"
+                        Text {
+                            anchors.centerIn: parent
+                            text: "Alt+D"
+                            color: root.selectedIndex === 4 ? "#FECACA" : "#DC2626"
                             font.pixelSize: 10
                             font.bold: true
                         }

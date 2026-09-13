@@ -682,6 +682,121 @@ void DatabaseManager::ensureTablesExist() {
         ");"
     );
 
+    // 8. Transport, Weighbridge (Kanda) & e-Way Dispatches
+    executeNonQuery(
+        "CREATE TABLE IF NOT EXISTS transport_dispatches ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "fy_id INTEGER,"
+        "financial_year TEXT DEFAULT 'FY 2025-26',"
+        "dispatch_date TEXT NOT NULL,"
+        "dispatch_time TEXT,"
+        "slip_no TEXT,"
+        "voucher_no TEXT,"
+        "invoice_no TEXT,"
+        "voucher_type TEXT DEFAULT 'Sale',"
+        "party_id INTEGER,"
+        "party_name TEXT NOT NULL,"
+        "item_id INTEGER,"
+        "item_name TEXT,"
+        "grade TEXT,"
+        "vehicle_no TEXT NOT NULL,"
+        "driver_name TEXT,"
+        "driver_phone TEXT,"
+        "transporter_name TEXT,"
+        "transporter_gstin TEXT,"
+        "gr_no TEXT,"
+        "gr_date TEXT,"
+        "destination TEXT,"
+        "distance_km INTEGER DEFAULT 0,"
+        "bag_count INTEGER DEFAULT 0,"
+        "packing_kg REAL DEFAULT 50.0,"
+        "gross_weight_qtl REAL DEFAULT 0.0,"
+        "tare_weight_qtl REAL DEFAULT 0.0,"
+        "bag_tare_kg REAL DEFAULT 0.0,"
+        "net_weight_qtl REAL DEFAULT 0.0,"
+        "freight_calc_type TEXT DEFAULT 'Per Qtl',"
+        "freight_rate REAL DEFAULT 0.0,"
+        "total_freight REAL DEFAULT 0.0,"
+        "advance_freight REAL DEFAULT 0.0,"
+        "balance_freight REAL DEFAULT 0.0,"
+        "freight_payment_status TEXT DEFAULT 'Unpaid',"
+        "eway_bill_no TEXT,"
+        "irn_no TEXT,"
+        "notes TEXT,"
+        "created_at DATETIME DEFAULT CURRENT_TIMESTAMP,"
+        "FOREIGN KEY (party_id) REFERENCES parties(id),"
+        "FOREIGN KEY (fy_id) REFERENCES financial_years(id)"
+        ");"
+    );
+
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_transport_date ON transport_dispatches(dispatch_date);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_transport_vehicle ON transport_dispatches(vehicle_no);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_transport_invoice ON transport_dispatches(invoice_no);");
+
+    // 9. GST Debit Notes & Credit Notes (DebitCreditNotes)
+    executeNonQuery(
+        "CREATE TABLE IF NOT EXISTS debit_credit_notes ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "fy_id INTEGER,"
+        "financial_year TEXT DEFAULT 'FY 2025-26',"
+        "note_type TEXT NOT NULL,"
+        "note_no TEXT NOT NULL,"
+        "note_date TEXT NOT NULL,"
+        "note_time TEXT,"
+        "original_invoice_id INTEGER,"
+        "original_invoice_no TEXT,"
+        "original_invoice_date TEXT,"
+        "original_invoice_type TEXT DEFAULT 'Sale',"
+        "party_id INTEGER,"
+        "party_name TEXT NOT NULL,"
+        "party_gstin TEXT,"
+        "state_code TEXT,"
+        "is_interstate INTEGER DEFAULT 0,"
+        "reason_code TEXT DEFAULT '01-Sales Return',"
+        "adjustment_type TEXT DEFAULT 'Sales Return',"
+        "item_name TEXT,"
+        "hsn_code TEXT,"
+        "total_bags INTEGER DEFAULT 0,"
+        "total_weight_qtl REAL DEFAULT 0.0,"
+        "taxable_amount REAL DEFAULT 0.0,"
+        "gst_pct REAL DEFAULT 5.0,"
+        "cgst_amount REAL DEFAULT 0.0,"
+        "sgst_amount REAL DEFAULT 0.0,"
+        "igst_amount REAL DEFAULT 0.0,"
+        "total_tax_amount REAL DEFAULT 0.0,"
+        "round_off REAL DEFAULT 0.0,"
+        "grand_total REAL DEFAULT 0.0,"
+        "narration TEXT,"
+        "voucher_id INTEGER,"
+        "created_at DATETIME DEFAULT CURRENT_TIMESTAMP,"
+        "FOREIGN KEY (party_id) REFERENCES parties(id),"
+        "FOREIGN KEY (fy_id) REFERENCES financial_years(id)"
+        ");"
+    );
+
+    executeNonQuery(
+        "CREATE TABLE IF NOT EXISTS debit_credit_note_items ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "note_id INTEGER NOT NULL,"
+        "item_id INTEGER,"
+        "item_name TEXT,"
+        "hsn_code TEXT,"
+        "unit TEXT DEFAULT 'QTL',"
+        "bags INTEGER DEFAULT 0,"
+        "weight_qtl REAL DEFAULT 0.0,"
+        "rate REAL DEFAULT 0.0,"
+        "taxable_amount REAL DEFAULT 0.0,"
+        "gst_pct REAL DEFAULT 5.0,"
+        "total_amount REAL DEFAULT 0.0,"
+        "FOREIGN KEY (note_id) REFERENCES debit_credit_notes(id) ON DELETE CASCADE"
+        ");"
+    );
+
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_dcn_note_no ON debit_credit_notes(note_no);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_dcn_date ON debit_credit_notes(note_date);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_dcn_invoice ON debit_credit_notes(original_invoice_no);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_dcn_party ON debit_credit_notes(party_name);");
+
     auto addColumnIfNotExists = [this](const QString& table, const QString& column, const QString& type) {
         QVariantList cols = executeQuery(QString("PRAGMA table_info(%1);").arg(table));
         for (const auto& c : cols) {

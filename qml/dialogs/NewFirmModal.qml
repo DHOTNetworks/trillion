@@ -132,7 +132,32 @@ T.Popup {
                             id: firmTypeCombo
                             Layout.fillWidth: true
                             implicitHeight: 32
-                            model: ["Partnership Firm", "Proprietorship Firm", "Private Limited Company", "Limited Liability Partnership (LLP)", "Individual"]
+                            model: ["Partnership Firm", "Proprietorship Firm", "Private Limited Company", "Limited Liability Partnership (LLP)", "Individual", "Hindu Undivided Family (HUF)", "Trust", "Association of Persons (AOP/BOI)"]
+                        }
+                    }
+                }
+
+                function autoDetectFromPan(panStr) {
+                    if (!panStr || panStr.length < 4) return
+                    var clean = panStr.trim().toUpperCase()
+                    if (clean.length === 15) clean = clean.substring(2, 12)
+                    if (clean.length >= 4) {
+                        var c = clean.charAt(3)
+                        var targetType = ""
+                        if (c === 'P') targetType = "Proprietorship Firm"
+                        else if (c === 'F') targetType = "Partnership Firm"
+                        else if (c === 'C') targetType = "Private Limited Company"
+                        else if (c === 'H') targetType = "Hindu Undivided Family (HUF)"
+                        else if (c === 'T') targetType = "Trust"
+                        else if (c === 'A' || c === 'B') targetType = "Association of Persons (AOP/BOI)"
+
+                        if (targetType) {
+                            for (var i = 0; i < firmTypeCombo.model.length; ++i) {
+                                if (firmTypeCombo.model[i] === targetType) {
+                                    firmTypeCombo.currentIndex = i
+                                    break
+                                }
+                            }
                         }
                     }
                 }
@@ -168,6 +193,20 @@ T.Popup {
                         Layout.fillWidth: true
                         label: "GSTIN Number (15 Digits)"
                         placeholderText: "06AAAAA0000A1Z5"
+                        onTextChanged: {
+                            var g = text.trim().toUpperCase()
+                            if (g.length >= 12 && (!panInput.text || panInput.text.trim().length < 10)) {
+                                panInput.text = g.substring(2, 12)
+                            }
+                            if (g.length >= 2) {
+                                var code = g.substring(0, 2)
+                                if (code === "06") stateInput.text = "Haryana"
+                                else if (code === "03") stateInput.text = "Punjab"
+                                else if (code === "08") stateInput.text = "Rajasthan"
+                                else if (code === "07") stateInput.text = "Delhi"
+                                else if (code === "09") stateInput.text = "Uttar Pradesh"
+                            }
+                        }
                     }
 
                     CustomInput {
@@ -175,6 +214,9 @@ T.Popup {
                         Layout.fillWidth: true
                         label: "PAN Number (10 Digits)"
                         placeholderText: "AAAAA0000A"
+                        onTextChanged: {
+                            autoDetectFromPan(text)
+                        }
                     }
 
                     CustomInput {

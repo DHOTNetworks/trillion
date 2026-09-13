@@ -24,6 +24,9 @@ T.Popup {
         item4.resetMouseTracking()
         item5.resetMouseTracking()
         item6.resetMouseTracking()
+        item7.resetMouseTracking()
+        item8.resetMouseTracking()
+        item9.resetMouseTracking()
         Qt.callLater(function() { menuScope.forceActiveFocus() })
     }
 
@@ -36,6 +39,8 @@ T.Popup {
         else if (selectedIndex === 4) act = "Sales Register"
         else if (selectedIndex === 5) act = "Purchase Register"
         else if (selectedIndex === 6) act = "Interest Calculator"
+        else if (selectedIndex === 7) act = "Transport Register"
+        else if (selectedIndex === 8) act = "Debit Credit Notes"
         var sel = selectedIndex
         root.close()
         root.actionSelected(act, sel)
@@ -56,11 +61,11 @@ T.Popup {
         Keys.onUpPressed: function(event) {
             event.accepted = true
             if (root.selectedIndex > 0) root.selectedIndex--
-            else root.selectedIndex = 6
+            else root.selectedIndex = 8
         }
         Keys.onDownPressed: function(event) {
             event.accepted = true
-            if (root.selectedIndex < 6) root.selectedIndex++
+            if (root.selectedIndex < 8) root.selectedIndex++
             else root.selectedIndex = 0
         }
         Keys.onReturnPressed: function(event) {
@@ -82,6 +87,8 @@ T.Popup {
         Keys.onDigit5Pressed: function(event) { event.accepted = true; root.selectedIndex = 4; root.triggerSelected() }
         Keys.onDigit6Pressed: function(event) { event.accepted = true; root.selectedIndex = 5; root.triggerSelected() }
         Keys.onDigit7Pressed: function(event) { event.accepted = true; root.selectedIndex = 6; root.triggerSelected() }
+        Keys.onDigit8Pressed: function(event) { event.accepted = true; root.selectedIndex = 7; root.triggerSelected() }
+        Keys.onDigit9Pressed: function(event) { event.accepted = true; root.selectedIndex = 8; root.triggerSelected() }
 
         ColumnLayout {
             id: mainCol
@@ -192,6 +199,30 @@ T.Popup {
                 activeBorderColor: "#047857"
                 onItemHovered: root.selectedIndex = 6
                 onItemClicked: { root.selectedIndex = 6; root.triggerSelected() }
+            }
+
+            // Item 8: Transport, Weighbridge & e-Way Register
+            NavMenuItem {
+                id: item8
+                index: 7
+                selectedIndex: root.selectedIndex
+                text: "8. Transport, Weighbridge & e-Way Register"
+                activeColor: "#059669"
+                activeBorderColor: "#047857"
+                onItemHovered: root.selectedIndex = 7
+                onItemClicked: { root.selectedIndex = 7; root.triggerSelected() }
+            }
+
+            // Item 9: GST Debit Notes & Credit Notes Register
+            NavMenuItem {
+                id: item9
+                index: 8
+                selectedIndex: root.selectedIndex
+                text: "9. GST Debit Notes & Credit Notes Register"
+                activeColor: "#059669"
+                activeBorderColor: "#047857"
+                onItemHovered: root.selectedIndex = 8
+                onItemClicked: { root.selectedIndex = 8; root.triggerSelected() }
             }
         }
     }

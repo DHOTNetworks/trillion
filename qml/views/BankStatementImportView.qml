@@ -18,6 +18,18 @@ Rectangle {
     property int editingRowIdx: -1
     property string editingField: "" // "Dr" or "Cr"
 
+    onCurrentFilterChanged: {
+        if (typeof bankStatementCtrl !== "undefined" && bankStatementCtrl && bankStatementCtrl.rowsModel) {
+            bankStatementCtrl.rowsModel.setFilter(currentFilter, searchQuery)
+        }
+    }
+
+    onSearchQueryChanged: {
+        if (typeof bankStatementCtrl !== "undefined" && bankStatementCtrl && bankStatementCtrl.rowsModel) {
+            bankStatementCtrl.rowsModel.setFilter(currentFilter, searchQuery)
+        }
+    }
+
     Shortcut {
         sequence: "Ctrl+O"
         context: Qt.WindowShortcut
@@ -89,14 +101,6 @@ Rectangle {
         }
         root.isPartySelectorOpen = false
         statementListView.forceActiveFocus()
-    }
-
-    Component.onCompleted: {
-        if (typeof bankStatementCtrl !== "undefined" && bankStatementCtrl) {
-            if (bankStatementCtrl.totalCount === 0) {
-                bankStatementCtrl.loadStatement("322157558_unlocked.pdf")
-            }
-        }
     }
 
     // Drag and Drop PDF support
@@ -196,7 +200,7 @@ Rectangle {
 
                 Item { Layout.fillWidth: true }
 
-                // Select PDF Statement Button
+                // Select Statement Button
                 T.Button {
                     id: browseBtn
                     implicitHeight: 28
@@ -204,7 +208,7 @@ Rectangle {
                     background: Rectangle { color: browseBtn.hovered ? "#1D4ED8" : "#2563EB"; radius: 4 }
                     contentItem: RowLayout {
                         spacing: 4
-                        Text { text: "Select PDF Statement"; color: "#FFFFFF"; font.pixelSize: 11; font.bold: true }
+                        Text { text: "Select Statement (Excel / CSV / PDF)"; color: "#FFFFFF"; font.pixelSize: 11; font.bold: true }
                         KbdBadge { text: "Ctrl+O"; badgeColor: "#1E40AF"; textColor: "#DBEAFE"; borderColor: "#2563EB" }
                     }
                     onClicked: {
@@ -506,24 +510,6 @@ Rectangle {
                         id: rowDelegate
                         width: statementListView.width
                         height: 34
-                        visible: {
-                            if (root.currentFilter === "RECEIPTS" && model.deposit <= 0.001) return false
-                            if (root.currentFilter === "PAYMENTS" && model.withdrawal <= 0.001) return false
-                            if (root.currentFilter === "CHARGES" && model.category !== "BANK_CHARGES") return false
-                            if (root.currentFilter === "INTEREST" && model.category !== "INTEREST_DEBIT") return false
-                            if (root.currentFilter === "UNMATCHED" && model.confidence !== "UNMATCHED") return false
-                            if (root.currentFilter === "DUPLICATES" && !model.isDuplicate) return false
-
-                            if (root.searchQuery !== "") {
-                                var q = root.searchQuery
-                                var n = (model.narration || "").toLowerCase()
-                                var u = (model.utrRef || "").toLowerCase()
-                                var dr = (model.drAccount || "").toLowerCase()
-                                var cr = (model.crAccount || "").toLowerCase()
-                                if (!n.includes(q) && !u.includes(q) && !dr.includes(q) && !cr.includes(q)) return false
-                            }
-                            return true
-                        }
 
                         property bool isCurrent: statementListView.currentIndex === index && statementListView.activeFocus
                         color: isCurrent ? "#DBEAFE" : (model.isSelected ? (model.deposit > 0.001 ? "#F0FDF4" : "#FFF7ED") : (index % 2 === 0 ? "#FFFFFF" : "#F8FAFC"))

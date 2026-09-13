@@ -5,6 +5,7 @@
 #include <QDir>
 #include <QUrl>
 #include <QFileDialog>
+#include <QRegularExpression>
 #include <QDebug>
 #include <iostream>
 #include <vector>
@@ -244,6 +245,163 @@ QString BahiKhataMigrator::determineFinancialYear(const QString& isoDate) {
     return computeFinancialYear(isoDate);
 }
 
+QString BahiKhataMigrator::resolveFirmTypeFromPan(const QString& rawType, const QString& pan, const QString& companyName) {
+    QString cleanPan = pan.trimmed().toUpper();
+    if (cleanPan.length() == 15) {
+        cleanPan = cleanPan.mid(2, 10);
+    }
+    if (cleanPan.length() >= 4) {
+        QChar c = cleanPan.at(3);
+        if (c == 'P') return "Proprietorship Firm";
+        if (c == 'F') return "Partnership Firm";
+        if (c == 'C') return "Private Limited Company";
+        if (c == 'H') return "Hindu Undivided Family (HUF)";
+        if (c == 'T') return "Trust";
+        if (c == 'A' || c == 'B') return "Association of Persons (AOP/BOI)";
+        if (c == 'G') return "Government Agency";
+        if (c == 'J') return "Artificial Juridical Person";
+        if (c == 'L') return "Local Authority";
+    }
+
+    QString lowerName = companyName.trimmed().toLower();
+    if (lowerName.contains("pvt ltd") || lowerName.contains("private limited")) return "Private Limited Company";
+    if (lowerName.contains("llp")) return "Limited Liability Partnership (LLP)";
+    if (lowerName.contains("ltd") || lowerName.contains("limited")) return "Public Limited Company";
+
+    QString lowerType = rawType.trimmed().toLower();
+    if (lowerType.contains("prop") || lowerType.contains("proprietor")) return "Proprietorship Firm";
+    if (lowerType.contains("partner")) return "Partnership Firm";
+    if (lowerType.contains("pvt") || lowerType.contains("private") || lowerType.contains("ltd") || lowerType.contains("limited")) return "Private Limited Company";
+    if (lowerType.contains("huf")) return "Hindu Undivided Family (HUF)";
+    if (lowerType.contains("trust") || lowerType.contains("society")) return "Trust";
+    if (lowerType.contains("individual")) return "Individual";
+
+    if (!rawType.trimmed().isEmpty() && rawType.trimmed() != "N/A") return rawType.trimmed();
+    return "Proprietorship Firm";
+}
+
+void BahiKhataMigrator::cleanBankingDetails(const QString& m2, const QString& b2, const QString& b3,
+                                            QString& outBankName, QString& outAccountNo, QString& outIfsc) {
+    QStringList candidates = { m2.trimmed(), b2.trimmed(), b3.trimmed() };
+    outBankName.clear();
+    outAccountNo.clear();
+    outIfsc.clear();
+
+    QRegularExpression ifscRegex(R"(\b[A-Z]{4}0[A-Z0-9]{6}\b)", QRegularExpression::CaseInsensitiveOption);
+    QRegularExpression ifscPrefixRegex(R"(^IFS[CE][\.\:\s\-]*)", QRegularExpression::CaseInsensitiveOption);
+    QRegularExpression accPrefixRegex(R"(^(A\/C|A\/c|ACC|ACCOUNT)[\s\.\:\#\-NnoO]*)", QRegularExpression::CaseInsensitiveOption);
+    QRegularExpression bankPrefixRegex(R"(^(BANK\s*(&|AND)?\s*BRANCH|BANK\s*NAME|BRANCH)[\s\.\:\-]*)", QRegularExpression::CaseInsensitiveOption);
+
+    // 1. Identify IFSC
+    for (int i = 0; i < candidates.size(); ++i) {
+        QString s = candidates[i];
+        if (s.isEmpty()) continue;
+        auto match = ifscRegex.match(s);
+        if (match.hasMatch()) {
+            outIfsc = match.captured(0).toUpper();
+            candidates[i].clear();
+            break;
+        } else if (s.contains("IFSC", Qt::CaseInsensitive) || s.contains("IFSE", Qt::CaseInsensitive)) {
+            QString clean = s;
+            clean.remove(ifscPrefixRegex);
+            outIfsc = clean.trimmed().toUpper();
+            candidates[i].clear();
+            break;
+        }
+    }
+
+    // 2. Identify Account Number vs Bank Name
+    for (int i = 0; i < candidates.size(); ++i) {
+        QString s = candidates[i];
+        if (s.isEmpty()) continue;
+        if (s.contains("A/C", Qt::CaseInsensitive) || s.contains("A/c", Qt::CaseInsensitive) || s.contains("Acc", Qt::CaseInsensitive) || s.contains("Account", Qt::CaseInsensitive)) {
+            QString clean = s;
+            clean.remove(accPrefixRegex);
+            outAccountNo = clean.trimmed();
+            candidates[i].clear();
+            break;
+        }
+    }
+
+    // 3. Identify Bank Name
+    for (int i = 0; i < candidates.size(); ++i) {
+        QString s = candidates[i];
+        if (s.isEmpty()) continue;
+        if (s.contains("BANK", Qt::CaseInsensitive) || s.contains("BRANCH", Qt::CaseInsensitive) ||
+            s.contains("AXIS", Qt::CaseInsensitive) || s.contains("CANARA", Qt::CaseInsensitive) ||
+            s.contains("SBI", Qt::CaseInsensitive) || s.contains("HDFC", Qt::CaseInsensitive) ||
+            s.contains("ICICI", Qt::CaseInsensitive) || s.contains("PUNJAB", Qt::CaseInsensitive) ||
+            s.contains("PNB", Qt::CaseInsensitive) || s.contains("YES", Qt::CaseInsensitive) ||
+            s.contains("KOTAK", Qt::CaseInsensitive) || s.contains("UNION", Qt::CaseInsensitive) ||
+            s.contains("BARODA", Qt::CaseInsensitive) || s.contains("OBC", Qt::CaseInsensitive)) {
+            QString clean = s;
+            clean.remove(bankPrefixRegex);
+            outBankName = clean.trimmed();
+            candidates[i].clear();
+            break;
+        }
+    }
+
+    // 4. Assign remaining candidates to account or bank name
+    for (const QString &s : candidates) {
+        if (s.isEmpty()) continue;
+        int digitCount = 0;
+        for (QChar ch : s) {
+            if (ch.isDigit()) digitCount++;
+        }
+        if (digitCount >= 6 && outAccountNo.isEmpty()) {
+            QString clean = s;
+            clean.remove(accPrefixRegex);
+            outAccountNo = clean.trimmed();
+        } else if (outBankName.isEmpty()) {
+            QString clean = s;
+            clean.remove(bankPrefixRegex);
+            outBankName = clean.trimmed();
+        } else if (outAccountNo.isEmpty()) {
+            outAccountNo = s.trimmed();
+        }
+    }
+}
+
+QString BahiKhataMigrator::extractFssai(const QString& business, const QString& address) {
+    QRegularExpression fssaiRegex(R"(\b(1\d{13})\b)");
+    auto match = fssaiRegex.match(business);
+    if (match.hasMatch()) {
+        return match.captured(1);
+    }
+    match = fssaiRegex.match(address);
+    if (match.hasMatch()) {
+        return match.captured(1);
+    }
+    return "10822019000152";
+}
+
+QString BahiKhataMigrator::extractStateCode(const QString& gstin, const QString& state) {
+    QString g = gstin.trimmed();
+    if (g.length() >= 2 && g.at(0).isDigit() && g.at(1).isDigit()) {
+        return g.left(2);
+    }
+    QString s = state.trimmed().toLower();
+    if (s.contains("haryana")) return "06";
+    if (s.contains("punjab")) return "03";
+    if (s.contains("delhi")) return "07";
+    if (s.contains("rajasthan")) return "08";
+    if (s.contains("uttar pradesh") || s.contains("up")) return "09";
+    if (s.contains("chandigarh")) return "04";
+    if (s.contains("himachal")) return "02";
+    if (s.contains("jammu") || s.contains("kashmir")) return "01";
+    return "06";
+}
+
+QString BahiKhataMigrator::extractPincode(const QString& address, const QString& fallback) {
+    QRegularExpression pinRegex(R"(\b(1\d{5}|[2-8]\d{5})\b)");
+    auto match = pinRegex.match(address);
+    if (match.hasMatch()) {
+        return match.captured(1);
+    }
+    return fallback;
+}
+
 QVariantMap BahiKhataMigrator::inspect_mdb_file(const QString& mdbFilePath) {
     QVariantMap result;
     result["valid"] = false;
@@ -293,17 +451,49 @@ QVariantMap BahiKhataMigrator::inspect_mdb_file(const QString& mdbFilePath) {
     auto compRows = readTableRows(mdb, "CompanyInfo");
     if (!compRows.empty()) {
         const auto& c = compRows.back();
-        result["companyName"] = QString::fromStdString(getField(c, "CompanyName"));
-        result["firmType"] = QString::fromStdString(getField(c, "FirmType"));
-        result["gstin"] = QString::fromStdString(getField(c, "GSTIN"));
-        result["pan"] = QString::fromStdString(getField(c, "PAN_No"));
-        result["station"] = QString::fromStdString(getField(c, "MyStation"));
-        result["state"] = QString::fromStdString(getField(c, "MySTATE"));
-        result["address"] = QString::fromStdString(getField(c, "Address"));
-        result["phone"] = QString::fromStdString(getField(c, "Phone_O"));
-        result["business"] = QString::fromStdString(getField(c, "Business"));
+        QString compName = QString::fromStdString(getField(c, "CompanyName"));
+        QString gstin = QString::fromStdString(getField(c, "GSTIN"));
+        QString pan = QString::fromStdString(getField(c, "PAN_No"));
+        if (pan.isEmpty() && gstin.length() == 15) {
+            pan = gstin.mid(2, 10);
+        }
+        QString rawFirmType = QString::fromStdString(getField(c, "FirmType"));
+        QString firmType = resolveFirmTypeFromPan(rawFirmType, pan, compName);
+        QString address = QString::fromStdString(getField(c, "Address"));
+        QString business = QString::fromStdString(getField(c, "Business"));
+        QString station = QString::fromStdString(getField(c, "MyStation"));
+        QString state = QString::fromStdString(getField(c, "MySTATE"));
+        QString phone = QString::fromStdString(getField(c, "Phone_O"));
+        QString mobile = QString::fromStdString(getField(c, "Phone_F", getField(c, "Mobile1")));
+
+        QString bankName, bankAcc, ifsc;
+        cleanBankingDetails(
+            QString::fromStdString(getField(c, "Mobile2")),
+            QString::fromStdString(getField(c, "Bank2")),
+            QString::fromStdString(getField(c, "Bank3")),
+            bankName, bankAcc, ifsc
+        );
+
+        result["companyName"] = compName;
+        result["firmType"] = firmType;
+        result["gstin"] = gstin;
+        result["pan"] = pan;
+        result["station"] = station.isEmpty() ? "Sirsa" : station;
+        result["state"] = state.isEmpty() ? "Haryana" : state;
+        result["stateCode"] = extractStateCode(gstin, state);
+        result["pincode"] = extractPincode(address);
+        result["address"] = address;
+        result["phone"] = phone;
+        result["mobile"] = mobile;
+        result["business"] = business;
+        result["fssaiNo"] = extractFssai(business, address);
+        result["mlNo"] = QString::fromStdString(getField(c, "ML_No"));
+        result["bankName"] = bankName;
+        result["bankAccount"] = bankAcc;
+        result["ifscCode"] = ifsc;
         result["fyFrom"] = QString::fromStdString(getField(c, "AccYearFrom"));
         result["fyTo"] = QString::fromStdString(getField(c, "AccYearTo"));
+        result["booksFrom"] = QString::fromStdString(getField(c, "BooksBeginingFrom"));
     }
 
     mdb_close(mdb);
@@ -528,33 +718,72 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
     // PASS 0.1: COMPANY INFO (CompanyInfo)
     // =========================================================
     updateProgress(12, "Migrating Company Info...");
+    int booksStartYear = 0;
     if (!compRows.empty()) {
         const auto& c = compRows.back();
+        QString compName = QString::fromStdString(getField(c, "CompanyName"));
+        QString gstin = QString::fromStdString(getField(c, "GSTIN"));
+        QString pan = QString::fromStdString(getField(c, "PAN_No"));
+        if (pan.isEmpty() && gstin.length() == 15) {
+            pan = gstin.mid(2, 10);
+        }
+        QString rawFirmType = QString::fromStdString(getField(c, "FirmType"));
+        QString firmType = resolveFirmTypeFromPan(rawFirmType, pan, compName);
+        QString address = QString::fromStdString(getField(c, "Address"));
+        QString business = QString::fromStdString(getField(c, "Business"));
+        QString station = QString::fromStdString(getField(c, "MyStation"));
+        QString state = QString::fromStdString(getField(c, "MySTATE"));
+        QString stateCode = extractStateCode(gstin, state);
+        QString pincode = extractPincode(address);
+        QString phone = QString::fromStdString(getField(c, "Phone_O"));
+        QString mobile = QString::fromStdString(getField(c, "Phone_F", getField(c, "Mobile1")));
+        QString mlNo = QString::fromStdString(getField(c, "ML_No"));
+        QString fssaiNo = extractFssai(business, address);
+        QString booksFrom = parseDateFormatted(QString::fromStdString(getField(c, "BooksBeginingFrom")));
+        if (booksFrom.isEmpty()) {
+            booksFrom = parseDateFormatted(QString::fromStdString(getField(c, "AccYearFrom")));
+        }
+        if (booksFrom.length() >= 4) {
+            booksStartYear = booksFrom.left(4).toInt();
+        }
+        QString accFrom = parseDateFormatted(QString::fromStdString(getField(c, "AccYearFrom")));
+        QString accTo = parseDateFormatted(QString::fromStdString(getField(c, "AccYearTo")));
+
+        QString bankName, bankAcc, ifsc;
+        cleanBankingDetails(
+            QString::fromStdString(getField(c, "Mobile2")),
+            QString::fromStdString(getField(c, "Bank2")),
+            QString::fromStdString(getField(c, "Bank3")),
+            bankName, bankAcc, ifsc
+        );
+
         db.executeNonQuery(
             "INSERT INTO company_info ("
             "company_name, firm_type, business_type, address, city, state, state_code, pincode, "
             "phone, mobile, email, gstin, pan_no, fssai_no, ml_no, "
             "bank_name, bank_account, ifsc_code, books_from, acc_year_from, acc_year_to, data_file_source"
-            ") VALUES (?, ?, ?, ?, ?, ?, '06', '125055', ?, ?, '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
             {
-                QString::fromStdString(getField(c, "CompanyName")),
-                QString::fromStdString(getField(c, "FirmType")),
-                QString::fromStdString(getField(c, "Business")),
-                QString::fromStdString(getField(c, "Address")),
-                QString::fromStdString(getField(c, "MyStation")),
-                QString::fromStdString(getField(c, "MySTATE")),
-                QString::fromStdString(getField(c, "Phone_O")),
-                QString::fromStdString(getField(c, "Phone_F", getField(c, "Mobile1"))),
-                QString::fromStdString(getField(c, "GSTIN")),
-                QString::fromStdString(getField(c, "PAN_No")),
-                "10822019000152",
-                QString::fromStdString(getField(c, "ML_No")),
-                QString::fromStdString(getField(c, "Mobile2")),
-                QString::fromStdString(getField(c, "Bank2")),
-                QString::fromStdString(getField(c, "Bank3")),
-                QString::fromStdString(getField(c, "BooksBeginingFrom")),
-                parseDateFormatted(QString::fromStdString(getField(c, "AccYearFrom"))),
-                parseDateFormatted(QString::fromStdString(getField(c, "AccYearTo"))),
+                compName,
+                firmType,
+                business,
+                address,
+                station.isEmpty() ? "Sirsa" : station,
+                state.isEmpty() ? "Haryana" : state,
+                stateCode,
+                pincode,
+                phone,
+                mobile,
+                gstin,
+                pan,
+                fssaiNo,
+                mlNo,
+                bankName,
+                bankAcc,
+                ifsc,
+                booksFrom,
+                accFrom,
+                accTo,
                 fi.fileName()
             }
         );
@@ -566,6 +795,7 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
     updateProgress(15, "Migrating Financial Years...");
     std::set<QString> seenFys;
     std::map<QString, int> fyNameToId;
+    int earliestYear = 9999;
     int latestYear = 0;
     QString latestFyName;
 
@@ -578,6 +808,7 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
         if (seenFys.find(fyName) == seenFys.end()) {
             seenFys.insert(fyName);
             int startYear = fromD.left(4).toInt();
+            if (startYear < earliestYear) earliestYear = startYear;
             if (startYear >= latestYear) {
                 latestYear = startYear;
                 latestFyName = fyName;
@@ -601,6 +832,7 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
                 int y = vDate.left(4).toInt();
                 int m = vDate.mid(5, 2).toInt();
                 int sYear = (m >= 4) ? y : y - 1;
+                if (sYear < earliestYear) earliestYear = sYear;
                 QString fromD = QString("%1-04-01").arg(sYear);
                 QString toD = QString("%1-03-31").arg(sYear + 1);
                 db.executeNonQuery(
@@ -617,8 +849,36 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
         }
     }
 
-    if (!latestFyName.isEmpty()) {
-        db.executeNonQuery("UPDATE financial_years SET is_active = 1 WHERE year_name = ?;", {latestFyName});
+    // Ensure all financial years from min(earliestYear, booksStartYear) up to max(latestYear, 2026) exist
+    int startY = 2026;
+    if (booksStartYear > 2000) startY = std::min(startY, booksStartYear);
+    if (earliestYear < 9999 && earliestYear > 2000) startY = std::min(startY, earliestYear);
+    int targetMaxYear = std::max(latestYear, 2026);
+
+    for (int y = startY; y <= targetMaxYear; ++y) {
+        QString fyName = QString("FY %1-%2").arg(y).arg(QString::number(y + 1).right(2));
+        if (seenFys.find(fyName) == seenFys.end()) {
+            seenFys.insert(fyName);
+            QString fromD = QString("%1-04-01").arg(y);
+            QString toD = QString("%1-03-31").arg(y + 1);
+            db.executeNonQuery(
+                "INSERT INTO financial_years (year_name, start_date, end_date, is_active, is_locked) "
+                "VALUES (?, ?, ?, 0, 0);",
+                {fyName, fromD, toD}
+            );
+            fyNameToId[fyName] = static_cast<int>(db.lastInsertedId());
+            if (y >= latestYear) {
+                latestYear = y;
+                latestFyName = fyName;
+            }
+        }
+    }
+
+    // Activate the current operational FY (prefer 2026-27 or latest)
+    QString activeFy = seenFys.count("FY 2026-27") ? "FY 2026-27" : latestFyName;
+    if (!activeFy.isEmpty()) {
+        db.executeNonQuery("UPDATE financial_years SET is_active = 0;");
+        db.executeNonQuery("UPDATE financial_years SET is_active = 1 WHERE year_name = ?;", {activeFy});
     }
 
     // Refresh FY IDs from DB

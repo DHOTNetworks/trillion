@@ -10,6 +10,8 @@
 
 class BankStatementRowsModel : public QAbstractListModel {
     Q_OBJECT
+    Q_PROPERTY(int count READ count NOTIFY rowsChanged)
+    Q_PROPERTY(int totalRows READ totalRows NOTIFY rowsChanged)
 
 public:
     enum Roles {
@@ -40,9 +42,10 @@ public:
     QHash<int, QByteArray> roleNames() const override;
 
     void setRows(const QVector<CanaraBankTransaction> &rows);
-    const QVector<CanaraBankTransaction>& rows() const { return m_rows; }
+    const QVector<CanaraBankTransaction>& rows() const { return m_allRows; }
     void clear();
 
+    Q_INVOKABLE void setFilter(const QString &filterType, const QString &searchQuery);
     Q_INVOKABLE void setRowSelected(int index, bool selected);
     Q_INVOKABLE void setRowDrAccount(int index, const QString &acc);
     Q_INVOKABLE void setRowCrAccount(int index, const QString &acc);
@@ -50,14 +53,20 @@ public:
     Q_INVOKABLE void selectAll(bool selected);
     Q_INVOKABLE void deselectDuplicates();
     Q_INVOKABLE QVariantMap getRow(int index) const;
-    Q_INVOKABLE int count() const { return m_rows.size(); }
+    Q_INVOKABLE int count() const { return m_visibleIndices.size(); }
+    Q_INVOKABLE int totalRows() const { return m_allRows.size(); }
 
 signals:
     void rowsChanged();
     void selectionChanged();
 
 private:
-    QVector<CanaraBankTransaction> m_rows;
+    void applyFilter();
+
+    QVector<CanaraBankTransaction> m_allRows;
+    QVector<int> m_visibleIndices;
+    QString m_filterType = "ALL";
+    QString m_searchQuery;
 };
 
 class BankStatementController : public QObject {

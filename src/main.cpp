@@ -46,6 +46,8 @@
 #include "models/ledger_master_controller.h"
 #include "models/stock_master_controller.h"
 #include "models/bank_statement_controller.h"
+#include "models/transport_dispatch_controller.h"
+#include "models/debit_credit_note_controller.h"
 #include "models/global_key_filter.h"
 #include "engine/bahi_khata_migrator.h"
 
@@ -157,6 +159,8 @@ int main(int argc, char* argv[]) {
     LedgerMasterController ledgerMasterCtrl;
     StockMasterController stockMasterCtrl;
     BankStatementController bankStatementCtrl;
+    TransportDispatchController transportDispatchCtrl;
+    DebitCreditNoteController debitCreditNoteCtrl;
 
     for (int i = 1; i < argc; ++i) {
         if (QString(argv[i]) == "--render-preview") {
@@ -187,6 +191,8 @@ int main(int argc, char* argv[]) {
         salesRegisterCtrl.reload();
         stockRegisterCtrl.reload();
         millingStatementCtrl.reload();
+        transportDispatchCtrl.reload();
+        debitCreditNoteCtrl.reload();
     });
 
     for (int i = 1; i < argc; ++i) {
@@ -286,6 +292,8 @@ int main(int argc, char* argv[]) {
     ctx->setContextProperty("ledgerMasterCtrl", &ledgerMasterCtrl);
     ctx->setContextProperty("stockMasterCtrl", &stockMasterCtrl);
     ctx->setContextProperty("bankStatementCtrl", &bankStatementCtrl);
+    ctx->setContextProperty("transportDispatchCtrl", &transportDispatchCtrl);
+    ctx->setContextProperty("debitCreditNoteCtrl", &debitCreditNoteCtrl);
 
     // Add import paths (Embedded QRC + local file fallbacks)
     engine.addImportPath(":/");

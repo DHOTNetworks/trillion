@@ -22,6 +22,14 @@ public:
     // Inspect tables and record counts in MDB without modifying SQLite
     Q_INVOKABLE QVariantMap inspect_mdb_file(const QString& mdbFilePath);
 
+    // Static helper to resolve legal firm entity type from PAN 4th character and entity name
+    static QString resolveFirmTypeFromPan(const QString& rawType, const QString& pan, const QString& companyName = "");
+    static void cleanBankingDetails(const QString& m2, const QString& b2, const QString& b3,
+                                   QString& outBankName, QString& outAccountNo, QString& outIfsc);
+    static QString extractFssai(const QString& business, const QString& address);
+    static QString extractStateCode(const QString& gstin, const QString& state);
+    static QString extractPincode(const QString& address, const QString& fallback = "125055");
+
     // Full in-process migration of MDB into mahadev_accounting.db
     Q_INVOKABLE bool migrate_mdb_file(const QString& mdbFilePath);
 

@@ -29,7 +29,12 @@
 #include "../src/models/account_groups_model.h"
 #include "../src/models/generic_list_model.h"
 #include "../src/services/canara_bank_statement_parser.h"
+#include "../src/services/bank_statement_excel_parser.h"
 #include "../src/models/bank_statement_controller.h"
+#include "../src/models/transport_dispatch_controller.h"
+#include "../src/models/debit_credit_note_controller.h"
+#include "../src/models/firm_manager.h"
+#include "../src/engine/bahi_khata_migrator.h"
 #include "../src/database_manager.h"
 #include <QQmlEngine>
 #include <QQmlComponent>
@@ -68,8 +73,18 @@ private slots:
     void testGstinValidationAndPanExtraction();
     void testStockItemOpeningValuation();
 
-    // 6. View Compilation Test
+    // 5. Weighbridge & Transport Logistics
+    void testTransportDispatchController();
+
+    // 6. GST Debit & Credit Notes
+    void testDebitCreditNoteController();
+
+    // 7. Firm & Fiscal Years Engine
+    void testFirmTypeResolutionAndDynamicFiscalYears();
+
+    // 8. View Compilation & Statement Parsers
     void testCanaraBankStatementPdfParser();
+    void testNativeXlsBankStatementParser();
     void testBankStatementControllerPosting();
     void testAllQmlViewsInstantiable();
 };
@@ -392,9 +407,12 @@ void LogicBoardTestSuite::testStockItemOpeningValuation() {
 }
 
 void LogicBoardTestSuite::testCanaraBankStatementPdfParser() {
-    QString pdfPath = "322157558_unlocked.pdf";
+    QString pdfPath = "322157558-3_unlocked.pdf";
     if (!QFile::exists(pdfPath)) {
-        QSKIP("Sample PDF 322157558_unlocked.pdf not found in working directory.");
+        if (QFile::exists("../322157558-3_unlocked.pdf")) pdfPath = "../322157558-3_unlocked.pdf";
+        else if (QFile::exists("322157558_unlocked.pdf")) pdfPath = "322157558_unlocked.pdf";
+        else if (QFile::exists("../322157558_unlocked.pdf")) pdfPath = "../322157558_unlocked.pdf";
+        else QSKIP("Sample PDF 322157558-3_unlocked.pdf not found in working directory.");
     }
 
     CanaraBankStatementParser parser;
@@ -404,8 +422,12 @@ void LogicBoardTestSuite::testCanaraBankStatementPdfParser() {
 
     bool ok = parser.parsePdf(pdfPath, header, txns, errMsg);
     QVERIFY2(ok, qPrintable(errMsg));
-    QVERIFY(txns.size() > 500); // Expect ~577 transactions
     QCOMPARE(header.accountNo, QString("128001400717"));
+    QCOMPARE(header.firmName, QString("MAHADEV RICE INDUSTRY"));
+    QCOMPARE(header.ifscCode, QString("CNRB0002058"));
+
+    // Verify 2,839 transactions matching XLS
+    QCOMPARE(txns.size(), 2839);
 
     double sumW = 0.0;
     double sumD = 0.0;
@@ -421,24 +443,70 @@ void LogicBoardTestSuite::testCanaraBankStatementPdfParser() {
         if (t.category == "BANK_CHARGES" || t.category == "INTEREST_DEBIT") charges++;
     }
 
-    // Verify sums match within precision (~25.45 Cr debits, ~24.98 Cr credits)
-    QVERIFY(sumW > 250000000.0);
-    QVERIFY(sumD > 240000000.0);
-    QVERIFY(receipts > 100);
-    QVERIFY(payments > 300);
-    QVERIFY(charges > 150);
+    // Verify sums match
+    QVERIFY(sumW > 100000000.0);
+    QVERIFY(sumD > 100000000.0);
+    QVERIFY(receipts > 300);
+    QVERIFY(payments > 1500);
+    QVERIFY(charges > 500);
+}
+
+void LogicBoardTestSuite::testNativeXlsBankStatementParser() {
+    QString xlsPath = "322157558.XLS";
+    if (!QFile::exists(xlsPath)) {
+        if (QFile::exists("../322157558.XLS")) xlsPath = "../322157558.XLS";
+        else QSKIP("322157558.XLS not found.");
+    }
+
+    BankStatementMetadata meta;
+    QVector<BankStatementTransaction> txns;
+    QString errorMsg;
+
+    bool ok = BankStatementExcelParser::parseFile(xlsPath, meta, txns, errorMsg);
+    QVERIFY2(ok, qPrintable(errorMsg));
+
+    // Verify metadata
+    QCOMPARE(meta.accountNumber, QString("128001400717"));
+    QCOMPARE(meta.ifscCode, QString("CNRB0002058"));
+    QCOMPARE(meta.customerId, QString("322157558"));
+    QCOMPARE(meta.accountName, QString("MAHADEV RICE INDUSTRY"));
+    QCOMPARE(meta.openingBalance, -238810040.90);
+    QCOMPARE(meta.closingBalance, -231544710.12);
+
+    // Verify exactly 2,839 transactions parsed
+    QCOMPARE(txns.size(), 2839);
+
+    // Verify first transaction
+    const auto& t1 = txns.first();
+    QCOMPARE(t1.date, QString("2025-04-01"));
+    QCOMPARE(t1.txnId, QString("20250401000001"));
+    QCOMPARE(t1.withdrawal, 60000.00);
+    QCOMPARE(t1.deposit, 0.00);
+    QCOMPARE(t1.balance, -238870040.90);
+    QVERIFY(t1.remarks.contains("SUSHIL TRADING COMPANY"));
+
+    // Verify controller integration
+    BankStatementController ctrl;
+    bool ctrlOk = ctrl.loadStatement(xlsPath);
+    QVERIFY(ctrlOk);
+    QCOMPARE(ctrl.totalCount(), 2839);
+    QVERIFY(ctrl.totalWithdrawals() > 0.0);
+    QVERIFY(ctrl.totalDeposits() > 0.0);
 }
 
 void LogicBoardTestSuite::testBankStatementControllerPosting() {
-    QString pdfPath = "322157558_unlocked.pdf";
+    QString pdfPath = "322157558-3_unlocked.pdf";
     if (!QFile::exists(pdfPath)) {
-        QSKIP("Sample PDF 322157558_unlocked.pdf not found.");
+        if (QFile::exists("../322157558-3_unlocked.pdf")) pdfPath = "../322157558-3_unlocked.pdf";
+        else if (QFile::exists("322157558_unlocked.pdf")) pdfPath = "322157558_unlocked.pdf";
+        else if (QFile::exists("../322157558_unlocked.pdf")) pdfPath = "../322157558_unlocked.pdf";
+        else QSKIP("Sample PDF 322157558-3_unlocked.pdf not found.");
     }
 
     BankStatementController ctrl;
     bool ok = ctrl.loadStatement(pdfPath);
     QVERIFY(ok);
-    QVERIFY(ctrl.totalCount() > 500);
+    QCOMPARE(ctrl.totalCount(), 2839);
     QVERIFY(!ctrl.bankLedgerName().isEmpty());
 
     // Test alias persistence
@@ -447,6 +515,292 @@ void LogicBoardTestSuite::testBankStatementControllerPosting() {
         "SELECT mapped_party_name FROM bank_narration_aliases WHERE narration_pattern = 'TEST BANK NARRATION ALIAS';"
     );
     QCOMPARE(val.toString(), QString("Anand Agro Foods [Batala]"));
+
+    // Verify party matches in loaded transactions
+    bool foundSingla = false;
+    bool foundBakhtawar = false;
+    bool foundNasa = false;
+    bool foundDeepak = false;
+    for (const auto &r : ctrl.rowsModel()->rows()) {
+        if (r.rawNarration.contains("SINGLA AGRO", Qt::CaseInsensitive)) {
+            if (r.suggestedCrAccount.contains("Singla Agro", Qt::CaseInsensitive) ||
+                r.suggestedDrAccount.contains("Singla Agro", Qt::CaseInsensitive) ||
+                r.extractedParty.contains("Singla Agro", Qt::CaseInsensitive)) {
+                foundSingla = true;
+            }
+        }
+        if (r.rawNarration.contains("BHAKTAWAR", Qt::CaseInsensitive)) {
+            if (r.suggestedCrAccount.contains("Bakhtawar", Qt::CaseInsensitive) ||
+                r.suggestedDrAccount.contains("Bakhtawar", Qt::CaseInsensitive)) {
+                foundBakhtawar = true;
+            }
+        }
+        if (r.rawNarration.contains("NASA AGRO", Qt::CaseInsensitive)) {
+            if (r.suggestedCrAccount.contains("Nasa Agro", Qt::CaseInsensitive) ||
+                r.suggestedDrAccount.contains("Nasa Agro", Qt::CaseInsensitive)) {
+                foundNasa = true;
+            }
+        }
+        if (r.rawNarration.contains("DEEPAK SON OF RAJESH KUMAR", Qt::CaseInsensitive)) {
+            if (r.suggestedCrAccount.contains("Deepak", Qt::CaseInsensitive) ||
+                r.suggestedDrAccount.contains("Deepak", Qt::CaseInsensitive)) {
+                foundDeepak = true;
+            }
+        }
+    }
+    QVERIFY(foundSingla);
+    QVERIFY(foundBakhtawar);
+    QVERIFY(foundNasa);
+    QVERIFY(foundDeepak);
+
+    // Test Account-Number Aware Fallback Matching (e.g. Deepak Singh account 50100034426592)
+    ctrl.saveAlias("IB NEFT DR-HDFC0000191-DEEPAK SINGH-MAHADEV RICE INDUSTRY-NETBANK,MUM-N129253569833772-50100034426592", "Deepak S/o Rajesh Kumar");
+    
+    // Verify party bank_account was updated
+    QVariant dbAcc = DatabaseManager::instance().executeScalar(
+        "SELECT bank_account FROM parties WHERE name = 'Deepak S/o Rajesh Kumar';"
+    );
+    QCOMPARE(dbAcc.toString(), QString("50100034426592"));
+
+    // Reload statement to verify auto-matching on account number
+    ctrl.reloadFromCurrentStatement();
+    int deepakAccMatchedCount = 0;
+    int deepakTotalMatchedCount = 0;
+    for (const auto &r : ctrl.rowsModel()->rows()) {
+        if (r.suggestedCrAccount == "Deepak S/o Rajesh Kumar" || r.suggestedDrAccount == "Deepak S/o Rajesh Kumar") {
+            deepakTotalMatchedCount++;
+            if (r.rawNarration.contains("50100034426592")) {
+                deepakAccMatchedCount++;
+            }
+        }
+    }
+    QVERIFY(deepakAccMatchedCount >= 3);
+    QVERIFY(deepakTotalMatchedCount >= 5);
+}
+
+void LogicBoardTestSuite::testTransportDispatchController() {
+    TransportDispatchController ctrl;
+
+    // 1. Test Net Weight Calculation Engine
+    // Gross: 450.00 Qtl, Tare: 109.40 Qtl, Bags: 680, BagTare: 0 kg
+    double net1 = ctrl.calculateNetWeight(450.0, 109.40, 680, 0.0);
+    QCOMPARE(net1, 340.60);
+
+    // Gross: 450.00 Qtl, Tare: 109.40 Qtl, Bags: 680, BagTare: 0.1 kg/bag (68 kg = 0.68 Qtl)
+    double net2 = ctrl.calculateNetWeight(450.0, 109.40, 680, 0.1);
+    QCOMPARE(net2, 339.92);
+
+    // 2. Test Freight Calculation
+    // Mode "Per Qtl": Rate 60, Net 340.60, Advance 5000
+    QVariantMap f1 = ctrl.calculateFreight("Per Qtl", 60.0, 340.60, 680, 5000.0);
+    QCOMPARE(f1.value("totalFreight").toDouble(), 20436.00);
+    QCOMPARE(f1.value("balanceFreight").toDouble(), 15436.00);
+    QCOMPARE(f1.value("paymentStatus").toString(), QString("Partially Paid"));
+
+    // Mode "Per Bag": Rate 25, Bags 680, Advance 17000
+    QVariantMap f2 = ctrl.calculateFreight("Per Bag", 25.0, 340.60, 680, 17000.0);
+    QCOMPARE(f2.value("totalFreight").toDouble(), 17000.00);
+    QCOMPARE(f2.value("balanceFreight").toDouble(), 0.00);
+    QCOMPARE(f2.value("paymentStatus").toString(), QString("Settled"));
+
+    // Mode "Fixed": Rate 12000, Advance 0
+    QVariantMap f3 = ctrl.calculateFreight("Fixed", 12000.0, 340.60, 680, 0.0);
+    QCOMPARE(f3.value("totalFreight").toDouble(), 12000.00);
+    QCOMPARE(f3.value("balanceFreight").toDouble(), 12000.00);
+    QCOMPARE(f3.value("paymentStatus").toString(), QString("Unpaid"));
+
+    // 3. Test CRUD Persistence
+    QVariantMap record;
+    record["slipNo"] = "TEST-SLIP-001";
+    record["dispatchDate"] = "2026-03-15";
+    record["dispatchTime"] = "14:30";
+    record["vehicleNo"] = "PB03AJ1982";
+    record["partyName"] = "Haryana Rice Traders";
+    record["itemName"] = "Basmati Sella 1121";
+    record["bagCount"] = 680;
+    record["packingKg"] = 50.0;
+    record["grossWeightQtl"] = 450.0;
+    record["tareWeightQtl"] = 109.40;
+    record["bagTareKg"] = 0.0;
+    record["freightCalcType"] = "Per Qtl";
+    record["freightRate"] = 60.0;
+    record["advanceFreight"] = 5000.0;
+    record["transporterName"] = "Royal Transport Co";
+    record["grNo"] = "GR-9988";
+    record["ewayBillNo"] = "123456789012";
+
+    QVariantMap saveRes = ctrl.saveDispatch(record);
+    QVERIFY(saveRes.value("success").toBool());
+    int recId = saveRes.value("id").toInt();
+    QVERIFY(recId > 0);
+
+    // Verify retrieval
+    QVariantMap fetched = ctrl.getDispatch(recId);
+    QCOMPARE(fetched.value("slipNo").toString(), QString("TEST-SLIP-001"));
+    QCOMPARE(fetched.value("vehicleNo").toString(), QString("PB03AJ1982"));
+    QCOMPARE(fetched.value("netWeightQtl").toDouble(), 340.60);
+    QCOMPARE(fetched.value("totalFreight").toDouble(), 20436.00);
+
+    // Test Model Filtering
+    ctrl.reload();
+    QVERIFY(ctrl.model()->count() > 0);
+    ctrl.model()->setFilter("PENDING", "PB03AJ1982");
+    QVERIFY(ctrl.model()->count() >= 1);
+
+    // Clean up
+    bool delOk = ctrl.deleteDispatch(recId);
+    QVERIFY(delOk);
+}
+
+void LogicBoardTestSuite::testDebitCreditNoteController() {
+    DebitCreditNoteController ctrl;
+
+    // 1. Test Tax & Total Calculation Engine
+    QVariantList testItems;
+    QVariantMap item1;
+    item1["itemName"] = "1121 Sella Rice (Quality Rate Cut)";
+    item1["hsnCode"] = "10063020";
+    item1["unit"] = "QTL";
+    item1["bags"] = 680;
+    item1["weightQtl"] = 340.60;
+    item1["rate"] = 50.0; // Rs. 50/Qtl rate cut
+    item1["taxableAmount"] = 17030.00;
+    testItems.append(item1);
+
+    // Intrastate GST @ 5% (CGST 2.5% + SGST 2.5%)
+    QVariantMap calcLocal = ctrl.calculateTotals(testItems, 5.0, false);
+    QCOMPARE(calcLocal.value("taxableAmount").toDouble(), 17030.00);
+    QCOMPARE(calcLocal.value("cgstAmount").toDouble(), 425.75);
+    QCOMPARE(calcLocal.value("sgstAmount").toDouble(), 425.75);
+    QCOMPARE(calcLocal.value("igstAmount").toDouble(), 0.00);
+    QCOMPARE(calcLocal.value("grandTotal").toDouble(), 17882.00);
+    QCOMPARE(calcLocal.value("roundOff").toDouble(), 0.50);
+
+    // Interstate GST @ 5% (IGST 5.0%)
+    QVariantMap calcInter = ctrl.calculateTotals(testItems, 5.0, true);
+    QCOMPARE(calcInter.value("cgstAmount").toDouble(), 0.00);
+    QCOMPARE(calcInter.value("sgstAmount").toDouble(), 0.00);
+    QCOMPARE(calcInter.value("igstAmount").toDouble(), 851.50);
+    QCOMPARE(calcInter.value("totalTaxAmount").toDouble(), 851.50);
+
+    // 2. Test Note Creation, Persistence & Double-Entry Voucher Posting
+    QVariantMap noteData;
+    noteData["noteType"] = "Credit Note";
+    noteData["noteNo"] = "CN-TEST-001";
+    noteData["noteDate"] = "2026-03-15";
+    noteData["noteTime"] = "15:00";
+    noteData["originalInvoiceNo"] = "12640";
+    noteData["originalInvoiceDate"] = "2026-03-10";
+    noteData["originalInvoiceType"] = "Sale";
+    noteData["partyName"] = "Haryana Rice Traders";
+    noteData["partyGstin"] = "06AABCR1234F1Z1";
+    noteData["isInterstate"] = true;
+    noteData["reasonCode"] = "03-Deficiency in Value / Quality Cut";
+    noteData["adjustmentType"] = "Rate Cut / Quality Deduction";
+    noteData["gstPct"] = 5.0;
+    noteData["narration"] = "Quality rate deduction Rs. 50/Qtl approved";
+    noteData["items"] = testItems;
+
+    QVariantMap saveRes = ctrl.saveNote(noteData);
+    QVERIFY(saveRes.value("success").toBool());
+    int noteId = saveRes.value("id").toInt();
+    QVERIFY(noteId > 0);
+
+    // Verify Note retrieval
+    QVariantMap fetched = ctrl.getNote(noteId);
+    QCOMPARE(fetched.value("noteNo").toString(), QString("CN-TEST-001"));
+    QCOMPARE(fetched.value("partyName").toString(), QString("Haryana Rice Traders"));
+    QCOMPARE(fetched.value("taxableAmount").toDouble(), 17030.00);
+    QCOMPARE(fetched.value("igstAmount").toDouble(), 851.50);
+
+    // Verify double-entry vouchers posted into vouchers table
+    QVariant vchCount = DatabaseManager::instance().executeScalar(
+        "SELECT COUNT(*) FROM vouchers WHERE voucher_no = 'CN-TEST-001';"
+    );
+    QVERIFY(vchCount.toInt() >= 2); // Credit Party + Debit Sales Return (+ Debit IGST)
+
+    // Verify Party Credit leg exists
+    QVariant partyCr = DatabaseManager::instance().executeScalar(
+        "SELECT amount FROM vouchers WHERE voucher_no = 'CN-TEST-001' AND party_name = 'Haryana Rice Traders' AND account_type = 'Cr';"
+    );
+    QVERIFY(partyCr.isValid());
+    QCOMPARE(partyCr.toDouble(), fetched.value("grandTotal").toDouble());
+
+    // Test Model Filtering
+    ctrl.reload();
+    QVERIFY(ctrl.model()->count() > 0);
+    ctrl.model()->setFilter("CREDIT_NOTES", "CN-TEST-001");
+    QVERIFY(ctrl.model()->count() >= 1);
+
+    // Clean up
+    bool delOk = ctrl.deleteNote(noteId);
+    QVERIFY(delOk);
+
+    // Verify vouchers cleaned up
+    QVariant vchAfter = DatabaseManager::instance().executeScalar(
+        "SELECT COUNT(*) FROM vouchers WHERE voucher_no = 'CN-TEST-001';"
+    );
+    QCOMPARE(vchAfter.toInt(), 0);
+}
+
+void LogicBoardTestSuite::testFirmTypeResolutionAndDynamicFiscalYears() {
+    // 1. Test PAN 4th Character Resolution
+    QCOMPARE(BahiKhataMigrator::resolveFirmTypeFromPan("Partnership", "ASNPR3139C", "M/S SUSHIL TRADING COMPANY"), QString("Proprietorship Firm"));
+    QCOMPARE(BahiKhataMigrator::resolveFirmTypeFromPan("Unknown", "ABKFM5928Q", "M/S MAHADEV RICE INDUSTRY"), QString("Partnership Firm"));
+    QCOMPARE(BahiKhataMigrator::resolveFirmTypeFromPan("", "06BCUPK4267Q2ZL"), QString("Proprietorship Firm"));
+    QCOMPARE(BahiKhataMigrator::resolveFirmTypeFromPan("", "AAACA1234C"), QString("Private Limited Company"));
+    QCOMPARE(BahiKhataMigrator::resolveFirmTypeFromPan("", "AABTH1234T"), QString("Trust"));
+    QCOMPARE(BahiKhataMigrator::resolveFirmTypeFromPan("", "AAAHH1234H"), QString("Hindu Undivided Family (HUF)"));
+    QCOMPARE(BahiKhataMigrator::resolveFirmTypeFromPan("", "AAAAB1234A"), QString("Association of Persons (AOP/BOI)"));
+
+    // 2. Test Banking String Extraction & Cleaning
+    QString bankName, bankAcc, ifsc;
+    BahiKhataMigrator::cleanBankingDetails(
+        "A/C -923030014007595",
+        "BANK & BRANCH - AXIS BANK, SIRSA (HRY.)",
+        "IFSE.-UTIB0003740",
+        bankName, bankAcc, ifsc
+    );
+    QCOMPARE(bankName, QString("AXIS BANK, SIRSA (HRY.)"));
+    QCOMPARE(bankAcc, QString("923030014007595"));
+    QCOMPARE(ifsc, QString("UTIB0003740"));
+
+    BahiKhataMigrator::cleanBankingDetails(
+        "CANARA BANK",
+        "A/c No:- 128001400717",
+        "IFSC:- CNRB0002058",
+        bankName, bankAcc, ifsc
+    );
+    QCOMPARE(bankName, QString("CANARA BANK"));
+    QCOMPARE(bankAcc, QString("128001400717"));
+    QCOMPARE(ifsc, QString("CNRB0002058"));
+
+    // 3. Test Dynamic Fiscal Years Generation from Books Begin Date
+    FirmManager firmMgr;
+    QVariantMap testFirm;
+    testFirm["company_name"] = "Test Agro Traders";
+    testFirm["gstin"] = "06ASNPR3139C1ZQ";
+    testFirm["pan_no"] = "ASNPR3139C";
+    testFirm["books_from"] = "1.4.24"; // Starts 2024
+    testFirm["address"] = "Shop 12, Mandi, Sirsa 125055";
+
+    bool created = firmMgr.create_new_firm(testFirm);
+    QVERIFY(created);
+
+    QVariantList fys = DatabaseManager::instance().executeQuery("SELECT year_name, start_date, end_date, is_active FROM financial_years ORDER BY start_date;");
+    QVERIFY(fys.size() >= 3); // 2024-25, 2025-26, 2026-27
+    QCOMPARE(fys[0].toMap().value("year_name").toString(), QString("FY 2024-25"));
+    QCOMPARE(fys[1].toMap().value("year_name").toString(), QString("FY 2025-26"));
+    QCOMPARE(fys[2].toMap().value("year_name").toString(), QString("FY 2026-27"));
+
+    QVariantMap compInfo = firmMgr.get_current_firm_info();
+    QCOMPARE(compInfo.value("firm_type").toString(), QString("Proprietorship Firm"));
+    QCOMPARE(compInfo.value("books_from").toString(), QString("2024-04-01"));
+
+    // Switch back to original DB
+    QString originalDb = "data/mahadev_rice_industry_data_004.db";
+    if (QFile::exists("../data/mahadev_rice_industry_data_004.db")) originalDb = "../data/mahadev_rice_industry_data_004.db";
+    DatabaseManager::instance().switchDatabase(originalDb);
 }
 
 extern int qInitResources_MahadevRiceMillERP_raw_qml_0();
@@ -468,6 +822,8 @@ void LogicBoardTestSuite::testAllQmlViewsInstantiable() {
     StockItemsModel stockItemsModel;
     AccountGroupsModel accountGroupsModel;
     BankStatementController bankStatementCtrl;
+    TransportDispatchController transportDispatchCtrl;
+    DebitCreditNoteController debitCreditNoteCtrl;
 
     engine.rootContext()->setContextProperty("partiesModel", &partiesModel);
     engine.rootContext()->setContextProperty("vouchersModel", &vouchersModel);
@@ -480,6 +836,8 @@ void LogicBoardTestSuite::testAllQmlViewsInstantiable() {
     engine.rootContext()->setContextProperty("stockItemsModel", &stockItemsModel);
     engine.rootContext()->setContextProperty("accountGroupsModel", &accountGroupsModel);
     engine.rootContext()->setContextProperty("bankStatementCtrl", &bankStatementCtrl);
+    engine.rootContext()->setContextProperty("transportDispatchCtrl", &transportDispatchCtrl);
+    engine.rootContext()->setContextProperty("debitCreditNoteCtrl", &debitCreditNoteCtrl);
 
     QStringList viewsToTest = {
         "ChequeVoucherView.qml",
@@ -504,7 +862,9 @@ void LogicBoardTestSuite::testAllQmlViewsInstantiable() {
         "MillingStatementView.qml",
         "StockDetailView.qml",
         "ViewLedgerStatementView.qml",
-        "BankStatementImportView.qml"
+        "BankStatementImportView.qml",
+        "TransportDispatchRegisterView.qml",
+        "DebitCreditNoteView.qml"
     };
 
     for (const QString& vName : viewsToTest) {

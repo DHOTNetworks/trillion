@@ -84,6 +84,26 @@ target_compile_definitions(miniz_embedded PRIVATE
     _CRT_NONSTDC_NO_DEPRECATE
 )
 
+# Embedded libxls (Excel 97-2004 BIFF8 Binary Engine) - 100% In-Tree Standalone C
+set(LIBXLS_SOURCES
+    third_party/libxls/src/endian.c
+    third_party/libxls/src/locale.c
+    third_party/libxls/src/ole.c
+    third_party/libxls/src/xls.c
+    third_party/libxls/src/xlstool.c
+)
+add_library(libxls_embedded STATIC ${LIBXLS_SOURCES})
+set_target_properties(libxls_embedded PROPERTIES
+    AUTOMOC OFF
+    AUTORCC OFF
+    AUTOUIC OFF
+)
+target_include_directories(libxls_embedded PUBLIC third_party/libxls/include)
+target_compile_definitions(libxls_embedded PRIVATE
+    _CRT_SECURE_NO_WARNINGS
+    _CRT_NONSTDC_NO_DEPRECATE
+)
+
 # Application Sources
 set(SOURCES
     src/main.cpp
@@ -161,8 +181,14 @@ set(SOURCES
     src/models/global_key_filter.h
     src/services/canara_bank_statement_parser.h
     src/services/canara_bank_statement_parser.cpp
+    src/services/bank_statement_excel_parser.h
+    src/services/bank_statement_excel_parser.cpp
     src/models/bank_statement_controller.h
     src/models/bank_statement_controller.cpp
+    src/models/transport_dispatch_controller.h
+    src/models/transport_dispatch_controller.cpp
+    src/models/debit_credit_note_controller.h
+    src/models/debit_credit_note_controller.cpp
     src/engine/bahi_khata_migrator.h
     src/engine/bahi_khata_migrator.cpp
 )
@@ -210,6 +236,7 @@ qt_add_qml_module(${PROJECT_NAME}
         qml/dialogs/NewFirmModal.qml
         qml/dialogs/PrintCopyOptionsModal.qml
         qml/dialogs/VoucherDateModal.qml
+        qml/dialogs/WeighbridgeKandaModal.qml
         qml/views/ChequeVoucherView.qml
         qml/views/DashboardView.qml
         qml/views/FirmSelecterView.qml
@@ -237,6 +264,8 @@ qt_add_qml_module(${PROJECT_NAME}
         qml/views/VoucherLedgerView.qml
         qml/views/TdsVoucherView.qml
         qml/views/BankStatementImportView.qml
+        qml/views/TransportDispatchRegisterView.qml
+        qml/views/DebitCreditNoteView.qml
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE
@@ -247,6 +276,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     third_party/sqlite
     third_party/libmdb
     third_party/miniz
+    third_party/libxls/include
 )
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE HAS_LIBMDB=1)
@@ -255,6 +285,8 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     sqlite3_embedded
     libmdb_embedded
     miniz_embedded
+    libxls_embedded
+    iconv
     Qt6::Core
     Qt6::Gui
     Qt6::Qml
@@ -355,8 +387,14 @@ set(TEST_SOURCES
     src/services/print_export_controller.cpp
     src/services/canara_bank_statement_parser.h
     src/services/canara_bank_statement_parser.cpp
+    src/services/bank_statement_excel_parser.h
+    src/services/bank_statement_excel_parser.cpp
     src/models/bank_statement_controller.h
     src/models/bank_statement_controller.cpp
+    src/models/transport_dispatch_controller.h
+    src/models/transport_dispatch_controller.cpp
+    src/models/debit_credit_note_controller.h
+    src/models/debit_credit_note_controller.cpp
     src/engine/bahi_khata_migrator.h
     src/engine/bahi_khata_migrator.cpp
     ${CMAKE_CURRENT_BINARY_DIR}/.qt/rcc/qrc_MahadevRiceMillERP_raw_qml_0.cpp
@@ -371,12 +409,15 @@ target_include_directories(LogicBoardTestSuite PRIVATE
     third_party/sqlite
     third_party/libmdb
     third_party/miniz
+    third_party/libxls/include
 )
 target_compile_definitions(LogicBoardTestSuite PRIVATE HAS_LIBMDB=1)
 target_link_libraries(LogicBoardTestSuite PRIVATE
     sqlite3_embedded
     libmdb_embedded
     miniz_embedded
+    libxls_embedded
+    iconv
     Qt6::Core
     Qt6::Gui
     Qt6::Widgets
@@ -386,4 +427,5 @@ target_link_libraries(LogicBoardTestSuite PRIVATE
     Qt6::Test
 )
 add_test(NAME LogicBoardTestSuite COMMAND LogicBoardTestSuite)
+
 

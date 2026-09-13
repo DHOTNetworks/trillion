@@ -37,8 +37,13 @@ data/
 *.md
 *.db
 *.pdf
+*.xls
+*.xlsx
+*.XLS
+*.XLSX
 aqtinstall.log
 debug_log.txt
 generated_cpp/
 Bahi-Khata-Data/
 CMakeFiles/
+scratch/

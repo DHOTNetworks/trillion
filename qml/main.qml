@@ -203,6 +203,8 @@ T.ApplicationWindow {
     Shortcut { sequence: "F11"; context: Qt.ApplicationShortcut; onActivated: window.navigateToView(23) } // J-Form Mandi Procurement Voucher
     Shortcut { sequence: "F12"; context: Qt.ApplicationShortcut; onActivated: window.navigateToView(24) } // TDS Voucher Entry
     Shortcut { sequence: "Ctrl+B"; context: Qt.ApplicationShortcut; onActivated: window.navigateToView(26) } // Bank Statement Auto-Entry
+    Shortcut { sequence: "Alt+T"; context: Qt.ApplicationShortcut; onActivated: window.navigateToView(27) } // Transport & Weighbridge Register
+    Shortcut { sequence: "Alt+D"; context: Qt.ApplicationShortcut; onActivated: window.navigateToView(28) } // GST Debit Notes & Credit Notes
     Shortcut { 
         sequences: ["Ctrl+S", "Ctrl+s", "StandardKey.Save"]
         context: Qt.ApplicationShortcut
@@ -317,6 +319,8 @@ T.ApplicationWindow {
                         case 24: return "views/TdsVoucherView.qml"
                         case 25: return "views/InterestCalculatorView.qml"
                         case 26: return "views/BankStatementImportView.qml"
+                        case 27: return "views/TransportDispatchRegisterView.qml"
+                        case 28: return "views/DebitCreditNoteView.qml"
                         default: return "views/DashboardView.qml"
                     }
                 }
@@ -620,6 +624,10 @@ T.ApplicationWindow {
                 window.navigateToView(24)
             } else if (opt === 3) {
                 window.navigateToView(26)
+            } else if (opt === 4) {
+                window.navigateToView(27)
+            } else if (opt === 5) {
+                window.navigateToView(28)
             }
         }
     }
@@ -649,6 +657,10 @@ T.ApplicationWindow {
                 window.navigateToView(21)
             } else if (act === "Interest Calculator") {
                 window.navigateToView(25)
+            } else if (act === "Transport Register") {
+                window.navigateToView(27)
+            } else if (act === "Debit Credit Notes") {
+                window.navigateToView(28)
             }
         }
     }

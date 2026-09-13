@@ -131,9 +131,24 @@ void FirmManager::loadRegistry() {
                 if (!firm.contains("name") || firm["name"].toString().isEmpty()) {
                     firm["name"] = slug.replace("_", " ").toUpper();
                 }
+                firm["firm_type"] = BahiKhataMigrator::resolveFirmTypeFromPan(
+                    firm.value("firm_type").toString(),
+                    firm.value("pan").toString(),
+                    firm.value("name").toString()
+                );
                 registeredFirms.append(firm);
             }
         }
+    }
+
+    // Refresh firm_type and statutory info for already registered firms
+    for (auto& f : registeredFirms) {
+        QVariantMap m = f.toMap();
+        QString fPan = m.value("pan").toString();
+        QString fName = m.value("name").toString();
+        QString fType = m.value("firm_type").toString();
+        m["firm_type"] = BahiKhataMigrator::resolveFirmTypeFromPan(fType, fPan, fName);
+        f = m;
     }
 
     if (m_activeFirmId.isEmpty() && !registeredFirms.isEmpty()) {
@@ -176,7 +191,7 @@ QString FirmManager::currentFirmName() const {
                 return f.toMap().value("name").toString();
             }
         }
-        return "M/S MAHADEV RICE INDUSTRY";
+        return "Company";
     }
     return name;
 }
@@ -307,13 +322,14 @@ QVariantList FirmManager::scan_folder_for_firms(const QString& folderPath) {
             }
 
             if (!firm.contains("name") || firm["name"].toString().isEmpty()) {
-                if (slug == "mahadev_rice") firm["name"] = "M/S MAHADEV RICE INDUSTRY";
-                else if (slug == "sushil_trading") firm["name"] = "M/S SUSHIL TRADING COMPANY";
-                else if (slug == "haritage_harvestor") firm["name"] = "M/S HARITAGE HARVESTOR AGRO PRODUCTS";
-                else firm["name"] = slug.replace("_", " ").toUpper();
+                firm["name"] = slug.replace("_", " ").toUpper();
             }
             if (!firm.contains("city") || firm["city"].toString().isEmpty()) firm["city"] = "Sirsa";
-            if (!firm.contains("firm_type") || firm["firm_type"].toString().isEmpty()) firm["firm_type"] = "Partnership Firm";
+            firm["firm_type"] = BahiKhataMigrator::resolveFirmTypeFromPan(
+                firm.value("firm_type").toString(),
+                firm.value("pan").toString(),
+                firm.value("name").toString()
+            );
             if (!firm.contains("period") || firm["period"].toString().isEmpty()) firm["period"] = "Active";
 
             results.append(firm);
@@ -513,10 +529,54 @@ bool FirmManager::create_new_firm(const QVariantMap& firmInfo) {
     QString compName = firmInfo.value("company_name").toString().trimmed();
     if (compName.isEmpty()) return false;
 
+    QString gstin = firmInfo.value("gstin").toString().trimmed();
+    QString pan = firmInfo.value("pan_no").toString().trimmed();
+    if (pan.isEmpty() && gstin.length() == 15) {
+        pan = gstin.mid(2, 10);
+    }
+
+    QString rawType = firmInfo.value("firm_type", "Partnership Firm").toString();
+    QString resolvedFirmType = BahiKhataMigrator::resolveFirmTypeFromPan(rawType, pan, compName);
+
     QString slug = sanitizeSlug(compName);
     QString targetDbPath = "data/" + slug + ".db";
 
     DatabaseManager::instance().switchDatabase(targetDbPath);
+
+    // Flexible date parsing for books_from (e.g., "1.4.24", "01/04/2024", "2024-04-01", "1-4-24", "01.04.2024")
+    QString rawBooksFrom = firmInfo.value("books_from").toString().trimmed();
+    if (rawBooksFrom.isEmpty()) rawBooksFrom = "2026-04-01";
+
+    int startYear = 2026;
+    int startMonth = 4;
+    int startDay = 1;
+
+    QRegularExpression dateDmy(R"(^(\d{1,2})[\.\/\-](\d{1,2})[\.\/\-](\d{2,4})$)");
+    QRegularExpression dateYmd(R"(^(\d{4})[\.\/\-](\d{1,2})[\.\/\-](\d{1,2})$)");
+    auto mDmy = dateDmy.match(rawBooksFrom);
+    auto mYmd = dateYmd.match(rawBooksFrom);
+
+    if (mYmd.hasMatch()) {
+        startYear = mYmd.captured(1).toInt();
+        startMonth = mYmd.captured(2).toInt();
+        startDay = mYmd.captured(3).toInt();
+    } else if (mDmy.hasMatch()) {
+        startDay = mDmy.captured(1).toInt();
+        startMonth = mDmy.captured(2).toInt();
+        int y = mDmy.captured(3).toInt();
+        if (y < 100) y += 2000;
+        startYear = y;
+    }
+
+    // Determine the starting FY year
+    int fyStartYear = (startMonth >= 4) ? startYear : (startYear - 1);
+    int currentYear = 2026; // Base active year
+    int targetEndYear = std::max(currentYear, fyStartYear);
+
+    QString formattedBooksFrom = QString("%1-%2-%3")
+        .arg(startYear, 4, 10, QChar('0'))
+        .arg(startMonth, 2, 10, QChar('0'))
+        .arg(startDay, 2, 10, QChar('0'));
 
     // Populate company_info
     DatabaseManager::instance().executeNonQuery("DELETE FROM company_info;");
@@ -528,8 +588,8 @@ bool FirmManager::create_new_firm(const QVariantMap& firmInfo) {
         ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Native');",
         {
             compName,
-            firmInfo.value("firm_type", "Partnership Firm").toString(),
-            firmInfo.value("business_type", "Rice Mill").toString(),
+            resolvedFirmType,
+            firmInfo.value("business_type", "Rice Mill & Grain Processing").toString(),
             firmInfo.value("address").toString(),
             firmInfo.value("city", "Sirsa").toString(),
             firmInfo.value("state", "Haryana").toString(),
@@ -538,29 +598,33 @@ bool FirmManager::create_new_firm(const QVariantMap& firmInfo) {
             firmInfo.value("phone").toString(),
             firmInfo.value("mobile").toString(),
             firmInfo.value("email").toString(),
-            firmInfo.value("gstin").toString(),
-            firmInfo.value("pan_no").toString(),
-            firmInfo.value("fssai_no").toString(),
+            gstin,
+            pan,
+            firmInfo.value("fssai_no", "10822019000152").toString(),
             firmInfo.value("ml_no").toString(),
             firmInfo.value("bank_name").toString(),
             firmInfo.value("bank_account").toString(),
             firmInfo.value("ifsc_code").toString(),
-            firmInfo.value("books_from", "2026-04-01").toString(),
-            firmInfo.value("acc_year_from", "2026-04-01").toString(),
-            firmInfo.value("acc_year_to", "2027-03-31").toString()
+            formattedBooksFrom,
+            QString("%1-04-01").arg(targetEndYear),
+            QString("%1-03-31").arg(targetEndYear + 1)
         }
     );
 
-    // Create default Financial Year
-    QString fyName = firmInfo.value("fy_name", "FY 2026-27").toString();
-    QString fyStart = firmInfo.value("acc_year_from", "2026-04-01").toString();
-    QString fyEnd = firmInfo.value("acc_year_to", "2027-03-31").toString();
+    // Create all Financial Years from fyStartYear to targetEndYear (e.g. 2024 -> FY 2024-25, FY 2025-26, FY 2026-27, FY 2027-28)
+    DatabaseManager::instance().executeNonQuery("DELETE FROM financial_years;");
+    for (int y = fyStartYear; y <= targetEndYear; ++y) {
+        QString fyName = QString("FY %1-%2").arg(y).arg(QString::number(y + 1).right(2));
+        QString fyStart = QString("%1-04-01").arg(y);
+        QString fyEnd = QString("%1-03-31").arg(y + 1);
+        int isActive = (y == targetEndYear) ? 1 : 0;
 
-    DatabaseManager::instance().executeNonQuery(
-        "INSERT OR IGNORE INTO financial_years (year_name, start_date, end_date, is_active, is_locked) "
-        "VALUES (?, ?, ?, 1, 0);",
-        {fyName, fyStart, fyEnd}
-    );
+        DatabaseManager::instance().executeNonQuery(
+            "INSERT INTO financial_years (year_name, start_date, end_date, is_active, is_locked) "
+            "VALUES (?, ?, ?, ?, 0);",
+            {fyName, fyStart, fyEnd, isActive}
+        );
+    }
 
     m_activeFirmId = slug;
 
@@ -570,13 +634,13 @@ bool FirmManager::create_new_firm(const QVariantMap& firmInfo) {
     regItem["db_name"] = slug + ".db";
     regItem["db_path"] = targetDbPath;
     regItem["folder"] = QDir::current().filePath("data");
-    regItem["gstin"] = firmInfo.value("gstin").toString();
-    regItem["pan"] = firmInfo.value("pan_no").toString();
+    regItem["gstin"] = gstin;
+    regItem["pan"] = pan;
     regItem["city"] = firmInfo.value("city", "Sirsa").toString();
     regItem["state"] = firmInfo.value("state", "Haryana").toString();
-    regItem["firm_type"] = firmInfo.value("firm_type", "Partnership Firm").toString();
+    regItem["firm_type"] = resolvedFirmType;
     regItem["is_imported"] = true;
-    regItem["period"] = fyStart + " To " + fyEnd;
+    regItem["period"] = QString("%1-04-01 To %2-03-31").arg(fyStartYear).arg(targetEndYear + 1);
 
     QVariantList firms = get_registered_firms();
     firms.append(regItem);

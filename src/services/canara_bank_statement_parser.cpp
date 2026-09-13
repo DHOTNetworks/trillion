@@ -1,4 +1,5 @@
 #include "canara_bank_statement_parser.h"
+#include "../database_manager.h"
 #include <QFile>
 #include <QFileInfo>
 #include <QRegularExpression>
@@ -61,63 +62,164 @@ QVector<TextRun> extractRunsFromStream(const QString &streamContent) {
 
     double curX = 0.0;
     double curY = 0.0;
+    bool inBT = false;
 
-    static QRegularExpression btBlockRegex("BT(.*?)ET", QRegularExpression::DotMatchesEverythingOption);
-    auto blockIt = btBlockRegex.globalMatch(streamContent);
+    const int len = streamContent.length();
+    int i = 0;
+    QStringList operandTokens;
 
-    while (blockIt.hasNext()) {
-        auto blockMatch = blockIt.next();
-        QString block = blockMatch.captured(1);
+    while (i < len) {
+        const QChar ch = streamContent[i];
 
-        QStringList lines = block.split('\n', Qt::SkipEmptyParts);
-        for (const QString &rawLine : lines) {
-            QString line = rawLine.trimmed();
-            if (line.isEmpty()) continue;
+        if (ch.isSpace()) {
+            i++;
+            continue;
+        }
 
-            if (line.endsWith("Tm")) {
-                QStringList parts = line.split(' ', Qt::SkipEmptyParts);
-                if (parts.size() >= 6) {
-                    curX = parts[parts.size() - 3].toDouble();
-                    curY = parts[parts.size() - 2].toDouble();
+        if (ch == '%') {
+            while (i < len && streamContent[i] != '\r' && streamContent[i] != '\n') {
+                i++;
+            }
+            continue;
+        }
+
+        if (ch == '(') {
+            int start = i + 1;
+            i++;
+            int depth = 1;
+            while (i < len && depth > 0) {
+                if (streamContent[i] == '\\') {
+                    i += 2;
+                    continue;
                 }
-            } else if (line.endsWith("Td") || line.endsWith("TD")) {
-                QStringList parts = line.split(' ', Qt::SkipEmptyParts);
-                if (parts.size() >= 3) {
-                    curX += parts[parts.size() - 3].toDouble();
-                    curY += parts[parts.size() - 2].toDouble();
+                if (streamContent[i] == '(') depth++;
+                else if (streamContent[i] == ')') depth--;
+                i++;
+            }
+            int strEnd = (depth == 0) ? (i - 1) : i;
+            QString strVal = streamContent.mid(start, strEnd - start);
+            strVal.replace("\\(", "(").replace("\\)", ")").replace("\\\\", "\\").replace("\\r", "\r").replace("\\n", "\n");
+
+            // Lookahead for Tj operator
+            int p = i;
+            while (p < len && streamContent[p].isSpace()) p++;
+            if (p + 1 < len && streamContent[p] == 'T' && streamContent[p + 1] == 'j' &&
+                (p + 2 >= len || streamContent[p + 2].isSpace() || streamContent[p + 2] == '(' || streamContent[p + 2] == '[' || streamContent[p + 2] == '/')) {
+                if (inBT && !strVal.trimmed().isEmpty()) {
+                    runs.append({curX, curY, strVal.trimmed()});
                 }
+                i = p + 2;
+                operandTokens.clear();
+                continue;
+            } else if (p < len && streamContent[p] == '\'' && (p + 1 >= len || streamContent[p + 1].isSpace())) {
+                if (inBT && !strVal.trimmed().isEmpty()) {
+                    runs.append({curX, curY, strVal.trimmed()});
+                }
+                i = p + 1;
+                operandTokens.clear();
+                continue;
             }
 
-            if (line.endsWith("Tj")) {
-                int firstParen = line.indexOf('(');
-                int lastParen = line.lastIndexOf(')');
-                if (firstParen >= 0 && lastParen > firstParen) {
-                    QString str = line.mid(firstParen + 1, lastParen - firstParen - 1);
-                    str.replace("\\(", "(").replace("\\)", ")").replace("\\\\", "\\");
-                    if (!str.trimmed().isEmpty()) {
-                        runs.append({curX, curY, str.trimmed()});
+            operandTokens.append(strVal);
+            continue;
+        }
+
+        if (ch == '[') {
+            int start = i + 1;
+            i++;
+            QString combined;
+            while (i < len && streamContent[i] != ']') {
+                if (streamContent[i] == '(') {
+                    int sStart = i + 1;
+                    i++;
+                    int depth = 1;
+                    while (i < len && depth > 0) {
+                        if (streamContent[i] == '\\') {
+                            i += 2;
+                            continue;
+                        }
+                        if (streamContent[i] == '(') depth++;
+                        else if (streamContent[i] == ')') depth--;
+                        i++;
+                    }
+                    int sEnd = (depth == 0) ? i - 1 : i;
+                    QString sub = streamContent.mid(sStart, sEnd - sStart);
+                    sub.replace("\\(", "(").replace("\\)", ")").replace("\\\\", "\\");
+                    combined += sub;
+                } else {
+                    i++;
+                }
+            }
+            if (i < len && streamContent[i] == ']') i++;
+
+            // Lookahead for TJ operator
+            int p = i;
+            while (p < len && streamContent[p].isSpace()) p++;
+            if (p + 1 < len && streamContent[p] == 'T' && streamContent[p + 1] == 'J' &&
+                (p + 2 >= len || streamContent[p + 2].isSpace() || streamContent[p + 2] == '(' || streamContent[p + 2] == '[' || streamContent[p + 2] == '/')) {
+                if (inBT && !combined.trimmed().isEmpty()) {
+                    runs.append({curX, curY, combined.trimmed()});
+                }
+                i = p + 2;
+                operandTokens.clear();
+                continue;
+            }
+
+            operandTokens.append(combined);
+            continue;
+        }
+
+        // Regular word / operator token
+        int start = i;
+        while (i < len && !streamContent[i].isSpace() && streamContent[i] != '(' && streamContent[i] != '[' && streamContent[i] != '%' && streamContent[i] != '<' && streamContent[i] != '>') {
+            i++;
+        }
+        if (i == start) {
+            i++;
+            continue;
+        }
+
+        QString token = streamContent.mid(start, i - start);
+
+        if (token == "BT") {
+            inBT = true;
+            operandTokens.clear();
+        } else if (token == "ET") {
+            inBT = false;
+            operandTokens.clear();
+        } else if (inBT) {
+            if (token == "Tm") {
+                if (operandTokens.size() >= 6) {
+                    curX = operandTokens[operandTokens.size() - 2].toDouble();
+                    curY = operandTokens[operandTokens.size() - 1].toDouble();
+                }
+                operandTokens.clear();
+            } else if (token == "Td" || token == "TD") {
+                if (operandTokens.size() >= 2) {
+                    curX += operandTokens[operandTokens.size() - 2].toDouble();
+                    curY += operandTokens[operandTokens.size() - 1].toDouble();
+                }
+                operandTokens.clear();
+            } else if (token == "Tj") {
+                if (!operandTokens.isEmpty()) {
+                    QString text = operandTokens.takeLast().trimmed();
+                    if (!text.isEmpty()) {
+                        runs.append({curX, curY, text});
                     }
                 }
-            } else if (line.endsWith("TJ")) {
-                int firstBracket = line.indexOf('[');
-                int lastBracket = line.lastIndexOf(']');
-                if (firstBracket >= 0 && lastBracket > firstBracket) {
-                    QString inner = line.mid(firstBracket + 1, lastBracket - firstBracket - 1);
-                    QString combined;
-                    int p = 0;
-                    while (p < inner.length()) {
-                        int o = inner.indexOf('(', p);
-                        if (o < 0) break;
-                        int c = inner.indexOf(')', o);
-                        if (c < 0) break;
-                        QString sub = inner.mid(o + 1, c - o - 1);
-                        sub.replace("\\(", "(").replace("\\)", ")").replace("\\\\", "\\");
-                        combined += sub;
-                        p = c + 1;
+                operandTokens.clear();
+            } else if (token == "TJ") {
+                if (!operandTokens.isEmpty()) {
+                    QString text = operandTokens.takeLast().trimmed();
+                    if (!text.isEmpty()) {
+                        runs.append({curX, curY, text});
                     }
-                    if (!combined.trimmed().isEmpty()) {
-                        runs.append({curX, curY, combined.trimmed()});
-                    }
+                }
+                operandTokens.clear();
+            } else {
+                operandTokens.append(token);
+                if (operandTokens.size() > 8) {
+                    operandTokens.removeFirst();
                 }
             }
         }
@@ -201,6 +303,23 @@ QVector<QString> CanaraBankStatementParser::extractPdfTextLines(const QByteArray
     return allLines;
 }
 
+static QString cleanCandidateName(const QString &raw) {
+    if (raw.trimmed().isEmpty()) return QString();
+    QString c = raw.trimmed();
+
+    // 1. Strip entity/honorific prefixes with word boundaries
+    static QRegularExpression prefixRegex(R"(^(?:M/S\.?|MS\.?|SHRI\b|SH\.|SH\b|SMT\.|SMT\b|MR\.|MR\b|MRS\.|MRS\b|C/O)\s*)", QRegularExpression::CaseInsensitiveOption);
+    c.remove(prefixRegex);
+    c = c.trimmed();
+
+    // 2. Strip trailing routing flags (e.g. --/FAST, //URGENT, /NONE, -//BT)
+    static QRegularExpression trailingFlagsRegex(R"(\s*[-/\\].*$)");
+    c.remove(trailingFlagsRegex);
+    c = c.trimmed();
+
+    return c;
+}
+
 void CanaraBankStatementParser::classifyAndExtractParty(CanaraBankTransaction &txn) {
     QString narr = txn.rawNarration.trimmed();
     txn.cleanNarration = narr;
@@ -221,10 +340,14 @@ void CanaraBankStatementParser::classifyAndExtractParty(CanaraBankTransaction &t
         txn.voucherType = "Cheque Payment";
     }
 
-    // 1. Bank Service Charges
-    if (u.contains(" SC") || u.contains("SERVICE CHARGE") || u.contains("MORTGAGE CHARGES") || 
-        u.contains("EXPERIAN") || u.contains("CRIF HIGH MARK") || u.contains("SMS ALERT") ||
-        u.contains("DD/TT ISS") || u.contains("COMMERCIAL WITH SCORE") || u.contains("RTGS 00.00 TO")) {
+    // 1. Bank Service Charges, Fees & Audit Fees
+    if (u.startsWith("SC ") || u.contains(" SC") || u.contains("SERVICE CHARGE") || u.contains("MORTGAGE CHARGES") || 
+        u.contains("TRANSACTION CHARGES") || u.contains("SMS CHARGES") || u.contains("SMS ALERT") ||
+        u.contains("FOLIO AMT") || u.contains("PENALTY CHARGES") || u.contains("PENALTY") ||
+        u.contains("DOC CHGS") || u.contains("PROC CHGS") || u.contains("PASSHEETCHARGES") || u.contains("PASSHEET") ||
+        u.contains("EXPERIAN") || u.contains("CRIF HIGH MARK") || u.contains("DD/TT ISS") || 
+        u.contains("COMMERCIAL WITH SCORE") || u.contains("RTGS 00.00 TO") || u.contains("RTN SC") || 
+        u.contains("CHQ RETURN") || u.contains("AUDIT FEE") || u.contains("STOCK AUDIT")) {
         txn.category = "BANK_CHARGES";
         txn.extractedParty = "Bank Charges";
         txn.suggestedDrAccount = "Bank Charges";
@@ -232,8 +355,9 @@ void CanaraBankStatementParser::classifyAndExtractParty(CanaraBankTransaction &t
         return;
     }
 
-    // 2. Bank Interest / CC Interest
-    if (u.contains("QOS PERIOD") || u.contains("INTEREST DEBIT") || u.contains("CC INT") || u.contains("OD INT")) {
+    // 2. Bank Interest / CC Interest / OD Interest / Interest Capitalized
+    if (u.contains("QOS PERIOD") || u.contains("INTEREST DEBIT") || u.contains("CC INT") || 
+        u.contains("OD INT") || u.contains("CASA DEBIT INTEREST") || u.contains("INTEREST CAPITALIZED")) {
         txn.category = "INTEREST_DEBIT";
         txn.extractedParty = "Interest Bank A/c";
         txn.suggestedDrAccount = "Interest Bank A/c";
@@ -241,66 +365,141 @@ void CanaraBankStatementParser::classifyAndExtractParty(CanaraBankTransaction &t
         return;
     }
 
-    // 3. Cheque Return Charges
-    if (u.contains("RTN SC") || u.contains("CHQ RETURN") || u.contains("INSUFFICIENT")) {
-        txn.category = "CHEQUE_RETURN_CHARGES";
-        txn.extractedParty = "Bank Charges";
-        txn.suggestedDrAccount = "Bank Charges";
+    // 3. Internal Account Transfers / Loan Drawdowns / Term Deposits
+    if (u.contains("DRAWDOWN FROM CASA") || u.contains("TD PAYIN") || u.contains("CASAXFER")) {
+        txn.category = "INTERNAL_TRANSFER";
+        txn.extractedParty = "Internal Transfer";
         txn.confidence = "HIGH";
         return;
     }
 
-    // 4. Cheque Clearing
-    if (u.contains("CHQ PAID") || u.contains("MICR INWARD") || u.contains("CLEARING")) {
-        txn.category = "CHEQUE_CLEARING";
-        txn.confidence = "MEDIUM";
-        int dashIdx = narr.lastIndexOf('-');
-        if (dashIdx > 0 && dashIdx < narr.length() - 2) {
-            txn.extractedParty = narr.mid(dashIdx + 1).trimmed().remove('.');
+    // 4. IB IFT / IB ITG (Internal Bank / Partner Funds Transfer)
+    if (u.contains("IB IFT") || u.contains("IB ITG")) {
+        static QRegularExpression iftRegex(R"(IB IFT\s+\d+\s+\d+\s+([A-Za-z0-9 &.,]+?)(?:\s+ONLINE TRANSACTION|\s+OTH|\s+BILL|\s+PF|\s+TRF|$))", QRegularExpression::CaseInsensitiveOption);
+        auto m = iftRegex.match(narr);
+        if (m.hasMatch()) {
+            txn.extractedParty = cleanCandidateName(m.captured(1));
+            txn.category = "SUPPLIER_PAYMENT";
+            txn.confidence = txn.extractedParty.isEmpty() ? "UNMATCHED" : "HIGH";
+            return;
         }
-        return;
+        static QRegularExpression itgRegex(R"(IB ITG\s+\d+\s+ONLINE TRANSACTION\s+([A-Za-z0-9 &.,\-]+))", QRegularExpression::CaseInsensitiveOption);
+        auto m2 = itgRegex.match(narr);
+        if (m2.hasMatch()) {
+            txn.extractedParty = cleanCandidateName(m2.captured(1));
+            txn.category = "SUPPLIER_PAYMENT";
+            txn.confidence = txn.extractedParty.isEmpty() ? "UNMATCHED" : "HIGH";
+            return;
+        }
     }
 
-    // 5. Internal / Partner Funds Transfer
+    // 5. NACH Mandates (e.g. NACH LTFINANCELIMITED...)
+    if (u.contains("NACH")) {
+        static QRegularExpression nachRegex(R"(NACH\s+([A-Za-z0-9 &.,]+?)(?:\s+[A-Z0-9]{10,}|\s+\d{10,}|$))", QRegularExpression::CaseInsensitiveOption);
+        auto m = nachRegex.match(narr);
+        if (m.hasMatch()) {
+            QString cand = cleanCandidateName(m.captured(1));
+            if (cand.contains("LTFINANCE", Qt::CaseInsensitive) || cand.contains("L AND T", Qt::CaseInsensitive) || cand.contains("L & T", Qt::CaseInsensitive)) {
+                cand = "L & T Finance Ltd.";
+            }
+            txn.extractedParty = cand;
+            txn.category = "SUPPLIER_PAYMENT";
+            txn.confidence = txn.extractedParty.isEmpty() ? "UNMATCHED" : "HIGH";
+            return;
+        }
+    }
+
+    // 6. Partner / Inter-Account Funds Transfer
     if (u.contains("FUNDS TRANSFER")) {
         txn.category = "INTERNAL_TRANSFER";
-        static QRegularExpression ftRegex("FUNDS TRANSFER (?:DEBIT|CREDIT)\\s*-\\s*([^/\\-]+)");
+        static QRegularExpression ftRegex("FUNDS TRANSFER (?:DEBIT|CREDIT)\\s*(?:\\d+)?\\s*-\\s*([^/\\-]+)");
         auto ftM = ftRegex.match(narr);
         if (ftM.hasMatch()) {
-            txn.extractedParty = ftM.captured(1).trimmed();
+            txn.extractedParty = cleanCandidateName(ftM.captured(1));
         }
         // Normalize known aliases
         if (txn.extractedParty.contains("HARITAGE", Qt::CaseInsensitive)) {
             txn.extractedParty = "Haritage Harvestor Agro Products";
         }
-        txn.confidence = "MEDIUM";
+        txn.confidence = txn.extractedParty.isEmpty() ? "UNMATCHED" : "HIGH";
         return;
     }
 
-    // 6. RTGS / NEFT / IMPS Customer Receipts
-    if (u.contains("RTGS CR") || u.contains("NEFT CR") || u.contains("IMPS-CR") || u.contains("INET-IMPS-CR") || u.contains("CR-")) {
+    // 5. Cheque Clearing (BY CLG / TO CLG / MICR)
+    if (u.contains("CLG:") || u.contains("CLEARING") || u.contains("MICR INWARD") || u.contains("CHQ PAID") || u.contains("CHEQUE WITHDRAWAL")) {
+        txn.category = "CHEQUE_CLEARING";
+        txn.confidence = "MEDIUM";
+        if (narr.contains(',')) {
+            txn.extractedParty = cleanCandidateName(narr.section(',', -1));
+        } else if (narr.contains('-')) {
+            txn.extractedParty = cleanCandidateName(narr.section('-', -1));
+        }
+        return;
+    }
+
+    // 6. UPI Receipts / Payments
+    if (u.contains("UPI/")) {
+        QStringList upiParts = narr.split('/', Qt::SkipEmptyParts);
+        if (upiParts.size() >= 4) {
+            txn.extractedParty = cleanCandidateName(upiParts[3]);
+        }
+        txn.category = (txn.deposit > 0.001) ? "CUSTOMER_RECEIPT" : "SUPPLIER_PAYMENT";
+        txn.confidence = txn.extractedParty.isEmpty() ? "UNMATCHED" : "HIGH";
+        return;
+    }
+
+    // 7. INET-IMPS Customer / Supplier Transfers
+    if (u.contains("INET-IMPS-CR") || u.contains("INET-IMPS-DR")) {
+        static QRegularExpression inetRegex("INET-IMPS-(?:CR|DR)/([^/]+)/");
+        auto im = inetRegex.match(narr);
+        if (im.hasMatch()) {
+            QString cand = im.captured(1).trimmed();
+            if (cand.startsWith("SUSHIL TRA", Qt::CaseInsensitive)) cand = "Sushil Trading Company";
+            else if (cand.startsWith("RAMAYANA I", Qt::CaseInsensitive)) cand = "Ramayana Industries";
+            txn.extractedParty = cleanCandidateName(cand);
+        }
+        txn.category = (txn.deposit > 0.001) ? "CUSTOMER_RECEIPT" : "SUPPLIER_PAYMENT";
+        txn.confidence = txn.extractedParty.isEmpty() ? "UNMATCHED" : "HIGH";
+        return;
+    }
+
+    // 8. RTGS / NEFT / IMPS Customer Receipts
+    if (u.contains("RTGS CR") || u.contains("NEFT CR") || u.contains("IMPS-CR") || u.contains("CR-")) {
         txn.category = "CUSTOMER_RECEIPT";
         txn.voucherType = "Cheque Receipt";
 
         // Try extracting party name from: RTGS CR-UTR-IFSC-PARTY NAME--/FAST/FAST
         QStringList parts = narr.split('-', Qt::SkipEmptyParts);
         QString candidate;
+        static QRegularExpression ifscRegex("^[A-Z]{4}[0-9A-Z]{7}$");
+
         if (parts.size() >= 4) {
-            candidate = parts[3].trimmed();
+            if (ifscRegex.match(parts[1].trimmed()).hasMatch()) {
+                candidate = parts[2].trimmed();
+            } else if (ifscRegex.match(parts[2].trimmed()).hasMatch()) {
+                candidate = parts[3].trimmed();
+            } else {
+                candidate = parts[3].trimmed();
+            }
         } else if (parts.size() == 3) {
-            candidate = parts[2].trimmed();
+            if (ifscRegex.match(parts[1].trimmed()).hasMatch()) {
+                candidate = parts[2].trimmed();
+            } else {
+                candidate = parts[2].trimmed();
+            }
         } else if (u.contains("IMPS")) {
             static QRegularExpression impsRegex("IMPS-CR/[^/]+/([^/]+)");
             auto m = impsRegex.match(narr);
             if (m.hasMatch()) candidate = m.captured(1).trimmed();
         }
 
-        // Clean candidate name
-        candidate.remove(QRegularExpression("[/\\\\].*"));
-        candidate = candidate.trimmed();
+        candidate = cleanCandidateName(candidate);
 
         // Check common aliases
-        if (candidate.contains("L AND FINEEINC", Qt::CaseInsensitive) || candidate.contains("L & T", Qt::CaseInsensitive)) {
+        if (candidate.contains("L AND FINEEINC", Qt::CaseInsensitive) || 
+            candidate.contains("L & T", Qt::CaseInsensitive) || 
+            candidate.contains("L AND T", Qt::CaseInsensitive) || 
+            candidate.contains("L ANT T", Qt::CaseInsensitive)) {
             candidate = "L & T Finance Ltd.";
         } else if (candidate.contains("HARITAGE", Qt::CaseInsensitive)) {
             candidate = "Haritage Harvestor Agro Products";
@@ -311,29 +510,42 @@ void CanaraBankStatementParser::classifyAndExtractParty(CanaraBankTransaction &t
         return;
     }
 
-    // 7. RTGS / NEFT / IMPS Supplier / Vendor Payments
+    // 9. RTGS / NEFT / IMPS Supplier / Vendor Payments
     if (u.contains("RTGS DR") || u.contains("NEFT DR") || u.contains("IMPS-DR") || u.contains("IB-IMPS-DR") || u.contains("DR-")) {
         txn.category = "SUPPLIER_PAYMENT";
         txn.voucherType = "Cheque Payment";
 
         QStringList parts = narr.split('-', Qt::SkipEmptyParts);
         QString candidate;
+        static QRegularExpression ifscRegex("^[A-Z]{4}[0-9A-Z]{7}$");
+
         if (parts.size() >= 4) {
-            candidate = parts[3].trimmed();
+            if (ifscRegex.match(parts[1].trimmed()).hasMatch()) {
+                candidate = parts[2].trimmed();
+            } else if (ifscRegex.match(parts[2].trimmed()).hasMatch()) {
+                candidate = parts[3].trimmed();
+            } else {
+                candidate = parts[3].trimmed();
+            }
         } else if (parts.size() == 3) {
-            candidate = parts[2].trimmed();
+            if (ifscRegex.match(parts[1].trimmed()).hasMatch()) {
+                candidate = parts[2].trimmed();
+            } else {
+                candidate = parts[2].trimmed();
+            }
         } else if (u.contains("IB NEFT DR") || u.contains("NEFT DR")) {
-            static QRegularExpression ibRegex("(?:IB )?NEFT DR\\s+[A-Z0-9]+\\s+([A-Za-z0-9 &.,]+?)(?:\\s+[A-Z]{4}\\d{7}|\\s+\\d{10,}|$)");
+            static QRegularExpression ibRegex("(?:IB )?NEFT DR\\s+[A-Z0-9]+\\s+([A-Za-z0-9 &.,]+?)(?:\\s+[A-Z]{4}[0-9A-Z]{7}|\\s+\\d{10,}|$)", QRegularExpression::CaseInsensitiveOption);
             auto m = ibRegex.match(narr);
             if (m.hasMatch()) candidate = m.captured(1).trimmed();
         }
 
-        // Clean candidate name
-        candidate.remove(QRegularExpression("[/\\\\].*"));
-        candidate = candidate.trimmed();
+        candidate = cleanCandidateName(candidate);
 
         // Check common aliases
-        if (candidate.contains("L AND FINEEINC", Qt::CaseInsensitive) || candidate.contains("L & T", Qt::CaseInsensitive)) {
+        if (candidate.contains("L AND FINEEINC", Qt::CaseInsensitive) || 
+            candidate.contains("L & T", Qt::CaseInsensitive) || 
+            candidate.contains("L AND T", Qt::CaseInsensitive) || 
+            candidate.contains("L ANT T", Qt::CaseInsensitive)) {
             candidate = "L & T Finance Ltd.";
         } else if (candidate.contains("HARITAGE", Qt::CaseInsensitive)) {
             candidate = "Haritage Harvestor Agro Products";
@@ -376,7 +588,12 @@ bool CanaraBankStatementParser::parsePdfData(const QByteArray &pdfData,
     }
 
     static QRegularExpression datePattern("^\\d{2}-\\d{2}-\\d{4}$");
+    static QRegularExpression partialDatePattern("^\\d{2}-\\d{2}-$");
+    static QRegularExpression yearPattern("^\\d{4}$");
+
     int globalIndex = 1;
+    QString pendingDatePrefix;
+    QString pendingBalSuffix;
 
     // Search for all streams
     int pos = 0;
@@ -416,9 +633,6 @@ bool CanaraBankStatementParser::parsePdfData(const QByteArray &pdfData,
                         header.toDate = dm.captured(2);
                     }
                 }
-                if (r.text.contains("MAHADEV RICE INDUSTRY", Qt::CaseInsensitive)) {
-                    header.firmName = "MAHADEV RICE INDUSTRY";
-                }
                 if (r.text.contains("CNRB", Qt::CaseInsensitive) && header.ifscCode.isEmpty()) {
                     static QRegularExpression ifscRegex("(CNRB\\d{7})");
                     auto im = ifscRegex.match(r.text);
@@ -433,6 +647,23 @@ bool CanaraBankStatementParser::parsePdfData(const QByteArray &pdfData,
                 }
                 return a.x < b.x;
             });
+
+            // Find year context on this page or from header
+            QString pageYear = "2025";
+            for (const auto &r : runs) {
+                auto m = datePattern.match(r.text);
+                if (m.hasMatch()) {
+                    pageYear = r.text.right(4);
+                    break;
+                }
+            }
+
+            // If a run has partial date like "29-12-", complete it
+            for (auto &r : runs) {
+                if (r.x < 60.0 && partialDatePattern.match(r.text).hasMatch()) {
+                    r.text = r.text + pageYear;
+                }
+            }
 
             // Find all date runs (X < 60 and DD-MM-YYYY)
             QVector<TextRun> dateRuns;
@@ -508,6 +739,20 @@ bool CanaraBankStatementParser::parsePdfData(const QByteArray &pdfData,
                     }
                 }
 
+                // Reversals / Negative Amount Normalization
+                if (withdrawal < 0.0) {
+                    deposit = std::abs(withdrawal);
+                    withdrawal = 0.0;
+                }
+                if (deposit < 0.0) {
+                    deposit = std::abs(deposit);
+                }
+
+                // Ignore zero-amount transactions
+                if (std::abs(withdrawal) < 0.005 && std::abs(deposit) < 0.005) {
+                    continue;
+                }
+
                 CanaraBankTransaction txn;
                 txn.index = globalIndex++;
                 txn.dateStr = dateRuns[i].text;
@@ -535,6 +780,15 @@ bool CanaraBankStatementParser::parsePdfData(const QByteArray &pdfData,
     if (transactions.isEmpty()) {
         errorMessage = "No transaction records could be extracted from the PDF statement.";
         return false;
+    }
+
+    if (header.firmName.isEmpty()) {
+        QVariant dbFirm = DatabaseManager::instance().executeScalar("SELECT company_name FROM company_info LIMIT 1;");
+        if (dbFirm.isValid() && !dbFirm.toString().trimmed().isEmpty()) {
+            QString name = dbFirm.toString().trimmed();
+            name.remove(QRegularExpression(R"(^(?:M/S\.?|MS\.?)\s*)", QRegularExpression::CaseInsensitiveOption));
+            header.firmName = name.trimmed();
+        }
     }
 
     return true;
