@@ -289,7 +289,6 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     libmdb_embedded
     miniz_embedded
     libxls_embedded
-    iconv
     Qt6::Core
     Qt6::Gui
     Qt6::Qml
@@ -299,6 +298,10 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::Widgets
     Qt6::PrintSupport
 )
+
+if(APPLE)
+    target_link_libraries(${PROJECT_NAME} PRIVATE iconv)
+endif()
 
 # Set Target Properties for macOS and Windows
 set_target_properties(${PROJECT_NAME} PROPERTIES
@@ -420,7 +423,6 @@ target_link_libraries(LogicBoardTestSuite PRIVATE
     libmdb_embedded
     miniz_embedded
     libxls_embedded
-    iconv
     Qt6::Core
     Qt6::Gui
     Qt6::Widgets
@@ -429,6 +431,10 @@ target_link_libraries(LogicBoardTestSuite PRIVATE
     Qt6::Quick
     Qt6::Test
 )
+
+if(APPLE)
+    target_link_libraries(LogicBoardTestSuite PRIVATE iconv)
+endif()
 add_test(NAME LogicBoardTestSuite COMMAND LogicBoardTestSuite)
 
 
