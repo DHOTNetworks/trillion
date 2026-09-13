@@ -187,30 +187,40 @@ static std::string getField(const std::map<std::string, std::string>& m, const s
 
 static std::vector<std::map<std::string, std::string>> readTableRows(MdbHandle* mdb, const char* tableName) {
     std::vector<std::map<std::string, std::string>> result;
+    if (!mdb || !tableName) return result;
+
     MdbTableDef* table = mdb_read_table_by_name(mdb, const_cast<char*>(tableName), MDB_TABLE);
     if (!table) return result;
 
     mdb_read_columns(table);
-    unsigned int numCols = table->num_cols;
-    if (numCols == 0) {
+    if (!table->columns || table->num_cols == 0) {
         mdb_free_tabledef(table);
         return result;
     }
 
+    unsigned int numCols = table->num_cols;
     std::vector<std::string> colNames(numCols);
-    std::vector<std::vector<char>> colBuffers(numCols, std::vector<char>(4096, 0));
+    // Buffer size must be >= MDB_BIND_SIZE (16384) to prevent snprintf/strcpy heap buffer overflows
+    const size_t bufSize = MDB_BIND_SIZE + 512;
+    std::vector<std::vector<char>> colBuffers(numCols, std::vector<char>(bufSize, 0));
 
     for (unsigned int j = 0; j < numCols; j++) {
         MdbColumn* col = static_cast<MdbColumn*>(g_ptr_array_index(table->columns, j));
-        colNames[j] = col->name;
-        mdb_bind_column(table, j + 1, colBuffers[j].data(), nullptr);
+        if (col && col->name[0] != '\0') {
+            colNames[j] = col->name;
+            mdb_bind_column(table, j + 1, colBuffers[j].data(), nullptr);
+        } else {
+            colNames[j] = "";
+        }
     }
 
     mdb_rewind_table(table);
     while (mdb_fetch_row(table)) {
         std::map<std::string, std::string> row;
         for (unsigned int j = 0; j < numCols; j++) {
-            row[colNames[j]] = colBuffers[j].data();
+            if (!colNames[j].empty()) {
+                row[colNames[j]] = colBuffers[j].data();
+            }
         }
         result.push_back(std::move(row));
     }
@@ -234,7 +244,7 @@ void BahiKhataMigrator::updateProgress(int percent, const QString& status) {
     emit progressChanged(percent);
     emit statusChanged(status);
     emit migrationProgress(percent, status);
-    QCoreApplication::processEvents();
+    QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
 }
 
 QString BahiKhataMigrator::parseMdbDate(const QString& rawDate) {

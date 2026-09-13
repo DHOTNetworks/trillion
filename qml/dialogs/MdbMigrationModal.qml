@@ -30,7 +30,7 @@ Rectangle {
                 root.migrationSuccess()
                 if (typeof stockItemsModel !== "undefined" && stockItemsModel) stockItemsModel.reload_data()
                 if (typeof partiesModel !== "undefined" && partiesModel) partiesModel.reload_data()
-                if (typeof dashboardController !== "undefined" && dashboardController) dashboardController.refresh_stats()
+                if (typeof dashboardCtrl !== "undefined" && dashboardCtrl) dashboardCtrl.refresh_stats()
                 if (typeof salesModel !== "undefined" && salesModel) salesModel.reload_data()
                 if (typeof millingModel !== "undefined" && millingModel) millingModel.reload_data()
                 if (typeof paddyModel !== "undefined" && paddyModel) paddyModel.reload_data()
