@@ -234,16 +234,24 @@ MdbHandle *mdb_open(const char *filename, MdbFileFlags flags)
 {
     FILE *file;
 
-	char *filepath = mdb_find_file(filename);
-	if (!filepath) {
-		fprintf(stderr, "File not found\n");
-		return NULL; 
-	}
 #ifdef _WIN32
     char *mode = (flags & MDB_WRITABLE) ? "rb+" : "rb";
 #else
     char *mode = (flags & MDB_WRITABLE) ? "r+" : "r";
 #endif
+
+    if (!filename) return NULL;
+
+    /* Direct fopen attempt first (essential for absolute paths and Windows paths) */
+    if ((file = fopen(filename, mode)) != NULL) {
+        return mdb_handle_from_stream(file, flags);
+    }
+
+	char *filepath = mdb_find_file(filename);
+	if (!filepath) {
+		fprintf(stderr, "File not found: %s\n", filename);
+		return NULL; 
+	}
 
     if ((file = fopen(filepath, mode)) == NULL) {
 		fprintf(stderr,"Couldn't open file %s\n",filepath);

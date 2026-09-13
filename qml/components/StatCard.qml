@@ -49,7 +49,7 @@ Rectangle {
             color: "#0F172A"
             font.pixelSize: 20
             font.bold: true
-            font.family: "Segoe UI, -apple-system, Roboto, sans-serif"
+            font.family: "Segoe UI"
         }
 
         Text {

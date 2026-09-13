@@ -326,60 +326,12 @@ T.ApplicationWindow {
                 }
 
                 onLoaded: {
-                    if (window.currentViewIndex === 2 && item) {
-                        if (typeof item.showNewModal !== "undefined") {
-                            item.showNewModal.connect(function() {
-                                window.navigateToView(18)
-                            })
-                        }
-                    }
-
                     if (window.currentViewIndex === 8 && item && typeof item.focusSearch === "function") {
                         Qt.callLater(item.focusSearch)
                     }
 
                     if (window.currentViewIndex === 16 && item && typeof item.voucherMode !== "undefined") {
                         item.voucherMode = window.targetChequeMode
-                    }
-
-                    if (window.currentViewIndex === 18 && item) {
-                        if (typeof item.cancelRequested !== "undefined") {
-                            item.cancelRequested.connect(function() {
-                                window.navigateBack()
-                            })
-                        }
-                        if (typeof item.voucherSaved !== "undefined") {
-                            item.voucherSaved.connect(function() {
-                                window.navigateBack()
-                            })
-                        }
-                    }
-
-                    if (window.currentViewIndex === 19 && item) {
-                        if (typeof item.cancelRequested !== "undefined") {
-                            item.cancelRequested.connect(function() {
-                                window.navigateBack()
-                            })
-                        }
-                        if (typeof item.openNewMillingRequested !== "undefined") {
-                            item.openNewMillingRequested.connect(function() {
-                                window.navigateToView(18)
-                            })
-                        }
-                    }
-
-                    if (window.currentViewIndex === 23 && item) {
-                        if (typeof item.cancelRequested !== "undefined") {
-                            item.cancelRequested.connect(function() {
-                                window.navigateBack()
-                            })
-                        }
-                        if (typeof item.voucherSaved !== "undefined") {
-                            item.voucherSaved.connect(function() {
-                                window.navigateBack()
-                                if (typeof dashboardCtrl !== "undefined" && dashboardCtrl) dashboardCtrl.refresh_stats()
-                            })
-                        }
                     }
 
                     if (window.currentViewIndex === 24 && item) {
@@ -390,39 +342,11 @@ T.ApplicationWindow {
                             }
                             window.targetTdsVoucherId = 0
                         }
-                        if (typeof item.cancelRequested !== "undefined") {
-                            item.cancelRequested.connect(function() {
-                                window.navigateBack()
-                            })
-                        }
-                        if (typeof item.voucherSaved !== "undefined") {
-                            item.voucherSaved.connect(function() {
-                                window.navigateBack()
-                                if (typeof dashboardCtrl !== "undefined" && dashboardCtrl) dashboardCtrl.refresh_stats()
-                            })
-                        }
-                    }
-
-                    if (window.currentViewIndex === 25 && item) {
-                        if (typeof item.cancelRequested !== "undefined") {
-                            item.cancelRequested.connect(function() {
-                                window.navigateBack()
-                            })
-                        }
-                        if (typeof item.interestVoucherSaved !== "undefined") {
-                            item.interestVoucherSaved.connect(function() {
-                                window.navigateBack()
-                                if (typeof dashboardCtrl !== "undefined" && dashboardCtrl) dashboardCtrl.refresh_stats()
-                            })
-                        }
                     }
 
                     if (window.currentViewIndex === 0 && item) {
                         if (typeof item.selectedMenuIndex !== "undefined") {
                             item.selectedMenuIndex = window.lastDashboardMenuIndex
-                            item.selectedMenuIndexChanged.connect(function() {
-                                window.lastDashboardMenuIndex = item.selectedMenuIndex
-                            })
                         }
 
                         // Restore 2-Level Menu Tree Memory (Only once when coming back from a page)
@@ -456,34 +380,6 @@ T.ApplicationWindow {
                         }
                     }
 
-                    if (item.openAddVoucherMenu) item.openAddVoucherMenu.connect(function() { window.openAddVoucherMenu() })
-                    if (item.openOtherVoucherMenu) item.openOtherVoucherMenu.connect(function() { window.openOtherVoucherMenu() })
-                    if (item.openReportsMenu) item.openReportsMenu.connect(function() { window.openReportsMenu() })
-                    if (item.openLedgers) item.openLedgers.connect(function() { window.openLedgerMasterMenu() })
-                    if (item.openStock) item.openStock.connect(function() { window.openStockMasterMenu() })
-                    if (item.openPaddy) item.openPaddy.connect(function() { window.navigateToView(1) })
-                    if (item.openLedgerMenu) item.openLedgerMenu.connect(function() { window.openLedgerMasterMenu() })
-                    if (item.openStockMenu) item.openStockMenu.connect(function() { window.openStockMasterMenu() })
-                    if (item.openPeriodModal) item.openPeriodModal.connect(function() { window.isPeriodModalOpen = true })
-                    if (item.cancelRequested) item.cancelRequested.connect(function() { window.navigateBack() })
-                    if (item.savedSuccess) item.savedSuccess.connect(function() { window.navigateBack() })
-                    if (item.invoiceSaved) item.invoiceSaved.connect(function() { window.navigateBack() })
-                    if (item.voucherSaved) item.voucherSaved.connect(function() { window.navigateBack() })
-                    if (item.openInvoiceRequested) item.openInvoiceRequested.connect(function(invNo) {
-                        window.pendingEditInvoiceNo = invNo
-                        if (window.currentViewIndex === 21) {
-                            window.navigateToView(15) // Purchase Voucher View
-                        } else {
-                            window.navigateToView(14) // Sales Voucher View
-                        }
-                    })
-                    if (item.openItemMovement) item.openItemMovement.connect(function(itemName) {
-                        var fDate = typeof stockItemsModel !== "undefined" && stockItemsModel ? stockItemsModel.get_from_date() : ""
-                        var tDate = typeof stockItemsModel !== "undefined" && stockItemsModel ? stockItemsModel.get_to_date() : ""
-                        itemMovementModal.loadItemMovements(itemName, fDate, tDate)
-                        window.isItemMovementModalOpen = true
-                    })
-
                     // Automatically load invoice for editing if pending
                     if (window.pendingEditInvoiceNo !== "") {
                         var invToLoad = window.pendingEditInvoiceNo
@@ -494,36 +390,75 @@ T.ApplicationWindow {
                             }
                         })
                     }
+                }
+            }
 
-                    if (window.currentViewIndex === 22 && item) {
-                        if (typeof item.firmOpened !== "undefined") {
-                            item.firmOpened.connect(function(firmId, firmName) {
-                                window.navigationHistory = []
-                                window.currentViewIndex = 0
-                                var fy = (typeof stockItemsModel !== "undefined" && stockItemsModel) ? stockItemsModel.get_financial_year() : ""
-                                var sd = (typeof stockItemsModel !== "undefined" && stockItemsModel) ? stockItemsModel.get_from_date() : ""
-                                var ed = (typeof stockItemsModel !== "undefined" && stockItemsModel) ? stockItemsModel.get_to_date() : ""
-                                if (fy && sd && ed) {
-                                    var s_fmt = sd.split("-").reverse().join("-")
-                                    var e_fmt = ed.split("-").reverse().join("-")
-                                    window.activePeriodLabel = s_fmt + " To " + e_fmt + " (" + fy + ")"
-                                    if (typeof dashboardCtrl !== "undefined" && dashboardCtrl) {
-                                        dashboardCtrl.refresh_stats(sd, ed, fy)
-                                    }
-                                }
-                            })
-                        }
-                        if (typeof item.cancelRequested !== "undefined") {
-                            item.cancelRequested.connect(function() {
-                                window.navigateBack()
-                            })
+            Connections {
+                target: mainLoader.item
+                ignoreUnknownSignals: true
+                function onOpenAddVoucherMenu() { window.openAddVoucherMenu() }
+                function onOpenOtherVoucherMenu() { window.openOtherVoucherMenu() }
+                function onOpenReportsMenu() { window.openReportsMenu() }
+                function onOpenLedgers() { window.openLedgerMasterMenu() }
+                function onOpenStock() { window.openStockMasterMenu() }
+                function onOpenPaddy() { window.navigateToView(1) }
+                function onOpenLedgerMenu() { window.openLedgerMasterMenu() }
+                function onOpenStockMenu() { window.openStockMasterMenu() }
+                function onOpenPeriodModal() { window.isPeriodModalOpen = true }
+                function onCancelRequested() { window.navigateBack() }
+                function onSavedSuccess() { window.navigateBack() }
+                function onInvoiceSaved() { window.navigateBack() }
+                function onVoucherSaved() { 
+                    window.navigateBack()
+                    if (typeof dashboardCtrl !== "undefined" && dashboardCtrl) dashboardCtrl.refresh_stats()
+                }
+                function onInterestVoucherSaved() {
+                    window.navigateBack()
+                    if (typeof dashboardCtrl !== "undefined" && dashboardCtrl) dashboardCtrl.refresh_stats()
+                }
+                function onShowNewModal() {
+                    window.navigateToView(18)
+                }
+                function onOpenNewMillingRequested() {
+                    window.navigateToView(18)
+                }
+                function onSelectedMenuIndexChanged() {
+                    if (mainLoader.item && typeof mainLoader.item.selectedMenuIndex !== "undefined") {
+                        window.lastDashboardMenuIndex = mainLoader.item.selectedMenuIndex
+                    }
+                }
+                function onOpenInvoiceRequested(invNo) {
+                    window.pendingEditInvoiceNo = invNo
+                    if (window.currentViewIndex === 21) {
+                        window.navigateToView(15)
+                    } else {
+                        window.navigateToView(14)
+                    }
+                }
+                function onOpenItemMovement(itemName) {
+                    var fDate = typeof stockItemsModel !== "undefined" && stockItemsModel ? stockItemsModel.get_from_date() : ""
+                    var tDate = typeof stockItemsModel !== "undefined" && stockItemsModel ? stockItemsModel.get_to_date() : ""
+                    itemMovementModal.loadItemMovements(itemName, fDate, tDate)
+                    window.isItemMovementModalOpen = true
+                }
+                function onFirmOpened(firmId, firmName) {
+                    window.navigationHistory = []
+                    window.currentViewIndex = 0
+                    var fy = (typeof stockItemsModel !== "undefined" && stockItemsModel) ? stockItemsModel.get_financial_year() : ""
+                    var sd = (typeof stockItemsModel !== "undefined" && stockItemsModel) ? stockItemsModel.get_from_date() : ""
+                    var ed = (typeof stockItemsModel !== "undefined" && stockItemsModel) ? stockItemsModel.get_to_date() : ""
+                    if (fy && sd && ed) {
+                        var s_fmt = sd.split("-").reverse().join("-")
+                        var e_fmt = ed.split("-").reverse().join("-")
+                        window.activePeriodLabel = s_fmt + " To " + e_fmt + " (" + fy + ")"
+                        if (typeof dashboardCtrl !== "undefined" && dashboardCtrl) {
+                            dashboardCtrl.refresh_stats(sd, ed, fy)
                         }
                     }
                 }
             }
         }
     }
-}
 
     // TREE-LIKE STATE MEMORY POPUP SUBMENUS
     LedgerMasterMenuModal {
@@ -773,4 +708,5 @@ T.ApplicationWindow {
             }
         }
     }
+}
 }

@@ -214,7 +214,7 @@ Rectangle {
                     text: root.currentFolder
                     color: "#0F172A"
                     font.pixelSize: 12
-                    font.family: "Segoe UI, Consolas, Menlo, monospace"
+                    font.family: "Consolas"
                     background: Rectangle { 
                         color: root.isViewingAppData ? "#F8FAFC" : "#FFFBEB"
                         radius: 6
@@ -422,7 +422,7 @@ Rectangle {
                                 color: "#0284C7"
                                 font.pixelSize: 12
                                 font.bold: true
-                                font.family: "Segoe UI, Consolas, monospace"
+                                font.family: "Consolas"
                                 Layout.preferredWidth: 150
                                 elide: Text.ElideRight
                             }
@@ -457,7 +457,7 @@ Rectangle {
                                 text: model.gstin || "-"
                                 color: "#64748B"
                                 font.pixelSize: 11
-                                font.family: "Segoe UI, Consolas, monospace"
+                                font.family: "Consolas"
                                 Layout.preferredWidth: 140
                             }
 

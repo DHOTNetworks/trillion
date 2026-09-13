@@ -266,7 +266,7 @@ T.ScrollView {
                             Text { text: "GSTIN Number:"; color: "#64748B"; font.pixelSize: 11 }
                             Text { 
                                 text: (typeof firmManager !== "undefined" && firmManager && firmManager.currentFirmInfo && firmManager.currentFirmInfo.gstin) ? firmManager.currentFirmInfo.gstin : "06ABKFM5928Q1ZG"
-                                color: "#0F172A"; font.pixelSize: 12; font.bold: true; font.family: "Segoe UI, Consolas, Menlo, sans-serif" 
+                                color: "#0F172A"; font.pixelSize: 12; font.bold: true; font.family: "Segoe UI" 
                             }
                         }
 
@@ -276,7 +276,7 @@ T.ScrollView {
                             Text { text: "PAN Number:"; color: "#64748B"; font.pixelSize: 11 }
                             Text { 
                                 text: (typeof firmManager !== "undefined" && firmManager && firmManager.currentFirmInfo && firmManager.currentFirmInfo.pan_no) ? firmManager.currentFirmInfo.pan_no : "ABKFM5928Q"
-                                color: "#0F172A"; font.pixelSize: 12; font.bold: true; font.family: "Segoe UI, Consolas, Menlo, sans-serif" 
+                                color: "#0F172A"; font.pixelSize: 12; font.bold: true; font.family: "Segoe UI" 
                             }
                         }
 
@@ -286,7 +286,7 @@ T.ScrollView {
                             Text { text: "Statutory / License:"; color: "#64748B"; font.pixelSize: 11 }
                             Text { 
                                 text: (typeof firmManager !== "undefined" && firmManager && firmManager.currentFirmInfo && firmManager.currentFirmInfo.fssai_no && firmManager.currentFirmInfo.fssai_no !== "") ? ("FSSAI: " + firmManager.currentFirmInfo.fssai_no) : ((typeof firmManager !== "undefined" && firmManager && firmManager.currentFirmInfo && firmManager.currentFirmInfo.ml_no) ? ("ML: " + firmManager.currentFirmInfo.ml_no) : "10822019000152")
-                                color: "#0F172A"; font.pixelSize: 11; font.bold: true; font.family: "Segoe UI, Consolas, Menlo, sans-serif"; elide: Text.ElideRight; Layout.maximumWidth: 180 
+                                color: "#0F172A"; font.pixelSize: 11; font.bold: true; font.family: "Segoe UI"; elide: Text.ElideRight; Layout.maximumWidth: 180 
                             }
                         }
 

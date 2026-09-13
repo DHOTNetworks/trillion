@@ -19,7 +19,7 @@ Rectangle {
         anchors.centerIn: parent
         font.pixelSize: 10
         font.bold: true
-        font.family: "Segoe UI, Consolas, Menlo, sans-serif"
+        font.family: "Segoe UI"
         color: root.textColor
     }
 }

@@ -668,7 +668,7 @@ FocusScope {
                                 Text {
                                     anchors.centerIn: parent
                                     text: (typeof partiesModel !== "undefined" && partiesModel && ledgerName.trim()) ? partiesModel.get_ledger_live_balance(ledgerName.trim()) : "0.00 Dr"
-                                    color: "#334155"; font.pixelSize: 11; font.bold: true; font.family: "Segoe UI, Consolas, Menlo, sans-serif"
+                                    color: "#334155"; font.pixelSize: 11; font.bold: true; font.family: "Segoe UI"
                                 }
                             }
 

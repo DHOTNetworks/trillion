@@ -101,7 +101,7 @@ ColumnLayout {
             placeholderText: root.placeholderText
             color: "#0F172A"
             font.pixelSize: 13
-            font.family: "Segoe UI, Consolas, Menlo, sans-serif"
+            font.family: "Segoe UI"
             background: null
             selectByMouse: true
             onEditingFinished: root.editingFinished()

@@ -5,6 +5,7 @@
 #include <QQuickStyle>
 #include <QQuickWindow>
 #include <QIcon>
+#include <QFont>
 #include <QDir>
 #include <QFile>
 #include <QStandardPaths>
@@ -54,6 +55,11 @@
 int main(int argc, char* argv[]) {
     std::cout << "[INIT] Starting Mahadev Rice Mill ERP native executable..." << std::endl << std::flush;
 
+#ifdef Q_OS_WIN
+    // Direct3D 11 backend provides ultra-fast native hardware acceleration on Windows
+    QQuickWindow::setGraphicsApi(QSGRendererInterface::Direct3D11);
+#endif
+
     // Force Basic Style for dark theme
     QQuickStyle::setStyle("Basic");
 
@@ -61,6 +67,20 @@ int main(int argc, char* argv[]) {
     app.setApplicationName("Mahadev Rice Mill ERP & Accounting");
     app.setApplicationVersion("0.2.0");
     app.setOrganizationName("MahadevAgro");
+
+#ifdef Q_OS_WIN
+    QFont defaultAppFont("Segoe UI", 10);
+    defaultAppFont.setStyleHint(QFont::SansSerif);
+    app.setFont(defaultAppFont);
+#elif defined(Q_OS_MACOS)
+    QFont defaultAppFont(".AppleSystemUIFont", 13);
+    defaultAppFont.setStyleHint(QFont::SansSerif);
+    app.setFont(defaultAppFont);
+#else
+    QFont defaultAppFont("Sans Serif", 10);
+    defaultAppFont.setStyleHint(QFont::SansSerif);
+    app.setFont(defaultAppFont);
+#endif
 
     QString appDir = QCoreApplication::applicationDirPath();
     QString cwd = QDir::currentPath();

@@ -258,8 +258,26 @@ bool BankStatementExcelParser::parseXls(const QString& filePath,
                                         BankStatementMetadata& outMeta,
                                         QVector<BankStatementTransaction>& outTxns,
                                         QString& outError) {
+    QFile file(filePath);
+    if (!file.open(QIODevice::ReadOnly)) {
+        outError = "Failed to open XLS file: " + file.errorString();
+        return false;
+    }
+    QByteArray fileBytes = file.readAll();
+    file.close();
+
+    if (fileBytes.isEmpty()) {
+        outError = "Excel XLS file is empty.";
+        return false;
+    }
+
     xls::xls_error_t err = xls::LIBXLS_OK;
-    xls::xlsWorkBook* wb = xls::xls_open_file(filePath.toUtf8().constData(), "UTF-8", &err);
+    xls::xlsWorkBook* wb = xls::xls_open_buffer(
+        reinterpret_cast<const unsigned char*>(fileBytes.constData()),
+        static_cast<size_t>(fileBytes.size()),
+        "UTF-8",
+        &err
+    );
     if (!wb) {
         outError = QString("Failed to open Excel XLS file. Error code: %1").arg(err);
         return false;
@@ -322,6 +340,7 @@ bool BankStatementExcelParser::parseCsv(const QString& filePath,
     }
 
     QTextStream in(&file);
+    in.setEncoding(QStringConverter::Utf8);
     QVector<QVector<QString>> matrix;
 
     while (!in.atEnd()) {
@@ -361,10 +380,23 @@ bool BankStatementExcelParser::parseXlsx(const QString& filePath,
                                          BankStatementMetadata& outMeta,
                                          QVector<BankStatementTransaction>& outTxns,
                                          QString& outError) {
+    QFile file(filePath);
+    if (!file.open(QIODevice::ReadOnly)) {
+        outError = "Failed to open XLSX file: " + file.errorString();
+        return false;
+    }
+    QByteArray fileBytes = file.readAll();
+    file.close();
+
+    if (fileBytes.isEmpty()) {
+        outError = "XLSX file is empty.";
+        return false;
+    }
+
     mz_zip_archive zipArchive;
     memset(&zipArchive, 0, sizeof(zipArchive));
 
-    if (!mz_zip_reader_init_file(&zipArchive, filePath.toUtf8().constData(), 0)) {
+    if (!mz_zip_reader_init_mem(&zipArchive, fileBytes.constData(), static_cast<size_t>(fileBytes.size()), 0)) {
         outError = "Failed to open XLSX zip package.";
         return false;
     }

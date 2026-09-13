@@ -414,7 +414,11 @@ QVariantMap BahiKhataMigrator::inspect_mdb_file(const QString& mdbFilePath) {
     }
 
 #if HAS_LIBMDB
-    MdbHandle* mdb = mdb_open(cleanPath.toUtf8().constData(), MDB_NOFLAGS);
+    MdbHandle* mdb = mdb_open(QFile::encodeName(cleanPath).constData(), MDB_NOFLAGS);
+    if (!mdb) {
+        // Fallback with UTF-8 data
+        mdb = mdb_open(cleanPath.toUtf8().constData(), MDB_NOFLAGS);
+    }
     if (!mdb) {
         result["error"] = "Unable to open Jet database file. Ensure it is a valid .mdb / .004 file.";
         return result;
@@ -666,7 +670,11 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
     emit migratingChanged();
 
     updateProgress(5, "Opening Bahi Khata Database: " + fi.fileName());
-    MdbHandle* mdb = mdb_open(cleanPath.toUtf8().constData(), MDB_NOFLAGS);
+    MdbHandle* mdb = mdb_open(QFile::encodeName(cleanPath).constData(), MDB_NOFLAGS);
+    if (!mdb) {
+        // Fallback with UTF-8 data
+        mdb = mdb_open(cleanPath.toUtf8().constData(), MDB_NOFLAGS);
+    }
     if (!mdb) {
         m_isMigrating = false;
         emit migratingChanged();
