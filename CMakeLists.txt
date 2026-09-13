@@ -98,7 +98,10 @@ set_target_properties(libxls_embedded PROPERTIES
     AUTORCC OFF
     AUTOUIC OFF
 )
-target_include_directories(libxls_embedded PUBLIC third_party/libxls/include)
+target_include_directories(libxls_embedded PUBLIC 
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/libxls/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/libxls/src
+)
 target_compile_definitions(libxls_embedded PRIVATE
     _CRT_SECURE_NO_WARNINGS
     _CRT_NONSTDC_NO_DEPRECATE
