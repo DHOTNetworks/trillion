@@ -8,6 +8,180 @@
 #include <cmath>
 
 // ---------------------------------------------------------------------------
+// DebitCreditNoteItemsModel Implementation
+// ---------------------------------------------------------------------------
+
+DebitCreditNoteItemsModel::DebitCreditNoteItemsModel(QObject *parent)
+    : QAbstractListModel(parent) {
+}
+
+int DebitCreditNoteItemsModel::rowCount(const QModelIndex &parent) const {
+    if (parent.isValid()) return 0;
+    return m_items.size();
+}
+
+QVariant DebitCreditNoteItemsModel::data(const QModelIndex &index, int role) const {
+    if (!index.isValid() || index.row() < 0 || index.row() >= m_items.size()) {
+        return QVariant();
+    }
+
+    const auto &it = m_items.at(index.row());
+    switch (role) {
+    case ItemNameRole: return it.itemName;
+    case HsnCodeRole: return it.hsnCode;
+    case UnitRole: return it.unit;
+    case BagsRole: return it.bags;
+    case WeightQtlRole: return it.weightQtl;
+    case RateRole: return it.rate;
+    case TaxableAmountRole: return it.taxableAmount;
+    case GstPctRole: return it.gstPct;
+    default: return QVariant();
+    }
+}
+
+bool DebitCreditNoteItemsModel::setData(const QModelIndex &index, const QVariant &value, int role) {
+    if (!index.isValid() || index.row() < 0 || index.row() >= m_items.size()) {
+        return false;
+    }
+
+    auto &it = m_items[index.row()];
+    switch (role) {
+    case ItemNameRole: it.itemName = value.toString(); break;
+    case HsnCodeRole: it.hsnCode = value.toString(); break;
+    case UnitRole: it.unit = value.toString(); break;
+    case BagsRole: it.bags = value.toInt(); break;
+    case WeightQtlRole: it.weightQtl = value.toDouble(); break;
+    case RateRole: it.rate = value.toDouble(); break;
+    case TaxableAmountRole: it.taxableAmount = value.toDouble(); break;
+    case GstPctRole: it.gstPct = value.toDouble(); break;
+    default: return false;
+    }
+
+    emit dataChanged(index, index, {role});
+    emit itemDataChanged();
+    return true;
+}
+
+QHash<int, QByteArray> DebitCreditNoteItemsModel::roleNames() const {
+    QHash<int, QByteArray> roles;
+    roles[ItemNameRole] = "itemName";
+    roles[HsnCodeRole] = "hsnCode";
+    roles[UnitRole] = "unit";
+    roles[BagsRole] = "bags";
+    roles[WeightQtlRole] = "weightQtl";
+    roles[RateRole] = "rate";
+    roles[TaxableAmountRole] = "taxableAmount";
+    roles[GstPctRole] = "gstPct";
+    return roles;
+}
+
+void DebitCreditNoteItemsModel::setItems(const QVector<DebitCreditNoteItem> &items) {
+    beginResetModel();
+    m_items = items;
+    endResetModel();
+    emit countChanged();
+    emit itemDataChanged();
+}
+
+void DebitCreditNoteItemsModel::addItem(const QString &itemName, const QString &hsn,
+                                        int bags, double weight, double rate,
+                                        double amount, double gst) {
+    beginInsertRows(QModelIndex(), m_items.size(), m_items.size());
+    DebitCreditNoteItem it;
+    it.itemName = itemName.isEmpty() ? "Rice Byproduct" : itemName;
+    it.hsnCode = hsn.isEmpty() ? "1006" : hsn;
+    it.unit = "QTL";
+    it.bags = bags;
+    it.weightQtl = weight;
+    it.rate = rate;
+    it.taxableAmount = (amount > 0.0) ? amount : ((weight > 0.0) ? (weight * rate) : (bags * rate));
+    it.gstPct = gst;
+    m_items.append(it);
+    endInsertRows();
+    emit countChanged();
+    emit itemDataChanged();
+}
+
+void DebitCreditNoteItemsModel::removeItem(int index) {
+    if (index < 0 || index >= m_items.size()) return;
+    beginRemoveRows(QModelIndex(), index, index);
+    m_items.removeAt(index);
+    endRemoveRows();
+    if (m_items.isEmpty()) {
+        addItem();
+    }
+    emit countChanged();
+    emit itemDataChanged();
+}
+
+void DebitCreditNoteItemsModel::updateItem(int index, const QString &field, const QVariant &value) {
+    if (index < 0 || index >= m_items.size()) return;
+    auto &it = m_items[index];
+    if (field == "itemName") it.itemName = value.toString();
+    else if (field == "hsnCode") it.hsnCode = value.toString();
+    else if (field == "unit") it.unit = value.toString();
+    else if (field == "bags") {
+        it.bags = value.toInt();
+        if (it.weightQtl <= 0.0 && it.rate > 0.0) it.taxableAmount = it.bags * it.rate;
+    } else if (field == "weightQtl") {
+        it.weightQtl = value.toDouble();
+        if (it.weightQtl > 0.0 && it.rate > 0.0) it.taxableAmount = it.weightQtl * it.rate;
+    } else if (field == "rate") {
+        it.rate = value.toDouble();
+        if (it.weightQtl > 0.0) it.taxableAmount = it.weightQtl * it.rate;
+        else if (it.bags > 0) it.taxableAmount = it.bags * it.rate;
+    } else if (field == "taxableAmount") {
+        it.taxableAmount = value.toDouble();
+    } else if (field == "gstPct") {
+        it.gstPct = value.toDouble();
+    }
+
+    QModelIndex idx = createIndex(index, 0);
+    emit dataChanged(idx, idx);
+    emit itemDataChanged();
+}
+
+void DebitCreditNoteItemsModel::clear() {
+    beginResetModel();
+    m_items.clear();
+    endResetModel();
+    emit countChanged();
+    emit itemDataChanged();
+}
+
+QVariantMap DebitCreditNoteItemsModel::get(int index) const {
+    if (index < 0 || index >= m_items.size()) return QVariantMap();
+    const auto &it = m_items.at(index);
+    QVariantMap map;
+    map["itemName"] = it.itemName;
+    map["hsnCode"] = it.hsnCode;
+    map["unit"] = it.unit;
+    map["bags"] = it.bags;
+    map["weightQtl"] = it.weightQtl;
+    map["rate"] = it.rate;
+    map["taxableAmount"] = it.taxableAmount;
+    map["gstPct"] = it.gstPct;
+    return map;
+}
+
+QVariantList DebitCreditNoteItemsModel::toVariantList() const {
+    QVariantList list;
+    for (const auto &it : m_items) {
+        QVariantMap map;
+        map["itemName"] = it.itemName;
+        map["hsnCode"] = it.hsnCode;
+        map["unit"] = it.unit;
+        map["bags"] = it.bags;
+        map["weightQtl"] = it.weightQtl;
+        map["rate"] = it.rate;
+        map["taxableAmount"] = it.taxableAmount;
+        map["gstPct"] = it.gstPct;
+        list.append(map);
+    }
+    return list;
+}
+
+// ---------------------------------------------------------------------------
 // DebitCreditNoteModel Implementation
 // ---------------------------------------------------------------------------
 
@@ -186,7 +360,12 @@ QVariantMap DebitCreditNoteModel::get(int visibleIndex) const {
 // ---------------------------------------------------------------------------
 
 DebitCreditNoteController::DebitCreditNoteController(QObject *parent)
-    : QObject(parent) {
+    : QObject(parent), m_itemsModel(this) {
+    connect(&m_itemsModel, &DebitCreditNoteItemsModel::itemDataChanged,
+            this, &DebitCreditNoteController::recalculateFormTotals);
+    connect(&m_itemsModel, &DebitCreditNoteItemsModel::countChanged,
+            this, &DebitCreditNoteController::recalculateFormTotals);
+    resetDraft();
     reload();
 }
 
@@ -897,3 +1076,281 @@ QVariantMap DebitCreditNoteController::getNote(int id) {
 
     return map;
 }
+
+void DebitCreditNoteController::setDraftId(int val) {
+    if (m_draftId != val) {
+        m_draftId = val;
+        emit draftChanged();
+    }
+}
+
+void DebitCreditNoteController::setDraftNoteType(const QString &val) {
+    if (m_draftNoteType != val) {
+        m_draftNoteType = val;
+        if (m_draftId <= 0) {
+            m_draftNoteNo = getNextNoteNo(m_draftNoteType);
+        }
+        emit draftChanged();
+    }
+}
+
+void DebitCreditNoteController::setDraftNoteNo(const QString &val) {
+    if (m_draftNoteNo != val) {
+        m_draftNoteNo = val;
+        emit draftChanged();
+    }
+}
+
+void DebitCreditNoteController::setDraftNoteDate(const QString &val) {
+    if (m_draftNoteDate != val) {
+        m_draftNoteDate = val;
+        emit draftChanged();
+    }
+}
+
+void DebitCreditNoteController::setDraftNoteTime(const QString &val) {
+    if (m_draftNoteTime != val) {
+        m_draftNoteTime = val;
+        emit draftChanged();
+    }
+}
+
+void DebitCreditNoteController::setDraftOrigInvNo(const QString &val) {
+    if (m_draftOrigInvNo != val) {
+        m_draftOrigInvNo = val;
+        emit draftChanged();
+    }
+}
+
+void DebitCreditNoteController::setDraftOrigInvDate(const QString &val) {
+    if (m_draftOrigInvDate != val) {
+        m_draftOrigInvDate = val;
+        emit draftChanged();
+    }
+}
+
+void DebitCreditNoteController::setDraftOrigInvType(const QString &val) {
+    if (m_draftOrigInvType != val) {
+        m_draftOrigInvType = val;
+        emit draftChanged();
+    }
+}
+
+void DebitCreditNoteController::setDraftPartyName(const QString &val) {
+    if (m_draftPartyName != val) {
+        m_draftPartyName = val;
+        emit draftChanged();
+    }
+}
+
+void DebitCreditNoteController::setDraftPartyGstin(const QString &val) {
+    if (m_draftPartyGstin != val) {
+        m_draftPartyGstin = val;
+        emit draftChanged();
+    }
+}
+
+void DebitCreditNoteController::setDraftIsInterstate(bool val) {
+    if (m_draftIsInterstate != val) {
+        m_draftIsInterstate = val;
+        emit draftChanged();
+        recalculateFormTotals();
+    }
+}
+
+void DebitCreditNoteController::setDraftGstPct(double val) {
+    if (std::abs(m_draftGstPct - val) > 0.001) {
+        m_draftGstPct = val;
+        emit draftChanged();
+        recalculateFormTotals();
+    }
+}
+
+void DebitCreditNoteController::setDraftReasonCode(const QString &val) {
+    if (m_draftReasonCode != val) {
+        m_draftReasonCode = val;
+        emit draftChanged();
+    }
+}
+
+void DebitCreditNoteController::setDraftAdjType(const QString &val) {
+    if (m_draftAdjType != val) {
+        m_draftAdjType = val;
+        emit draftChanged();
+    }
+}
+
+void DebitCreditNoteController::setDraftNarration(const QString &val) {
+    if (m_draftNarration != val) {
+        m_draftNarration = val;
+        emit draftChanged();
+    }
+}
+
+QString DebitCreditNoteController::currentDateIso() const {
+    return QDate::currentDate().toString("yyyy-MM-dd");
+}
+
+QString DebitCreditNoteController::currentTimeIso() const {
+    return QTime::currentTime().toString("hh:mm");
+}
+
+void DebitCreditNoteController::resetDraft() {
+    m_draftId = 0;
+    m_draftNoteType = "Credit Note";
+    m_draftNoteNo = getNextNoteNo(m_draftNoteType);
+    m_draftNoteDate = currentDateIso();
+    m_draftNoteTime = currentTimeIso();
+    m_draftOrigInvNo.clear();
+    m_draftOrigInvDate = m_draftNoteDate;
+    m_draftOrigInvType = "Sale";
+    m_draftOrigInvId = 0;
+    m_draftPartyName.clear();
+    m_draftPartyGstin.clear();
+    m_draftStateCode.clear();
+    m_draftIsInterstate = false;
+    m_draftGstPct = 5.0;
+    m_draftReasonCode = "01-Sales Return";
+    m_draftAdjType = "Sales Return";
+    m_draftNarration.clear();
+
+    m_itemsModel.clear();
+    m_itemsModel.addItem("Basmati Rice", "10063020", 0, 0.0, 0.0, 0.0, 5.0);
+    emit draftChanged();
+    recalculateFormTotals();
+}
+
+void DebitCreditNoteController::recalculateFormTotals() {
+    QVariantMap totals = calculateTotals(m_itemsModel.toVariantList(), m_draftGstPct, m_draftIsInterstate);
+    m_formTotalBags = totals.value("totalBags").toInt();
+    m_formTotalWeightQtl = totals.value("totalWeightQtl").toDouble();
+    m_formTaxableAmount = totals.value("taxableAmount").toDouble();
+    m_formCgstAmount = totals.value("cgstAmount").toDouble();
+    m_formSgstAmount = totals.value("sgstAmount").toDouble();
+    m_formIgstAmount = totals.value("igstAmount").toDouble();
+    m_formTotalTaxAmount = totals.value("totalTaxAmount").toDouble();
+    m_formRoundOff = totals.value("roundOff").toDouble();
+    m_formGrandTotal = totals.value("grandTotal").toDouble();
+    emit formTotalsChanged();
+}
+
+QString DebitCreditNoteController::formTaxableAmountFmt() const { return FinancialMathService::instance().formatInr(m_formTaxableAmount); }
+QString DebitCreditNoteController::formCgstAmountFmt() const { return FinancialMathService::instance().formatInr(m_formCgstAmount); }
+QString DebitCreditNoteController::formSgstAmountFmt() const { return FinancialMathService::instance().formatInr(m_formSgstAmount); }
+QString DebitCreditNoteController::formIgstAmountFmt() const { return FinancialMathService::instance().formatInr(m_formIgstAmount); }
+QString DebitCreditNoteController::formTotalTaxAmountFmt() const { return FinancialMathService::instance().formatInr(m_formTotalTaxAmount); }
+QString DebitCreditNoteController::formRoundOffFmt() const { return FinancialMathService::instance().formatInr(m_formRoundOff); }
+QString DebitCreditNoteController::formGrandTotalFmt() const { return FinancialMathService::instance().formatInr(m_formGrandTotal); }
+
+bool DebitCreditNoteController::loadNoteIntoDraft(int id) {
+    if (id <= 0) return false;
+    QVariantMap data = getNote(id);
+    if (!data.contains("noteNo") || data.value("noteNo").toString().isEmpty()) return false;
+
+    m_draftId = id;
+    m_draftNoteType = data.value("noteType", "Credit Note").toString();
+    m_draftNoteNo = data.value("noteNo").toString();
+    m_draftNoteDate = data.value("noteDate").toString();
+    m_draftNoteTime = data.value("noteTime").toString();
+    m_draftOrigInvNo = data.value("originalInvoiceNo").toString();
+    m_draftOrigInvDate = data.value("originalInvoiceDate").toString();
+    m_draftOrigInvType = data.value("originalInvoiceType", "Sale").toString();
+    m_draftPartyName = data.value("partyName").toString();
+    m_draftPartyGstin = data.value("partyGstin").toString();
+    m_draftIsInterstate = data.value("isInterstate", false).toBool();
+    m_draftGstPct = data.value("gstPct", 5.0).toDouble();
+    m_draftReasonCode = data.value("reasonCode", "01-Sales Return").toString();
+    m_draftAdjType = data.value("adjustmentType", "Sales Return").toString();
+    m_draftNarration = data.value("narration").toString();
+
+    QVector<DebitCreditNoteItem> items;
+    QVariantList itList = data.value("items").toList();
+    if (!itList.isEmpty()) {
+        for (const auto &v : itList) {
+            auto m = v.toMap();
+            DebitCreditNoteItem it;
+            it.itemName = m.value("itemName").toString();
+            it.hsnCode = m.value("hsnCode").toString();
+            it.unit = m.value("unit", "QTL").toString();
+            it.bags = m.value("bags", 0).toInt();
+            it.weightQtl = m.value("weightQtl", 0.0).toDouble();
+            it.rate = m.value("rate", 0.0).toDouble();
+            it.taxableAmount = m.value("taxableAmount", 0.0).toDouble();
+            it.gstPct = m.value("gstPct", 5.0).toDouble();
+            items.append(it);
+        }
+    } else {
+        DebitCreditNoteItem it;
+        it.itemName = data.value("itemName").toString();
+        it.hsnCode = data.value("hsnCode").toString();
+        it.unit = "QTL";
+        it.bags = data.value("totalBags", 0).toInt();
+        it.weightQtl = data.value("totalWeightQtl", 0.0).toDouble();
+        it.taxableAmount = data.value("taxableAmount", 0.0).toDouble();
+        it.gstPct = data.value("gstPct", 5.0).toDouble();
+        items.append(it);
+    }
+    m_itemsModel.setItems(items);
+    emit draftChanged();
+    recalculateFormTotals();
+    return true;
+}
+
+bool DebitCreditNoteController::fetchAndLoadOriginalInvoice(const QString &invType, const QString &invNo) {
+    QVariantMap res = fetchOriginalInvoice(invType, invNo);
+    if (!res.value("found", false).toBool()) return false;
+
+    m_draftOrigInvNo = res.value("invoiceNo").toString();
+    m_draftOrigInvDate = res.value("invoiceDate").toString();
+    m_draftPartyName = res.value("partyName").toString();
+    m_draftPartyGstin = res.value("partyGstin").toString();
+    m_draftStateCode = res.value("stateCode").toString();
+    m_draftIsInterstate = res.value("isInterstate", false).toBool();
+    m_draftGstPct = res.value("gstPct", 5.0).toDouble();
+
+    QVariantList itemsList = res.value("items").toList();
+    if (!itemsList.isEmpty()) {
+        QVector<DebitCreditNoteItem> items;
+        for (const auto &v : itemsList) {
+            auto m = v.toMap();
+            DebitCreditNoteItem it;
+            it.itemName = m.value("itemName").toString();
+            it.hsnCode = m.value("hsnCode").toString();
+            it.unit = m.value("unit", "QTL").toString();
+            it.bags = m.value("bags", 0).toInt();
+            it.weightQtl = m.value("weightQtl", 0.0).toDouble();
+            it.rate = m.value("rate", 0.0).toDouble();
+            it.taxableAmount = m.value("taxableAmount", 0.0).toDouble();
+            it.gstPct = m.value("gstPct", 5.0).toDouble();
+            items.append(it);
+        }
+        m_itemsModel.setItems(items);
+    }
+    emit draftChanged();
+    recalculateFormTotals();
+    return true;
+}
+
+bool DebitCreditNoteController::saveCurrentDraft() {
+    QVariantMap payload;
+    payload["id"] = m_draftId;
+    payload["noteType"] = m_draftNoteType;
+    payload["noteNo"] = m_draftNoteNo;
+    payload["noteDate"] = m_draftNoteDate;
+    payload["noteTime"] = m_draftNoteTime;
+    payload["originalInvoiceNo"] = m_draftOrigInvNo;
+    payload["originalInvoiceDate"] = m_draftOrigInvDate;
+    payload["originalInvoiceType"] = m_draftOrigInvType;
+    payload["partyName"] = m_draftPartyName;
+    payload["partyGstin"] = m_draftPartyGstin;
+    payload["isInterstate"] = m_draftIsInterstate;
+    payload["reasonCode"] = m_draftReasonCode;
+    payload["adjustmentType"] = m_draftAdjType;
+    payload["gstPct"] = m_draftGstPct;
+    payload["narration"] = m_draftNarration;
+    payload["items"] = m_itemsModel.toVariantList();
+
+    QVariantMap res = saveNote(payload);
+    return res.value("success", false).toBool();
+}
+

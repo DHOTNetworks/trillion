@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Templates as T
 import QtQuick.Layouts
@@ -15,7 +16,7 @@ T.ScrollView {
 
     property string activeTab: "ALL"
 
-    function handleEscape() {
+    function handleEscape(): void {
         if (kandaModal.visible) {
             kandaModal.close()
             return
@@ -23,18 +24,18 @@ T.ScrollView {
         root.cancelRequested()
     }
 
-    function openNewModal() {
+    function openNewModal(): void {
         kandaModalObj.resetForm()
         kandaModal.open()
     }
 
-    function openEditModal(id) {
+    function openEditModal(id: int): void {
         kandaModalObj.loadDispatch(id)
         kandaModal.open()
     }
 
-    function applyFilters() {
-        if (typeof transportDispatchCtrl !== "undefined" && transportDispatchCtrl.model) {
+    function applyFilters(): void {
+        if (typeof transportDispatchCtrl !== "undefined" && transportDispatchCtrl && transportDispatchCtrl.model) {
             transportDispatchCtrl.model.setFilter(root.activeTab, searchInput.text.trim())
         }
     }
@@ -395,6 +396,25 @@ T.ScrollView {
                     }
 
                     delegate: Rectangle {
+                        required property int index
+                        required property int dispatchId
+                        required property string slipNo
+                        required property string dispatchDate
+                        required property string dispatchTime
+                        required property string vehicleNo
+                        required property string partyName
+                        required property string transporterName
+                        required property string driverName
+                        required property string driverPhone
+                        required property string itemName
+                        required property string grade
+                        required property int bagCount
+                        required property real netWeightQtl
+                        required property string totalFreightFmt
+                        required property string balanceFreightFmt
+                        required property real balanceFreight
+                        required property string freightPaymentStatus
+
                         width: dispatchListView.width
                         height: 42
                         color: index % 2 === 0 ? "#FFFFFF" : "#F8FAFC"
@@ -412,7 +432,7 @@ T.ScrollView {
                             onEntered: parent.color = "#EFF6FF"
                             onExited: parent.color = index % 2 === 0 ? "#FFFFFF" : "#F8FAFC"
                             onDoubleClicked: {
-                                root.openEditModal(model.dispatchId)
+                                root.openEditModal(dispatchId)
                             }
                         }
 
@@ -422,7 +442,7 @@ T.ScrollView {
                             spacing: 8
 
                             Text {
-                                text: model.slipNo || ""
+                                text: slipNo
                                 color: "#2563EB"
                                 font.pixelSize: 12
                                 font.bold: true
@@ -431,7 +451,7 @@ T.ScrollView {
                             }
 
                             Text {
-                                text: (model.dispatchDate || "") + "\n" + (model.dispatchTime || "")
+                                text: dispatchDate + "\n" + dispatchTime
                                 color: "#64748B"
                                 font.pixelSize: 11
                                 elide: Text.ElideRight
@@ -439,7 +459,7 @@ T.ScrollView {
                             }
 
                             Text {
-                                text: model.vehicleNo || ""
+                                text: vehicleNo
                                 color: "#0F172A"
                                 font.pixelSize: 12
                                 font.bold: true
@@ -448,7 +468,7 @@ T.ScrollView {
                             }
 
                             Text {
-                                text: model.partyName || "-"
+                                text: partyName.length > 0 ? partyName : "-"
                                 color: "#0F172A"
                                 font.pixelSize: 12
                                 elide: Text.ElideRight
@@ -459,7 +479,7 @@ T.ScrollView {
                                 Layout.preferredWidth: 165
                                 spacing: 1
                                 Text {
-                                    text: model.transporterName || "-"
+                                    text: transporterName.length > 0 ? transporterName : "-"
                                     color: "#334155"
                                     font.pixelSize: 11
                                     font.bold: true
@@ -467,7 +487,7 @@ T.ScrollView {
                                     Layout.fillWidth: true
                                 }
                                 Text {
-                                    text: (model.driverName ? model.driverName + " " : "") + (model.driverPhone || "")
+                                    text: (driverName.length > 0 ? (driverName + " ") : "") + driverPhone
                                     color: "#64748B"
                                     font.pixelSize: 10
                                     elide: Text.ElideRight
@@ -476,7 +496,7 @@ T.ScrollView {
                             }
 
                             Text {
-                                text: (model.itemName || "-") + (model.grade ? " (" + model.grade + ")" : "")
+                                text: (itemName.length > 0 ? itemName : "-") + (grade.length > 0 ? (" (" + grade + ")") : "")
                                 color: "#475569"
                                 font.pixelSize: 11
                                 elide: Text.ElideRight
@@ -484,7 +504,7 @@ T.ScrollView {
                             }
 
                             Text {
-                                text: model.bagCount ? model.bagCount.toString() : "0"
+                                text: bagCount.toString()
                                 color: "#334155"
                                 font.pixelSize: 12
                                 Layout.preferredWidth: 55
@@ -492,7 +512,7 @@ T.ScrollView {
                             }
 
                             Text {
-                                text: model.netWeightQtl ? model.netWeightQtl.toFixed(2) : "0.00"
+                                text: netWeightQtl.toFixed(2)
                                 color: "#15803D"
                                 font.pixelSize: 12
                                 font.bold: true
@@ -501,7 +521,7 @@ T.ScrollView {
                             }
 
                             Text {
-                                text: model.totalFreightFmt || "Rs. 0.00"
+                                text: totalFreightFmt
                                 color: "#1D4ED8"
                                 font.pixelSize: 12
                                 font.bold: true
@@ -510,8 +530,8 @@ T.ScrollView {
                             }
 
                             Text {
-                                text: model.balanceFreightFmt || "Rs. 0.00"
-                                color: model.balanceFreight > 0 ? "#DC2626" : "#15803D"
+                                text: balanceFreightFmt
+                                color: balanceFreight > 0.0 ? "#DC2626" : "#15803D"
                                 font.pixelSize: 12
                                 font.bold: true
                                 Layout.preferredWidth: 95
@@ -522,14 +542,14 @@ T.ScrollView {
                                 Layout.preferredWidth: 80
                                 height: 22
                                 radius: 4
-                                color: model.freightPaymentStatus === "Settled" ? "#DCFCE7" : (model.freightPaymentStatus === "Partially Paid" ? "#FEF3C7" : "#FEE2E2")
-                                border.color: model.freightPaymentStatus === "Settled" ? "#86EFAC" : (model.freightPaymentStatus === "Partially Paid" ? "#FDE68A" : "#FCA5A5")
+                                color: freightPaymentStatus === "Settled" ? "#DCFCE7" : (freightPaymentStatus === "Partially Paid" ? "#FEF3C7" : "#FEE2E2")
+                                border.color: freightPaymentStatus === "Settled" ? "#86EFAC" : (freightPaymentStatus === "Partially Paid" ? "#FDE68A" : "#FCA5A5")
                                 border.width: 1
 
                                 Text {
                                     anchors.centerIn: parent
-                                    text: model.freightPaymentStatus || "Unpaid"
-                                    color: model.freightPaymentStatus === "Settled" ? "#166534" : (model.freightPaymentStatus === "Partially Paid" ? "#92400E" : "#991B1B")
+                                    text: freightPaymentStatus
+                                    color: freightPaymentStatus === "Settled" ? "#166534" : (freightPaymentStatus === "Partially Paid" ? "#92400E" : "#991B1B")
                                     font.pixelSize: 10
                                     font.bold: true
                                 }
@@ -544,7 +564,7 @@ T.ScrollView {
                                     implicitHeight: 26
                                     background: Rectangle { color: "#EFF6FF"; radius: 4; border.color: "#BFDBFE" }
                                     contentItem: Text { text: "Edit"; color: "#2563EB"; font.pixelSize: 11; font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                                    onClicked: root.openEditModal(model.dispatchId)
+                                    onClicked: root.openEditModal(dispatchId)
                                 }
 
                                 T.Button {
@@ -553,8 +573,8 @@ T.ScrollView {
                                     background: Rectangle { color: "#FEF2F2"; radius: 4; border.color: "#FECACA" }
                                     contentItem: Text { text: "Del"; color: "#DC2626"; font.pixelSize: 11; font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                                     onClicked: {
-                                        if (typeof transportDispatchCtrl !== "undefined") {
-                                            transportDispatchCtrl.deleteDispatch(model.dispatchId)
+                                        if (typeof transportDispatchCtrl !== "undefined" && transportDispatchCtrl) {
+                                            transportDispatchCtrl.deleteDispatch(dispatchId)
                                         }
                                     }
                                 }

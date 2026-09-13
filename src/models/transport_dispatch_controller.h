@@ -173,6 +173,8 @@ public:
     Q_INVOKABLE bool deleteDispatch(int id);
     Q_INVOKABLE QVariantMap getDispatch(int id);
     Q_INVOKABLE QString getNextSlipNo();
+    Q_INVOKABLE QString currentDateIso() const;
+    Q_INVOKABLE QString currentTimeIso() const;
     Q_INVOKABLE QVariantList searchInvoices(const QString &query);
 
 signals:

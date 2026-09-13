@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Templates as T
 import QtQuick.Layouts
@@ -14,7 +15,6 @@ Rectangle {
     border.width: 1
 
     property int editDispatchId: 0
-    property var invoiceSearchList: []
     property real loadedNetWeight: 0.0
     property real loadedFreight: 0.0
     property real loadedAdvance: 0.0
@@ -25,9 +25,9 @@ Rectangle {
     signal closeRequested()
     signal savedSuccess()
 
-    function loadDispatch(id) {
+    function loadDispatch(id: int): void {
         root.editDispatchId = id
-        if (id > 0 && typeof transportDispatchCtrl !== "undefined") {
+        if (id > 0 && typeof transportDispatchCtrl !== "undefined" && transportDispatchCtrl) {
             var data = transportDispatchCtrl.getDispatch(id)
             if (data && data.slipNo) {
                 root.loadedNetWeight = (data.netWeightQtl && data.netWeightQtl > 0) ? data.netWeightQtl : 0.0
@@ -55,7 +55,7 @@ Rectangle {
                 grossWeightInput.text = (data.grossWeightQtl && data.grossWeightQtl > 0) ? data.grossWeightQtl.toString() : ""
                 tareWeightInput.text = (data.tareWeightQtl && data.tareWeightQtl > 0) ? data.tareWeightQtl.toString() : ""
                 bagTareInput.text = (data.bagTareKg && data.bagTareKg > 0) ? data.bagTareKg.toString() : "0.00"
-                
+
                 var cType = data.freightCalcType || "Per Qtl"
                 if (cType === "Per Bag") calcTypeCombo.currentIndex = 1
                 else if (cType === "Fixed") calcTypeCombo.currentIndex = 2
@@ -66,7 +66,7 @@ Rectangle {
                 ewayInput.text = data.ewayBillNo || ""
                 irnInput.text = data.irnNo || ""
                 notesInput.text = data.notes || ""
-                
+
                 recalcAll()
                 return
             }
@@ -75,7 +75,7 @@ Rectangle {
         resetForm()
     }
 
-    function resetForm() {
+    function resetForm(): void {
         root.editDispatchId = 0
         root.loadedNetWeight = 0.0
         root.loadedFreight = 0.0
@@ -84,21 +84,17 @@ Rectangle {
         root.calculatedTotalFreight = 0.0
         root.calculatedBalanceFreight = 0.0
 
-        if (typeof transportDispatchCtrl !== "undefined") {
+        if (typeof transportDispatchCtrl !== "undefined" && transportDispatchCtrl) {
             slipNoInput.text = transportDispatchCtrl.getNextSlipNo()
+            dateInput.text = transportDispatchCtrl.currentDateIso()
+            timeInput.text = transportDispatchCtrl.currentTimeIso()
+            grDateInput.text = transportDispatchCtrl.currentDateIso()
         } else {
             slipNoInput.text = "KND-0001"
+            dateInput.text = "2026-04-01"
+            timeInput.text = "10:00"
+            grDateInput.text = "2026-04-01"
         }
-        
-        var today = new Date()
-        var yyyy = today.getFullYear()
-        var mm = String(today.getMonth() + 1).padStart(2, '0')
-        var dd = String(today.getDate()).padStart(2, '0')
-        dateInput.text = yyyy + "-" + mm + "-" + dd
-        
-        var hh = String(today.getHours()).padStart(2, '0')
-        var min = String(today.getMinutes()).padStart(2, '0')
-        timeInput.text = hh + ":" + min
 
         invoiceInput.text = ""
         partyInput.text = ""
@@ -110,7 +106,6 @@ Rectangle {
         transporterInput.text = ""
         transporterGstinInput.text = ""
         grNoInput.text = ""
-        grDateInput.text = yyyy + "-" + mm + "-" + dd
         destInput.text = ""
         distInput.text = "0"
         bagCountInput.text = "0"
@@ -127,7 +122,7 @@ Rectangle {
         recalcAll()
     }
 
-    function recalcAll() {
+    function recalcAll(): void {
         var gross = parseFloat(grossWeightInput.text) || 0.0
         var tare = parseFloat(tareWeightInput.text) || 0.0
         var bags = parseInt(bagCountInput.text) || 0

@@ -666,3 +666,12 @@ QVariantList TransportDispatchController::searchInvoices(const QString &query) {
     );
     return rows;
 }
+
+QString TransportDispatchController::currentDateIso() const {
+    return QDate::currentDate().toString("yyyy-MM-dd");
+}
+
+QString TransportDispatchController::currentTimeIso() const {
+    return QTime::currentTime().toString("hh:mm");
+}
+

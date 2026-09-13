@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Templates as T
 import QtQuick.Layouts
@@ -330,6 +331,9 @@ Rectangle {
                         ]
 
                         Rectangle {
+                            required property int index
+                            required property var modelData
+
                             height: 24
                             implicitWidth: tabTxt.implicitWidth + 12
                             radius: 3
@@ -508,12 +512,31 @@ Rectangle {
 
                     delegate: Rectangle {
                         id: rowDelegate
+                        required property int index
+                        required property int rowIndex
+                        required property string vDate
+                        required property string isoDate
+                        required property string narration
+                        required property string utrRef
+                        required property real withdrawal
+                        required property real deposit
+                        required property real balance
+                        required property real amount
+                        required property string category
+                        required property string extractedParty
+                        required property string drAccount
+                        required property string crAccount
+                        required property string voucherType
+                        required property string confidence
+                        required property bool isDuplicate
+                        required property bool isSelected
+
                         width: statementListView.width
                         height: 34
 
                         property bool isCurrent: statementListView.currentIndex === index && statementListView.activeFocus
-                        color: isCurrent ? "#DBEAFE" : (model.isSelected ? (model.deposit > 0.001 ? "#F0FDF4" : "#FFF7ED") : (index % 2 === 0 ? "#FFFFFF" : "#F8FAFC"))
-                        border.color: isCurrent ? "#2563EB" : (model.isSelected ? (model.deposit > 0.001 ? "#86EFAC" : "#FDBA74") : "#F1F5F9")
+                        color: isCurrent ? "#DBEAFE" : (isSelected ? (deposit > 0.001 ? "#F0FDF4" : "#FFF7ED") : (index % 2 === 0 ? "#FFFFFF" : "#F8FAFC"))
+                        border.color: isCurrent ? "#2563EB" : (isSelected ? (deposit > 0.001 ? "#86EFAC" : "#FDBA74") : "#F1F5F9")
                         border.width: isCurrent ? 2 : 1
                         radius: 3
 
@@ -529,14 +552,14 @@ Rectangle {
                                 boxSize: 15
                                 boxRadius: 3
                                 checkedColor: "#2563EB"
-                                checked: Boolean(model.isSelected)
+                                checked: isSelected
                                 onToggled: {
-                                    bankStatementCtrl.rowsModel.setRowSelected(index, !model.isSelected)
+                                    bankStatementCtrl.rowsModel.setRowSelected(index, !isSelected)
                                 }
                             }
 
-                            Text { text: model.rowIndex ? model.rowIndex.toString() : (index + 1).toString(); color: "#64748B"; font.pixelSize: 10; Layout.preferredWidth: 28; Layout.minimumWidth: 28 }
-                            Text { text: model.vDate ? model.vDate : ""; color: "#334155"; font.pixelSize: 10; Layout.preferredWidth: 72; Layout.minimumWidth: 72 }
+                            Text { text: rowIndex > 0 ? rowIndex.toString() : (index + 1).toString(); color: "#64748B"; font.pixelSize: 10; Layout.preferredWidth: 28; Layout.minimumWidth: 28 }
+                            Text { text: vDate; color: "#334155"; font.pixelSize: 10; Layout.preferredWidth: 72; Layout.minimumWidth: 72 }
 
                             // Voucher Type Badge
                             Rectangle {
@@ -544,12 +567,12 @@ Rectangle {
                                 Layout.minimumWidth: 75
                                 height: 20
                                 radius: 3
-                                color: model.deposit > 0.001 ? "#DCFCE7" : "#FEE2E2"
-                                border.color: model.deposit > 0.001 ? "#86EFAC" : "#FCA5A5"
+                                color: deposit > 0.001 ? "#DCFCE7" : "#FEE2E2"
+                                border.color: deposit > 0.001 ? "#86EFAC" : "#FCA5A5"
                                 Text {
                                     anchors.centerIn: parent
-                                    text: model.deposit > 0.001 ? "Receipt" : "Payment"
-                                    color: model.deposit > 0.001 ? "#15803D" : "#B91C1C"
+                                    text: deposit > 0.001 ? "Receipt" : "Payment"
+                                    color: deposit > 0.001 ? "#15803D" : "#B91C1C"
                                     font.pixelSize: 9; font.bold: true
                                 }
                             }
@@ -563,13 +586,13 @@ Rectangle {
                                 clip: true
 
                                 Rectangle {
-                                    visible: Boolean(model.utrRef && model.utrRef.length > 0)
+                                    visible: utrRef.length > 0
                                     height: 16; radius: 3; color: "#EFF6FF"; border.color: "#BFDBFE"
                                     implicitWidth: utrTxt.implicitWidth + 6
-                                    Text { id: utrTxt; anchors.centerIn: parent; text: model.utrRef || ""; color: "#1D4ED8"; font.pixelSize: 9; font.bold: true }
+                                    Text { id: utrTxt; anchors.centerIn: parent; text: utrRef; color: "#1D4ED8"; font.pixelSize: 9; font.bold: true }
                                 }
                                 Text {
-                                    text: model.narration ? model.narration : ""
+                                    text: narration
                                     color: "#0F172A"
                                     font.pixelSize: 10
                                     Layout.fillWidth: true
@@ -585,15 +608,15 @@ Rectangle {
                                 Layout.minimumWidth: 145
                                 height: 24
                                 radius: 3
-                                color: model.drAccount ? "#EFF6FF" : "#FEF2F2"
-                                border.color: model.drAccount ? "#93C5FD" : "#FCA5A5"
+                                color: drAccount.length > 0 ? "#EFF6FF" : "#FEF2F2"
+                                border.color: drAccount.length > 0 ? "#93C5FD" : "#FCA5A5"
                                 border.width: 1
                                 RowLayout {
                                     anchors.fill: parent
                                     anchors.leftMargin: 5; anchors.rightMargin: 5
                                     Text {
-                                        text: model.drAccount ? model.drAccount : "Select Dr..."
-                                        color: model.drAccount ? "#1E40AF" : "#DC2626"
+                                        text: drAccount.length > 0 ? drAccount : "Select Dr..."
+                                        color: drAccount.length > 0 ? "#1E40AF" : "#DC2626"
                                         font.pixelSize: 9
                                         font.bold: true
                                         Layout.fillWidth: true
@@ -606,7 +629,7 @@ Rectangle {
                                     cursorShape: Qt.PointingHandCursor
                                     onClicked: {
                                         statementListView.currentIndex = index
-                                        partyPopupScope.openForEdit(index, "Dr", model.drAccount || "")
+                                        partyPopupScope.openForEdit(index, "Dr", drAccount)
                                     }
                                 }
                             }
@@ -617,15 +640,15 @@ Rectangle {
                                 Layout.minimumWidth: 145
                                 height: 24
                                 radius: 3
-                                color: model.crAccount ? "#FFF7ED" : "#FEF2F2"
-                                border.color: model.crAccount ? "#FDBA74" : "#FCA5A5"
+                                color: crAccount.length > 0 ? "#FFF7ED" : "#FEF2F2"
+                                border.color: crAccount.length > 0 ? "#FDBA74" : "#FCA5A5"
                                 border.width: 1
                                 RowLayout {
                                     anchors.fill: parent
                                     anchors.leftMargin: 5; anchors.rightMargin: 5
                                     Text {
-                                        text: model.crAccount ? model.crAccount : "Select Cr..."
-                                        color: model.crAccount ? "#9A3412" : "#DC2626"
+                                        text: crAccount.length > 0 ? crAccount : "Select Cr..."
+                                        color: crAccount.length > 0 ? "#9A3412" : "#DC2626"
                                         font.pixelSize: 9
                                         font.bold: true
                                         Layout.fillWidth: true
@@ -638,15 +661,15 @@ Rectangle {
                                     cursorShape: Qt.PointingHandCursor
                                     onClicked: {
                                         statementListView.currentIndex = index
-                                        partyPopupScope.openForEdit(index, "Cr", model.crAccount || "")
+                                        partyPopupScope.openForEdit(index, "Cr", crAccount)
                                     }
                                 }
                             }
 
                             // Amount
                             Text {
-                                text: (typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.format_inr(model.amount) : ((parseFloat(model.amount) || 0.0).toFixed(2))
-                                color: model.deposit > 0.001 ? "#16A34A" : "#DC2626"
+                                text: (typeof dashboardCtrl !== "undefined" && dashboardCtrl) ? dashboardCtrl.format_inr(amount) : amount.toFixed(2)
+                                color: deposit > 0.001 ? "#16A34A" : "#DC2626"
                                 font.pixelSize: 10
                                 font.bold: true
                                 Layout.preferredWidth: 90
@@ -660,14 +683,14 @@ Rectangle {
                                 Layout.minimumWidth: 85
                                 height: 20
                                 radius: 3
-                                color: model.isDuplicate ? "#F1F5F9" : (model.confidence === "ALIAS_MATCH" ? "#F5F3FF" : (model.confidence === "HIGH" ? "#ECFDF5" : (model.confidence === "MEDIUM" ? "#EFF6FF" : "#FEF2F2")))
-                                border.color: model.isDuplicate ? "#CBD5E1" : (model.confidence === "ALIAS_MATCH" ? "#DDD6FE" : (model.confidence === "HIGH" ? "#A7F3D0" : (model.confidence === "MEDIUM" ? "#BFDBFE" : "#FECACA")))
+                                color: isDuplicate ? "#F1F5F9" : (confidence === "ALIAS_MATCH" ? "#F5F3FF" : (confidence === "HIGH" ? "#ECFDF5" : (confidence === "MEDIUM" ? "#EFF6FF" : "#FEF2F2")))
+                                border.color: isDuplicate ? "#CBD5E1" : (confidence === "ALIAS_MATCH" ? "#DDD6FE" : (confidence === "HIGH" ? "#A7F3D0" : (confidence === "MEDIUM" ? "#BFDBFE" : "#FECACA")))
 
                                 RowLayout {
                                     anchors.centerIn: parent
                                     Text {
-                                        text: model.isDuplicate ? "Duplicate" : (model.confidence === "ALIAS_MATCH" ? "Learned" : (model.confidence === "HIGH" ? "Matched" : (model.confidence === "MEDIUM" ? "Suggestion" : "Unmatched")))
-                                        color: model.isDuplicate ? "#64748B" : (model.confidence === "ALIAS_MATCH" ? "#6D28D9" : (model.confidence === "HIGH" ? "#047857" : (model.confidence === "MEDIUM" ? "#1D4ED8" : "#B91C1C")))
+                                        text: isDuplicate ? "Duplicate" : (confidence === "ALIAS_MATCH" ? "Learned" : (confidence === "HIGH" ? "Matched" : (confidence === "MEDIUM" ? "Suggestion" : "Unmatched")))
+                                        color: isDuplicate ? "#64748B" : (confidence === "ALIAS_MATCH" ? "#6D28D9" : (confidence === "HIGH" ? "#047857" : (confidence === "MEDIUM" ? "#1D4ED8" : "#B91C1C")))
                                         font.pixelSize: 9; font.bold: true
                                     }
                                 }
@@ -993,6 +1016,9 @@ Rectangle {
                     }
 
                     delegate: Rectangle {
+                        required property int index
+                        required property var modelData
+
                         width: partyListView.width
                         height: 36
                         radius: 4

@@ -27,6 +27,7 @@ ColumnLayout {
     signal upPressed()
     signal downPressed()
     signal editingFinished()
+    signal textEdited()
 
     function ensureVisibleInScroll() {
         var p = root.parent
@@ -104,6 +105,7 @@ ColumnLayout {
             background: null
             selectByMouse: true
             onEditingFinished: root.editingFinished()
+            onTextEdited: root.textEdited()
 
             onActiveFocusChanged: {
                 if (activeFocus) {
