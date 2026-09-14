@@ -30,6 +30,11 @@ T.ApplicationWindow {
     property bool isMdbModalOpen: false
     property string activePeriodLabel: "FY 2026-27"
     property string pendingEditInvoiceNo: ""
+    property string pendingEditVoucherNo: ""
+    property int pendingEditVoucherId: 0
+    property string pendingEditVoucherType: ""
+    property string pendingEditVoucherDate: ""
+    property string targetChequeMode: "Payment"
     property int targetTdsVoucherId: 0
     property string targetStatementParty: ""
 
@@ -167,7 +172,6 @@ T.ApplicationWindow {
     }
     Shortcut { sequence: "Alt+F2"; context: Qt.ApplicationShortcut; onActivated: window.isPeriodModalOpen = true }
     Shortcut { sequence: "Option+F2"; context: Qt.ApplicationShortcut; onActivated: window.isPeriodModalOpen = true }
-    property string targetChequeMode: "Payment"
 
     Shortcut { 
         sequence: "F3"
@@ -330,17 +334,125 @@ T.ApplicationWindow {
                         Qt.callLater(item.focusSearch)
                     }
 
-                    if (window.currentViewIndex === 16 && item && typeof item.voucherMode !== "undefined") {
-                        item.voucherMode = window.targetChequeMode
+                    // 14: SalesVoucherView
+                    if (window.currentViewIndex === 14 && item) {
+                        if (window.pendingEditInvoiceNo !== "" || window.pendingEditVoucherNo !== "" || window.pendingEditVoucherId > 0) {
+                            var salesIdOrNo = window.pendingEditInvoiceNo !== "" ? window.pendingEditInvoiceNo : (window.pendingEditVoucherId > 0 ? window.pendingEditVoucherId : window.pendingEditVoucherNo)
+                            window.pendingEditInvoiceNo = ""
+                            window.pendingEditVoucherNo = ""
+                            window.pendingEditVoucherId = 0
+                            Qt.callLater(function() {
+                                if (item && typeof item.loadInvoiceForEditing === "function") {
+                                    item.loadInvoiceForEditing(salesIdOrNo)
+                                }
+                            })
+                        }
                     }
 
+                    // 15: PurchaseVoucherView
+                    if (window.currentViewIndex === 15 && item) {
+                        if (window.pendingEditInvoiceNo !== "" || window.pendingEditVoucherNo !== "" || window.pendingEditVoucherId > 0) {
+                            var purcIdOrNo = window.pendingEditInvoiceNo !== "" ? window.pendingEditInvoiceNo : (window.pendingEditVoucherId > 0 ? window.pendingEditVoucherId : window.pendingEditVoucherNo)
+                            window.pendingEditInvoiceNo = ""
+                            window.pendingEditVoucherNo = ""
+                            window.pendingEditVoucherId = 0
+                            Qt.callLater(function() {
+                                if (item && typeof item.loadInvoiceForEditing === "function") {
+                                    item.loadInvoiceForEditing(purcIdOrNo)
+                                }
+                            })
+                        }
+                    }
+
+                    // 16: ChequeVoucherView
+                    if (window.currentViewIndex === 16 && item) {
+                        if (typeof item.voucherMode !== "undefined") {
+                            item.voucherMode = window.targetChequeMode
+                        }
+                        if (window.pendingEditVoucherId > 0 || window.pendingEditVoucherNo !== "") {
+                            var chqIdOrNo = window.pendingEditVoucherId > 0 ? window.pendingEditVoucherId : window.pendingEditVoucherNo
+                            var chqDate = window.pendingEditVoucherDate
+                            window.pendingEditVoucherId = 0
+                            window.pendingEditVoucherNo = ""
+                            window.pendingEditVoucherDate = ""
+                            Qt.callLater(function() {
+                                if (item && typeof item.loadVoucherForEditing === "function") {
+                                    item.loadVoucherForEditing(chqIdOrNo, chqDate)
+                                }
+                            })
+                        }
+                    }
+
+                    // 17: JournalVoucherView
+                    if (window.currentViewIndex === 17 && item) {
+                        if (window.pendingEditVoucherId > 0 || window.pendingEditVoucherNo !== "") {
+                            var jrnlIdOrNo = window.pendingEditVoucherId > 0 ? window.pendingEditVoucherId : window.pendingEditVoucherNo
+                            var jrnlDate = window.pendingEditVoucherDate
+                            window.pendingEditVoucherId = 0
+                            window.pendingEditVoucherNo = ""
+                            window.pendingEditVoucherDate = ""
+                            Qt.callLater(function() {
+                                if (item && typeof item.loadVoucherForEditing === "function") {
+                                    item.loadVoucherForEditing(jrnlIdOrNo, jrnlDate)
+                                }
+                            })
+                        }
+                    }
+
+                    // 18: MillingVoucherView
+                    if (window.currentViewIndex === 18 && item) {
+                        if (window.pendingEditVoucherId > 0 || window.pendingEditVoucherNo !== "") {
+                            var millIdOrNo = window.pendingEditVoucherId > 0 ? window.pendingEditVoucherId : window.pendingEditVoucherNo
+                            window.pendingEditVoucherId = 0
+                            window.pendingEditVoucherNo = ""
+                            Qt.callLater(function() {
+                                if (item && typeof item.loadBatchForEditing === "function") {
+                                    item.loadBatchForEditing(millIdOrNo)
+                                }
+                            })
+                        }
+                    }
+
+                    // 23: JFormVoucherView
+                    if (window.currentViewIndex === 23 && item) {
+                        if (window.pendingEditVoucherId > 0 || window.pendingEditVoucherNo !== "") {
+                            var jfIdOrNo = window.pendingEditVoucherId > 0 ? window.pendingEditVoucherId : window.pendingEditVoucherNo
+                            window.pendingEditVoucherId = 0
+                            window.pendingEditVoucherNo = ""
+                            Qt.callLater(function() {
+                                if (item && typeof item.loadVoucherForEditing === "function") {
+                                    item.loadVoucherForEditing(jfIdOrNo)
+                                }
+                            })
+                        }
+                    }
+
+                    // 24: TdsVoucherView
                     if (window.currentViewIndex === 24 && item) {
-                        if (window.targetTdsVoucherId > 0) {
-                            if (typeof item.loadVoucher !== "undefined" && typeof tdsModel !== "undefined" && tdsModel) {
-                                var vch = tdsModel.get_tds_voucher_by_id(window.targetTdsVoucherId)
-                                item.loadVoucher(vch)
-                            }
+                        if (window.targetTdsVoucherId > 0 || window.pendingEditVoucherId > 0 || window.pendingEditVoucherNo !== "") {
+                            var targetId = window.targetTdsVoucherId > 0 ? window.targetTdsVoucherId : (window.pendingEditVoucherId > 0 ? window.pendingEditVoucherId : window.pendingEditVoucherNo)
                             window.targetTdsVoucherId = 0
+                            window.pendingEditVoucherId = 0
+                            window.pendingEditVoucherNo = ""
+                            Qt.callLater(function() {
+                                if (item && typeof item.loadVoucher === "function" && typeof tdsModel !== "undefined" && tdsModel) {
+                                    var vch = tdsModel.get_tds_voucher_by_id(targetId)
+                                    if (vch && vch.id) item.loadVoucher(vch)
+                                }
+                            })
+                        }
+                    }
+
+                    // 28: DebitCreditNoteView
+                    if (window.currentViewIndex === 28 && item) {
+                        if (window.pendingEditVoucherId > 0) {
+                            var noteId = window.pendingEditVoucherId
+                            window.pendingEditVoucherId = 0
+                            Qt.callLater(function() {
+                                if (item && typeof item.loadNoteForEditing === "function") {
+                                    item.loadNoteForEditing(noteId)
+                                }
+                            })
                         }
                     }
 
@@ -378,17 +490,6 @@ T.ApplicationWindow {
                         } else {
                             item.forceActiveFocus()
                         }
-                    }
-
-                    // Automatically load invoice for editing if pending
-                    if (window.pendingEditInvoiceNo !== "") {
-                        var invToLoad = window.pendingEditInvoiceNo
-                        window.pendingEditInvoiceNo = ""
-                        Qt.callLater(function() {
-                            if (item && typeof item.loadInvoiceForEditing === "function") {
-                                item.loadInvoiceForEditing(invToLoad)
-                            }
-                        })
                     }
                 }
             }

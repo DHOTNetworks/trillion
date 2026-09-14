@@ -130,89 +130,104 @@ Rectangle {
     }
 
     function openVoucherEntry(item) {
-        if (!item) return
-        var vType = item.voucher_type || item.trans_type || ""
-        var rawType = item.legacy_type || item.trans_type || ""
-        var vNoStr = (item.voucher_no || item.refNo || "").toString()
+        if (!item || typeof window === "undefined") return
+        var vType = item.voucherType || item.voucher_type || item.transType || item.trans_type || ""
+        var rawType = item.legacyType || item.legacy_type || item.transType || item.trans_type || ""
+        var vNoStr = (item.voucherNo || item.voucher_no || item.refNo || "").toString()
         var vNo = parseInt(vNoStr.replace(/\D/g, "")) || 0
-        var vDate = item.vIso || toIso(item.vDate)
+        var vDate = item.vIso || (item.vDate ? toIso(item.vDate) : "")
+        var itemId = item.id || 0
 
-        // Check if it's a TDS voucher
+        // 1. TDS Voucher
         if (vType === "TDS" || rawType === "TDS" || (item.particulars && item.particulars.indexOf("T.D.S.") !== -1)) {
             if (typeof tdsModel !== "undefined" && tdsModel) {
                 var tdsVch = tdsModel.get_tds_voucher_by_ref(vNo, vDate)
                 if (tdsVch && tdsVch.id) {
-                    if (typeof window !== "undefined") {
-                        window.targetTdsVoucherId = tdsVch.id
-                        if (typeof window.navigateToView === "function") {
-                            window.navigateToView(24) // TDS Voucher View
-                        } else {
-                            window.currentViewIndex = 24
-                        }
-                    }
-                    return
-                }
-            }
-            if (typeof window !== "undefined") {
-                if (typeof window.navigateToView === "function") {
-                    window.navigateToView(24)
+                    window.targetTdsVoucherId = tdsVch.id
                 } else {
-                    window.currentViewIndex = 24
+                    window.targetTdsVoucherId = itemId
                 }
+            } else {
+                window.targetTdsVoucherId = itemId
             }
+            window.pendingEditVoucherId = itemId
+            window.pendingEditVoucherNo = vNoStr
+            if (typeof window.navigateToView === "function") window.navigateToView(24)
+            else window.currentViewIndex = 24
             return
         }
 
-        if (vType === "Sales" || rawType === "Sale") {
-            if (typeof window !== "undefined") {
-                window.pendingEditInvoiceNo = item.invoice_no || vNoStr
-                if (typeof window.navigateToView === "function") {
-                    window.navigateToView(14) // Sales Voucher
-                } else {
-                    window.currentViewIndex = 14
-                }
-            }
+        // 2. Sales Voucher
+        if (vType === "Sales" || rawType === "Sale" || rawType === "Sales" || vType === "Sale") {
+            window.pendingEditInvoiceNo = item.invoiceNo || item.invoice_no || vNoStr
+            window.pendingEditVoucherNo = vNoStr
+            window.pendingEditVoucherId = itemId
+            window.pendingEditVoucherDate = vDate
+            if (typeof window.navigateToView === "function") window.navigateToView(14)
+            else window.currentViewIndex = 14
             return
         }
-        if (vType === "Purchase" || rawType === "Purc") {
-            if (typeof window !== "undefined") {
-                window.pendingEditInvoiceNo = item.invoice_no || vNoStr
-                if (typeof window.navigateToView === "function") {
-                    window.navigateToView(15) // Purchase Voucher
-                } else {
-                    window.currentViewIndex = 15
-                }
-            }
+
+        // 3. Purchase Voucher
+        if (vType === "Purchase" || rawType === "Purc" || rawType === "Purchase" || vType === "Purc") {
+            window.pendingEditInvoiceNo = item.invoiceNo || item.invoice_no || vNoStr
+            window.pendingEditVoucherNo = vNoStr
+            window.pendingEditVoucherId = itemId
+            window.pendingEditVoucherDate = vDate
+            if (typeof window.navigateToView === "function") window.navigateToView(15)
+            else window.currentViewIndex = 15
             return
         }
-        if (vType === "Payment" || vType === "Receipt" || rawType === "ChPt" || rawType === "ChRt" || rawType === "Pymt" || rawType === "Rcpt") {
-            if (typeof window !== "undefined") {
-                if (typeof window.navigateToView === "function") {
-                    window.navigateToView(16) // Cheque Voucher
-                } else {
-                    window.currentViewIndex = 16
-                }
-            }
+
+        // 4. Payment / Receipt (Cheque / Cash / Bank)
+        if (vType === "Payment" || vType === "Receipt" || rawType === "ChPt" || rawType === "ChRt" || rawType === "Pymt" || rawType === "Rcpt" || rawType === "Bank") {
+            var isReceipt = (vType === "Receipt" || rawType === "ChRt" || rawType === "Rcpt" || (item.side === "Cr"))
+            window.targetChequeMode = isReceipt ? "RECEIPT" : "PAYMENT"
+            window.pendingEditVoucherId = itemId
+            window.pendingEditVoucherNo = vNoStr
+            window.pendingEditVoucherDate = vDate
+            if (typeof window.navigateToView === "function") window.navigateToView(16)
+            else window.currentViewIndex = 16
             return
         }
-        if (vType === "Journal" || rawType === "Jrnl") {
-            if (typeof window !== "undefined") {
-                if (typeof window.navigateToView === "function") {
-                    window.navigateToView(17) // Journal Voucher
-                } else {
-                    window.currentViewIndex = 17
-                }
-            }
+
+        // 5. Journal Voucher
+        if (vType === "Journal" || rawType === "Jrnl" || rawType === "Journal" || vType === "Jrnl") {
+            window.pendingEditVoucherId = itemId
+            window.pendingEditVoucherNo = vNoStr
+            window.pendingEditVoucherDate = vDate
+            if (typeof window.navigateToView === "function") window.navigateToView(17)
+            else window.currentViewIndex = 17
             return
         }
-        if (vType === "J-Form" || rawType === "JFrm") {
-            if (typeof window !== "undefined") {
-                if (typeof window.navigateToView === "function") {
-                    window.navigateToView(23) // J-Form Voucher
-                } else {
-                    window.currentViewIndex = 23
-                }
-            }
+
+        // 6. Milling / Production Voucher
+        if (vType === "Milling" || rawType === "Mill" || rawType === "Prod" || rawType === "ML") {
+            window.pendingEditVoucherId = itemId
+            window.pendingEditVoucherNo = vNoStr
+            window.pendingEditVoucherDate = vDate
+            if (typeof window.navigateToView === "function") window.navigateToView(18)
+            else window.currentViewIndex = 18
+            return
+        }
+
+        // 7. J-Form Voucher
+        if (vType === "J-Form" || rawType === "JFrm" || rawType === "J-Form" || vType === "JFrm") {
+            window.pendingEditVoucherId = itemId
+            window.pendingEditVoucherNo = vNoStr
+            window.pendingEditVoucherDate = vDate
+            if (typeof window.navigateToView === "function") window.navigateToView(23)
+            else window.currentViewIndex = 23
+            return
+        }
+
+        // 8. Debit / Credit Note
+        if (vType === "Debit Note" || vType === "Credit Note" || rawType === "DbNt" || rawType === "CrNt" || rawType === "DN" || rawType === "CN") {
+            window.pendingEditVoucherId = itemId
+            window.pendingEditVoucherNo = vNoStr
+            window.pendingEditVoucherDate = vDate
+            if (typeof window.navigateToView === "function") window.navigateToView(28)
+            else window.currentViewIndex = 28
             return
         }
     }

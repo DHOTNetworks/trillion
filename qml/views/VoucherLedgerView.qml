@@ -46,6 +46,98 @@ ColumnLayout {
         }
     }
 
+    function openVoucher(rowIndex) {
+        if (typeof vouchersModel === "undefined" || !vouchersModel || typeof window === "undefined") return
+        var row = vouchersModel.get(rowIndex)
+        if (!row) return
+
+        var vType = row.voucher_type || ""
+        var vNo = ("" + (row.voucher_no || "")).trim()
+        var vId = row.id || 0
+        var vDate = "" + (row.voucher_date || "")
+
+        if (vType === "Sale" || vType === "Sales") {
+            window.pendingEditInvoiceNo = vNo
+            window.pendingEditVoucherNo = vNo
+            window.pendingEditVoucherId = vId
+            window.pendingEditVoucherDate = vDate
+            window.navigateToView(14)
+            return
+        }
+
+        if (vType === "Purc" || vType === "Purchase") {
+            window.pendingEditInvoiceNo = vNo
+            window.pendingEditVoucherNo = vNo
+            window.pendingEditVoucherId = vId
+            window.pendingEditVoucherDate = vDate
+            window.navigateToView(15)
+            return
+        }
+
+        if (vType === "ChPt" || vType === "Pymt" || vType === "Payment") {
+            window.targetChequeMode = "PAYMENT"
+            window.pendingEditVoucherId = vId
+            window.pendingEditVoucherNo = vNo
+            window.pendingEditVoucherDate = vDate
+            window.navigateToView(16)
+            return
+        }
+
+        if (vType === "ChRt" || vType === "Rcpt" || vType === "Receipt") {
+            window.targetChequeMode = "RECEIPT"
+            window.pendingEditVoucherId = vId
+            window.pendingEditVoucherNo = vNo
+            window.pendingEditVoucherDate = vDate
+            window.navigateToView(16)
+            return
+        }
+
+        if (vType === "Jrnl" || vType === "Journal" || vType === "Jour") {
+            window.pendingEditVoucherId = vId
+            window.pendingEditVoucherNo = vNo
+            window.pendingEditVoucherDate = vDate
+            window.navigateToView(17)
+            return
+        }
+
+        if (vType === "Mill" || vType === "Milling" || vType === "Prod" || vType === "ML") {
+            window.pendingEditVoucherId = vId
+            window.pendingEditVoucherNo = vNo
+            window.pendingEditVoucherDate = vDate
+            window.navigateToView(18)
+            return
+        }
+
+        if (vType === "JFrm" || vType === "J-Form" || vType === "JForm") {
+            window.pendingEditVoucherId = vId
+            window.pendingEditVoucherNo = vNo
+            window.pendingEditVoucherDate = vDate
+            window.navigateToView(23)
+            return
+        }
+
+        if (vType === "TDS" || vType === "Tds") {
+            window.targetTdsVoucherId = vId
+            window.pendingEditVoucherId = vId
+            window.pendingEditVoucherNo = vNo
+            window.navigateToView(24)
+            return
+        }
+
+        if (vType === "DbNt" || vType === "CrNt" || vType === "Debit Note" || vType === "Credit Note" || vType === "DN" || vType === "CN") {
+            window.pendingEditVoucherId = vId
+            window.pendingEditVoucherNo = vNo
+            window.pendingEditVoucherDate = vDate
+            window.navigateToView(28)
+            return
+        }
+
+        window.pendingEditVoucherId = vId
+        window.pendingEditVoucherNo = vNo
+        window.pendingEditVoucherDate = vDate
+        window.navigateToView(16)
+    }
+
     FastTable {
         Layout.fillWidth: true
         Layout.fillHeight: true
@@ -54,5 +146,8 @@ ColumnLayout {
         headers: ["Voucher No", "Date", "Type", "Party", "Account", "Amount ₹", "Narration"]
         roleKeys: ["voucher_no", "voucher_date", "voucher_type", "party_name", "account_type", "amount", "narration"]
         onNewEntryRequested: root.showNewModal()
+        onRowClicked: function(rowIndex) {
+            root.openVoucher(rowIndex)
+        }
     }
 }

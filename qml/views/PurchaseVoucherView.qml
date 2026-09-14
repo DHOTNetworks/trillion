@@ -85,13 +85,9 @@ Item {
 
     Component.onCompleted: {
         resetForm()
-        if (!root.isEditMode) {
+        if (!root.isEditMode && (!window || (window.pendingEditInvoiceNo === "" && window.pendingEditVoucherNo === "" && window.pendingEditVoucherId === 0))) {
             Qt.callLater(function() {
                 root.openDateModal()
-            })
-        } else {
-            Qt.callLater(function() {
-                partyCombo.focusAndOpen()
             })
         }
     }
@@ -164,8 +160,22 @@ Item {
         autoVoucherNo = autoVchCode
         invNoInput.text = inv.invoice_no || ""
         if (inv.invoice_date) {
-            var parts = String(inv.invoice_date).split("-")
-            invoiceDateInput.text = parts.length === 3 ? (parts[2] + "-" + parts[1] + "-" + parts[0]) : inv.invoice_date
+            var raw = String(inv.invoice_date).trim()
+            if (raw.indexOf("-") !== -1 || raw.indexOf(".") !== -1 || raw.indexOf("/") !== -1) {
+                var clean = raw.replace(/[.\/]/g, "-")
+                var parts = clean.split("-")
+                if (parts.length === 3) {
+                    if (parts[0].length === 4) {
+                        invoiceDateInput.text = parts[2] + "-" + parts[1] + "-" + parts[0]
+                    } else {
+                        invoiceDateInput.text = parts[0] + "-" + parts[1] + "-" + parts[2]
+                    }
+                } else {
+                    invoiceDateInput.text = raw
+                }
+            } else {
+                invoiceDateInput.text = raw
+            }
         }
         partyCombo.editText = inv.supplier_name || ""
         gstinInput.text = inv.gstin || ""

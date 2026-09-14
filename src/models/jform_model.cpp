@@ -140,32 +140,63 @@ bool JFormModel::save_jform_voucher(const QVariantMap& data, const QVariantList&
     QString brokerName = data.value("broker_name").toString().trimmed();
     QString challanNo = data.value("challan_no").toString().trimmed();
     QString kandaWeight = data.value("kanda_weight").toString().trimmed();
+    int editId = data.value("id", 0).toInt();
 
-    // 1. Insert into jform_vouchers
-    bool ok = db.executeNonQuery(
-        "INSERT INTO jform_vouchers ("
-        "voucher_no, voucher_date, financial_year, jform_no, zimidar_id, zimidar_name, party_id, party_name, "
-        "auction_sale_status, due_days, vehicle_no, driver_name, gate_pass_no, eway_bill_no, "
-        "bill_time, sauda_date, mandi_place, procurement_mode, lot_no, grade, transport_name, "
-        "broker_name, challan_no, kanda_weight, total_bags, total_weight, goods_amount, bonus_amount, "
-        "relief_amount, subtotal_amount, labour_amount, round_off, grand_total, narration"
-        ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-        {
-            vchNo, vchDate, fy, jformNo, zimidarId, zimidarName, partyId, partyName,
-            auctionSaleStatus, dueDays, vehicleNo, driverName, gatePassNo, ewayBillNo,
-            billTime, saudaDate, mandiPlace, procurementMode, lotNo, grade, transportName,
-            brokerName, challanNo, kandaWeight, totalBags, totalWeight, goodsAmount, bonusAmount,
-            reliefAmount, subtotalAmount, labourAmount, roundOff, grandTotal, narration
+    int voucherId = 0;
+    if (editId > 0) {
+        voucherId = editId;
+        bool ok = db.executeNonQuery(
+            "UPDATE jform_vouchers SET "
+            "voucher_no = ?, voucher_date = ?, financial_year = ?, jform_no = ?, zimidar_id = ?, zimidar_name = ?, party_id = ?, party_name = ?, "
+            "auction_sale_status = ?, due_days = ?, vehicle_no = ?, driver_name = ?, gate_pass_no = ?, eway_bill_no = ?, "
+            "bill_time = ?, sauda_date = ?, mandi_place = ?, procurement_mode = ?, lot_no = ?, grade = ?, transport_name = ?, "
+            "broker_name = ?, challan_no = ?, kanda_weight = ?, total_bags = ?, total_weight = ?, goods_amount = ?, bonus_amount = ?, "
+            "relief_amount = ?, subtotal_amount = ?, labour_amount = ?, round_off = ?, grand_total = ?, narration = ? "
+            "WHERE id = ?;",
+            {
+                vchNo, vchDate, fy, jformNo, zimidarId, zimidarName, partyId, partyName,
+                auctionSaleStatus, dueDays, vehicleNo, driverName, gatePassNo, ewayBillNo,
+                billTime, saudaDate, mandiPlace, procurementMode, lotNo, grade, transportName,
+                brokerName, challanNo, kandaWeight, totalBags, totalWeight, goodsAmount, bonusAmount,
+                reliefAmount, subtotalAmount, labourAmount, roundOff, grandTotal, narration, editId
+            }
+        );
+        if (!ok) {
+            db.rollback();
+            return false;
         }
-    );
+        // Delete old items and transaction records
+        db.executeNonQuery("DELETE FROM jform_voucher_items WHERE voucher_id = ?;", {editId});
+        db.executeNonQuery("DELETE FROM stock_transactions WHERE trans_type = 'JFrm' AND voucher_no = ?;", {vchNo});
+        db.executeNonQuery("DELETE FROM vouchers WHERE voucher_type = 'JFrm' AND voucher_no = ?;", {vchNo});
+        db.executeNonQuery("DELETE FROM transactions WHERE (voucher_type = 'JFrm' OR trans_type = 'JFrm') AND voucher_no = ?;", {vchNo});
+    } else {
+        // 1. Insert into jform_vouchers
+        bool ok = db.executeNonQuery(
+            "INSERT INTO jform_vouchers ("
+            "voucher_no, voucher_date, financial_year, jform_no, zimidar_id, zimidar_name, party_id, party_name, "
+            "auction_sale_status, due_days, vehicle_no, driver_name, gate_pass_no, eway_bill_no, "
+            "bill_time, sauda_date, mandi_place, procurement_mode, lot_no, grade, transport_name, "
+            "broker_name, challan_no, kanda_weight, total_bags, total_weight, goods_amount, bonus_amount, "
+            "relief_amount, subtotal_amount, labour_amount, round_off, grand_total, narration"
+            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+            {
+                vchNo, vchDate, fy, jformNo, zimidarId, zimidarName, partyId, partyName,
+                auctionSaleStatus, dueDays, vehicleNo, driverName, gatePassNo, ewayBillNo,
+                billTime, saudaDate, mandiPlace, procurementMode, lotNo, grade, transportName,
+                brokerName, challanNo, kandaWeight, totalBags, totalWeight, goodsAmount, bonusAmount,
+                reliefAmount, subtotalAmount, labourAmount, roundOff, grandTotal, narration
+            }
+        );
 
-    if (!ok) {
-        db.rollback();
-        return false;
+        if (!ok) {
+            db.rollback();
+            return false;
+        }
+
+        QVariant newIdVar = db.executeScalar("SELECT last_insert_rowid();");
+        voucherId = newIdVar.toInt();
     }
-
-    QVariant newIdVar = db.executeScalar("SELECT last_insert_rowid();");
-    int voucherId = newIdVar.toInt();
 
     // 2. Insert items into jform_voucher_items & stock_transactions
     for (const auto& itemVar : items) {
@@ -256,13 +287,15 @@ bool JFormModel::save_jform_voucher(const QVariantMap& data, const QVariantList&
     return true;
 }
 
-QVariantMap JFormModel::get_jform_voucher(int voucherId) {
+QVariantMap JFormModel::get_jform_voucher(const QVariant& voucherIdOrNo) {
     QVariantMap res;
     auto& db = DatabaseManager::instance();
+    QString queryVal = voucherIdOrNo.toString().trimmed();
+    if (queryVal.isEmpty()) return res;
 
     QVariantList rows = db.executeQuery(
-        "SELECT * FROM jform_vouchers WHERE id = ? OR voucher_no = ? LIMIT 1;",
-        {voucherId, voucherId}
+        "SELECT * FROM jform_vouchers WHERE id = ? OR voucher_no = ? OR jform_no = ? LIMIT 1;",
+        {queryVal, queryVal, queryVal}
     );
     if (rows.isEmpty()) return res;
 

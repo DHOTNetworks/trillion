@@ -13,6 +13,9 @@ FocusScope {
     // Mode: "Payment" (F3) or "Receipt" (F4)
     property string voucherMode: "Payment"
 
+    property int editingVoucherId: 0
+    readonly property bool isEditMode: editingVoucherId > 0
+
     property string autoVoucherNo: ""
     property string autoVchCode: ""
     
@@ -65,19 +68,24 @@ FocusScope {
 
     Component.onCompleted: {
         resetForm()
-        Qt.callLater(function() {
-            root.openDateModal()
-        })
+        if (!root.isEditMode && (!window || (window.pendingEditVoucherId === 0 && window.pendingEditVoucherNo === ""))) {
+            Qt.callLater(function() {
+                root.openDateModal()
+            })
+        }
     }
 
     onVoucherModeChanged: {
-        resetForm()
-        Qt.callLater(function() {
-            root.openDateModal()
-        })
+        if (!root.isEditMode) {
+            resetForm()
+            Qt.callLater(function() {
+                root.openDateModal()
+            })
+        }
     }
 
     function resetForm() {
+        editingVoucherId = 0
         cursorMax()
         var wDate = (typeof financialYearsModel !== "undefined" && financialYearsModel) ? financialYearsModel.get_working_date() : Qt.formatDate(new Date(), "dd-MM-yyyy")
         voucherDateInput.text = wDate
@@ -91,7 +99,63 @@ FocusScope {
         recalculateTotals()
     }
 
+    function loadVoucherForEditing(vchNoOrId, vchDate) {
+        if (typeof vouchersModel === "undefined" || !vouchersModel) return
+        var vch = vouchersModel.get_cheque_voucher(vchNoOrId)
+        if (!vch || (!vch.id && !vch.voucher_no)) return
+
+        editingVoucherId = vch.id || 0
+        autoVchCode = vch.voucher_no || ""
+        autoVoucherNo = autoVchCode
+        
+        var raw = String(vch.voucher_date || vchDate || "").trim()
+        if (raw.indexOf("-") !== -1 || raw.indexOf(".") !== -1 || raw.indexOf("/") !== -1) {
+            var clean = raw.replace(/[.\/]/g, "-")
+            var parts = clean.split("-")
+            if (parts.length === 3) {
+                if (parts[0].length === 4) {
+                    voucherDateInput.text = parts[2] + "-" + parts[1] + "-" + parts[0]
+                } else {
+                    voucherDateInput.text = parts[0] + "-" + parts[1] + "-" + parts[2]
+                }
+            } else {
+                voucherDateInput.text = raw
+            }
+        } else if (raw !== "") {
+            voucherDateInput.text = raw
+        }
+
+        var vType = vch.voucher_type || vch.legacy_type || ""
+        if (vType === "Receipt" || vType === "ChRt" || vType === "Cheque Receipt") {
+            voucherMode = "Receipt"
+        } else {
+            voucherMode = "Payment"
+        }
+
+        voucherRowsModel.clear()
+        var rows = vch.rows || []
+        if (rows.length > 0) {
+            for (var i = 0; i < rows.length; i++) {
+                var r = rows[i]
+                voucherRowsModel.append({
+                    drcr: r.drcr || "Dr",
+                    ledgerName: r.ledgerName || "",
+                    debitAmt: r.debitAmt || "",
+                    creditAmt: r.creditAmt || "",
+                    refNo: r.refNo || ""
+                })
+            }
+        } else {
+            voucherRowsModel.append({ drcr: "Dr", ledgerName: vch.party_name || "", debitAmt: (parseFloat(vch.amount) || 0.0).toFixed(2), creditAmt: "", refNo: vch.instrument_no || "" })
+            voucherRowsModel.append({ drcr: "Cr", ledgerName: vch.account_type || "", debitAmt: "", creditAmt: (parseFloat(vch.amount) || 0.0).toFixed(2), refNo: vch.instrument_no || "" })
+        }
+        statusMessage = ""
+        isError = false
+        recalculateTotals()
+    }
+
     function cursorMax(dateStr) {
+        if (root.isEditMode) return
         if (typeof vouchersModel !== "undefined" && vouchersModel) {
             var prefix = (root.voucherMode === "Receipt" || root.voucherMode === "ChRt") ? "ChRt" : "ChPt"
             var d = dateStr || (voucherDateInput ? voucherDateInput.text.trim() : "")
@@ -175,9 +239,6 @@ FocusScope {
                 isError = true
                 return
             }
-            if (row.drcr === "Dr" && !drParty) drParty = row.ledgerName.trim()
-            if (row.drcr === "Cr" && !crParty) crParty = row.ledgerName.trim()
-            if (row.refNo.trim() && !chqNo) chqNo = row.refNo.trim()
         }
 
         saveConfirmModal.open()
@@ -203,27 +264,30 @@ FocusScope {
 
         var vchType = voucherMode === "Journal" ? "Journal" : (voucherMode === "Payment" ? "Cheque Payment" : "Cheque Receipt")
         var vchDate = voucherDateInput.text.trim()
-        
-        var drParty = ""
-        var crParty = ""
         var chqNo = ""
 
+        var rowList = []
         for (var i = 0; i < voucherRowsModel.count; i++) {
-            var row = voucherRowsModel.get(i)
-            if (row.drcr === "Dr" && !drParty) drParty = row.ledgerName.trim()
-            if (row.drcr === "Cr" && !crParty) crParty = row.ledgerName.trim()
-            if (row.refNo.trim() && !chqNo) chqNo = row.refNo.trim()
+            var r = voucherRowsModel.get(i)
+            if (r.refNo.trim() && !chqNo) chqNo = r.refNo.trim()
+            rowList.push({
+                drcr: r.drcr,
+                ledgerName: r.ledgerName,
+                debitAmt: r.debitAmt,
+                creditAmt: r.creditAmt,
+                refNo: r.refNo
+            })
         }
 
         if (typeof vouchersModel !== "undefined" && vouchersModel) {
-            var ok = vouchersModel.add_cheque_voucher(vchType, drParty, crParty, totalDebit, chqNo, "", vchDate)
+            var ok = vouchersModel.save_multi_row_voucher(root.editingVoucherId, vchType, autoVoucherNo, vchDate, chqNo ? ("Ch. No. " + chqNo) : "", rowList)
             if (ok) {
                 statusMessage = "" + vchType + " " + autoVchCode + " saved & posted successfully!"
                 isError = false
                 resetForm()
                 root.voucherSaved()
             } else {
-                statusMessage = "Failed to save Voucher."
+                statusMessage = "Error saving voucher. Please verify ledger accounts."
                 isError = true
             }
         }
@@ -284,8 +348,8 @@ FocusScope {
                 ColumnLayout {
                     spacing: 1
                     Text {
-                        text: root.voucherMode === "Payment" ? "Cheque / Bank Payment Voucher (F3)" : "Cheque / Bank Receipt Voucher (F4)"
-                        color: "#0F172A"
+                        text: root.isEditMode ? ((root.voucherMode === "Payment" ? "Cheque / Bank Payment Voucher" : "Cheque / Bank Receipt Voucher") + " (ALTERATION)") : (root.voucherMode === "Payment" ? "Cheque / Bank Payment Voucher (F3)" : "Cheque / Bank Receipt Voucher (F4)")
+                        color: root.isEditMode ? "#2563EB" : "#0F172A"
                         font.pixelSize: 18
                         font.bold: true
                     }
@@ -827,7 +891,7 @@ FocusScope {
                     contentItem: RowLayout {
                         spacing: 6
                         Item { Layout.fillWidth: true }
-                        Text { text: "Save Voucher"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 12 }
+                        Text { text: root.isEditMode ? "Update Voucher" : "Save Voucher"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 12 }
                         KbdBadge { text: "Ctrl+S"; badgeColor: "#1E40AF"; textColor: "#93C5FD"; borderColor: "#2563EB" }
                         Item { Layout.fillWidth: true }
                     }

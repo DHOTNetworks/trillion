@@ -9,6 +9,9 @@ Item {
     signal cancelRequested()
     signal voucherSaved()
 
+    property int editingVoucherId: 0
+    readonly property bool isEditMode: editingVoucherId > 0
+
     property int nextVchNo: 1
     property string nextJFormNo: "1"
     property string vchDate: ""
@@ -51,7 +54,9 @@ Item {
     Component.onCompleted: {
         resetForm()
         Qt.callLater(function() {
-            root.openDateModal()
+            if (!root.isEditMode) {
+                root.openDateModal()
+            }
         })
     }
 
@@ -71,6 +76,7 @@ Item {
     }
 
     function resetForm() {
+        root.editingVoucherId = 0
         root.vchDate = (typeof financialYearsModel !== "undefined" && financialYearsModel) ? financialYearsModel.get_working_date() : Qt.formatDate(new Date(), "dd-MM-yyyy")
         vchDateInput.text = root.vchDate
         updateNextNumbers(root.vchDate)
@@ -107,6 +113,89 @@ Item {
         recalculateTotals()
         statusMessage = ""
         isError = false
+    }
+
+    function loadVoucherForEditing(vchNoOrId) {
+        if (!vchNoOrId || typeof jformModel === "undefined" || !jformModel) return
+        var data = jformModel.get_jform_voucher(vchNoOrId)
+        if (!data || !data.id) return
+
+        root.editingVoucherId = data.id || 0
+        root.nextVchNo = data.voucher_no || 1
+        root.nextJFormNo = data.jform_no ? ("" + data.jform_no) : ""
+        if (jformNoInput) jformNoInput.text = root.nextJFormNo
+
+        var rawDate = "" + (data.voucher_date || "")
+        if (rawDate.length > 0) {
+            var parts = rawDate.split("-")
+            if (parts.length === 3) {
+                if (parts[0].length === 4) {
+                    root.vchDate = parts[2] + "-" + parts[1] + "-" + parts[0]
+                } else {
+                    root.vchDate = rawDate
+                }
+            } else {
+                root.vchDate = rawDate
+            }
+        }
+        if (vchDateInput) vchDateInput.text = root.vchDate
+        if (typeof financialYearsModel !== "undefined" && financialYearsModel && root.vchDate) {
+            financialYearsModel.set_working_date(root.vchDate)
+        }
+
+        if (zimidarCombo) {
+            zimidarCombo.editText = data.zimidar_name || ""
+            zimidarCombo.currentText = data.zimidar_name || ""
+        }
+        root.selectedZimidarId = data.zimidar_id || 0
+        if (partyCombo) {
+            partyCombo.editText = data.party_name || "Self Purchase"
+            partyCombo.currentText = data.party_name || "Self Purchase"
+        }
+        root.selectedPartyId = data.party_id || 0
+        root.selectedSaleStatus = data.auction_sale_status || "Zimidara Self Purchase"
+
+        if (dueDaysInput) dueDaysInput.text = "" + (data.due_days || 0)
+        if (vehNoInput) vehNoInput.text = data.vehicle_no || ""
+        if (driverInput) driverInput.text = data.driver_name || ""
+        if (grNoInput) grNoInput.text = data.gate_pass_no || ""
+        if (ewayInput) ewayInput.text = data.eway_bill_no || ""
+        if (billTimeInput) billTimeInput.text = data.bill_time || ""
+        if (saudaDtInput) saudaDtInput.text = data.sauda_date || ""
+        if (shippingInput) shippingInput.text = data.mandi_place || ""
+        if (posCombo) {
+            posCombo.editText = data.procurement_mode || "Direct Farmer"
+            posCombo.currentText = data.procurement_mode || "Direct Farmer"
+        }
+        if (poNoInput) poNoInput.text = data.lot_no || ""
+        if (gradeInput) gradeInput.text = data.grade || ""
+        if (transportInput) transportInput.text = data.transport_name || ""
+        if (brokerInput) brokerInput.text = data.broker_name || ""
+        if (challanInput) challanInput.text = data.challan_no || ""
+        if (kandaWeightInput) kandaWeightInput.text = data.kanda_weight || ""
+        if (narrationInput) narrationInput.text = data.narration || ""
+
+        if (bonusInput) bonusInput.text = parseFloat(data.bonus_amount || 0).toFixed(2)
+        if (reliefInput) reliefInput.text = parseFloat(data.relief_amount || 0).toFixed(2)
+        if (labourInput) labourInput.text = parseFloat(data.labour_amount || 0).toFixed(2)
+        if (roundInput) roundInput.text = parseFloat(data.round_off || 0).toFixed(2)
+
+        lineItemsModel.clear()
+        var items = data.items || []
+        for (var i = 0; i < items.length; i++) {
+            var it = items[i]
+            lineItemsModel.append({
+                "itemName": it.item_name || "",
+                "bags": it.bags || 0,
+                "loose": it.loose_weight || 0.0,
+                "packing": it.packing || 0.5,
+                "weight": it.weight || 0.0,
+                "rate": it.rate || 0.0,
+                "amount": it.amount || 0.0
+            })
+        }
+        recalculateTotals()
+        updateZimidarBalance(data.zimidar_name || "")
     }
 
     function updateZimidarBalance(partyName) {
@@ -337,6 +426,7 @@ Item {
         }
 
         var headerData = {
+            "id": root.editingVoucherId,
             "voucher_no": root.nextVchNo,
             "voucher_date": formattedDate,
             "jform_no": jformNoInput.text.trim() || root.nextJFormNo,
@@ -389,7 +479,7 @@ Item {
 
         var ok = jformModel.save_jform_voucher(headerData, items)
         if (ok) {
-            statusMessage = "J-Form Voucher #" + root.nextVchNo + " (Form J: " + (jformNoInput.text.trim() || root.nextJFormNo) + ") posted successfully!"
+            statusMessage = root.isEditMode ? ("J-Form Voucher #" + root.nextVchNo + " updated successfully!") : ("J-Form Voucher #" + root.nextVchNo + " (Form J: " + (jformNoInput.text.trim() || root.nextJFormNo) + ") posted successfully!")
             isError = false
             resetForm()
             root.voucherSaved()
@@ -492,7 +582,7 @@ Item {
                 ColumnLayout {
                     spacing: 0
                     Text {
-                        text: "J-Form Mandi Procurement Voucher (Form J / F11)"
+                        text: root.isEditMode ? "J-Form Mandi Procurement Voucher (ALTERATION)" : "J-Form Mandi Procurement Voucher (Form J / F11)"
                         color: "#0F172A"
                         font.pixelSize: 18
                         font.bold: true
@@ -1342,7 +1432,7 @@ Item {
                         border.width: 2
                     }
                     contentItem: Text {
-                        text: "Save & Post J-Form Voucher (Ctrl+S)"
+                        text: root.isEditMode ? "Update J-Form Voucher (Ctrl+S)" : "Save & Post J-Form Voucher (Ctrl+S)"
                         color: "#FFF"
                         font.bold: true
                         font.pixelSize: 12

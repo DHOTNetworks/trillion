@@ -86,9 +86,11 @@ Rectangle {
             if (editVoucherId > 0 && typeof tdsModel !== "undefined" && tdsModel) {
                 var vch = tdsModel.get_tds_voucher_by_id(editVoucherId)
                 loadVoucher(vch)
-            } else if (typeof window !== "undefined" && window.targetTdsVoucherId > 0 && typeof tdsModel !== "undefined" && tdsModel) {
-                var vchId = window.targetTdsVoucherId
+            } else if (typeof window !== "undefined" && (window.targetTdsVoucherId > 0 || window.pendingEditVoucherId > 0) && typeof tdsModel !== "undefined" && tdsModel) {
+                var vchId = window.targetTdsVoucherId > 0 ? window.targetTdsVoucherId : window.pendingEditVoucherId
                 window.targetTdsVoucherId = 0
+                window.pendingEditVoucherId = 0
+                window.pendingEditVoucherNo = ""
                 var vch2 = tdsModel.get_tds_voucher_by_id(vchId)
                 loadVoucher(vch2)
             } else {
@@ -104,13 +106,22 @@ Rectangle {
         currentVoucherNo = vch.voucher_no || 1
         if (vchNoInput) vchNoInput.text = currentVoucherNo.toString()
 
-        var rawDate = vch.voucher_date || ""
-        if (rawDate.indexOf("-") !== -1) {
+        var rawDate = "" + (vch.voucher_date || "")
+        if (rawDate.length > 0) {
             var pts = rawDate.split("-")
-            if (pts.length === 3) rawDate = pts[2] + "/" + pts[1] + "/" + pts[0]
+            if (pts.length === 3) {
+                if (pts[0].length === 4) {
+                    rawDate = pts[2] + "-" + pts[1] + "-" + pts[0]
+                } else {
+                    rawDate = pts[0] + "-" + pts[1] + "-" + pts[2]
+                }
+            }
         }
         voucherDate = rawDate
         if (vchDateInput) vchDateInput.text = voucherDate
+        if (typeof financialYearsModel !== "undefined" && financialYearsModel && voucherDate) {
+            financialYearsModel.set_working_date(voucherDate)
+        }
         dayOfWeek = vch.day_of_week || ""
 
         currentTdsType = (vch.tds_type || "RENT").toUpperCase()

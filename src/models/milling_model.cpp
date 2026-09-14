@@ -323,3 +323,37 @@ QVariantList MillingModel::get_batch_items(int batch_id, const QString& batch_no
     }
     return result;
 }
+
+QVariantMap MillingModel::get_milling_batch(const QVariant& batchNoOrId) {
+    QString qVal = batchNoOrId.toString().trimmed();
+    if (qVal.isEmpty()) return {};
+
+    QVariantList rows = DatabaseManager::instance().executeQuery(
+        "SELECT * FROM milling_batches WHERE id = ? OR batch_no = ? LIMIT 1;",
+        {qVal, qVal}
+    );
+    if (rows.isEmpty()) return {};
+
+    QVariantMap batch = rows.first().toMap();
+    int bId = batch.value("id").toInt();
+    QString bNo = batch.value("batch_no").toString();
+
+    QVariantList items = get_batch_items(bId, bNo);
+    QVariantList consumedList;
+    QVariantList producedList;
+
+    for (const auto& itVar : items) {
+        QVariantMap it = itVar.toMap();
+        QString drcr = it.value("drcr").toString();
+        if (drcr == "Cr") {
+            consumedList.append(it);
+        } else {
+            producedList.append(it);
+        }
+    }
+
+    batch["consumed_items"] = consumedList;
+    batch["produced_items"] = producedList;
+    return batch;
+}
+

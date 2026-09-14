@@ -16,4 +16,6 @@ public:
     Q_INVOKABLE QVariantMap get_voucher(const QString& vchNoOrId);
     Q_INVOKABLE QVariantMap get_cheque_voucher(const QString& vchNoOrId);
     Q_INVOKABLE QVariantMap get_journal_voucher(const QString& vchNoOrId);
+    Q_INVOKABLE bool save_multi_row_voucher(int editId, const QString& vch_type, const QString& vch_no, const QString& vch_date, const QString& narration, const QVariantList& rows);
+    Q_INVOKABLE bool delete_voucher(int voucherId);
 };
