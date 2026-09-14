@@ -21,13 +21,9 @@ T.Popup {
 
     onOpened: {
         errorMessage = ""
-        var wDate = (typeof financialYearsModel !== "undefined" && financialYearsModel) ? financialYearsModel.get_working_date() : Qt.formatDate(new Date(), "dd-MM-yyyy")
+        var wDate = (initialDate && initialDate.trim() !== "") ? initialDate.trim() : ((typeof financialYearsModel !== "undefined" && financialYearsModel) ? financialYearsModel.get_working_date() : Qt.formatDate(new Date(), "dd-MM-yyyy"))
         workingDateText = wDate
-        if (initialDate && initialDate.trim() !== "") {
-            dateInputField.text = initialDate.trim()
-        } else {
-            dateInputField.text = wDate
-        }
+        dateInputField.text = wDate
         Qt.callLater(function() {
             dateInputField.forceActiveFocus()
             dateInputField.selectAll()
@@ -39,7 +35,7 @@ T.Popup {
     }
 
     function openWithDate(currentDate) {
-        initialDate = currentDate || ""
+        initialDate = (currentDate && currentDate.trim() !== "") ? currentDate.trim() : ""
         root.open()
     }
 
@@ -82,16 +78,16 @@ T.Popup {
         anchors.margins: 14
         spacing: 6
 
-        // Label: (Current Working Date)
+        // Label: (Current Working Date or Voucher Date)
         Text {
-            text: "(Current Working Date)"
+            text: (root.initialDate && root.initialDate.trim() !== "") ? "(Current Voucher Date)" : "(Current Working Date)"
             color: "#0369A1"
             font.pixelSize: 13
             font.bold: true
             Layout.alignment: Qt.AlignHCenter
         }
 
-        // Current Working Date value
+        // Current Working / Voucher Date value
         Text {
             text: root.workingDateText || "01-04-2026"
             color: "#082F49"

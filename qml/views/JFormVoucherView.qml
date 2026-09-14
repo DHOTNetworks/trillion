@@ -53,11 +53,19 @@ Item {
 
     Component.onCompleted: {
         resetForm()
-        Qt.callLater(function() {
-            if (!root.isEditMode) {
+        if (typeof window !== "undefined" && window && (window.pendingEditVoucherId > 0 || window.pendingEditVoucherNo !== "")) {
+            var jfIdOrNo = window.pendingEditVoucherId > 0 ? window.pendingEditVoucherId : window.pendingEditVoucherNo
+            window.pendingEditVoucherId = 0
+            window.pendingEditVoucherNo = ""
+            window.pendingEditVoucherDate = ""
+            Qt.callLater(function() {
+                root.loadVoucherForEditing(jfIdOrNo)
+            })
+        } else {
+            Qt.callLater(function() {
                 root.openDateModal()
-            }
-        })
+            })
+        }
     }
 
     function updateNextNumbers(dateStr) {
@@ -116,6 +124,9 @@ Item {
     }
 
     function loadVoucherForEditing(vchNoOrId) {
+        if (voucherDateModal && voucherDateModal.opened) {
+            voucherDateModal.close()
+        }
         if (!vchNoOrId || typeof jformModel === "undefined" || !jformModel) return
         var data = jformModel.get_jform_voucher(vchNoOrId)
         if (!data || !data.id) return

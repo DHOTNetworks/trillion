@@ -345,37 +345,110 @@ QVariantList SalesModel::get_sales_register(const QString& param1, const QString
     return result;
 }
 
-QVariantMap SalesModel::get_sales_invoice(const QString& invoiceNoOrId) {
-    QString q = invoiceNoOrId.trimmed();
-    if (q.isEmpty()) return {};
+QVariantMap SalesModel::get_sales_invoice(const QVariant& invoiceNoOrId, const QString& dateHint, const QString& partyHint) {
+    QString q = invoiceNoOrId.toString().trimmed();
+    if (q.isEmpty() && dateHint.isEmpty() && partyHint.isEmpty()) return {};
 
     QVariantList rows;
     bool isNum = false;
     int numId = q.toInt(&isNum);
 
-    // 1. Try numeric ID if valid
-    if (isNum && numId > 0) {
-        rows = DatabaseManager::instance().executeQuery(
-            "SELECT * FROM sales_invoices WHERE id = ? LIMIT 1;",
-            {numId}
-        );
-    }
-    // 2. Try exact invoice_no
-    if (rows.isEmpty()) {
+    // 1. If exact invoice_no matches in sales_invoices
+    if (!q.isEmpty()) {
         rows = DatabaseManager::instance().executeQuery(
             "SELECT * FROM sales_invoices WHERE invoice_no = ? ORDER BY id DESC LIMIT 1;",
             {q}
         );
     }
-    // 3. Try voucher_no ordered by id DESC
-    if (rows.isEmpty()) {
+
+    // 2. If exact voucher_no matches in sales_invoices
+    if (rows.isEmpty() && !q.isEmpty()) {
         rows = DatabaseManager::instance().executeQuery(
             "SELECT * FROM sales_invoices WHERE voucher_no = ? ORDER BY id DESC LIMIT 1;",
             {q}
         );
     }
-    // 4. Loose fallback
-    if (rows.isEmpty()) {
+
+    // 3. Try lookup via vouchers table (if q is a vouchers.id, vouchers.voucher_no, or vouchers.ref_no)
+    if (rows.isEmpty() && !q.isEmpty()) {
+        QVariantList vRows = DatabaseManager::instance().executeQuery(
+            "SELECT id, voucher_no, ref_no, voucher_date, party_name, amount, narration "
+            "FROM vouchers WHERE (id = ? OR voucher_no = ? OR ref_no = ?) AND (voucher_type IN ('Sales', 'Sale') OR legacy_type IN ('Sale', 'Sales')) LIMIT 1;",
+            {q, q, q}
+        );
+        if (!vRows.isEmpty()) {
+            QVariantMap v = vRows.first().toMap();
+            QString vRef = v.value("ref_no").toString().trimmed();
+            QString vNo = v.value("voucher_no").toString().trimmed();
+            QString vDate = v.value("voucher_date").toString().trimmed();
+            QString vParty = v.value("party_name").toString().trimmed();
+
+            if (!vRef.isEmpty()) {
+                rows = DatabaseManager::instance().executeQuery(
+                    "SELECT * FROM sales_invoices WHERE invoice_no = ? ORDER BY id DESC LIMIT 1;", {vRef}
+                );
+            }
+            if (rows.isEmpty() && !vNo.isEmpty()) {
+                rows = DatabaseManager::instance().executeQuery(
+                    "SELECT * FROM sales_invoices WHERE voucher_no = ? OR invoice_no = ? ORDER BY id DESC LIMIT 1;", {vNo, vNo}
+                );
+            }
+            if (rows.isEmpty() && !vDate.isEmpty() && !vParty.isEmpty()) {
+                rows = DatabaseManager::instance().executeQuery(
+                    "SELECT * FROM sales_invoices WHERE invoice_date = ? AND customer_name = ? ORDER BY id DESC LIMIT 1;",
+                    {vDate, vParty}
+                );
+            }
+            if (rows.isEmpty()) {
+                // Construct synthetic sales invoice directly from vouchers and stock_transactions!
+                QVariantMap synInv;
+                synInv["id"] = v.value("id");
+                synInv["voucher_no"] = vNo.isEmpty() ? ("Sale-" + v.value("id").toString()) : vNo;
+                synInv["invoice_no"] = vRef.isEmpty() ? synInv["voucher_no"] : vRef;
+                synInv["invoice_date"] = vDate;
+                synInv["customer_name"] = vParty;
+                synInv["total_amount"] = v.value("amount");
+                synInv["taxable_amount"] = v.value("amount");
+                synInv["narration"] = v.value("narration");
+
+                QVariantList pRows = DatabaseManager::instance().executeQuery(
+                    "SELECT gstin, address FROM parties WHERE name = ? LIMIT 1;", {vParty}
+                );
+                if (!pRows.isEmpty()) {
+                    synInv["gstin"] = pRows.first().toMap().value("gstin");
+                    synInv["shipping_address"] = pRows.first().toMap().value("address");
+                }
+
+                QVariantList stRows = DatabaseManager::instance().executeQuery(
+                    "SELECT item_name, bags AS bag_count, packing, weight_qtl, rate AS rate_per_qtl, amount AS total_amount, taxable_amount, tax AS gst_pct "
+                    "FROM stock_transactions WHERE (voucher_no = ? OR bill_no = ? OR (trans_date = ? AND party_name = ?)) AND trans_type IN ('Sale', 'Sales') "
+                    "ORDER BY row_no ASC, id ASC;",
+                    {vNo, vRef, vDate, vParty}
+                );
+                synInv["items"] = stRows;
+                return synInv;
+            }
+        }
+    }
+
+    // 4. Try numeric id in sales_invoices if isNum
+    if (rows.isEmpty() && isNum && numId > 0) {
+        rows = DatabaseManager::instance().executeQuery(
+            "SELECT * FROM sales_invoices WHERE id = ? LIMIT 1;",
+            {numId}
+        );
+    }
+
+    // 5. Try matching by dateHint and partyHint
+    if (rows.isEmpty() && !dateHint.isEmpty() && !partyHint.isEmpty()) {
+        rows = DatabaseManager::instance().executeQuery(
+            "SELECT * FROM sales_invoices WHERE invoice_date = ? AND customer_name LIKE ? ORDER BY id DESC LIMIT 1;",
+            {dateHint, "%" + partyHint + "%"}
+        );
+    }
+
+    // 6. Loose substring match fallback
+    if (rows.isEmpty() && !q.isEmpty()) {
         rows = DatabaseManager::instance().executeQuery(
             "SELECT * FROM sales_invoices WHERE invoice_no LIKE ? OR voucher_no LIKE ? ORDER BY id DESC LIMIT 1;",
             {"%" + q + "%", "%" + q + "%"}

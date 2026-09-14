@@ -68,7 +68,16 @@ FocusScope {
 
     Component.onCompleted: {
         resetForm()
-        if (!root.isEditMode && (!window || (window.pendingEditVoucherId === 0 && window.pendingEditVoucherNo === ""))) {
+        if (typeof window !== "undefined" && window && (window.pendingEditVoucherId > 0 || window.pendingEditVoucherNo !== "")) {
+            var chqIdOrNo = window.pendingEditVoucherId > 0 ? window.pendingEditVoucherId : window.pendingEditVoucherNo
+            var chqDate = window.pendingEditVoucherDate
+            window.pendingEditVoucherId = 0
+            window.pendingEditVoucherNo = ""
+            window.pendingEditVoucherDate = ""
+            Qt.callLater(function() {
+                root.loadVoucherForEditing(chqIdOrNo, chqDate)
+            })
+        } else {
             Qt.callLater(function() {
                 root.openDateModal()
             })
@@ -76,11 +85,8 @@ FocusScope {
     }
 
     onVoucherModeChanged: {
-        if (!root.isEditMode) {
+        if (!root.isEditMode && (!window || (window.pendingEditVoucherId === 0 && window.pendingEditVoucherNo === ""))) {
             resetForm()
-            Qt.callLater(function() {
-                root.openDateModal()
-            })
         }
     }
 
@@ -100,6 +106,9 @@ FocusScope {
     }
 
     function loadVoucherForEditing(vchNoOrId, vchDate) {
+        if (voucherDateModal && voucherDateModal.opened) {
+            voucherDateModal.close()
+        }
         if (typeof vouchersModel === "undefined" || !vouchersModel) return
         var vch = vouchersModel.get_cheque_voucher(vchNoOrId)
         if (!vch || (!vch.id && !vch.voucher_no)) return

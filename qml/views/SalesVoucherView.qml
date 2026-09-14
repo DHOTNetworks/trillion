@@ -121,7 +121,17 @@ Item {
 
     Component.onCompleted: {
         resetForm()
-        if (!root.isEditMode && (!window || (window.pendingEditInvoiceNo === "" && window.pendingEditVoucherNo === "" && window.pendingEditVoucherId === 0))) {
+        if (typeof window !== "undefined" && window && (window.pendingEditInvoiceNo !== "" || window.pendingEditVoucherNo !== "" || window.pendingEditVoucherId > 0)) {
+            var salesIdOrNo = window.pendingEditInvoiceNo !== "" ? window.pendingEditInvoiceNo : (window.pendingEditVoucherId > 0 ? window.pendingEditVoucherId : window.pendingEditVoucherNo)
+            var sDate = window.pendingEditVoucherDate || ""
+            window.pendingEditInvoiceNo = ""
+            window.pendingEditVoucherNo = ""
+            window.pendingEditVoucherId = 0
+            window.pendingEditVoucherDate = ""
+            Qt.callLater(function() {
+                root.loadInvoiceForEditing(salesIdOrNo, sDate)
+            })
+        } else {
             Qt.callLater(function() {
                 root.openDateModal()
             })
@@ -186,9 +196,12 @@ Item {
         recalculateTotals()
     }
 
-    function loadInvoiceForEditing(invNoOrId) {
+    function loadInvoiceForEditing(invNoOrId, dateHint) {
+        if (voucherDateModal && voucherDateModal.opened) {
+            voucherDateModal.close()
+        }
         if (typeof salesModel === "undefined" || !salesModel) return
-        var inv = salesModel.get_sales_invoice(invNoOrId)
+        var inv = salesModel.get_sales_invoice(invNoOrId, dateHint || "")
         if (!inv || !inv.id) return
 
         editingInvoiceId = inv.id

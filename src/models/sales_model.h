@@ -40,7 +40,7 @@ public:
     );
 
     Q_INVOKABLE QVariantList get_sales_register(const QString& param1 = "", const QString& param2 = "");
-    Q_INVOKABLE QVariantMap get_sales_invoice(const QString& invoiceNoOrId);
+    Q_INVOKABLE QVariantMap get_sales_invoice(const QVariant& invoiceNoOrId, const QString& dateHint = "", const QString& partyHint = "");
     Q_INVOKABLE bool update_sales_invoice_full(
         int invoice_id,
         const QString& invoice_no, const QString& invoice_date, const QString& party_ledger,

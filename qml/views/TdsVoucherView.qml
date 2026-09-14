@@ -101,6 +101,9 @@ Rectangle {
     }
 
     function loadVoucher(vch) {
+        if (voucherDateModal && voucherDateModal.opened) {
+            voucherDateModal.close()
+        }
         if (!vch || typeof vch !== "object") return
         editVoucherId = vch.id || 0
         currentVoucherNo = vch.voucher_no || 1
