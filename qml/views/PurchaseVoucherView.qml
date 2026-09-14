@@ -230,22 +230,52 @@ Item {
             taxStatusCombo.currentIndex = 1
         }
         
-        lineItemsModel.clear()
-        var items = inv.items || []
-        for (var i = 0; i < items.length; i++) {
-            var itm = items[i]
-            var w = parseFloat(itm.weight || itm.weight_qtl || 0.0)
-            var r = parseFloat(itm.rate || itm.rate_per_qtl || 0.0)
-            var a = parseFloat(itm.amount || itm.total_amount || (w * r))
-            lineItemsModel.append({
-                itemName: itm.item_name || "",
-                bags: parseInt(itm.bags || itm.bag_count) || 0,
-                packing: (parseFloat(itm.packing) || 0.5).toFixed(3),
-                weight: w,
-                rate: r,
-                gstPct: (itm.gst_pct !== undefined && itm.gst_pct !== null && itm.gst_pct !== "") ? parseFloat(itm.gst_pct) : 0.0,
-                amount: a
+        var rawItems = inv.items || []
+        var formattedList = []
+        for (var i = 0; i < rawItems.length; i++) {
+            var itm = rawItems[i]
+            var w = parseFloat(itm.weight !== undefined ? itm.weight : (itm.weight_qtl !== undefined ? itm.weight_qtl : 0.0)) || 0.0
+            var r = parseFloat(itm.rate !== undefined ? itm.rate : (itm.rate_per_qtl !== undefined ? itm.rate_per_qtl : 0.0)) || 0.0
+            var a = parseFloat(itm.amount !== undefined ? itm.amount : (itm.total_amount !== undefined ? itm.total_amount : (itm.taxable_amount !== undefined ? itm.taxable_amount : (w * r)))) || (w * r)
+            var b = parseInt(itm.bags !== undefined ? itm.bags : (itm.bag_count !== undefined ? itm.bag_count : 0)) || 0
+            var g = parseFloat(itm.gstPct !== undefined ? itm.gstPct : (itm.gst_pct !== undefined ? itm.gst_pct : 0.0)) || 0.0
+            var p = itm.packing !== undefined ? String(itm.packing) : "0.500"
+            var name = itm.itemName || itm.item_name || ""
+
+            formattedList.push({
+                "itemName": name,
+                "item_name": name,
+                "bags": b,
+                "bag_count": b,
+                "packing": p,
+                "weight": w,
+                "weight_qtl": w,
+                "rate": r,
+                "rate_per_qtl": r,
+                "gstPct": g,
+                "gst_pct": g,
+                "amount": a,
+                "taxable_amount": a,
+                "total_amount": a
             })
+        }
+        lineItemsModel.resetWithList(formattedList)
+
+        if (typeof purchaseVoucherCtrl !== "undefined" && purchaseVoucherCtrl) {
+            purchaseVoucherCtrl.lineItemsModel.clear()
+            for (var j = 0; j < formattedList.length; j++) {
+                var f = formattedList[j]
+                purchaseVoucherCtrl.lineItemsModel.appendRow(
+                    f.itemName,
+                    "",
+                    "QTL",
+                    f.bags,
+                    parseFloat(f.packing) || 0.0,
+                    f.weight,
+                    f.rate,
+                    f.amount
+                )
+            }
         }
         recalculateTotals()
     }

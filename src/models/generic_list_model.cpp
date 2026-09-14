@@ -3,6 +3,22 @@
 GenericListModel::GenericListModel(QObject* parent)
     : QAbstractListModel(parent)
 {
+    const QStringList standardRoles = {
+        "id", "itemName", "item_name", "itemCode", "item_code", "hsnCode", "hsn_code",
+        "bags", "bag_count", "packing", "pkng", "weight", "weight_qtl", "loose", "loose_weight",
+        "rate", "rate_per_qtl", "amount", "taxable_amount", "total_amount", "gstPct", "gst_pct",
+        "cgst", "cgst_amount", "sgst", "sgst_amount", "igst", "igst_amount",
+        "drCr", "drcr", "side", "account", "accountName", "partyName", "party_name",
+        "particulars", "narration", "remarks", "date", "vDate", "vIso", "refNo", "voucherNo", "voucher_no",
+        "invoiceNo", "invoice_no", "status", "selected", "isSelected", "type", "voucherType",
+        "batchNo", "batch_no", "issueDate", "totalInputBags", "totalInputWeight", "totalOutputBags", "totalOutputWeight"
+    };
+    for (const QString& r : standardRoles) {
+        QByteArray roleName = r.toUtf8();
+        int newRoleId = Qt::UserRole + 1 + static_cast<int>(m_roleIds.size());
+        m_roleIds[roleName] = newRoleId;
+        m_roles[newRoleId] = roleName;
+    }
 }
 
 int GenericListModel::rowCount(const QModelIndex& parent) const {
@@ -49,7 +65,7 @@ void GenericListModel::append(const QVariantMap& item) {
     bool roleAdded = ensureRoles(item);
     int newRow = static_cast<int>(m_items.size());
 
-    if (roleAdded && !m_items.isEmpty()) {
+    if (roleAdded) {
         beginResetModel();
         m_items.append(item);
         endResetModel();
@@ -61,11 +77,36 @@ void GenericListModel::append(const QVariantMap& item) {
     emit countChanged();
 }
 
+void GenericListModel::appendList(const QVariantList& items) {
+    if (items.isEmpty()) return;
+    for (const auto& it : items) {
+        ensureRoles(it.toMap());
+    }
+    beginResetModel();
+    for (const auto& it : items) {
+        m_items.append(it.toMap());
+    }
+    endResetModel();
+    emit countChanged();
+}
+
+void GenericListModel::resetWithList(const QVariantList& items) {
+    beginResetModel();
+    m_items.clear();
+    for (const auto& it : items) {
+        QVariantMap map = it.toMap();
+        ensureRoles(map);
+        m_items.append(map);
+    }
+    endResetModel();
+    emit countChanged();
+}
+
 void GenericListModel::insert(int index, const QVariantMap& item) {
     if (index < 0 || index > m_items.size()) return;
     bool roleAdded = ensureRoles(item);
 
-    if (roleAdded && !m_items.isEmpty()) {
+    if (roleAdded) {
         beginResetModel();
         m_items.insert(index, item);
         endResetModel();

@@ -346,13 +346,47 @@ QVariantList PurchaseModel::get_purchase_register(const QString& param1, const Q
 }
 
 QVariantMap PurchaseModel::get_purchase_invoice(const QString& invoiceNoOrId) {
-    QVariantList rows = DatabaseManager::instance().executeQuery(
-        "SELECT * FROM purchase_invoices WHERE invoice_no = ? OR voucher_no = ? OR id = ? LIMIT 1;",
-        {invoiceNoOrId, invoiceNoOrId, invoiceNoOrId}
-    );
+    QString q = invoiceNoOrId.trimmed();
+    if (q.isEmpty()) return {};
+
+    QVariantList rows;
+    bool isNum = false;
+    int numId = q.toInt(&isNum);
+
+    // 1. Try numeric ID if valid
+    if (isNum && numId > 0) {
+        rows = DatabaseManager::instance().executeQuery(
+            "SELECT * FROM purchase_invoices WHERE id = ? LIMIT 1;",
+            {numId}
+        );
+    }
+    // 2. Try exact invoice_no
+    if (rows.isEmpty()) {
+        rows = DatabaseManager::instance().executeQuery(
+            "SELECT * FROM purchase_invoices WHERE invoice_no = ? ORDER BY id DESC LIMIT 1;",
+            {q}
+        );
+    }
+    // 3. Try voucher_no ordered by id DESC
+    if (rows.isEmpty()) {
+        rows = DatabaseManager::instance().executeQuery(
+            "SELECT * FROM purchase_invoices WHERE voucher_no = ? ORDER BY id DESC LIMIT 1;",
+            {q}
+        );
+    }
+    // 4. Loose fallback
+    if (rows.isEmpty()) {
+        rows = DatabaseManager::instance().executeQuery(
+            "SELECT * FROM purchase_invoices WHERE invoice_no LIKE ? OR voucher_no LIKE ? ORDER BY id DESC LIMIT 1;",
+            {"%" + q + "%", "%" + q + "%"}
+        );
+    }
+
     if (rows.isEmpty()) return {};
     QVariantMap inv = rows.first().toMap();
     int invId = inv.value("id").toInt();
+    QString invNo = inv.value("invoice_no").toString().trimmed();
+    QString vNo = inv.value("voucher_no").toString().trimmed();
 
     // Auto-resolve party metadata if gstin or address is missing
     QString suppName = inv.value("supplier_name").toString().trimmed();
@@ -380,30 +414,78 @@ QVariantMap PurchaseModel::get_purchase_invoice(const QString& invoiceNoOrId) {
         }
     }
 
-    // Fetch line items from purchase_invoice_items
+    // A. Fetch line items from purchase_invoice_items by invoice_id
     QVariantList itemRows = DatabaseManager::instance().executeQuery(
         "SELECT * FROM purchase_invoice_items WHERE invoice_id = ? ORDER BY id ASC;",
         {invId}
     );
-    // If no purchase_invoice_items, create single line item from header
+    // B. Fallback by invoice_no if invoice_id returned none
+    if (itemRows.isEmpty() && !invNo.isEmpty()) {
+        itemRows = DatabaseManager::instance().executeQuery(
+            "SELECT * FROM purchase_invoice_items WHERE invoice_no = ? ORDER BY id ASC;",
+            {invNo}
+        );
+    }
+    // C. Fallback to stock_transactions for multi-line stock items
+    if (itemRows.isEmpty() && (!vNo.isEmpty() || !invNo.isEmpty())) {
+        QVariantList stRows = DatabaseManager::instance().executeQuery(
+            "SELECT item_id, item_name, bags AS bag_count, packing, weight_qtl, rate AS rate_per_qtl, "
+            "amount AS total_amount, taxable_amount, tax AS gst_pct "
+            "FROM stock_transactions WHERE (voucher_no = ? OR bill_no = ?) AND trans_type IN ('Purc', 'Purchase') "
+            "ORDER BY row_no ASC, id ASC;",
+            {vNo, invNo}
+        );
+        if (!stRows.isEmpty()) {
+            itemRows = stRows;
+        }
+    }
+    // D. If still empty, create single line item from header
     if (itemRows.isEmpty() && !inv.value("item_name").toString().isEmpty()) {
         QVariantMap itm;
+        itm["itemName"] = inv.value("item_name");
         itm["item_name"] = inv.value("item_name");
-        itm["bags"] = inv.value("bag_count");
+        itm["bags"] = inv.value("bag_count").toInt();
+        itm["bag_count"] = itm["bags"];
         itm["packing"] = 0.5;
-        itm["weight"] = inv.value("weight_qtl");
-        itm["rate"] = inv.value("rate_per_qtl");
-        itm["gst_pct"] = inv.value("gst_pct");
-        itm["amount"] = inv.value("taxable_amount");
+        itm["weight"] = inv.value("weight_qtl").toDouble();
+        itm["weight_qtl"] = itm["weight"];
+        itm["rate"] = inv.value("rate_per_qtl").toDouble();
+        itm["rate_per_qtl"] = itm["rate"];
+        itm["gstPct"] = inv.value("gst_pct").toDouble();
+        itm["gst_pct"] = itm["gstPct"];
+        double amt = inv.value("taxable_amount").toDouble() > 0 ? inv.value("taxable_amount").toDouble() : inv.value("total_amount").toDouble();
+        if (amt <= 0.001) amt = itm["weight"].toDouble() * itm["rate"].toDouble();
+        itm["amount"] = amt;
+        itm["taxable_amount"] = amt;
+        itm["total_amount"] = inv.value("total_amount").toDouble() > 0 ? inv.value("total_amount").toDouble() : amt;
         itm["hsn_code"] = inv.value("hsn_code");
         itemRows.append(itm);
     } else {
         for (int i = 0; i < itemRows.size(); ++i) {
             QVariantMap itm = itemRows[i].toMap();
-            itm["bags"] = itm.value("bag_count");
-            itm["weight"] = itm.value("weight_qtl");
-            itm["rate"] = itm.value("rate_per_qtl");
-            itm["amount"] = itm.value("total_amount").toDouble() > 0 ? itm.value("total_amount") : itm.value("taxable_amount");
+            QString iName = itm.value("item_name").toString();
+            int bCount = itm.value("bag_count").isValid() ? itm.value("bag_count").toInt() : itm.value("bags").toInt();
+            double pVal = itm.value("packing").toDouble() > 0 ? itm.value("packing").toDouble() : 0.5;
+            double wVal = itm.value("weight_qtl").isValid() ? itm.value("weight_qtl").toDouble() : itm.value("weight").toDouble();
+            double rVal = itm.value("rate_per_qtl").isValid() ? itm.value("rate_per_qtl").toDouble() : itm.value("rate").toDouble();
+            double gVal = itm.value("gst_pct").isValid() ? itm.value("gst_pct").toDouble() : itm.value("gstPct").toDouble();
+            double amt = itm.value("total_amount").toDouble() > 0 ? itm.value("total_amount").toDouble() : itm.value("taxable_amount").toDouble();
+            if (amt <= 0.001 && wVal > 0 && rVal > 0) amt = wVal * rVal;
+
+            itm["itemName"] = iName;
+            itm["item_name"] = iName;
+            itm["bags"] = bCount;
+            itm["bag_count"] = bCount;
+            itm["packing"] = pVal;
+            itm["weight"] = wVal;
+            itm["weight_qtl"] = wVal;
+            itm["rate"] = rVal;
+            itm["rate_per_qtl"] = rVal;
+            itm["gstPct"] = gVal;
+            itm["gst_pct"] = gVal;
+            itm["amount"] = amt;
+            itm["taxable_amount"] = amt;
+            itm["total_amount"] = amt;
             itemRows[i] = itm;
         }
     }

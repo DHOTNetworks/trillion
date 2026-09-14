@@ -22,6 +22,8 @@ public:
 
     Q_INVOKABLE void clear();
     Q_INVOKABLE void append(const QVariantMap& item);
+    Q_INVOKABLE void appendList(const QVariantList& items);
+    Q_INVOKABLE void resetWithList(const QVariantList& items);
     Q_INVOKABLE void insert(int index, const QVariantMap& item);
     Q_INVOKABLE void remove(int index, int count = 1);
     Q_INVOKABLE QVariantMap get(int index) const;

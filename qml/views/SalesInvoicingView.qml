@@ -46,6 +46,18 @@ ColumnLayout {
         }
     }
 
+    function openInvoice(rowIndex) {
+        if (typeof salesModel === "undefined" || !salesModel || typeof window === "undefined") return
+        var row = salesModel.get(rowIndex)
+        if (!row) return
+        var invNo = ("" + (row.invoice_no || row.voucher_no || "")).trim()
+        var invId = row.id || 0
+        window.pendingEditInvoiceNo = invNo
+        window.pendingEditVoucherNo = ("" + (row.voucher_no || "")).trim()
+        window.pendingEditVoucherId = invId
+        window.navigateToView(14)
+    }
+
     FastTable {
         Layout.fillWidth: true
         Layout.fillHeight: true
@@ -54,5 +66,8 @@ ColumnLayout {
         headers: ["Invoice No", "Date", "Customer", "Item", "Bags", "Weight Qtl", "Rate ₹", "Taxable ₹", "GST %", "Total ₹", "Mode"]
         roleKeys: ["invoice_no", "invoice_date", "customer_name", "item_name", "bag_count", "weight_qtl", "rate_per_qtl", "taxable_amount", "gst_pct", "total_amount", "payment_mode"]
         onNewEntryRequested: root.showNewModal()
+        onRowClicked: function(rowIndex) {
+            root.openInvoice(rowIndex)
+        }
     }
 }

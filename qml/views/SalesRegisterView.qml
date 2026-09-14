@@ -11,6 +11,18 @@ T.ScrollView {
     signal cancelRequested()
     signal openInvoiceRequested(string invoiceNo)
 
+    onOpenInvoiceRequested: function(invoiceNo) {
+        root.openInvoice(invoiceNo)
+    }
+
+    function openInvoice(invNo) {
+        if (!invNo || typeof window === "undefined") return
+        window.pendingEditInvoiceNo = invNo
+        window.pendingEditVoucherNo = invNo
+        window.pendingEditVoucherId = 0
+        window.navigateToView(14)
+    }
+
     function handleEscape() {
         root.cancelRequested()
     }
