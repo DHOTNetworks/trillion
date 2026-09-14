@@ -32,6 +32,7 @@ public:
         WeightQtlRole,
         RateRole,
         AmountRole,
+        GstPctRole,
         IsStockRole
     };
 
@@ -43,7 +44,7 @@ public:
     QHash<int, QByteArray> roleNames() const override;
 
     Q_INVOKABLE void appendRow(const QString &itemName = "", const QString &hsn = "", const QString &unit = "QTL",
-                               int bags = 0, double packing = 0.0, double weight = 0.0, double rate = 0.0, double amount = 0.0);
+                               int bags = 0, double packing = 0.500, double weight = 0.0, double rate = 0.0, double amount = 0.0, double gstPct = 0.0);
     Q_INVOKABLE void removeRowAt(int index);
     Q_INVOKABLE void clear();
     Q_INVOKABLE int count() const { return m_items.size(); }
@@ -115,11 +116,23 @@ class SalesVoucherController : public QObject {
     Q_PROPERTY(double marketFee READ marketFee WRITE setMarketFee NOTIFY totalsChanged)
     Q_PROPERTY(double hrdf READ hrdf WRITE setHrdf NOTIFY totalsChanged)
     Q_PROPERTY(double otherExp READ otherExp WRITE setOtherExp NOTIFY totalsChanged)
+    Q_PROPERTY(double welfare READ welfare WRITE setWelfare NOTIFY totalsChanged)
+    Q_PROPERTY(double dhrmd READ dhrmd WRITE setDhrmd NOTIFY totalsChanged)
+    Q_PROPERTY(double sutli READ sutli WRITE setSutli NOTIFY totalsChanged)
+    Q_PROPERTY(double lessAmount READ lessAmount WRITE setLessAmount NOTIFY totalsChanged)
 
     // Transport & Shipping
     Q_PROPERTY(QString vehicleNo READ vehicleNo WRITE setVehicleNo NOTIFY vehicleNoChanged)
     Q_PROPERTY(QString ewayBillNo READ ewayBillNo WRITE setEwayBillNo NOTIFY ewayBillNoChanged)
     Q_PROPERTY(QString grNo READ grNo WRITE setGrNo NOTIFY grNoChanged)
+    Q_PROPERTY(QString driverName READ driverName WRITE setDriverName NOTIFY driverNameChanged)
+    Q_PROPERTY(QString billTime READ billTime WRITE setBillTime NOTIFY billTimeChanged)
+    Q_PROPERTY(QString saudaDate READ saudaDate WRITE setSaudaDate NOTIFY saudaDateChanged)
+    Q_PROPERTY(QString grade READ grade WRITE setGrade NOTIFY gradeChanged)
+    Q_PROPERTY(QString kandaWeight READ kandaWeight WRITE setKandaWeight NOTIFY kandaWeightChanged)
+    Q_PROPERTY(QString brokerName READ brokerName WRITE setBrokerName NOTIFY brokerNameChanged)
+    Q_PROPERTY(QString challanNo READ challanNo WRITE setChallanNo NOTIFY challanNoChanged)
+    Q_PROPERTY(QString placeOfSupply READ placeOfSupply WRITE setPlaceOfSupply NOTIFY placeOfSupplyChanged)
     Q_PROPERTY(QString transportName READ transportName WRITE setTransportName NOTIFY transportNameChanged)
     Q_PROPERTY(QString shippingAddress READ shippingAddress WRITE setShippingAddress NOTIFY shippingAddressChanged)
     Q_PROPERTY(QString poNo READ poNo WRITE setPoNo NOTIFY poNoChanged)
@@ -224,6 +237,18 @@ public:
     double otherExp() const { return m_otherExp; }
     void setOtherExp(double v) { if (std::abs(m_otherExp - v) > 0.001) { m_otherExp = v; recalculateTotals(); } }
 
+    double welfare() const { return m_welfare; }
+    void setWelfare(double v) { if (std::abs(m_welfare - v) > 0.001) { m_welfare = v; recalculateTotals(); } }
+
+    double dhrmd() const { return m_dhrmd; }
+    void setDhrmd(double v) { if (std::abs(m_dhrmd - v) > 0.001) { m_dhrmd = v; recalculateTotals(); } }
+
+    double sutli() const { return m_sutli; }
+    void setSutli(double v) { if (std::abs(m_sutli - v) > 0.001) { m_sutli = v; recalculateTotals(); } }
+
+    double lessAmount() const { return m_lessAmount; }
+    void setLessAmount(double v) { if (std::abs(m_lessAmount - v) > 0.001) { m_lessAmount = v; recalculateTotals(); } }
+
     QString vehicleNo() const { return m_vehicleNo; }
     void setVehicleNo(const QString &v) { if (m_vehicleNo != v) { m_vehicleNo = v; emit vehicleNoChanged(); } }
 
@@ -232,6 +257,30 @@ public:
 
     QString grNo() const { return m_grNo; }
     void setGrNo(const QString &v) { if (m_grNo != v) { m_grNo = v; emit grNoChanged(); } }
+
+    QString driverName() const { return m_driverName; }
+    void setDriverName(const QString &v) { if (m_driverName != v) { m_driverName = v; emit driverNameChanged(); } }
+
+    QString billTime() const { return m_billTime; }
+    void setBillTime(const QString &v) { if (m_billTime != v) { m_billTime = v; emit billTimeChanged(); } }
+
+    QString saudaDate() const { return m_saudaDate; }
+    void setSaudaDate(const QString &v) { if (m_saudaDate != v) { m_saudaDate = v; emit saudaDateChanged(); } }
+
+    QString grade() const { return m_grade; }
+    void setGrade(const QString &v) { if (m_grade != v) { m_grade = v; emit gradeChanged(); } }
+
+    QString kandaWeight() const { return m_kandaWeight; }
+    void setKandaWeight(const QString &v) { if (m_kandaWeight != v) { m_kandaWeight = v; emit kandaWeightChanged(); } }
+
+    QString brokerName() const { return m_brokerName; }
+    void setBrokerName(const QString &v) { if (m_brokerName != v) { m_brokerName = v; emit brokerNameChanged(); } }
+
+    QString challanNo() const { return m_challanNo; }
+    void setChallanNo(const QString &v) { if (m_challanNo != v) { m_challanNo = v; emit challanNoChanged(); } }
+
+    QString placeOfSupply() const { return m_placeOfSupply; }
+    void setPlaceOfSupply(const QString &v) { if (m_placeOfSupply != v) { m_placeOfSupply = v; emit placeOfSupplyChanged(); } }
 
     QString transportName() const { return m_transportName; }
     void setTransportName(const QString &v) { if (m_transportName != v) { m_transportName = v; emit transportNameChanged(); } }
@@ -254,6 +303,7 @@ public:
     Q_INVOKABLE void resetForm(const QString &workingDate = "");
     Q_INVOKABLE bool loadInvoice(int invoiceId);
     Q_INVOKABLE bool loadInvoiceByNo(const QString &invNo);
+    Q_INVOKABLE bool loadInvoiceForEditing(const QVariant &invNoOrId, const QString &dateHint = "");
     Q_INVOKABLE void recalculateTotals();
     Q_INVOKABLE bool saveVoucher();
 
@@ -278,6 +328,14 @@ signals:
     void vehicleNoChanged();
     void ewayBillNoChanged();
     void grNoChanged();
+    void driverNameChanged();
+    void billTimeChanged();
+    void saudaDateChanged();
+    void gradeChanged();
+    void kandaWeightChanged();
+    void brokerNameChanged();
+    void challanNoChanged();
+    void placeOfSupplyChanged();
     void transportNameChanged();
     void shippingAddressChanged();
     void poNoChanged();
@@ -321,10 +379,22 @@ private:
     double m_marketFee = 0.0;
     double m_hrdf = 0.0;
     double m_otherExp = 0.0;
+    double m_welfare = 0.0;
+    double m_dhrmd = 0.0;
+    double m_sutli = 0.0;
+    double m_lessAmount = 0.0;
 
     QString m_vehicleNo;
     QString m_ewayBillNo;
     QString m_grNo;
+    QString m_driverName;
+    QString m_billTime;
+    QString m_saudaDate;
+    QString m_grade;
+    QString m_kandaWeight;
+    QString m_brokerName;
+    QString m_challanNo;
+    QString m_placeOfSupply;
     QString m_transportName;
     QString m_shippingAddress;
     QString m_poNo;

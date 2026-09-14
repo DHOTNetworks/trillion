@@ -37,6 +37,7 @@ QVariant SalesLineItemsModel::data(const QModelIndex &index, int role) const
     case WeightQtlRole: return item.weightQtl;
     case RateRole: return item.rate;
     case AmountRole: return item.amount;
+    case GstPctRole: return 0.0;
     case IsStockRole: return item.isStock;
     default: return QVariant();
     }
@@ -100,20 +101,22 @@ QHash<int, QByteArray> SalesLineItemsModel::roleNames() const
     roles[WeightQtlRole] = "weightQtl";
     roles[RateRole] = "rate";
     roles[AmountRole] = "amount";
+    roles[GstPctRole] = "gstPct";
     roles[IsStockRole] = "isStock";
     return roles;
 }
 
 void SalesLineItemsModel::appendRow(const QString &itemName, const QString &hsn, const QString &unit,
-                                   int bags, double packing, double weight, double rate, double amount)
+                                   int bags, double packing, double weight, double rate, double amount, double gstPct)
 {
+    Q_UNUSED(gstPct);
     beginInsertRows(QModelIndex(), m_items.size(), m_items.size());
     SalesLineItem item;
     item.itemName = itemName;
     item.hsnCode = hsn;
     item.unit = unit.isEmpty() ? "QTL" : unit;
     item.bags = bags;
-    item.packingKg = packing;
+    item.packingKg = packing > 0.0001 ? packing : 0.500;
     item.weightQtl = weight;
     item.rate = rate;
     item.amount = (amount > 0.001) ? amount : FinancialMathService::round2(weight * rate);
@@ -146,13 +149,22 @@ QVariantMap SalesLineItemsModel::getRow(int index) const
     if (index < 0 || index >= m_items.size()) return map;
     const auto &item = m_items.at(index);
     map["itemName"] = item.itemName;
+    map["item_name"] = item.itemName;
     map["hsnCode"] = item.hsnCode;
+    map["hsn_code"] = item.hsnCode;
     map["unit"] = item.unit;
     map["bags"] = item.bags;
+    map["bag_count"] = item.bags;
     map["packingKg"] = item.packingKg;
+    map["packing"] = item.packingKg;
     map["weightQtl"] = item.weightQtl;
+    map["weight"] = item.weightQtl;
+    map["weight_qtl"] = item.weightQtl;
     map["rate"] = item.rate;
+    map["rate_per_qtl"] = item.rate;
     map["amount"] = item.amount;
+    map["taxable_amount"] = item.amount;
+    map["total_amount"] = item.amount;
     map["isStock"] = item.isStock;
     return map;
 }
@@ -161,14 +173,14 @@ void SalesLineItemsModel::setRowProperty(int index, const QString &property, con
 {
     if (index < 0 || index >= m_items.size()) return;
     QModelIndex idx = this->index(index, 0);
-    if (property == "itemName") setData(idx, value, ItemNameRole);
-    else if (property == "hsnCode") setData(idx, value, HsnCodeRole);
+    if (property == "itemName" || property == "item_name") setData(idx, value, ItemNameRole);
+    else if (property == "hsnCode" || property == "hsn_code") setData(idx, value, HsnCodeRole);
     else if (property == "unit") setData(idx, value, UnitRole);
-    else if (property == "bags") setData(idx, value, BagsRole);
-    else if (property == "packingKg") setData(idx, value, PackingKgRole);
-    else if (property == "weightQtl") setData(idx, value, WeightQtlRole);
-    else if (property == "rate") setData(idx, value, RateRole);
-    else if (property == "amount") setData(idx, value, AmountRole);
+    else if (property == "bags" || property == "bag_count") setData(idx, value, BagsRole);
+    else if (property == "packingKg" || property == "packing" || property == "pkng") setData(idx, value, PackingKgRole);
+    else if (property == "weightQtl" || property == "weight" || property == "weight_qtl") setData(idx, value, WeightQtlRole);
+    else if (property == "rate" || property == "rate_per_qtl") setData(idx, value, RateRole);
+    else if (property == "amount" || property == "taxable_amount" || property == "total_amount") setData(idx, value, AmountRole);
     else if (property == "isStock") setData(idx, value, IsStockRole);
 }
 
@@ -178,13 +190,20 @@ QVariantList SalesLineItemsModel::toVariantList() const
     for (const auto &item : m_items) {
         QVariantMap map;
         map["item_name"] = item.itemName;
+        map["itemName"] = item.itemName;
         map["hsn_code"] = item.hsnCode;
         map["unit"] = item.unit;
         map["bags"] = item.bags;
+        map["bag_count"] = item.bags;
         map["packing_kg"] = item.packingKg;
+        map["packing"] = item.packingKg;
         map["weight_qtl"] = item.weightQtl;
+        map["weight"] = item.weightQtl;
         map["rate"] = item.rate;
+        map["rate_per_qtl"] = item.rate;
         map["amount"] = item.amount;
+        map["taxable_amount"] = item.amount;
+        map["total_amount"] = item.amount;
         list.append(map);
     }
     return list;
@@ -197,16 +216,39 @@ void SalesLineItemsModel::loadFromVariantList(const QVariantList &list)
     for (const auto &v : list) {
         QVariantMap map = v.toMap();
         SalesLineItem item;
-        item.itemName = map.value("item_name").toString();
+        item.itemName = map.contains("item_name") && !map.value("item_name").toString().isEmpty()
+            ? map.value("item_name").toString() : map.value("itemName").toString();
         item.hsnCode = map.value("hsn_code").toString();
         item.unit = map.value("unit", "QTL").toString();
-        item.bags = map.value("bags").toInt();
-        item.packingKg = map.value("packing_kg").toDouble();
-        item.weightQtl = map.value("weight_qtl").toDouble();
-        item.rate = map.value("rate").toDouble();
-        item.amount = map.value("amount").toDouble();
+        
+        int bags = map.value("bags").toInt();
+        if (bags == 0) bags = map.value("bag_count").toInt();
+        item.bags = bags;
+
+        double packing = map.value("packing_kg").toDouble();
+        if (packing <= 0.0001) packing = map.value("packing").toDouble();
+        if (packing <= 0.0001) packing = map.value("pkng").toDouble();
+        if (packing <= 0.0001) packing = 0.500;
+        item.packingKg = packing;
+
+        double weight = map.value("weight_qtl").toDouble();
+        if (weight <= 0.0001) weight = map.value("weight").toDouble();
+        item.weightQtl = weight;
+
+        double rate = map.value("rate").toDouble();
+        if (rate <= 0.0001) rate = map.value("rate_per_qtl").toDouble();
+        item.rate = rate;
+
+        double amount = map.value("amount").toDouble();
+        if (amount <= 0.0001) amount = map.value("taxable_amount").toDouble();
+        if (amount <= 0.0001) amount = map.value("total_amount").toDouble();
+        if (amount <= 0.0001 && weight > 0 && rate > 0) amount = FinancialMathService::round2(weight * rate);
+        item.amount = amount;
         item.isStock = true;
-        m_items.append(item);
+
+        if (!item.itemName.isEmpty() || item.amount > 0.001 || item.bags > 0) {
+            m_items.append(item);
+        }
     }
     endResetModel();
     emit itemsChanged();
@@ -298,9 +340,27 @@ void SalesVoucherController::resetForm(const QString &workingDate)
     emit editingInvoiceIdChanged();
     emit isEditModeChanged();
 
+    m_voucherNo.clear();
+    emit voucherNoChanged();
+
+    m_invoiceNo.clear();
+    emit invoiceNoChanged();
+
     m_invoiceDate = workingDate.isEmpty() ? AccountingDateService::instance().currentWorkingDate() : workingDate;
     emit invoiceDateChanged();
     emit dayOfWeekChanged();
+
+    m_marketType = "Market Type (With Stock)";
+    emit marketTypeChanged();
+
+    m_saleStatus = "Self Sale";
+    emit saleStatusChanged();
+
+    m_paymentMode = "Credit";
+    emit paymentModeChanged();
+
+    m_taxStatus = "GST / Exempt";
+    emit taxStatusChanged();
 
     m_partyLedger.clear();
     emit partyLedgerChanged();
@@ -311,17 +371,28 @@ void SalesVoucherController::resetForm(const QString &workingDate)
     m_dueDays = 30;
     emit dueDaysChanged();
 
+    m_salesAccount = "Sales Account";
+    emit salesAccountChanged();
+
+    m_gstRate = 5.0;
+    emit gstRateChanged();
+
     m_isInterstate = false;
     emit isInterstateChanged();
 
     m_freightCharges = 0.0;
     m_tcsRate = 0.0;
+    m_tcsAmount = 0.0;
     m_dami = 0.0;
     m_labour = 0.0;
     m_auction = 0.0;
     m_marketFee = 0.0;
     m_hrdf = 0.0;
     m_otherExp = 0.0;
+    m_welfare = 0.0;
+    m_dhrmd = 0.0;
+    m_sutli = 0.0;
+    m_lessAmount = 0.0;
 
     m_vehicleNo.clear();
     emit vehicleNoChanged();
@@ -331,6 +402,30 @@ void SalesVoucherController::resetForm(const QString &workingDate)
 
     m_grNo.clear();
     emit grNoChanged();
+
+    m_driverName.clear();
+    emit driverNameChanged();
+
+    m_billTime.clear();
+    emit billTimeChanged();
+
+    m_saudaDate.clear();
+    emit saudaDateChanged();
+
+    m_grade.clear();
+    emit gradeChanged();
+
+    m_kandaWeight.clear();
+    emit kandaWeightChanged();
+
+    m_brokerName.clear();
+    emit brokerNameChanged();
+
+    m_challanNo.clear();
+    emit challanNoChanged();
+
+    m_placeOfSupply.clear();
+    emit placeOfSupplyChanged();
 
     m_transportName.clear();
     emit transportNameChanged();
@@ -354,10 +449,23 @@ void SalesVoucherController::resetForm(const QString &workingDate)
 
 bool SalesVoucherController::loadInvoice(int invoiceId)
 {
+    return loadInvoiceForEditing(invoiceId, "");
+}
+
+bool SalesVoucherController::loadInvoiceByNo(const QString &invNo)
+{
+    return loadInvoiceForEditing(invNo.trimmed(), "");
+}
+
+bool SalesVoucherController::loadInvoiceForEditing(const QVariant &invNoOrId, const QString &dateHint)
+{
+    QString key = invNoOrId.toString().trimmed();
+    if (key.isEmpty()) return false;
+
     SalesModel salesModel;
-    QVariantMap inv = salesModel.get_sales_invoice(QString::number(invoiceId));
-    if (inv.isEmpty() || !inv.contains("id")) {
-        m_statusMessage = "Invoice not found";
+    QVariantMap inv = salesModel.get_sales_invoice(key, dateHint);
+    if (inv.isEmpty() || !inv.contains("id") || inv.value("id").toInt() <= 0) {
+        m_statusMessage = "Sales Invoice not found";
         m_isError = true;
         emit statusChanged();
         return false;
@@ -374,7 +482,20 @@ bool SalesVoucherController::loadInvoice(int invoiceId)
     setSaleStatus(inv.value("sale_status", "Self Sale").toString());
     setVehicleNo(inv.value("vehicle_no").toString());
     setEwayBillNo(inv.value("eway_bill_no").toString());
+    setGrNo(inv.value("gr_no").toString());
+    setDriverName(inv.value("driver").toString());
+    setBillTime(inv.value("bill_time").toString());
+    setSaudaDate(inv.value("sauda_date").toString());
+    setGrade(inv.value("grade").toString());
+    setKandaWeight(inv.value("kanda_weight").toString());
+    setBrokerName(inv.value("broker_name").toString());
+    setChallanNo(inv.value("challan_no").toString());
+    setPlaceOfSupply(inv.value("place_of_supply").toString());
+    setTransportName(inv.value("transport").toString());
+    setShippingAddress(inv.value("shipping_address").toString());
+    setPoNo(inv.value("po_no").toString());
     setNarration(inv.value("narration").toString());
+    setTaxStatus(inv.value("tax_status", "GST / Exempt").toString());
     setDueDays(inv.value("due_days", 30).toInt());
     setFreightCharges(inv.value("freight_charges", 0.0).toDouble());
     setTcsRate(inv.value("tcs_rate", 0.0).toDouble());
@@ -386,6 +507,10 @@ bool SalesVoucherController::loadInvoice(int invoiceId)
     setMarketFee(inv.value("m_fee", 0.0).toDouble());
     setHrdf(inv.value("hrdf", 0.0).toDouble());
     setOtherExp(inv.value("other_exp", 0.0).toDouble());
+    setWelfare(inv.value("welfare", 0.0).toDouble());
+    setDhrmd(inv.value("dhrmd", 0.0).toDouble());
+    setSutli(inv.value("sutli", 0.0).toDouble());
+    setLessAmount(inv.value("less_amount", 0.0).toDouble());
 
     QVariantList items = inv.value("items").toList();
     if (items.isEmpty() && !inv.value("item_name").toString().isEmpty()) {
@@ -406,16 +531,6 @@ bool SalesVoucherController::loadInvoice(int invoiceId)
     m_isError = false;
     emit statusChanged();
     return true;
-}
-
-bool SalesVoucherController::loadInvoiceByNo(const QString &invNo)
-{
-    SalesModel salesModel;
-    QVariantMap inv = salesModel.get_sales_invoice(invNo.trimmed());
-    if (inv.contains("id")) {
-        return loadInvoice(inv.value("id").toInt());
-    }
-    return false;
 }
 
 void SalesVoucherController::recalculateTotals()

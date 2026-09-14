@@ -50,11 +50,6 @@ Item {
     property string selectedTaxStatus: "GST / Exempt"
     property bool isManualGst: false
 
-    // Registered Items List Model
-    GenericListModel {
-        id: lineItemsModel
-    }
-
     Shortcut {
         sequence: "F2"
         context: Qt.WindowShortcut
@@ -148,8 +143,11 @@ Item {
     }
 
     function resetForm() {
-        editingInvoiceId = 0
         var wDate = (typeof financialYearsModel !== "undefined" && financialYearsModel) ? financialYearsModel.get_working_date() : Qt.formatDate(new Date(), "dd-MM-yyyy")
+        if (typeof salesVoucherCtrl !== "undefined" && salesVoucherCtrl) {
+            salesVoucherCtrl.resetForm(wDate)
+        }
+        editingInvoiceId = 0
         invoiceDateInput.text = wDate
         invNoInput.text = ""
         updateNextNumbers(wDate)
@@ -162,7 +160,6 @@ Item {
         partyCombo.editText = ""
         gstinInput.text = ""
         
-        lineItemsModel.clear()
         clearItemInputRow()
         
         vehNoInput.text = ""
@@ -196,16 +193,22 @@ Item {
         if (voucherDateModal && voucherDateModal.opened) {
             voucherDateModal.close()
         }
-        if (typeof salesModel === "undefined" || !salesModel) return
-        var inv = salesModel.get_sales_invoice(invNoOrId, dateHint || "")
-        if (!inv || !inv.id) return
+        if (typeof salesVoucherCtrl === "undefined" || !salesVoucherCtrl) return
 
-        editingInvoiceId = inv.id
-        autoVchCode = inv.voucher_no || ("Sale-" + inv.id)
+        var ok = salesVoucherCtrl.loadInvoiceForEditing(invNoOrId, dateHint || "")
+        if (!ok) {
+            statusMessage = salesVoucherCtrl.statusMessage || "Invoice not found"
+            isError = true
+            return
+        }
+
+        editingInvoiceId = salesVoucherCtrl.editingInvoiceId
+        autoVchCode = salesVoucherCtrl.voucherNo
         autoVoucherNo = autoVchCode
-        invNoInput.text = inv.invoice_no || ""
-        if (inv.invoice_date) {
-            var raw = String(inv.invoice_date).trim()
+        invNoInput.text = salesVoucherCtrl.invoiceNo
+        
+        if (salesVoucherCtrl.invoiceDate) {
+            var raw = String(salesVoucherCtrl.invoiceDate).trim()
             if (raw.indexOf("-") !== -1 || raw.indexOf(".") !== -1 || raw.indexOf("/") !== -1) {
                 var clean = raw.replace(/[.\/]/g, "-")
                 var parts = clean.split("-")
@@ -222,131 +225,58 @@ Item {
                 invoiceDateInput.text = raw
             }
         }
-        partyCombo.editText = inv.customer_name || ""
-        gstinInput.text = inv.gstin || ""
-        vehNoInput.text = inv.vehicle_no || ""
-        grNoInput.text = inv.gr_no || ""
-        driverInput.text = inv.driver || inv.driver_name || ""
-        ewayInput.text = inv.eway_bill_no || ""
-        billTimeInput.text = inv.bill_time || ""
-        saudaDtInput.text = inv.sauda_date || ""
-        shippingInput.text = inv.shipping_address || ""
-        poNoInput.text = inv.po_no || ""
-        gradeInput.text = inv.grade || ""
-        transportInput.text = inv.transport || ""
-        brokerInput.text = inv.broker_name || ""
-        kandaWeightInput.text = inv.kanda_weight || ""
-        narrationInput.text = inv.narration || ""
+        partyCombo.editText = salesVoucherCtrl.partyLedger
+        gstinInput.text = salesVoucherCtrl.gstin
+        vehNoInput.text = salesVoucherCtrl.vehicleNo
+        grNoInput.text = salesVoucherCtrl.grNo
+        driverInput.text = salesVoucherCtrl.driverName
+        ewayInput.text = salesVoucherCtrl.ewayBillNo
+        billTimeInput.text = salesVoucherCtrl.billTime
+        saudaDtInput.text = salesVoucherCtrl.saudaDate
+        shippingInput.text = salesVoucherCtrl.shippingAddress
+        poNoInput.text = salesVoucherCtrl.poNo
+        gradeInput.text = salesVoucherCtrl.grade
+        transportInput.text = salesVoucherCtrl.transportName
+        brokerInput.text = salesVoucherCtrl.brokerName
+        kandaWeightInput.text = salesVoucherCtrl.kandaWeight
+        narrationInput.text = salesVoucherCtrl.narration
 
-        damiAmount = parseFloat(inv.dami) || 0.0
-        labourAmount = parseFloat(inv.labour) || 0.0
-        auctionAmount = parseFloat(inv.auction) || 0.0
-        mFeeAmount = parseFloat(inv.m_fee) || 0.0
-        hrdfAmount = parseFloat(inv.hrdf) || 0.0
-        welfareAmount = parseFloat(inv.welfare) || 0.0
-        dhrmdAmount = parseFloat(inv.dhrmd) || 0.0
-        sutliAmount = parseFloat(inv.sutli) || 0.0
+        damiAmount = salesVoucherCtrl.dami
+        labourAmount = salesVoucherCtrl.labour
+        auctionAmount = salesVoucherCtrl.auction
+        mFeeAmount = salesVoucherCtrl.marketFee
+        hrdfAmount = salesVoucherCtrl.hrdf
+        welfareAmount = salesVoucherCtrl.welfare
+        dhrmdAmount = salesVoucherCtrl.dhrmd
+        sutliAmount = salesVoucherCtrl.sutli
 
-        otherExpInput.text = (parseFloat(inv.other_exp) || 0.0).toFixed(2)
-        lessInput.text = (parseFloat(inv.less_amount) || 0.0).toFixed(2)
-        freightInput.text = (parseFloat(inv.freight_charges) || 0.0).toFixed(2)
-        tcsInput.text = (parseFloat(inv.tcs_amount) || 0.0).toFixed(2)
-        challanInput.text = inv.challan_no || ""
-        dueDaysInput.text = (inv.due_days !== undefined && inv.due_days !== null) ? String(inv.due_days) : "0"
+        otherExpInput.text = salesVoucherCtrl.otherExp.toFixed(2)
+        lessInput.text = salesVoucherCtrl.lessAmount.toFixed(2)
+        freightInput.text = salesVoucherCtrl.freightCharges.toFixed(2)
+        tcsInput.text = salesVoucherCtrl.tcsAmount.toFixed(2)
+        challanInput.text = salesVoucherCtrl.challanNo
+        dueDaysInput.text = String(salesVoucherCtrl.dueDays)
 
-        if (inv.market_type) {
-            if (inv.market_type === "Mandi Type") {
-                marketTypeCombo.currentIndex = 1
-            } else if (inv.market_type === "Market Type (Without Stock)") {
-                marketTypeCombo.currentIndex = 2
-            } else {
-                marketTypeCombo.currentIndex = 0
-            }
+        if (salesVoucherCtrl.marketType === "Mandi Type") {
+            marketTypeCombo.currentIndex = 1
+        } else if (salesVoucherCtrl.marketType === "Market Type (Without Stock)") {
+            marketTypeCombo.currentIndex = 2
         } else {
             marketTypeCombo.currentIndex = 0
         }
 
-        if (inv.place_of_supply) {
-            posCombo.editText = inv.place_of_supply
+        if (salesVoucherCtrl.placeOfSupply) {
+            posCombo.editText = salesVoucherCtrl.placeOfSupply
         }
-        if (inv.tax_status) {
-            taxStatusCombo.currentIndex = (inv.tax_status === "IGST") ? 1 : (inv.tax_status === "Export" ? 2 : 0)
-        } else if (parseFloat(inv.igst_amount) > 0) {
+        if (salesVoucherCtrl.taxStatus === "IGST") {
             taxStatusCombo.currentIndex = 1
-        }
-        
-        var rawItems = inv.items || []
-        var formattedList = []
-        for (var i = 0; i < rawItems.length; i++) {
-            var itm = rawItems[i]
-            var w = parseFloat(itm.weight !== undefined ? itm.weight : (itm.weight_qtl !== undefined ? itm.weight_qtl : 0.0)) || 0.0
-            var r = parseFloat(itm.rate !== undefined ? itm.rate : (itm.rate_per_qtl !== undefined ? itm.rate_per_qtl : 0.0)) || 0.0
-            var a = parseFloat(itm.amount !== undefined ? itm.amount : (itm.total_amount !== undefined ? itm.total_amount : (itm.taxable_amount !== undefined ? itm.taxable_amount : (w * r)))) || (w * r)
-            var b = parseInt(itm.bags !== undefined ? itm.bags : (itm.bag_count !== undefined ? itm.bag_count : 0)) || 0
-            var g = parseFloat(itm.gstPct !== undefined ? itm.gstPct : (itm.gst_pct !== undefined ? itm.gst_pct : 0.0)) || 0.0
-            var p = itm.packing !== undefined ? String(itm.packing) : "0.500"
-            var name = itm.itemName || itm.item_name || ""
-
-            formattedList.push({
-                "itemName": name,
-                "item_name": name,
-                "bags": b,
-                "bag_count": b,
-                "packing": p,
-                "weight": w,
-                "weight_qtl": w,
-                "rate": r,
-                "rate_per_qtl": r,
-                "gstPct": g,
-                "gst_pct": g,
-                "amount": a,
-                "taxable_amount": a,
-                "total_amount": a
-            })
+        } else if (salesVoucherCtrl.taxStatus === "Export") {
+            taxStatusCombo.currentIndex = 2
+        } else {
+            taxStatusCombo.currentIndex = 0
         }
 
-        if (formattedList.length === 0 && (inv.item_name || inv.weight_qtl || inv.total_amount || inv.taxable_amount)) {
-            var fallbackName = inv.item_name || "Rice Basmati (Non Branded)"
-            var fallbackWeight = parseFloat(inv.weight_qtl) || 0.0
-            var fallbackRate = parseFloat(inv.rate_per_qtl) || 0.0
-            var fallbackAmount = parseFloat(inv.taxable_amount) || parseFloat(inv.total_amount) || (fallbackWeight * fallbackRate)
-            var fallbackBags = parseInt(inv.bag_count) || 0
-            var fallbackGst = parseFloat(inv.gst_pct) || 0.0
-            formattedList.push({
-                "itemName": fallbackName,
-                "item_name": fallbackName,
-                "bags": fallbackBags,
-                "bag_count": fallbackBags,
-                "packing": "0.500",
-                "weight": fallbackWeight,
-                "weight_qtl": fallbackWeight,
-                "rate": fallbackRate,
-                "rate_per_qtl": fallbackRate,
-                "gstPct": fallbackGst,
-                "gst_pct": fallbackGst,
-                "amount": fallbackAmount,
-                "taxable_amount": fallbackAmount,
-                "total_amount": fallbackAmount
-            })
-        }
-        lineItemsModel.resetWithList(formattedList)
-
-        if (typeof salesVoucherCtrl !== "undefined" && salesVoucherCtrl) {
-            salesVoucherCtrl.lineItemsModel.clear()
-            for (var j = 0; j < formattedList.length; j++) {
-                var f = formattedList[j]
-                salesVoucherCtrl.lineItemsModel.appendRow(
-                    f.itemName,
-                    "",
-                    "QTL",
-                    f.bags,
-                    parseFloat(f.packing) || 0.0,
-                    f.weight,
-                    f.rate,
-                    f.amount
-                )
-            }
-        }
+        clearItemInputRow()
         recalculateTotals()
     }
 
@@ -362,19 +292,27 @@ Item {
     }
 
     function addCurrentItemRow() {
-        var itemName = itemCombo.currentText.trim()
-        var bCount = parseInt(bagsInput.text) || 0
-        var weightVal = parseFloat(weightInput.text) || 0.0
-        var rateVal = parseFloat(rateInput.text) || 0.0
-        var gstStr = gstInput.text.replace("%", "").trim()
-        var gstPct = isNaN(parseFloat(gstStr)) ? 0.0 : parseFloat(gstStr)
-        var pkng = pkngInput.text.trim()
-        var userAmount = parseFloat(amountInput.text) || 0.0
+        addLineItem()
+    }
 
-        if (!itemName) {
-            statusMessage = "Please select an Item."
+    function addLineItem() {
+        var itemName = itemCombo.currentText.trim()
+        if (itemName === "") {
+            statusMessage = "Please select or enter an Item."
             isError = true
             return
+        }
+
+        var bCount = parseInt(bagsInput.text) || 0
+        var pkng = pkngInput.text.trim() || "0.500"
+        var weightVal = parseFloat(weightInput.text) || 0.0
+        var gstPct = parseFloat(gstInput.text) || 0.0
+        var rateVal = parseFloat(rateInput.text) || 0.0
+        var userAmount = parseFloat(amountInput.text) || 0.0
+
+        if (!root.isWithoutStock && weightVal <= 0 && bCount > 0) {
+            var pkKg = parseFloat(pkng) || 0.500
+            weightVal = Math.round(bCount * pkKg * 1000.0) / 1000.0
         }
 
         if (!root.isWithoutStock && weightVal <= 0 && bCount <= 0) {
@@ -391,22 +329,13 @@ Item {
                 "",
                 "QTL",
                 root.isWithoutStock ? 0 : bCount,
-                parseFloat(pkng) || 0.0,
+                parseFloat(pkng) || 0.500,
                 root.isWithoutStock ? 0.0 : weightVal,
                 rateVal,
-                amount
+                amount,
+                gstPct
             )
         }
-
-        lineItemsModel.append({
-            "itemName": itemName,
-            "bags": root.isWithoutStock ? 0 : bCount,
-            "packing": root.isWithoutStock ? "" : pkng,
-            "weight": root.isWithoutStock ? 0.0 : weightVal,
-            "gstPct": gstPct,
-            "rate": rateVal,
-            "amount": amount
-        })
 
         clearItemInputRow()
         statusMessage = ""
@@ -420,40 +349,11 @@ Item {
     function removeLineItem(index) {
         if (typeof salesVoucherCtrl !== "undefined" && salesVoucherCtrl) {
             salesVoucherCtrl.lineItemsModel.removeRowAt(index)
-        }
-        if (index >= 0 && index < lineItemsModel.count) {
-            lineItemsModel.remove(index)
             recalculateTotals()
         }
     }
 
     function recalculateTotals() {
-        var sumBags = 0
-        var sumWeight = 0.0
-        var sumTaxable = 0.0
-        var sumGst = 0.0
-
-        for (var i = 0; i < lineItemsModel.count; i++) {
-            var item = lineItemsModel.get(i)
-            sumBags += item.bags
-            sumWeight += item.weight
-            sumTaxable += item.amount
-            if (selectedTaxStatus !== "Export") {
-                sumGst += Math.round(item.amount * (item.gstPct / 100.0) * 100.0) / 100.0
-            }
-        }
-
-        totalBags = sumBags
-        totalWeight = Math.round(sumWeight * 1000.0) / 1000.0
-        taxableAmount = Math.round(sumTaxable * 100.0) / 100.0
-
-        if (!isManualGst) {
-            gstTaxAmount = Math.round(sumGst * 100.0) / 100.0
-            gstTaxInput.text = gstTaxAmount > 0 ? gstTaxAmount.toFixed(2) : "0.00"
-        } else {
-            gstTaxAmount = parseFloat(gstTaxInput.text) || 0.0
-        }
-
         if (root.isMandiType && typeof damiInput !== "undefined" && damiInput) {
             damiAmount = parseFloat(damiInput.text) || 0.0
             labourAmount = parseFloat(labourInput.text) || 0.0
@@ -475,11 +375,34 @@ Item {
         freightAmount = (typeof freightInput !== "undefined" && freightInput) ? (parseFloat(freightInput.text) || 0.0) : 0.0
         tcsAmount = (typeof tcsInput !== "undefined" && tcsInput) ? (parseFloat(tcsInput.text) || 0.0) : 0.0
 
-        var mandiChargesSum = damiAmount + labourAmount + auctionAmount + mFeeAmount + hrdfAmount + welfareAmount + dhrmdAmount + sutliAmount
-        var gross = taxableAmount + mandiChargesSum + gstTaxAmount + otherExpAmount + freightAmount + tcsAmount - lessAmount
-        var rounded = Math.round(gross)
-        roundOffAmount = Math.round((rounded - gross) * 100.0) / 100.0
-        grandTotal = rounded
+        if (typeof salesVoucherCtrl !== "undefined" && salesVoucherCtrl) {
+            salesVoucherCtrl.setDami(damiAmount)
+            salesVoucherCtrl.setLabour(labourAmount)
+            salesVoucherCtrl.setAuction(auctionAmount)
+            salesVoucherCtrl.setMarketFee(mFeeAmount)
+            salesVoucherCtrl.setHrdf(hrdfAmount)
+            salesVoucherCtrl.setWelfare(welfareAmount)
+            salesVoucherCtrl.setDhrmd(dhrmdAmount)
+            salesVoucherCtrl.setSutli(sutliAmount)
+            salesVoucherCtrl.setOtherExp(otherExpAmount)
+            salesVoucherCtrl.setLessAmount(lessAmount)
+            salesVoucherCtrl.setFreightCharges(freightAmount)
+            salesVoucherCtrl.setTcsRate(parseFloat(tcsInput.text) || 0.0)
+            salesVoucherCtrl.setIsInterstate(selectedTaxStatus === "IGST")
+            salesVoucherCtrl.recalculateTotals()
+
+            totalBags = salesVoucherCtrl.totalBags
+            totalWeight = salesVoucherCtrl.totalWeightQtl
+            taxableAmount = salesVoucherCtrl.taxableAmount
+            if (!isManualGst) {
+                gstTaxAmount = salesVoucherCtrl.totalTaxAmount
+                gstTaxInput.text = gstTaxAmount > 0 ? gstTaxAmount.toFixed(2) : "0.00"
+            } else {
+                gstTaxAmount = parseFloat(gstTaxInput.text) || 0.0
+            }
+            roundOffAmount = salesVoucherCtrl.roundOff
+            grandTotal = salesVoucherCtrl.grandTotal
+        }
     }
 
     function onPartySelected(partyName) {
@@ -568,11 +491,13 @@ Item {
             return
         }
 
-        if (lineItemsModel.count === 0 && itemCombo.currentText.trim() !== "") {
+        var itemsCount = (typeof salesVoucherCtrl !== "undefined" && salesVoucherCtrl) ? salesVoucherCtrl.lineItemsModel.count : 0
+        if (itemsCount === 0 && itemCombo.currentText.trim() !== "") {
             addCurrentItemRow()
+            itemsCount = (typeof salesVoucherCtrl !== "undefined" && salesVoucherCtrl) ? salesVoucherCtrl.lineItemsModel.count : 0
         }
 
-        if (lineItemsModel.count === 0) {
+        if (itemsCount === 0) {
             statusMessage = "Please enter at least one Stock Item in the grid."
             isError = true
             return
@@ -599,33 +524,9 @@ Item {
         if (!invNo && typeof salesModel !== "undefined" && salesModel) {
             invNo = salesModel.get_next_invoice_no()
         }
-        var dParts = invoiceDateInput.text.trim().split("-")
-        var invDate = dParts.length === 3 ? (dParts[2] + "-" + dParts[1] + "-" + dParts[0]) : Qt.formatDate(new Date(), "yyyy-MM-dd")
         var vehicle = vehNoInput.text.trim()
         var eway = ewayInput.text.trim()
         var narr = narrationInput.text.trim()
-
-        var firstItem = lineItemsModel.count > 0 ? lineItemsModel.get(0) : null
-        var mainItemName = firstItem ? firstItem.itemName : ""
-        var mainGstPct = firstItem ? (parseFloat(firstItem.gstPct) || 0.0) : (parseFloat(gstInput.text.replace("%", "").trim()) || 0.0)
-
-        var cgstVal = selectedTaxStatus === "IGST" ? 0.0 : gstTaxAmount / 2.0
-        var sgstVal = selectedTaxStatus === "IGST" ? 0.0 : gstTaxAmount / 2.0
-        var igstVal = selectedTaxStatus === "IGST" ? gstTaxAmount : 0.0
-
-        var itemsList = []
-        for (var i = 0; i < lineItemsModel.count; i++) {
-            var it = lineItemsModel.get(i)
-            itemsList.push({
-                item_name: it.itemName,
-                bags: it.bags,
-                packing: parseFloat(it.packing) || 0.5,
-                weight: it.weight,
-                rate: it.rate,
-                gst_pct: it.gstPct,
-                amount: it.amount
-            })
-        }
 
         if (typeof salesVoucherCtrl !== "undefined" && salesVoucherCtrl) {
             salesVoucherCtrl.editingInvoiceId = root.editingInvoiceId
@@ -638,28 +539,51 @@ Item {
             salesVoucherCtrl.vehicleNo = vehicle
             salesVoucherCtrl.ewayBillNo = eway
             salesVoucherCtrl.grNo = grNoInput.text.trim()
+            salesVoucherCtrl.driverName = driverInput.text.trim()
+            salesVoucherCtrl.billTime = billTimeInput.text.trim()
+            salesVoucherCtrl.saudaDate = saudaDtInput.text.trim()
+            salesVoucherCtrl.grade = gradeInput.text.trim()
+            salesVoucherCtrl.kandaWeight = kandaWeightInput.text.trim()
+            salesVoucherCtrl.brokerName = brokerInput.text.trim()
+            salesVoucherCtrl.challanNo = challanInput.text.trim()
+            salesVoucherCtrl.placeOfSupply = posCombo.editText.trim()
+            salesVoucherCtrl.transportName = transportInput.text.trim()
             salesVoucherCtrl.shippingAddress = shippingInput.text.trim()
             salesVoucherCtrl.poNo = poNoInput.text.trim()
             salesVoucherCtrl.narration = narr
             salesVoucherCtrl.freightCharges = freightAmount
             salesVoucherCtrl.otherExp = otherExpAmount
+            salesVoucherCtrl.welfare = welfareAmount
+            salesVoucherCtrl.dhrmd = dhrmdAmount
+            salesVoucherCtrl.sutli = sutliAmount
+            salesVoucherCtrl.lessAmount = lessAmount
             salesVoucherCtrl.tcsRate = parseFloat(tcsInput.text) || 0.0
             salesVoucherCtrl.dami = damiAmount
             salesVoucherCtrl.labour = labourAmount
             salesVoucherCtrl.auction = auctionAmount
             salesVoucherCtrl.marketFee = mFeeAmount
             salesVoucherCtrl.hrdf = hrdfAmount
+            salesVoucherCtrl.marketType = marketTypeCombo.currentText
             salesVoucherCtrl.saleStatus = selectedSaleStatus
             salesVoucherCtrl.taxStatus = selectedTaxStatus
 
             var ok = salesVoucherCtrl.saveVoucher()
             if (ok) {
-                statusMessage = salesVoucherCtrl.statusMessage
+                savedInvoiceNo = invNo
+                savedInvoiceDate = invoiceDateInput.text.trim()
+                savedCustomerName = partyLedger
+                savedGrandTotal = grandTotal
+                savedTotalBags = totalBags
+                savedTotalWeight = totalWeight
+                savedIsEdit = root.editingInvoiceId > 0
+
+                statusMessage = root.editingInvoiceId > 0 ? ("Invoice " + invNo + " updated successfully!") : ("Invoice " + invNo + " saved successfully!")
                 isError = false
+                postSaveDialog.open()
                 resetForm()
                 return
             } else {
-                statusMessage = salesVoucherCtrl.statusMessage
+                statusMessage = salesVoucherCtrl.statusMessage || "Failed to save invoice"
                 isError = true
                 return
             }
@@ -1105,7 +1029,7 @@ Item {
                         implicitHeight: contentHeight
                         interactive: false
                         clip: true
-                        model: lineItemsModel
+                        model: (typeof salesVoucherCtrl !== "undefined" && salesVoucherCtrl) ? salesVoucherCtrl.lineItemsModel : null
                         delegate: Rectangle {
                             width: itemsListView.width
                             height: 32
@@ -1157,7 +1081,7 @@ Item {
                             anchors.leftMargin: 8; anchors.rightMargin: 8
                             spacing: 6
 
-                            Item { Layout.preferredWidth: 30; Text { anchors.verticalCenter: parent.verticalCenter; text: (lineItemsModel.count + 1) + "."; color: "#2563EB"; font.pixelSize: 12; font.bold: true } }
+                            Item { Layout.preferredWidth: 30; Text { anchors.verticalCenter: parent.verticalCenter; text: (((typeof salesVoucherCtrl !== "undefined" && salesVoucherCtrl && salesVoucherCtrl.lineItemsModel) ? salesVoucherCtrl.lineItemsModel.count : 0) + 1) + "."; color: "#2563EB"; font.pixelSize: 12; font.bold: true } }
 
                             CustomWhiteCombo {
                                 id: itemCombo
