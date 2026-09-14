@@ -14,6 +14,8 @@ public:
 
     // Deterministic 2-decimal rounding with double precision
     Q_INVOKABLE static double round2(double val);
+    // Deterministic 3-decimal rounding with double precision (for weight / quintals)
+    Q_INVOKABLE static double round3(double val);
 
     // Formats double into Indian Rupee style e.g. "1,25,000.50" or "₹ 1,25,000.50"
     Q_INVOKABLE QString formatInr(double amount, bool includeSymbol = true) const;

@@ -37,7 +37,7 @@ QVariant PurchaseLineItemsModel::data(const QModelIndex &index, int role) const
     case WeightQtlRole: return item.weightQtl;
     case RateRole: return item.rate;
     case AmountRole: return item.amount;
-    case GstPctRole: return 0.0;
+    case GstPctRole: return item.gstPct;
     case IsStockRole: return item.isStock;
     default: return QVariant();
     }
@@ -77,6 +77,9 @@ bool PurchaseLineItemsModel::setData(const QModelIndex &index, const QVariant &v
     case AmountRole:
         if (std::abs(item.amount - value.toDouble()) > 0.001) { item.amount = value.toDouble(); changed = true; }
         break;
+    case GstPctRole:
+        if (std::abs(item.gstPct - value.toDouble()) > 0.001) { item.gstPct = value.toDouble(); changed = true; }
+        break;
     case IsStockRole:
         if (item.isStock != value.toBool()) { item.isStock = value.toBool(); changed = true; }
         break;
@@ -109,7 +112,6 @@ QHash<int, QByteArray> PurchaseLineItemsModel::roleNames() const
 void PurchaseLineItemsModel::appendRow(const QString &itemName, const QString &hsn, const QString &unit,
                                        int bags, double packing, double weight, double rate, double amount, double gstPct)
 {
-    Q_UNUSED(gstPct);
     beginInsertRows(QModelIndex(), m_items.size(), m_items.size());
     PurchaseLineItem item;
     item.itemName = itemName;
@@ -117,9 +119,14 @@ void PurchaseLineItemsModel::appendRow(const QString &itemName, const QString &h
     item.unit = unit.isEmpty() ? "QTL" : unit;
     item.bags = bags;
     item.packingKg = packing > 0.0001 ? packing : 0.500;
+    if (weight <= 0.0001 && bags > 0) {
+        double pQtl = item.packingKg > 2.0 ? (item.packingKg / 100.0) : item.packingKg;
+        weight = FinancialMathService::round3(bags * pQtl);
+    }
     item.weightQtl = weight;
     item.rate = rate;
     item.amount = (amount > 0.001) ? amount : FinancialMathService::round2(weight * rate);
+    item.gstPct = gstPct;
     item.isStock = true;
     m_items.append(item);
     endInsertRows();
@@ -165,6 +172,8 @@ QVariantMap PurchaseLineItemsModel::getRow(int index) const
     map["amount"] = item.amount;
     map["taxable_amount"] = item.amount;
     map["total_amount"] = item.amount;
+    map["gstPct"] = item.gstPct;
+    map["gst_pct"] = item.gstPct;
     map["isStock"] = item.isStock;
     return map;
 }
@@ -181,6 +190,7 @@ void PurchaseLineItemsModel::setRowProperty(int index, const QString &property, 
     else if (property == "weightQtl" || property == "weight" || property == "weight_qtl") setData(idx, value, WeightQtlRole);
     else if (property == "rate" || property == "rate_per_qtl") setData(idx, value, RateRole);
     else if (property == "amount" || property == "taxable_amount" || property == "total_amount") setData(idx, value, AmountRole);
+    else if (property == "gstPct" || property == "gst_pct") setData(idx, value, GstPctRole);
     else if (property == "isStock") setData(idx, value, IsStockRole);
 }
 
@@ -204,6 +214,8 @@ QVariantList PurchaseLineItemsModel::toVariantList() const
         map["amount"] = item.amount;
         map["taxable_amount"] = item.amount;
         map["total_amount"] = item.amount;
+        map["gst_pct"] = item.gstPct;
+        map["gstPct"] = item.gstPct;
         list.append(map);
     }
     return list;
@@ -233,6 +245,10 @@ void PurchaseLineItemsModel::loadFromVariantList(const QVariantList &list)
 
         double weight = map.value("weight_qtl").toDouble();
         if (weight <= 0.0001) weight = map.value("weight").toDouble();
+        if (weight <= 0.0001 && bags > 0 && packing > 0.0001) {
+            double pQtl = packing > 2.0 ? (packing / 100.0) : packing;
+            weight = FinancialMathService::round3(bags * pQtl);
+        }
         item.weightQtl = weight;
 
         double rate = map.value("rate").toDouble();
@@ -242,8 +258,15 @@ void PurchaseLineItemsModel::loadFromVariantList(const QVariantList &list)
         double amount = map.value("amount").toDouble();
         if (amount <= 0.0001) amount = map.value("taxable_amount").toDouble();
         if (amount <= 0.0001) amount = map.value("total_amount").toDouble();
-        if (amount <= 0.0001 && weight > 0 && rate > 0) amount = FinancialMathService::round2(weight * rate);
+        if (amount <= 0.0001 && weight > 0 && rate > 0) {
+            amount = FinancialMathService::round2(weight * rate);
+        }
         item.amount = amount;
+
+        double gstPct = map.value("gst_pct").toDouble();
+        if (gstPct <= 0.0001) gstPct = map.value("gstPct").toDouble();
+        item.gstPct = gstPct;
+
         item.isStock = true;
 
         if (!item.itemName.isEmpty() || item.amount > 0.001 || item.bags > 0) {
@@ -556,7 +579,7 @@ void PurchaseVoucherController::recalculateTotals()
     m_totalTaxAmount = gst.value("totalTax").toDouble();
 
     // Additional Expenses
-    double expenses = m_dami + m_labour + m_auction + m_marketFee + m_hrdf + m_otherExp + m_freightCharges;
+    double expenses = m_dami + m_labour + m_auction + m_marketFee + m_hrdf + m_otherExp + m_welfare + m_dhrmd + m_sutli + m_freightCharges - m_lessAmount;
 
     // TCS Calculation
     m_tcsAmount = (m_tcsRate > 0.001) ? FinancialMathService::round2((m_taxableAmount + m_totalTaxAmount) * (m_tcsRate / 100.0)) : 0.0;

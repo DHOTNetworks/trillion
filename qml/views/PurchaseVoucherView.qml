@@ -33,17 +33,17 @@ Item {
     property real dhrmdAmount: 0.0
     property real sutliAmount: 0.0
 
-    // Aggregated Totals
-    property int totalBags: 0
-    property real totalWeight: 0.0
-    property real taxableAmount: 0.0
-    property real gstTaxAmount: 0.0
-    property real otherExpAmount: 0.0
-    property real lessAmount: 0.0
-    property real freightAmount: 0.0
-    property real roundOffAmount: 0.0
-    property real tcsAmount: 0.0
-    property real grandTotal: 0.0
+    // Aggregated Totals (Direct Reactive Bindings to C++ Controller)
+    readonly property int totalBags: (typeof purchaseVoucherCtrl !== "undefined" && purchaseVoucherCtrl) ? purchaseVoucherCtrl.totalBags : 0
+    readonly property real totalWeight: (typeof purchaseVoucherCtrl !== "undefined" && purchaseVoucherCtrl) ? purchaseVoucherCtrl.totalWeightQtl : 0.0
+    readonly property real taxableAmount: (typeof purchaseVoucherCtrl !== "undefined" && purchaseVoucherCtrl) ? purchaseVoucherCtrl.taxableAmount : 0.0
+    readonly property real gstTaxAmount: (typeof purchaseVoucherCtrl !== "undefined" && purchaseVoucherCtrl) ? purchaseVoucherCtrl.totalTaxAmount : 0.0
+    readonly property real otherExpAmount: (typeof purchaseVoucherCtrl !== "undefined" && purchaseVoucherCtrl) ? purchaseVoucherCtrl.otherExp : 0.0
+    readonly property real lessAmount: (typeof purchaseVoucherCtrl !== "undefined" && purchaseVoucherCtrl) ? purchaseVoucherCtrl.lessAmount : 0.0
+    readonly property real freightAmount: (typeof purchaseVoucherCtrl !== "undefined" && purchaseVoucherCtrl) ? purchaseVoucherCtrl.freightCharges : 0.0
+    readonly property real roundOffAmount: (typeof purchaseVoucherCtrl !== "undefined" && purchaseVoucherCtrl) ? purchaseVoucherCtrl.roundOff : 0.0
+    readonly property real tcsAmount: (typeof purchaseVoucherCtrl !== "undefined" && purchaseVoucherCtrl) ? purchaseVoucherCtrl.tcsAmount : 0.0
+    readonly property real grandTotal: (typeof purchaseVoucherCtrl !== "undefined" && purchaseVoucherCtrl) ? purchaseVoucherCtrl.grandTotal : 0.0
     
     property string statusMessage: ""
     property bool isError: false
@@ -233,11 +233,11 @@ Item {
             posCombo.editText = purchaseVoucherCtrl.placeOfSupply
         }
         if (purchaseVoucherCtrl.taxStatus === "IGST") {
-            taxStatusCombo.currentIndex = 1
+            root.selectedTaxStatus = "IGST"
         } else if (purchaseVoucherCtrl.taxStatus === "Export") {
-            taxStatusCombo.currentIndex = 2
+            root.selectedTaxStatus = "Export"
         } else {
-            taxStatusCombo.currentIndex = 0
+            root.selectedTaxStatus = "GST / Exempt"
         }
 
         clearItemInputRow()
@@ -355,17 +355,9 @@ Item {
             purchaseVoucherCtrl.setIsInterstate(selectedTaxStatus === "IGST")
             purchaseVoucherCtrl.recalculateTotals()
 
-            totalBags = purchaseVoucherCtrl.totalBags
-            totalWeight = purchaseVoucherCtrl.totalWeightQtl
-            taxableAmount = purchaseVoucherCtrl.taxableAmount
-            if (!isManualGst) {
-                gstTaxAmount = purchaseVoucherCtrl.totalTaxAmount
-                gstTaxInput.text = gstTaxAmount > 0 ? gstTaxAmount.toFixed(2) : "0.00"
-            } else {
-                gstTaxAmount = parseFloat(gstTaxInput.text) || 0.0
+            if (!isManualGst && typeof gstTaxInput !== "undefined" && gstTaxInput) {
+                gstTaxInput.text = purchaseVoucherCtrl.totalTaxAmount > 0 ? purchaseVoucherCtrl.totalTaxAmount.toFixed(2) : "0.00"
             }
-            roundOffAmount = purchaseVoucherCtrl.roundOff
-            grandTotal = purchaseVoucherCtrl.grandTotal
         }
     }
 
@@ -956,17 +948,17 @@ Item {
                             anchors.leftMargin: 8; anchors.rightMargin: 8
                             spacing: 6
 
-                            Item { Layout.preferredWidth: 30; Text { anchors.verticalCenter: parent.verticalCenter; text: "No."; color: "#0F172A"; font.pixelSize: 11; font.bold: true } }
-                            Item { Layout.fillWidth: true; Layout.preferredWidth: 240; Text { anchors.verticalCenter: parent.verticalCenter; text: "Item Name *"; color: "#0F172A"; font.pixelSize: 11; font.bold: true } }
+                            Item { Layout.preferredWidth: 35; Text { anchors.verticalCenter: parent.verticalCenter; text: "No."; color: "#0F172A"; font.pixelSize: 11; font.bold: true } }
+                            Item { Layout.fillWidth: true; Layout.minimumWidth: 200; Layout.preferredWidth: 240; Text { anchors.verticalCenter: parent.verticalCenter; text: "Item Name *"; color: "#0F172A"; font.pixelSize: 11; font.bold: true } }
                             
-                            Item { visible: !root.isWithoutStock; Layout.preferredWidth: 60; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: "Bags"; color: "#0F172A"; font.pixelSize: 11; font.bold: true } }
+                            Item { visible: !root.isWithoutStock; Layout.preferredWidth: 70; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: "Bags"; color: "#0F172A"; font.pixelSize: 11; font.bold: true } }
                             Item { visible: !root.isWithoutStock; Layout.preferredWidth: 70; Text { anchors.centerIn: parent; text: "Pkng."; color: "#0F172A"; font.pixelSize: 11; font.bold: true } }
-                            Item { visible: !root.isWithoutStock; Layout.preferredWidth: 90; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: "Weight (Qtl)"; color: "#0F172A"; font.pixelSize: 11; font.bold: true } }
+                            Item { visible: !root.isWithoutStock; Layout.preferredWidth: 95; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: "Weight (Qtl)"; color: "#0F172A"; font.pixelSize: 11; font.bold: true } }
                             
-                            Item { Layout.preferredWidth: 50; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: "GST %"; color: "#0F172A"; font.pixelSize: 11; font.bold: true } }
-                            Item { Layout.preferredWidth: 95; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: "Rate (₹)"; color: "#0F172A"; font.pixelSize: 11; font.bold: true } }
-                            Item { Layout.preferredWidth: 110; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: "Amount (₹)"; color: "#0F172A"; font.pixelSize: 11; font.bold: true } }
-                            Item { Layout.preferredWidth: 35; Text { anchors.centerIn: parent; text: "Act"; color: "#0F172A"; font.pixelSize: 11; font.bold: true } }
+                            Item { Layout.preferredWidth: 60; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: "GST %"; color: "#0F172A"; font.pixelSize: 11; font.bold: true } }
+                            Item { Layout.preferredWidth: 100; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: "Rate (₹)"; color: "#0F172A"; font.pixelSize: 11; font.bold: true } }
+                            Item { Layout.preferredWidth: 120; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: "Amount (₹)"; color: "#0F172A"; font.pixelSize: 11; font.bold: true } }
+                            Item { Layout.preferredWidth: 38; Text { anchors.centerIn: parent; text: "Act"; color: "#0F172A"; font.pixelSize: 11; font.bold: true } }
                         }
                     }
 
@@ -990,19 +982,19 @@ Item {
                                 anchors.leftMargin: 8; anchors.rightMargin: 8
                                 spacing: 6
 
-                                Item { Layout.preferredWidth: 30; Text { anchors.verticalCenter: parent.verticalCenter; text: (index + 1) + "."; color: "#0F172A"; font.pixelSize: 12; font.bold: true } }
-                                Item { Layout.fillWidth: true; Layout.preferredWidth: 240; Text { anchors.verticalCenter: parent.verticalCenter; text: (model.itemName || model.item_name || ""); color: "#0F172A"; font.pixelSize: 12; font.bold: true; elide: Text.ElideRight } }
+                                Item { Layout.preferredWidth: 35; Text { anchors.verticalCenter: parent.verticalCenter; text: (index + 1) + "."; color: "#0F172A"; font.pixelSize: 12; font.bold: true } }
+                                Item { Layout.fillWidth: true; Layout.minimumWidth: 200; Layout.preferredWidth: 240; Text { anchors.verticalCenter: parent.verticalCenter; text: (model.itemName || model.item_name || ""); color: "#0F172A"; font.pixelSize: 12; font.bold: true; elide: Text.ElideRight } }
                                 
-                                Item { visible: !root.isWithoutStock; Layout.preferredWidth: 60; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: ((model.bags || model.bag_count || 0) > 0 ? (model.bags || model.bag_count).toString() : ""); color: "#0F172A"; font.pixelSize: 12 } }
+                                Item { visible: !root.isWithoutStock; Layout.preferredWidth: 70; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: ((model.bags || model.bag_count || 0) > 0 ? (model.bags || model.bag_count).toString() : ""); color: "#0F172A"; font.pixelSize: 12 } }
                                 Item { visible: !root.isWithoutStock; Layout.preferredWidth: 70; Text { anchors.centerIn: parent; text: (model.packing || model.pkng || "0.500"); color: "#475569"; font.pixelSize: 12 } }
-                                Item { visible: !root.isWithoutStock; Layout.preferredWidth: 90; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: ((model.weight || model.weight_qtl || 0) > 0 ? Number(model.weight || model.weight_qtl).toFixed(3) : ""); color: "#0F172A"; font.pixelSize: 12; font.bold: true } }
+                                Item { visible: !root.isWithoutStock; Layout.preferredWidth: 95; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: ((model.weight || model.weight_qtl || 0) > 0 ? Number(model.weight || model.weight_qtl).toFixed(3) : ""); color: "#0F172A"; font.pixelSize: 12; font.bold: true } }
                                 
-                                Item { Layout.preferredWidth: 50; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: ((model.gstPct !== undefined ? model.gstPct : (model.gst_pct || 0)) + "%"); color: "#475569"; font.pixelSize: 12 } }
-                                Item { Layout.preferredWidth: 95; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: ((model.rate || model.rate_per_qtl || 0) > 0 ? Number(model.rate || model.rate_per_qtl).toFixed(2) : ""); color: "#0F172A"; font.pixelSize: 12; font.bold: true } }
-                                Item { Layout.preferredWidth: 110; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: "₹" + Number(model.amount || model.total_amount || 0).toFixed(2); color: "#16A34A"; font.pixelSize: 12; font.bold: true } }
+                                Item { Layout.preferredWidth: 60; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: ((model.gstPct !== undefined ? model.gstPct : (model.gst_pct || 0)) + "%"); color: "#475569"; font.pixelSize: 12 } }
+                                Item { Layout.preferredWidth: 100; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: ((model.rate || model.rate_per_qtl || 0) > 0 ? Number(model.rate || model.rate_per_qtl).toFixed(2) : ""); color: "#0F172A"; font.pixelSize: 12; font.bold: true } }
+                                Item { Layout.preferredWidth: 120; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: "₹" + Number(model.amount || model.total_amount || 0).toFixed(2); color: "#16A34A"; font.pixelSize: 12; font.bold: true } }
                                 
                                 Item {
-                                    Layout.preferredWidth: 35
+                                    Layout.preferredWidth: 38
                                     T.Button {
                                         anchors.centerIn: parent
                                         implicitWidth: 28
@@ -1030,13 +1022,15 @@ Item {
                             anchors.leftMargin: 8; anchors.rightMargin: 8
                             spacing: 6
 
-                            Item { Layout.preferredWidth: 30; Text { anchors.verticalCenter: parent.verticalCenter; text: (((typeof purchaseVoucherCtrl !== "undefined" && purchaseVoucherCtrl && purchaseVoucherCtrl.lineItemsModel) ? purchaseVoucherCtrl.lineItemsModel.count : 0) + 1) + "."; color: "#16A34A"; font.pixelSize: 12; font.bold: true } }
+                            Item { Layout.preferredWidth: 35; Text { anchors.verticalCenter: parent.verticalCenter; text: (itemsListView.count + 1) + "."; color: "#16A34A"; font.pixelSize: 12; font.bold: true } }
 
                             CustomWhiteCombo {
                                 id: itemCombo
                                 model: (typeof stockItemsModel !== "undefined" && stockItemsModel) ? stockItemsModel.get_items_list(root.isMandiType ? "Mandi" : "Market") : []
                                 Layout.fillWidth: true
+                                Layout.minimumWidth: 200
                                 Layout.preferredWidth: 240
+                                placeholderText: "Select Item..."
                                 onCurrentTextChanged: root.onItemSelected(currentText)
                                 onReturnPressed: {
                                     if (itemCombo.currentText.trim() === "") {
@@ -1062,8 +1056,9 @@ Item {
                             CustomInput {
                                 id: bagsInput
                                 visible: !root.isWithoutStock
-                                placeholderText: "0"
-                                Layout.preferredWidth: 60
+                                placeholderText: "Bags"
+                                horizontalAlignment: TextInput.AlignRight
+                                Layout.preferredWidth: 70
                                 onTextChanged: root.recalculateRowAmount(true)
                                 onReturnPressed: pkngInput.focusInput = true
                                 onRightPressed: pkngInput.focusInput = true
@@ -1074,7 +1069,8 @@ Item {
                                 id: pkngInput
                                 visible: !root.isWithoutStock
                                 text: ""
-                                placeholderText: "0.000"
+                                placeholderText: "0.500"
+                                horizontalAlignment: TextInput.AlignHCenter
                                 Layout.preferredWidth: 70
                                 onTextChanged: root.recalculateRowAmount(true)
                                 onReturnPressed: weightInput.focusInput = true
@@ -1086,7 +1082,8 @@ Item {
                                 id: weightInput
                                 visible: !root.isWithoutStock
                                 placeholderText: "0.000"
-                                Layout.preferredWidth: 90
+                                horizontalAlignment: TextInput.AlignRight
+                                Layout.preferredWidth: 95
                                 onTextChanged: root.recalculateRowAmount(false)
                                 onReturnPressed: gstInput.focusInput = true
                                 onRightPressed: gstInput.focusInput = true
@@ -1097,7 +1094,8 @@ Item {
                                 id: gstInput
                                 text: ""
                                 placeholderText: "0%"
-                                Layout.preferredWidth: 50
+                                horizontalAlignment: TextInput.AlignRight
+                                Layout.preferredWidth: 60
                                 onReturnPressed: rateInput.focusInput = true
                                 onRightPressed: rateInput.focusInput = true
                                 onLeftPressed: root.isWithoutStock ? itemCombo.focusAndOpen() : weightInput.focusInput = true
@@ -1106,7 +1104,8 @@ Item {
                             CustomInput {
                                 id: rateInput
                                 placeholderText: "0.00"
-                                Layout.preferredWidth: 95
+                                horizontalAlignment: TextInput.AlignRight
+                                Layout.preferredWidth: 100
                                 onTextChanged: root.recalculateRowAmount(false)
                                 onReturnPressed: amountInput.focusInput = true
                                 onRightPressed: amountInput.focusInput = true
@@ -1117,14 +1116,15 @@ Item {
                                 id: amountInput
                                 text: ""
                                 placeholderText: "0.00"
-                                Layout.preferredWidth: 110
+                                horizontalAlignment: TextInput.AlignRight
+                                Layout.preferredWidth: 120
                                 onReturnPressed: root.addCurrentItemRow()
                                 onRightPressed: root.addCurrentItemRow()
                                 onLeftPressed: rateInput.focusInput = true
                             }
 
                             Item {
-                                Layout.preferredWidth: 35
+                                Layout.preferredWidth: 38
                                 T.Button {
                                     anchors.centerIn: parent
                                     implicitWidth: 28

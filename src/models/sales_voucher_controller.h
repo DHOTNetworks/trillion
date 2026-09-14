@@ -16,11 +16,14 @@ struct SalesLineItem {
     double weightQtl = 0.0;
     double rate = 0.0;
     double amount = 0.0;
+    double gstPct = 0.0;
     bool isStock = true;
 };
 
 class SalesLineItemsModel : public QAbstractListModel {
     Q_OBJECT
+    Q_PROPERTY(int count READ count NOTIFY itemsChanged)
+    Q_PROPERTY(int rowCount READ rowCount NOTIFY itemsChanged)
 
 public:
     enum ItemRoles {

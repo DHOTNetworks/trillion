@@ -12,6 +12,7 @@ ColumnLayout {
     property int currentIndex: -1
     property alias text: comboField.text
     property alias editText: comboField.text
+    property alias placeholderText: comboField.placeholderText
     property bool editable: true
     property bool focusInput: false
     onFocusInputChanged: {

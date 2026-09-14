@@ -17,6 +17,11 @@ double FinancialMathService::round2(double val)
     return std::round(val * 100.0) / 100.0;
 }
 
+double FinancialMathService::round3(double val)
+{
+    return std::round(val * 1000.0) / 1000.0;
+}
+
 QString FinancialMathService::formatInr(double amount, bool includeSymbol) const
 {
     bool isNegative = amount < -0.0001;
