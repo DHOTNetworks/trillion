@@ -21,10 +21,10 @@ public:
     QHash<int, QByteArray> roleNames() const override;
 
     Q_INVOKABLE void clear();
-    Q_INVOKABLE void append(const QVariantMap& item);
+    Q_INVOKABLE void append(const QVariant& item);
     Q_INVOKABLE void appendList(const QVariantList& items);
     Q_INVOKABLE void resetWithList(const QVariantList& items);
-    Q_INVOKABLE void insert(int index, const QVariantMap& item);
+    Q_INVOKABLE void insert(int index, const QVariant& item);
     Q_INVOKABLE void remove(int index, int count = 1);
     Q_INVOKABLE QVariantMap get(int index) const;
     Q_INVOKABLE void setProperty(int index, const QString& propertyName, const QVariant& value);

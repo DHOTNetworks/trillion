@@ -42,35 +42,44 @@ void StockItemsModel::reload_data() {
 
 QStringList StockItemsModel::get_items_list(const QString& filterType) const {
     QString f = filterType.trimmed().toLower();
-    QStringList list;
+    QStringList primaryList;
+    QStringList secondaryList;
+
     for (const QVariant& v : m_data) {
         QVariantMap m = v.toMap();
         QString n = m.value("name").toString().trimmed();
         if (n.isEmpty()) continue;
 
-        if (!f.isEmpty()) {
-            QString iType = m.value("item_type").toString().trimmed().toLower();
-            if (f == "mandi") {
-                bool isMandi = (iType == "mandi" || iType == "both" || iType == "mandi type");
-                if (!isMandi) continue;
-            } else if (f == "market") {
-                bool isMarket = (iType == "market" || iType == "both" || iType == "market type");
-                if (!isMarket) continue;
+        QString iType = m.value("item_type").toString().trimmed().toLower();
+        if (f == "mandi") {
+            if (iType == "mandi" || iType == "both" || iType == "mandi type") {
+                primaryList.append(n);
+            } else {
+                secondaryList.append(n);
             }
+        } else if (f == "market") {
+            if (iType == "market" || iType == "both" || iType == "market type") {
+                primaryList.append(n);
+            } else {
+                secondaryList.append(n);
+            }
+        } else {
+            primaryList.append(n);
         }
-        list.append(n);
     }
-    // If filtering yielded 0 items, fallback to all available items so dropdown is never broken
-    if (list.isEmpty()) {
-        for (const QVariant& v : m_data) {
-            QString n = v.toMap().value("name").toString().trimmed();
-            if (!n.isEmpty() && !list.contains(n)) list.append(n);
-        }
-    }
-    std::sort(list.begin(), list.end(), [](const QString& a, const QString& b) {
+
+    std::sort(primaryList.begin(), primaryList.end(), [](const QString& a, const QString& b) {
         return a.compare(b, Qt::CaseInsensitive) < 0;
     });
-    return list;
+    std::sort(secondaryList.begin(), secondaryList.end(), [](const QString& a, const QString& b) {
+        return a.compare(b, Qt::CaseInsensitive) < 0;
+    });
+
+    QStringList combined = primaryList;
+    for (const QString& item : secondaryList) {
+        if (!combined.contains(item)) combined.append(item);
+    }
+    return combined;
 }
 
 QVariantMap StockItemsModel::get_item_by_id(int itemId) const {

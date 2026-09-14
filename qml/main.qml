@@ -338,12 +338,14 @@ T.ApplicationWindow {
                     if (window.currentViewIndex === 14 && item) {
                         if (window.pendingEditInvoiceNo !== "" || window.pendingEditVoucherNo !== "" || window.pendingEditVoucherId > 0) {
                             var salesIdOrNo = window.pendingEditInvoiceNo !== "" ? window.pendingEditInvoiceNo : (window.pendingEditVoucherId > 0 ? window.pendingEditVoucherId : window.pendingEditVoucherNo)
+                            var sDate = window.pendingEditVoucherDate || ""
                             window.pendingEditInvoiceNo = ""
                             window.pendingEditVoucherNo = ""
                             window.pendingEditVoucherId = 0
+                            window.pendingEditVoucherDate = ""
                             Qt.callLater(function() {
                                 if (item && typeof item.loadInvoiceForEditing === "function") {
-                                    item.loadInvoiceForEditing(salesIdOrNo)
+                                    item.loadInvoiceForEditing(salesIdOrNo, sDate)
                                 }
                             })
                         }
@@ -353,12 +355,14 @@ T.ApplicationWindow {
                     if (window.currentViewIndex === 15 && item) {
                         if (window.pendingEditInvoiceNo !== "" || window.pendingEditVoucherNo !== "" || window.pendingEditVoucherId > 0) {
                             var purcIdOrNo = window.pendingEditInvoiceNo !== "" ? window.pendingEditInvoiceNo : (window.pendingEditVoucherId > 0 ? window.pendingEditVoucherId : window.pendingEditVoucherNo)
+                            var pDate = window.pendingEditVoucherDate || ""
                             window.pendingEditInvoiceNo = ""
                             window.pendingEditVoucherNo = ""
                             window.pendingEditVoucherId = 0
+                            window.pendingEditVoucherDate = ""
                             Qt.callLater(function() {
                                 if (item && typeof item.loadInvoiceForEditing === "function") {
-                                    item.loadInvoiceForEditing(purcIdOrNo)
+                                    item.loadInvoiceForEditing(purcIdOrNo, pDate)
                                 }
                             })
                         }

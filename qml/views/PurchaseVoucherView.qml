@@ -95,10 +95,6 @@ Item {
             Qt.callLater(function() {
                 root.loadInvoiceForEditing(purcIdOrNo, pDate)
             })
-        } else {
-            Qt.callLater(function() {
-                root.openDateModal()
-            })
         }
     }
 
@@ -270,6 +266,31 @@ Item {
                 "amount": a,
                 "taxable_amount": a,
                 "total_amount": a
+            })
+        }
+
+        if (formattedList.length === 0 && (inv.item_name || inv.weight_qtl || inv.total_amount || inv.taxable_amount)) {
+            var fallbackName = inv.item_name || "Rice Basmati (Non Branded)"
+            var fallbackWeight = parseFloat(inv.weight_qtl) || 0.0
+            var fallbackRate = parseFloat(inv.rate_per_qtl) || 0.0
+            var fallbackAmount = parseFloat(inv.taxable_amount) || parseFloat(inv.total_amount) || (fallbackWeight * fallbackRate)
+            var fallbackBags = parseInt(inv.bag_count) || 0
+            var fallbackGst = parseFloat(inv.gst_pct) || 0.0
+            formattedList.push({
+                "itemName": fallbackName,
+                "item_name": fallbackName,
+                "bags": fallbackBags,
+                "bag_count": fallbackBags,
+                "packing": "0.500",
+                "weight": fallbackWeight,
+                "weight_qtl": fallbackWeight,
+                "rate": fallbackRate,
+                "rate_per_qtl": fallbackRate,
+                "gstPct": fallbackGst,
+                "gst_pct": fallbackGst,
+                "amount": fallbackAmount,
+                "taxable_amount": fallbackAmount,
+                "total_amount": fallbackAmount
             })
         }
         lineItemsModel.resetWithList(formattedList)
@@ -1029,7 +1050,9 @@ Item {
                     ListView {
                         id: itemsListView
                         Layout.fillWidth: true
+                        Layout.preferredHeight: contentHeight
                         implicitHeight: contentHeight
+                        interactive: false
                         clip: true
                         model: lineItemsModel
                         delegate: Rectangle {
@@ -1044,15 +1067,15 @@ Item {
                                 spacing: 6
 
                                 Item { Layout.preferredWidth: 30; Text { anchors.verticalCenter: parent.verticalCenter; text: (index + 1) + "."; color: "#0F172A"; font.pixelSize: 12; font.bold: true } }
-                                Item { Layout.fillWidth: true; Layout.preferredWidth: 240; Text { anchors.verticalCenter: parent.verticalCenter; text: model.itemName; color: "#0F172A"; font.pixelSize: 12; font.bold: true; elide: Text.ElideRight } }
+                                Item { Layout.fillWidth: true; Layout.preferredWidth: 240; Text { anchors.verticalCenter: parent.verticalCenter; text: (model.itemName || model.item_name || ""); color: "#0F172A"; font.pixelSize: 12; font.bold: true; elide: Text.ElideRight } }
                                 
-                                Item { visible: !root.isWithoutStock; Layout.preferredWidth: 60; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: model.bags > 0 ? model.bags.toString() : ""; color: "#0F172A"; font.pixelSize: 12 } }
-                                Item { visible: !root.isWithoutStock; Layout.preferredWidth: 70; Text { anchors.centerIn: parent; text: model.packing; color: "#475569"; font.pixelSize: 12 } }
-                                Item { visible: !root.isWithoutStock; Layout.preferredWidth: 90; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: model.weight > 0 ? model.weight.toFixed(3) : ""; color: "#0F172A"; font.pixelSize: 12; font.bold: true } }
+                                Item { visible: !root.isWithoutStock; Layout.preferredWidth: 60; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: ((model.bags || model.bag_count || 0) > 0 ? (model.bags || model.bag_count).toString() : ""); color: "#0F172A"; font.pixelSize: 12 } }
+                                Item { visible: !root.isWithoutStock; Layout.preferredWidth: 70; Text { anchors.centerIn: parent; text: (model.packing || model.pkng || "0.500"); color: "#475569"; font.pixelSize: 12 } }
+                                Item { visible: !root.isWithoutStock; Layout.preferredWidth: 90; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: ((model.weight || model.weight_qtl || 0) > 0 ? Number(model.weight || model.weight_qtl).toFixed(3) : ""); color: "#0F172A"; font.pixelSize: 12; font.bold: true } }
                                 
-                                Item { Layout.preferredWidth: 50; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: model.gstPct + "%"; color: "#475569"; font.pixelSize: 12 } }
-                                Item { Layout.preferredWidth: 95; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: model.rate > 0 ? model.rate.toFixed(2) : ""; color: "#0F172A"; font.pixelSize: 12; font.bold: true } }
-                                Item { Layout.preferredWidth: 110; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: "₹" + model.amount.toFixed(2); color: "#16A34A"; font.pixelSize: 12; font.bold: true } }
+                                Item { Layout.preferredWidth: 50; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: ((model.gstPct !== undefined ? model.gstPct : (model.gst_pct || 0)) + "%"); color: "#475569"; font.pixelSize: 12 } }
+                                Item { Layout.preferredWidth: 95; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: ((model.rate || model.rate_per_qtl || 0) > 0 ? Number(model.rate || model.rate_per_qtl).toFixed(2) : ""); color: "#0F172A"; font.pixelSize: 12; font.bold: true } }
+                                Item { Layout.preferredWidth: 110; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: "₹" + Number(model.amount || model.total_amount || 0).toFixed(2); color: "#16A34A"; font.pixelSize: 12; font.bold: true } }
                                 
                                 Item {
                                     Layout.preferredWidth: 35

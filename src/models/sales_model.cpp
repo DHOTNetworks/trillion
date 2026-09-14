@@ -369,16 +369,16 @@ QVariantMap SalesModel::get_sales_invoice(const QVariant& invoiceNoOrId, const Q
         );
     }
 
-    // 3. Try lookup via vouchers table (if q is a vouchers.id, vouchers.voucher_no, or vouchers.ref_no)
+    // 3. Try lookup via vouchers table (if q is a vouchers.id, vouchers.voucher_no, or vouchers.instrument_no)
     if (rows.isEmpty() && !q.isEmpty()) {
         QVariantList vRows = DatabaseManager::instance().executeQuery(
-            "SELECT id, voucher_no, ref_no, voucher_date, party_name, amount, narration "
-            "FROM vouchers WHERE (id = ? OR voucher_no = ? OR ref_no = ?) AND (voucher_type IN ('Sales', 'Sale') OR legacy_type IN ('Sale', 'Sales')) LIMIT 1;",
+            "SELECT id, voucher_no, instrument_no, voucher_date, party_name, amount, narration "
+            "FROM vouchers WHERE (id = ? OR voucher_no = ? OR instrument_no = ?) AND (voucher_type IN ('Sales', 'Sale') OR legacy_type IN ('Sale', 'Sales')) LIMIT 1;",
             {q, q, q}
         );
         if (!vRows.isEmpty()) {
             QVariantMap v = vRows.first().toMap();
-            QString vRef = v.value("ref_no").toString().trimmed();
+            QString vRef = v.value("instrument_no").toString().trimmed();
             QString vNo = v.value("voucher_no").toString().trimmed();
             QString vDate = v.value("voucher_date").toString().trimmed();
             QString vParty = v.value("party_name").toString().trimmed();
@@ -386,6 +386,12 @@ QVariantMap SalesModel::get_sales_invoice(const QVariant& invoiceNoOrId, const Q
             if (!vRef.isEmpty()) {
                 rows = DatabaseManager::instance().executeQuery(
                     "SELECT * FROM sales_invoices WHERE invoice_no = ? ORDER BY id DESC LIMIT 1;", {vRef}
+                );
+            }
+            if (rows.isEmpty() && !vNo.isEmpty() && !vParty.isEmpty()) {
+                rows = DatabaseManager::instance().executeQuery(
+                    "SELECT * FROM sales_invoices WHERE (voucher_no = ? OR invoice_no = ?) AND customer_name LIKE ? ORDER BY id DESC LIMIT 1;",
+                    {vNo, vNo, "%" + vParty + "%"}
                 );
             }
             if (rows.isEmpty() && !vNo.isEmpty()) {
@@ -400,7 +406,7 @@ QVariantMap SalesModel::get_sales_invoice(const QVariant& invoiceNoOrId, const Q
                 );
             }
             if (rows.isEmpty()) {
-                // Construct synthetic sales invoice directly from vouchers and stock_transactions!
+                // Construct synthetic sales invoice directly from vouchers and stock_transactions
                 QVariantMap synInv;
                 synInv["id"] = v.value("id");
                 synInv["voucher_no"] = vNo.isEmpty() ? ("Sale-" + v.value("id").toString()) : vNo;
@@ -421,7 +427,7 @@ QVariantMap SalesModel::get_sales_invoice(const QVariant& invoiceNoOrId, const Q
 
                 QVariantList stRows = DatabaseManager::instance().executeQuery(
                     "SELECT item_name, bags AS bag_count, packing, weight_qtl, rate AS rate_per_qtl, amount AS total_amount, taxable_amount, tax AS gst_pct "
-                    "FROM stock_transactions WHERE (voucher_no = ? OR bill_no = ? OR (trans_date = ? AND party_name = ?)) AND trans_type IN ('Sale', 'Sales') "
+                    "FROM stock_transactions WHERE (voucher_no = ? OR bill_no = ? OR (voucher_date = ? AND party_name = ?)) AND trans_type IN ('Sale', 'Sales') "
                     "ORDER BY row_no ASC, id ASC;",
                     {vNo, vRef, vDate, vParty}
                 );
@@ -536,13 +542,20 @@ QVariantMap SalesModel::get_sales_invoice(const QVariant& invoiceNoOrId, const Q
     } else {
         for (int i = 0; i < itemRows.size(); ++i) {
             QVariantMap itm = itemRows[i].toMap();
-            QString iName = itm.value("item_name").toString();
-            int bCount = itm.value("bag_count").isValid() ? itm.value("bag_count").toInt() : itm.value("bags").toInt();
-            double pVal = itm.value("packing").toDouble() > 0 ? itm.value("packing").toDouble() : 0.5;
-            double wVal = itm.value("weight_qtl").isValid() ? itm.value("weight_qtl").toDouble() : itm.value("weight").toDouble();
-            double rVal = itm.value("rate_per_qtl").isValid() ? itm.value("rate_per_qtl").toDouble() : itm.value("rate").toDouble();
-            double gVal = itm.value("gst_pct").isValid() ? itm.value("gst_pct").toDouble() : itm.value("gstPct").toDouble();
-            double amt = itm.value("total_amount").toDouble() > 0 ? itm.value("total_amount").toDouble() : itm.value("taxable_amount").toDouble();
+            QString iName = itm.contains("item_name") ? itm.value("item_name").toString() : itm.value("itemName").toString();
+            int bCount = itm.value("bag_count").toInt();
+            if (bCount == 0) bCount = itm.value("bags").toInt();
+            double pVal = itm.value("packing").toDouble();
+            if (pVal <= 0.0001) pVal = 0.5;
+            double wVal = itm.value("weight_qtl").toDouble();
+            if (wVal <= 0.0001) wVal = itm.value("weight").toDouble();
+            double rVal = itm.value("rate_per_qtl").toDouble();
+            if (rVal <= 0.0001) rVal = itm.value("rate").toDouble();
+            double gVal = itm.value("gst_pct").toDouble();
+            if (gVal <= 0.0001) gVal = itm.value("gstPct").toDouble();
+            double amt = itm.value("total_amount").toDouble();
+            if (amt <= 0.0001) amt = itm.value("taxable_amount").toDouble();
+            if (amt <= 0.0001) amt = itm.value("amount").toDouble();
             if (amt <= 0.001 && wVal > 0 && rVal > 0) amt = wVal * rVal;
 
             itm["itemName"] = iName;
