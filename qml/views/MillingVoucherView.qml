@@ -10,6 +10,9 @@ FocusScope {
     signal cancelRequested()
     signal voucherSaved()
 
+    property int editingBatchId: 0
+    readonly property bool isEditMode: editingBatchId > 0
+
     property string autoVoucherNo: ""
     property string autoVchCode: ""
 
@@ -49,12 +52,96 @@ FocusScope {
 
     Component.onCompleted: {
         resetForm()
-        Qt.callLater(function() {
-            root.openDateModal()
-        })
+        if (typeof window !== "undefined" && window && (window.pendingEditVoucherId > 0 || window.pendingEditVoucherNo !== "")) {
+            var millIdOrNo = window.pendingEditVoucherId > 0 ? window.pendingEditVoucherId : window.pendingEditVoucherNo
+            window.pendingEditVoucherId = 0
+            window.pendingEditVoucherNo = ""
+            Qt.callLater(function() {
+                root.loadBatchForEditing(millIdOrNo)
+            })
+        } else {
+            Qt.callLater(function() {
+                root.openDateModal()
+            })
+        }
+    }
+
+    function loadBatchForEditing(batchNoOrId) {
+        if (!batchNoOrId || typeof millingModel === "undefined" || !millingModel) return
+        var batch = millingModel.get_milling_batch(batchNoOrId)
+        if (!batch || (!batch.id && !batch.batch_no)) return
+
+        editingBatchId = batch.id || 0
+        autoVchCode = batch.batch_no || ""
+        autoVoucherNo = autoVchCode
+
+        var raw = String(batch.batch_date || "").trim()
+        if (raw.indexOf("-") !== -1 || raw.indexOf(".") !== -1 || raw.indexOf("/") !== -1) {
+            var clean = raw.replace(/[.\/]/g, "-")
+            var parts = clean.split("-")
+            if (parts.length === 3) {
+                if (parts[0].length === 4) {
+                    vchDateInput.text = parts[2] + "-" + parts[1] + "-" + parts[0]
+                } else {
+                    vchDateInput.text = parts[0] + "-" + parts[1] + "-" + parts[2]
+                }
+            } else {
+                vchDateInput.text = raw
+            }
+        } else if (raw !== "") {
+            vchDateInput.text = raw
+        }
+
+        particularsInput.text = batch.narration || ""
+
+        var cItems = []
+        var rawC = batch.consumed_items || []
+        for (var i = 0; i < rawC.length; i++) {
+            var ci = rawC[i]
+            cItems.push({
+                "itemName": ci.item_name || ci.itemName || "",
+                "bags": ci.bags !== undefined ? ("" + ci.bags) : "",
+                "weight": ci.weight_qtl !== undefined ? ("" + ci.weight_qtl) : (ci.weight !== undefined ? ("" + ci.weight) : ""),
+                "amount": ci.amount !== undefined && ci.amount > 0 ? ("" + ci.amount) : ""
+            })
+        }
+        if (cItems.length === 0) {
+            cItems.push({
+                "itemName": batch.paddy_variety || "Paddy Basmati",
+                "bags": "",
+                "weight": batch.paddy_input_qtl !== undefined ? ("" + batch.paddy_input_qtl) : "",
+                "amount": ""
+            })
+        }
+        consumedModel.resetWithList(cItems)
+
+        var pItems = []
+        var rawP = batch.produced_items || []
+        for (var j = 0; j < rawP.length; j++) {
+            var pi = rawP[j]
+            pItems.push({
+                "itemName": pi.item_name || pi.itemName || "",
+                "yieldPct": pi.percentage !== undefined && pi.percentage > 0 ? ("" + pi.percentage) : "",
+                "bags": pi.bags !== undefined ? ("" + pi.bags) : "",
+                "weight": pi.weight_qtl !== undefined ? ("" + pi.weight_qtl) : (pi.weight !== undefined ? ("" + pi.weight) : ""),
+                "amount": pi.amount !== undefined && pi.amount > 0 ? ("" + pi.amount) : ""
+            })
+        }
+        if (pItems.length === 0) {
+            if (batch.head_rice_qtl > 0) pItems.push({ "itemName": "Rice Basmati(Non Branded)", "yieldPct": "" + (batch.yield_pct || 0), "bags": "", "weight": "" + batch.head_rice_qtl, "amount": "" })
+            if (batch.bran_qtl > 0) pItems.push({ "itemName": "Rice Bran", "yieldPct": "", "bags": "", "weight": "" + batch.bran_qtl, "amount": "" })
+            if (batch.broken_rice_qtl > 0) pItems.push({ "itemName": "Rice Broken", "yieldPct": "", "bags": "", "weight": "" + batch.broken_rice_qtl, "amount": "" })
+            if (batch.husk_qtl > 0) pItems.push({ "itemName": "Rice Husk", "yieldPct": "", "bags": "", "weight": "" + batch.husk_qtl, "amount": "" })
+        }
+        producedModel.resetWithList(pItems)
+
+        statusMessage = ""
+        isError = false
+        recalculateTotals()
     }
 
     function updateNextNumbers(dateStr) {
+        if (root.isEditMode) return
         var d = dateStr || (vchDateInput ? vchDateInput.text.trim() : "")
         if (typeof millingModel !== "undefined" && millingModel) {
             autoVchCode = millingModel.get_next_batch_no(d)
@@ -66,6 +153,7 @@ FocusScope {
     }
 
     function resetForm() {
+        editingBatchId = 0
         vchDateInput.text = (typeof financialYearsModel !== "undefined" && financialYearsModel) ? financialYearsModel.get_working_date() : Qt.formatDate(new Date(), "dd-MM-yyyy")
         updateNextNumbers(vchDateInput.text)
         particularsInput.text = ""
@@ -266,16 +354,17 @@ FocusScope {
             }
         }
 
-        var ok = (typeof millingModel !== "undefined" && millingModel) ? millingModel.add_milling_voucher_full(
+        var ok = (typeof millingModel !== "undefined" && millingModel) ? millingModel.add_milling_voucher(
             root.autoVchCode,
             vchDateInput.text.trim(),
             particularsInput.text.trim(),
             cList,
-            pList
+            pList,
+            root.editingBatchId
         ) : false
 
         if (ok) {
-            statusMessage = "Milling Production Voucher " + root.autoVchCode + " saved & posted successfully!"
+            statusMessage = (root.isEditMode ? "Milling Batch " + root.autoVchCode + " updated successfully!" : "Milling Production Voucher " + root.autoVchCode + " saved & posted successfully!")
             isError = false
             root.voucherSaved()
             resetForm()
@@ -325,7 +414,7 @@ FocusScope {
         Rectangle {
             Layout.fillWidth: true
             height: 44
-            color: "#0F172A"
+            color: root.isEditMode ? "#78350F" : "#0F172A"
             radius: 8
 
             RowLayout {
@@ -334,7 +423,7 @@ FocusScope {
                 spacing: 12
 
                 Text {
-                    text: "Milling Voucher Entry (Production & Stock Movement)"
+                    text: root.isEditMode ? "Milling Batch Alteration (" + root.autoVchCode + ")" : "Milling Voucher Entry (Production & Stock Movement)"
                     color: "#FFFFFF"
                     font.pixelSize: 15
                     font.bold: true
@@ -1083,12 +1172,12 @@ FocusScope {
                     T.Button {
                         implicitWidth: contentItem.implicitWidth + 24
                         implicitHeight: 34
-                        background: Rectangle { color: "#16A34A"; radius: 6 }
+                        background: Rectangle { color: root.isEditMode ? "#D97706" : "#16A34A"; radius: 6 }
                         contentItem: RowLayout {
                             spacing: 6
                             Item { Layout.fillWidth: true }
-                            Text { text: "Save Voucher"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 12 }
-                            KbdBadge { text: "Ctrl+S"; badgeColor: "#14532D"; textColor: "#86EFAC"; borderColor: "#16A34A" }
+                            Text { text: root.isEditMode ? "Update Batch" : "Save Voucher"; color: "#FFFFFF"; font.bold: true; font.pixelSize: 12 }
+                            KbdBadge { text: "Ctrl+S"; badgeColor: root.isEditMode ? "#78350F" : "#14532D"; textColor: root.isEditMode ? "#FDE68A" : "#86EFAC"; borderColor: root.isEditMode ? "#D97706" : "#16A34A" }
                             Item { Layout.fillWidth: true }
                         }
                         onClicked: root.saveMillingVoucher()
@@ -1113,9 +1202,9 @@ FocusScope {
     // Confirmation Modal
     ConfirmationModal {
         id: saveConfirmModal
-        titleText: "Post Milling Production Batch"
-        messageText: "Are you sure you want to post Milling Batch " + root.autoVchCode + " for " + root.totalConsumedWeight.toFixed(3) + " Qtl Paddy Input (" + root.totalProducedYieldPct.toFixed(2) + "% yield)?"
-        confirmBtnText: "Save & Post Batch (Enter)"
+        titleText: root.isEditMode ? "Update Milling Production Batch" : "Post Milling Production Batch"
+        messageText: (root.isEditMode ? "Are you sure you want to update Milling Batch " : "Are you sure you want to post Milling Batch ") + root.autoVchCode + " for " + root.totalConsumedWeight.toFixed(3) + " Qtl Paddy Input (" + root.totalProducedYieldPct.toFixed(2) + "% yield)?"
+        confirmBtnText: root.isEditMode ? "Update Batch (Enter)" : "Save & Post Batch (Enter)"
         onConfirmed: root.executeSave()
     }
 }

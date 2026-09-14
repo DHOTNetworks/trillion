@@ -10,6 +10,12 @@ public:
     Q_INVOKABLE void reload_data() override;
 
     Q_INVOKABLE QString get_next_batch_no(const QString& fy = "");
+    Q_INVOKABLE bool add_milling_voucher(
+        const QString& batch_no, const QString& batch_date, const QString& particulars,
+        const QVariantList& consumed_items, const QVariantList& produced_items,
+        int edit_id = 0
+    );
+
     Q_INVOKABLE bool add_milling_voucher_full(
         const QString& batch_no, const QString& batch_date, const QString& paddy_item,
         int paddy_bags, double paddy_weight, const QString& rice_item, int rice_bags,

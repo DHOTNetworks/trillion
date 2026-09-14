@@ -84,8 +84,22 @@ FocusScope {
         }
     }
 
+    function openSelectedBatch() {
+        if (typeof millingStatementCtrl !== "undefined" && millingStatementCtrl) {
+            var row = millingStatementCtrl.batchModel.get(millingStatementCtrl.selectedBatchIndex)
+            if (row && (row.batchNo || row.id)) {
+                window.pendingEditVoucherId = row.id || 0
+                window.pendingEditVoucherNo = row.batchNo || ""
+                window.pendingEditVoucherDate = row.batchDate || ""
+                if (typeof window.navigateToView === "function") window.navigateToView(18)
+                else window.currentViewIndex = 18
+            }
+        }
+    }
+
     // Keyboard Shortcuts
     Shortcut { sequence: "F2"; onActivated: root.openNewMillingRequested() }
+    Shortcut { sequence: "Ctrl+E"; onActivated: root.openSelectedBatch() }
     Shortcut { sequence: "Ctrl+F"; onActivated: searchInput.focusInput = true }
     Shortcut {
         sequence: "Alt+F"
@@ -96,6 +110,14 @@ FocusScope {
     Keys.onEscapePressed: function(event) {
         event.accepted = true
         root.cancelRequested()
+    }
+    Keys.onReturnPressed: function(event) {
+        event.accepted = true
+        root.openSelectedBatch()
+    }
+    Keys.onEnterPressed: function(event) {
+        event.accepted = true
+        root.openSelectedBatch()
     }
     Keys.onUpPressed: function(event) {
         event.accepted = true
@@ -199,6 +221,21 @@ FocusScope {
                         Item { Layout.fillWidth: true }
                     }
                     onClicked: filterPopup.open()
+                }
+
+                T.Button {
+                    id: alterBatchBtn
+                    implicitWidth: contentItem.implicitWidth + 24
+                    implicitHeight: 30
+                    background: Rectangle { color: alterBatchBtn.hovered ? "#B45309" : "#D97706"; radius: 6 }
+                    contentItem: RowLayout {
+                        spacing: 6
+                        Item { Layout.fillWidth: true }
+                        Text { text: "Alter Batch"; color: "#FFFFFF"; font.pixelSize: 11; font.bold: true }
+                        KbdBadge { text: "Ctrl+E"; badgeColor: "#78350F"; textColor: "#FDE68A"; borderColor: "#D97706" }
+                        Item { Layout.fillWidth: true }
+                    }
+                    onClicked: root.openSelectedBatch()
                 }
 
                 T.Button {
@@ -395,6 +432,12 @@ FocusScope {
                                 onClicked: {
                                     if (typeof millingStatementCtrl !== "undefined" && millingStatementCtrl) {
                                         millingStatementCtrl.selectBatch(index)
+                                    }
+                                }
+                                onDoubleClicked: {
+                                    if (typeof millingStatementCtrl !== "undefined" && millingStatementCtrl) {
+                                        millingStatementCtrl.selectBatch(index)
+                                        root.openSelectedBatch()
                                     }
                                 }
                             }

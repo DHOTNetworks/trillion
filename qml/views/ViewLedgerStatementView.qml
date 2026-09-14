@@ -129,8 +129,35 @@ Rectangle {
         }
     }
 
+    function openSelectedVoucher() {
+        if (typeof ledgerStatementCtrl === "undefined" || !ledgerStatementCtrl) return
+        if (crListView.activeFocus || (crListView.currentIndex >= 0 && !drListView.activeFocus)) {
+            if (crListView.currentIndex >= 0 && crListView.currentIndex < crListView.count) {
+                root.openVoucherEntry(ledgerStatementCtrl.crModel.get(crListView.currentIndex))
+                return
+            }
+        }
+        if (drListView.activeFocus || drListView.currentIndex >= 0) {
+            if (drListView.currentIndex >= 0 && drListView.currentIndex < drListView.count) {
+                root.openVoucherEntry(ledgerStatementCtrl.drModel.get(drListView.currentIndex))
+                return
+            }
+        }
+    }
+
+    Shortcut {
+        sequence: "Ctrl+E"
+        context: Qt.WindowShortcut
+        onActivated: root.openSelectedVoucher()
+    }
+
     function openVoucherEntry(item) {
         if (!item || typeof window === "undefined") return
+        var part = (item.particulars || "").toString().toLowerCase()
+        if (part.indexOf("opening balance") !== -1 || part.indexOf("closing balance") !== -1 || part.indexOf("b/f") !== -1) {
+            return
+        }
+
         var vType = item.voucherType || item.voucher_type || item.transType || item.trans_type || ""
         var rawType = item.legacyType || item.legacy_type || item.transType || item.trans_type || ""
         var vNoStr = (item.voucherNo || item.voucher_no || item.refNo || "").toString()
@@ -257,6 +284,21 @@ Rectangle {
             }
 
             Item { Layout.fillWidth: true }
+
+            T.Button {
+                id: alterVchBtn
+                implicitWidth: contentItem.implicitWidth + 24
+                implicitHeight: 32
+                background: Rectangle { color: alterVchBtn.hovered ? "#B45309" : "#D97706"; radius: 6 }
+                contentItem: RowLayout {
+                    spacing: 6
+                    Item { Layout.fillWidth: true }
+                    Text { text: "Alter Voucher"; color: "#FFFFFF"; font.pixelSize: 12; font.bold: true }
+                    KbdBadge { text: "Ctrl+E"; badgeColor: "#78350F"; textColor: "#FDE68A"; borderColor: "#D97706" }
+                    Item { Layout.fillWidth: true }
+                }
+                onClicked: root.openSelectedVoucher()
+            }
 
             T.Button {
                 id: printBtn

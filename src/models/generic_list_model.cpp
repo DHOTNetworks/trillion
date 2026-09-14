@@ -9,9 +9,13 @@ GenericListModel::GenericListModel(QObject* parent)
         "rate", "rate_per_qtl", "amount", "taxable_amount", "total_amount", "gstPct", "gst_pct",
         "cgst", "cgst_amount", "sgst", "sgst_amount", "igst", "igst_amount",
         "drCr", "drcr", "side", "account", "accountName", "partyName", "party_name",
-        "particulars", "narration", "remarks", "date", "vDate", "vIso", "refNo", "voucherNo", "voucher_no",
+        "ledgerName", "ledger_name", "debitAmt", "debit_amt", "creditAmt", "credit_amt",
+        "yieldPct", "yield_pct", "yield_percentage", "loss_weight", "loss_pct", "cost",
+        "particulars", "narration", "remarks", "notes", "date", "vDate", "vIso", "refNo", "voucherNo", "voucher_no",
         "invoiceNo", "invoice_no", "status", "selected", "isSelected", "type", "voucherType",
-        "batchNo", "batch_no", "issueDate", "totalInputBags", "totalInputWeight", "totalOutputBags", "totalOutputWeight"
+        "batchNo", "batch_no", "issueDate", "totalInputBags", "totalInputWeight", "totalOutputBags", "totalOutputWeight",
+        "paddyVariety", "paddy_variety", "paddyInput", "paddy_input", "headRice", "head_rice",
+        "brokenRice", "broken_rice", "bran", "husk", "wastage"
     };
     for (const QString& r : standardRoles) {
         QByteArray roleName = r.toUtf8();

@@ -66,6 +66,224 @@ QString MillingModel::get_next_batch_no(const QString& fy) {
     return QString("Mill-%1").arg(maxId + 1);
 }
 
+bool MillingModel::add_milling_voucher(
+    const QString& batch_no,
+    const QString& batch_date,
+    const QString& particulars,
+    const QVariantList& consumed_items,
+    const QVariantList& produced_items,
+    int edit_id
+) {
+    QString dt = batch_date.trimmed();
+    if (dt.isEmpty()) dt = QDate::currentDate().toString("yyyy-MM-dd");
+    if (dt.contains("-")) {
+        QStringList parts = dt.split("-");
+        if (parts.size() == 3 && parts[2].length() == 4) {
+            dt = parts[2] + "-" + parts[1] + "-" + parts[0];
+        }
+    }
+
+    QVariantList fyRows = DatabaseManager::instance().executeQuery(
+        "SELECT id, year_name FROM financial_years WHERE start_date <= ? AND end_date >= ? LIMIT 1;",
+        {dt, dt}
+    );
+    int fyId = 28;
+    QString fyLabel = "FY 2026-27";
+    if (!fyRows.isEmpty()) {
+        fyId = fyRows.first().toMap().value("id").toInt();
+        fyLabel = fyRows.first().toMap().value("year_name").toString();
+    }
+
+    QString bNo = batch_no.trimmed();
+    if (bNo.isEmpty()) {
+        bNo = get_next_batch_no(fyLabel);
+    }
+
+    // Process consumed items
+    double totalPaddyWeight = 0.0;
+    int totalPaddyBags = 0;
+    double totalConsumedAmount = 0.0;
+    QString primaryPaddyItem = "Paddy Basmati";
+
+    for (const QVariant& cVar : consumed_items) {
+        QVariantMap c = cVar.toMap();
+        QString name = c.value("itemName").toString().trimmed();
+        if (name.isEmpty()) name = c.value("item_name").toString().trimmed();
+        if (name.isEmpty()) continue;
+        if (primaryPaddyItem == "Paddy Basmati") primaryPaddyItem = name;
+
+        int bags = c.value("bags").toInt();
+        double wt = c.value("weight").toDouble();
+        if (wt == 0.0) wt = c.value("weight_qtl").toDouble();
+        double amt = c.value("amount").toDouble();
+
+        totalPaddyBags += bags;
+        totalPaddyWeight += wt;
+        totalConsumedAmount += amt;
+    }
+
+    // Process produced items
+    double totalHeadRiceWeight = 0.0;
+    int totalHeadRiceBags = 0;
+    double totalBrokenWeight = 0.0;
+    double totalBranWeight = 0.0;
+    double totalHuskWeight = 0.0;
+    double totalProducedWeight = 0.0;
+    int totalProducedBags = 0;
+    double totalProducedAmount = 0.0;
+
+    for (const QVariant& pVar : produced_items) {
+        QVariantMap p = pVar.toMap();
+        QString name = p.value("itemName").toString().trimmed();
+        if (name.isEmpty()) name = p.value("item_name").toString().trimmed();
+        if (name.isEmpty()) continue;
+
+        int bags = p.value("bags").toInt();
+        double wt = p.value("weight").toDouble();
+        if (wt == 0.0) wt = p.value("weight_qtl").toDouble();
+        double amt = p.value("amount").toDouble();
+
+        totalProducedBags += bags;
+        totalProducedWeight += wt;
+        totalProducedAmount += amt;
+
+        QString lowName = name.toLower();
+        if (lowName.contains("bran") && !lowName.contains("brand")) {
+            totalBranWeight += wt;
+        } else if (lowName.contains("broken") || lowName.contains("nakku") || lowName.contains("tibar") ||
+                   lowName.contains("dubar") || lowName.contains("mogra") || lowName.contains("kinki")) {
+            totalBrokenWeight += wt;
+        } else if (lowName.contains("husk") || lowName.contains("phak") || lowName.contains("bhusa")) {
+            totalHuskWeight += wt;
+        } else {
+            totalHeadRiceWeight += wt;
+            totalHeadRiceBags += bags;
+        }
+    }
+
+    double yieldPct = totalPaddyWeight > 0.0 ? ((totalHeadRiceWeight / totalPaddyWeight) * 100.0) : 0.0;
+    double wastageWeight = std::max(0.0, totalPaddyWeight - totalProducedWeight);
+
+    DatabaseManager::instance().beginTransaction();
+
+    qint64 batchId = edit_id;
+    if (edit_id > 0) {
+        QVariant oldNoVar = DatabaseManager::instance().executeScalar(
+            "SELECT batch_no FROM milling_batches WHERE id = ?;", {edit_id}
+        );
+        QString oldNo = oldNoVar.isValid() ? oldNoVar.toString() : bNo;
+
+        DatabaseManager::instance().executeNonQuery(
+            "DELETE FROM milling_voucher_items WHERE batch_id = ?;", {edit_id}
+        );
+        DatabaseManager::instance().executeNonQuery(
+            "DELETE FROM vouchers WHERE (voucher_no = ? OR voucher_no = ?) AND (voucher_type = 'Milling' OR legacy_type = 'Mill');",
+            {oldNo, bNo}
+        );
+
+        DatabaseManager::instance().executeNonQuery(
+            "UPDATE milling_batches SET "
+            "fy_id = ?, financial_year = ?, batch_no = ?, batch_date = ?, paddy_variety = ?, "
+            "paddy_input_qtl = ?, head_rice_qtl = ?, broken_rice_qtl = ?, bran_qtl = ?, husk_qtl = ?, "
+            "wastage_qtl = ?, yield_pct = ?, narration = ? "
+            "WHERE id = ?;",
+            {
+                fyId, fyLabel, bNo, dt, primaryPaddyItem,
+                totalPaddyWeight, totalHeadRiceWeight, totalBrokenWeight, totalBranWeight, totalHuskWeight,
+                wastageWeight, yieldPct, particulars, edit_id
+            }
+        );
+    } else {
+        bool okBatch = DatabaseManager::instance().executeNonQuery(
+            "INSERT INTO milling_batches ("
+            "fy_id, financial_year, batch_no, batch_date, paddy_variety, paddy_input_qtl, "
+            "head_rice_qtl, broken_rice_qtl, bran_qtl, husk_qtl, wastage_qtl, yield_pct, narration"
+            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+            {
+                fyId, fyLabel, bNo, dt, primaryPaddyItem, totalPaddyWeight,
+                totalHeadRiceWeight, totalBrokenWeight, totalBranWeight, totalHuskWeight,
+                wastageWeight, yieldPct, particulars
+            }
+        );
+
+        if (!okBatch) {
+            DatabaseManager::instance().rollback();
+            return false;
+        }
+        batchId = DatabaseManager::instance().lastInsertedId();
+    }
+
+    // Insert Consumed Items (Cr)
+    int rowIdx = 1;
+    for (const QVariant& cVar : consumed_items) {
+        QVariantMap c = cVar.toMap();
+        QString name = c.value("itemName").toString().trimmed();
+        if (name.isEmpty()) name = c.value("item_name").toString().trimmed();
+        if (name.isEmpty()) continue;
+
+        int bags = c.value("bags").toInt();
+        double wt = c.value("weight").toDouble();
+        if (wt == 0.0) wt = c.value("weight_qtl").toDouble();
+        double amt = c.value("amount").toDouble();
+        double rate = c.value("rate").toDouble();
+        if (rate == 0.0 && wt > 0.0 && amt > 0.0) rate = amt / wt;
+
+        DatabaseManager::instance().executeNonQuery(
+            "INSERT INTO milling_voucher_items ("
+            "batch_id, batch_no, batch_date, row_no, drcr, item_name, weight_qtl, bags, rate, amount, narration"
+            ") VALUES (?, ?, ?, ?, 'Cr', ?, ?, ?, ?, ?, 'Raw Paddy Consumed in Milling');",
+            {batchId, bNo, dt, rowIdx++, name, wt, bags, rate, amt}
+        );
+    }
+
+    // Insert Produced Items (Dr)
+    for (const QVariant& pVar : produced_items) {
+        QVariantMap p = pVar.toMap();
+        QString name = p.value("itemName").toString().trimmed();
+        if (name.isEmpty()) name = p.value("item_name").toString().trimmed();
+        if (name.isEmpty()) continue;
+
+        int bags = p.value("bags").toInt();
+        double wt = p.value("weight").toDouble();
+        if (wt == 0.0) wt = p.value("weight_qtl").toDouble();
+        double amt = p.value("amount").toDouble();
+        double yieldP = p.value("yieldPct").toDouble();
+        if (yieldP == 0.0 && totalPaddyWeight > 0.0 && wt > 0.0) {
+            yieldP = (wt / totalPaddyWeight) * 100.0;
+        }
+        double rate = p.value("rate").toDouble();
+        if (rate == 0.0 && wt > 0.0 && amt > 0.0) rate = amt / wt;
+
+        DatabaseManager::instance().executeNonQuery(
+            "INSERT INTO milling_voucher_items ("
+            "batch_id, batch_no, batch_date, row_no, drcr, item_name, percentage, weight_qtl, bags, rate, amount, narration"
+            ") VALUES (?, ?, ?, ?, 'Dr', ?, ?, ?, ?, ?, ?, 'Milled Rice / By-product Produced');",
+            {batchId, bNo, dt, rowIdx++, name, yieldP, wt, bags, rate, amt}
+        );
+    }
+
+    // Double-Entry Accounting Voucher
+    QString vchNarr = QString("Milling Batch %1 - In: %2 (%3 Qtl), Out: Head Rice (%4 Qtl, %5%)")
+        .arg(bNo, primaryPaddyItem, QString::number(totalPaddyWeight, 'f', 2),
+             QString::number(totalHeadRiceWeight, 'f', 2), QString::number(yieldPct, 'f', 2));
+    if (!particulars.isEmpty()) vchNarr += " | " + particulars;
+
+    bool okVch = DatabaseManager::instance().executeNonQuery(
+        "INSERT INTO vouchers (fy_id, financial_year, voucher_no, voucher_date, voucher_type, legacy_type, party_name, account_type, amount, narration) "
+        "VALUES (?, ?, ?, ?, 'Milling', 'Mill', 'Milling Production Account', 'Inventory Account', ?, ?);",
+        {fyId, fyLabel, bNo, dt, totalConsumedAmount, vchNarr}
+    );
+
+    if (!okVch) {
+        DatabaseManager::instance().rollback();
+        return false;
+    }
+
+    DatabaseManager::instance().commit();
+    reload_data();
+    return true;
+}
+
 bool MillingModel::add_milling_voucher_full(
     const QString& batch_no, const QString& batch_date, const QString& paddy_item,
     int paddy_bags, double paddy_weight, const QString& rice_item, int rice_bags,
