@@ -101,9 +101,6 @@ Rectangle {
     }
 
     function loadVoucher(vch) {
-        if (voucherDateModal && voucherDateModal.opened) {
-            voucherDateModal.close()
-        }
         if (!vch || typeof vch !== "object") return
         editVoucherId = vch.id || 0
         currentVoucherNo = vch.voucher_no || 1
@@ -161,6 +158,9 @@ Rectangle {
         updatePartyInfo(selectedPartyName)
         if (vch.narration && narrationInput) narrationInput.text = vch.narration
         recalculateTotals()
+        Qt.callLater(function() {
+            root.openDateModal()
+        })
     }
 
     function initializeVoucher(dateStr) {
@@ -1187,7 +1187,6 @@ Rectangle {
     // -------------------------------------------------------------
     VoucherDateModal {
         id: voucherDateModal
-        anchors.centerIn: parent
         onDateConfirmed: function(fmtDate, isoDate) {
             vchDateInput.text = fmtDate
             root.voucherDate = fmtDate

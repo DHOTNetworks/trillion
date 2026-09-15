@@ -106,9 +106,6 @@ FocusScope {
     }
 
     function loadVoucherForEditing(vchNoOrId, vchDate) {
-        if (voucherDateModal && voucherDateModal.opened) {
-            voucherDateModal.close()
-        }
         if (typeof vouchersModel === "undefined" || !vouchersModel) return
         var vch = vouchersModel.get_cheque_voucher(vchNoOrId)
         if (!vch || (!vch.id && !vch.voucher_no)) return
@@ -161,6 +158,9 @@ FocusScope {
         statusMessage = ""
         isError = false
         recalculateTotals()
+        Qt.callLater(function() {
+            root.openDateModal()
+        })
     }
 
     function cursorMax(dateStr) {
@@ -313,7 +313,6 @@ FocusScope {
 
     VoucherDateModal {
         id: voucherDateModal
-        anchors.centerIn: parent
         onDateConfirmed: function(fmtDate, isoDate) {
             voucherDateInput.text = fmtDate
             root.cursorMax(fmtDate)

@@ -158,9 +158,6 @@ Item {
     }
 
     function loadInvoiceForEditing(invNoOrId, dateHint) {
-        if (voucherDateModal && voucherDateModal.opened) {
-            voucherDateModal.close()
-        }
         if (typeof purchaseVoucherCtrl === "undefined" || !purchaseVoucherCtrl) return
 
         var ok = purchaseVoucherCtrl.loadInvoiceForEditing(invNoOrId, dateHint || "")
@@ -246,6 +243,9 @@ Item {
 
         clearItemInputRow()
         recalculateTotals()
+        Qt.callLater(function() {
+            root.openDateModal()
+        })
     }
 
     function clearItemInputRow() {
@@ -603,7 +603,6 @@ Item {
 
     VoucherDateModal {
         id: voucherDateModal
-        anchors.centerIn: parent
         onDateConfirmed: function(fmtDate, isoDate) {
             invoiceDateInput.text = fmtDate
             root.updateNextNumbers(fmtDate)

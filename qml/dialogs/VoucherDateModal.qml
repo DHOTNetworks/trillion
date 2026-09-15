@@ -10,6 +10,7 @@ T.Popup {
     modal: true
     dim: true
     focus: true
+    anchors.centerIn: T.Overlay.overlay
     closePolicy: T.Popup.CloseOnPressOutside | T.Popup.CloseOnEscape
 
     signal dateConfirmed(string formattedDate, string isoDate)
@@ -36,7 +37,15 @@ T.Popup {
 
     function openWithDate(currentDate) {
         initialDate = (currentDate && currentDate.trim() !== "") ? currentDate.trim() : ""
+        var wDate = (initialDate && initialDate.trim() !== "") ? initialDate.trim() : ((typeof financialYearsModel !== "undefined" && financialYearsModel) ? financialYearsModel.get_working_date() : Qt.formatDate(new Date(), "dd-MM-yyyy"))
+        workingDateText = wDate
+        dateInputField.text = wDate
+        errorMessage = ""
         root.open()
+        Qt.callLater(function() {
+            dateInputField.forceActiveFocus()
+            dateInputField.selectAll()
+        })
     }
 
     function validateAndAccept() {
@@ -128,7 +137,6 @@ T.Popup {
                 font.pixelSize: 16
                 font.bold: true
                 selectByMouse: true
-                inputMethodHints: Qt.ImhDigitsOnly
 
                 Keys.onReturnPressed: function(event) {
                     event.accepted = true

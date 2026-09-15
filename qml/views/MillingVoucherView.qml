@@ -138,6 +138,9 @@ FocusScope {
         statusMessage = ""
         isError = false
         recalculateTotals()
+        Qt.callLater(function() {
+            root.openDateModal()
+        })
     }
 
     function updateNextNumbers(dateStr) {
@@ -1189,7 +1192,6 @@ FocusScope {
 
     VoucherDateModal {
         id: voucherDateModal
-        anchors.centerIn: parent
         onDateConfirmed: function(fmtDate, isoDate) {
             vchDateInput.text = fmtDate
             root.updateNextNumbers(fmtDate)

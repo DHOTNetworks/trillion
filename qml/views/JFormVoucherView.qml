@@ -124,9 +124,6 @@ Item {
     }
 
     function loadVoucherForEditing(vchNoOrId) {
-        if (voucherDateModal && voucherDateModal.opened) {
-            voucherDateModal.close()
-        }
         if (!vchNoOrId || typeof jformModel === "undefined" || !jformModel) return
         var data = jformModel.get_jform_voucher(vchNoOrId)
         if (!data || !data.id) return
@@ -207,6 +204,9 @@ Item {
         }
         recalculateTotals()
         updateZimidarBalance(data.zimidar_name || "")
+        Qt.callLater(function() {
+            root.openDateModal()
+        })
     }
 
     function updateZimidarBalance(partyName) {
@@ -552,7 +552,6 @@ Item {
 
     VoucherDateModal {
         id: voucherDateModal
-        anchors.centerIn: parent
         onDateConfirmed: function(fmtDate, isoDate) {
             vchDateInput.text = fmtDate
             root.updateNextNumbers(fmtDate)
