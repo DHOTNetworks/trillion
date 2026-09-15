@@ -42,4 +42,5 @@ private:
     QListWidget* m_listWidget = nullptr;
     std::function<QVariantList(const QString&)> m_searchFn;
     bool m_programmaticChange = false;
+    bool m_isUpdatingPopup = false;
 };

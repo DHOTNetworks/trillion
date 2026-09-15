@@ -28,9 +28,10 @@ AccountSearchBox::AccountSearchBox(QWidget* parent)
         "}"
     );
 
-    // Create Popup
-    m_popupFrame = new QFrame(nullptr, Qt::Popup | Qt::FramelessWindowHint);
-    m_popupFrame->setAttribute(Qt::WA_ShowWithoutActivating);
+    // Create Popup with ToolTip window type to prevent focus oscillation
+    m_popupFrame = new QFrame(nullptr, Qt::ToolTip | Qt::FramelessWindowHint);
+    m_popupFrame->setAttribute(Qt::WA_ShowWithoutActivating, true);
+    m_popupFrame->setFocusPolicy(Qt::NoFocus);
     m_popupFrame->setStyleSheet(
         "QFrame {"
         "  background-color: #FFFFFF;"
@@ -99,12 +100,19 @@ QString AccountSearchBox::currentPartyName() const {
 }
 
 void AccountSearchBox::openSearchPopup() {
+    if (m_isUpdatingPopup) return;
+    m_isUpdatingPopup = true;
+
     updateResults();
-    if (m_listWidget->count() > 0) {
+    if (m_listWidget->count() > 0 && isVisible()) {
         positionPopup();
         m_popupFrame->show();
         m_popupFrame->raise();
+    } else {
+        closeSearchPopup();
     }
+
+    m_isUpdatingPopup = false;
 }
 
 void AccountSearchBox::closeSearchPopup() {
@@ -114,7 +122,7 @@ void AccountSearchBox::closeSearchPopup() {
 }
 
 void AccountSearchBox::positionPopup() {
-    if (!m_popupFrame) return;
+    if (!m_popupFrame || !isVisible()) return;
     QPoint globalPos = mapToGlobal(QPoint(0, height() + 2));
     int popupWidth = qMax(width(), 400);
     int itemHeight = 36;
@@ -148,13 +156,7 @@ void AccountSearchBox::updateResults() {
 void AccountSearchBox::onTextChanged(const QString& /*text*/) {
     if (m_programmaticChange) return;
     if (hasFocus()) {
-        updateResults();
-        if (m_listWidget->count() > 0) {
-            positionPopup();
-            m_popupFrame->show();
-        } else {
-            closeSearchPopup();
-        }
+        openSearchPopup();
     }
 }
 
@@ -167,14 +169,11 @@ void AccountSearchBox::onListItemClicked(QListWidgetItem* item) {
 
 void AccountSearchBox::focusInEvent(QFocusEvent* event) {
     QLineEdit::focusInEvent(event);
-    if (!m_programmaticChange && text().trimmed().isEmpty()) {
-        openSearchPopup();
-    }
+    selectAll();
 }
 
 void AccountSearchBox::focusOutEvent(QFocusEvent* event) {
     QLineEdit::focusOutEvent(event);
-    // Don't close immediately if clicking inside popup
     if (m_popupFrame && !m_popupFrame->underMouse()) {
         closeSearchPopup();
     }
@@ -209,7 +208,7 @@ void AccountSearchBox::keyPressEvent(QKeyEvent* event) {
             return;
         }
     } else {
-        if (event->key() == Qt::Key_Down && text().trimmed().isEmpty()) {
+        if (event->key() == Qt::Key_Down) {
             openSearchPopup();
             event->accept();
             return;

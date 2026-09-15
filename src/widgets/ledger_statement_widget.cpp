@@ -307,7 +307,8 @@ void LedgerStatementWidget::resetSearch() {
         m_controller->loadPartyStatement("");
     }
     updateHeadersAndTotals();
-    focusSearch();
+    m_searchBox->setFocus();
+    m_searchBox->selectAll();
 }
 
 QString LedgerStatementWidget::currentParty() const {
@@ -491,6 +492,7 @@ void LedgerStatementWidget::keyPressEvent(QKeyEvent* event) {
 void LedgerStatementWidget::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
     if (m_searchBox->currentPartyName().isEmpty()) {
-        focusSearch();
+        m_searchBox->setFocus();
+        m_searchBox->selectAll();
     }
 }

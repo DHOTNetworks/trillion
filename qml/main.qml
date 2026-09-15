@@ -309,7 +309,7 @@ T.ApplicationWindow {
                         case 5: return "views/ReportsView.qml"
                         case 6: return "views/NewLedgerView.qml"
                         case 7: return "views/ModifyLedgerView.qml"
-                        case 8: return "views/ViewLedgerStatementView.qml"
+                        case 8: return ""
                         case 9: return "views/NewGroupView.qml"
                         case 10: return "views/ModifyGroupView.qml"
                         case 11: return "views/NewStockItemView.qml"
