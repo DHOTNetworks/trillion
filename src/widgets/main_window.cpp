@@ -15,8 +15,11 @@ MainWindow::MainWindow(QQuickWindow* qmlWindow,
     setWindowTitle("Mahadev Rice Mill ERP & Accounting");
     resize(1280, 800);
     setMinimumSize(1024, 680);
+    setAttribute(Qt::WA_StyledBackground, true);
+    setStyleSheet("QMainWindow { background-color: #F8FAFC; } QStackedWidget { background-color: #F8FAFC; }");
 
     m_stackedWidget = new QStackedWidget(this);
+    m_stackedWidget->setAttribute(Qt::WA_StyledBackground, true);
     setCentralWidget(m_stackedWidget);
 
     // Index 0: Embedded QML Application Window

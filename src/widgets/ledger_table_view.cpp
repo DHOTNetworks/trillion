@@ -172,8 +172,8 @@ void LedgerTableDelegate::paint(QPainter* painter, const QStyleOptionViewItem& o
         }
     } else {
         QString text = index.data(Qt::DisplayRole).toString();
-        QFont font = painter->font();
-        font.setFamily("Segoe UI");
+        QFont font = QApplication::font();
+        font.setStyleHint(QFont::SansSerif);
 
         if (col == 1) { // Date
             font.setPointSize(10);
@@ -198,7 +198,10 @@ void LedgerTableDelegate::paint(QPainter* painter, const QStyleOptionViewItem& o
             painter->setPen(QColor("#0F172A"));
         }
 
+        painter->setRenderHint(QPainter::Antialiasing, false);
+        painter->setRenderHint(QPainter::TextAntialiasing, true);
         painter->setFont(font);
+
         QRect textRect = option.rect.adjusted(8, 0, -8, 0);
         int align = index.data(Qt::TextAlignmentRole).toInt();
         if (align == 0) align = Qt::AlignLeft | Qt::AlignVCenter;

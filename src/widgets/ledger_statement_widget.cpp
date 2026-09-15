@@ -1,5 +1,6 @@
 #include "ledger_statement_widget.h"
 #include "engine/accounting_engine.h"
+#include <QPainter>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QFrame>
@@ -15,6 +16,8 @@ LedgerStatementWidget::LedgerStatementWidget(LedgerStatementController* controll
     , m_controller(controller)
     , m_printExportCtrl(printExportCtrl)
 {
+    setAttribute(Qt::WA_StyledBackground, true);
+    setAutoFillBackground(true);
     setupUi();
 
     if (m_controller) {
@@ -370,12 +373,23 @@ void LedgerStatementWidget::updateHeadersAndTotals() {
     m_drTotalLabel->setText(QString("Total Dr: %1 (%2 entries)").arg(m_controller->drTotalFmt()).arg(drCount));
     m_drCheckedLabel->setText(QString("Checked: %1").arg(m_controller->drSelectedTotalFmt()));
 
-    double diff = std::abs(m_controller->drTotal() - m_controller->crTotal());
+    double drTot = m_controller->drTotal();
+    double crTot = m_controller->crTotal();
+    double diff = std::abs(drTot - crTot);
     m_netDiffLabel->setText(QString("Difference: %1").arg(AccountingEngine::formatIndianCurrency(diff, true)));
 
-    QString balType = m_controller->netBalanceType();
-    QString balFmt = m_controller->netBalanceFmt();
-    m_netBalanceLabel->setText(QString("Closing Balance: %1 (%2)").arg(balFmt).arg(balType));
+    QString balType = "Nil";
+    QString balColor = "#475569";
+    if (crTot > drTot + 0.001) {
+        balType = "Cr";
+        balColor = "#047857"; // Emerald Green for Cr closing balance
+    } else if (drTot > crTot + 0.001) {
+        balType = "Dr";
+        balColor = "#1D4ED8"; // Royal Blue for Dr closing balance
+    }
+
+    m_netBalanceLabel->setText(QString("Closing Balance: %1 %2").arg(AccountingEngine::formatIndianCurrency(diff, true), balType));
+    m_netBalanceLabel->setStyleSheet(QString("color: %1; font-weight: bold; font-size: 14px; border: none; background: transparent; font-family: 'Segoe UI', sans-serif;").arg(balColor));
 
     double checkedDiff = std::abs(m_controller->drSelectedTotal() - m_controller->crSelectedTotal());
     m_checkedDiffLabel->setText(QString("Checked Difference: %1").arg(AccountingEngine::formatIndianCurrency(checkedDiff, true)));
@@ -506,3 +520,10 @@ void LedgerStatementWidget::showEvent(QShowEvent* event) {
         m_searchBox->selectAll();
     }
 }
+
+void LedgerStatementWidget::paintEvent(QPaintEvent* event) {
+    QPainter painter(this);
+    painter.fillRect(rect(), QColor("#F8FAFC"));
+    QWidget::paintEvent(event);
+}
+
