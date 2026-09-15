@@ -309,18 +309,139 @@ QVariantMap PartiesModel::get_party_by_name(const QString& name) const {
 }
 
 QVariantList PartiesModel::search_parties(const QString& query) const {
-    QString q = query.trimmed();
+    QString q = query.trimmed().toLower();
     if (q.isEmpty()) return {};
-    QString pattern = q;
-    pattern.replace(QChar(0x00A0), '%');
-    pattern.replace(' ', '%');
-    QString wildcard = "%" + pattern + "%";
 
-    QVariantList rows = DatabaseManager::instance().executeQuery(
-        "SELECT id, legacy_id, name, group_name, party_type, phone, city, gstin, opening_balance, balance_type FROM parties WHERE name LIKE ? OR alias LIKE ? OR phone LIKE ? OR city LIKE ? ORDER BY name COLLATE NOCASE ASC LIMIT 30;",
-        {wildcard, wildcard, wildcard, wildcard}
+    static const QRegularExpression splitRegex(QStringLiteral("[\\s\\-\\/\\.\\[\\]\\(\\)\\,\\&]+"));
+    QStringList queryTokens = q.split(splitRegex, Qt::SkipEmptyParts);
+    if (queryTokens.isEmpty()) return {};
+
+    QVariantList allParties = DatabaseManager::instance().executeQuery(
+        "SELECT id, legacy_id, name, group_name, party_type, phone, city, gstin, opening_balance, balance_type "
+        "FROM parties;"
     );
-    return rows;
+
+    struct RankedItem {
+        QVariantMap data;
+        int tier;          // 0: 1st word prefix, 1: 2nd word prefix, 2: 3rd+ word prefix, 3: City prefix, 4: Group prefix
+        int wordIndex;
+        int nameLength;
+        QString name;
+    };
+
+    QList<RankedItem> matches;
+    matches.reserve(allParties.size());
+
+    for (const QVariant& rowVar : allParties) {
+        QVariantMap row = rowVar.toMap();
+        QString name = row.value("name").toString().trimmed();
+        QString city = row.value("city").toString().trimmed();
+        QString group = row.value("group_name").toString().trimmed();
+
+        QString nameLower = name.toLower();
+        QString cityLower = city.toLower();
+        QString groupLower = group.toLower();
+
+        QString bracketLocation;
+        int bStart = nameLower.indexOf('[');
+        int bEnd = nameLower.indexOf(']', bStart);
+        if (bStart != -1 && bEnd > bStart) {
+            bracketLocation = nameLower.mid(bStart + 1, bEnd - bStart - 1).trimmed();
+        }
+
+        QString cleanNamePart = (bStart != -1) ? nameLower.left(bStart).trimmed() : nameLower;
+        QStringList nameWords = cleanNamePart.split(splitRegex, Qt::SkipEmptyParts);
+        QStringList locationWords = bracketLocation.split(splitRegex, Qt::SkipEmptyParts);
+        if (!cityLower.isEmpty()) {
+            locationWords.append(cityLower.split(splitRegex, Qt::SkipEmptyParts));
+        }
+        QStringList groupWords = groupLower.split(splitRegex, Qt::SkipEmptyParts);
+
+        bool allTokensMatched = true;
+        int bestTier = 999;
+        int bestWordIdx = 999;
+
+        for (int t = 0; t < queryTokens.size(); ++t) {
+            const QString& tok = queryTokens.at(t);
+            bool tokenFound = false;
+
+            for (int w = 0; w < nameWords.size(); ++w) {
+                if (nameWords.at(w).startsWith(tok)) {
+                    tokenFound = true;
+                    int curTier = (w == 0) ? 0 : ((w == 1) ? 1 : 2);
+                    if (curTier < bestTier) {
+                        bestTier = curTier;
+                        bestWordIdx = w;
+                    }
+                    break;
+                }
+            }
+
+            if (!tokenFound) {
+                for (int lw = 0; lw < locationWords.size(); ++lw) {
+                    if (locationWords.at(lw).startsWith(tok)) {
+                        tokenFound = true;
+                        int curTier = 3;
+                        if (curTier < bestTier) {
+                            bestTier = curTier;
+                            bestWordIdx = 100 + lw;
+                        }
+                        break;
+                    }
+                }
+            }
+
+            if (!tokenFound) {
+                for (int gw = 0; gw < groupWords.size(); ++gw) {
+                    if (groupWords.at(gw).startsWith(tok)) {
+                        tokenFound = true;
+                        int curTier = 4;
+                        if (curTier < bestTier) {
+                            bestTier = curTier;
+                            bestWordIdx = 200 + gw;
+                        }
+                        break;
+                    }
+                }
+            }
+
+            if (!tokenFound) {
+                allTokensMatched = false;
+                break;
+            }
+        }
+
+        if (allTokensMatched && bestTier < 999) {
+            RankedItem item;
+            item.data = row;
+            item.tier = bestTier;
+            item.wordIndex = bestWordIdx;
+            item.nameLength = name.length();
+            item.name = name;
+            matches.append(item);
+        }
+    }
+
+    std::sort(matches.begin(), matches.end(), [](const RankedItem& a, const RankedItem& b) {
+        if (a.tier != b.tier) {
+            return a.tier < b.tier;
+        }
+        if (a.wordIndex != b.wordIndex) {
+            return a.wordIndex < b.wordIndex;
+        }
+        if (a.nameLength != b.nameLength) {
+            return a.nameLength < b.nameLength;
+        }
+        return QString::compare(a.name, b.name, Qt::CaseInsensitive) < 0;
+    });
+
+    QVariantList results;
+    int limit = qMin(matches.size(), 40);
+    for (int i = 0; i < limit; ++i) {
+        results.append(matches.at(i).data);
+    }
+
+    return results;
 }
 
 bool PartiesModel::add_party(const QString& name, const QString& ptype, const QString& phone, const QString& place, const QString& gstin, double op_bal, const QString& bal_type) {
