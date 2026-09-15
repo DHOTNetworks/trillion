@@ -108,11 +108,18 @@ void MainWindow::onLedgerAlterVoucherRequested(int targetViewIndex, const QVaria
         m_qmlWindow->setProperty("lastViewedStatementFromDate", m_ledgerWidget->fromDate());
         m_qmlWindow->setProperty("lastViewedStatementToDate", m_ledgerWidget->toDate());
 
+        bool isCr = (m_ledgerWidget->lastSide() == "Cr");
+        m_qmlWindow->setProperty("lastViewedStatementSide", isCr ? "Cr" : "Dr");
+        m_qmlWindow->setProperty("lastViewedStatementIndex", m_ledgerWidget->lastIndex());
+
         QString vNoStr = entry.value("voucherNo").toString();
+        if (vNoStr.isEmpty()) vNoStr = entry.value("voucher_no").toString();
         if (vNoStr.isEmpty()) vNoStr = entry.value("refNo").toString();
+
         int itemId = entry.value("id").toInt();
         QString vDate = entry.value("vIso").toString();
         QString invNo = entry.value("invoiceNo").toString();
+        if (invNo.isEmpty()) invNo = entry.value("invoice_no").toString();
         if (invNo.isEmpty()) invNo = vNoStr;
 
         m_qmlWindow->setProperty("pendingEditInvoiceNo", invNo);
@@ -124,9 +131,11 @@ void MainWindow::onLedgerAlterVoucherRequested(int targetViewIndex, const QVaria
             m_qmlWindow->setProperty("targetTdsVoucherId", itemId);
         } else if (targetViewIndex == 16) {
             QString vType = entry.value("voucherType").toString();
+            if (vType.isEmpty()) vType = entry.value("voucher_type").toString();
             QString rawType = entry.value("legacyType").toString();
+            if (rawType.isEmpty()) rawType = entry.value("legacy_type").toString();
             bool isReceipt = (vType == "Receipt" || rawType == "ChRt" || rawType == "Rcpt" || entry.value("side").toString() == "Cr");
-            m_qmlWindow->setProperty("targetChequeMode", isReceipt ? "Receipt" : "Payment");
+            m_qmlWindow->setProperty("targetChequeMode", isReceipt ? "RECEIPT" : "PAYMENT");
         }
 
         if (m_qmlContainer) {

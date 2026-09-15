@@ -53,10 +53,6 @@ void LedgerStatementWidget::setupUi() {
 
     headerLayout->addStretch(1);
 
-    m_alterBtn = new KbdBadgeButton("Alter Voucher", "Ctrl+E", QColor("#D97706"), QColor("#B45309"), QColor("#FFFFFF"), QColor("#D97706"), headerCard);
-    connect(m_alterBtn, &QPushButton::clicked, this, &LedgerStatementWidget::openSelectedVoucher);
-    headerLayout->addWidget(m_alterBtn);
-
     m_printBtn = new KbdBadgeButton("Print Statement", "Ctrl+P", QColor("#2563EB"), QColor("#1D4ED8"), QColor("#FFFFFF"), QColor("#2563EB"), headerCard);
     connect(m_printBtn, &QPushButton::clicked, this, &LedgerStatementWidget::printStatement);
     headerLayout->addWidget(m_printBtn);
@@ -396,9 +392,11 @@ void LedgerStatementWidget::updateHeadersAndTotals() {
 }
 
 void LedgerStatementWidget::openSelectedVoucher() {
-    if (m_crTable->hasFocus()) {
+    if (m_crTable->hasFocus() || (m_crTable->selectedRowIndex() >= 0 && !m_drTable->hasFocus())) {
         int row = m_crTable->selectedRowIndex();
         if (row >= 0 && m_controller) {
+            m_lastSide = "Cr";
+            m_lastIndex = row;
             onVoucherActivated(m_controller->crModel()->get(row));
             return;
         }
@@ -406,11 +404,15 @@ void LedgerStatementWidget::openSelectedVoucher() {
     if (m_drTable->hasFocus() || m_drTable->selectedRowIndex() >= 0) {
         int row = m_drTable->selectedRowIndex();
         if (row >= 0 && m_controller) {
+            m_lastSide = "Dr";
+            m_lastIndex = row;
             onVoucherActivated(m_controller->drModel()->get(row));
             return;
         }
     }
     if (m_crTable->selectedRowIndex() >= 0 && m_controller) {
+        m_lastSide = "Cr";
+        m_lastIndex = m_crTable->selectedRowIndex();
         onVoucherActivated(m_controller->crModel()->get(m_crTable->selectedRowIndex()));
     }
 }
@@ -428,42 +430,53 @@ void LedgerStatementWidget::openVoucherForEntry(const QVariantMap& entry) {
     }
 
     QString vType = entry.value("voucherType").toString();
+    if (vType.isEmpty()) vType = entry.value("voucher_type").toString();
     QString rawType = entry.value("legacyType").toString();
+    if (rawType.isEmpty()) rawType = entry.value("legacy_type").toString();
     if (vType.isEmpty()) vType = entry.value("transType").toString();
-    if (rawType.isEmpty()) rawType = entry.value("transType").toString();
+    if (vType.isEmpty()) vType = entry.value("trans_type").toString();
+    if (rawType.isEmpty()) rawType = entry.value("trans_type").toString();
+
+    QString refNo = entry.value("refNo").toString().trimmed();
+    if (vType.isEmpty() && rawType.isEmpty() && !refNo.isEmpty()) {
+        QString prefix = refNo.split(' ').first();
+        rawType = prefix;
+        vType = prefix;
+    }
 
     int targetViewIndex = -1;
 
     // 1. TDS Voucher (View 24)
-    if (vType == "TDS" || rawType == "TDS" || part.contains("t.d.s.")) {
+    if (vType == "TDS" || rawType == "TDS" || refNo.startsWith("TDS") || part.contains("t.d.s.")) {
         targetViewIndex = 24;
     }
     // 2. Sales Voucher (View 14)
-    else if (vType == "Sales" || rawType == "Sale" || rawType == "Sales" || vType == "Sale") {
+    else if (vType == "Sales" || rawType == "Sale" || rawType == "Sales" || vType == "Sale" || refNo.startsWith("Sale")) {
         targetViewIndex = 14;
     }
     // 3. Purchase Voucher (View 15)
-    else if (vType == "Purchase" || rawType == "Purc" || rawType == "Purchase" || vType == "Purc") {
+    else if (vType == "Purchase" || rawType == "Purc" || rawType == "Purchase" || vType == "Purc" || refNo.startsWith("Purc")) {
         targetViewIndex = 15;
     }
     // 4. Payment / Receipt (View 16)
-    else if (vType == "Payment" || vType == "Receipt" || rawType == "ChPt" || rawType == "ChRt" || rawType == "Pymt" || rawType == "Rcpt" || rawType == "Bank") {
+    else if (vType == "Payment" || vType == "Receipt" || rawType == "ChPt" || rawType == "ChRt" || rawType == "Pymt" || rawType == "Rcpt" || rawType == "Bank" ||
+             refNo.startsWith("ChPt") || refNo.startsWith("ChRt") || refNo.startsWith("Pymt") || refNo.startsWith("Rcpt")) {
         targetViewIndex = 16;
     }
     // 5. Journal Voucher (View 17)
-    else if (vType == "Journal" || rawType == "Jrnl" || rawType == "Journal" || vType == "Jrnl") {
+    else if (vType == "Journal" || rawType == "Jrnl" || rawType == "Journal" || vType == "Jrnl" || refNo.startsWith("Jrnl")) {
         targetViewIndex = 17;
     }
     // 6. Milling Voucher (View 18)
-    else if (vType == "Milling" || rawType == "Mill" || rawType == "Prod" || rawType == "ML") {
+    else if (vType == "Milling" || rawType == "Mill" || rawType == "Prod" || rawType == "ML" || refNo.startsWith("Mill") || refNo.startsWith("ML")) {
         targetViewIndex = 18;
     }
     // 7. J-Form Voucher (View 23)
-    else if (vType == "J-Form" || rawType == "JFrm" || rawType == "J-Form" || vType == "JFrm") {
+    else if (vType == "J-Form" || rawType == "JFrm" || rawType == "J-Form" || vType == "JFrm" || refNo.startsWith("JFrm") || refNo.startsWith("J-Form")) {
         targetViewIndex = 23;
     }
     // 8. Debit / Credit Note (View 28)
-    else if (vType == "Debit Note" || vType == "Credit Note" || rawType == "DbNt" || rawType == "CrNt" || rawType == "DN" || rawType == "CN") {
+    else if (vType == "Debit Note" || vType == "Credit Note" || rawType == "DbNt" || rawType == "CrNt" || rawType == "DN" || rawType == "CN" || refNo.startsWith("DbNt") || refNo.startsWith("CrNt")) {
         targetViewIndex = 28;
     }
 

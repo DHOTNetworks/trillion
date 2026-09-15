@@ -27,6 +27,8 @@ public:
     QString currentParty() const;
     QString fromDate() const;
     QString toDate() const;
+    QString lastSide() const { return m_lastSide; }
+    int lastIndex() const { return m_lastIndex; }
 
 signals:
     void backRequested();
@@ -60,7 +62,6 @@ private:
     PrintExportController* m_printExportCtrl = nullptr;
 
     // Header Actions
-    KbdBadgeButton* m_alterBtn = nullptr;
     KbdBadgeButton* m_printBtn = nullptr;
     KbdBadgeButton* m_pdfBtn = nullptr;
     KbdBadgeButton* m_csvBtn = nullptr;
