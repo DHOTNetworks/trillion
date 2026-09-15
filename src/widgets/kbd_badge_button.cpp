@@ -5,23 +5,56 @@
 
 KbdBadgeButton::KbdBadgeButton(const QString& text, const QString& shortcut,
                                const QColor& bgColor, const QColor& hoverColor,
+                               const QColor& textColor, const QColor& borderColor,
                                QWidget* parent)
     : QPushButton(parent)
     , m_shortcut(shortcut)
     , m_bgColor(bgColor)
     , m_hoverColor(hoverColor)
+    , m_textColor(textColor)
+    , m_borderColor(borderColor)
 {
     setText(text);
-    setFixedHeight(32);
+    setFixedHeight(34);
     setCursor(Qt::PointingHandCursor);
-    setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
+    setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
 }
 
-void KbdBadgeButton::setButtonColors(const QColor& bg, const QColor& hover, const QColor& badgeBg) {
+void KbdBadgeButton::setButtonColors(const QColor& bg, const QColor& hover, const QColor& text,
+                                     const QColor& border, const QColor& badgeBg, const QColor& badgeText) {
     m_bgColor = bg;
     m_hoverColor = hover;
+    m_textColor = text;
+    m_borderColor = border;
     m_badgeBg = badgeBg;
+    m_badgeText = badgeText;
     update();
+}
+
+QSize KbdBadgeButton::sizeHint() const {
+    QFont font = this->font();
+    font.setPointSize(10);
+    font.setBold(true);
+    QFontMetrics fm(font);
+    int textWidth = fm.horizontalAdvance(text());
+
+    int badgeWidth = 0;
+    int spacing = 0;
+    if (!m_shortcut.isEmpty()) {
+        QFont badgeFont = font;
+        badgeFont.setPointSize(8);
+        badgeFont.setBold(true);
+        QFontMetrics bfm(badgeFont);
+        badgeWidth = bfm.horizontalAdvance(m_shortcut) + 12; // 6px padding on each side
+        spacing = 8;
+    }
+
+    int totalW = 16 + textWidth + spacing + badgeWidth + 16; // 16px left + 16px right margin
+    return QSize(qMax(totalW, 80), 34);
+}
+
+QSize KbdBadgeButton::minimumSizeHint() const {
+    return sizeHint();
 }
 
 void KbdBadgeButton::paintEvent(QPaintEvent* /*event*/) {
@@ -31,16 +64,21 @@ void KbdBadgeButton::paintEvent(QPaintEvent* /*event*/) {
     bool isHovered = underMouse() && isEnabled();
     QColor currentBg = isHovered ? m_hoverColor : m_bgColor;
     if (!isEnabled()) {
-        currentBg = QColor("#94A3B8");
+        currentBg = QColor("#E2E8F0");
     }
 
-    // Draw Rounded Button Background
+    // 1. Draw Background
     painter.setBrush(currentBg);
-    painter.setPen(Qt::NoPen);
-    painter.drawRoundedRect(rect(), 6, 6);
+    if (m_borderColor.isValid() && m_borderColor != Qt::transparent) {
+        painter.setPen(QPen(m_borderColor, 1));
+    } else {
+        painter.setPen(Qt::NoPen);
+    }
+    painter.drawRoundedRect(rect().adjusted(1, 1, -1, -1), 6, 6);
 
-    // Calculate text and badge layout
+    // 2. Setup Fonts
     QFont font = painter.font();
+    font.setFamily("Segoe UI");
     font.setPointSize(10);
     font.setBold(true);
     painter.setFont(font);
@@ -56,31 +94,48 @@ void KbdBadgeButton::paintEvent(QPaintEvent* /*event*/) {
     QFontMetrics bfm(badgeFont);
 
     if (!m_shortcut.isEmpty()) {
-        badgeWidth = bfm.horizontalAdvance(m_shortcut) + 10;
+        badgeWidth = bfm.horizontalAdvance(m_shortcut) + 12;
     }
 
     int totalContentWidth = textWidth + spacing + badgeWidth;
     int startX = (width() - totalContentWidth) / 2;
-    int centerY = height() / 2;
 
-    // Draw Main Text
-    painter.setPen(Qt::white);
+    // 3. Draw Main Text
+    QColor txtColor = isEnabled() ? m_textColor : QColor("#94A3B8");
+    painter.setPen(txtColor);
     painter.drawText(QRect(startX, 0, textWidth, height()), Qt::AlignVCenter | Qt::AlignLeft, text());
 
-    // Draw Shortcut Badge if present
+    // 4. Draw Shortcut Badge if present
     if (!m_shortcut.isEmpty()) {
         int badgeX = startX + textWidth + spacing;
         int badgeH = 18;
         int badgeY = (height() - badgeH) / 2;
         QRect badgeRect(badgeX, badgeY, badgeWidth, badgeH);
 
-        QColor badgeBgColor = m_badgeBg.isValid() ? m_badgeBg : QColor(0, 0, 0, 40);
-        painter.setBrush(badgeBgColor);
-        painter.setPen(QColor(255, 255, 255, 60));
+        QColor bBg;
+        if (m_badgeBg.isValid()) {
+            bBg = m_badgeBg;
+        } else if (m_textColor == QColor("#FFFFFF")) {
+            bBg = QColor(0, 0, 0, 50); // Dark translucent badge for bright buttons
+        } else {
+            bBg = QColor("#E2E8F0"); // Light gray badge for white/light buttons
+        }
+
+        painter.setBrush(bBg);
+        painter.setPen(Qt::NoPen);
         painter.drawRoundedRect(badgeRect, 4, 4);
 
         painter.setFont(badgeFont);
-        painter.setPen(QColor("#FEF08A")); // Soft yellow accent for keyboard shortcut
+        QColor bTxt;
+        if (m_badgeText.isValid()) {
+            bTxt = m_badgeText;
+        } else if (m_textColor == QColor("#FFFFFF")) {
+            bTxt = QColor("#FEF08A"); // Accent yellow for dark/colored buttons
+        } else {
+            bTxt = QColor("#475569"); // Slate gray for light buttons
+        }
+        painter.setPen(bTxt);
         painter.drawText(badgeRect, Qt::AlignCenter, m_shortcut);
     }
 }
+

@@ -1,4 +1,5 @@
 #include "ledger_statement_widget.h"
+#include "engine/accounting_engine.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QFrame>
@@ -23,57 +24,64 @@ LedgerStatementWidget::LedgerStatementWidget(LedgerStatementController* controll
 }
 
 void LedgerStatementWidget::setupUi() {
-    setStyleSheet("background-color: #F4F6F9;");
+    setStyleSheet("background-color: #F8FAFC;");
 
     QVBoxLayout* mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(16, 12, 16, 12);
-    mainLayout->setSpacing(10);
+    mainLayout->setContentsMargins(12, 10, 12, 10);
+    mainLayout->setSpacing(8);
 
-    // ================= 1. TOP HEADER BAR =================
-    QHBoxLayout* headerLayout = new QHBoxLayout();
+    // ================= 1. TOP HEADER BAR CARD =================
+    QFrame* headerCard = new QFrame(this);
+    headerCard->setFixedHeight(54);
+    headerCard->setStyleSheet("background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px;");
+    QHBoxLayout* headerLayout = new QHBoxLayout(headerCard);
+    headerLayout->setContentsMargins(14, 6, 14, 6);
     headerLayout->setSpacing(10);
 
     QVBoxLayout* titleLayout = new QVBoxLayout();
-    titleLayout->setSpacing(2);
-    QLabel* titleLabel = new QLabel("Account Ledger Statement (2-Column Dr / Cr)", this);
-    titleLabel->setStyleSheet("font-size: 18px; font-weight: bold; color: #0F172A; font-family: 'Segoe UI', sans-serif;");
-    QLabel* subtitleLabel = new QLabel("Side-by-side Credit (Cr) and Debit (Dr) accounting ledger with interactive reconciliation.", this);
-    subtitleLabel->setStyleSheet("font-size: 11px; color: #64748B; font-family: 'Segoe UI', sans-serif;");
+    titleLayout->setSpacing(1);
+    QLabel* titleLabel = new QLabel("Account Ledger Statement (2-Column Dr / Cr)", headerCard);
+    titleLabel->setStyleSheet("font-size: 16px; font-weight: bold; color: #0F172A; font-family: 'Segoe UI', sans-serif; border: none; background: transparent;");
+    QLabel* subtitleLabel = new QLabel("Side-by-side Credit (Cr) and Debit (Dr) accounting ledger with interactive reconciliation.", headerCard);
+    subtitleLabel->setStyleSheet("font-size: 11px; color: #64748B; font-family: 'Segoe UI', sans-serif; border: none; background: transparent;");
     titleLayout->addWidget(titleLabel);
     titleLayout->addWidget(subtitleLabel);
     headerLayout->addLayout(titleLayout);
 
     headerLayout->addStretch(1);
 
-    m_alterBtn = new KbdBadgeButton("Alter Voucher", "Ctrl+E", QColor("#D97706"), QColor("#B45309"), this);
+    m_alterBtn = new KbdBadgeButton("Alter Voucher", "Ctrl+E", QColor("#D97706"), QColor("#B45309"), QColor("#FFFFFF"), QColor("#D97706"), headerCard);
     connect(m_alterBtn, &QPushButton::clicked, this, &LedgerStatementWidget::openSelectedVoucher);
     headerLayout->addWidget(m_alterBtn);
 
-    m_printBtn = new KbdBadgeButton("Print Statement", "Ctrl+P", QColor("#2563EB"), QColor("#1D4ED8"), this);
+    m_printBtn = new KbdBadgeButton("Print Statement", "Ctrl+P", QColor("#2563EB"), QColor("#1D4ED8"), QColor("#FFFFFF"), QColor("#2563EB"), headerCard);
     connect(m_printBtn, &QPushButton::clicked, this, &LedgerStatementWidget::printStatement);
     headerLayout->addWidget(m_printBtn);
 
-    m_pdfBtn = new KbdBadgeButton("Export PDF", "Alt+P", QColor("#059669"), QColor("#047857"), this);
+    m_pdfBtn = new KbdBadgeButton("Export PDF", "Alt+P", QColor("#059669"), QColor("#047857"), QColor("#FFFFFF"), QColor("#059669"), headerCard);
     connect(m_pdfBtn, &QPushButton::clicked, this, &LedgerStatementWidget::exportPdf);
     headerLayout->addWidget(m_pdfBtn);
 
-    m_csvBtn = new KbdBadgeButton("Export CSV", "", QColor("#FFFFFF"), QColor("#F1F5F9"), this);
-    m_csvBtn->setStyleSheet("color: #334155; border: 1px solid #CBD5E1;");
+    m_csvBtn = new KbdBadgeButton("Export CSV", "", QColor("#FFFFFF"), QColor("#F1F5F9"), QColor("#334155"), QColor("#CBD5E1"), headerCard);
     connect(m_csvBtn, &QPushButton::clicked, this, &LedgerStatementWidget::exportCsv);
     headerLayout->addWidget(m_csvBtn);
 
-    m_backBtn = new KbdBadgeButton("Back to Dashboard", "Esc", QColor("#EF4444"), QColor("#DC2626"), this);
+    m_backBtn = new KbdBadgeButton("Back to Dashboard", "Esc", QColor("#EF4444"), QColor("#DC2626"), QColor("#FFFFFF"), QColor("#EF4444"), headerCard);
     connect(m_backBtn, &QPushButton::clicked, this, &LedgerStatementWidget::backRequested);
     headerLayout->addWidget(m_backBtn);
 
-    mainLayout->addLayout(headerLayout);
+    mainLayout->addWidget(headerCard);
 
-    // ================= 2. SEARCH & FILTER BAR =================
-    QHBoxLayout* filterLayout = new QHBoxLayout();
-    filterLayout->setSpacing(8);
+    // ================= 2. SEARCH & FILTER BAR CARD =================
+    QFrame* filterCard = new QFrame(this);
+    filterCard->setFixedHeight(50);
+    filterCard->setStyleSheet("background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px;");
+    QHBoxLayout* filterLayout = new QHBoxLayout(filterCard);
+    filterLayout->setContentsMargins(12, 6, 12, 6);
+    filterLayout->setSpacing(10);
 
-    m_searchBox = new AccountSearchBox(this);
-    m_searchBox->setMinimumWidth(420);
+    m_searchBox = new AccountSearchBox(filterCard);
+    m_searchBox->setMinimumWidth(400);
     if (m_controller) {
         m_searchBox->setSearchFunction([this](const QString& q) {
             return m_controller->searchParties(q);
@@ -82,41 +90,43 @@ void LedgerStatementWidget::setupUi() {
     connect(m_searchBox, &AccountSearchBox::partySelected, this, &LedgerStatementWidget::onPartySelected);
     filterLayout->addWidget(m_searchBox);
 
-    m_fyBadge = new QLabel("FY 2026-27", this);
+    m_fyBadge = new QLabel("FY 2026-27", filterCard);
     m_fyBadge->setAlignment(Qt::AlignCenter);
     m_fyBadge->setFixedHeight(34);
-    m_fyBadge->setStyleSheet("background-color: #FFFFFF; color: #1E293B; border: 1px solid #CBD5E1; border-radius: 6px; padding: 4px 12px; font-weight: bold; font-size: 12px;");
+    m_fyBadge->setStyleSheet("background-color: #F8FAFC; color: #334155; border: 1px solid #CBD5E1; border-radius: 6px; padding: 4px 12px; font-weight: bold; font-size: 11px;");
     filterLayout->addWidget(m_fyBadge);
 
-    QLabel* fromLabel = new QLabel("From:", this);
-    fromLabel->setStyleSheet("color: #475569; font-weight: bold; font-size: 12px;");
+    QLabel* fromLabel = new QLabel("From:", filterCard);
+    fromLabel->setStyleSheet("color: #475569; font-weight: bold; font-size: 11px; border: none; background: transparent;");
     filterLayout->addWidget(fromLabel);
 
-    m_fromDateEdit = new AccountingDateEdit(this);
+    m_fromDateEdit = new AccountingDateEdit(filterCard);
     m_fromDateEdit->setIsoDate("2026-04-01");
+    m_fromDateEdit->setFixedWidth(110);
     filterLayout->addWidget(m_fromDateEdit);
 
-    QLabel* toLabel = new QLabel("To:", this);
-    toLabel->setStyleSheet("color: #475569; font-weight: bold; font-size: 12px;");
+    QLabel* toLabel = new QLabel("To:", filterCard);
+    toLabel->setStyleSheet("color: #475569; font-weight: bold; font-size: 11px; border: none; background: transparent;");
     filterLayout->addWidget(toLabel);
 
-    m_toDateEdit = new AccountingDateEdit(this);
+    m_toDateEdit = new AccountingDateEdit(filterCard);
     m_toDateEdit->setIsoDate("2027-03-31");
+    m_toDateEdit->setFixedWidth(110);
     filterLayout->addWidget(m_toDateEdit);
 
-    m_applyFilterBtn = new QPushButton("Filter Dates", this);
+    m_applyFilterBtn = new QPushButton("Filter Dates", filterCard);
     m_applyFilterBtn->setFixedHeight(34);
     m_applyFilterBtn->setCursor(Qt::PointingHandCursor);
-    m_applyFilterBtn->setStyleSheet("background-color: #2563EB; color: #FFFFFF; border-radius: 6px; padding: 4px 14px; font-weight: bold; font-size: 12px;");
+    m_applyFilterBtn->setStyleSheet("background-color: #2563EB; color: #FFFFFF; border-radius: 6px; padding: 4px 16px; font-weight: bold; font-size: 11px; border: none;");
     connect(m_applyFilterBtn, &QPushButton::clicked, this, &LedgerStatementWidget::onDateFilterApplied);
     filterLayout->addWidget(m_applyFilterBtn);
 
     filterLayout->addStretch(1);
-    mainLayout->addLayout(filterLayout);
+    mainLayout->addWidget(filterCard);
 
     // ================= 3. 2-COLUMN TABLES =================
     QHBoxLayout* tablesLayout = new QHBoxLayout();
-    tablesLayout->setSpacing(12);
+    tablesLayout->setSpacing(10);
 
     // --- Left: Credit Side (Cr) ---
     QVBoxLayout* crSideLayout = new QVBoxLayout();
@@ -128,7 +138,7 @@ void LedgerStatementWidget::setupUi() {
     QHBoxLayout* crBannerLayout = new QHBoxLayout(crBanner);
     crBannerLayout->setContentsMargins(10, 0, 10, 0);
     m_crHeaderLabel = new QLabel("CREDIT SIDE (JAMA / Cr)", crBanner);
-    m_crHeaderLabel->setStyleSheet("color: #15803D; font-weight: bold; font-size: 12px; border: none;");
+    m_crHeaderLabel->setStyleSheet("color: #15803D; font-weight: bold; font-size: 11px; border: none; background: transparent;");
     QLabel* crBadge = new QLabel("Takes / Payables", crBanner);
     crBadge->setStyleSheet("color: #166534; background-color: #BBF7D0; border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: bold; border: none;");
     crBannerLayout->addWidget(m_crHeaderLabel);
@@ -144,13 +154,13 @@ void LedgerStatementWidget::setupUi() {
     // Cr Footer
     QFrame* crFooter = new QFrame(this);
     crFooter->setFixedHeight(32);
-    crFooter->setStyleSheet("background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px;");
+    crFooter->setStyleSheet("background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 6px;");
     QHBoxLayout* crFooterLayout = new QHBoxLayout(crFooter);
     crFooterLayout->setContentsMargins(10, 0, 10, 0);
     m_crTotalLabel = new QLabel("Total Cr: ₹0.00 (0 entries)", crFooter);
-    m_crTotalLabel->setStyleSheet("color: #15803D; font-weight: bold; font-size: 11px; border: none;");
+    m_crTotalLabel->setStyleSheet("color: #15803D; font-weight: bold; font-size: 11px; border: none; background: transparent;");
     m_crCheckedLabel = new QLabel("Checked: ₹0.00", crFooter);
-    m_crCheckedLabel->setStyleSheet("color: #475569; font-weight: bold; font-size: 11px; border: none;");
+    m_crCheckedLabel->setStyleSheet("color: #475569; font-weight: bold; font-size: 11px; border: none; background: transparent;");
     crFooterLayout->addWidget(m_crTotalLabel);
     crFooterLayout->addStretch(1);
     crFooterLayout->addWidget(m_crCheckedLabel);
@@ -168,7 +178,7 @@ void LedgerStatementWidget::setupUi() {
     QHBoxLayout* drBannerLayout = new QHBoxLayout(drBanner);
     drBannerLayout->setContentsMargins(10, 0, 10, 0);
     m_drHeaderLabel = new QLabel("DEBIT SIDE (NAAME / Dr)", drBanner);
-    m_drHeaderLabel->setStyleSheet("color: #1D4ED8; font-weight: bold; font-size: 12px; border: none;");
+    m_drHeaderLabel->setStyleSheet("color: #1D4ED8; font-weight: bold; font-size: 11px; border: none; background: transparent;");
     QLabel* drBadge = new QLabel("Gives / Receivables", drBanner);
     drBadge->setStyleSheet("color: #1E40AF; background-color: #BFDBFE; border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: bold; border: none;");
     drBannerLayout->addWidget(m_drHeaderLabel);
@@ -184,13 +194,13 @@ void LedgerStatementWidget::setupUi() {
     // Dr Footer
     QFrame* drFooter = new QFrame(this);
     drFooter->setFixedHeight(32);
-    drFooter->setStyleSheet("background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px;");
+    drFooter->setStyleSheet("background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 6px;");
     QHBoxLayout* drFooterLayout = new QHBoxLayout(drFooter);
     drFooterLayout->setContentsMargins(10, 0, 10, 0);
     m_drTotalLabel = new QLabel("Total Dr: ₹0.00 (0 entries)", drFooter);
-    m_drTotalLabel->setStyleSheet("color: #1D4ED8; font-weight: bold; font-size: 11px; border: none;");
+    m_drTotalLabel->setStyleSheet("color: #1D4ED8; font-weight: bold; font-size: 11px; border: none; background: transparent;");
     m_drCheckedLabel = new QLabel("Checked: ₹0.00", drFooter);
-    m_drCheckedLabel->setStyleSheet("color: #475569; font-weight: bold; font-size: 11px; border: none;");
+    m_drCheckedLabel->setStyleSheet("color: #475569; font-weight: bold; font-size: 11px; border: none; background: transparent;");
     drFooterLayout->addWidget(m_drTotalLabel);
     drFooterLayout->addStretch(1);
     drFooterLayout->addWidget(m_drCheckedLabel);
@@ -202,19 +212,19 @@ void LedgerStatementWidget::setupUi() {
 
     // ================= 4. BOTTOM NET RECONCILIATION SUMMARY =================
     QFrame* summaryBar = new QFrame(this);
-    summaryBar->setFixedHeight(40);
+    summaryBar->setFixedHeight(44);
     summaryBar->setStyleSheet("background-color: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 8px;");
     QHBoxLayout* summaryLayout = new QHBoxLayout(summaryBar);
     summaryLayout->setContentsMargins(16, 0, 16, 0);
 
     m_netDiffLabel = new QLabel("Difference: ₹0.00", summaryBar);
-    m_netDiffLabel->setStyleSheet("color: #334155; font-weight: bold; font-size: 12px; border: none;");
+    m_netDiffLabel->setStyleSheet("color: #334155; font-weight: bold; font-size: 12px; border: none; background: transparent;");
 
     m_netBalanceLabel = new QLabel("Closing Balance: ₹0.00", summaryBar);
-    m_netBalanceLabel->setStyleSheet("color: #0F172A; font-weight: bold; font-size: 13px; border: none;");
+    m_netBalanceLabel->setStyleSheet("color: #0F172A; font-weight: bold; font-size: 13px; border: none; background: transparent;");
 
     m_checkedDiffLabel = new QLabel("Checked Difference: ₹0.00", summaryBar);
-    m_checkedDiffLabel->setStyleSheet("color: #64748B; font-weight: bold; font-size: 11px; border: none;");
+    m_checkedDiffLabel->setStyleSheet("color: #64748B; font-weight: bold; font-size: 11px; border: none; background: transparent;");
 
     summaryLayout->addWidget(m_netDiffLabel);
     summaryLayout->addStretch(1);
@@ -361,14 +371,14 @@ void LedgerStatementWidget::updateHeadersAndTotals() {
     m_drCheckedLabel->setText(QString("Checked: %1").arg(m_controller->drSelectedTotalFmt()));
 
     double diff = std::abs(m_controller->drTotal() - m_controller->crTotal());
-    m_netDiffLabel->setText(QString("Difference: ₹%1").arg(QString::number(diff, 'f', 2)));
+    m_netDiffLabel->setText(QString("Difference: %1").arg(AccountingEngine::formatIndianCurrency(diff, true)));
 
     QString balType = m_controller->netBalanceType();
     QString balFmt = m_controller->netBalanceFmt();
     m_netBalanceLabel->setText(QString("Closing Balance: %1 (%2)").arg(balFmt).arg(balType));
 
     double checkedDiff = std::abs(m_controller->drSelectedTotal() - m_controller->crSelectedTotal());
-    m_checkedDiffLabel->setText(QString("Checked Difference: ₹%1").arg(QString::number(checkedDiff, 'f', 2)));
+    m_checkedDiffLabel->setText(QString("Checked Difference: %1").arg(AccountingEngine::formatIndianCurrency(checkedDiff, true)));
 }
 
 void LedgerStatementWidget::openSelectedVoucher() {

@@ -121,8 +121,7 @@ void LedgerTableDelegate::paint(QPainter* painter, const QStyleOptionViewItem& o
     painter->save();
     painter->setRenderHint(QPainter::Antialiasing);
 
-    bool isSelected = option.state & QStyle::State_Selected;
-    bool hasFocus = option.state & QStyle::State_HasFocus || (option.state & QStyle::State_Active);
+    bool isSelected = (option.state & QStyle::State_Selected);
     int row = index.row();
     int col = index.column();
 
@@ -135,59 +134,65 @@ void LedgerTableDelegate::paint(QPainter* painter, const QStyleOptionViewItem& o
     }
     painter->fillRect(option.rect, bg);
 
-    // Border for active selection
-    if (isSelected) {
-        painter->setPen(QPen((m_side == "Cr") ? QColor("#16A34A") : QColor("#2563EB"), 1));
-        if (col == 0) {
-            painter->drawLine(option.rect.topLeft(), option.rect.bottomLeft());
-        }
-        if (col == 4) {
-            painter->drawLine(option.rect.topRight(), option.rect.bottomRight());
-        }
-        painter->drawLine(option.rect.topLeft(), option.rect.topRight());
-        painter->drawLine(option.rect.bottomLeft(), option.rect.bottomRight());
-    } else {
-        painter->setPen(QColor("#E2E8F0"));
-        painter->drawLine(option.rect.bottomLeft(), option.rect.bottomRight());
+    // Row bottom separator line
+    painter->setPen(QColor("#E2E8F0"));
+    painter->drawLine(option.rect.bottomLeft(), option.rect.bottomRight());
+
+    // Left accent bar on selected row (Column 0)
+    if (isSelected && col == 0) {
+        painter->setBrush((m_side == "Cr") ? QColor("#16A34A") : QColor("#2563EB"));
+        painter->setPen(Qt::NoPen);
+        painter->drawRect(option.rect.x(), option.rect.y(), 3, option.rect.height());
     }
 
     // Column-specific rendering
     if (col == 0) {
         // Checkbox
         bool checked = (index.data(Qt::CheckStateRole) == Qt::Checked);
-        int boxSize = 18;
+        int boxSize = 16;
         int bx = option.rect.x() + (option.rect.width() - boxSize) / 2;
         int by = option.rect.y() + (option.rect.height() - boxSize) / 2;
         QRect boxRect(bx, by, boxSize, boxSize);
 
-        painter->setBrush(checked ? ((m_side == "Cr") ? QColor("#16A34A") : QColor("#2563EB")) : Qt::white);
-        painter->setPen(QPen(checked ? ((m_side == "Cr") ? QColor("#16A34A") : QColor("#2563EB")) : QColor("#CBD5E1"), 1.5));
+        QColor accentColor = (m_side == "Cr") ? QColor("#16A34A") : QColor("#2563EB");
+        painter->setBrush(checked ? accentColor : Qt::white);
+        painter->setPen(QPen(checked ? accentColor : QColor("#94A3B8"), 1.5));
         painter->drawRoundedRect(boxRect, 3, 3);
 
         if (checked) {
-            painter->setPen(QPen(Qt::white, 2));
-            painter->drawLine(bx + 4, by + 9, bx + 7, by + 13);
-            painter->drawLine(bx + 7, by + 13, bx + 14, by + 5);
+            painter->setPen(QPen(Qt::white, 2, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+            painter->drawLine(bx + 3, by + 8, bx + 6, by + 12);
+            painter->drawLine(bx + 6, by + 12, bx + 13, by + 4);
         }
     } else {
         QString text = index.data(Qt::DisplayRole).toString();
         QFont font = painter->font();
         font.setFamily("Segoe UI");
-        font.setPointSize(10);
 
-        if (col == 2) { // Ref No
+        if (col == 1) { // Date
+            font.setPointSize(10);
+            font.setBold(false);
+            painter->setPen(QColor("#475569"));
+        } else if (col == 2) { // Ref No
+            font.setPointSize(10);
             font.setBold(true);
             painter->setPen((m_side == "Cr") ? QColor("#16A34A") : QColor("#2563EB"));
+        } else if (col == 3) { // Particulars
+            font.setPointSize(10);
+            font.setBold(false);
+            painter->setPen(QColor("#0F172A"));
         } else if (col == 4) { // Amount
+            font.setPointSize(10);
             font.setBold(true);
             painter->setPen((m_side == "Cr") ? QColor("#15803D") : QColor("#1D4ED8"));
         } else {
+            font.setPointSize(10);
             font.setBold(false);
             painter->setPen(QColor("#0F172A"));
         }
 
         painter->setFont(font);
-        QRect textRect = option.rect.adjusted(6, 0, -6, 0);
+        QRect textRect = option.rect.adjusted(8, 0, -8, 0);
         int align = index.data(Qt::TextAlignmentRole).toInt();
         if (align == 0) align = Qt::AlignLeft | Qt::AlignVCenter;
         painter->drawText(textRect, align, text);
@@ -197,7 +202,7 @@ void LedgerTableDelegate::paint(QPainter* painter, const QStyleOptionViewItem& o
 }
 
 QSize LedgerTableDelegate::sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const {
-    return QSize(QStyledItemDelegate::sizeHint(option, index).width(), 36);
+    return QSize(QStyledItemDelegate::sizeHint(option, index).width(), 32);
 }
 
 bool LedgerTableDelegate::editorEvent(QEvent* event, QAbstractItemModel* model, const QStyleOptionViewItem& /*option*/, const QModelIndex& index) {
@@ -226,25 +231,42 @@ LedgerTableView::LedgerTableView(const QString& side, LedgerStatementSideModel* 
     setSelectionBehavior(QAbstractItemView::SelectRows);
     setSelectionMode(QAbstractItemView::SingleSelection);
     setShowGrid(false);
-    setAlternatingRowColors(true);
+    setAlternatingRowColors(false); // Handled explicitly in delegate
     verticalHeader()->setVisible(false);
-    verticalHeader()->setDefaultSectionSize(36);
+    verticalHeader()->setDefaultSectionSize(32);
     setFocusPolicy(Qt::StrongFocus);
     setStyleSheet(
         "QTableView {"
         "  background-color: #FFFFFF;"
-        "  border: 1px solid #E2E8F0;"
+        "  border: 1px solid #CBD5E1;"
         "  border-radius: 6px;"
         "  outline: none;"
         "}"
         "QHeaderView::section {"
         "  background-color: #F8FAFC;"
-        "  color: #475569;"
+        "  color: #334155;"
         "  font-weight: bold;"
         "  font-size: 11px;"
         "  padding: 6px 8px;"
         "  border: none;"
         "  border-bottom: 2px solid #CBD5E1;"
+        "}"
+        "QScrollBar:vertical {"
+        "  border: none;"
+        "  background: #F1F5F9;"
+        "  width: 8px;"
+        "  border-radius: 4px;"
+        "}"
+        "QScrollBar::handle:vertical {"
+        "  background: #CBD5E1;"
+        "  min-height: 24px;"
+        "  border-radius: 4px;"
+        "}"
+        "QScrollBar::handle:vertical:hover {"
+        "  background: #94A3B8;"
+        "}"
+        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
+        "  height: 0px;"
         "}"
     );
 
@@ -257,7 +279,7 @@ LedgerTableView::LedgerTableView(const QString& side, LedgerStatementSideModel* 
     setColumnWidth(2, 85); // Ref No
     horizontalHeader()->setSectionResizeMode(3, QHeaderView::Stretch); // Particulars
     horizontalHeader()->setSectionResizeMode(4, QHeaderView::Fixed);
-    setColumnWidth(4, 110); // Amount
+    setColumnWidth(4, 120); // Amount
 }
 
 void LedgerTableView::setSourceModel(LedgerStatementSideModel* sourceModel) {
