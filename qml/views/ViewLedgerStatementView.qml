@@ -6,6 +6,7 @@ import MahadevERP
 Rectangle {
     id: root
     color: "#F4F6F9"
+    focus: true
 
     signal cancelRequested()
 
@@ -17,6 +18,46 @@ Rectangle {
         partySearchBox.updateSearch()
         if (!partySearchPopup.visible) {
             partySearchPopup.open()
+        }
+    }
+
+    function applyFocusToEntries() {
+        if (partySearchPopup.visible) {
+            partySearchPopup.close()
+        }
+        var side = (typeof window !== "undefined" && window.lastViewedStatementSide) ? window.lastViewedStatementSide : "Dr"
+        var targetIdx = (typeof window !== "undefined" && typeof window.lastViewedStatementIndex === "number") ? window.lastViewedStatementIndex : 0
+        var crCount = (typeof ledgerStatementCtrl !== "undefined" && ledgerStatementCtrl && ledgerStatementCtrl.crModel) ? ledgerStatementCtrl.crModel.count : crListView.count
+        var drCount = (typeof ledgerStatementCtrl !== "undefined" && ledgerStatementCtrl && ledgerStatementCtrl.drModel) ? ledgerStatementCtrl.drModel.count : drListView.count
+
+        if (side === "Cr") {
+            if (crCount > 0) {
+                crListView.forceActiveFocus()
+                crListView.currentIndex = Math.min(Math.max(0, targetIdx), crCount - 1)
+                crListView.positionViewAtIndex(crListView.currentIndex, ListView.Contain)
+            } else if (drCount > 0) {
+                drListView.forceActiveFocus()
+                drListView.currentIndex = 0
+                drListView.positionViewAtIndex(0, ListView.Contain)
+            }
+        } else {
+            if (drCount > 0) {
+                drListView.forceActiveFocus()
+                drListView.currentIndex = Math.min(Math.max(0, targetIdx), drCount - 1)
+                drListView.positionViewAtIndex(drListView.currentIndex, ListView.Contain)
+            } else if (crCount > 0) {
+                crListView.forceActiveFocus()
+                crListView.currentIndex = 0
+                crListView.positionViewAtIndex(0, ListView.Contain)
+            }
+        }
+    }
+
+    function restoreFocus() {
+        if ((currentPartyName && currentPartyName.trim() !== "") || (partySearchInput.text.trim() !== "")) {
+            applyFocusToEntries()
+        } else {
+            focusSearch()
         }
     }
 
@@ -70,36 +111,8 @@ Rectangle {
             }
 
             loadPartyStatement(initParty)
-
-            Qt.callLater(function() {
-                if (partySearchPopup.visible) {
-                    partySearchPopup.close()
-                }
-                var side = (typeof window !== "undefined" && window.lastViewedStatementSide) ? window.lastViewedStatementSide : "Dr"
-                var targetIdx = (typeof window !== "undefined" && typeof window.lastViewedStatementIndex === "number") ? window.lastViewedStatementIndex : 0
-
-                if (side === "Cr") {
-                    if (crListView.count > 0) {
-                        crListView.forceActiveFocus()
-                        crListView.currentIndex = Math.min(Math.max(0, targetIdx), crListView.count - 1)
-                        crListView.positionViewAtIndex(crListView.currentIndex, ListView.Contain)
-                    } else if (drListView.count > 0) {
-                        drListView.forceActiveFocus()
-                        drListView.currentIndex = 0
-                        drListView.positionViewAtIndex(0, ListView.Contain)
-                    }
-                } else {
-                    if (drListView.count > 0) {
-                        drListView.forceActiveFocus()
-                        drListView.currentIndex = Math.min(Math.max(0, targetIdx), drListView.count - 1)
-                        drListView.positionViewAtIndex(drListView.currentIndex, ListView.Contain)
-                    } else if (crListView.count > 0) {
-                        crListView.forceActiveFocus()
-                        crListView.currentIndex = 0
-                        crListView.positionViewAtIndex(0, ListView.Contain)
-                    }
-                }
-            })
+            applyFocusToEntries()
+            Qt.callLater(applyFocusToEntries)
         } else {
             syncDateInputsWithActivePeriod()
             resetSearchAndFocus()
@@ -468,10 +481,7 @@ Rectangle {
                         searchResults = []
                         partySearchPopup.close()
                         root.loadPartyStatement(pName)
-                        crListView.forceActiveFocus()
-                        if (typeof ledgerStatementCtrl !== "undefined" && ledgerStatementCtrl && ledgerStatementCtrl.crModel.count > 0) {
-                            crListView.currentIndex = 0
-                        }
+                        root.applyFocusToEntries()
                     }
 
                     RowLayout {
@@ -498,21 +508,27 @@ Rectangle {
                                 selectByMouse: true
                                 clip: true
                                 focus: false
+                                activeFocusOnTab: false
 
                                 onActiveFocusChanged: {
                                     if (activeFocus) {
-                                        partySearchBox.updateSearch()
-                                        partySearchPopup.open()
-                                        partySearchInput.selectAll()
+                                        if (partySearchInput.text.trim() === "") {
+                                            partySearchBox.updateSearch()
+                                            if (!partySearchPopup.visible) {
+                                                partySearchPopup.open()
+                                            }
+                                        }
+                                    } else {
+                                        if (partySearchPopup.visible) {
+                                            partySearchPopup.close()
+                                        }
                                     }
                                 }
 
-                                onTextChanged: {
-                                    if (activeFocus) {
-                                        partySearchBox.updateSearch()
-                                        if (!partySearchPopup.visible) {
-                                            partySearchPopup.open()
-                                        }
+                                onTextEdited: {
+                                    partySearchBox.updateSearch()
+                                    if (!partySearchPopup.visible && partySearchBox.searchResults.length > 0) {
+                                        partySearchPopup.open()
                                     }
                                 }
 
@@ -1192,19 +1208,13 @@ Rectangle {
     Shortcut {
         sequence: "Alt+S"
         context: Qt.WindowShortcut
-        onActivated: {
-            partySearchInput.forceActiveFocus()
-            partySearchInput.selectAll()
-        }
+        onActivated: root.focusSearch()
     }
 
     Shortcut {
         sequence: "Alt+L"
         context: Qt.WindowShortcut
-        onActivated: {
-            partySearchInput.forceActiveFocus()
-            partySearchInput.selectAll()
-        }
+        onActivated: root.focusSearch()
     }
 
     Shortcut {

@@ -509,7 +509,11 @@ T.ApplicationWindow {
                             window.lastActiveMenuType = 0
                             window.lastReportsSubmenuIndex = 0
                         } else {
-                            item.forceActiveFocus()
+                            if (item && typeof item.restoreFocus === "function") {
+                                item.restoreFocus()
+                            } else if (item) {
+                                item.forceActiveFocus()
+                            }
                         }
                     }
                 }
@@ -588,7 +592,10 @@ T.ApplicationWindow {
         anchors.centerIn: parent
         onClosed: {
             if (window.lastActiveMenuType === 0) ledgerMenu.selectedIndex = 0
-            if (window.lastActiveMenuType === 0 && mainLoader.item) mainLoader.item.forceActiveFocus()
+            if (window.lastActiveMenuType === 0 && mainLoader.item) {
+                if (typeof mainLoader.item.restoreFocus === "function") mainLoader.item.restoreFocus()
+                else mainLoader.item.forceActiveFocus()
+            }
         }
         onActionSelected: function(act, selIdx) {
             window.lastActiveMenuType = 1
@@ -615,7 +622,10 @@ T.ApplicationWindow {
         anchors.centerIn: parent
         onClosed: {
             if (window.lastActiveMenuType === 0) stockMenu.selectedIndex = 0
-            if (window.lastActiveMenuType === 0 && mainLoader.item) mainLoader.item.forceActiveFocus()
+            if (window.lastActiveMenuType === 0 && mainLoader.item) {
+                if (typeof mainLoader.item.restoreFocus === "function") mainLoader.item.restoreFocus()
+                else mainLoader.item.forceActiveFocus()
+            }
         }
         onActionSelected: function(act, selIdx) {
             window.lastActiveMenuType = 2
@@ -638,7 +648,10 @@ T.ApplicationWindow {
         anchors.centerIn: parent
         onClosed: {
             if (window.lastActiveMenuType === 0) addVoucherMenu.selectedIndex = 0
-            if (window.lastActiveMenuType === 0 && mainLoader.item) mainLoader.item.forceActiveFocus()
+            if (window.lastActiveMenuType === 0 && mainLoader.item) {
+                if (typeof mainLoader.item.restoreFocus === "function") mainLoader.item.restoreFocus()
+                else mainLoader.item.forceActiveFocus()
+            }
         }
         onOptionSelected: function(opt, selIdx) {
             window.lastActiveMenuType = 3
@@ -669,7 +682,10 @@ T.ApplicationWindow {
         anchors.centerIn: parent
         onClosed: {
             if (window.lastActiveMenuType === 0) otherVoucherMenu.selectedIndex = 0
-            if (window.lastActiveMenuType === 0 && mainLoader.item) mainLoader.item.forceActiveFocus()
+            if (window.lastActiveMenuType === 0 && mainLoader.item) {
+                if (typeof mainLoader.item.restoreFocus === "function") mainLoader.item.restoreFocus()
+                else mainLoader.item.forceActiveFocus()
+            }
         }
         onOptionSelected: function(opt, selIdx) {
             window.lastActiveMenuType = 4
@@ -694,7 +710,10 @@ T.ApplicationWindow {
         anchors.centerIn: parent
         onClosed: {
             if (window.lastActiveMenuType === 0) reportsMenu.selectedIndex = 0
-            if (window.lastActiveMenuType === 0 && mainLoader.item) mainLoader.item.forceActiveFocus()
+            if (window.lastActiveMenuType === 0 && mainLoader.item) {
+                if (typeof mainLoader.item.restoreFocus === "function") mainLoader.item.restoreFocus()
+                else mainLoader.item.forceActiveFocus()
+            }
         }
         onActionSelected: function(act, selIdx) {
             window.lastActiveMenuType = 5
