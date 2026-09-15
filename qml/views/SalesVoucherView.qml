@@ -81,7 +81,17 @@ Item {
     }
 
     function openDateModal() {
-        voucherDateModal.openWithDate(invoiceDateInput.text)
+        var dt = ""
+        if (typeof invoiceDateInput !== "undefined" && invoiceDateInput && invoiceDateInput.text) {
+            dt = invoiceDateInput.text.trim()
+        }
+        if (!dt && typeof salesVoucherCtrl !== "undefined" && salesVoucherCtrl && salesVoucherCtrl.invoiceDate) {
+            dt = salesVoucherCtrl.invoiceDate.trim()
+        }
+        if (!dt && typeof financialYearsModel !== "undefined" && financialYearsModel) {
+            dt = financialYearsModel.get_working_date()
+        }
+        voucherDateModal.openWithDate(dt)
     }
 
     function openPrintModal() {

@@ -6,7 +6,11 @@ import MahadevERP
 T.Popup {
     id: root
     width: 340
-    implicitHeight: mainCol.implicitHeight + 36
+    height: 220
+    implicitWidth: 340
+    implicitHeight: 220
+    x: Math.round(((parent ? parent.width : (T.Overlay.overlay ? T.Overlay.overlay.width : 1024)) - width) / 2)
+    y: Math.round(((parent ? parent.height : (T.Overlay.overlay ? T.Overlay.overlay.height : 768)) - height) / 2)
     modal: true
     dim: true
     focus: true

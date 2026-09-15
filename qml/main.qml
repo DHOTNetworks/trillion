@@ -348,6 +348,12 @@ T.ApplicationWindow {
                                     item.loadInvoiceForEditing(salesIdOrNo, sDate)
                                 }
                             })
+                        } else {
+                            Qt.callLater(function() {
+                                if (item && typeof item.openDateModal === "function") {
+                                    item.openDateModal()
+                                }
+                            })
                         }
                     }
 
@@ -363,6 +369,12 @@ T.ApplicationWindow {
                             Qt.callLater(function() {
                                 if (item && typeof item.loadInvoiceForEditing === "function") {
                                     item.loadInvoiceForEditing(purcIdOrNo, pDate)
+                                }
+                            })
+                        } else {
+                            Qt.callLater(function() {
+                                if (item && typeof item.openDateModal === "function") {
+                                    item.openDateModal()
                                 }
                             })
                         }
