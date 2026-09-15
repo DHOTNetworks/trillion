@@ -4,6 +4,7 @@ import QtQuick.Layouts
 
 ColumnLayout {
     id: root
+    Layout.minimumWidth: 0
     property string label: ""
     property string placeholderText: ""
     property alias text: textInput.text

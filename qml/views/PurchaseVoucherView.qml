@@ -90,6 +90,10 @@ Item {
             Qt.callLater(function() {
                 root.loadInvoiceForEditing(purcIdOrNo, pDate)
             })
+        } else {
+            Qt.callLater(function() {
+                root.openDateModal()
+            })
         }
     }
 
@@ -948,17 +952,17 @@ Item {
                             anchors.leftMargin: 8; anchors.rightMargin: 8
                             spacing: 6
 
-                            Item { Layout.preferredWidth: 35; Text { anchors.verticalCenter: parent.verticalCenter; text: "No."; color: "#0F172A"; font.pixelSize: 11; font.bold: true } }
-                            Item { Layout.fillWidth: true; Layout.minimumWidth: 200; Layout.preferredWidth: 240; Text { anchors.verticalCenter: parent.verticalCenter; text: "Item Name *"; color: "#0F172A"; font.pixelSize: 11; font.bold: true } }
+                            Item { Layout.preferredWidth: 35; Layout.minimumWidth: 35; Layout.maximumWidth: 35; Text { anchors.verticalCenter: parent.verticalCenter; text: "No."; color: "#0F172A"; font.pixelSize: 11; font.bold: true } }
+                            Item { Layout.fillWidth: true; Layout.minimumWidth: 160; Text { anchors.verticalCenter: parent.verticalCenter; text: "Item Name *"; color: "#0F172A"; font.pixelSize: 11; font.bold: true } }
                             
-                            Item { visible: !root.isWithoutStock; Layout.preferredWidth: 70; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: "Bags"; color: "#0F172A"; font.pixelSize: 11; font.bold: true } }
-                            Item { visible: !root.isWithoutStock; Layout.preferredWidth: 70; Text { anchors.centerIn: parent; text: "Pkng."; color: "#0F172A"; font.pixelSize: 11; font.bold: true } }
-                            Item { visible: !root.isWithoutStock; Layout.preferredWidth: 95; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: "Weight (Qtl)"; color: "#0F172A"; font.pixelSize: 11; font.bold: true } }
+                            Item { visible: !root.isWithoutStock; Layout.preferredWidth: 70; Layout.minimumWidth: 70; Layout.maximumWidth: 70; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: "Bags"; color: "#0F172A"; font.pixelSize: 11; font.bold: true } }
+                            Item { visible: !root.isWithoutStock; Layout.preferredWidth: 65; Layout.minimumWidth: 65; Layout.maximumWidth: 65; Text { anchors.centerIn: parent; text: "Pkng."; color: "#0F172A"; font.pixelSize: 11; font.bold: true } }
+                            Item { visible: !root.isWithoutStock; Layout.preferredWidth: 95; Layout.minimumWidth: 95; Layout.maximumWidth: 95; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: "Weight (Qtl)"; color: "#0F172A"; font.pixelSize: 11; font.bold: true } }
                             
-                            Item { Layout.preferredWidth: 60; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: "GST %"; color: "#0F172A"; font.pixelSize: 11; font.bold: true } }
-                            Item { Layout.preferredWidth: 100; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: "Rate (₹)"; color: "#0F172A"; font.pixelSize: 11; font.bold: true } }
-                            Item { Layout.preferredWidth: 120; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: "Amount (₹)"; color: "#0F172A"; font.pixelSize: 11; font.bold: true } }
-                            Item { Layout.preferredWidth: 38; Text { anchors.centerIn: parent; text: "Act"; color: "#0F172A"; font.pixelSize: 11; font.bold: true } }
+                            Item { Layout.preferredWidth: 60; Layout.minimumWidth: 60; Layout.maximumWidth: 60; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: "GST %"; color: "#0F172A"; font.pixelSize: 11; font.bold: true } }
+                            Item { Layout.preferredWidth: 95; Layout.minimumWidth: 95; Layout.maximumWidth: 95; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: "Rate (₹)"; color: "#0F172A"; font.pixelSize: 11; font.bold: true } }
+                            Item { Layout.preferredWidth: 120; Layout.minimumWidth: 120; Layout.maximumWidth: 120; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: "Amount (₹)"; color: "#0F172A"; font.pixelSize: 11; font.bold: true } }
+                            Item { Layout.preferredWidth: 38; Layout.minimumWidth: 38; Layout.maximumWidth: 38; Text { anchors.centerIn: parent; text: "Act"; color: "#0F172A"; font.pixelSize: 11; font.bold: true } }
                         }
                     }
 
@@ -982,19 +986,21 @@ Item {
                                 anchors.leftMargin: 8; anchors.rightMargin: 8
                                 spacing: 6
 
-                                Item { Layout.preferredWidth: 35; Text { anchors.verticalCenter: parent.verticalCenter; text: (index + 1) + "."; color: "#0F172A"; font.pixelSize: 12; font.bold: true } }
-                                Item { Layout.fillWidth: true; Layout.minimumWidth: 200; Layout.preferredWidth: 240; Text { anchors.verticalCenter: parent.verticalCenter; text: (model.itemName || model.item_name || ""); color: "#0F172A"; font.pixelSize: 12; font.bold: true; elide: Text.ElideRight } }
+                                Item { Layout.preferredWidth: 35; Layout.minimumWidth: 35; Layout.maximumWidth: 35; Text { anchors.verticalCenter: parent.verticalCenter; text: (index + 1) + "."; color: "#0F172A"; font.pixelSize: 12; font.bold: true } }
+                                Item { Layout.fillWidth: true; Layout.minimumWidth: 160; Text { anchors.verticalCenter: parent.verticalCenter; text: (model.itemName || model.item_name || ""); color: "#0F172A"; font.pixelSize: 12; font.bold: true; elide: Text.ElideRight } }
                                 
-                                Item { visible: !root.isWithoutStock; Layout.preferredWidth: 70; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: ((model.bags || model.bag_count || 0) > 0 ? (model.bags || model.bag_count).toString() : ""); color: "#0F172A"; font.pixelSize: 12 } }
-                                Item { visible: !root.isWithoutStock; Layout.preferredWidth: 70; Text { anchors.centerIn: parent; text: (model.packing || model.pkng || "0.500"); color: "#475569"; font.pixelSize: 12 } }
-                                Item { visible: !root.isWithoutStock; Layout.preferredWidth: 95; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: ((model.weight || model.weight_qtl || 0) > 0 ? Number(model.weight || model.weight_qtl).toFixed(3) : ""); color: "#0F172A"; font.pixelSize: 12; font.bold: true } }
+                                Item { visible: !root.isWithoutStock; Layout.preferredWidth: 70; Layout.minimumWidth: 70; Layout.maximumWidth: 70; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: ((model.bags || model.bag_count || 0) > 0 ? (model.bags || model.bag_count).toString() : ""); color: "#0F172A"; font.pixelSize: 12 } }
+                                Item { visible: !root.isWithoutStock; Layout.preferredWidth: 65; Layout.minimumWidth: 65; Layout.maximumWidth: 65; Text { anchors.centerIn: parent; text: (model.packing || model.pkng || "0.500"); color: "#475569"; font.pixelSize: 12 } }
+                                Item { visible: !root.isWithoutStock; Layout.preferredWidth: 95; Layout.minimumWidth: 95; Layout.maximumWidth: 95; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: ((model.weight || model.weight_qtl || 0) > 0 ? Number(model.weight || model.weight_qtl).toFixed(3) : ""); color: "#0F172A"; font.pixelSize: 12; font.bold: true } }
                                 
-                                Item { Layout.preferredWidth: 60; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: ((model.gstPct !== undefined ? model.gstPct : (model.gst_pct || 0)) + "%"); color: "#475569"; font.pixelSize: 12 } }
-                                Item { Layout.preferredWidth: 100; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: ((model.rate || model.rate_per_qtl || 0) > 0 ? Number(model.rate || model.rate_per_qtl).toFixed(2) : ""); color: "#0F172A"; font.pixelSize: 12; font.bold: true } }
-                                Item { Layout.preferredWidth: 120; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: "₹" + Number(model.amount || model.total_amount || 0).toFixed(2); color: "#16A34A"; font.pixelSize: 12; font.bold: true } }
+                                Item { Layout.preferredWidth: 60; Layout.minimumWidth: 60; Layout.maximumWidth: 60; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: ((model.gstPct !== undefined ? model.gstPct : (model.gst_pct || 0)) + "%"); color: "#475569"; font.pixelSize: 12 } }
+                                Item { Layout.preferredWidth: 95; Layout.minimumWidth: 95; Layout.maximumWidth: 95; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: ((model.rate || model.rate_per_qtl || 0) > 0 ? Number(model.rate || model.rate_per_qtl).toFixed(2) : ""); color: "#0F172A"; font.pixelSize: 12; font.bold: true } }
+                                Item { Layout.preferredWidth: 120; Layout.minimumWidth: 120; Layout.maximumWidth: 120; Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: "₹" + Number(model.amount || model.total_amount || 0).toFixed(2); color: "#16A34A"; font.pixelSize: 12; font.bold: true } }
                                 
                                 Item {
                                     Layout.preferredWidth: 38
+                                    Layout.minimumWidth: 38
+                                    Layout.maximumWidth: 38
                                     T.Button {
                                         anchors.centerIn: parent
                                         implicitWidth: 28
@@ -1022,14 +1028,13 @@ Item {
                             anchors.leftMargin: 8; anchors.rightMargin: 8
                             spacing: 6
 
-                            Item { Layout.preferredWidth: 35; Text { anchors.verticalCenter: parent.verticalCenter; text: (itemsListView.count + 1) + "."; color: "#16A34A"; font.pixelSize: 12; font.bold: true } }
+                            Item { Layout.preferredWidth: 35; Layout.minimumWidth: 35; Layout.maximumWidth: 35; Text { anchors.verticalCenter: parent.verticalCenter; text: (itemsListView.count + 1) + "."; color: "#16A34A"; font.pixelSize: 12; font.bold: true } }
 
                             CustomWhiteCombo {
                                 id: itemCombo
                                 model: (typeof stockItemsModel !== "undefined" && stockItemsModel) ? stockItemsModel.get_items_list(root.isMandiType ? "Mandi" : "Market") : []
                                 Layout.fillWidth: true
-                                Layout.minimumWidth: 200
-                                Layout.preferredWidth: 240
+                                Layout.minimumWidth: 160
                                 placeholderText: "Select Item..."
                                 onCurrentTextChanged: root.onItemSelected(currentText)
                                 onReturnPressed: {
@@ -1059,6 +1064,8 @@ Item {
                                 placeholderText: "Bags"
                                 horizontalAlignment: TextInput.AlignRight
                                 Layout.preferredWidth: 70
+                                Layout.minimumWidth: 70
+                                Layout.maximumWidth: 70
                                 onTextChanged: root.recalculateRowAmount(true)
                                 onReturnPressed: pkngInput.focusInput = true
                                 onRightPressed: pkngInput.focusInput = true
@@ -1071,7 +1078,9 @@ Item {
                                 text: ""
                                 placeholderText: "0.500"
                                 horizontalAlignment: TextInput.AlignHCenter
-                                Layout.preferredWidth: 70
+                                Layout.preferredWidth: 65
+                                Layout.minimumWidth: 65
+                                Layout.maximumWidth: 65
                                 onTextChanged: root.recalculateRowAmount(true)
                                 onReturnPressed: weightInput.focusInput = true
                                 onRightPressed: weightInput.focusInput = true
@@ -1084,6 +1093,8 @@ Item {
                                 placeholderText: "0.000"
                                 horizontalAlignment: TextInput.AlignRight
                                 Layout.preferredWidth: 95
+                                Layout.minimumWidth: 95
+                                Layout.maximumWidth: 95
                                 onTextChanged: root.recalculateRowAmount(false)
                                 onReturnPressed: gstInput.focusInput = true
                                 onRightPressed: gstInput.focusInput = true
@@ -1096,6 +1107,8 @@ Item {
                                 placeholderText: "0%"
                                 horizontalAlignment: TextInput.AlignRight
                                 Layout.preferredWidth: 60
+                                Layout.minimumWidth: 60
+                                Layout.maximumWidth: 60
                                 onReturnPressed: rateInput.focusInput = true
                                 onRightPressed: rateInput.focusInput = true
                                 onLeftPressed: root.isWithoutStock ? itemCombo.focusAndOpen() : weightInput.focusInput = true
@@ -1105,7 +1118,9 @@ Item {
                                 id: rateInput
                                 placeholderText: "0.00"
                                 horizontalAlignment: TextInput.AlignRight
-                                Layout.preferredWidth: 100
+                                Layout.preferredWidth: 95
+                                Layout.minimumWidth: 95
+                                Layout.maximumWidth: 95
                                 onTextChanged: root.recalculateRowAmount(false)
                                 onReturnPressed: amountInput.focusInput = true
                                 onRightPressed: amountInput.focusInput = true
@@ -1118,6 +1133,8 @@ Item {
                                 placeholderText: "0.00"
                                 horizontalAlignment: TextInput.AlignRight
                                 Layout.preferredWidth: 120
+                                Layout.minimumWidth: 120
+                                Layout.maximumWidth: 120
                                 onReturnPressed: root.addCurrentItemRow()
                                 onRightPressed: root.addCurrentItemRow()
                                 onLeftPressed: rateInput.focusInput = true
@@ -1125,6 +1142,8 @@ Item {
 
                             Item {
                                 Layout.preferredWidth: 38
+                                Layout.minimumWidth: 38
+                                Layout.maximumWidth: 38
                                 T.Button {
                                     anchors.centerIn: parent
                                     implicitWidth: 28

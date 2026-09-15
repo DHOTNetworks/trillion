@@ -4,6 +4,7 @@ import QtQuick.Layouts
 
 ColumnLayout {
     id: root
+    Layout.minimumWidth: 0
     implicitWidth: 200
     property alias comboHeight: combo.implicitHeight
     readonly property int count: rawItems.length
