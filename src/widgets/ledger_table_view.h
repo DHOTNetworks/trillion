@@ -21,9 +21,6 @@ public:
     void toggleSelection(int row);
     QVariantMap getEntry(int row) const;
 
-private slots:
-    void onSourceDataChanged();
-
 private:
     LedgerStatementSideModel* m_sourceModel = nullptr;
     QString m_side; // "Dr" or "Cr"

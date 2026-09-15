@@ -13,10 +13,21 @@ LedgerTableModelAdapter::LedgerTableModelAdapter(LedgerStatementSideModel* sourc
     , m_side(side)
 {
     if (m_sourceModel) {
-        connect(m_sourceModel, &QAbstractListModel::rowsInserted, this, &LedgerTableModelAdapter::onSourceDataChanged);
-        connect(m_sourceModel, &QAbstractListModel::rowsRemoved, this, &LedgerTableModelAdapter::onSourceDataChanged);
-        connect(m_sourceModel, &QAbstractListModel::modelReset, this, &LedgerTableModelAdapter::onSourceDataChanged);
-        connect(m_sourceModel, &QAbstractListModel::dataChanged, this, &LedgerTableModelAdapter::onSourceDataChanged);
+        connect(m_sourceModel, &QAbstractListModel::modelReset, this, [this]() {
+            beginResetModel();
+            endResetModel();
+        });
+        connect(m_sourceModel, &QAbstractListModel::dataChanged, this, [this](const QModelIndex& topLeft, const QModelIndex& bottomRight, const QList<int>& roles) {
+            emit dataChanged(index(topLeft.row(), 0), index(bottomRight.row(), 4), roles);
+        });
+        connect(m_sourceModel, &QAbstractListModel::rowsInserted, this, [this](const QModelIndex& parent, int first, int last) {
+            beginInsertRows(QModelIndex(), first, last);
+            endInsertRows();
+        });
+        connect(m_sourceModel, &QAbstractListModel::rowsRemoved, this, [this](const QModelIndex& parent, int first, int last) {
+            beginRemoveRows(QModelIndex(), first, last);
+            endRemoveRows();
+        });
     }
 }
 
@@ -93,7 +104,7 @@ Qt::ItemFlags LedgerTableModelAdapter::flags(const QModelIndex& index) const {
 void LedgerTableModelAdapter::toggleSelection(int row) {
     if (m_sourceModel && row >= 0 && row < m_sourceModel->rowCount()) {
         m_sourceModel->toggleSelection(row);
-        emit dataChanged(index(row, 0), index(row, 4));
+        // Note: m_sourceModel emits dataChanged, which our connection forwards to the view!
     }
 }
 
@@ -102,11 +113,6 @@ QVariantMap LedgerTableModelAdapter::getEntry(int row) const {
         return m_sourceModel->get(row);
     }
     return QVariantMap();
-}
-
-void LedgerTableModelAdapter::onSourceDataChanged() {
-    beginResetModel();
-    endResetModel();
 }
 
 // ==================== LedgerTableDelegate ====================
@@ -142,7 +148,7 @@ void LedgerTableDelegate::paint(QPainter* painter, const QStyleOptionViewItem& o
     if (isSelected && col == 0) {
         painter->setBrush((m_side == "Cr") ? QColor("#16A34A") : QColor("#2563EB"));
         painter->setPen(Qt::NoPen);
-        painter->drawRect(option.rect.x(), option.rect.y(), 3, option.rect.height());
+        painter->drawRect(option.rect.x(), option.rect.y(), 4, option.rect.height());
     }
 
     // Column-specific rendering
@@ -172,19 +178,20 @@ void LedgerTableDelegate::paint(QPainter* painter, const QStyleOptionViewItem& o
         if (col == 1) { // Date
             font.setPointSize(10);
             font.setBold(false);
-            painter->setPen(QColor("#475569"));
+            painter->setPen(QColor("#334155"));
         } else if (col == 2) { // Ref No
             font.setPointSize(10);
             font.setBold(true);
-            painter->setPen((m_side == "Cr") ? QColor("#16A34A") : QColor("#2563EB"));
+            painter->setPen((m_side == "Cr") ? QColor("#047857") : QColor("#1D4ED8"));
         } else if (col == 3) { // Particulars
             font.setPointSize(10);
             font.setBold(false);
             painter->setPen(QColor("#0F172A"));
         } else if (col == 4) { // Amount
-            font.setPointSize(10);
+            font.setPointSize(11);
             font.setBold(true);
-            painter->setPen((m_side == "Cr") ? QColor("#15803D") : QColor("#1D4ED8"));
+            // High vivid contrast emerald green for Cr, royal blue for Dr
+            painter->setPen((m_side == "Cr") ? QColor("#047857") : QColor("#1D4ED8"));
         } else {
             font.setPointSize(10);
             font.setBold(false);

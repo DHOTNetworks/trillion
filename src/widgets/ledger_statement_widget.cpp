@@ -460,15 +460,15 @@ void LedgerStatementWidget::openVoucherForEntry(const QVariantMap& entry) {
 
 void LedgerStatementWidget::onSwitchSideRequested(const QString& targetSide) {
     if (targetSide == "Cr" && m_controller && m_controller->crModel()->rowCount() > 0) {
+        int currentDrRow = m_drTable->selectedRowIndex();
+        int targetRow = (currentDrRow >= 0) ? qMin(currentDrRow, m_controller->crModel()->rowCount() - 1) : 0;
         m_crTable->setFocus();
-        if (m_crTable->selectedRowIndex() < 0) {
-            m_crTable->selectRowIndex(0);
-        }
+        m_crTable->selectRowIndex(targetRow);
     } else if (targetSide == "Dr" && m_controller && m_controller->drModel()->rowCount() > 0) {
+        int currentCrRow = m_crTable->selectedRowIndex();
+        int targetRow = (currentCrRow >= 0) ? qMin(currentCrRow, m_controller->drModel()->rowCount() - 1) : 0;
         m_drTable->setFocus();
-        if (m_drTable->selectedRowIndex() < 0) {
-            m_drTable->selectRowIndex(0);
-        }
+        m_drTable->selectRowIndex(targetRow);
     }
 }
 
