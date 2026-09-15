@@ -37,6 +37,11 @@ T.ApplicationWindow {
     property string targetChequeMode: "Payment"
     property int targetTdsVoucherId: 0
     property string targetStatementParty: ""
+    property string lastViewedStatementParty: ""
+    property string lastViewedStatementFromDate: ""
+    property string lastViewedStatementToDate: ""
+    property string lastViewedStatementSide: "Dr"
+    property int lastViewedStatementIndex: 0
 
     function navigateToView(targetIndex) {
         if (window.currentViewIndex !== targetIndex) {

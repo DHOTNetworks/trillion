@@ -26,6 +26,11 @@ Rectangle {
         if (typeof window !== "undefined") {
             window.lastViewedPartyName = ""
             window.targetStatementParty = ""
+            window.lastViewedStatementParty = ""
+            window.lastViewedStatementFromDate = ""
+            window.lastViewedStatementToDate = ""
+            window.lastViewedStatementSide = "Dr"
+            window.lastViewedStatementIndex = 0
         }
         if (typeof ledgerStatementCtrl !== "undefined" && ledgerStatementCtrl) {
             ledgerStatementCtrl.loadPartyStatement("")
@@ -33,31 +38,81 @@ Rectangle {
         Qt.callLater(focusSearch)
     }
 
-    Component.onCompleted: {
-        syncDateInputsWithActivePeriod()
-        var initParty = (typeof window !== "undefined" && typeof window.targetStatementParty !== "undefined" && window.targetStatementParty) ? window.targetStatementParty : ""
+    function restoreOrResetStatement() {
+        var initParty = ""
+        if (typeof window !== "undefined") {
+            if (window.targetStatementParty && window.targetStatementParty.trim() !== "") {
+                initParty = window.targetStatementParty.trim()
+            } else if (window.lastViewedStatementParty && window.lastViewedStatementParty.trim() !== "") {
+                initParty = window.lastViewedStatementParty.trim()
+            } else if (window.lastViewedPartyName && window.lastViewedPartyName.trim() !== "") {
+                initParty = window.lastViewedPartyName.trim()
+            }
+        }
+        if (!initParty && currentPartyName) {
+            initParty = currentPartyName
+        }
+
         if (initParty !== "") {
-            window.targetStatementParty = ""
+            if (typeof window !== "undefined") {
+                window.targetStatementParty = ""
+            }
             partySearchInput.text = initParty
+            currentPartyName = initParty
+
+            if (typeof window !== "undefined" && window.lastViewedStatementFromDate) {
+                fromDateInput.text = window.lastViewedStatementFromDate
+            } else {
+                syncDateInputsWithActivePeriod()
+            }
+            if (typeof window !== "undefined" && window.lastViewedStatementToDate) {
+                toDateInput.text = window.lastViewedStatementToDate
+            }
+
             loadPartyStatement(initParty)
+
+            Qt.callLater(function() {
+                if (partySearchPopup.visible) {
+                    partySearchPopup.close()
+                }
+                var side = (typeof window !== "undefined" && window.lastViewedStatementSide) ? window.lastViewedStatementSide : "Dr"
+                var targetIdx = (typeof window !== "undefined" && typeof window.lastViewedStatementIndex === "number") ? window.lastViewedStatementIndex : 0
+
+                if (side === "Cr") {
+                    if (crListView.count > 0) {
+                        crListView.forceActiveFocus()
+                        crListView.currentIndex = Math.min(Math.max(0, targetIdx), crListView.count - 1)
+                        crListView.positionViewAtIndex(crListView.currentIndex, ListView.Contain)
+                    } else if (drListView.count > 0) {
+                        drListView.forceActiveFocus()
+                        drListView.currentIndex = 0
+                        drListView.positionViewAtIndex(0, ListView.Contain)
+                    }
+                } else {
+                    if (drListView.count > 0) {
+                        drListView.forceActiveFocus()
+                        drListView.currentIndex = Math.min(Math.max(0, targetIdx), drListView.count - 1)
+                        drListView.positionViewAtIndex(drListView.currentIndex, ListView.Contain)
+                    } else if (crListView.count > 0) {
+                        crListView.forceActiveFocus()
+                        crListView.currentIndex = 0
+                        crListView.positionViewAtIndex(0, ListView.Contain)
+                    }
+                }
+            })
         } else {
+            syncDateInputsWithActivePeriod()
             resetSearchAndFocus()
         }
-        Qt.callLater(focusSearch)
+    }
+
+    Component.onCompleted: {
+        restoreOrResetStatement()
     }
 
     onVisibleChanged: {
         if (visible) {
-            syncDateInputsWithActivePeriod()
-            var pToLoad = (typeof window !== "undefined" && typeof window.targetStatementParty !== "undefined" && window.targetStatementParty) ? window.targetStatementParty : ""
-            if (pToLoad !== "") {
-                window.targetStatementParty = ""
-                partySearchInput.text = pToLoad
-                loadPartyStatement(pToLoad)
-            } else if (!currentPartyName) {
-                resetSearchAndFocus()
-            }
-            Qt.callLater(focusSearch)
+            restoreOrResetStatement()
         }
     }
 
@@ -157,6 +212,15 @@ Rectangle {
         if (part.indexOf("opening balance") !== -1 || part.indexOf("closing balance") !== -1 || part.indexOf("b/f") !== -1) {
             return
         }
+
+        var pName = partySearchInput.text.trim() || currentPartyName
+        window.lastViewedStatementParty = pName
+        window.targetStatementParty = pName
+        window.lastViewedStatementFromDate = fromDateInput.text.trim()
+        window.lastViewedStatementToDate = toDateInput.text.trim()
+        var isCr = crListView.activeFocus || (crListView.currentIndex >= 0 && !drListView.activeFocus)
+        window.lastViewedStatementSide = isCr ? "Cr" : "Dr"
+        window.lastViewedStatementIndex = isCr ? crListView.currentIndex : drListView.currentIndex
 
         var vType = item.voucherType || item.voucher_type || item.transType || item.trans_type || ""
         var rawType = item.legacyType || item.legacy_type || item.transType || item.trans_type || ""
@@ -433,7 +497,7 @@ Rectangle {
                                 font.family: "Segoe UI"
                                 selectByMouse: true
                                 clip: true
-                                focus: true
+                                focus: false
 
                                 onActiveFocusChanged: {
                                     if (activeFocus) {
