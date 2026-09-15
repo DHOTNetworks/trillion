@@ -30,6 +30,7 @@ find_package(Qt6 6.5 REQUIRED COMPONENTS
     Sql
     Svg
     Widgets
+    QuickWidgets
     PrintSupport
     Test
 )
@@ -194,6 +195,18 @@ set(SOURCES
     src/models/debit_credit_note_controller.cpp
     src/engine/bahi_khata_migrator.h
     src/engine/bahi_khata_migrator.cpp
+    src/widgets/kbd_badge_button.h
+    src/widgets/kbd_badge_button.cpp
+    src/widgets/accounting_date_edit.h
+    src/widgets/accounting_date_edit.cpp
+    src/widgets/account_search_box.h
+    src/widgets/account_search_box.cpp
+    src/widgets/ledger_table_view.h
+    src/widgets/ledger_table_view.cpp
+    src/widgets/ledger_statement_widget.h
+    src/widgets/ledger_statement_widget.cpp
+    src/widgets/main_window.h
+    src/widgets/main_window.cpp
 )
 
 qt_add_executable(${PROJECT_NAME} ${SOURCES})
@@ -273,6 +286,7 @@ qt_add_qml_module(${PROJECT_NAME}
 
 target_include_directories(${PROJECT_NAME} PRIVATE
     src
+    src/widgets
     src/engine
     src/models
     src/services
@@ -296,6 +310,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::QuickControls2
     Qt6::QuickLayouts
     Qt6::Widgets
+    Qt6::QuickWidgets
     Qt6::PrintSupport
 )
 

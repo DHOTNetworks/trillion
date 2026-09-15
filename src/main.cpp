@@ -51,6 +51,7 @@
 #include "models/debit_credit_note_controller.h"
 #include "models/global_key_filter.h"
 #include "engine/bahi_khata_migrator.h"
+#include "widgets/main_window.h"
 
 int main(int argc, char* argv[]) {
     std::cout << "[INIT] Starting Mahadev Rice Mill ERP native executable..." << std::endl << std::flush;
@@ -352,15 +353,24 @@ int main(int argc, char* argv[]) {
         return -1;
     }
 
-    std::cout << "[SUCCESS] Created " << rootObjs.size() << " root window objects! Showing UI window on screen..." << std::endl << std::flush;
+    QQuickWindow* qmlWindow = nullptr;
     for (QObject* obj : rootObjs) {
-        QQuickWindow* window = qobject_cast<QQuickWindow*>(obj);
-        if (window) {
-            window->show();
-            window->raise();
-            window->requestActivate();
+        qmlWindow = qobject_cast<QQuickWindow*>(obj);
+        if (qmlWindow) {
+            break;
         }
     }
+
+    if (!qmlWindow) {
+        std::cerr << "[FATAL] Root QML object is not a QQuickWindow!" << std::endl << std::flush;
+        return -1;
+    }
+
+    std::cout << "[SUCCESS] Creating Hybrid MainWindow..." << std::endl << std::flush;
+    MainWindow mainWindow(qmlWindow, &ledgerStatementCtrl, &printExportCtrl);
+    mainWindow.show();
+    mainWindow.raise();
+    mainWindow.activateWindow();
 
     return app.exec();
 }
