@@ -35,6 +35,8 @@ dist/
 data/
 *.bak
 *.md
+!README.md
+!THIRD_PARTY_NOTICES.md
 *.db
 *.pdf
 *.xls
