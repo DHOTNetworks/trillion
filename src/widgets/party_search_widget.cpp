@@ -177,10 +177,11 @@ void PartySearchWidget::updateResults() {
 
 void PartySearchWidget::selectCurrentListItem() {
     QListWidgetItem* item = m_listWidget ? m_listWidget->currentItem() : nullptr;
-    if (item && !text().trimmed().isEmpty()) {
+    if (!item && m_listWidget && m_listWidget->count() > 0) {
+        item = m_listWidget->item(0);
+    }
+    if (item) {
         onListItemClicked(item);
-    } else if (m_listWidget && m_listWidget->count() > 0 && !text().trimmed().isEmpty()) {
-        onListItemClicked(m_listWidget->item(0));
     } else {
         closeSearchPopup();
         emit returnPressed();

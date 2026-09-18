@@ -14,12 +14,12 @@ ItemSearchEditor::ItemSearchEditor(QWidget* parent)
 {
     setStyleSheet(
         "QLineEdit {"
-        "  background-color: #FFFFFF;"
-        "  color: #000000;"
-        "  border: 1.5px solid #0000CC;"
-        "  border-radius: 0px;"
-        "  padding: 1px 4px;"
-        "  font-size: 11.5px;"
+        "  background-color: #EFF6FF;"
+        "  color: #0F172A;"
+        "  border: 1.5px solid #2563EB;"
+        "  border-radius: 4px;"
+        "  padding: 2px 6px;"
+        "  font-size: 12px;"
         "  font-weight: 700;"
         "}"
     );
@@ -30,13 +30,13 @@ ItemSearchEditor::ItemSearchEditor(QWidget* parent)
     m_popupFrame->setStyleSheet(
         "QFrame {"
         "  background-color: #FFFFFF;"
-        "  border: 1.5px solid #0000CC;"
-        "  border-radius: 0px;"
+        "  border: 1px solid #CBD5E1;"
+        "  border-radius: 6px;"
         "}"
     );
 
     QVBoxLayout* layout = new QVBoxLayout(m_popupFrame);
-    layout->setContentsMargins(1, 1, 1, 1);
+    layout->setContentsMargins(2, 2, 2, 2);
     layout->setSpacing(0);
 
     m_listWidget = new QListWidget(m_popupFrame);
@@ -45,20 +45,21 @@ ItemSearchEditor::ItemSearchEditor(QWidget* parent)
         "QListWidget {"
         "  border: none;"
         "  background-color: #FFFFFF;"
-        "  font-family: 'Segoe UI', -apple-system, sans-serif;"
-        "  font-size: 11.5px;"
+        "  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;"
+        "  font-size: 12px;"
         "}"
         "QListWidget::item {"
-        "  padding: 4px 8px;"
-        "  border-radius: 0px;"
-        "  color: #000000;"
-        "  border-bottom: 1px solid #EEEEEE;"
+        "  padding: 6px 10px;"
+        "  border-radius: 4px;"
+        "  color: #1E293B;"
+        "  border-bottom: 1px solid #F1F5F9;"
         "}"
         "QListWidget::item:hover {"
-        "  background-color: #FFFFDD;"
+        "  background-color: #F8FAFC;"
+        "  color: #0F172A;"
         "}"
         "QListWidget::item:selected {"
-        "  background-color: #0066CC;"
+        "  background-color: #2563EB;"
         "  color: #FFFFFF;"
         "  font-weight: bold;"
         "}"
@@ -145,7 +146,10 @@ void ItemSearchEditor::updateResults() {
 }
 
 void ItemSearchEditor::selectCurrentListItem() {
-    QListWidgetItem* item = m_listWidget->currentItem();
+    QListWidgetItem* item = m_listWidget ? m_listWidget->currentItem() : nullptr;
+    if (!item && m_listWidget && m_listWidget->count() > 0) {
+        item = m_listWidget->item(0);
+    }
     if (item) {
         onListItemClicked(item);
     }
@@ -209,7 +213,7 @@ void ItemSearchEditor::keyPressEvent(QKeyEvent* event) {
             event->accept();
             return;
         } else if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
-            if (text().trimmed().isEmpty() || m_listWidget->currentRow() < 0) {
+            if (!m_listWidget || m_listWidget->count() == 0) {
                 closeSearchPopup();
                 emit moveNextCell();
                 event->accept();
@@ -270,7 +274,9 @@ QWidget* ItemSearchDelegate::createEditor(QWidget* parent, const QStyleOptionVie
 
     if (index.column() == 1) { // Stock Item Name
         ItemSearchEditor* editor = new ItemSearchEditor(parent);
-        connect(editor, &ItemSearchEditor::itemChosen, this, [this, index](const QVariantMap& data) {
+        connect(editor, &ItemSearchEditor::itemChosen, this, [this, editor, index](const QVariantMap& data) {
+            emit const_cast<ItemSearchDelegate*>(this)->commitData(editor);
+            emit const_cast<ItemSearchDelegate*>(this)->closeEditor(editor, QAbstractItemDelegate::NoHint);
             emit const_cast<ItemSearchDelegate*>(this)->stockItemConfigured(index.row(), data);
         });
         connect(editor, &ItemSearchEditor::moveNextCell, this, [this, editor]() {
@@ -289,13 +295,13 @@ QWidget* ItemSearchDelegate::createEditor(QWidget* parent, const QStyleOptionVie
     QLineEdit* editor = new QLineEdit(parent);
     editor->setStyleSheet(
         "QLineEdit {"
-        "  background-color: #FFFFDD;"
-        "  color: #000000;"
-        "  border: 1.5px solid #0000CC;"
-        "  border-radius: 0px;"
-        "  font-size: 11.5px;"
+        "  background-color: #EFF6FF;"
+        "  color: #0F172A;"
+        "  border: 1.5px solid #2563EB;"
+        "  border-radius: 4px;"
+        "  font-size: 12px;"
         "  font-weight: 700;"
-        "  padding: 1px 4px;"
+        "  padding: 2px 6px;"
         "}"
     );
     if (index.column() >= 2 && index.column() <= 7) {

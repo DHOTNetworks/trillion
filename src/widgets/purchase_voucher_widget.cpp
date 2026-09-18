@@ -38,20 +38,21 @@ PurchaseVoucherWidget::~PurchaseVoucherWidget() {
 void PurchaseVoucherWidget::setupUi() {
     setAttribute(Qt::WA_StyledBackground, true);
     setStyleSheet(
-        "PurchaseVoucherWidget { background-color: #FDEBD0; font-family: 'Segoe UI', -apple-system, sans-serif; }"
-        "QLabel { border: none; background: transparent; color: #000000; font-size: 11px; font-weight: 700; }"
-        "QLineEdit { background: #FFFFFF; color: #000000; border: 1px solid #7F9DB9; border-radius: 0px; padding: 2px 5px; font-size: 11.5px; font-weight: 700; }"
-        "QLineEdit:focus { border: 1.5px solid #0000CC; background: #FFFFDD; }"
-        "QComboBox { background: #D5F5D5; color: #000000; border: 1px solid #7F9DB9; border-radius: 0px; padding: 2px 4px; font-size: 11.5px; font-weight: 700; }"
-        "QRadioButton { font-size: 11px; font-weight: 700; color: #000000; spacing: 4px; background: transparent; }"
+        "PurchaseVoucherWidget { background-color: #F8FAFC; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }"
+        "QLabel { border: none; background: transparent; color: #1E293B; font-size: 11px; font-weight: 700; }"
+        "QLineEdit { background-color: #FFFFFF; color: #0F172A; border: 1px solid #CBD5E1; border-radius: 6px; padding: 2px 6px; font-size: 11.5px; font-weight: 700; }"
+        "QLineEdit:focus { border: 1.5px solid #2563EB; background-color: #EFF6FF; }"
+        "QComboBox { background-color: #FFFFFF; color: #0F172A; border: 1px solid #CBD5E1; border-radius: 6px; padding: 2px 6px; font-size: 11.5px; font-weight: 700; }"
+        "QComboBox:focus { border: 1.5px solid #2563EB; background-color: #EFF6FF; }"
+        "QRadioButton { font-size: 11px; font-weight: 700; color: #334155; spacing: 4px; background: transparent; }"
         "QRadioButton::indicator { width: 13px; height: 13px; }"
-        "QCheckBox { font-size: 11px; font-weight: 700; color: #000000; spacing: 4px; background: transparent; }"
-        "QCheckBox::indicator { width: 13px; height: 13px; background: #FFFFFF; border: 1px solid #7F9DB9; }"
-        "QGroupBox { font-size: 11px; font-weight: 800; color: #800000; border: 1px solid #C49A7A; margin-top: 6px; padding: 3px 6px; background: transparent; }"
-        "QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top left; padding: 0 4px; left: 6px; }"
-        "QPushButton { background: #EFEFEF; border: 1px solid #7F9DB9; border-radius: 0px; font-size: 11px; font-weight: 700; color: #000000; padding: 3px 10px; }"
-        "QPushButton:hover { background: #DFDFDF; }"
-        "QPushButton:focus { border: 1.5px solid #0000CC; background: #FFFFDD; }"
+        "QCheckBox { font-size: 11px; font-weight: 700; color: #334155; spacing: 4px; background: transparent; }"
+        "QCheckBox::indicator { width: 13px; height: 13px; background: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 3px; }"
+        "QGroupBox { font-size: 11px; font-weight: 800; color: #1E293B; border: 1px solid #E2E8F0; border-radius: 6px; margin-top: 6px; padding: 3px 6px; background: #FFFFFF; }"
+        "QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top left; padding: 0 4px; left: 6px; color: #475569; }"
+        "QPushButton { background-color: #F1F5F9; border: 1px solid #CBD5E1; border-radius: 6px; font-size: 11px; font-weight: 700; color: #475569; padding: 3px 10px; }"
+        "QPushButton:hover { background-color: #E2E8F0; }"
+        "QPushButton:focus { border: 1.5px solid #2563EB; background-color: #EFF6FF; }"
     );
 
     QVBoxLayout* rootLayout = new QVBoxLayout(this);
@@ -59,26 +60,26 @@ void PurchaseVoucherWidget::setupUi() {
     rootLayout->setSpacing(4);
 
     // ========================================================================
-    // 1. TOP HEADER BAR: Maroon Badge + No. + Red Title + Date & Day
+    // 1. TOP HEADER BAR: Modern Badge + No. + Title + Date & Day
     // ========================================================================
     QHBoxLayout* topHeaderLayout = new QHBoxLayout();
     topHeaderLayout->setSpacing(8);
 
     m_purchaseBadge = new QLabel("Purchase", this);
     m_purchaseBadge->setAlignment(Qt::AlignCenter);
-    m_purchaseBadge->setFixedHeight(22);
-    m_purchaseBadge->setStyleSheet("background-color: #800000; color: #FFFFFF; font-weight: 900; font-size: 12px; padding: 1px 8px; border: 1px solid #500000;");
+    m_purchaseBadge->setFixedHeight(24);
+    m_purchaseBadge->setStyleSheet("background-color: #FEF2F2; color: #DC2626; font-weight: 900; font-size: 12px; padding: 2px 10px; border: 1px solid #FECACA; border-radius: 6px;");
     topHeaderLayout->addWidget(m_purchaseBadge);
 
     m_voucherNoDisplay = new QLabel("No. 1", this);
-    m_voucherNoDisplay->setStyleSheet("font-size: 13px; font-weight: 900; color: #000000;");
+    m_voucherNoDisplay->setStyleSheet("font-size: 13px; font-weight: 900; color: #0F172A;");
     topHeaderLayout->addWidget(m_voucherNoDisplay);
 
     topHeaderLayout->addStretch(1);
 
     m_titleHeaderLabel = new QLabel("F9 : Purchase Voucher", this);
     m_titleHeaderLabel->setAlignment(Qt::AlignCenter);
-    m_titleHeaderLabel->setStyleSheet("font-size: 16px; font-weight: 900; color: #FF0000; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto;");
+    m_titleHeaderLabel->setStyleSheet("font-size: 15px; font-weight: 900; color: #0F172A; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto;");
     topHeaderLayout->addWidget(m_titleHeaderLabel);
 
     topHeaderLayout->addStretch(1);
@@ -89,15 +90,15 @@ void PurchaseVoucherWidget::setupUi() {
     dateBox->setAlignment(Qt::AlignRight);
 
     m_invoiceDateEdit = new AccountingDateEdit(this);
-    m_invoiceDateEdit->setFixedHeight(22);
-    m_invoiceDateEdit->setFixedWidth(95);
-    m_invoiceDateEdit->setStyleSheet("QLineEdit { background: #FFFFFF; color: #000000; font-size: 12px; font-weight: 800; border: 1px solid #7F9DB9; }");
+    m_invoiceDateEdit->setFixedHeight(24);
+    m_invoiceDateEdit->setFixedWidth(105);
+    m_invoiceDateEdit->setStyleSheet("QLineEdit { background-color: #FFFFFF; color: #0F172A; font-size: 12px; font-weight: 800; border: 1px solid #CBD5E1; border-radius: 6px; }");
     connect(m_invoiceDateEdit, &AccountingDateEdit::dateChanged, this, &PurchaseVoucherWidget::onDateChanged);
     dateBox->addWidget(m_invoiceDateEdit);
 
     m_dayOfWeekLabel = new QLabel(this);
     m_dayOfWeekLabel->setAlignment(Qt::AlignRight);
-    m_dayOfWeekLabel->setStyleSheet("font-size: 11px; font-weight: 700; color: #000000;");
+    m_dayOfWeekLabel->setStyleSheet("font-size: 11px; font-weight: 700; color: #0284C7;");
     dateBox->addWidget(m_dayOfWeekLabel);
     topHeaderLayout->addLayout(dateBox);
 
@@ -107,7 +108,7 @@ void PurchaseVoucherWidget::setupUi() {
     QHBoxLayout* subBarLayout = new QHBoxLayout();
     subBarLayout->setSpacing(10);
 
-    m_revChargeCheck = new QCheckBox("Rev.Chrage By Recipient", this);
+    m_revChargeCheck = new QCheckBox("Rev.Charge By Recipient", this);
     subBarLayout->addWidget(m_revChargeCheck);
 
     m_helpHintLabel = new QLabel("Change Date - F9 : Change Purchase Mode - Shift+F9: Purchase Settings - Alt+L:Show Ledger - Ctrl+F1: Set Image)", this);
@@ -233,11 +234,11 @@ void PurchaseVoucherWidget::setupUi() {
     row2->setSpacing(6);
 
     m_partyTagLabel = new QLabel("Purchase From Party :", this);
-    m_partyTagLabel->setStyleSheet("color: #CC0000; font-size: 12px; font-weight: 900;");
+    m_partyTagLabel->setStyleSheet("color: #1E293B; font-size: 12px; font-weight: 800;");
     row2->addWidget(m_partyTagLabel);
 
     m_partySearchWidget = new PartySearchWidget(this);
-    m_partySearchWidget->setFixedHeight(24);
+    m_partySearchWidget->setFixedHeight(26);
     connect(m_partySearchWidget, &PartySearchWidget::partySelected, this, &PurchaseVoucherWidget::onPartySelected);
     row2->addWidget(m_partySearchWidget, 1);
 
@@ -249,7 +250,7 @@ void PurchaseVoucherWidget::setupUi() {
     partySubRow->setContentsMargins(10, 0, 0, 0);
 
     m_partyBalLabel = new QLabel("Date Bal. 0.00", this);
-    m_partyBalLabel->setStyleSheet("font-size: 11px; font-weight: 700; color: #000000; font-style: italic;");
+    m_partyBalLabel->setStyleSheet("font-size: 11px; font-weight: 700; color: #64748B; font-style: italic;");
     partySubRow->addWidget(m_partyBalLabel);
 
     QHBoxLayout* gstinLayout = new QHBoxLayout();
@@ -260,7 +261,7 @@ void PurchaseVoucherWidget::setupUi() {
     m_gstinDisplay->setReadOnly(true);
     m_gstinDisplay->setFixedHeight(20);
     m_gstinDisplay->setFixedWidth(160);
-    m_gstinDisplay->setStyleSheet("QLineEdit { background: transparent; border: none; font-weight: 800; color: #000000; }");
+    m_gstinDisplay->setStyleSheet("QLineEdit { background: transparent; border: none; font-weight: 800; color: #0F172A; }");
     gstinLayout->addWidget(m_gstinDisplay);
     partySubRow->addLayout(gstinLayout);
 
@@ -268,7 +269,7 @@ void PurchaseVoucherWidget::setupUi() {
 
     // Including Tax Checkbox (Above Table)
     m_inclTaxCheck = new QCheckBox("Including Tax (Alt+I)", this);
-    m_inclTaxCheck->setStyleSheet("color: #0000CC; font-weight: 800;");
+    m_inclTaxCheck->setStyleSheet("color: #2563EB; font-weight: 800;");
     connect(m_inclTaxCheck, &QCheckBox::toggled, this, &PurchaseVoucherWidget::recalculateTotals);
     partySubRow->addWidget(m_inclTaxCheck);
 
@@ -305,30 +306,31 @@ void PurchaseVoucherWidget::setupUi() {
     m_tableWidget->verticalHeader()->setVisible(false);
     m_tableWidget->setSelectionBehavior(QAbstractItemView::SelectItems);
     m_tableWidget->setSelectionMode(QAbstractItemView::SingleSelection);
-    m_tableWidget->setShowGrid(false);
+    m_tableWidget->setShowGrid(true);
     m_tableWidget->setMinimumHeight(120);
     m_tableWidget->setMaximumHeight(220);
     m_tableWidget->setStyleSheet(
         "QTableWidget {"
-        "  background-color: transparent;"
-        "  gridline-color: transparent;"
-        "  font-family: 'Segoe UI', -apple-system, sans-serif;"
+        "  background-color: #FFFFFF;"
+        "  gridline-color: #F1F5F9;"
+        "  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;"
         "  font-size: 11.5px;"
-        "  color: #000000;"
-        "  border: none;"
+        "  color: #0F172A;"
+        "  border: 1px solid #E2E8F0;"
+        "  border-radius: 8px;"
         "}"
         "QHeaderView::section {"
-        "  background-color: #F5CBA7;"
-        "  color: #000000;"
+        "  background-color: #F1F5F9;"
+        "  color: #334155;"
         "  font-weight: 800;"
         "  font-size: 11px;"
-        "  padding: 3px 4px;"
+        "  padding: 4px 6px;"
         "  border: none;"
-        "  border-bottom: 1px solid #777777;"
+        "  border-bottom: 2px solid #CBD5E1;"
         "}"
         "QTableWidget::item:selected {"
-        "  background-color: #0066CC;"
-        "  color: #FFFFFF;"
+        "  background-color: #EFF6FF;"
+        "  color: #2563EB;"
         "  font-weight: 800;"
         "}"
     );
@@ -345,8 +347,8 @@ void PurchaseVoucherWidget::setupUi() {
 
     // Table Total Summary Row
     QFrame* totalSummaryBar = new QFrame(this);
-    totalSummaryBar->setFixedHeight(26);
-    totalSummaryBar->setStyleSheet("background: transparent; border-top: 1px solid #777777; border-bottom: 1px solid #777777;");
+    totalSummaryBar->setFixedHeight(28);
+    totalSummaryBar->setStyleSheet("background: #F8FAFC; border-top: 1px solid #E2E8F0; border-bottom: 1px solid #E2E8F0; border-radius: 4px;");
     QHBoxLayout* sumLayout = new QHBoxLayout(totalSummaryBar);
     sumLayout->setContentsMargins(6, 2, 6, 2);
     sumLayout->setSpacing(0);
@@ -545,7 +547,7 @@ void PurchaseVoucherWidget::setupUi() {
     rightColLayout->setSpacing(4);
 
     m_summaryFrame = new QFrame(this);
-    m_summaryFrame->setStyleSheet("QFrame { background: transparent; border: 1px solid #7F9DB9; }");
+    m_summaryFrame->setStyleSheet("QFrame { background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; }");
     QGridLayout* sGrid = new QGridLayout(m_summaryFrame);
     sGrid->setContentsMargins(8, 6, 8, 6);
     sGrid->setHorizontalSpacing(8);
@@ -553,10 +555,10 @@ void PurchaseVoucherWidget::setupUi() {
 
     // Row 0: Mandi Total (Visible only in Mandi Type)
     m_mandiTotalTitleLabel = new QLabel("Total :", m_summaryFrame);
-    m_mandiTotalTitleLabel->setStyleSheet("color: #0000CC; text-decoration: underline; font-weight: 900;");
+    m_mandiTotalTitleLabel->setStyleSheet("color: #2563EB; text-decoration: underline; font-weight: 800;");
     m_mandiTotalValLabel = new QLabel("0.00", m_summaryFrame);
     m_mandiTotalValLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    m_mandiTotalValLabel->setStyleSheet("font-size: 11.5px; font-weight: 800;");
+    m_mandiTotalValLabel->setStyleSheet("font-size: 11.5px; font-weight: 800; color: #0F172A;");
     sGrid->addWidget(m_mandiTotalTitleLabel, 0, 0);
     sGrid->addWidget(m_mandiTotalValLabel, 0, 1);
 
@@ -570,7 +572,7 @@ void PurchaseVoucherWidget::setupUi() {
     sGrid->addWidget(m_commissionEdit, 1, 1);
 
     m_otherExpTitleLabel = new QLabel("Other Exp. :", m_summaryFrame);
-    m_otherExpTitleLabel->setStyleSheet("color: #800000; text-decoration: underline;");
+    m_otherExpTitleLabel->setStyleSheet("color: #475569; text-decoration: underline;");
     m_otherExpEdit = new QLineEdit("0.00", m_summaryFrame);
     m_otherExpEdit->setFixedHeight(22);
     m_otherExpEdit->setAlignment(Qt::AlignRight);
@@ -580,7 +582,7 @@ void PurchaseVoucherWidget::setupUi() {
 
     // Row 2: Less Amount
     m_lessTitleLabel = new QLabel("(-) Less :", m_summaryFrame);
-    m_lessTitleLabel->setStyleSheet("color: #800000; text-decoration: underline;");
+    m_lessTitleLabel->setStyleSheet("color: #DC2626; text-decoration: underline;");
     m_lessAmountEdit = new QLineEdit("0.00", m_summaryFrame);
     m_lessAmountEdit->setFixedHeight(22);
     m_lessAmountEdit->setAlignment(Qt::AlignRight);
@@ -590,7 +592,7 @@ void PurchaseVoucherWidget::setupUi() {
 
     // Row 3: Taxes
     m_taxTitleLabel = new QLabel("SGST+CGST :", m_summaryFrame);
-    m_taxTitleLabel->setStyleSheet("color: #800000;");
+    m_taxTitleLabel->setStyleSheet("color: #475569;");
     m_taxAmountEdit = new QLineEdit("0.00", m_summaryFrame);
     m_taxAmountEdit->setFixedHeight(22);
     m_taxAmountEdit->setAlignment(Qt::AlignRight);
@@ -600,7 +602,7 @@ void PurchaseVoucherWidget::setupUi() {
 
     // Row 4: Freight
     m_freightTitleLabel = new QLabel("(+) Freight :", m_summaryFrame);
-    m_freightTitleLabel->setStyleSheet("color: #000000;");
+    m_freightTitleLabel->setStyleSheet("color: #475569;");
     m_freightChargesEdit = new QLineEdit("0.00", m_summaryFrame);
     m_freightChargesEdit->setFixedHeight(22);
     m_freightChargesEdit->setAlignment(Qt::AlignRight);
@@ -610,19 +612,19 @@ void PurchaseVoucherWidget::setupUi() {
 
     // Row 5: Round Off
     m_roundOffTitleLabel = new QLabel("Round +/-", m_summaryFrame);
-    m_roundOffTitleLabel->setStyleSheet("color: #000000; text-decoration: underline;");
+    m_roundOffTitleLabel->setStyleSheet("color: #475569; text-decoration: underline;");
     m_roundOffLabel = new QLabel("0.00", m_summaryFrame);
     m_roundOffLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    m_roundOffLabel->setStyleSheet("font-size: 11.5px; font-weight: 800;");
+    m_roundOffLabel->setStyleSheet("font-size: 11.5px; font-weight: 800; color: #0F172A;");
     sGrid->addWidget(m_roundOffTitleLabel, 5, 0);
     sGrid->addWidget(m_roundOffLabel, 5, 1);
 
     // Row 6: TCS
     m_tcsTitleLabel = new QLabel("TCS @ 0.000% :", m_summaryFrame);
-    m_tcsTitleLabel->setStyleSheet("color: #FF0000; font-weight: 800;");
+    m_tcsTitleLabel->setStyleSheet("color: #DC2626; font-weight: 800;");
     m_tcsAmountLabel = new QLabel("0.00", m_summaryFrame);
     m_tcsAmountLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    m_tcsAmountLabel->setStyleSheet("font-size: 11.5px; font-weight: 800;");
+    m_tcsAmountLabel->setStyleSheet("font-size: 11.5px; font-weight: 800; color: #0F172A;");
     m_tcsRateEdit = new QLineEdit("0.000", m_summaryFrame);
     m_tcsRateEdit->setVisible(false);
     sGrid->addWidget(m_tcsTitleLabel, 6, 0);
@@ -634,12 +636,12 @@ void PurchaseVoucherWidget::setupUi() {
     QHBoxLayout* gtRow = new QHBoxLayout();
     gtRow->setSpacing(6);
     QLabel* gtTitle = new QLabel("G. Total :", this);
-    gtTitle->setStyleSheet("font-size: 14px; font-weight: 900; color: #000000;");
+    gtTitle->setStyleSheet("font-size: 14px; font-weight: 900; color: #0F172A;");
     gtRow->addWidget(gtTitle);
 
     m_grandTotalLabel = new QLabel("0.00", this);
     m_grandTotalLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    m_grandTotalLabel->setStyleSheet("font-size: 16px; font-weight: 900; color: #000000; background: #FFFFFF; border: 1.5px solid #7F9DB9; padding: 2px 6px;");
+    m_grandTotalLabel->setStyleSheet("font-size: 16px; font-weight: 900; color: #0F172A; background-color: #FFFFFF; border: 1.5px solid #2563EB; border-radius: 6px; padding: 2px 6px;");
     gtRow->addWidget(m_grandTotalLabel, 1);
     rightColLayout->addLayout(gtRow);
 
@@ -654,35 +656,39 @@ void PurchaseVoucherWidget::setupUi() {
     footerLayout->addStretch(1);
 
     m_backBtn = new QPushButton("Back (Esc)", this);
-    m_backBtn->setFixedHeight(26);
+    m_backBtn->setFixedHeight(30);
+    m_backBtn->setStyleSheet("QPushButton { background-color: #F1F5F9; border: 1px solid #CBD5E1; border-radius: 6px; padding: 0px 14px; font-weight: 700; color: #475569; font-size: 12px; } QPushButton:hover { background-color: #E2E8F0; }");
     connect(m_backBtn, &QPushButton::clicked, this, &PurchaseVoucherWidget::backRequested);
     footerLayout->addWidget(m_backBtn);
 
     m_newBtn = new QPushButton("New (F9)", this);
-    m_newBtn->setFixedHeight(26);
+    m_newBtn->setFixedHeight(30);
+    m_newBtn->setStyleSheet("QPushButton { background-color: #F1F5F9; border: 1px solid #CBD5E1; border-radius: 6px; padding: 0px 14px; font-weight: 700; color: #0284C7; font-size: 12px; } QPushButton:hover { background-color: #E0F2FE; }");
     connect(m_newBtn, &QPushButton::clicked, this, &PurchaseVoucherWidget::resetForm);
     footerLayout->addWidget(m_newBtn);
 
     m_deleteBtn = new QPushButton("Delete", this);
-    m_deleteBtn->setFixedHeight(26);
-    m_deleteBtn->setStyleSheet("background: #FEE2E2; color: #DC2626; font-weight: 800;");
+    m_deleteBtn->setFixedHeight(30);
+    m_deleteBtn->setStyleSheet("QPushButton { background-color: #FEE2E2; color: #DC2626; border: 1px solid #FCA5A5; border-radius: 6px; padding: 0px 14px; font-weight: 800; font-size: 12px; } QPushButton:hover { background-color: #FECACA; }");
     m_deleteBtn->setVisible(false);
     connect(m_deleteBtn, &QPushButton::clicked, this, &PurchaseVoucherWidget::deleteVoucher);
     footerLayout->addWidget(m_deleteBtn);
 
     m_printBtn = new QPushButton("Print (Ctrl+P)", this);
-    m_printBtn->setFixedHeight(26);
+    m_printBtn->setFixedHeight(30);
+    m_printBtn->setStyleSheet("QPushButton { background-color: #F1F5F9; border: 1px solid #CBD5E1; border-radius: 6px; padding: 0px 14px; font-weight: 700; color: #475569; font-size: 12px; } QPushButton:hover { background-color: #E2E8F0; }");
     connect(m_printBtn, &QPushButton::clicked, this, &PurchaseVoucherWidget::printInvoice);
     footerLayout->addWidget(m_printBtn);
 
     m_pdfBtn = new QPushButton("PDF (Ctrl+E)", this);
-    m_pdfBtn->setFixedHeight(26);
+    m_pdfBtn->setFixedHeight(30);
+    m_pdfBtn->setStyleSheet("QPushButton { background-color: #F1F5F9; border: 1px solid #CBD5E1; border-radius: 6px; padding: 0px 14px; font-weight: 700; color: #475569; font-size: 12px; } QPushButton:hover { background-color: #E2E8F0; }");
     connect(m_pdfBtn, &QPushButton::clicked, this, &PurchaseVoucherWidget::exportPdf);
     footerLayout->addWidget(m_pdfBtn);
 
     m_saveBtn = new QPushButton("Save Voucher (Ctrl+S)", this);
-    m_saveBtn->setFixedHeight(26);
-    m_saveBtn->setStyleSheet("background-color: #2563EB; color: #FFFFFF; font-weight: 900;");
+    m_saveBtn->setFixedHeight(30);
+    m_saveBtn->setStyleSheet("QPushButton { background-color: #2563EB; border: 1px solid #1D4ED8; border-radius: 6px; padding: 0px 16px; font-weight: 800; color: #FFFFFF; font-size: 12px; } QPushButton:hover { background-color: #1D4ED8; }");
     connect(m_saveBtn, &QPushButton::clicked, this, &PurchaseVoucherWidget::saveVoucher);
     footerLayout->addWidget(m_saveBtn);
 
@@ -811,7 +817,8 @@ void PurchaseVoucherWidget::setupNavigationChains() {
     VoucherCommon::installGridNavigation(m_dueDaysEdit, m_invoiceNoEdit, m_partySearchWidget, [this]() {
         if (m_partySearchWidget) { m_partySearchWidget->setFocus(); m_partySearchWidget->selectAll(); }
     });
-    VoucherCommon::installGridNavigation(m_partySearchWidget, m_dueDaysEdit, m_posCombo, [this]() {
+    VoucherCommon::installGridNavigation(m_partySearchWidget, m_dueDaysEdit, m_posCombo, nullptr);
+    connect(m_partySearchWidget, &PartySearchWidget::returnPressed, this, [this]() {
         focusTableAt(0, 1);
     });
     VoucherCommon::installGridNavigation(m_posCombo, m_partySearchWidget, m_vehicleNoEdit, [this]() {
@@ -859,13 +866,7 @@ void PurchaseVoucherWidget::setupNavigationChains() {
     VoucherCommon::installGridNavigation(m_challanNoEdit, m_transportEdit, m_kandaWeightEdit);
     VoucherCommon::installGridNavigation(m_kandaWeightEdit, m_challanNoEdit, m_brokerEdit);
     VoucherCommon::installGridNavigation(m_brokerEdit, m_kandaWeightEdit, m_narrationEdit);
-
-    // Summary & Save chain
-    connect(m_narrationEdit, &QLineEdit::returnPressed, this, [this]() { if (m_otherExpEdit && m_otherExpEdit->isVisible()) { m_otherExpEdit->setFocus(); m_otherExpEdit->selectAll(); } else if (m_taxAmountEdit) { m_taxAmountEdit->setFocus(); m_taxAmountEdit->selectAll(); } });
-    connect(m_otherExpEdit, &QLineEdit::returnPressed, this, [this]() { if (m_lessAmountEdit) { m_lessAmountEdit->setFocus(); m_lessAmountEdit->selectAll(); } });
-    connect(m_lessAmountEdit, &QLineEdit::returnPressed, this, [this]() { if (m_taxAmountEdit) { m_taxAmountEdit->setFocus(); m_taxAmountEdit->selectAll(); } });
-    connect(m_taxAmountEdit, &QLineEdit::returnPressed, this, [this]() { if (m_freightChargesEdit) { m_freightChargesEdit->setFocus(); m_freightChargesEdit->selectAll(); } });
-    connect(m_freightChargesEdit, &QLineEdit::returnPressed, this, [this]() { if (m_saveBtn) { m_saveBtn->setFocus(); } });
+    VoucherCommon::installGridNavigation(m_narrationEdit, m_brokerEdit, nullptr);
 }
 
 void PurchaseVoucherWidget::focusTableAt(int row, int col) {
@@ -966,9 +967,11 @@ void PurchaseVoucherWidget::onStockItemConfigured(int row, const QVariantMap& it
     if (row < 0 || row >= m_tableWidget->rowCount()) return;
     m_isUpdatingTable = true;
     m_tableWidget->item(row, 1)->setText(itemData.value("name").toString());
-    double gst = itemData.value("tax_rate", 0.0).toDouble();
+    double gst = itemData.value("gst_rate", 0.0).toDouble();
+    if (gst == 0.0) gst = itemData.value("tax_rate", 0.0).toDouble();
     if (m_tableWidget->item(row, 5)) m_tableWidget->item(row, 5)->setText(QString::number(gst, 'f', 0));
     double rate = itemData.value("purchase_rate", 0.0).toDouble();
+    if (rate <= 0) rate = itemData.value("sale_rate", 0.0).toDouble();
     if (rate <= 0) rate = itemData.value("sales_rate", 0.0).toDouble();
     if (rate > 0 && m_tableWidget->item(row, 6)) m_tableWidget->item(row, 6)->setText(QString::number(rate, 'f', 2));
     m_isUpdatingTable = false;
