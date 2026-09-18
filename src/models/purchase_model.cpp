@@ -231,10 +231,11 @@ bool PurchaseModel::add_purchase_invoice_full(
         for (const QVariant& itmV : items) {
             QVariantMap itm = itmV.toMap();
             DatabaseManager::instance().executeNonQuery(
-                "INSERT INTO purchase_invoice_items (invoice_id, invoice_no, item_id, item_name, bag_count, packing, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, total_amount) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+                "INSERT INTO purchase_invoice_items (invoice_id, invoice_no, item_id, item_name, grade, bag_count, packing, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, total_amount) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
                 {
                     newInvId, invNo, itemId, itm.value("item_name").toString(),
+                    itm.value("grade").toString(),
                     itm.value("bags").toInt(), itm.value("packing").toDouble(),
                     itm.value("weight").toDouble(), itm.value("rate").toDouble(),
                     itm.value("amount").toDouble(), itm.value("gst_pct").toDouble(),
@@ -683,7 +684,7 @@ QVariantMap PurchaseModel::get_purchase_invoice(const QVariant& invoiceNoOrId, c
     }
     if (itemRows.isEmpty() && (!vNo.isEmpty() || !invNo.isEmpty())) {
         QVariantList stRows = DatabaseManager::instance().executeQuery(
-            "SELECT item_id, item_name, bags AS bag_count, packing, weight_qtl, rate AS rate_per_qtl, "
+            "SELECT item_id, item_name, dheri_bill_no AS grade, bags AS bag_count, packing, weight_qtl, rate AS rate_per_qtl, "
             "amount AS total_amount, taxable_amount, tax AS gst_pct "
             "FROM stock_transactions WHERE (voucher_no = ? OR bill_no = ?) AND trans_type IN ('Purc', 'Purchase') "
             "ORDER BY row_no ASC, id ASC;",
@@ -698,6 +699,7 @@ QVariantMap PurchaseModel::get_purchase_invoice(const QVariant& invoiceNoOrId, c
         QVariantMap itm;
         itm["itemName"] = inv.value("item_name");
         itm["item_name"] = inv.value("item_name");
+        itm["grade"] = inv.value("grade");
         itm["bags"] = inv.value("bag_count").toInt();
         itm["bag_count"] = itm["bags"];
         itm["packing"] = 0.5;
@@ -718,6 +720,8 @@ QVariantMap PurchaseModel::get_purchase_invoice(const QVariant& invoiceNoOrId, c
         for (int i = 0; i < itemRows.size(); ++i) {
             QVariantMap itm = itemRows[i].toMap();
             QString iName = itm.contains("item_name") ? itm.value("item_name").toString() : itm.value("itemName").toString();
+            QString gradeVal = itm.value("grade").toString().trimmed();
+            if (gradeVal.isEmpty()) gradeVal = inv.value("grade").toString().trimmed();
             int bCount = itm.value("bag_count").toInt();
             if (bCount == 0) bCount = itm.value("bags").toInt();
             double pVal = itm.value("packing").toDouble();
@@ -735,6 +739,7 @@ QVariantMap PurchaseModel::get_purchase_invoice(const QVariant& invoiceNoOrId, c
 
             itm["itemName"] = iName;
             itm["item_name"] = iName;
+            itm["grade"] = gradeVal;
             itm["bags"] = bCount;
             itm["bag_count"] = bCount;
             itm["packing"] = pVal;
@@ -870,10 +875,11 @@ bool PurchaseModel::update_purchase_invoice_full(
         for (const QVariant& itmV : items) {
             QVariantMap itm = itmV.toMap();
             DatabaseManager::instance().executeNonQuery(
-                "INSERT INTO purchase_invoice_items (invoice_id, invoice_no, item_id, item_name, bag_count, packing, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, total_amount) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+                "INSERT INTO purchase_invoice_items (invoice_id, invoice_no, item_id, item_name, grade, bag_count, packing, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, total_amount) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
                 {
                     targetInvId, invoice_no, itemId, itm.value("item_name").toString(),
+                    itm.value("grade").toString(),
                     itm.value("bags").toInt(), itm.value("packing").toDouble(),
                     itm.value("weight").toDouble(), itm.value("rate").toDouble(),
                     itm.value("amount").toDouble(), itm.value("gst_pct").toDouble(),

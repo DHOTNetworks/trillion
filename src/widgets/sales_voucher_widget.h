@@ -79,7 +79,7 @@ private:
     void updateNextNumbers();
     void updateFiscalYearBadge();
     void updateDayOfWeek(const QDate& date);
-    void populateRow(int row, const QString& itemName, int bags, double packing, double weight, double rate, double amount, double gstPct);
+    void populateRow(int row, const QString& itemName, const QString& grade, int bags, double packing, double weight, double rate, double amount, double gstPct);
     void syncModelFromTable();
     void syncTableFromModel();
     void setStatusMessage(const QString& message, bool isError);

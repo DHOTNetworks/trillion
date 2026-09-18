@@ -16,7 +16,7 @@ public:
     ~PartySearchWidget() override;
 
     void setPartyName(const QString& name);
-    QString currentPartyName() const { return text().trimmed(); }
+    QString currentPartyName() const { return text(); }
     int selectedPartyId() const { return m_selectedPartyId; }
     QVariantMap selectedPartyData() const { return m_selectedPartyData; }
     void clearSelection();

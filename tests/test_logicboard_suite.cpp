@@ -99,15 +99,69 @@ private slots:
     void testNativeXlsBankStatementParser();
     void testBankStatementControllerPosting();
     void testAllQmlViewsInstantiable();
+    void testBahiKhataMdbStationAndLedgerMigration();
 };
+
+#include "mdbtools.h"
+void LogicBoardTestSuite::testBahiKhataMdbStationAndLedgerMigration() {
+    BahiKhataMigrator migrator;
+    
+    // 1. Migrate Data.002 into isolated test_migration_002.db
+    QString db002Path = "data/test_migration_002.db";
+    if (QFile::exists("../data")) db002Path = "../data/test_migration_002.db";
+    DatabaseManager::instance().switchDatabase(db002Path);
+    QString mdb002 = "Bahi-Khata-Data/Data.002";
+    if (!QFile::exists(mdb002) && QFile::exists("../Bahi-Khata-Data/Data.002")) mdb002 = "../Bahi-Khata-Data/Data.002";
+    bool ok1 = migrator.migrate_mdb_file(mdb002);
+    qDebug() << "[TEST MIGRATION] Data.002 migration success:" << ok1;
+    QVERIFY(ok1);
+    
+    PartiesModel partiesModel;
+    QStringList stations002 = partiesModel.get_stations();
+    QStringList groups002 = partiesModel.get_account_groups();
+    QStringList states002 = partiesModel.get_states();
+    qDebug() << "[TEST MIGRATION 002] Distinct Stations Count:" << stations002.size() << "Sample:" << stations002.mid(0, 10);
+    qDebug() << "[TEST MIGRATION 002] Distinct Groups Count:" << groups002.size() << "Sample:" << groups002.mid(0, 5);
+    QVERIFY(stations002.size() > 20);
+    QVERIFY(stations002.contains("Delhi", Qt::CaseInsensitive) || stations002.contains("Ludhiana", Qt::CaseInsensitive) || stations002.contains("Sirsa", Qt::CaseInsensitive));
+    
+    // 2. Migrate Data.018 into isolated test_migration_018.db
+    QString db018Path = "data/test_migration_018.db";
+    if (QFile::exists("../data")) db018Path = "../data/test_migration_018.db";
+    DatabaseManager::instance().switchDatabase(db018Path);
+    QString mdb018 = "Bahi-Khata-Data/Data.018";
+    if (!QFile::exists(mdb018) && QFile::exists("../Bahi-Khata-Data/Data.018")) mdb018 = "../Bahi-Khata-Data/Data.018";
+    bool ok2 = migrator.migrate_mdb_file(mdb018);
+    qDebug() << "[TEST MIGRATION] Data.018 migration success:" << ok2;
+    QVERIFY(ok2);
+    
+    PartiesModel partiesModel2;
+    QStringList stations018 = partiesModel2.get_stations();
+    qDebug() << "[TEST MIGRATION 018] Distinct Stations Count:" << stations018.size() << "Sample:" << stations018.mid(0, 10);
+    QVERIFY(stations018.size() > 5);
+
+    // Reset back to isolated test unit DB for subsequent tests
+    QString testDbPath = "data/test_unit_suite.db";
+    if (QFile::exists("../data")) testDbPath = "../data/test_unit_suite.db";
+    DatabaseManager::instance().switchDatabase(testDbPath);
+}
 
 void LogicBoardTestSuite::initTestCase() {
     qDebug() << "[TEST INIT] Initializing LogicBoard Test Suite...";
-    QString dbPath = "data/mahadev_rice_industry_data_004.db";
-    if (QFile::exists("../data/mahadev_rice_industry_data_004.db")) {
-        dbPath = "../data/mahadev_rice_industry_data_004.db";
+    QString testDbPath = "data/test_unit_suite.db";
+    if (QFile::exists("../data")) {
+        testDbPath = "../data/test_unit_suite.db";
     }
-    DatabaseManager::instance().initDatabase(dbPath);
+    QFile::remove(testDbPath);
+    DatabaseManager::instance().initDatabase(testDbPath);
+
+    // Seed test_unit_suite.db with Data.002 fixture data so calculation tests have real data
+    BahiKhataMigrator migrator;
+    QString mdb002 = "Bahi-Khata-Data/Data.002";
+    if (!QFile::exists(mdb002) && QFile::exists("../Bahi-Khata-Data/Data.002")) mdb002 = "../Bahi-Khata-Data/Data.002";
+    if (QFile::exists(mdb002)) {
+        migrator.migrate_mdb_file(mdb002);
+    }
 }
 
 void LogicBoardTestSuite::cleanupTestCase() {
@@ -898,9 +952,9 @@ void LogicBoardTestSuite::testFirmTypeResolutionAndDynamicFiscalYears() {
     QCOMPARE(compInfo.value("firm_type").toString(), QString("Proprietorship Firm"));
     QCOMPARE(compInfo.value("books_from").toString(), QString("2024-04-01"));
 
-    // Switch back to original DB
-    QString originalDb = "data/mahadev_rice_industry_data_004.db";
-    if (QFile::exists("../data/mahadev_rice_industry_data_004.db")) originalDb = "../data/mahadev_rice_industry_data_004.db";
+    // Switch back to isolated test unit DB
+    QString originalDb = "data/test_unit_suite.db";
+    if (QFile::exists("../data/test_unit_suite.db")) originalDb = "../data/test_unit_suite.db";
     DatabaseManager::instance().switchDatabase(originalDb);
 }
 

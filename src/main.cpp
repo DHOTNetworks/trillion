@@ -69,26 +69,27 @@ int main(int argc, char* argv[]) {
     app.setApplicationVersion("0.2.0");
     app.setOrganizationName("MahadevAgro");
 
+    // Universal cross-platform font configuration (Windows, macOS, Linux x86_64/ARM64)
+    QFont defaultAppFont;
 #ifdef Q_OS_WIN
-    QFont defaultAppFont("Segoe UI", 10);
-    defaultAppFont.setStyleHint(QFont::SansSerif);
-    app.setFont(defaultAppFont);
+    defaultAppFont.setFamilies({"Segoe UI", "Calibri", "Arial"});
+    defaultAppFont.setPointSize(10);
 #elif defined(Q_OS_MACOS)
-    QFont defaultAppFont(".AppleSystemUIFont", 13);
-    defaultAppFont.setStyleHint(QFont::SansSerif);
-    app.setFont(defaultAppFont);
+    defaultAppFont.setFamilies({"Helvetica Neue", "Arial"});
+    defaultAppFont.setPointSize(12);
 #else
-    QFont defaultAppFont("Sans Serif", 10);
+    defaultAppFont.setFamilies({"Noto Sans", "Liberation Sans", "DejaVu Sans", "Arial"});
+    defaultAppFont.setPointSize(10);
+#endif
     defaultAppFont.setStyleHint(QFont::SansSerif);
     app.setFont(defaultAppFont);
-#endif
 
     // App-wide clean dialog style ensuring high readability on all OS themes (macOS Dark Mode safe)
     app.setStyleSheet(
         "QDialog, QMessageBox, QInputDialog {"
         "  background-color: #FFFFFF;"
         "  color: #0F172A;"
-        "  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;"
+        "  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', 'Noto Sans', 'Liberation Sans', Arial, sans-serif;"
         "}"
         "QDialog QLabel, QMessageBox QLabel, QInputDialog QLabel {"
         "  color: #0F172A;"

@@ -22,11 +22,26 @@ public:
     Q_INVOKABLE QStringList get_cities() const;
     Q_INVOKABLE QStringList get_districts() const;
     Q_INVOKABLE QStringList get_stations() const;
+    Q_INVOKABLE QStringList get_states() const;
+    Q_INVOKABLE QString get_state_code_for_state(const QString& state) const;
+    Q_INVOKABLE QString get_state_for_gstin(const QString& gstin) const;
+    Q_INVOKABLE QString get_state_code_for_gstin(const QString& gstin) const;
+    Q_INVOKABLE QStringList get_prefixes() const;
+    Q_INVOKABLE QStringList get_party_types() const;
+    Q_INVOKABLE QStringList get_special_types() const;
+    Q_INVOKABLE QStringList get_gst_party_types() const;
+    Q_INVOKABLE QStringList get_routes() const;
+
+    Q_INVOKABLE QVariantMap get_total_opening_balance_summary(int excludePartyId = 0, double pendingAmount = 0.0, const QString& pendingBalType = "") const;
+    Q_INVOKABLE QString get_financial_year_start() const;
 
     Q_INVOKABLE bool add_party(
         const QString& name, const QString& ptype, const QString& phone,
         const QString& place, const QString& gstin, double op_bal, const QString& bal_type
     );
+
+    Q_INVOKABLE bool add_ledger_extended(const QVariantMap& data);
+    Q_INVOKABLE bool update_ledger_extended(int party_id, const QVariantMap& data);
 
     Q_INVOKABLE bool add_ledger_full(
         const QString& name, const QString& alias, const QString& prefix,

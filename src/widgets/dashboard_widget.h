@@ -14,6 +14,7 @@
 #include "../services/print_export_controller.h"
 #include "../models/dashboard_controller.h"
 #include "../models/firm_manager.h"
+#include "../engine/bahi_khata_migrator.h"
 
 // Forward declarations
 class DashboardMenuCard;
@@ -26,11 +27,12 @@ public:
     explicit DashboardWidget(DashboardController* dashCtrl = nullptr,
                             FirmManager* firmMgr = nullptr,
                             PrintExportController* printExportCtrl = nullptr,
+                            BahiKhataMigrator* migrator = nullptr,
                             QWidget* parent = nullptr);
     ~DashboardWidget() override = default;
 
     void refreshStats();
-    void setControllers(DashboardController* dashCtrl, FirmManager* firmMgr);
+    void setControllers(DashboardController* dashCtrl, FirmManager* firmMgr, BahiKhataMigrator* migrator = nullptr);
 
 signals:
     void openViewRequested(int viewIndex);
@@ -43,6 +45,7 @@ public slots:
     void openAddVoucherMenu(int initialIndex = 0);
     void openOtherVoucherMenu(int initialIndex = 0);
     void openReportsMenu(int initialIndex = 0);
+    void onSyncClicked();
 
 protected:
     void showEvent(QShowEvent* event) override;
@@ -67,6 +70,7 @@ private:
     DashboardController* m_dashCtrl = nullptr;
     FirmManager* m_firmMgr = nullptr;
     PrintExportController* m_printExportCtrl = nullptr;
+    BahiKhataMigrator* m_migrator = nullptr;
 
     int m_selectedMenuIndex = 0;
     int m_lastOpenedMenuIndex = -1;
@@ -78,6 +82,8 @@ private:
     QVector<DashboardMenuCard*> m_menuCards;
 
     // Header elements
+    QPushButton* m_openFirmBtn = nullptr;
+    QPushButton* m_syncBtn = nullptr;
     QPushButton* m_periodBtn = nullptr;
     QPushButton* m_newPaddyBtn = nullptr;
     QPushButton* m_newInvoiceBtn = nullptr;

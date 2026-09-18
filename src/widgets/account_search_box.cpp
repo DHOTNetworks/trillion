@@ -20,7 +20,7 @@ AccountSearchBox::AccountSearchBox(QWidget* parent)
         "  padding: 2px 6px;"
         "  font-size: 11px;"
         "  font-weight: 700;"
-        "  font-family: 'Segoe UI', -apple-system, sans-serif;"
+        "  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', 'Noto Sans', 'Liberation Sans', Arial, sans-serif;"
         "}"
         "QLineEdit:focus {"
         "  border: 1.5px solid #2563EB;"
@@ -50,7 +50,7 @@ AccountSearchBox::AccountSearchBox(QWidget* parent)
         "QListWidget {"
         "  border: none;"
         "  background-color: #FFFFFF;"
-        "  font-family: 'Segoe UI', -apple-system, sans-serif;"
+        "  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', 'Noto Sans', 'Liberation Sans', Arial, sans-serif;"
         "  font-size: 11.5px;"
         "}"
         "QListWidget::item {"
@@ -97,7 +97,7 @@ void AccountSearchBox::setPartyName(const QString& partyName) {
 }
 
 QString AccountSearchBox::currentPartyName() const {
-    return text().trimmed();
+    return text();
 }
 
 void AccountSearchBox::openSearchPopup() {
@@ -133,7 +133,7 @@ void AccountSearchBox::positionPopup() {
 
 void AccountSearchBox::updateResults() {
     if (!m_searchFn) return;
-    QString q = text().trimmed();
+    QString q = text();
     QVariantList results = m_searchFn(q);
 
     m_listWidget->clear();

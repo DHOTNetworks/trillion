@@ -1,5 +1,6 @@
 #include "dashboard_widget.h"
 #include "accounting_period_dialog.h"
+#include "mdb_migration_dialog.h"
 #include "../engine/accounting_engine.h"
 #include "../database_manager.h"
 #include <QSqlQuery>
@@ -16,25 +17,28 @@
 #include <QMouseEvent>
 #include <QEnterEvent>
 #include <QTimer>
+#include <QFileDialog>
+#include <QDir>
+#include <QFile>
 
 DashboardWidget::DashboardWidget(DashboardController* dashCtrl,
                                  FirmManager* firmMgr,
                                  PrintExportController* printExportCtrl,
+                                 BahiKhataMigrator* migrator,
                                  QWidget* parent)
     : QWidget(parent)
     , m_dashCtrl(dashCtrl)
     , m_firmMgr(firmMgr)
     , m_printExportCtrl(printExportCtrl)
+    , m_migrator(migrator)
 {
     setupUi();
-    refreshStats();
-}
-
-void DashboardWidget::setControllers(DashboardController* dashCtrl, FirmManager* firmMgr) {
-    m_dashCtrl = dashCtrl;
-    m_firmMgr = firmMgr;
     if (m_dashCtrl) {
-        connect(m_dashCtrl, &DashboardController::statsChanged, this, &DashboardWidget::refreshStats);
+        connect(m_dashCtrl, &DashboardController::statsChanged, this, [this]() {
+            if (m_paddyStockLabel) m_paddyStockLabel->setText(m_dashCtrl->paddyStock());
+            if (m_riceStockLabel) m_riceStockLabel->setText(m_dashCtrl->riceStock());
+            if (m_totalSalesLabel) m_totalSalesLabel->setText(m_dashCtrl->totalSales());
+        });
     }
     if (m_firmMgr) {
         connect(m_firmMgr, &FirmManager::firmSwitched, this, [this](const QString&, const QString&) {
@@ -42,6 +46,61 @@ void DashboardWidget::setControllers(DashboardController* dashCtrl, FirmManager*
         });
     }
     refreshStats();
+}
+
+void DashboardWidget::setControllers(DashboardController* dashCtrl, FirmManager* firmMgr, BahiKhataMigrator* migrator) {
+    m_dashCtrl = dashCtrl;
+    m_firmMgr = firmMgr;
+    if (migrator) m_migrator = migrator;
+    if (m_dashCtrl) {
+        connect(m_dashCtrl, &DashboardController::statsChanged, this, [this]() {
+            if (m_paddyStockLabel) m_paddyStockLabel->setText(m_dashCtrl->paddyStock());
+            if (m_riceStockLabel) m_riceStockLabel->setText(m_dashCtrl->riceStock());
+            if (m_totalSalesLabel) m_totalSalesLabel->setText(m_dashCtrl->totalSales());
+        });
+    }
+    if (m_firmMgr) {
+        connect(m_firmMgr, &FirmManager::firmSwitched, this, [this](const QString&, const QString&) {
+            refreshStats();
+        });
+    }
+    refreshStats();
+}
+
+void DashboardWidget::onSyncClicked() {
+    if (!m_firmMgr) return;
+    QVariantMap firmInfo = m_firmMgr->currentFirmInfo();
+    QString fullPath = firmInfo.value("full_path").toString();
+    if (fullPath.isEmpty()) {
+        QString src = firmInfo.value("source_file").toString();
+        if (!src.isEmpty()) {
+            fullPath = m_firmMgr->activeFolder() + "/" + src;
+        }
+    }
+    if (fullPath.isEmpty() || !QFile::exists(fullPath)) {
+        QDir firmDir("/Users/karan/Firm Data");
+        if (firmDir.exists()) {
+            for (const auto& f : firmDir.entryInfoList({"*.004", "*.001", "*.002", "*.003", "*.mdb"}, QDir::Files)) {
+                fullPath = f.absoluteFilePath();
+                break;
+            }
+        }
+    }
+
+    if (fullPath.isEmpty() || !QFile::exists(fullPath)) {
+        fullPath = QFileDialog::getOpenFileName(this, "Select Bahi-Khata Data File to Sync", "/Users/karan/Firm Data", "Bahi-Khata Files (*.004 *.001 *.002 *.003 *.mdb);;All Files (*.*)");
+    }
+
+    if (!fullPath.isEmpty() && QFile::exists(fullPath)) {
+        QString firmName = m_firmMgr->currentFirmName();
+        QString firmId = m_firmMgr->currentFirmId();
+        MdbMigrationDialog dlg(m_migrator, m_firmMgr, fullPath, firmName, firmId, this);
+        connect(&dlg, &MdbMigrationDialog::migrationCompleted, this, [this](const QString&, const QString&) {
+            refreshStats();
+        });
+        dlg.exec();
+        refreshStats();
+    }
 }
 
 void DashboardWidget::setupUi() {
@@ -61,7 +120,7 @@ void DashboardWidget::setupUi() {
     QVBoxLayout* titleBox = new QVBoxLayout();
     titleBox->setSpacing(2);
     QLabel* mainTitle = new QLabel("Executive Accounting Dashboard", this);
-    mainTitle->setStyleSheet("font-size: 22px; font-weight: 800; color: #0F172A; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto; border: none; background: transparent;");
+    mainTitle->setStyleSheet("font-size: 22px; font-weight: 800; color: #0F172A; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', 'Noto Sans', 'Liberation Sans', Arial, sans-serif; border: none; background: transparent;");
     titleBox->addWidget(mainTitle);
 
     QLabel* subTitle = new QLabel("Mahadev Rice Milling ERP & Financial Control System", this);
@@ -74,6 +133,28 @@ void DashboardWidget::setupUi() {
     // Header Buttons
     QHBoxLayout* btnBox = new QHBoxLayout();
     btnBox->setSpacing(8);
+
+    // Open Firm Button (Alt+F1)
+    m_openFirmBtn = new QPushButton("Open Firm  [Alt+F1]", this);
+    m_openFirmBtn->setFixedHeight(36);
+    m_openFirmBtn->setCursor(Qt::PointingHandCursor);
+    m_openFirmBtn->setStyleSheet(
+        "QPushButton { background-color: #FFFFFF; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 0px 14px; font-weight: 700; color: #334155; font-size: 12px; }"
+        "QPushButton:hover { background-color: #F1F5F9; border-color: #94A3B8; }"
+    );
+    connect(m_openFirmBtn, &QPushButton::clicked, this, [this]() { emit openViewRequested(22); });
+    btnBox->addWidget(m_openFirmBtn);
+
+    // Sync Bahi-Khata Data Button
+    m_syncBtn = new QPushButton("Sync Data", this);
+    m_syncBtn->setFixedHeight(36);
+    m_syncBtn->setCursor(Qt::PointingHandCursor);
+    m_syncBtn->setStyleSheet(
+        "QPushButton { background-color: #EFF6FF; border: 1.5px solid #3B82F6; border-radius: 6px; padding: 0px 14px; font-weight: 700; color: #1D4ED8; font-size: 12px; }"
+        "QPushButton:hover { background-color: #DBEAFE; border-color: #2563EB; }"
+    );
+    connect(m_syncBtn, &QPushButton::clicked, this, &DashboardWidget::onSyncClicked);
+    btnBox->addWidget(m_syncBtn);
 
     // Period Button
     m_periodBtn = new QPushButton(this);
@@ -325,7 +406,7 @@ QWidget* DashboardWidget::createStatCard(const QString& title, QLabel** outValLa
     content->addWidget(tLabel);
 
     *outValLabel = new QLabel("0.0 Qtl", card);
-    (*outValLabel)->setStyleSheet("color: #0F172A; font-size: 20px; font-weight: 800; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto; border: none; background: transparent;");
+    (*outValLabel)->setStyleSheet("color: #0F172A; font-size: 20px; font-weight: 800; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', 'Noto Sans', 'Liberation Sans', Arial, sans-serif; border: none; background: transparent;");
     content->addWidget(*outValLabel);
 
     if (!subtext.isEmpty()) {
@@ -545,6 +626,8 @@ void DashboardWidget::refreshStats() {
 
     // 2. Metrics from DashboardController / Database
     if (m_dashCtrl) {
+        FiscalYearInfo fy = FiscalYearHelper::getActiveFiscalYear();
+        m_dashCtrl->refresh_stats(fy.startDate, fy.endDate, fy.name);
         if (m_paddyStockLabel) m_paddyStockLabel->setText(m_dashCtrl->paddyStock());
         if (m_riceStockLabel) m_riceStockLabel->setText(m_dashCtrl->riceStock());
         if (m_totalSalesLabel) m_totalSalesLabel->setText(m_dashCtrl->totalSales());

@@ -35,12 +35,12 @@ void DashboardController::refresh_stats(const QString& fromDate, const QString& 
         }
     }
 
-    // 1. Point-in-time Stock as of tDate (Paddy Basmati - Item 43)
+    // 1. Point-in-time Stock as of tDate (Paddy Basmati - Item 43 or Paddy)
     double paddyVal = 0.0;
     QString targetDate = !tDate.isEmpty() ? tDate : "9999-12-31";
     QVariant pAudited = DatabaseManager::instance().executeScalar(
-        "SELECT weight_qtl FROM custom_closing_stocks "
-        "WHERE item_code = '43' AND closing_date = ? LIMIT 1;",
+        "SELECT SUM(weight_qtl) FROM custom_closing_stocks "
+        "WHERE (item_name LIKE '%Paddy%' OR item_code = '43') AND closing_date = ?;",
         {targetDate}
     );
     if (pAudited.isValid() && pAudited.toDouble() > 0.0) {
@@ -48,8 +48,8 @@ void DashboardController::refresh_stats(const QString& fromDate, const QString& 
     } else {
         // Query latest audited closing stock on or before targetDate
         QVariantList pPriorList = DatabaseManager::instance().executeQuery(
-            "SELECT closing_date, weight_qtl FROM custom_closing_stocks "
-            "WHERE item_code = '43' AND closing_date <= ? ORDER BY closing_date DESC LIMIT 1;",
+            "SELECT closing_date, SUM(weight_qtl) as weight_qtl FROM custom_closing_stocks "
+            "WHERE (item_name LIKE '%Paddy%' OR item_code = '43') AND closing_date <= ? GROUP BY closing_date ORDER BY closing_date DESC LIMIT 1;",
             {targetDate}
         );
         QString cDate = "1900-01-01";
@@ -62,7 +62,7 @@ void DashboardController::refresh_stats(const QString& fromDate, const QString& 
         // Live transactions between cDate and targetDate
         QVariant pIn = DatabaseManager::instance().executeScalar(
             "SELECT SUM(weight_qtl) FROM stock_transactions "
-            "WHERE item_code = '43' AND trans_type IN ('Purc', 'Inward', 'P') "
+            "WHERE (item_name LIKE '%Paddy%' OR item_code = '43') AND trans_type IN ('Purc', 'Inward', 'P') "
             "AND voucher_date > ? AND voucher_date <= ?;",
             {cDate, targetDate}
         );
@@ -70,7 +70,7 @@ void DashboardController::refresh_stats(const QString& fromDate, const QString& 
 
         QVariant pOut = DatabaseManager::instance().executeScalar(
             "SELECT SUM(weight_qtl) FROM stock_transactions "
-            "WHERE item_code = '43' AND trans_type IN ('Sale', 'Outward', 'S') "
+            "WHERE (item_name LIKE '%Paddy%' OR item_code = '43') AND trans_type IN ('Sale', 'Outward', 'S') "
             "AND voucher_date > ? AND voucher_date <= ?;",
             {cDate, targetDate}
         );
@@ -80,11 +80,11 @@ void DashboardController::refresh_stats(const QString& fromDate, const QString& 
     }
     m_paddyStock = AccountingEngine::formatIndianNumber(paddyVal, 1, "Qtl");
 
-    // 2. Point-in-time Stock as of tDate (Rice Basmati Non Branded - Item 30)
+    // 2. Point-in-time Stock as of tDate (Rice Basmati Non Branded - Item 30 or Rice)
     double riceVal = 0.0;
     QVariant rAudited = DatabaseManager::instance().executeScalar(
-        "SELECT weight_qtl FROM custom_closing_stocks "
-        "WHERE item_code = '30' AND closing_date = ? LIMIT 1;",
+        "SELECT SUM(weight_qtl) FROM custom_closing_stocks "
+        "WHERE (item_name LIKE '%Rice%' OR item_code = '30') AND closing_date = ?;",
         {targetDate}
     );
     if (rAudited.isValid() && rAudited.toDouble() > 0.0) {
@@ -92,8 +92,8 @@ void DashboardController::refresh_stats(const QString& fromDate, const QString& 
     } else {
         // Query latest audited closing stock on or before targetDate
         QVariantList rPriorList = DatabaseManager::instance().executeQuery(
-            "SELECT closing_date, weight_qtl FROM custom_closing_stocks "
-            "WHERE item_code = '30' AND closing_date <= ? ORDER BY closing_date DESC LIMIT 1;",
+            "SELECT closing_date, SUM(weight_qtl) as weight_qtl FROM custom_closing_stocks "
+            "WHERE (item_name LIKE '%Rice%' OR item_code = '30') AND closing_date <= ? GROUP BY closing_date ORDER BY closing_date DESC LIMIT 1;",
             {targetDate}
         );
         QString cDate = "1900-01-01";
@@ -106,7 +106,7 @@ void DashboardController::refresh_stats(const QString& fromDate, const QString& 
         // Live purchases between cDate and targetDate
         QVariant rIn = DatabaseManager::instance().executeScalar(
             "SELECT SUM(weight_qtl) FROM stock_transactions "
-            "WHERE item_code = '30' AND trans_type IN ('Purc', 'Inward', 'P') "
+            "WHERE (item_name LIKE '%Rice%' OR item_code = '30') AND trans_type IN ('Purc', 'Inward', 'P') "
             "AND voucher_date > ? AND voucher_date <= ?;",
             {cDate, targetDate}
         );
@@ -115,7 +115,7 @@ void DashboardController::refresh_stats(const QString& fromDate, const QString& 
         // Live milling production between cDate and targetDate
         QVariant rMill = DatabaseManager::instance().executeScalar(
             "SELECT SUM(weight_qtl) FROM milling_voucher_items "
-            "WHERE item_code = '30' AND drcr = 'Dr' "
+            "WHERE (item_name LIKE '%Rice%' OR item_code = '30') AND drcr = 'Dr' "
             "AND batch_date > ? AND batch_date <= ?;",
             {cDate, targetDate}
         );
@@ -124,7 +124,7 @@ void DashboardController::refresh_stats(const QString& fromDate, const QString& 
         // Live sales between cDate and targetDate
         QVariant rOut = DatabaseManager::instance().executeScalar(
             "SELECT SUM(weight_qtl) FROM stock_transactions "
-            "WHERE item_code = '30' AND trans_type IN ('Sale', 'Outward', 'S') "
+            "WHERE (item_name LIKE '%Rice%' OR item_code = '30') AND trans_type IN ('Sale', 'Outward', 'S') "
             "AND voucher_date > ? AND voucher_date <= ?;",
             {cDate, targetDate}
         );

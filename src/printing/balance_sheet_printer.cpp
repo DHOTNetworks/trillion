@@ -67,7 +67,7 @@ QString BalanceSheetPrinter::generateHtml(const BalanceSheetData& data) {
 
     QString html = QString(
         "<!DOCTYPE html><html><head><meta charset='utf-8'><style>"
-        "  body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 8.5pt; color: #000000; margin: 0; padding: 0; background-color: #ffffff; }"
+        "  body { font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', Arial, 'Liberation Sans', 'DejaVu Sans', sans-serif; font-size: 8.5pt; color: #000000; margin: 0; padding: 0; background-color: #ffffff; }"
         "  table { border-collapse: collapse; }"
         "  .main-table { width: 100%; border-collapse: collapse; margin-top: 4pt; }"
         "  .col-hdr-left { border-top: 1.5pt solid #000000; border-bottom: 1.5pt solid #000000; border-right: 1pt solid #000000; font-weight: bold; font-size: 8.5pt; padding: 4pt 8pt 4pt 4pt; background-color: #f8f8f8; }"
@@ -78,7 +78,7 @@ QString BalanceSheetPrinter::generateHtml(const BalanceSheetData& data) {
         "  .items-table td { border: none; padding: 1.5pt 2pt; font-size: 8pt; }"
         "  .group-title { font-weight: bold; padding-top: 2pt !important; text-decoration: underline; }"
         "  .child-item { padding-left: 10pt !important; }"
-        "  .num-amt { font-family: 'Courier New', Courier, monospace; font-weight: bold; text-align: right; white-space: nowrap; }"
+        "  .num-amt { font-family: 'Consolas', 'Menlo', 'Monaco', 'DejaVu Sans Mono', 'Liberation Mono', 'Courier New', monospace; font-weight: bold; text-align: right; white-space: nowrap; }"
         "  .tot-table { width: 100%; border-collapse: collapse; margin-top: 6pt; border-top: 1.5pt solid #000000; border-bottom: 3.5pt double #000000; background-color: #f8f8f8; }"
         "  .sign-table { width: 100%; margin-top: 20pt; border-collapse: collapse; border: none; }"
         "  .sign-box { border-top: 1pt solid #000000; padding-top: 3pt; min-width: 170px; text-align: center; font-size: 8.5pt; font-weight: bold; }"

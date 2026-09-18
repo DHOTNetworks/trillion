@@ -107,7 +107,7 @@ void FirmSelectorWidget::setupUi() {
         "  padding: 0px 10px;"
         "  font-size: 12px;"
         "  color: #0F172A;"
-        "  font-family: 'Consolas', monospace;"
+        "  font-family: 'Consolas', 'Menlo', 'Monaco', 'DejaVu Sans Mono', 'Liberation Mono', 'Courier New', monospace;"
         "}"
         "QLineEdit:focus {"
         "  border: 1.5px solid #2563EB;"

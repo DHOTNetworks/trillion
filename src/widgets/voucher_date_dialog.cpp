@@ -45,7 +45,7 @@ void VoucherDateDialog::setupUi() {
         "QLabel {"
         "  color: #0369A1;"
         "  background: transparent;"
-        "  font-family: 'Segoe UI', -apple-system, sans-serif;"
+        "  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', 'Noto Sans', 'Liberation Sans', Arial, sans-serif;"
         "}"
         "QLineEdit {"
         "  background-color: #FFFFFF;"

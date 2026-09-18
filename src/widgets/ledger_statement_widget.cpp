@@ -46,9 +46,9 @@ void LedgerStatementWidget::setupUi() {
     QVBoxLayout* titleLayout = new QVBoxLayout();
     titleLayout->setSpacing(1);
     QLabel* titleLabel = new QLabel("Account Ledger Statement (2-Column Dr / Cr)", headerCard);
-    titleLabel->setStyleSheet("font-size: 16px; font-weight: bold; color: #0F172A; font-family: 'Segoe UI', sans-serif; border: none; background: transparent;");
+    titleLabel->setStyleSheet("font-size: 16px; font-weight: bold; color: #0F172A; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', 'Noto Sans', 'Liberation Sans', Arial, sans-serif; border: none; background: transparent;");
     QLabel* subtitleLabel = new QLabel("Side-by-side Credit (Cr) and Debit (Dr) accounting ledger with interactive reconciliation.", headerCard);
-    subtitleLabel->setStyleSheet("font-size: 11px; color: #64748B; font-family: 'Segoe UI', sans-serif; border: none; background: transparent;");
+    subtitleLabel->setStyleSheet("font-size: 11px; color: #64748B; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', 'Noto Sans', 'Liberation Sans', Arial, sans-serif; border: none; background: transparent;");
     titleLayout->addWidget(titleLabel);
     titleLayout->addWidget(subtitleLabel);
     headerLayout->addLayout(titleLayout);
@@ -423,7 +423,7 @@ void LedgerStatementWidget::updateHeadersAndTotals() {
     }
 
     m_netBalanceLabel->setText(QString("Closing Balance: %1 %2").arg(AccountingEngine::formatIndianCurrency(diff, true), balType));
-    m_netBalanceLabel->setStyleSheet(QString("color: %1; font-weight: bold; font-size: 14px; border: none; background: transparent; font-family: 'Segoe UI', sans-serif;").arg(balColor));
+    m_netBalanceLabel->setStyleSheet(QString("color: %1; font-weight: bold; font-size: 14px; border: none; background: transparent; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', 'Noto Sans', 'Liberation Sans', Arial, sans-serif;").arg(balColor));
 
     double checkedDiff = std::abs(m_controller->drSelectedTotal() - m_controller->crSelectedTotal());
     m_checkedDiffLabel->setText(QString("Checked Difference: %1").arg(AccountingEngine::formatIndianCurrency(checkedDiff, true)));

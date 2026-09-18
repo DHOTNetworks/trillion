@@ -38,18 +38,22 @@ SalesVoucherWidget::~SalesVoucherWidget() {
 void SalesVoucherWidget::setupUi() {
     setAttribute(Qt::WA_StyledBackground, true);
     setStyleSheet(
-        "SalesVoucherWidget { background-color: #F8FAFC; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }"
+        "SalesVoucherWidget { background-color: #F8FAFC; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', 'Noto Sans', 'Liberation Sans', Arial, sans-serif; }"
         "QLabel { border: none; background: transparent; color: #1E293B; font-size: 11px; font-weight: 700; }"
         "QLineEdit { background-color: #FFFFFF; color: #0F172A; border: 1px solid #CBD5E1; border-radius: 6px; padding: 2px 6px; font-size: 11.5px; font-weight: 700; }"
         "QLineEdit:focus { border: 1.5px solid #2563EB; background-color: #EFF6FF; }"
         "QComboBox { background-color: #FFFFFF; color: #0F172A; border: 1px solid #CBD5E1; border-radius: 6px; padding: 2px 6px; font-size: 11.5px; font-weight: 700; }"
         "QComboBox:focus { border: 1.5px solid #2563EB; background-color: #EFF6FF; }"
-        "QRadioButton { font-size: 11px; font-weight: 700; color: #334155; spacing: 4px; background: transparent; }"
-        "QRadioButton::indicator { width: 13px; height: 13px; }"
+        "QRadioButton { font-size: 11px; font-weight: 700; color: #1E293B; spacing: 5px; background: transparent; }"
+        "QRadioButton:hover { color: #0F172A; }"
+        "QRadioButton::indicator { width: 14px; height: 14px; border-radius: 7px; border: 1.5px solid #94A3B8; background-color: #FFFFFF; }"
+        "QRadioButton::indicator:hover { border-color: #2563EB; background-color: #EFF6FF; }"
+        "QRadioButton::indicator:checked { border: 4.5px solid #2563EB; background-color: #FFFFFF; }"
+        "QRadioButton::indicator:checked:hover { border-color: #1D4ED8; }"
         "QCheckBox { font-size: 11px; font-weight: 700; color: #334155; spacing: 4px; background: transparent; }"
         "QCheckBox::indicator { width: 13px; height: 13px; background: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 3px; }"
-        "QGroupBox { font-size: 11px; font-weight: 800; color: #1E293B; border: 1px solid #E2E8F0; border-radius: 6px; margin-top: 6px; padding: 3px 6px; background: #FFFFFF; }"
-        "QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top left; padding: 0 4px; left: 6px; color: #475569; }"
+        "QGroupBox { font-size: 10.5px; font-weight: 800; color: #1E293B; border: 1px solid #CBD5E1; border-radius: 6px; margin-top: 6px; padding: 2px 8px 3px 8px; background-color: #F8FAFC; }"
+        "QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top left; padding: 0 4px; left: 8px; color: #2563EB; font-weight: 800; }"
         "QPushButton { background-color: #F1F5F9; border: 1px solid #CBD5E1; border-radius: 6px; font-size: 11px; font-weight: 700; color: #475569; padding: 3px 10px; }"
         "QPushButton:hover { background-color: #E2E8F0; }"
         "QPushButton:focus { border: 1.5px solid #2563EB; background-color: #EFF6FF; }"
@@ -79,7 +83,7 @@ void SalesVoucherWidget::setupUi() {
 
     m_titleHeaderLabel = new QLabel("F8 : Sale Voucher", this);
     m_titleHeaderLabel->setAlignment(Qt::AlignCenter);
-    m_titleHeaderLabel->setStyleSheet("font-size: 15px; font-weight: 900; color: #0F172A; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto;");
+    m_titleHeaderLabel->setStyleSheet("font-size: 15px; font-weight: 900; color: #0F172A; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', 'Noto Sans', 'Liberation Sans', Arial, sans-serif;");
     topHeaderLayout->addWidget(m_titleHeaderLabel);
 
     topHeaderLayout->addStretch(1);
@@ -181,36 +185,11 @@ void SalesVoucherWidget::setupUi() {
     connect(m_saleButtonGroup, &QButtonGroup::idClicked, this, &SalesVoucherWidget::onSaleStatusChanged);
     row1->addWidget(m_saleStatusGroupBox);
 
-    // Tax Status (Always visible, well-spaced)
-    m_taxStatusGroupBox = new QGroupBox("Tax Status : (Alt+R / Alt+T)", this);
-    QHBoxLayout* taxStatLayout = new QHBoxLayout(m_taxStatusGroupBox);
-    taxStatLayout->setContentsMargins(6, 2, 6, 2);
-    taxStatLayout->setSpacing(8);
-
-    m_taxButtonGroup = new QButtonGroup(this);
-    m_taxGstRadio = new QRadioButton("GST / Exempt", m_taxStatusGroupBox);
-    m_taxGstRadio->setStyleSheet("color: #CC0000; font-weight: 800;");
-    m_taxIgstRadio = new QRadioButton("IGST", m_taxStatusGroupBox);
-    m_taxIgstRadio->setStyleSheet("color: #CC0000; font-weight: 800;");
-    m_taxExportRadio = new QRadioButton("Export", m_taxStatusGroupBox);
-    m_taxExportRadio->setStyleSheet("color: #CC0000; font-weight: 800;");
-
-    m_taxGstRadio->setChecked(true);
-    m_taxButtonGroup->addButton(m_taxGstRadio, 0);
-    m_taxButtonGroup->addButton(m_taxIgstRadio, 1);
-    m_taxButtonGroup->addButton(m_taxExportRadio, 2);
-
-    taxStatLayout->addWidget(m_taxGstRadio);
-    taxStatLayout->addWidget(m_taxIgstRadio);
-    taxStatLayout->addWidget(m_taxExportRadio);
-    connect(m_taxButtonGroup, &QButtonGroup::idClicked, this, &SalesVoucherWidget::onTaxStatusChanged);
-    row1->addWidget(m_taxStatusGroupBox);
-
     // Market Fee Status (Mandi Only)
     m_marketFeeStatusGroupBox = new QGroupBox("Market Fee Status (Alt+F)", this);
     QHBoxLayout* feeStatLayout = new QHBoxLayout(m_marketFeeStatusGroupBox);
-    feeStatLayout->setContentsMargins(4, 2, 4, 2);
-    feeStatLayout->setSpacing(6);
+    feeStatLayout->setContentsMargins(6, 2, 6, 2);
+    feeStatLayout->setSpacing(8);
 
     m_feeButtonGroup = new QButtonGroup(this);
     m_feePayableRadio = new QRadioButton("Payable", m_marketFeeStatusGroupBox);
@@ -224,7 +203,31 @@ void SalesVoucherWidget::setupUi() {
     connect(m_feeButtonGroup, &QButtonGroup::idClicked, this, &SalesVoucherWidget::onMarketFeeStatusChanged);
     row1->addWidget(m_marketFeeStatusGroupBox);
 
+    // Push Tax Status to the right side corner
     row1->addStretch(1);
+
+    // Tax Status (Always visible, aligned to right side corner)
+    m_taxStatusGroupBox = new QGroupBox("Tax Status : (Alt+R / Alt+T)", this);
+    QHBoxLayout* taxStatLayout = new QHBoxLayout(m_taxStatusGroupBox);
+    taxStatLayout->setContentsMargins(8, 2, 8, 2);
+    taxStatLayout->setSpacing(10);
+
+    m_taxButtonGroup = new QButtonGroup(this);
+    m_taxGstRadio = new QRadioButton("GST / Exempt", m_taxStatusGroupBox);
+    m_taxIgstRadio = new QRadioButton("IGST", m_taxStatusGroupBox);
+    m_taxExportRadio = new QRadioButton("Export", m_taxStatusGroupBox);
+
+    m_taxGstRadio->setChecked(true);
+    m_taxButtonGroup->addButton(m_taxGstRadio, 0);
+    m_taxButtonGroup->addButton(m_taxIgstRadio, 1);
+    m_taxButtonGroup->addButton(m_taxExportRadio, 2);
+
+    taxStatLayout->addWidget(m_taxGstRadio);
+    taxStatLayout->addWidget(m_taxIgstRadio);
+    taxStatLayout->addWidget(m_taxExportRadio);
+    connect(m_taxButtonGroup, &QButtonGroup::idClicked, this, &SalesVoucherWidget::onTaxStatusChanged);
+    row1->addWidget(m_taxStatusGroupBox);
+
     rootLayout->addLayout(row1);
 
     // ========================================================================
@@ -279,29 +282,31 @@ void SalesVoucherWidget::setupUi() {
     // 4. LINE ITEMS TABLE & TOTAL SUMMARY ROW
     // ========================================================================
     m_tableWidget = new QTableWidget(this);
-    m_tableWidget->setColumnCount(9);
+    m_tableWidget->setColumnCount(10);
     m_tableWidget->setHorizontalHeaderLabels({
-        "No.", "Item Name", "Bags", "Pkng.", "Weight", "GST", "Rate", "Amount", "Act"
+        "No.", "Item Name", "Grade", "Bags", "Pkng.", "Weight", "GST", "Rate", "Amount", "Act"
     });
 
     m_tableWidget->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Fixed);
-    m_tableWidget->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
-    m_tableWidget->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Fixed);
+    m_tableWidget->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Interactive);
+    m_tableWidget->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
     m_tableWidget->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Fixed);
     m_tableWidget->horizontalHeader()->setSectionResizeMode(4, QHeaderView::Fixed);
     m_tableWidget->horizontalHeader()->setSectionResizeMode(5, QHeaderView::Fixed);
     m_tableWidget->horizontalHeader()->setSectionResizeMode(6, QHeaderView::Fixed);
     m_tableWidget->horizontalHeader()->setSectionResizeMode(7, QHeaderView::Fixed);
     m_tableWidget->horizontalHeader()->setSectionResizeMode(8, QHeaderView::Fixed);
+    m_tableWidget->horizontalHeader()->setSectionResizeMode(9, QHeaderView::Fixed);
 
     m_tableWidget->setColumnWidth(0, 35);
-    m_tableWidget->setColumnWidth(2, 65);
+    m_tableWidget->setColumnWidth(1, 230);
     m_tableWidget->setColumnWidth(3, 65);
-    m_tableWidget->setColumnWidth(4, 85);
-    m_tableWidget->setColumnWidth(5, 50);
-    m_tableWidget->setColumnWidth(6, 95);
-    m_tableWidget->setColumnWidth(7, 115);
-    m_tableWidget->setColumnWidth(8, 35);
+    m_tableWidget->setColumnWidth(4, 65);
+    m_tableWidget->setColumnWidth(5, 85);
+    m_tableWidget->setColumnWidth(6, 50);
+    m_tableWidget->setColumnWidth(7, 95);
+    m_tableWidget->setColumnWidth(8, 115);
+    m_tableWidget->setColumnWidth(9, 35);
 
     m_tableWidget->verticalHeader()->setVisible(false);
     m_tableWidget->setSelectionBehavior(QAbstractItemView::SelectItems);
@@ -313,7 +318,7 @@ void SalesVoucherWidget::setupUi() {
         "QTableWidget {"
         "  background-color: #FFFFFF;"
         "  gridline-color: #F1F5F9;"
-        "  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;"
+        "  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', 'Noto Sans', 'Liberation Sans', Arial, sans-serif;"
         "  font-size: 11.5px;"
         "  color: #0F172A;"
         "  border: 1px solid #E2E8F0;"
@@ -894,7 +899,7 @@ void SalesVoucherWidget::advanceCell() {
     if (curCol < 0) curCol = 1;
 
     QTableWidgetItem* nameIt = m_tableWidget->item(curRow, 1);
-    bool isItemEmpty = (!nameIt || nameIt->text().trimmed().isEmpty());
+    bool isItemEmpty = (!nameIt || nameIt->text().isEmpty());
 
     if (curCol == 1 && isItemEmpty) {
         if (curRow > 0 && curRow == m_tableWidget->rowCount() - 1) {
@@ -912,15 +917,15 @@ void SalesVoucherWidget::advanceCell() {
     }
 
     int nextCol = curCol + 1;
-    while (nextCol < 8 && m_tableWidget->isColumnHidden(nextCol)) {
+    while (nextCol < 9 && m_tableWidget->isColumnHidden(nextCol)) {
         nextCol++;
     }
 
-    if (nextCol <= 7) {
+    if (nextCol <= 8) {
         m_tableWidget->setCurrentCell(curRow, nextCol);
         m_tableWidget->edit(m_tableWidget->currentIndex());
     } else {
-        if (nameIt && !nameIt->text().trimmed().isEmpty()) {
+        if (nameIt && !nameIt->text().isEmpty()) {
             if (curRow == m_tableWidget->rowCount() - 1) {
                 addNewLineRow();
             }
@@ -956,7 +961,7 @@ void SalesVoucherWidget::retreatCell() {
         m_tableWidget->setCurrentCell(curRow, prevCol);
         m_tableWidget->edit(m_tableWidget->currentIndex());
     } else if (curRow > 0) {
-        m_tableWidget->setCurrentCell(curRow - 1, 7);
+        m_tableWidget->setCurrentCell(curRow - 1, 8);
         m_tableWidget->edit(m_tableWidget->currentIndex());
     } else {
         if (m_partySearchWidget) {
@@ -976,10 +981,10 @@ void SalesVoucherWidget::onStockItemConfigured(int row, const QVariantMap& itemD
     m_tableWidget->item(row, 1)->setText(itemData.value("name").toString());
     double gst = itemData.value("gst_rate", 0.0).toDouble();
     if (gst == 0.0) gst = itemData.value("tax_rate", 0.0).toDouble();
-    if (m_tableWidget->item(row, 5)) m_tableWidget->item(row, 5)->setText(QString::number(gst, 'f', 0));
+    if (m_tableWidget->item(row, 6)) m_tableWidget->item(row, 6)->setText(QString::number(gst, 'f', 0));
     double rate = itemData.value("sale_rate", 0.0).toDouble();
     if (rate == 0.0) rate = itemData.value("sales_rate", 0.0).toDouble();
-    if (rate > 0 && m_tableWidget->item(row, 6)) m_tableWidget->item(row, 6)->setText(QString::number(rate, 'f', 2));
+    if (rate > 0 && m_tableWidget->item(row, 7)) m_tableWidget->item(row, 7)->setText(QString::number(rate, 'f', 2));
     m_isUpdatingTable = false;
     focusTableAt(row, 2);
 }
@@ -1020,7 +1025,7 @@ void SalesVoucherWidget::resetForm() {
     m_hasInitialDateOpened = false;
 
     m_titleHeaderLabel->setText("F8 : Sale Voucher");
-    m_titleHeaderLabel->setStyleSheet("font-size: 16px; font-weight: 900; color: #FF0000; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto;");
+    m_titleHeaderLabel->setStyleSheet("font-size: 16px; font-weight: 900; color: #FF0000; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', 'Noto Sans', 'Liberation Sans', Arial, sans-serif;");
     m_deleteBtn->setVisible(false);
     m_statusBanner->setVisible(false);
 
@@ -1102,7 +1107,7 @@ void SalesVoucherWidget::addNewLineRow() {
     int row = m_tableWidget->rowCount();
     m_isUpdatingTable = true;
     m_tableWidget->insertRow(row);
-    populateRow(row, "", 0, 0.500, 0.0, 0.0, 0.0, 0.0);
+    populateRow(row, "", "", 0, 0.500, 0.0, 0.0, 0.0, 0.0);
     m_isUpdatingTable = false;
 }
 
@@ -1115,7 +1120,7 @@ void SalesVoucherWidget::removeLineRow(int row) {
     }
 }
 
-void SalesVoucherWidget::populateRow(int row, const QString& itemName, int bags, double packing, double weight, double rate, double amount, double gstPct) {
+void SalesVoucherWidget::populateRow(int row, const QString& itemName, const QString& grade, int bags, double packing, double weight, double rate, double amount, double gstPct) {
     if (row >= m_tableWidget->rowCount()) {
         m_tableWidget->insertRow(row);
     }
@@ -1129,29 +1134,32 @@ void SalesVoucherWidget::populateRow(int row, const QString& itemName, int bags,
     QTableWidgetItem* nameItem = new QTableWidgetItem(itemName);
     m_tableWidget->setItem(row, 1, nameItem);
 
+    QTableWidgetItem* gradeItem = new QTableWidgetItem(grade);
+    m_tableWidget->setItem(row, 2, gradeItem);
+
     QTableWidgetItem* bagsItem = new QTableWidgetItem(bags > 0 ? QString::number(bags) : "");
     bagsItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    m_tableWidget->setItem(row, 2, bagsItem);
+    m_tableWidget->setItem(row, 3, bagsItem);
 
     QTableWidgetItem* pkgItem = new QTableWidgetItem(packing > 0.0 ? QString::number(packing, 'f', 3) : "0.500");
     pkgItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    m_tableWidget->setItem(row, 3, pkgItem);
+    m_tableWidget->setItem(row, 4, pkgItem);
 
     QTableWidgetItem* wtItem = new QTableWidgetItem(weight > 0.0 ? QString::number(weight, 'f', 3) : "");
     wtItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    m_tableWidget->setItem(row, 4, wtItem);
+    m_tableWidget->setItem(row, 5, wtItem);
 
     QTableWidgetItem* gstItem = new QTableWidgetItem(gstPct > 0.0 ? QString::number(gstPct, 'f', 0) : "0");
     gstItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    m_tableWidget->setItem(row, 5, gstItem);
+    m_tableWidget->setItem(row, 6, gstItem);
 
     QTableWidgetItem* rateItem = new QTableWidgetItem(rate > 0.0 ? QString::number(rate, 'f', 2) : "");
     rateItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    m_tableWidget->setItem(row, 6, rateItem);
+    m_tableWidget->setItem(row, 7, rateItem);
 
     QTableWidgetItem* amtItem = new QTableWidgetItem(amount > 0.0 ? QString::number(amount, 'f', 2) : "");
     amtItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    m_tableWidget->setItem(row, 7, amtItem);
+    m_tableWidget->setItem(row, 8, amtItem);
 
     m_isUpdatingTable = false;
 }
@@ -1160,26 +1168,26 @@ void SalesVoucherWidget::onTableCellChanged(int row, int column) {
     if (m_isUpdatingTable) return;
     m_isUpdatingTable = true;
 
-    if (column == 2 || column == 3 || column == 4 || column == 6) {
-        int bags = m_tableWidget->item(row, 2) ? m_tableWidget->item(row, 2)->text().toInt() : 0;
-        double pkg = m_tableWidget->item(row, 3) ? m_tableWidget->item(row, 3)->text().toDouble() : 0.500;
-        double wt = m_tableWidget->item(row, 4) ? m_tableWidget->item(row, 4)->text().toDouble() : 0.0;
-        double rate = m_tableWidget->item(row, 6) ? m_tableWidget->item(row, 6)->text().toDouble() : 0.0;
+    if (column == 3 || column == 4 || column == 5 || column == 7) {
+        int bags = m_tableWidget->item(row, 3) ? m_tableWidget->item(row, 3)->text().toInt() : 0;
+        double pkg = m_tableWidget->item(row, 4) ? m_tableWidget->item(row, 4)->text().toDouble() : 0.500;
+        double wt = m_tableWidget->item(row, 5) ? m_tableWidget->item(row, 5)->text().toDouble() : 0.0;
+        double rate = m_tableWidget->item(row, 7) ? m_tableWidget->item(row, 7)->text().toDouble() : 0.0;
 
-        if (column == 2 && pkg > 0.0001 && wt <= 0.0001) {
+        if (column == 3 && pkg > 0.0001 && wt <= 0.0001) {
             wt = (bags * pkg);
-            if (m_tableWidget->item(row, 4)) m_tableWidget->item(row, 4)->setText(QString::number(wt, 'f', 3));
+            if (m_tableWidget->item(row, 5)) m_tableWidget->item(row, 5)->setText(QString::number(wt, 'f', 3));
         }
 
         double amt = wt * rate;
-        if (m_tableWidget->item(row, 7)) m_tableWidget->item(row, 7)->setText(QString::number(amt, 'f', 2));
+        if (m_tableWidget->item(row, 8)) m_tableWidget->item(row, 8)->setText(QString::number(amt, 'f', 2));
     }
 
     m_isUpdatingTable = false;
     recalculateTotals();
 
-    if (row == m_tableWidget->rowCount() - 1 && column == 7) {
-        if (m_tableWidget->item(row, 1) && !m_tableWidget->item(row, 1)->text().trimmed().isEmpty()) {
+    if (row == m_tableWidget->rowCount() - 1 && column == 8) {
+        if (m_tableWidget->item(row, 1) && !m_tableWidget->item(row, 1)->text().isEmpty()) {
             addNewLineRow();
         }
     }
@@ -1192,12 +1200,12 @@ void SalesVoucherWidget::recalculateTotals() {
     double totalGst = 0.0;
 
     for (int r = 0; r < m_tableWidget->rowCount(); ++r) {
-        QString name = m_tableWidget->item(r, 1) ? m_tableWidget->item(r, 1)->text().trimmed() : "";
+        QString name = m_tableWidget->item(r, 1) ? m_tableWidget->item(r, 1)->text() : "";
         if (name.isEmpty()) continue;
-        int b = m_tableWidget->item(r, 2) ? m_tableWidget->item(r, 2)->text().toInt() : 0;
-        double w = m_tableWidget->item(r, 4) ? m_tableWidget->item(r, 4)->text().toDouble() : 0.0;
-        double amt = m_tableWidget->item(r, 7) ? m_tableWidget->item(r, 7)->text().toDouble() : 0.0;
-        double gst = m_tableWidget->item(r, 5) ? m_tableWidget->item(r, 5)->text().toDouble() : 0.0;
+        int b = m_tableWidget->item(r, 3) ? m_tableWidget->item(r, 3)->text().toInt() : 0;
+        double w = m_tableWidget->item(r, 5) ? m_tableWidget->item(r, 5)->text().toDouble() : 0.0;
+        double amt = m_tableWidget->item(r, 8) ? m_tableWidget->item(r, 8)->text().toDouble() : 0.0;
+        double gst = m_tableWidget->item(r, 6) ? m_tableWidget->item(r, 6)->text().toDouble() : 0.0;
 
         totalBags += b;
         totalWeight += w;
@@ -1264,16 +1272,18 @@ void SalesVoucherWidget::saveVoucher() {
 
     QVariantList items;
     for (int r = 0; r < m_tableWidget->rowCount(); ++r) {
-        QString name = m_tableWidget->item(r, 1) ? m_tableWidget->item(r, 1)->text().trimmed() : "";
+        QString name = m_tableWidget->item(r, 1) ? m_tableWidget->item(r, 1)->text() : "";
         if (name.isEmpty()) continue;
+        QString grade = m_tableWidget->item(r, 2) ? m_tableWidget->item(r, 2)->text() : "";
         QVariantMap itm;
         itm["item_name"] = name;
-        itm["bags"] = m_tableWidget->item(r, 2) ? m_tableWidget->item(r, 2)->text().toInt() : 0;
-        itm["packing"] = m_tableWidget->item(r, 3) ? m_tableWidget->item(r, 3)->text().toDouble() : 0.500;
-        itm["weight"] = m_tableWidget->item(r, 4) ? m_tableWidget->item(r, 4)->text().toDouble() : 0.0;
-        itm["rate"] = m_tableWidget->item(r, 6) ? m_tableWidget->item(r, 6)->text().toDouble() : 0.0;
-        itm["amount"] = m_tableWidget->item(r, 7) ? m_tableWidget->item(r, 7)->text().toDouble() : 0.0;
-        itm["gst_pct"] = m_tableWidget->item(r, 5) ? m_tableWidget->item(r, 5)->text().toDouble() : 0.0;
+        itm["grade"] = grade;
+        itm["bags"] = m_tableWidget->item(r, 3) ? m_tableWidget->item(r, 3)->text().toInt() : 0;
+        itm["packing"] = m_tableWidget->item(r, 4) ? m_tableWidget->item(r, 4)->text().toDouble() : 0.500;
+        itm["weight"] = m_tableWidget->item(r, 5) ? m_tableWidget->item(r, 5)->text().toDouble() : 0.0;
+        itm["rate"] = m_tableWidget->item(r, 7) ? m_tableWidget->item(r, 7)->text().toDouble() : 0.0;
+        itm["amount"] = m_tableWidget->item(r, 8) ? m_tableWidget->item(r, 8)->text().toDouble() : 0.0;
+        itm["gst_pct"] = m_tableWidget->item(r, 6) ? m_tableWidget->item(r, 6)->text().toDouble() : 0.0;
         items.append(itm);
     }
 
@@ -1420,8 +1430,11 @@ bool SalesVoucherWidget::loadInvoiceForEditing(const QVariant& invNoOrId, const 
     if (!items.isEmpty()) {
         for (int r = 0; r < items.size(); ++r) {
             QVariantMap itm = items[r].toMap();
+            QString grade = itm.value("grade").toString();
+            if (grade.isEmpty()) grade = inv.value("grade").toString();
             populateRow(
                 r, itm.value("item_name").toString(),
+                grade,
                 itm.value("bag_count", itm.value("bags")).toInt(),
                 itm.value("packing", 0.500).toDouble(),
                 itm.value("weight_qtl", itm.value("weight")).toDouble(),
@@ -1433,6 +1446,7 @@ bool SalesVoucherWidget::loadInvoiceForEditing(const QVariant& invNoOrId, const 
     } else {
         populateRow(
             0, inv.value("item_name").toString(),
+            inv.value("grade").toString(),
             inv.value("bag_count").toInt(), 0.500,
             inv.value("weight_qtl").toDouble(),
             inv.value("rate_per_qtl").toDouble(),

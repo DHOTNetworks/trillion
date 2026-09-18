@@ -477,6 +477,12 @@ QString PrintExportController::renderSalesInvoiceSingleHtml(const QString& invoi
     for (const auto& var : items) {
         QVariantMap it = var.toMap();
         QString itmName = it.value("item_name").toString();
+        QString grade = it.value("grade").toString().trimmed();
+        if (grade.isEmpty()) grade = inv.value("grade").toString().trimmed();
+        QString descHtml = "<b>" + itmName.toHtmlEscaped() + "</b>";
+        if (!grade.isEmpty()) {
+            descHtml += " <span style='font-size: 7.5pt; color: #334155; font-weight: normal;'>(" + grade.toHtmlEscaped() + ")</span>";
+        }
         QString hsn = it.value("hsn_code", "100630").toString();
         long long bg = it.value("bag_count").toLongLong();
         double wt = it.value("weight_qtl").toDouble();
@@ -490,7 +496,7 @@ QString PrintExportController::renderSalesInvoiceSingleHtml(const QString& invoi
         itemsRowsHtml += QString(
             "<tr>"
             "<td align='center' valign='top'>%1</td>"
-            "<td valign='top'><b>%2</b></td>"
+            "<td valign='top'>%2</td>"
             "<td align='center' valign='top'>%3</td>"
             "<td align='right' valign='top'>%4</td>"
             "<td align='right' valign='top'>%5</td>"
@@ -498,7 +504,7 @@ QString PrintExportController::renderSalesInvoiceSingleHtml(const QString& invoi
             "<td align='center' valign='top'>%7%</td>"
             "<td align='right' valign='top'><b>%8</b></td>"
             "</tr>"
-        ).arg(QString::number(rowIdx++), itmName, hsn,
+        ).arg(QString::number(rowIdx++), descHtml, hsn,
              bg > 0 ? QString::number(bg) : "-",
              wt > 0 ? QString::number(wt, 'f', 3) : "-",
              r > 0 ? formatPlainINR(r) : "-",
@@ -687,7 +693,7 @@ QString PrintExportController::renderSalesInvoiceHtml(const QString& invoiceNo, 
         QString c2 = renderSalesInvoiceSingleHtml(invoiceNo, "DUPLICATE FOR TRANSPORTER");
         return QString(
             "<!DOCTYPE html><html><head><meta charset='utf-8'><style>"
-            "  body { font-family: Arial, Helvetica, sans-serif; font-size: 8.5pt; color: #000000; margin: 0; padding: 0; background: #ffffff; }"
+            "  body { font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', Arial, 'Liberation Sans', 'DejaVu Sans', sans-serif; font-size: 8.5pt; color: #000000; margin: 0; padding: 0; background: #ffffff; }"
             "  table { border-collapse: collapse; }"
             "  th { font-weight: bold; font-size: 8pt; }"
             "  td { font-size: 8pt; }"
@@ -712,7 +718,7 @@ QString PrintExportController::renderSalesInvoiceHtml(const QString& invoiceNo, 
 
     return QString(
         "<!DOCTYPE html><html><head><meta charset='utf-8'><style>"
-        "  body { font-family: Arial, Helvetica, sans-serif; font-size: 8.5pt; color: #000000; margin: 0; padding: 0; background: #ffffff; }"
+        "  body { font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', Arial, 'Liberation Sans', 'DejaVu Sans', sans-serif; font-size: 8.5pt; color: #000000; margin: 0; padding: 0; background: #ffffff; }"
         "  table { border-collapse: collapse; }"
         "  th { font-weight: bold; font-size: 8pt; }"
         "  td { font-size: 8pt; }"
@@ -791,9 +797,74 @@ QString PrintExportController::renderPurchaseInvoiceHtml(const QString& invoiceN
     if (suppPhone.isEmpty()) suppPhone = party.value("phone").toString().trimmed();
     if (suppPhone.isEmpty()) suppPhone = "-";
 
+    int invId = inv.value("id").toInt();
+    QVariantList items = DatabaseManager::instance().executeQuery(
+        "SELECT * FROM purchase_invoice_items WHERE invoice_id = ? ORDER BY id ASC;",
+        {invId}
+    );
+    if (items.isEmpty()) {
+        QVariantMap itm;
+        itm["item_name"] = inv.value("item_name");
+        itm["grade"] = inv.value("grade");
+        itm["hsn_code"] = inv.value("hsn_code", "100610");
+        itm["bag_count"] = inv.value("bag_count");
+        itm["weight_qtl"] = inv.value("weight_qtl");
+        itm["rate_per_qtl"] = inv.value("rate_per_qtl");
+        itm["taxable_amount"] = inv.value("taxable_amount");
+        itm["gst_pct"] = inv.value("gst_pct");
+        itm["total_amount"] = inv.value("total_amount");
+        items.append(itm);
+    }
+
+    QString itemsRowsHtml = "";
+    int rowIdx = 1;
+    long long totalBags = 0;
+    double totalWeight = 0.0;
+    double totalTaxable = 0.0;
+
+    for (const auto& var : items) {
+        QVariantMap it = var.toMap();
+        QString itmName = it.value("item_name").toString();
+        QString grade = it.value("grade").toString().trimmed();
+        if (grade.isEmpty()) grade = inv.value("grade").toString().trimmed();
+        QString descHtml = "<b>" + itmName.toHtmlEscaped() + "</b>";
+        if (!grade.isEmpty()) {
+            descHtml += " <span style='font-size: 7.5pt; color: #334155; font-weight: normal;'>(" + grade.toHtmlEscaped() + ")</span>";
+        }
+        QString hsn = it.value("hsn_code", "100610").toString();
+        long long bg = it.value("bag_count").toLongLong();
+        double itemWt = it.value("weight_qtl").toDouble();
+        double itemRate = it.value("rate_per_qtl").toDouble();
+        double itemTaxable = it.value("taxable_amount").toDouble();
+
+        totalBags += bg;
+        totalWeight += itemWt;
+        totalTaxable += itemTaxable;
+
+        itemsRowsHtml += QString(
+            "<tr>"
+            "<td align='center' valign='top'>%1</td>"
+            "<td valign='top'>%2</td>"
+            "<td align='center' valign='top'>%3</td>"
+            "<td align='right' valign='top'>%4</td>"
+            "<td align='right' valign='top'>%5</td>"
+            "<td align='right' valign='top'>%6</td>"
+            "<td align='right' valign='top'><b>%7</b></td>"
+            "</tr>"
+        ).arg(QString::number(rowIdx++), descHtml, hsn,
+             bg > 0 ? QString::number(bg) : "-",
+             itemWt > 0 ? QString::number(itemWt, 'f', 3) : "-",
+             itemRate > 0 ? formatPlainINR(itemRate) : "-",
+             formatPlainINR(itemTaxable));
+    }
+
+    long long displayBags = totalBags > 0 ? totalBags : bags;
+    double displayWeight = totalWeight > 0 ? totalWeight : wt;
+    double displayTaxable = taxable > 0 ? taxable : totalTaxable;
+
     QString html = QString(
         "<!DOCTYPE html><html><head><meta charset='utf-8'><style>"
-        "  body { font-family: Arial, Helvetica, sans-serif; font-size: 8.5pt; color: #000000; margin: 0; padding: 0; background: #ffffff; }"
+        "  body { font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', Arial, 'Liberation Sans', 'DejaVu Sans', sans-serif; font-size: 8.5pt; color: #000000; margin: 0; padding: 0; background: #ffffff; }"
         "  table { border-collapse: collapse; }"
         "  th { font-weight: bold; font-size: 8pt; }"
         "  td { font-size: 8pt; }"
@@ -862,15 +933,7 @@ QString PrintExportController::renderPurchaseInvoiceHtml(const QString& invoiceN
         "          <th width='12%' align='right'>Rate (₹/Qtl)</th>"
         "          <th width='12%' align='right'>Total Amount (₹)</th>"
         "        </tr>"
-        "        <tr>"
-        "          <td align='center' valign='top'>1</td>"
-        "          <td valign='top'><b>%16</b></td>"
-        "          <td align='center' valign='top'>100610</td>"
-        "          <td align='right' valign='top'>%17</td>"
-        "          <td align='right' valign='top'>%18</td>"
-        "          <td align='right' valign='top'>%19</td>"
-        "          <td align='right' valign='top'><b>%20</b></td>"
-        "        </tr>"
+        "        %16"
         "        <tr style='font-weight: bold;'>"
         "          <td colspan='3' align='right'><b>TOTAL:</b></td>"
         "          <td align='right'><b>%17</b></td>"
@@ -934,11 +997,11 @@ QString PrintExportController::renderPurchaseInvoiceHtml(const QString& invoiceN
     .arg(suppState)
     .arg(suppPhone)
     .arg(veh.isEmpty() ? "-" : veh)
-    .arg(item)
-    .arg(bags > 0 ? QString::number(bags) : "-")
-    .arg(wt > 0 ? QString::number(wt, 'f', 3) : "-")
-    .arg(r > 0 ? formatPlainINR(r) : "-")
-    .arg(formatPlainINR(taxable))
+    .arg(itemsRowsHtml)
+    .arg(displayBags > 0 ? QString::number(displayBags) : "-")
+    .arg(displayWeight > 0 ? QString::number(displayWeight, 'f', 3) : "-")
+    .arg(formatPlainINR(r > 0 ? r : 0.0))
+    .arg(formatPlainINR(displayTaxable))
     .arg(formatPlainINR(gstAmt))
     .arg(amountInWords(total))
     .arg(formatINR(total));
@@ -1014,7 +1077,7 @@ QString PrintExportController::renderLedgerStatementHtml(const QString& partyNam
 
     QString html = QString(
         "<!DOCTYPE html><html><head><meta charset='utf-8'><style>"
-        "  body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 8.5pt; color: #000000; margin: 0; padding: 0; background-color: #ffffff; }"
+        "  body { font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', Arial, 'Liberation Sans', 'DejaVu Sans', sans-serif; font-size: 8.5pt; color: #000000; margin: 0; padding: 0; background-color: #ffffff; }"
         "  table { border-collapse: collapse; }"
         "  th { font-weight: bold; font-size: 8pt; }"
         "  td { font-size: 8pt; }"
@@ -1196,7 +1259,7 @@ QString PrintExportController::renderStockRegisterHtml(const QString& fromDate, 
 
     QString html = QString(
         "<!DOCTYPE html><html><head><meta charset='utf-8'><style>"
-        "  body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 8.5pt; color: #000000; margin: 0; padding: 0; background-color: #ffffff; }"
+        "  body { font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', Arial, 'Liberation Sans', 'DejaVu Sans', sans-serif; font-size: 8.5pt; color: #000000; margin: 0; padding: 0; background-color: #ffffff; }"
         "  table { width: 100%; border-collapse: collapse; }"
         "  th { border: 1pt solid #000000; padding: 3.5pt 3pt; font-size: 8pt; font-weight: bold; color: #000000; background-color: #ffffff; }"
         "  td { border: 0.5pt solid #000000; padding: 3pt 3pt; font-size: 8pt; }"

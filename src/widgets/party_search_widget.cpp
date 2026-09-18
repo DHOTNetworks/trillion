@@ -30,7 +30,7 @@ void PartySearchWidget::setupUi() {
         "  padding: 2px 8px;"
         "  font-size: 12px;"
         "  font-weight: 600;"
-        "  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;"
+        "  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', 'Noto Sans', 'Liberation Sans', Arial, sans-serif;"
         "}"
         "QLineEdit:focus {"
         "  border: 1.5px solid #2563EB;"
@@ -59,7 +59,7 @@ void PartySearchWidget::setupUi() {
         "QListWidget {"
         "  border: none;"
         "  background-color: #FFFFFF;"
-        "  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;"
+        "  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', 'Noto Sans', 'Liberation Sans', Arial, sans-serif;"
         "  font-size: 12px;"
         "}"
         "QListWidget::item {"
@@ -94,7 +94,7 @@ void PartySearchWidget::setPartyName(const QString& name) {
     setText(name);
     m_programmaticChange = false;
 
-    QVariantMap p = m_partiesModel.get_party_by_name(name.trimmed());
+    QVariantMap p = m_partiesModel.get_party_by_name(name);
     if (!p.isEmpty()) {
         m_selectedPartyId = p.value("id").toInt();
         m_selectedPartyData = p;
@@ -143,7 +143,7 @@ void PartySearchWidget::positionPopup() {
 }
 
 void PartySearchWidget::updateResults() {
-    QString q = text().trimmed();
+    QString q = text();
     QVariantList results = m_partiesModel.search_parties(q);
 
     m_listWidget->clear();

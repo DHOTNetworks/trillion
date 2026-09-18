@@ -44,84 +44,249 @@ QStringList PartiesModel::get_bank_accounts_list() const {
     );
     QStringList list;
     for (const QVariant& r : rows) {
-        QString n = r.toMap().value("name").toString();
+        QString n = r.toMap().value("name").toString().trimmed();
         if (!n.isEmpty()) list.append(n);
-    }
-    if (list.isEmpty()) {
-        list << "HDFC Bank MG Road" << "IndusInd Bank(200999406993)" << "SBI Raichur Main Branch";
     }
     return list;
 }
 
 QStringList PartiesModel::get_account_groups() const {
-    QStringList defaults = {
-        "Bank Accounts", "Cash-in-hand", "Direct Expenses (Hamali/Freight)",
-        "Duties & Taxes (GST)", "Loans & Liabilities", "Paddy Procurement Purchases",
-        "Rice Milling Sales Revenue", "Sundry Creditors (Farmers/Vendors)", "Sundry Debtors (Buyers)"
-    };
-    QVariantList rows = DatabaseManager::instance().executeQuery("SELECT name FROM account_groups ORDER BY name COLLATE NOCASE ASC;");
+    QVariantList rows = DatabaseManager::instance().executeQuery(
+        "SELECT name FROM account_groups "
+        "UNION "
+        "SELECT DISTINCT TRIM(group_name) AS name FROM parties WHERE group_name IS NOT NULL AND TRIM(group_name) != '' "
+        "ORDER BY name COLLATE NOCASE ASC;"
+    );
     QStringList result;
     for (const QVariant& r : rows) {
-        QString n = r.toMap().value("name").toString();
-        if (!n.isEmpty() && !result.contains(n)) result.append(n);
+        QString n = r.toMap().value("name").toString().trimmed();
+        if (!n.isEmpty() && !result.contains(n, Qt::CaseInsensitive)) {
+            result.append(n);
+        }
     }
-    for (const QString& d : defaults) {
-        if (!result.contains(d)) result.append(d);
-    }
-    std::sort(result.begin(), result.end(), [](const QString& a, const QString& b) {
-        return a.compare(b, Qt::CaseInsensitive) < 0;
-    });
-    return result;
-}
-
-QStringList PartiesModel::get_cities() const {
-    QStringList defaults = {"Ballari", "Bengaluru", "Hospet", "Hyderabad", "Kalaburagi", "Koppal", "Raichur", "Vijayanagara"};
-    QVariantList rows = DatabaseManager::instance().executeQuery("SELECT DISTINCT city FROM parties WHERE city IS NOT NULL AND city != '';");
-    QStringList result;
-    for (const QVariant& r : rows) {
-        QString n = r.toMap().value("city").toString();
-        if (!n.isEmpty() && !result.contains(n)) result.append(n);
-    }
-    for (const QString& d : defaults) {
-        if (!result.contains(d)) result.append(d);
-    }
-    std::sort(result.begin(), result.end(), [](const QString& a, const QString& b) {
-        return a.compare(b, Qt::CaseInsensitive) < 0;
-    });
-    return result;
-}
-
-QStringList PartiesModel::get_districts() const {
-    QStringList defaults = {"Ballari", "Bengaluru Urban", "Hyderabad", "Koppal", "Raichur", "Vijayanagara"};
-    QVariantList rows = DatabaseManager::instance().executeQuery("SELECT DISTINCT district FROM parties WHERE district IS NOT NULL AND district != '';");
-    QStringList result;
-    for (const QVariant& r : rows) {
-        QString n = r.toMap().value("district").toString();
-        if (!n.isEmpty() && !result.contains(n)) result.append(n);
-    }
-    for (const QString& d : defaults) {
-        if (!result.contains(d)) result.append(d);
-    }
-    std::sort(result.begin(), result.end(), [](const QString& a, const QString& b) {
-        return a.compare(b, Qt::CaseInsensitive) < 0;
-    });
     return result;
 }
 
 QStringList PartiesModel::get_stations() const {
-    QStringList defaults = {"Andhra Pradesh", "Bengaluru Ganj", "Hyderabad Market", "Karnataka", "Koppal Mandi", "Raichur APMC Yard", "Telangana"};
-    QVariantList rows = DatabaseManager::instance().executeQuery("SELECT DISTINCT state FROM parties WHERE state IS NOT NULL AND state != '';");
+    QVariantList rows = DatabaseManager::instance().executeQuery(
+        "SELECT DISTINCT TRIM(city) AS val FROM parties WHERE city IS NOT NULL AND TRIM(city) != '' "
+        "UNION "
+        "SELECT DISTINCT TRIM(destination) AS val FROM transport_dispatches WHERE destination IS NOT NULL AND TRIM(destination) != '' "
+        "ORDER BY val COLLATE NOCASE ASC;"
+    );
     QStringList result;
     for (const QVariant& r : rows) {
-        QString n = r.toMap().value("state").toString();
-        if (!n.isEmpty() && !result.contains(n)) result.append(n);
+        QString n = r.toMap().value("val").toString().trimmed();
+        if (!n.isEmpty() && !result.contains(n, Qt::CaseInsensitive)) {
+            result.append(n);
+        }
     }
-    for (const QString& d : defaults) {
-        if (!result.contains(d)) result.append(d);
+    return result;
+}
+
+QStringList PartiesModel::get_cities() const {
+    return get_stations();
+}
+
+QStringList PartiesModel::get_districts() const {
+    QVariantList rows = DatabaseManager::instance().executeQuery(
+        "SELECT DISTINCT TRIM(district) AS val FROM parties WHERE district IS NOT NULL AND TRIM(district) != '' "
+        "ORDER BY val COLLATE NOCASE ASC;"
+    );
+    QStringList result;
+    for (const QVariant& r : rows) {
+        QString n = r.toMap().value("val").toString().trimmed();
+        if (!n.isEmpty() && !result.contains(n, Qt::CaseInsensitive)) {
+            result.append(n);
+        }
+    }
+    return result;
+}
+
+QStringList PartiesModel::get_states() const {
+    QVariantList rows = DatabaseManager::instance().executeQuery(
+        "SELECT DISTINCT TRIM(state) AS val FROM parties WHERE state IS NOT NULL AND TRIM(state) != '' "
+        "ORDER BY val COLLATE NOCASE ASC;"
+    );
+    QStringList result;
+    for (const QVariant& r : rows) {
+        QString n = r.toMap().value("val").toString().trimmed();
+        if (!n.isEmpty() && !result.contains(n, Qt::CaseInsensitive) && n != "STATE" && n != "INTER-STATE") {
+            result.append(n);
+        }
+    }
+    QStringList standardStates = {
+        "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chandigarh", "Chhattisgarh",
+        "Dadra & Nagar Haveli and Daman & Diu", "Delhi", "Goa", "Gujarat", "Haryana",
+        "Himachal Pradesh", "Jammu & Kashmir", "Jharkhand", "Karnataka", "Kerala", "Ladakh",
+        "Lakshadweep", "Madhya Pradesh", "Maharashtra", "Manipur", "Meghalaya", "Mizoram",
+        "Nagaland", "Odisha", "Puducherry", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu",
+        "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal"
+    };
+    for (const QString& s : standardStates) {
+        if (!result.contains(s, Qt::CaseInsensitive)) {
+            result.append(s);
+        }
     }
     std::sort(result.begin(), result.end(), [](const QString& a, const QString& b) {
         return a.compare(b, Qt::CaseInsensitive) < 0;
     });
+    return result;
+}
+
+QString PartiesModel::get_state_code_for_state(const QString& state) const {
+    QString s = state.trimmed().toLower();
+    if (s.contains("jammu") || s.contains("kashmir")) return "01";
+    if (s.contains("himachal")) return "02";
+    if (s.contains("punjab")) return "03";
+    if (s.contains("chandigarh")) return "04";
+    if (s.contains("uttarakhand") || s.contains("uttaranchal")) return "05";
+    if (s.contains("haryana")) return "06";
+    if (s.contains("delhi")) return "07";
+    if (s.contains("rajasthan")) return "08";
+    if (s.contains("uttar pradesh") || s == "up") return "09";
+    if (s.contains("bihar")) return "10";
+    if (s.contains("sikkim")) return "11";
+    if (s.contains("arunachal")) return "12";
+    if (s.contains("nagaland")) return "13";
+    if (s.contains("manipur")) return "14";
+    if (s.contains("mizoram")) return "15";
+    if (s.contains("tripura")) return "16";
+    if (s.contains("meghalaya")) return "17";
+    if (s.contains("assam")) return "18";
+    if (s.contains("bengal")) return "19";
+    if (s.contains("jharkhand")) return "20";
+    if (s.contains("odisha") || s.contains("orissa")) return "21";
+    if (s.contains("chhattisgarh")) return "22";
+    if (s.contains("madhya pradesh") || s == "mp") return "23";
+    if (s.contains("gujarat")) return "24";
+    if (s.contains("maharashtra")) return "27";
+    if (s.contains("karnataka")) return "29";
+    if (s.contains("goa")) return "30";
+    if (s.contains("kerala")) return "32";
+    if (s.contains("tamil nadu") || s.contains("tamilnadu")) return "33";
+    if (s.contains("puducherry") || s.contains("pondicherry")) return "34";
+    if (s.contains("telangana")) return "36";
+    if (s.contains("andhra")) return "37";
+    if (s.contains("ladakh")) return "38";
+    return "";
+}
+
+QString PartiesModel::get_state_for_gstin(const QString& gstin) const {
+    QString g = gstin.trimmed();
+    if (g.length() >= 2 && g.at(0).isDigit() && g.at(1).isDigit()) {
+        QString code = g.left(2);
+        static const QMap<QString, QString> codeMap = {
+            {"01", "Jammu & Kashmir"}, {"02", "Himachal Pradesh"}, {"03", "Punjab"},
+            {"04", "Chandigarh"}, {"05", "Uttarakhand"}, {"06", "Haryana"},
+            {"07", "Delhi"}, {"08", "Rajasthan"}, {"09", "Uttar Pradesh"},
+            {"10", "Bihar"}, {"11", "Sikkim"}, {"12", "Arunachal Pradesh"},
+            {"13", "Nagaland"}, {"14", "Manipur"}, {"15", "Mizoram"},
+            {"16", "Tripura"}, {"17", "Meghalaya"}, {"18", "Assam"},
+            {"19", "West Bengal"}, {"20", "Jharkhand"}, {"21", "Odisha"},
+            {"22", "Chhattisgarh"}, {"23", "Madhya Pradesh"}, {"24", "Gujarat"},
+            {"26", "Dadra & Nagar Haveli and Daman & Diu"}, {"27", "Maharashtra"},
+            {"29", "Karnataka"}, {"30", "Goa"}, {"31", "Lakshadweep"},
+            {"32", "Kerala"}, {"33", "Tamil Nadu"}, {"34", "Puducherry"},
+            {"36", "Telangana"}, {"37", "Andhra Pradesh"}, {"38", "Ladakh"}
+        };
+        return codeMap.value(code, "");
+    }
+    return "";
+}
+
+QString PartiesModel::get_state_code_for_gstin(const QString& gstin) const {
+    QString g = gstin.trimmed();
+    if (g.length() >= 2 && g.at(0).isDigit() && g.at(1).isDigit()) {
+        return g.left(2);
+    }
+    return "";
+}
+
+QStringList PartiesModel::get_prefixes() const {
+    QVariantList rows = DatabaseManager::instance().executeQuery(
+        "SELECT DISTINCT TRIM(prefix) AS val FROM parties WHERE prefix IS NOT NULL AND TRIM(prefix) != '' "
+        "ORDER BY val COLLATE NOCASE ASC;"
+    );
+    QStringList result;
+    for (const QVariant& r : rows) {
+        QString n = r.toMap().value("val").toString().trimmed();
+        if (!n.isEmpty() && !result.contains(n, Qt::CaseInsensitive)) {
+            result.append(n);
+        }
+    }
+    QStringList standard = {"M/s", "Mr.", "Mrs.", "Shri", "Smt.", "Dr.", "Messrs"};
+    for (const QString& s : standard) {
+        if (!result.contains(s, Qt::CaseInsensitive)) {
+            result.append(s);
+        }
+    }
+    return result;
+}
+
+QStringList PartiesModel::get_party_types() const {
+    QVariantList rows = DatabaseManager::instance().executeQuery(
+        "SELECT DISTINCT TRIM(party_type) AS val FROM parties WHERE party_type IS NOT NULL AND TRIM(party_type) != '' "
+        "ORDER BY val COLLATE NOCASE ASC;"
+    );
+    QStringList result;
+    for (const QVariant& r : rows) {
+        QString n = r.toMap().value("val").toString().trimmed();
+        if (!n.isEmpty() && !result.contains(n, Qt::CaseInsensitive)) {
+            result.append(n);
+        }
+    }
+    return result;
+}
+
+QStringList PartiesModel::get_special_types() const {
+    QVariantList rows = DatabaseManager::instance().executeQuery(
+        "SELECT DISTINCT TRIM(special_type) AS val FROM parties WHERE special_type IS NOT NULL AND TRIM(special_type) != '' "
+        "ORDER BY val COLLATE NOCASE ASC;"
+    );
+    QStringList result;
+    for (const QVariant& r : rows) {
+        QString n = r.toMap().value("val").toString().trimmed();
+        if (!n.isEmpty() && !result.contains(n, Qt::CaseInsensitive)) {
+            result.append(n);
+        }
+    }
+    return result;
+}
+
+QStringList PartiesModel::get_gst_party_types() const {
+    QVariantList rows = DatabaseManager::instance().executeQuery(
+        "SELECT DISTINCT TRIM(gst_party_type) AS val FROM parties WHERE gst_party_type IS NOT NULL AND TRIM(gst_party_type) != '' "
+        "ORDER BY val COLLATE NOCASE ASC;"
+    );
+    QStringList result;
+    for (const QVariant& r : rows) {
+        QString n = r.toMap().value("val").toString().trimmed();
+        if (!n.isEmpty() && !result.contains(n, Qt::CaseInsensitive)) {
+            result.append(n);
+        }
+    }
+    QStringList defaults = {"Registered", "Unregistered", "Composition", "Consumer", "Overseas", "SEZ Developer", "SEZ Unit", "UIN/Embassy", "Exempt"};
+    for (const QString& d : defaults) {
+        if (!result.contains(d, Qt::CaseInsensitive)) {
+            result.append(d);
+        }
+    }
+    return result;
+}
+
+QStringList PartiesModel::get_routes() const {
+    QVariantList rows = DatabaseManager::instance().executeQuery(
+        "SELECT DISTINCT TRIM(route) AS val FROM parties WHERE route IS NOT NULL AND TRIM(route) != '' "
+        "ORDER BY val COLLATE NOCASE ASC;"
+    );
+    QStringList result;
+    for (const QVariant& r : rows) {
+        QString n = r.toMap().value("val").toString().trimmed();
+        if (!n.isEmpty() && !result.contains(n, Qt::CaseInsensitive)) {
+            result.append(n);
+        }
+    }
     return result;
 }
 
@@ -449,6 +614,195 @@ bool PartiesModel::add_party(const QString& name, const QString& ptype, const QS
         "INSERT INTO parties (name, party_type, phone, city, gstin, opening_balance, balance_type) "
         "VALUES (?, ?, ?, ?, ?, ?, ?);",
         {name, ptype, phone, place, gstin, op_bal, bal_type}
+    );
+    if (ok) reload_data();
+    return ok;
+}
+
+QVariantMap PartiesModel::get_total_opening_balance_summary(int excludePartyId, double pendingAmount, const QString& pendingBalType) const {
+    double totalDr = 0.0;
+    double totalCr = 0.0;
+
+    QString sql = "SELECT id, opening_balance, balance_type FROM parties WHERE opening_balance > 0.0001";
+    QVariantList params;
+    if (excludePartyId > 0) {
+        sql += " AND id != ?";
+        params << excludePartyId;
+    }
+    QVariantList rows = DatabaseManager::instance().executeQuery(sql, params);
+    for (const auto& r : rows) {
+        QVariantMap row = r.toMap();
+        double op = row.value("opening_balance").toDouble();
+        QString bType = row.value("balance_type").toString().trimmed();
+        if (bType.compare("Cr", Qt::CaseInsensitive) == 0) {
+            totalCr += op;
+        } else {
+            totalDr += op;
+        }
+    }
+
+    if (pendingAmount > 0.0001) {
+        if (pendingBalType.compare("Cr", Qt::CaseInsensitive) == 0) {
+            totalCr += pendingAmount;
+        } else {
+            totalDr += pendingAmount;
+        }
+    }
+
+    double diff = totalDr - totalCr;
+    QString diffType = "Balanced";
+    if (diff > 0.0001) {
+        diffType = "Dr";
+    } else if (diff < -0.0001) {
+        diffType = "Cr";
+    }
+
+    QVariantMap res;
+    res["total_dr"] = totalDr;
+    res["total_cr"] = totalCr;
+    res["diff"] = std::abs(diff);
+    res["diff_type"] = diffType;
+    return res;
+}
+
+QString PartiesModel::get_financial_year_start() const {
+    QVariant fyStart = DatabaseManager::instance().executeScalar(
+        "SELECT start_date FROM financial_years WHERE is_active = 1 LIMIT 1;"
+    );
+    if (fyStart.isValid() && !fyStart.toString().trimmed().isEmpty()) {
+        QDate d = QDate::fromString(fyStart.toString().trimmed(), "yyyy-MM-dd");
+        if (d.isValid()) return d.toString("dd-MM-yyyy");
+    }
+    return "01-04-2023";
+}
+
+bool PartiesModel::add_ledger_extended(const QVariantMap& data) {
+    bool ok = DatabaseManager::instance().executeNonQuery(
+        "INSERT INTO parties ("
+        "name, alias, prefix, group_name, party_type, special_type, "
+        "opening_balance, balance_type, mailing_name, address, city, district, state, state_code, pincode, route, "
+        "mobile, whatsapp, phone, email, contact_person, pan, aadhaar, tan, gstin, gst_party_type, "
+        "bank_name, bank_account, ifsc_code, credit_limit, credit_days, interest_rate, commission_rate, commission_on, "
+        "apply_tcs, tcs_exempt, party_station, use_routes, shop_no, tin, urn, stock_not_calc, use_credit_limit, "
+        "show_date_totals, calc_direct_expense, set_title_case, ledger_open_from, books_start_from) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+        {
+            data.value("name").toString().trimmed(),
+            data.value("alias").toString().trimmed(),
+            data.value("prefix", "M/s").toString().trimmed(),
+            data.value("group_name", "Sundry Debtors").toString().trimmed(),
+            data.value("party_type", "Buyer").toString().trimmed(),
+            data.value("special_type").toString().trimmed(),
+            data.value("opening_balance", 0.0).toDouble(),
+            data.value("balance_type", "Dr").toString().trimmed(),
+            data.value("mailing_name").toString().trimmed(),
+            data.value("address").toString().trimmed(),
+            data.value("city").toString().trimmed(),
+            data.value("district").toString().trimmed(),
+            data.value("state").toString().trimmed(),
+            data.value("state_code").toString().trimmed(),
+            data.value("pincode").toString().trimmed(),
+            data.value("route").toString().trimmed(),
+            data.value("mobile").toString().trimmed(),
+            data.value("whatsapp").toString().trimmed(),
+            data.value("phone").toString().trimmed(),
+            data.value("email").toString().trimmed(),
+            data.value("contact_person").toString().trimmed(),
+            data.value("pan").toString().trimmed(),
+            data.value("aadhaar").toString().trimmed(),
+            data.value("tan").toString().trimmed(),
+            data.value("gstin").toString().trimmed(),
+            data.value("gst_party_type", "Unregistered").toString().trimmed(),
+            data.value("bank_name").toString().trimmed(),
+            data.value("bank_account").toString().trimmed(),
+            data.value("ifsc_code").toString().trimmed(),
+            data.value("credit_limit", 0.0).toDouble(),
+            data.value("credit_days", 30).toInt(),
+            data.value("interest_rate", 0.0).toDouble(),
+            data.value("commission_rate", 0.0).toDouble(),
+            data.value("commission_on").toString().trimmed(),
+            data.value("apply_tcs", 0).toInt(),
+            data.value("tcs_exempt", 0).toInt(),
+            data.value("party_station").toString().trimmed(),
+            data.value("use_routes", 0).toInt(),
+            data.value("shop_no").toString().trimmed(),
+            data.value("tin").toString().trimmed(),
+            data.value("urn").toString().trimmed(),
+            data.value("stock_not_calc", 0).toInt(),
+            data.value("use_credit_limit", 1).toInt(),
+            data.value("show_date_totals", 0).toInt(),
+            data.value("calc_direct_expense", 0).toInt(),
+            data.value("set_title_case", 1).toInt(),
+            data.value("ledger_open_from").toString().trimmed(),
+            data.value("books_start_from", "01-04-2023").toString().trimmed()
+        }
+    );
+    if (ok) reload_data();
+    return ok;
+}
+
+bool PartiesModel::update_ledger_extended(int party_id, const QVariantMap& data) {
+    if (party_id <= 0) return false;
+    bool ok = DatabaseManager::instance().executeNonQuery(
+        "UPDATE parties SET "
+        "name = ?, alias = ?, prefix = ?, group_name = ?, party_type = ?, special_type = ?, "
+        "opening_balance = ?, balance_type = ?, mailing_name = ?, address = ?, city = ?, district = ?, state = ?, state_code = ?, pincode = ?, route = ?, "
+        "mobile = ?, whatsapp = ?, phone = ?, email = ?, contact_person = ?, pan = ?, aadhaar = ?, tan = ?, gstin = ?, gst_party_type = ?, "
+        "bank_name = ?, bank_account = ?, ifsc_code = ?, credit_limit = ?, credit_days = ?, interest_rate = ?, commission_rate = ?, commission_on = ?, "
+        "apply_tcs = ?, tcs_exempt = ?, party_station = ?, use_routes = ?, shop_no = ?, tin = ?, urn = ?, stock_not_calc = ?, use_credit_limit = ?, "
+        "show_date_totals = ?, calc_direct_expense = ?, set_title_case = ?, ledger_open_from = ?, books_start_from = ? "
+        "WHERE id = ?;",
+        {
+            data.value("name").toString().trimmed(),
+            data.value("alias").toString().trimmed(),
+            data.value("prefix", "M/s").toString().trimmed(),
+            data.value("group_name", "Sundry Debtors").toString().trimmed(),
+            data.value("party_type", "Buyer").toString().trimmed(),
+            data.value("special_type").toString().trimmed(),
+            data.value("opening_balance", 0.0).toDouble(),
+            data.value("balance_type", "Dr").toString().trimmed(),
+            data.value("mailing_name").toString().trimmed(),
+            data.value("address").toString().trimmed(),
+            data.value("city").toString().trimmed(),
+            data.value("district").toString().trimmed(),
+            data.value("state").toString().trimmed(),
+            data.value("state_code").toString().trimmed(),
+            data.value("pincode").toString().trimmed(),
+            data.value("route").toString().trimmed(),
+            data.value("mobile").toString().trimmed(),
+            data.value("whatsapp").toString().trimmed(),
+            data.value("phone").toString().trimmed(),
+            data.value("email").toString().trimmed(),
+            data.value("contact_person").toString().trimmed(),
+            data.value("pan").toString().trimmed(),
+            data.value("aadhaar").toString().trimmed(),
+            data.value("tan").toString().trimmed(),
+            data.value("gstin").toString().trimmed(),
+            data.value("gst_party_type", "Unregistered").toString().trimmed(),
+            data.value("bank_name").toString().trimmed(),
+            data.value("bank_account").toString().trimmed(),
+            data.value("ifsc_code").toString().trimmed(),
+            data.value("credit_limit", 0.0).toDouble(),
+            data.value("credit_days", 30).toInt(),
+            data.value("interest_rate", 0.0).toDouble(),
+            data.value("commission_rate", 0.0).toDouble(),
+            data.value("commission_on").toString().trimmed(),
+            data.value("apply_tcs", 0).toInt(),
+            data.value("tcs_exempt", 0).toInt(),
+            data.value("party_station").toString().trimmed(),
+            data.value("use_routes", 0).toInt(),
+            data.value("shop_no").toString().trimmed(),
+            data.value("tin").toString().trimmed(),
+            data.value("urn").toString().trimmed(),
+            data.value("stock_not_calc", 0).toInt(),
+            data.value("use_credit_limit", 1).toInt(),
+            data.value("show_date_totals", 0).toInt(),
+            data.value("calc_direct_expense", 0).toInt(),
+            data.value("set_title_case", 1).toInt(),
+            data.value("ledger_open_from").toString().trimmed(),
+            data.value("books_start_from", "01-04-2023").toString().trimmed(),
+            party_id
+        }
     );
     if (ok) reload_data();
     return ok;

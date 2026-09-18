@@ -59,7 +59,7 @@ QString ProfitLossPrinter::generateHtml(const ProfitLossData& data) {
 
     QString html = QString(
         "<!DOCTYPE html><html><head><meta charset='utf-8'><style>"
-        "  body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 8.5pt; color: #000000; margin: 0; padding: 0; background-color: #ffffff; }"
+        "  body { font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', Arial, 'Liberation Sans', 'DejaVu Sans', sans-serif; font-size: 8.5pt; color: #000000; margin: 0; padding: 0; background-color: #ffffff; }"
         "  table { border-collapse: collapse; }"
         "  .main-table { width: 100%; border-collapse: collapse; margin-top: 4pt; }"
         "  .col-hdr-left { border-top: 1.5pt solid #000000; border-bottom: 1.5pt solid #000000; border-right: 1pt solid #000000; font-weight: bold; font-size: 8.5pt; padding: 4pt 8pt 4pt 4pt; background-color: #f8f8f8; }"
@@ -71,7 +71,7 @@ QString ProfitLossPrinter::generateHtml(const ProfitLossData& data) {
         "  .section-hdr { background-color: #eaeaea; font-weight: bold; text-align: center; font-size: 8pt; padding: 2.5pt 0; margin: 4pt 0 3pt 0; }"
         "  .group-title { font-weight: bold; padding-top: 2pt !important; text-decoration: underline; }"
         "  .child-item { padding-left: 10pt !important; }"
-        "  .num-amt { font-family: 'Courier New', Courier, monospace; font-weight: bold; text-align: right; white-space: nowrap; }"
+        "  .num-amt { font-family: 'Consolas', 'Menlo', 'Monaco', 'DejaVu Sans Mono', 'Liberation Mono', 'Courier New', monospace; font-weight: bold; text-align: right; white-space: nowrap; }"
         "  .subtotal-table { width: 100%; border-collapse: collapse; margin: 4pt 0; border-top: 1pt solid #000000; border-bottom: 2pt double #000000; background-color: #f4f4f4; }"
         "  .subtotal-table td { padding: 3pt 4pt; font-weight: bold; font-size: 8pt; }"
         "  .summary-box { width: 100%; margin-top: 8pt; border: 1.5pt solid #000000; background-color: #f8f8f8; border-collapse: collapse; }"

@@ -252,6 +252,10 @@ set(SOURCES
     src/widgets/cheque_voucher_widget.cpp
     src/widgets/journal_voucher_widget.h
     src/widgets/journal_voucher_widget.cpp
+    src/widgets/new_ledger_widget.h
+    src/widgets/new_ledger_widget.cpp
+    src/widgets/modify_ledger_widget.h
+    src/widgets/modify_ledger_widget.cpp
     src/widgets/main_window.h
     src/widgets/main_window.cpp
 )

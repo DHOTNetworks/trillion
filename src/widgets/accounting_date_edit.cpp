@@ -18,7 +18,7 @@ AccountingDateEdit::AccountingDateEdit(QWidget* parent)
         "  padding: 4px 8px;"
         "  font-size: 13px;"
         "  font-weight: bold;"
-        "  font-family: 'Segoe UI', sans-serif;"
+        "  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', 'Noto Sans', 'Liberation Sans', Arial, sans-serif;"
         "}"
         "QLineEdit:focus {"
         "  border: 2px solid #2563EB;"

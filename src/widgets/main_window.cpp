@@ -35,7 +35,7 @@ MainWindow::MainWindow(QQuickWindow* qmlWindow,
     setCentralWidget(m_stackedWidget);
 
     // Index 0: Native C++ Main Dashboard Widget (View 0)
-    m_dashboardWidget = new DashboardWidget(m_dashCtrl, m_firmMgr, m_printExportCtrl, this);
+    m_dashboardWidget = new DashboardWidget(m_dashCtrl, m_firmMgr, m_printExportCtrl, m_bahiKhataMigrator, this);
     connect(m_dashboardWidget, &DashboardWidget::openViewRequested, this, &MainWindow::navigateToView);
     connect(m_dashboardWidget, &DashboardWidget::requestAccountingPeriodDialog, this, &MainWindow::openAccountingPeriodDialog);
     m_stackedWidget->addWidget(m_dashboardWidget);
@@ -146,6 +146,18 @@ MainWindow::MainWindow(QQuickWindow* qmlWindow,
     connect(m_journalVoucherWidget, &JournalVoucherWidget::voucherSaved, this, &MainWindow::onJournalVoucherSaved);
     m_stackedWidget->addWidget(m_journalVoucherWidget);
 
+    // Index 9: Native C++ New Ledger Widget (View 6)
+    m_newLedgerWidget = new NewLedgerWidget(this);
+    connect(m_newLedgerWidget, &NewLedgerWidget::backRequested, this, &MainWindow::onNewLedgerBackRequested);
+    connect(m_newLedgerWidget, &NewLedgerWidget::savedSuccess, this, &MainWindow::onNewLedgerSaved);
+    m_stackedWidget->addWidget(m_newLedgerWidget);
+
+    // Index 10: Native C++ Modify Ledger Widget (View 7)
+    m_modifyLedgerWidget = new ModifyLedgerWidget(this);
+    connect(m_modifyLedgerWidget, &ModifyLedgerWidget::backRequested, this, &MainWindow::onModifyLedgerBackRequested);
+    connect(m_modifyLedgerWidget, &ModifyLedgerWidget::savedSuccess, this, &MainWindow::onModifyLedgerSaved);
+    m_stackedWidget->addWidget(m_modifyLedgerWidget);
+
     // Global Shortcuts for Accounting Period (Alt+F2) and Context-Aware F2 (Date / Period)
     QShortcut* altF2Shortcut = new QShortcut(QKeySequence(Qt::ALT | Qt::Key_F2), this);
     connect(altF2Shortcut, &QShortcut::activated, this, &MainWindow::openAccountingPeriodDialog);
@@ -221,7 +233,11 @@ void MainWindow::checkQmlView() {
         navigateToView(17);
     } else if (vIdx == 22 && m_stackedWidget->currentWidget() != m_firmSelectorWidget) {
         navigateToView(22);
-    } else if (vIdx != 0 && vIdx != 8 && vIdx != 29 && vIdx != 30 && vIdx != 14 && vIdx != 15 && vIdx != 16 && vIdx != 17 && vIdx != 22 && m_stackedWidget->currentWidget() != m_qmlContainer) {
+    } else if (vIdx == 6 && m_stackedWidget->currentWidget() != m_newLedgerWidget) {
+        navigateToView(6);
+    } else if (vIdx == 7 && m_stackedWidget->currentWidget() != m_modifyLedgerWidget) {
+        navigateToView(7);
+    } else if (vIdx != 0 && vIdx != 8 && vIdx != 29 && vIdx != 30 && vIdx != 14 && vIdx != 15 && vIdx != 16 && vIdx != 17 && vIdx != 22 && vIdx != 6 && vIdx != 7 && m_stackedWidget->currentWidget() != m_qmlContainer) {
         m_stackedWidget->setCurrentWidget(m_qmlContainer);
         if (m_qmlContainer) {
             m_qmlContainer->setFocus(Qt::OtherFocusReason);
@@ -247,6 +263,8 @@ int MainWindow::currentViewIndex() const {
     if (cur == m_chequeVoucherWidget) return 16;
     if (cur == m_journalVoucherWidget) return 17;
     if (cur == m_firmSelectorWidget) return 22;
+    if (cur == m_newLedgerWidget) return 6;
+    if (cur == m_modifyLedgerWidget) return 7;
     if (m_qmlWindow) {
         return m_qmlWindow->property("currentViewIndex").toInt();
     }
@@ -265,6 +283,12 @@ void MainWindow::restoreActiveViewFocus() {
         m_chequeVoucherWidget->setFocus(Qt::OtherFocusReason);
     } else if (vIdx == 17 && m_journalVoucherWidget) {
         m_journalVoucherWidget->setFocus(Qt::OtherFocusReason);
+    } else if (vIdx == 6 && m_newLedgerWidget) {
+        m_newLedgerWidget->setFocus(Qt::OtherFocusReason);
+        m_newLedgerWidget->focusFirstField();
+    } else if (vIdx == 7 && m_modifyLedgerWidget) {
+        m_modifyLedgerWidget->setFocus(Qt::OtherFocusReason);
+        m_modifyLedgerWidget->focusSearch();
     } else if (vIdx == 22 && m_firmSelectorWidget) {
         m_firmSelectorWidget->setFocus(Qt::OtherFocusReason);
         m_firmSelectorWidget->focusTable();
@@ -314,6 +338,14 @@ void MainWindow::openAccountingPeriodDialog() {
         QString s_fmt = FiscalYearHelper::formatDisplayDate(fIso);
         QString e_fmt = FiscalYearHelper::formatDisplayDate(tIso);
         QString label = QString("%1 To %2 (%3)").arg(s_fmt, e_fmt, fyLabel);
+
+        if (m_dashCtrl) {
+            m_dashCtrl->refresh_stats(fIso, tIso, fyLabel);
+        }
+
+        if (m_dashboardWidget) {
+            m_dashboardWidget->refreshStats();
+        }
 
         if (m_qmlWindow) {
             m_qmlWindow->setProperty("activePeriodLabel", label);
@@ -551,6 +583,22 @@ void MainWindow::navigateToView(int viewIndex) {
             m_firmSelectorWidget->setFocus();
             m_firmSelectorWidget->focusTable();
         }
+    } else if (viewIndex == 6) {
+        // Show C++ New Ledger Widget
+        if (m_newLedgerWidget) {
+            m_stackedWidget->setCurrentWidget(m_newLedgerWidget);
+            m_newLedgerWidget->resetForm();
+            m_newLedgerWidget->setFocus();
+            m_newLedgerWidget->focusFirstField();
+        }
+    } else if (viewIndex == 7) {
+        // Show C++ Modify Ledger Widget
+        if (m_modifyLedgerWidget) {
+            m_stackedWidget->setCurrentWidget(m_modifyLedgerWidget);
+            m_modifyLedgerWidget->resetForm();
+            m_modifyLedgerWidget->setFocus();
+            m_modifyLedgerWidget->focusSearch();
+        }
     } else {
         // Show QML view stack
         if (m_qmlContainer) {
@@ -649,6 +697,32 @@ void MainWindow::onJournalVoucherSaved(const QString& voucherNo) {
     Q_UNUSED(voucherNo);
     if (m_ledgerWidget) {
         m_ledgerWidget->onTotalsChanged();
+    }
+}
+
+void MainWindow::onNewLedgerBackRequested() {
+    navigateToView(0);
+}
+
+void MainWindow::onNewLedgerSaved() {
+    if (m_ledgerWidget) {
+        m_ledgerWidget->onTotalsChanged();
+    }
+    if (m_dashboardWidget) {
+        m_dashboardWidget->refreshStats();
+    }
+}
+
+void MainWindow::onModifyLedgerBackRequested() {
+    navigateToView(0);
+}
+
+void MainWindow::onModifyLedgerSaved() {
+    if (m_ledgerWidget) {
+        m_ledgerWidget->onTotalsChanged();
+    }
+    if (m_dashboardWidget) {
+        m_dashboardWidget->refreshStats();
     }
 }
 

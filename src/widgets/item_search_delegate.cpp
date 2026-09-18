@@ -45,7 +45,7 @@ ItemSearchEditor::ItemSearchEditor(QWidget* parent)
         "QListWidget {"
         "  border: none;"
         "  background-color: #FFFFFF;"
-        "  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;"
+        "  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', 'Noto Sans', 'Liberation Sans', Arial, sans-serif;"
         "  font-size: 12px;"
         "}"
         "QListWidget::item {"
@@ -108,7 +108,7 @@ void ItemSearchEditor::positionPopup() {
 }
 
 void ItemSearchEditor::updateResults() {
-    QString q = text().trimmed();
+    QString q = text();
     QStringList allItems = m_stockModel.get_items_list();
 
     m_listWidget->clear();
@@ -146,12 +146,9 @@ void ItemSearchEditor::updateResults() {
 }
 
 void ItemSearchEditor::selectCurrentListItem() {
-    QListWidgetItem* item = m_listWidget ? m_listWidget->currentItem() : nullptr;
-    if (!item && m_listWidget && m_listWidget->count() > 0) {
-        item = m_listWidget->item(0);
-    }
-    if (item) {
-        onListItemClicked(item);
+    int row = m_listWidget ? m_listWidget->currentRow() : -1;
+    if (row >= 0 && row < m_listWidget->count()) {
+        onListItemClicked(m_listWidget->item(row));
     }
 }
 
@@ -213,13 +210,18 @@ void ItemSearchEditor::keyPressEvent(QKeyEvent* event) {
             event->accept();
             return;
         } else if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
-            if (!m_listWidget || m_listWidget->count() == 0) {
-                closeSearchPopup();
-                emit moveNextCell();
+            if (m_listWidget && m_listWidget->currentRow() >= 0) {
+                selectCurrentListItem();
+                event->accept();
+                return;
+            } else if (!text().isEmpty() && m_listWidget && m_listWidget->count() > 0) {
+                m_listWidget->setCurrentRow(0);
+                selectCurrentListItem();
                 event->accept();
                 return;
             } else {
-                selectCurrentListItem();
+                closeSearchPopup();
+                emit moveNextCell();
                 event->accept();
                 return;
             }
@@ -304,7 +306,7 @@ QWidget* ItemSearchDelegate::createEditor(QWidget* parent, const QStyleOptionVie
         "  padding: 2px 6px;"
         "}"
     );
-    if (index.column() >= 2 && index.column() <= 7) {
+    if (index.column() >= 3 && index.column() <= 8) {
         editor->setAlignment(Qt::AlignRight);
     }
     return editor;

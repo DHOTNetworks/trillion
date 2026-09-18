@@ -195,7 +195,7 @@ void BalanceSheetWidget::setupUi() {
     QLabel* lTotTitle = new QLabel("Grand Total", footerCard);
     lTotTitle->setStyleSheet("font-size: 14.5px; font-weight: 900; color: #DC2626; background: transparent; text-decoration: underline;");
     m_liabilitiesTotalLbl = new QLabel("49,14,29,438.15", footerCard);
-    m_liabilitiesTotalLbl->setStyleSheet("font-size: 15px; font-weight: 900; color: #1E3A8A; font-family: monospace; background: transparent;");
+    m_liabilitiesTotalLbl->setStyleSheet("font-size: 15px; font-weight: 900; color: #1E3A8A; font-family: 'Consolas', 'Menlo', 'Monaco', 'DejaVu Sans Mono', 'Liberation Mono', 'Courier New', monospace; background: transparent;");
     lTotBox->addWidget(lTotTitle);
     lTotBox->addStretch();
     lTotBox->addWidget(m_liabilitiesTotalLbl);
@@ -206,7 +206,7 @@ void BalanceSheetWidget::setupUi() {
     QLabel* rTotTitle = new QLabel("Grand Total", footerCard);
     rTotTitle->setStyleSheet("font-size: 14.5px; font-weight: 900; color: #DC2626; background: transparent; text-decoration: underline;");
     m_assetsTotalLbl = new QLabel("49,14,29,438.15", footerCard);
-    m_assetsTotalLbl->setStyleSheet("font-size: 15px; font-weight: 900; color: #1E3A8A; font-family: monospace; background: transparent;");
+    m_assetsTotalLbl->setStyleSheet("font-size: 15px; font-weight: 900; color: #1E3A8A; font-family: 'Consolas', 'Menlo', 'Monaco', 'DejaVu Sans Mono', 'Liberation Mono', 'Courier New', monospace; background: transparent;");
     rTotBox->addWidget(rTotTitle);
     rTotBox->addStretch();
     rTotBox->addWidget(m_assetsTotalLbl);

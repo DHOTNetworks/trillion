@@ -272,6 +272,18 @@ void DatabaseManager::ensureTablesExist() {
         "commission_on TEXT,"
         "apply_tcs INTEGER DEFAULT 0,"
         "tcs_exempt INTEGER DEFAULT 0,"
+        "party_station TEXT,"
+        "use_routes INTEGER DEFAULT 0,"
+        "shop_no TEXT,"
+        "tin TEXT,"
+        "urn TEXT,"
+        "stock_not_calc INTEGER DEFAULT 0,"
+        "use_credit_limit INTEGER DEFAULT 1,"
+        "show_date_totals INTEGER DEFAULT 0,"
+        "calc_direct_expense INTEGER DEFAULT 0,"
+        "set_title_case INTEGER DEFAULT 1,"
+        "ledger_open_from TEXT,"
+        "books_start_from TEXT DEFAULT '01-04-2023',"
         "legacy_id INTEGER"
         ");"
     );
@@ -548,6 +560,7 @@ void DatabaseManager::ensureTablesExist() {
         "invoice_no TEXT,"
         "item_id INTEGER,"
         "item_name TEXT,"
+        "grade TEXT DEFAULT '',"
         "bag_count INTEGER DEFAULT 0,"
         "packing TEXT,"
         "weight_qtl REAL DEFAULT 0.0,"
@@ -628,6 +641,7 @@ void DatabaseManager::ensureTablesExist() {
         "invoice_no TEXT,"
         "item_id INTEGER,"
         "item_name TEXT,"
+        "grade TEXT DEFAULT '',"
         "bag_count INTEGER DEFAULT 0,"
         "packing TEXT,"
         "weight_qtl REAL DEFAULT 0.0,"
@@ -819,6 +833,13 @@ void DatabaseManager::ensureTablesExist() {
     addColumnIfNotExists("sales_invoices", "tcs_amount", "REAL DEFAULT 0.0");
     addColumnIfNotExists("sales_invoices", "tcs_rate", "REAL DEFAULT 0.0");
     addColumnIfNotExists("sales_invoices", "place_of_supply", "TEXT");
+    addColumnIfNotExists("sales_invoice_items", "grade", "TEXT DEFAULT ''");
+    executeNonQuery(
+        "UPDATE sales_invoice_items "
+        "SET grade = (SELECT grade FROM sales_invoices WHERE sales_invoices.id = sales_invoice_items.invoice_id) "
+        "WHERE (grade IS NULL OR grade = '') "
+        "  AND EXISTS (SELECT 1 FROM sales_invoices WHERE sales_invoices.id = sales_invoice_items.invoice_id AND sales_invoices.grade != '');"
+    );
 
     addColumnIfNotExists("purchase_invoices", "market_type", "TEXT DEFAULT 'Market Type (With Stock)'");
     addColumnIfNotExists("purchase_invoices", "due_days", "INTEGER DEFAULT 0");
@@ -828,6 +849,13 @@ void DatabaseManager::ensureTablesExist() {
     addColumnIfNotExists("purchase_invoices", "tcs_amount", "REAL DEFAULT 0.0");
     addColumnIfNotExists("purchase_invoices", "tcs_rate", "REAL DEFAULT 0.0");
     addColumnIfNotExists("purchase_invoices", "place_of_supply", "TEXT");
+    addColumnIfNotExists("purchase_invoice_items", "grade", "TEXT DEFAULT ''");
+    executeNonQuery(
+        "UPDATE purchase_invoice_items "
+        "SET grade = (SELECT grade FROM purchase_invoices WHERE purchase_invoices.id = purchase_invoice_items.invoice_id) "
+        "WHERE (grade IS NULL OR grade = '') "
+        "  AND EXISTS (SELECT 1 FROM purchase_invoices WHERE purchase_invoices.id = purchase_invoice_items.invoice_id AND purchase_invoices.grade != '');"
+    );
 
     addColumnIfNotExists("vouchers", "due_days", "INTEGER DEFAULT 0");
     addColumnIfNotExists("vouchers", "market_type", "TEXT");
@@ -838,6 +866,20 @@ void DatabaseManager::ensureTablesExist() {
     addColumnIfNotExists("transactions", "due_days", "INTEGER DEFAULT 0");
     addColumnIfNotExists("transactions", "place_of_supply", "TEXT");
     addColumnIfNotExists("transactions", "market_type", "TEXT");
+
+    // Parties Master Bahi-Khata attributes
+    addColumnIfNotExists("parties", "party_station", "TEXT");
+    addColumnIfNotExists("parties", "use_routes", "INTEGER DEFAULT 0");
+    addColumnIfNotExists("parties", "shop_no", "TEXT");
+    addColumnIfNotExists("parties", "tin", "TEXT");
+    addColumnIfNotExists("parties", "urn", "TEXT");
+    addColumnIfNotExists("parties", "stock_not_calc", "INTEGER DEFAULT 0");
+    addColumnIfNotExists("parties", "use_credit_limit", "INTEGER DEFAULT 1");
+    addColumnIfNotExists("parties", "show_date_totals", "INTEGER DEFAULT 0");
+    addColumnIfNotExists("parties", "calc_direct_expense", "INTEGER DEFAULT 0");
+    addColumnIfNotExists("parties", "set_title_case", "INTEGER DEFAULT 1");
+    addColumnIfNotExists("parties", "ledger_open_from", "TEXT");
+    addColumnIfNotExists("parties", "books_start_from", "TEXT DEFAULT '01-04-2023'");
 
     addColumnIfNotExists("jform_vouchers", "vehicle_no", "TEXT");
     addColumnIfNotExists("jform_vouchers", "driver_name", "TEXT");
@@ -955,6 +997,11 @@ void DatabaseManager::ensureTablesExist() {
         "dhrmd REAL DEFAULT 0.0,"
         "sutli REAL DEFAULT 0.0,"
         "less_amount REAL DEFAULT 0.0,"
+        "due_days INTEGER DEFAULT 0,"
+        "market_type TEXT,"
+        "tax_status TEXT,"
+        "place_of_supply TEXT,"
+        "challan_no TEXT,"
         "FOREIGN KEY (ledger_id) REFERENCES parties(id),"
         "FOREIGN KEY (fy_id) REFERENCES financial_years(id)"
         ");"
@@ -988,6 +1035,9 @@ void DatabaseManager::ensureTablesExist() {
         "tds_rate REAL DEFAULT 0.0,"
         "gst_pct REAL DEFAULT 0.0,"
         "row_no INTEGER DEFAULT 1,"
+        "due_days INTEGER DEFAULT 0,"
+        "place_of_supply TEXT,"
+        "market_type TEXT,"
         "FOREIGN KEY (party_id) REFERENCES parties(id),"
         "FOREIGN KEY (fy_id) REFERENCES financial_years(id)"
         ");"

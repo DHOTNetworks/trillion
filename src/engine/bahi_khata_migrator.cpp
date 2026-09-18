@@ -386,20 +386,97 @@ QString BahiKhataMigrator::extractFssai(const QString& business, const QString& 
     return "10822019000152";
 }
 
+static QString toTitleCase(const QString& str) {
+    if (str.isEmpty()) return "";
+    QStringList words = str.toLower().split(QRegularExpression("\\s+"), Qt::SkipEmptyParts);
+    for (int i = 0; i < words.size(); ++i) {
+        if (!words[i].isEmpty()) {
+            words[i][0] = words[i][0].toUpper();
+        }
+    }
+    return words.join(" ");
+}
+
+static QString getStateNameFromCode(const QString& code) {
+    static const QMap<QString, QString> codeToState = {
+        {"01", "Jammu & Kashmir"},
+        {"02", "Himachal Pradesh"},
+        {"03", "Punjab"},
+        {"04", "Chandigarh"},
+        {"05", "Uttarakhand"},
+        {"06", "Haryana"},
+        {"07", "Delhi"},
+        {"08", "Rajasthan"},
+        {"09", "Uttar Pradesh"},
+        {"10", "Bihar"},
+        {"11", "Sikkim"},
+        {"12", "Arunachal Pradesh"},
+        {"13", "Nagaland"},
+        {"14", "Manipur"},
+        {"15", "Mizoram"},
+        {"16", "Tripura"},
+        {"17", "Meghalaya"},
+        {"18", "Assam"},
+        {"19", "West Bengal"},
+        {"20", "Jharkhand"},
+        {"21", "Odisha"},
+        {"22", "Chhattisgarh"},
+        {"23", "Madhya Pradesh"},
+        {"24", "Gujarat"},
+        {"26", "Dadra & Nagar Haveli and Daman & Diu"},
+        {"27", "Maharashtra"},
+        {"29", "Karnataka"},
+        {"30", "Goa"},
+        {"31", "Lakshadweep"},
+        {"32", "Kerala"},
+        {"33", "Tamil Nadu"},
+        {"34", "Puducherry"},
+        {"36", "Telangana"},
+        {"37", "Andhra Pradesh"},
+        {"38", "Ladakh"}
+    };
+    return codeToState.value(code, "");
+}
+
 QString BahiKhataMigrator::extractStateCode(const QString& gstin, const QString& state) {
     QString g = gstin.trimmed();
     if (g.length() >= 2 && g.at(0).isDigit() && g.at(1).isDigit()) {
         return g.left(2);
     }
     QString s = state.trimmed().toLower();
-    if (s.contains("haryana")) return "06";
+    if (s.contains("jammu") || s.contains("kashmir")) return "01";
+    if (s.contains("himachal")) return "02";
     if (s.contains("punjab")) return "03";
+    if (s.contains("chandigarh")) return "04";
+    if (s.contains("uttarakhand") || s.contains("uttaranchal")) return "05";
+    if (s.contains("haryana")) return "06";
     if (s.contains("delhi")) return "07";
     if (s.contains("rajasthan")) return "08";
-    if (s.contains("uttar pradesh") || s.contains("up")) return "09";
-    if (s.contains("chandigarh")) return "04";
-    if (s.contains("himachal")) return "02";
-    if (s.contains("jammu") || s.contains("kashmir")) return "01";
+    if (s.contains("uttar pradesh") || s == "up") return "09";
+    if (s.contains("bihar")) return "10";
+    if (s.contains("sikkim")) return "11";
+    if (s.contains("arunachal")) return "12";
+    if (s.contains("nagaland")) return "13";
+    if (s.contains("manipur")) return "14";
+    if (s.contains("mizoram")) return "15";
+    if (s.contains("tripura")) return "16";
+    if (s.contains("meghalaya")) return "17";
+    if (s.contains("assam")) return "18";
+    if (s.contains("bengal")) return "19";
+    if (s.contains("jharkhand")) return "20";
+    if (s.contains("odisha") || s.contains("orissa")) return "21";
+    if (s.contains("chhattisgarh")) return "22";
+    if (s.contains("madhya pradesh") || s == "mp") return "23";
+    if (s.contains("gujarat")) return "24";
+    if (s.contains("maharashtra")) return "27";
+    if (s.contains("karnataka")) return "29";
+    if (s.contains("goa")) return "30";
+    if (s.contains("kerala")) return "32";
+    if (s.contains("tamil nadu") || s.contains("tamilnadu")) return "33";
+    if (s.contains("puducherry") || s.contains("pondicherry")) return "34";
+    if (s.contains("telangana")) return "36";
+    if (s.contains("andhra")) return "37";
+    if (s.contains("ladakh")) return "38";
     return "06";
 }
 
@@ -541,6 +618,7 @@ struct ItemDetail {
 struct StockMovementEntry {
     int item_id = 0;
     std::string item_name;
+    std::string grade;
     std::string hsn_code;
     int bags = 0;
     double packing = 0.500;
@@ -740,6 +818,7 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
     // =========================================================
     updateProgress(12, "Migrating Company Info...");
     int booksStartYear = 0;
+    QString globalBooksFrom = "01-04-2023";
     if (!compRows.empty()) {
         const auto& c = compRows.back();
         QString compName = QString::fromStdString(getField(c, "CompanyName"));
@@ -763,6 +842,9 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
         QString booksFrom = parseDateFormatted(QString::fromStdString(getField(c, "BooksBeginingFrom")));
         if (booksFrom.isEmpty()) {
             booksFrom = parseDateFormatted(QString::fromStdString(getField(c, "AccYearFrom")));
+        }
+        if (!booksFrom.isEmpty()) {
+            globalBooksFrom = booksFrom;
         }
         if (booksFrom.length() >= 4) {
             booksStartYear = booksFrom.left(4).toInt();
@@ -1013,30 +1095,110 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
         std::string balType = cleanText(getField(l, "OpeningType", "Dr"));
         if (balType.empty()) balType = "Dr";
 
-        std::string mailingName = cleanText(getField(l, "MailingName"));
-        if (mailingName.empty()) mailingName = lName;
+        std::string rawMailing = cleanText(getField(l, "MailingName"));
+        std::string booksStartFrom = "";
+        static const std::regex datePattern(R"(^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}$)");
+        if (std::regex_match(rawMailing, datePattern)) {
+            booksStartFrom = rawMailing;
+            std::replace(booksStartFrom.begin(), booksStartFrom.end(), '/', '-');
+        }
+        if (booksStartFrom.empty()) {
+            booksStartFrom = !globalBooksFrom.isEmpty() ? globalBooksFrom.toStdString() : "01-04-2023";
+        }
+
+        std::string mailingName = rawMailing;
+        if (mailingName.empty() || mailingName == "None" || mailingName == "none" || std::regex_match(mailingName, datePattern)) {
+            // Strip [Station] from lName for clean business mailing name
+            size_t bStart = lName.rfind('[');
+            if (bStart != std::string::npos && bStart > 0) {
+                mailingName = cleanText(lName.substr(0, bStart));
+            } else {
+                mailingName = lName;
+            }
+        }
         std::string address = cleanText(getField(l, "MailingAdd"));
-        std::string city = cleanText(getField(l, "Station"));
-        std::string district = cleanText(getField(l, "Distt"));
-        std::string state = cleanText(getField(l, "STATE", "Haryana"));
-        if (state.empty()) state = "Haryana";
-        std::string stateCode = cleanText(getField(l, "PartyState"));
+
+        // 1. Station / City resolution
+        std::string partyStation = cleanText(getField(l, "PartyStation"));
+        std::string rawStation = cleanText(getField(l, "Station"));
+        std::string city = "";
+        if (!partyStation.empty() && partyStation != "None" && partyStation != "none") {
+            city = partyStation;
+        } else if (!rawStation.empty() && rawStation != "None" && rawStation != "none") {
+            city = rawStation;
+        } else {
+            // Check if lName ends with or contains [StationName]
+            size_t bStart = lName.rfind('[');
+            size_t bEnd = lName.rfind(']');
+            if (bStart != std::string::npos && bEnd != std::string::npos && bEnd > bStart + 1) {
+                city = cleanText(lName.substr(bStart + 1, bEnd - bStart - 1));
+            }
+        }
+        city = toTitleCase(QString::fromStdString(city)).toStdString();
+
+        // 2. District (deprecated/omitted)
+        std::string district = "";
+
+        // 3. GSTIN, PAN, Aadhaar, TAN
+        std::string gstin = cleanText(getField(l, "GSTIN"));
+        std::string pan = cleanText(getField(l, "IncomeTaxNo"));
+        std::string tan = cleanText(getField(l, "PartyTAN"));
+        std::string aadhaar = cleanText(getField(l, "AadharNo"));
+
+        // 4. State & State Code
+        std::string partyState = cleanText(getField(l, "PartyState"));
+        std::string state = "";
+        if (!partyState.empty() && partyState != "None" && partyState != "none" && 
+            partyState != "STATE" && partyState != "INTER-STATE") {
+            state = toTitleCase(QString::fromStdString(partyState)).toStdString();
+        } else if (!gstin.empty() && gstin.length() >= 2 && isdigit(gstin[0]) && isdigit(gstin[1])) {
+            QString sc = QString::fromStdString(gstin.substr(0, 2));
+            state = getStateNameFromCode(sc).toStdString();
+        }
+        if (state.empty()) {
+            std::string rawState = cleanText(getField(l, "STATE"));
+            if (rawState == "INTER-STATE") {
+                if (city == "Delhi") state = "Delhi";
+                else if (city == "Ludhiana" || city == "Ludhiyana" || city == "Moga" || city == "Jalandhar") state = "Punjab";
+                else if (city == "Jaipur" || city == "Alwar" || city == "Kota") state = "Rajasthan";
+                else state = "Haryana";
+            } else {
+                state = "Haryana";
+            }
+        }
+        std::string stateCode = extractStateCode(QString::fromStdString(gstin), QString::fromStdString(state)).toStdString();
+
+        // 5. PIN Code & Route
         std::string pincode = cleanText(getField(l, "PartyPINcode"));
+        if (pincode == "None" || pincode == "none") pincode = "";
+        if (pincode.empty() && !address.empty()) {
+            pincode = extractPincode(QString::fromStdString(address)).toStdString();
+        }
         std::string route = cleanText(getField(l, "Route"));
+        if (route == "None" || route == "none") route = "";
+        else route = toTitleCase(QString::fromStdString(route)).toStdString();
 
         std::string phone = cleanText(getField(l, "Phone_O"));
         std::string mobile = cleanText(getField(l, "MobNoForSMS"));
+        std::string saleTaxNo = cleanText(getField(l, "SaleTaxNo"));
+        if (mobile.empty() && !saleTaxNo.empty() && saleTaxNo.find_first_of("0123456789") != std::string::npos && saleTaxNo.length() >= 8) {
+            mobile = saleTaxNo;
+        }
         if (mobile.empty()) mobile = phone;
         std::string whatsapp = cleanText(getField(l, "WhatsappNo"));
         if (whatsapp.empty()) whatsapp = mobile;
         std::string email = cleanText(getField(l, "Email"));
         std::string contactPerson = cleanText(getField(l, "ConcernedPerson"));
-        if (contactPerson.empty()) contactPerson = lName;
+        if (contactPerson.empty() || contactPerson == "None") {
+            // Strip [Station] from lName for clean contact person
+            size_t bStart = lName.rfind('[');
+            if (bStart != std::string::npos && bStart > 0) {
+                contactPerson = cleanText(lName.substr(0, bStart));
+            } else {
+                contactPerson = lName;
+            }
+        }
 
-        std::string gstin = cleanText(getField(l, "GSTIN"));
-        std::string pan = cleanText(getField(l, "IncomeTaxNo"));
-        std::string tan = cleanText(getField(l, "PartyTAN"));
-        std::string aadhaar = cleanText(getField(l, "AadharNo"));
         std::string gstPartyType = cleanText(getField(l, "GSTPartyType"));
         if (gstPartyType.empty()) gstPartyType = gstin.empty() ? "Unregistered" : "Registered";
 
@@ -1064,14 +1226,29 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
             specialType = (partyType.find("Buyer") != std::string::npos) ? "Rice Buyer" : "Paddy Seller";
         }
 
+        std::string shopNo = cleanText(getField(l, "ShopNo"));
+        std::string tin = cleanText(getField(l, "SaleTaxNo"));
+        if (tin.empty()) tin = cleanText(getField(l, "VAT"));
+        std::string urn = cleanText(getField(l, "URN"));
+        if (urn.empty()) urn = cleanText(getField(l, "BRN"));
+
+        std::string sncStr = toLowerStr(getField(l, "StockNotCalculateInLedger"));
+        int stockNotCalc = (sncStr == "1" || sncStr == "true" || sncStr == "yes") ? 1 : 0;
+        std::string sdtStr = toLowerStr(getField(l, "ShowDateTotals"));
+        int showDateTotals = (sdtStr == "1" || sdtStr == "true" || sdtStr == "yes") ? 1 : 0;
+        std::string cjtStr = toLowerStr(getField(l, "CalculateInJointTrading"));
+        int calcDirectExpense = (cjtStr == "1" || cjtStr == "true" || cjtStr == "yes") ? 1 : 0;
+        int useCreditLimit = (creditLimit > 0.0) ? 1 : 0;
+
         db.executeNonQuery(
             "INSERT INTO parties ("
             "name, alias, prefix, group_name, party_type, special_type, "
             "opening_balance, balance_type, mailing_name, address, city, district, state, state_code, pincode, route, "
             "mobile, whatsapp, phone, email, contact_person, pan, aadhaar, tan, gstin, gst_party_type, "
             "bank_name, bank_account, ifsc_code, credit_limit, credit_days, interest_rate, commission_rate, commission_on, "
-            "apply_tcs, tcs_exempt, legacy_id) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 30, ?, ?, ?, ?, ?, ?);",
+            "apply_tcs, tcs_exempt, party_station, use_routes, shop_no, tin, urn, stock_not_calc, use_credit_limit, "
+            "show_date_totals, calc_direct_expense, set_title_case, books_start_from, legacy_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 30, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?);",
             {
                 QString::fromStdString(lName),
                 QString::fromStdString(alias),
@@ -1108,6 +1285,16 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
                 QString::fromStdString(commissionOn),
                 applyTcs,
                 tcsExempt,
+                QString::fromStdString(city),
+                (route.empty() || route == "None") ? 0 : 1,
+                QString::fromStdString(shopNo),
+                QString::fromStdString(tin),
+                QString::fromStdString(urn),
+                stockNotCalc,
+                useCreditLimit,
+                showDateTotals,
+                calcDirectExpense,
+                QString::fromStdString(booksStartFrom),
                 legacyId
             }
         );
@@ -1433,11 +1620,17 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
         double igst = parseDoubleVal(getField(st, "IGSTTax"));
         double cess = parseDoubleVal(getField(st, "CESSTax"));
         std::string dheriBill = cleanText(getField(st, "DheriBillNo"));
+        std::string itemGrade = dheriBill;
+        if (itemGrade.empty()) itemGrade = cleanText(getField(st, "Grade"));
+        if (itemGrade.empty()) itemGrade = cleanText(getField(st, "Quality"));
+        if (itemGrade.empty()) itemGrade = cleanText(getField(st, "ItemQuality"));
+        if (itemGrade.empty()) itemGrade = cleanText(getField(st, "Variety"));
         std::string vchTypeStr = cleanText(getField(st, "VoucherType"));
 
         StockMovementEntry entry;
         entry.item_id = itemId;
         entry.item_name = itemName;
+        entry.grade = itemGrade;
         entry.hsn_code = hsn;
         entry.bags = bags;
         entry.packing = packing;
@@ -1922,15 +2115,18 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
             // Insert line items
             if (itStockLines != stockTransMap.end() && !itStockLines->second.empty()) {
                 for (const auto& sLine : itStockLines->second) {
+                    std::string lineGrade = sLine.grade;
+                    if (lineGrade.empty()) lineGrade = grade;
                     db.executeNonQuery(
                         "INSERT INTO sales_invoice_items ("
-                        "invoice_id, invoice_no, item_id, item_name, bag_count, packing, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, total_amount) "
-                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+                        "invoice_id, invoice_no, item_id, item_name, grade, bag_count, packing, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, total_amount) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
                         {
                             salesInvId,
                             QString::fromStdString(invNo),
                             (sLine.item_id > 0 ? QVariant(sLine.item_id) : QVariant()),
                             QString::fromStdString(sLine.item_name),
+                            QString::fromStdString(lineGrade),
                             sLine.bags,
                             QString::number(sLine.packing, 'f', 3),
                             sLine.weight_qtl,
@@ -1944,13 +2140,14 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
             } else {
                 db.executeNonQuery(
                     "INSERT INTO sales_invoice_items ("
-                    "invoice_id, invoice_no, item_id, item_name, bag_count, packing, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, total_amount) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+                    "invoice_id, invoice_no, item_id, item_name, grade, bag_count, packing, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, total_amount) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
                     {
                         salesInvId,
                         QString::fromStdString(invNo),
                         (itemId > 0 ? QVariant(itemId) : QVariant()),
                         QString::fromStdString(itemName),
+                        QString::fromStdString(grade),
                         bagCount,
                         (marketType == "Market Type (Without Stock)" ? "" : "0.500"),
                         weightQtl,
@@ -2036,15 +2233,18 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
             // Insert line items
             if (itStockLines != stockTransMap.end() && !itStockLines->second.empty()) {
                 for (const auto& pLine : itStockLines->second) {
+                    std::string lineGrade = pLine.grade;
+                    if (lineGrade.empty()) lineGrade = grade;
                     db.executeNonQuery(
                         "INSERT INTO purchase_invoice_items ("
-                        "invoice_id, invoice_no, item_id, item_name, bag_count, packing, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, total_amount) "
-                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+                        "invoice_id, invoice_no, item_id, item_name, grade, bag_count, packing, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, total_amount) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
                         {
                             purcInvId,
                             QString::fromStdString(invNo),
                             (pLine.item_id > 0 ? QVariant(pLine.item_id) : QVariant()),
                             QString::fromStdString(pLine.item_name),
+                            QString::fromStdString(lineGrade),
                             pLine.bags,
                             QString::number(pLine.packing, 'f', 3),
                             pLine.weight_qtl,
@@ -2058,13 +2258,14 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
             } else {
                 db.executeNonQuery(
                     "INSERT INTO purchase_invoice_items ("
-                    "invoice_id, invoice_no, item_id, item_name, bag_count, packing, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, total_amount) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+                    "invoice_id, invoice_no, item_id, item_name, grade, bag_count, packing, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, total_amount) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
                     {
                         purcInvId,
                         QString::fromStdString(invNo),
                         (itemId > 0 ? QVariant(itemId) : QVariant()),
                         QString::fromStdString(itemName),
+                        QString::fromStdString(grade),
                         bagCount,
                         (marketType == "Market Type (Without Stock)" ? "" : "0.500"),
                         weightQtl,
