@@ -302,12 +302,19 @@ void LedgerTableView::setSourceModel(LedgerStatementSideModel* sourceModel) {
 
 void LedgerTableView::selectRowIndex(int index) {
     if (m_adapter && index >= 0 && index < m_adapter->rowCount()) {
+        QModelIndex modelIdx = m_adapter->index(index, 0);
+        if (selectionModel()) {
+            selectionModel()->setCurrentIndex(modelIdx, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+        }
         selectRow(index);
-        scrollTo(m_adapter->index(index, 0), QAbstractItemView::EnsureVisible);
+        scrollTo(modelIdx, QAbstractItemView::PositionAtCenter);
     }
 }
 
 int LedgerTableView::selectedRowIndex() const {
+    if (selectionModel() && selectionModel()->currentIndex().isValid()) {
+        return selectionModel()->currentIndex().row();
+    }
     QModelIndexList sel = selectionModel() ? selectionModel()->selectedRows() : QModelIndexList();
     if (!sel.isEmpty()) {
         return sel.first().row();
@@ -349,6 +356,8 @@ void LedgerTableView::keyPressEvent(QKeyEvent* event) {
 void LedgerTableView::mouseDoubleClickEvent(QMouseEvent* event) {
     QModelIndex idx = indexAt(event->pos());
     if (idx.isValid() && m_adapter) {
+        selectRowIndex(idx.row());
+        setFocus();
         emit voucherActivated(m_adapter->getEntry(idx.row()));
     }
     QTableView::mouseDoubleClickEvent(event);

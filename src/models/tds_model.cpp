@@ -398,6 +398,24 @@ bool TdsModel::save_tds_voucher(const QVariantMap& data) {
         fyLabel = fyRows.first().toMap().value("year_name").toString();
     }
 
+    QVariant fyIdVal = (fyId > 0) ? QVariant(fyId) : QVariant();
+    QVariant ledgerIdVal = (ledgerId > 0) ? QVariant(ledgerId) : QVariant();
+    QVariant expLedgerIdVal = (expLedgerId > 0) ? QVariant(expLedgerId) : QVariant();
+    QVariant tdsLedgerIdVal = (tdsLedgerId > 0) ? QVariant(tdsLedgerId) : QVariant();
+
+    if (!ledgerIdVal.isValid() && !ledgerName.isEmpty()) {
+        QVariant lid = db.executeScalar("SELECT id FROM parties WHERE name = ? COLLATE NOCASE;", {ledgerName});
+        if (lid.isValid() && lid.toInt() > 0) ledgerIdVal = lid.toInt();
+    }
+    if (!expLedgerIdVal.isValid() && !expLedgerName.isEmpty()) {
+        QVariant lid = db.executeScalar("SELECT id FROM parties WHERE name = ? COLLATE NOCASE;", {expLedgerName});
+        if (lid.isValid() && lid.toInt() > 0) expLedgerIdVal = lid.toInt();
+    }
+    if (!tdsLedgerIdVal.isValid() && !tdsLedgerName.isEmpty()) {
+        QVariant lid = db.executeScalar("SELECT id FROM parties WHERE name = ? COLLATE NOCASE;", {tdsLedgerName});
+        if (lid.isValid() && lid.toInt() > 0) tdsLedgerIdVal = lid.toInt();
+    }
+
     if (voucherNo <= 0) {
         QVariant maxVch = db.executeScalar("SELECT MAX(voucher_no) FROM tds_vouchers WHERE financial_year = ?;", {fyLabel});
         voucherNo = (maxVch.isValid() && !maxVch.isNull()) ? maxVch.toInt() + 1 : 1;
@@ -418,12 +436,12 @@ bool TdsModel::save_tds_voucher(const QVariantMap& data) {
             "non_deduction_reason = ?, exp_ledger_id = ?, exp_ledger_name = ?, tds_ledger_id = ?, tds_ledger_name = ? "
             "WHERE id = ?;",
             {
-                fyId, fyLabel, voucherNo, voucherDate, dayOfWeek,
-                postInBooks, tdsType, ledgerId, ledgerName, incomeAmount,
+                fyIdVal, fyLabel, voucherNo, voucherDate, dayOfWeek,
+                postInBooks, tdsType, ledgerIdVal, ledgerName, incomeAmount,
                 previousAmount, totalForTds, narration, rateTds, taxAmountTds,
                 rateSurcharge, taxAmountSurcharge, rateCess, taxAmountCess,
                 useRoundedTotal, totalTaxRate, totalTaxAmount, netAmount,
-                nonDeductionReason, expLedgerId, expLedgerName, tdsLedgerId, tdsLedgerName,
+                nonDeductionReason, expLedgerIdVal, expLedgerName, tdsLedgerIdVal, tdsLedgerName,
                 voucherId
             }
         );
@@ -444,11 +462,11 @@ bool TdsModel::save_tds_voucher(const QVariantMap& data) {
             "?, ?, ?, ?"
             ");",
             {
-                fyId, fyLabel, voucherNo, voucherDate, dayOfWeek, postInBooks, tdsType,
-                ledgerId, ledgerName, incomeAmount, previousAmount, totalForTds, narration,
+                fyIdVal, fyLabel, voucherNo, voucherDate, dayOfWeek, postInBooks, tdsType,
+                ledgerIdVal, ledgerName, incomeAmount, previousAmount, totalForTds, narration,
                 rateTds, taxAmountTds, rateSurcharge, taxAmountSurcharge, rateCess, taxAmountCess,
                 useRoundedTotal, totalTaxRate, totalTaxAmount, netAmount, nonDeductionReason,
-                expLedgerId, expLedgerName, tdsLedgerId, tdsLedgerName
+                expLedgerIdVal, expLedgerName, tdsLedgerIdVal, tdsLedgerName
             }
         );
     }

@@ -139,4 +139,8 @@ public:
     static QString formatIndianCurrency(double amount, bool includeSymbol = true, int decimals = 2) {
         return formatIndianNumber(amount, decimals, "", includeSymbol);
     }
+
+    static QString formatCurrency(double amount, int decimals = 2) {
+        return formatIndianNumber(amount, decimals, "", false);
+    }
 };

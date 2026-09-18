@@ -38,11 +38,11 @@ Item {
     readonly property real totalWeight: (typeof purchaseVoucherCtrl !== "undefined" && purchaseVoucherCtrl) ? purchaseVoucherCtrl.totalWeightQtl : 0.0
     readonly property real taxableAmount: (typeof purchaseVoucherCtrl !== "undefined" && purchaseVoucherCtrl) ? purchaseVoucherCtrl.taxableAmount : 0.0
     readonly property real gstTaxAmount: (typeof purchaseVoucherCtrl !== "undefined" && purchaseVoucherCtrl) ? purchaseVoucherCtrl.totalTaxAmount : 0.0
-    readonly property real otherExpAmount: (typeof purchaseVoucherCtrl !== "undefined" && purchaseVoucherCtrl) ? purchaseVoucherCtrl.otherExp : 0.0
-    readonly property real lessAmount: (typeof purchaseVoucherCtrl !== "undefined" && purchaseVoucherCtrl) ? purchaseVoucherCtrl.lessAmount : 0.0
-    readonly property real freightAmount: (typeof purchaseVoucherCtrl !== "undefined" && purchaseVoucherCtrl) ? purchaseVoucherCtrl.freightCharges : 0.0
+    property real otherExpAmount: (typeof purchaseVoucherCtrl !== "undefined" && purchaseVoucherCtrl) ? purchaseVoucherCtrl.otherExp : 0.0
+    property real lessAmount: (typeof purchaseVoucherCtrl !== "undefined" && purchaseVoucherCtrl) ? purchaseVoucherCtrl.lessAmount : 0.0
+    property real freightAmount: (typeof purchaseVoucherCtrl !== "undefined" && purchaseVoucherCtrl) ? purchaseVoucherCtrl.freightCharges : 0.0
     readonly property real roundOffAmount: (typeof purchaseVoucherCtrl !== "undefined" && purchaseVoucherCtrl) ? purchaseVoucherCtrl.roundOff : 0.0
-    readonly property real tcsAmount: (typeof purchaseVoucherCtrl !== "undefined" && purchaseVoucherCtrl) ? purchaseVoucherCtrl.tcsAmount : 0.0
+    property real tcsAmount: (typeof purchaseVoucherCtrl !== "undefined" && purchaseVoucherCtrl) ? purchaseVoucherCtrl.tcsAmount : 0.0
     readonly property real grandTotal: (typeof purchaseVoucherCtrl !== "undefined" && purchaseVoucherCtrl) ? purchaseVoucherCtrl.grandTotal : 0.0
     
     property string statusMessage: ""

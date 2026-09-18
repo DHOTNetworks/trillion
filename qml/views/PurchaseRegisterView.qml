@@ -8,18 +8,19 @@ T.ScrollView {
     contentWidth: availableWidth
     clip: true
 
+    signal openInvoiceRequested(string invoiceNo, string vchNo, int id, string dateVal)
     signal cancelRequested()
-    signal openInvoiceRequested(string invoiceNo)
 
-    onOpenInvoiceRequested: function(invoiceNo) {
-        root.openInvoice(invoiceNo)
+    onOpenInvoiceRequested: function(invoiceNo, vchNo, id, dateVal) {
+        root.openInvoice(invoiceNo, vchNo, id, dateVal)
     }
 
-    function openInvoice(invNo) {
-        if (!invNo || typeof window === "undefined") return
-        window.pendingEditInvoiceNo = invNo
-        window.pendingEditVoucherNo = invNo
-        window.pendingEditVoucherId = 0
+    function openInvoice(invNo, vchNo, id, dateVal) {
+        if (typeof window === "undefined") return
+        window.pendingEditInvoiceNo = invNo || ""
+        window.pendingEditVoucherNo = vchNo || invNo || ""
+        window.pendingEditVoucherId = id || 0
+        window.pendingEditVoucherDate = dateVal || ""
         window.navigateToView(15)
     }
 
@@ -258,14 +259,14 @@ T.ScrollView {
                         event.accepted = true
                         if (currentIndex >= 0 && currentIndex < count) {
                             var it = purchaseRegisterCtrl.model.get(currentIndex)
-                            if (it && it.invNoVal) root.openInvoiceRequested(it.invNoVal)
+                            if (it) root.openInvoice(it.invNoVal, it.vchNoVal, it.id, it.dateVal)
                         }
                     }
                     Keys.onEnterPressed: function(event) {
                         event.accepted = true
                         if (currentIndex >= 0 && currentIndex < count) {
                             var it = purchaseRegisterCtrl.model.get(currentIndex)
-                            if (it && it.invNoVal) root.openInvoiceRequested(it.invNoVal)
+                            if (it) root.openInvoice(it.invNoVal, it.vchNoVal, it.id, it.dateVal)
                         }
                     }
                     Keys.onUpPressed: function(event) {
@@ -303,8 +304,9 @@ T.ScrollView {
                             }
                             onDoubleClicked: {
                                 purchaseListView.currentIndex = index
-                                if (model.invNoVal) {
-                                    root.openInvoiceRequested(model.invNoVal)
+                                var it = purchaseRegisterCtrl.model.get(index)
+                                if (it) {
+                                    root.openInvoice(it.invNoVal, it.vchNoVal, it.id, it.dateVal)
                                 }
                             }
                         }

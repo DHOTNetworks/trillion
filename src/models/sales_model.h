@@ -41,6 +41,8 @@ public:
 
     Q_INVOKABLE QVariantList get_sales_register(const QString& param1 = "", const QString& param2 = "");
     Q_INVOKABLE QVariantMap get_sales_invoice(const QVariant& invoiceNoOrId, const QString& dateHint = "", const QString& partyHint = "");
+    Q_INVOKABLE QVariantMap get_previous_sales_invoice(int currentId = 0, const QString& currentInvOrVchNo = "");
+    Q_INVOKABLE QVariantMap get_next_sales_invoice(int currentId = 0, const QString& currentInvOrVchNo = "");
     Q_INVOKABLE bool update_sales_invoice_full(
         int invoice_id,
         const QString& invoice_no, const QString& invoice_date, const QString& party_ledger,
@@ -67,4 +69,7 @@ public:
         const QString& tax_status = "GST",
         const QString& place_of_supply = ""
     );
+
+    Q_INVOKABLE bool delete_sales_invoice(int invoice_id, const QString& invoice_no = "");
 };
+

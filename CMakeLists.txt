@@ -114,6 +114,8 @@ set(SOURCES
     src/database_manager.h
     src/database_manager.cpp
     src/engine/accounting_engine.h
+    src/engine/fiscal_year_helper.h
+    src/engine/fiscal_year_helper.cpp
     src/models/base_table_model.h
     src/models/base_table_model.cpp
     src/models/dashboard_controller.h
@@ -183,6 +185,8 @@ set(SOURCES
     src/models/generic_list_model.h
     src/models/generic_list_model.cpp
     src/models/global_key_filter.h
+    src/services/app_keyboard_controller.h
+    src/services/app_keyboard_controller.cpp
     src/services/canara_bank_statement_parser.h
     src/services/canara_bank_statement_parser.cpp
     src/services/bank_statement_excel_parser.h
@@ -205,6 +209,49 @@ set(SOURCES
     src/widgets/ledger_table_view.cpp
     src/widgets/ledger_statement_widget.h
     src/widgets/ledger_statement_widget.cpp
+    src/widgets/accounting_period_dialog.h
+    src/widgets/accounting_period_dialog.cpp
+    src/engine/balance_sheet_calculator.h
+    src/engine/balance_sheet_calculator.cpp
+    src/models/balance_sheet_controller.h
+    src/models/balance_sheet_controller.cpp
+    src/printing/balance_sheet_printer.h
+    src/printing/balance_sheet_printer.cpp
+    src/printing/profit_loss_printer.h
+    src/printing/profit_loss_printer.cpp
+    src/widgets/balance_sheet_widget.h
+    src/widgets/balance_sheet_widget.cpp
+    src/engine/profit_loss_calculator.h
+    src/engine/profit_loss_calculator.cpp
+    src/models/profit_loss_controller.h
+    src/models/profit_loss_controller.cpp
+    src/widgets/profit_loss_widget.h
+    src/widgets/profit_loss_widget.cpp
+    src/widgets/voucher_common.h
+    src/widgets/voucher_date_dialog.h
+    src/widgets/voucher_date_dialog.cpp
+    src/widgets/custom_dialogs.h
+    src/widgets/custom_dialogs.cpp
+    src/widgets/party_search_widget.h
+    src/widgets/party_search_widget.cpp
+    src/widgets/item_search_delegate.h
+    src/widgets/item_search_delegate.cpp
+    src/widgets/dashboard_widget.h
+    src/widgets/dashboard_widget.cpp
+    src/widgets/sales_voucher_widget.h
+    src/widgets/sales_voucher_widget.cpp
+    src/widgets/purchase_voucher_widget.h
+    src/widgets/purchase_voucher_widget.cpp
+    src/widgets/new_firm_dialog.h
+    src/widgets/new_firm_dialog.cpp
+    src/widgets/mdb_migration_dialog.h
+    src/widgets/mdb_migration_dialog.cpp
+    src/widgets/firm_selector_widget.h
+    src/widgets/firm_selector_widget.cpp
+    src/widgets/cheque_voucher_widget.h
+    src/widgets/cheque_voucher_widget.cpp
+    src/widgets/journal_voucher_widget.h
+    src/widgets/journal_voucher_widget.cpp
     src/widgets/main_window.h
     src/widgets/main_window.cpp
 )
@@ -237,7 +284,6 @@ qt_add_qml_module(${PROJECT_NAME}
         qml/components/NavMenuItem.qml
         qml/components/Sidebar.qml
         qml/components/StatCard.qml
-        qml/dialogs/AccountingPeriodModal.qml
         qml/dialogs/AddVoucherMenuModal.qml
         qml/dialogs/ConfirmationModal.qml
         qml/dialogs/ItemMovementModal.qml
@@ -305,6 +351,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     libxls_embedded
     Qt6::Core
     Qt6::Gui
+    Qt6::Sql
     Qt6::Qml
     Qt6::Quick
     Qt6::QuickControls2
@@ -404,6 +451,8 @@ set(TEST_SOURCES
     src/models/financial_years_model.h
     src/models/financial_years_model.cpp
     src/engine/accounting_engine.h
+    src/engine/fiscal_year_helper.h
+    src/engine/fiscal_year_helper.cpp
     src/services/print_export_controller.h
     src/services/print_export_controller.cpp
     src/services/canara_bank_statement_parser.h
@@ -416,6 +465,18 @@ set(TEST_SOURCES
     src/models/transport_dispatch_controller.cpp
     src/models/debit_credit_note_controller.h
     src/models/debit_credit_note_controller.cpp
+    src/engine/balance_sheet_calculator.h
+    src/engine/balance_sheet_calculator.cpp
+    src/models/balance_sheet_controller.h
+    src/models/balance_sheet_controller.cpp
+    src/engine/profit_loss_calculator.h
+    src/engine/profit_loss_calculator.cpp
+    src/models/profit_loss_controller.h
+    src/models/profit_loss_controller.cpp
+    src/printing/balance_sheet_printer.h
+    src/printing/balance_sheet_printer.cpp
+    src/printing/profit_loss_printer.h
+    src/printing/profit_loss_printer.cpp
     src/engine/bahi_khata_migrator.h
     src/engine/bahi_khata_migrator.cpp
     ${CMAKE_CURRENT_BINARY_DIR}/.qt/rcc/qrc_MahadevRiceMillERP_raw_qml_0.cpp
@@ -427,6 +488,7 @@ target_include_directories(LogicBoardTestSuite PRIVATE
     src/engine
     src/models
     src/services
+    src/printing
     third_party/sqlite
     third_party/libmdb
     third_party/miniz

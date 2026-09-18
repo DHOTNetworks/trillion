@@ -13,7 +13,6 @@
         <file>qml/components/NavMenuItem.qml</file>
         <file>qml/components/Sidebar.qml</file>
         <file>qml/components/StatCard.qml</file>
-        <file>qml/dialogs/AccountingPeriodModal.qml</file>
         <file>qml/dialogs/AddVoucherMenuModal.qml</file>
         <file>qml/dialogs/ConfirmationModal.qml</file>
         <file>qml/dialogs/ItemMovementModal.qml</file>

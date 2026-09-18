@@ -1,5 +1,6 @@
 #include "ledger_statement_widget.h"
 #include "engine/accounting_engine.h"
+#include "engine/fiscal_year_helper.h"
 #include <QPainter>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -7,6 +8,7 @@
 #include <QShortcut>
 #include <QKeyEvent>
 #include <QDate>
+#include <QTimer>
 #include <cmath>
 
 LedgerStatementWidget::LedgerStatementWidget(LedgerStatementController* controller,
@@ -89,7 +91,9 @@ void LedgerStatementWidget::setupUi() {
     connect(m_searchBox, &AccountSearchBox::partySelected, this, &LedgerStatementWidget::onPartySelected);
     filterLayout->addWidget(m_searchBox);
 
-    m_fyBadge = new QLabel("FY 2026-27", filterCard);
+    FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
+
+    m_fyBadge = new QLabel(activeFy.name, filterCard);
     m_fyBadge->setAlignment(Qt::AlignCenter);
     m_fyBadge->setFixedHeight(34);
     m_fyBadge->setStyleSheet("background-color: #F8FAFC; color: #334155; border: 1px solid #CBD5E1; border-radius: 6px; padding: 4px 12px; font-weight: bold; font-size: 11px;");
@@ -100,7 +104,7 @@ void LedgerStatementWidget::setupUi() {
     filterLayout->addWidget(fromLabel);
 
     m_fromDateEdit = new AccountingDateEdit(filterCard);
-    m_fromDateEdit->setIsoDate("2026-04-01");
+    m_fromDateEdit->setIsoDate(activeFy.startDate);
     m_fromDateEdit->setFixedWidth(110);
     filterLayout->addWidget(m_fromDateEdit);
 
@@ -109,7 +113,7 @@ void LedgerStatementWidget::setupUi() {
     filterLayout->addWidget(toLabel);
 
     m_toDateEdit = new AccountingDateEdit(filterCard);
-    m_toDateEdit->setIsoDate("2027-03-31");
+    m_toDateEdit->setIsoDate(activeFy.endDate);
     m_toDateEdit->setFixedWidth(110);
     filterLayout->addWidget(m_toDateEdit);
 
@@ -146,7 +150,12 @@ void LedgerStatementWidget::setupUi() {
     crSideLayout->addWidget(crBanner);
 
     m_crTable = new LedgerTableView("Cr", m_controller ? m_controller->crModel() : nullptr, this);
-    connect(m_crTable, &LedgerTableView::voucherActivated, this, &LedgerStatementWidget::onVoucherActivated);
+    connect(m_crTable, &LedgerTableView::voucherActivated, this, [this](const QVariantMap& entry) {
+        m_lastSide = "Cr";
+        int row = m_crTable->selectedRowIndex();
+        m_lastIndex = (row >= 0) ? row : 0;
+        openVoucherForEntry(entry);
+    });
     connect(m_crTable, &LedgerTableView::switchSideRequested, this, &LedgerStatementWidget::onSwitchSideRequested);
     crSideLayout->addWidget(m_crTable, 1);
 
@@ -186,7 +195,12 @@ void LedgerStatementWidget::setupUi() {
     drSideLayout->addWidget(drBanner);
 
     m_drTable = new LedgerTableView("Dr", m_controller ? m_controller->drModel() : nullptr, this);
-    connect(m_drTable, &LedgerTableView::voucherActivated, this, &LedgerStatementWidget::onVoucherActivated);
+    connect(m_drTable, &LedgerTableView::voucherActivated, this, [this](const QVariantMap& entry) {
+        m_lastSide = "Dr";
+        int row = m_drTable->selectedRowIndex();
+        m_lastIndex = (row >= 0) ? row : 0;
+        openVoucherForEntry(entry);
+    });
     connect(m_drTable, &LedgerTableView::switchSideRequested, this, &LedgerStatementWidget::onSwitchSideRequested);
     drSideLayout->addWidget(m_drTable, 1);
 
@@ -248,17 +262,19 @@ void LedgerStatementWidget::loadParty(const QString& partyName, const QString& f
         return;
     }
 
-    m_searchBox->setPartyName(partyName.trimmed());
+    FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
+    m_fyBadge->setText(activeFy.name);
 
-    if (!fromDate.isEmpty()) {
-        m_fromDateEdit->setIsoDate(fromDate);
-    }
-    if (!toDate.isEmpty()) {
-        m_toDateEdit->setIsoDate(toDate);
-    }
+    QString fIso = FiscalYearHelper::normalizeToIso(fromDate);
+    QString tIso = FiscalYearHelper::normalizeToIso(toDate);
+    FiscalYearHelper::clampDateRangeToFiscalYear(fIso, tIso, activeFy);
+
+    m_searchBox->setPartyName(partyName.trimmed());
+    m_fromDateEdit->setIsoDate(fIso);
+    m_toDateEdit->setIsoDate(tIso);
 
     if (m_controller) {
-        m_controller->loadPartyStatement(partyName.trimmed(), m_fromDateEdit->isoDate(), m_toDateEdit->isoDate());
+        m_controller->loadPartyStatement(partyName.trimmed(), fIso, tIso);
     }
 
     updateHeadersAndTotals();
@@ -280,17 +296,19 @@ void LedgerStatementWidget::restoreState(const QString& partyName, const QString
         return;
     }
 
-    m_searchBox->setPartyName(partyName.trimmed());
+    FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
+    m_fyBadge->setText(activeFy.name);
 
-    if (!fromDate.isEmpty()) {
-        m_fromDateEdit->setIsoDate(fromDate);
-    }
-    if (!toDate.isEmpty()) {
-        m_toDateEdit->setIsoDate(toDate);
-    }
+    QString fIso = FiscalYearHelper::normalizeToIso(fromDate);
+    QString tIso = FiscalYearHelper::normalizeToIso(toDate);
+    FiscalYearHelper::clampDateRangeToFiscalYear(fIso, tIso, activeFy);
+
+    m_searchBox->setPartyName(partyName.trimmed());
+    m_fromDateEdit->setIsoDate(fIso);
+    m_toDateEdit->setIsoDate(tIso);
 
     if (m_controller) {
-        m_controller->loadPartyStatement(partyName.trimmed(), m_fromDateEdit->isoDate(), m_toDateEdit->isoDate());
+        m_controller->loadPartyStatement(partyName.trimmed(), fIso, tIso);
     }
 
     updateHeadersAndTotals();
@@ -298,22 +316,31 @@ void LedgerStatementWidget::restoreState(const QString& partyName, const QString
     m_lastSide = side;
     m_lastIndex = rowIndex;
 
-    if (side == "Cr" && m_controller && m_controller->crModel()->rowCount() > 0) {
-        m_crTable->setFocus();
-        m_crTable->selectRowIndex(qMin(qMax(0, rowIndex), m_controller->crModel()->rowCount() - 1));
-    } else if (m_controller && m_controller->drModel()->rowCount() > 0) {
-        m_drTable->setFocus();
-        m_drTable->selectRowIndex(qMin(qMax(0, rowIndex), m_controller->drModel()->rowCount() - 1));
-    } else if (m_controller && m_controller->crModel()->rowCount() > 0) {
-        m_crTable->setFocus();
-        m_crTable->selectRowIndex(0);
-    }
+    QTimer::singleShot(20, this, [this, side, rowIndex]() {
+        if (side == "Cr" && m_controller && m_controller->crModel()->rowCount() > 0) {
+            int target = qBound(0, rowIndex, m_controller->crModel()->rowCount() - 1);
+            m_crTable->setFocus();
+            m_crTable->selectRowIndex(target);
+        } else if (m_controller && m_controller->drModel()->rowCount() > 0) {
+            int target = qBound(0, rowIndex, m_controller->drModel()->rowCount() - 1);
+            m_drTable->setFocus();
+            m_drTable->selectRowIndex(target);
+        } else if (m_controller && m_controller->crModel()->rowCount() > 0) {
+            m_crTable->setFocus();
+            m_crTable->selectRowIndex(0);
+        }
+    });
 }
 
 void LedgerStatementWidget::resetSearch() {
+    FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
+    m_fyBadge->setText(activeFy.name);
+    m_fromDateEdit->setIsoDate(activeFy.startDate);
+    m_toDateEdit->setIsoDate(activeFy.endDate);
+
     m_searchBox->setPartyName("");
     if (m_controller) {
-        m_controller->loadPartyStatement("");
+        m_controller->loadPartyStatement("", activeFy.startDate, activeFy.endDate);
     }
     updateHeadersAndTotals();
     m_searchBox->setFocus();
@@ -344,7 +371,18 @@ void LedgerStatementWidget::onPartySelected(const QString& partyName) {
 
 void LedgerStatementWidget::onDateFilterApplied() {
     if (m_controller && !m_searchBox->currentPartyName().isEmpty()) {
-        m_controller->applyDateFilter(m_fromDateEdit->isoDate(), m_toDateEdit->isoDate());
+        FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
+        m_fyBadge->setText(activeFy.name);
+
+        QString fIso = m_fromDateEdit->isoDate();
+        QString tIso = m_toDateEdit->isoDate();
+        FiscalYearHelper::clampDateRangeToFiscalYear(fIso, tIso, activeFy);
+
+        // Update UI inputs with clamped valid dates
+        m_fromDateEdit->setIsoDate(fIso);
+        m_toDateEdit->setIsoDate(tIso);
+
+        m_controller->applyDateFilter(fIso, tIso);
         updateHeadersAndTotals();
     }
 }
@@ -487,15 +525,19 @@ void LedgerStatementWidget::openVoucherForEntry(const QVariantMap& entry) {
 
 void LedgerStatementWidget::onSwitchSideRequested(const QString& targetSide) {
     if (targetSide == "Cr" && m_controller && m_controller->crModel()->rowCount() > 0) {
-        int currentDrRow = m_drTable->selectedRowIndex();
-        int targetRow = (currentDrRow >= 0) ? qMin(currentDrRow, m_controller->crModel()->rowCount() - 1) : 0;
+        int existingCrRow = m_crTable->selectedRowIndex();
+        int targetRow = (existingCrRow >= 0) ? qBound(0, existingCrRow, m_controller->crModel()->rowCount() - 1) : 0;
         m_crTable->setFocus();
         m_crTable->selectRowIndex(targetRow);
+        m_lastSide = "Cr";
+        m_lastIndex = targetRow;
     } else if (targetSide == "Dr" && m_controller && m_controller->drModel()->rowCount() > 0) {
-        int currentCrRow = m_crTable->selectedRowIndex();
-        int targetRow = (currentCrRow >= 0) ? qMin(currentCrRow, m_controller->drModel()->rowCount() - 1) : 0;
+        int existingDrRow = m_drTable->selectedRowIndex();
+        int targetRow = (existingDrRow >= 0) ? qBound(0, existingDrRow, m_controller->drModel()->rowCount() - 1) : 0;
         m_drTable->setFocus();
         m_drTable->selectRowIndex(targetRow);
+        m_lastSide = "Dr";
+        m_lastIndex = targetRow;
     }
 }
 
@@ -528,7 +570,14 @@ void LedgerStatementWidget::keyPressEvent(QKeyEvent* event) {
 
 void LedgerStatementWidget::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
-    if (m_searchBox->currentPartyName().isEmpty()) {
+    FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
+    m_fyBadge->setText(activeFy.name);
+    
+    QString curFrom = m_fromDateEdit->isoDate();
+    QString curTo = m_toDateEdit->isoDate();
+    if (m_searchBox->currentPartyName().isEmpty() || curFrom < activeFy.startDate || curTo > activeFy.endDate) {
+        m_fromDateEdit->setIsoDate(activeFy.startDate);
+        m_toDateEdit->setIsoDate(activeFy.endDate);
         m_searchBox->setFocus();
         m_searchBox->selectAll();
     }

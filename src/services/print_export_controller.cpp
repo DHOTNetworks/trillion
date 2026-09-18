@@ -1,6 +1,7 @@
 #include "print_export_controller.h"
 #include "../database_manager.h"
 #include "../engine/accounting_engine.h"
+#include "../engine/fiscal_year_helper.h"
 #include <QPrinter>
 #include <QPrintDialog>
 #include <QTextDocument>
@@ -952,194 +953,60 @@ QString PrintExportController::renderLedgerStatementHtml(const QString& partyNam
     auto firm = getFirmProfile();
     QString pName = partyName.trimmed();
 
-    QString fDate = fromDate.trimmed();
-    QString tDate = toDate.trimmed();
-    if (fDate.isEmpty() && tDate.isEmpty()) {
-        fDate = AccountingEngine::getActiveFromDate();
-        tDate = AccountingEngine::getActiveToDate();
-    }
+    PartitionedLedgerData partData = FiscalYearHelper::partitionPartyTransactions(pName, fromDate, toDate);
+    QString fDate = partData.effectiveFromDate;
+    QString tDate = partData.effectiveToDate;
 
     QVariantList pRows = DatabaseManager::instance().executeQuery(
-        "SELECT id, legacy_id, name, group_name, party_type, phone, city, gstin, opening_balance, balance_type "
+        "SELECT id, legacy_id, name, group_name, party_type, phone, city, gstin "
         "FROM parties WHERE name = ? OR alias = ? OR name LIKE ? LIMIT 1;",
         {pName, pName, "%" + pName + "%"}
     );
     QString pPhone = "-", pPlace = "-", pGstin = "-";
-    int partyId = 0;
-    int legacyCode = 0;
-    double initialOp = 0.0;
-    QString initialOpType = "Cr";
-
     if (!pRows.isEmpty()) {
         QVariantMap pm = pRows.first().toMap();
-        partyId = pm.value("id").toInt();
-        legacyCode = pm.value("legacy_id").toInt();
         pPhone = pm.value("phone", "-").toString();
         pPlace = pm.value("city", pm.value("place", "-")).toString();
         pGstin = pm.value("gstin", "-").toString();
-        initialOp = pm.value("opening_balance").toDouble();
-        initialOpType = pm.value("balance_type").toString();
     }
-
-    double priorDr = 0.0;
-    double priorCr = 0.0;
-    if (initialOpType.compare("Dr", Qt::CaseInsensitive) == 0) priorDr += initialOp;
-    else priorCr += initialOp;
-
-    if (!fDate.isEmpty() && fDate != "ALL" && fDate != "All") {
-        QVariantList priorRows = DatabaseManager::instance().executeQuery(
-            "SELECT dr_cr, SUM(amount) as total_amt FROM transactions "
-            "WHERE (party_name = ? OR party_name LIKE ? OR party_id = ? OR (account_code > 0 AND account_code = ?)) "
-            "AND voucher_date < ? GROUP BY dr_cr;",
-            {pName, "%" + pName + "%", partyId, legacyCode, fDate}
-        );
-        for (const auto& pr : priorRows) {
-            QVariantMap m = pr.toMap();
-            if (m.value("dr_cr").toString().compare("Dr", Qt::CaseInsensitive) == 0) {
-                priorDr += m.value("total_amt").toDouble();
-            } else {
-                priorCr += m.value("total_amt").toDouble();
-            }
-        }
-    }
-
-    double netOp = priorDr - priorCr;
 
     QString drRowsHtml = "";
     QString crRowsHtml = "";
     double drTotal = 0.0;
     double crTotal = 0.0;
 
-    if (std::abs(netOp) > 0.001) {
-        QString opDate = formatDisplayDate(!fDate.isEmpty() && fDate != "ALL" ? fDate : "2025-04-01");
-        if (netOp >= 0) {
-            drTotal += netOp;
-            drRowsHtml += QString(
-                "<tr style='font-weight:bold;'>"
-                "<td align='center'>%1</td>"
-                "<td align='center'>OP-BAL</td>"
-                "<td align='left'>Opening Balance (Dr)</td>"
-                "<td align='right'>%2</td>"
-                "</tr>"
-            ).arg(opDate, formatPlainINR(netOp));
-        } else {
-            double crAmt = std::abs(netOp);
-            crTotal += crAmt;
-            crRowsHtml += QString(
-                "<tr style='font-weight:bold;'>"
-                "<td align='center'>%1</td>"
-                "<td align='center'>OP-BAL</td>"
-                "<td align='left'>Opening Balance (Cr)</td>"
-                "<td align='right'>%2</td>"
-                "</tr>"
-            ).arg(opDate, formatPlainINR(crAmt));
-        }
+    for (const auto& e : partData.drEntries) {
+        drTotal += e.amount;
+        bool isOp = (e.id == -1);
+        drRowsHtml += QString(
+            "<tr style='%1'>"
+            "<td align='center'>%2</td>"
+            "<td align='center'>%3</td>"
+            "<td align='left'>%4</td>"
+            "<td align='right'>%5</td>"
+            "</tr>"
+        ).arg(isOp ? "font-weight:bold;" : "",
+              e.vDate,
+              isOp ? "OP-BAL" : (!e.refNo.isEmpty() ? e.refNo : e.voucherNo),
+              e.particulars,
+              isOp ? formatPlainINR(e.amount) : QString("<b>%1</b>").arg(formatPlainINR(e.amount)));
     }
 
-    QString sql = "SELECT id, voucher_no, voucher_date, voucher_type, trans_type, opposing_account, dr_cr, amount, invoice_no, narration, broker_name, vehicle_no, taxable_amount, tds_amount FROM transactions WHERE (party_name = ? OR party_name LIKE ? OR party_id = ? OR (account_code > 0 AND account_code = ?))";
-    QVariantList params = {pName, "%" + pName + "%", partyId, legacyCode};
-    if (!fDate.isEmpty() && !tDate.isEmpty() && fDate != "ALL" && fDate != "All") {
-        sql += " AND voucher_date >= ? AND voucher_date <= ?";
-        params << fDate << tDate;
-    }
-    sql += " ORDER BY voucher_date ASC, CAST(voucher_no AS INTEGER) ASC, id ASC;";
-
-    QVariantList rows = DatabaseManager::instance().executeQuery(sql, params);
-
-    for (const auto& rVar : rows) {
-        QVariantMap t = rVar.toMap();
-        QString vNo = t.value("voucher_no").toString();
-        QString rawType = t.value("trans_type").toString();
-        QString vType = t.value("voucher_type").toString();
-        QString opposing = t.value("opposing_account").toString();
-        QString drCr = t.value("dr_cr").toString();
-        double amt = t.value("amount").toDouble();
-        QString invNo = t.value("invoice_no").toString();
-        QString narr = t.value("narration").toString().trimmed();
-        QString veh = t.value("vehicle_no").toString().trimmed();
-        QString broker = t.value("broker_name").toString().trimmed();
-        QString dt = formatDisplayDate(t.value("voucher_date").toString());
-
-        if (rawType == "TDS" || vType == "TDS") {
-            rawType = "TDS";
-            vType = "TDS";
-        }
-        QString displayRef = !rawType.isEmpty() ? QString("%1 %2").arg(rawType, vNo).trimmed() : QString("%1 %2").arg(vType, vNo).trimmed();
-        if (displayRef.isEmpty()) displayRef = vNo;
-
-        QString desc;
-        if (rawType == "Sale" || vType == "Sales") {
-            desc = QString("Sales Invoice: %1").arg(!invNo.isEmpty() ? invNo : vNo);
-        } else if (rawType == "Purc" || vType == "Purchase") {
-            desc = QString("Purchase Bill: %1").arg(!invNo.isEmpty() ? invNo : vNo);
-        } else if (rawType == "ChRt" || rawType == "Rcpt" || vType == "Receipt") {
-            desc = QString("Receipt via %1").arg(!opposing.isEmpty() ? opposing : "Bank/Cash");
-        } else if (rawType == "ChPt" || rawType == "Pymt" || vType == "Payment") {
-            desc = QString("Payment to %1").arg(!opposing.isEmpty() ? opposing : "Bank/Cash");
-        } else if (rawType == "TDS" || vType == "TDS") {
-            desc = !narr.isEmpty() ? narr : QString("TDS: %1").arg(!opposing.isEmpty() ? opposing : "TDS");
-        } else if (rawType == "Jrnl" || vType == "Journal") {
-            desc = QString("Journal: %1").arg(!opposing.isEmpty() ? opposing : "A/c");
-        } else if (rawType == "JFrm" || vType == "J-Form") {
-            desc = QString("J-Form: %1").arg(!opposing.isEmpty() ? opposing : "Paddy Purchase");
-        } else {
-            desc = QString("%1: %2").arg(vType, opposing);
-        }
-
-        if (!veh.isEmpty()) desc += " | Veh: " + veh;
-        if (!broker.isEmpty()) desc += " | Broker: " + broker;
-        if (!narr.isEmpty() && rawType != "TDS" && vType != "TDS" && !desc.contains(narr)) desc += " | " + narr;
-
-        double tdsAmt = t.value("tds_amount").toDouble();
-        if ((rawType == "Purc" || vType == "Purchase") && tdsAmt > 0.0) {
-            double grossAmt = amt + tdsAmt;
-            crTotal += grossAmt;
-            QString purcDesc = QString("B.No. %1").arg(!invNo.isEmpty() ? invNo : vNo);
-            if (!veh.isEmpty()) purcDesc += " | Veh: " + veh;
-            if (!broker.isEmpty()) purcDesc += " | Broker: " + broker;
-            if (!narr.isEmpty()) purcDesc += " | " + narr;
-
-            crRowsHtml += QString(
-                "<tr>"
-                "<td align='center'>%1</td>"
-                "<td align='center'>%2</td>"
-                "<td align='left'>%3</td>"
-                "<td align='right'><b>%4</b></td>"
-                "</tr>"
-            ).arg(dt, displayRef, purcDesc, formatPlainINR(grossAmt));
-
-            drTotal += tdsAmt;
-            drRowsHtml += QString(
-                "<tr>"
-                "<td align='center'>%1</td>"
-                "<td align='center'>%2</td>"
-                "<td align='left'>%3</td>"
-                "<td align='right'><b>%4</b></td>"
-                "</tr>"
-            ).arg(dt, displayRef, QString("T.D.S. U/S 194Q (B.No. %1)").arg(!invNo.isEmpty() ? invNo : vNo), formatPlainINR(tdsAmt));
-        } else {
-            if (drCr.compare("Dr", Qt::CaseInsensitive) == 0) {
-                drTotal += amt;
-                drRowsHtml += QString(
-                    "<tr>"
-                    "<td align='center'>%1</td>"
-                    "<td align='center'>%2</td>"
-                    "<td align='left'>%3</td>"
-                    "<td align='right'><b>%4</b></td>"
-                    "</tr>"
-                ).arg(dt, displayRef, desc, formatPlainINR(amt));
-            } else {
-                crTotal += amt;
-                crRowsHtml += QString(
-                    "<tr>"
-                    "<td align='center'>%1</td>"
-                    "<td align='center'>%2</td>"
-                    "<td align='left'>%3</td>"
-                    "<td align='right'><b>%4</b></td>"
-                    "</tr>"
-                ).arg(dt, displayRef, desc, formatPlainINR(amt));
-            }
-        }
+    for (const auto& e : partData.crEntries) {
+        crTotal += e.amount;
+        bool isOp = (e.id == -1);
+        crRowsHtml += QString(
+            "<tr style='%1'>"
+            "<td align='center'>%2</td>"
+            "<td align='center'>%3</td>"
+            "<td align='left'>%4</td>"
+            "<td align='right'>%5</td>"
+            "</tr>"
+        ).arg(isOp ? "font-weight:bold;" : "",
+              e.vDate,
+              isOp ? "OP-BAL" : (!e.refNo.isEmpty() ? e.refNo : e.voucherNo),
+              e.particulars,
+              isOp ? formatPlainINR(e.amount) : QString("<b>%1</b>").arg(formatPlainINR(e.amount)));
     }
 
     double netBal = std::abs(drTotal - crTotal);
@@ -1471,56 +1338,13 @@ bool PrintExportController::print_stock_register(const QString& fromDate, const 
 // ------------------------------------------------------------------------------------------------
 QString PrintExportController::export_ledger_csv(const QString& partyName, const QString& fromDate, const QString& toDate, const QString& customPath) {
     QString pName = partyName.trimmed();
-    QString fDate = fromDate.trimmed();
-    QString tDate = toDate.trimmed();
-    if (fDate.isEmpty() && tDate.isEmpty()) {
-        fDate = AccountingEngine::getActiveFromDate();
-        tDate = AccountingEngine::getActiveToDate();
-    }
-
-    // Query party profile
-    QVariantList pRows = DatabaseManager::instance().executeQuery(
-        "SELECT id, legacy_id, opening_balance, balance_type FROM parties WHERE name = ? OR alias = ? OR name LIKE ? LIMIT 1;",
-        {pName, pName, "%" + pName + "%"}
-    );
-    int partyId = 0;
-    int legacyCode = 0;
-    double initialOp = 0.0;
-    QString initialOpType = "Cr";
-    if (!pRows.isEmpty()) {
-        partyId = pRows.first().toMap().value("id").toInt();
-        legacyCode = pRows.first().toMap().value("legacy_id").toInt();
-        initialOp = pRows.first().toMap().value("opening_balance").toDouble();
-        initialOpType = pRows.first().toMap().value("balance_type").toString();
-    }
-
-    double priorDr = 0.0;
-    double priorCr = 0.0;
-    if (initialOpType.compare("Dr", Qt::CaseInsensitive) == 0) priorDr += initialOp;
-    else priorCr += initialOp;
-
-    if (!fDate.isEmpty() && fDate != "ALL" && fDate != "All") {
-        QVariantList priorRows = DatabaseManager::instance().executeQuery(
-            "SELECT dr_cr, SUM(amount) as total_amt FROM transactions "
-            "WHERE (party_name = ? OR party_name LIKE ? OR party_id = ? OR (account_code > 0 AND account_code = ?)) "
-            "AND voucher_date < ? GROUP BY dr_cr;",
-            {pName, "%" + pName + "%", partyId, legacyCode, fDate}
-        );
-        for (const auto& pr : priorRows) {
-            QVariantMap m = pr.toMap();
-            if (m.value("dr_cr").toString().compare("Dr", Qt::CaseInsensitive) == 0) {
-                priorDr += m.value("total_amt").toDouble();
-            } else {
-                priorCr += m.value("total_amt").toDouble();
-            }
-        }
-    }
-
-    double netOp = priorDr - priorCr;
+    PartitionedLedgerData partData = FiscalYearHelper::partitionPartyTransactions(pName, fromDate, toDate);
 
     QString outPath = customPath.trimmed();
     if (outPath.isEmpty()) {
-        outPath = get_default_reports_dir() + "/Ledger_" + pName.replace(" ", "_").replace("/", "_") + ".csv";
+        QString safeName = pName;
+        safeName.replace(" ", "_").replace("/", "_");
+        outPath = get_default_reports_dir() + "/Ledger_" + safeName + ".csv";
     }
 
     QFile file(outPath);
@@ -1532,82 +1356,32 @@ QString PrintExportController::export_ledger_csv(const QString& partyName, const
     }
 
     QTextStream out(&file);
-    out << "Date,Voucher No,Voucher Type,Particulars,Debit (₹),Credit (₹)\n";
+    out << "Side,Date,Voucher No,Voucher Type,Particulars,Debit (₹),Credit (₹)\n";
 
     double drTot = 0.0, crTot = 0.0;
-    if (std::abs(netOp) > 0.001) {
-        QString opD = formatDisplayDate(!fDate.isEmpty() && fDate != "ALL" ? fDate : "2025-04-01");
-        if (netOp >= 0) {
-            drTot += netOp;
-            out << opD << ",OP,OBal,\"Opening Balance (Dr)\"," << QString::number(netOp, 'f', 2) << ",0.00\n";
-        } else {
-            double cAmt = std::abs(netOp);
-            crTot += cAmt;
-            out << opD << ",OP,OBal,\"Opening Balance (Cr)\",0.00," << QString::number(cAmt, 'f', 2) << "\n";
-        }
-    }
 
-    QString sql = "SELECT voucher_no, voucher_date, voucher_type, trans_type, opposing_account, dr_cr, amount, invoice_no, narration, broker_name, vehicle_no, tds_amount FROM transactions WHERE (party_name = ? OR party_name LIKE ? OR party_id = ? OR (account_code > 0 AND account_code = ?))";
-    QVariantList params = {pName, "%" + pName + "%", partyId, legacyCode};
-    if (!fDate.isEmpty() && !tDate.isEmpty() && fDate != "ALL" && fDate != "All") {
-        sql += " AND voucher_date >= ? AND voucher_date <= ?";
-        params << fDate << tDate;
-    }
-    sql += " ORDER BY voucher_date ASC, CAST(voucher_no AS INTEGER) ASC, id ASC;";
-
-    QVariantList rows = DatabaseManager::instance().executeQuery(sql, params);
-
-    for (const auto& rVar : rows) {
-        QVariantMap t = rVar.toMap();
-        QString dt = formatDisplayDate(t.value("voucher_date").toString());
-        QString vNo = t.value("voucher_no").toString();
-        QString rawType = t.value("trans_type").toString();
-        QString vType = t.value("voucher_type").toString();
-        QString opposing = t.value("opposing_account").toString();
-        QString drCr = t.value("dr_cr").toString();
-        double amt = t.value("amount").toDouble();
-        QString invNo = t.value("invoice_no").toString();
-        QString narr = t.value("narration").toString().trimmed().replace(",", ";").replace("\"", "'");
-        QString veh = t.value("vehicle_no").toString().trimmed();
-        QString broker = t.value("broker_name").toString().trimmed();
-
-        QString displayRef = !rawType.isEmpty() ? QString("%1 %2").arg(rawType, vNo).trimmed() : QString("%1 %2").arg(vType, vNo).trimmed();
-        if (displayRef.isEmpty()) displayRef = vNo;
-
-        QString desc;
-        if (rawType == "Sale" || vType == "Sales") desc = QString("Sales Invoice: %1").arg(!invNo.isEmpty() ? invNo : vNo);
-        else if (rawType == "Purc" || vType == "Purchase") desc = QString("Purchase Bill: %1").arg(!invNo.isEmpty() ? invNo : vNo);
-        else if (rawType == "ChRt" || rawType == "Rcpt" || vType == "Receipt") desc = QString("Receipt via %1").arg(!opposing.isEmpty() ? opposing : "Bank/Cash");
-        else if (rawType == "ChPt" || rawType == "Pymt" || vType == "Payment") desc = QString("Payment to %1").arg(!opposing.isEmpty() ? opposing : "Bank/Cash");
-        else if (rawType == "TDS" || vType == "TDS") desc = !narr.isEmpty() ? narr : QString("TDS: %1").arg(!opposing.isEmpty() ? opposing : "TDS");
-        else desc = QString("%1: %2").arg(vType, opposing);
-
-        if (!veh.isEmpty()) desc += " | Veh: " + veh;
-        if (!broker.isEmpty()) desc += " | Broker: " + broker;
-        if (!narr.isEmpty() && !desc.contains(narr)) desc += " | " + narr;
+    for (const auto& e : partData.drEntries) {
+        drTot += e.amount;
+        QString dt = formatDisplayDate(e.vDate);
+        QString vNo = (e.id == -1) ? "OP-BAL" : (!e.refNo.isEmpty() ? e.refNo : e.voucherNo);
+        QString vType = (e.id == -1) ? "Opening Balance" : e.transType;
+        QString desc = e.particulars;
         desc.replace(",", ";").replace("\"", "'");
-
-        double tdsAmt = t.value("tds_amount").toDouble();
-        if ((rawType == "Purc" || vType == "Purchase") && tdsAmt > 0.0) {
-            double grossAmt = amt + tdsAmt;
-            crTot += grossAmt;
-            out << dt << "," << displayRef << "," << vType << ",\"" << desc << "\",0.00," << QString::number(grossAmt, 'f', 2) << "\n";
-
-            drTot += tdsAmt;
-            out << dt << "," << displayRef << ",TDS,\"T.D.S. U/S 194Q (B.No. " << (!invNo.isEmpty() ? invNo : vNo) << ")\"," << QString::number(tdsAmt, 'f', 2) << ",0.00\n";
-        } else {
-            if (drCr.compare("Dr", Qt::CaseInsensitive) == 0) {
-                drTot += amt;
-                out << dt << "," << displayRef << "," << vType << ",\"" << desc << "\"," << QString::number(amt, 'f', 2) << ",0.00\n";
-            } else {
-                crTot += amt;
-                out << dt << "," << displayRef << "," << vType << ",\"" << desc << "\",0.00," << QString::number(amt, 'f', 2) << "\n";
-            }
-        }
+        out << "Dr," << dt << "," << vNo << "," << vType << ",\"" << desc << "\"," << QString::number(e.amount, 'f', 2) << ",0.00\n";
     }
 
-    out << ",,,TOTAL," << QString::number(drTot, 'f', 2) << "," << QString::number(crTot, 'f', 2) << "\n";
-    out << ",,,NET BALANCE," << QString::number(std::abs(drTot - crTot), 'f', 2) << "," << (drTot >= crTot ? "Dr (Receivable)" : "Cr (Payable)") << "\n";
+    for (const auto& e : partData.crEntries) {
+        crTot += e.amount;
+        QString dt = formatDisplayDate(e.vDate);
+        QString vNo = (e.id == -1) ? "OP-BAL" : (!e.refNo.isEmpty() ? e.refNo : e.voucherNo);
+        QString vType = (e.id == -1) ? "Opening Balance" : e.transType;
+        QString desc = e.particulars;
+        desc.replace(",", ";").replace("\"", "'");
+        out << "Cr," << dt << "," << vNo << "," << vType << ",\"" << desc << "\",0.00," << QString::number(e.amount, 'f', 2) << "\n";
+    }
+
+    out << ",,,,TOTAL," << QString::number(drTot, 'f', 2) << "," << QString::number(crTot, 'f', 2) << "\n";
+    out << ",,,,NET BALANCE," << QString::number(std::abs(drTot - crTot), 'f', 2) << "," << (drTot >= crTot ? "Dr (Receivable)" : "Cr (Payable)") << "\n";
     file.close();
 
     m_lastExportedFile = outPath;

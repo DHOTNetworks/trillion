@@ -1,6 +1,7 @@
 #include "ledger_statement_model.h"
 #include "../database_manager.h"
 #include "../engine/accounting_engine.h"
+#include "../engine/fiscal_year_helper.h"
 #include <QDate>
 #include <algorithm>
 #include <cmath>
@@ -233,18 +234,24 @@ void LedgerStatementController::onSideTotalsChanged() {
 
 void LedgerStatementController::loadPartyStatement(const QString& partyName, const QString& fromDate, const QString& toDate) {
     m_currentPartyName = partyName.trimmed();
-    if (!fromDate.isEmpty()) m_fromDate = fromDate.trimmed();
-    if (!toDate.isEmpty()) m_toDate = toDate.trimmed();
+    FiscalYearInfo fy = FiscalYearHelper::getActiveFiscalYear();
+    QString fIso = FiscalYearHelper::normalizeToIso(fromDate);
+    QString tIso = FiscalYearHelper::normalizeToIso(toDate);
+    FiscalYearHelper::clampDateRangeToFiscalYear(fIso, tIso, fy);
+    m_fromDate = fIso;
+    m_toDate = tIso;
     emit currentPartyNameChanged();
     reloadData();
 }
 
 void LedgerStatementController::applyDateFilter(const QString& fromDate, const QString& toDate) {
-    auto [fIso, _fFmt] = parseDateIsoAndFmt(fromDate);
-    auto [tIso, _tFmt] = parseDateIsoAndFmt(toDate);
-    m_fromDate = (fromDate.trimmed().toUpper() == "ALL" || fromDate.trimmed().isEmpty()) ? "" : fIso;
-    m_toDate = (toDate.trimmed().toUpper() == "ALL" || toDate.trimmed().isEmpty()) ? "" : tIso;
-    applyFilterInternal();
+    FiscalYearInfo fy = FiscalYearHelper::getActiveFiscalYear();
+    QString fIso = FiscalYearHelper::normalizeToIso(fromDate);
+    QString tIso = FiscalYearHelper::normalizeToIso(toDate);
+    FiscalYearHelper::clampDateRangeToFiscalYear(fIso, tIso, fy);
+    m_fromDate = fIso;
+    m_toDate = tIso;
+    reloadData();
 }
 
 void LedgerStatementController::refresh() {
@@ -409,325 +416,26 @@ void LedgerStatementController::reloadData() {
     m_rawCrEntries.clear();
 
     QString cleanName = m_currentPartyName.trimmed();
-
-    QString activeFromDate = m_fromDate.isEmpty() ? AccountingEngine::getActiveFromDate() : m_fromDate;
-    QString activeToDate = m_toDate.isEmpty() ? AccountingEngine::getActiveToDate() : m_toDate;
-    QString activeFyName = AccountingEngine::getActiveFyLabel();
-
-    if (activeFromDate.isEmpty() && activeToDate.isEmpty()) {
-        QVariantList fyActiveRows = DatabaseManager::instance().executeQuery(
-            "SELECT year_name, start_date, end_date FROM financial_years WHERE is_active = 1 LIMIT 1;"
-        );
-        if (!fyActiveRows.isEmpty()) {
-            QVariantMap act = fyActiveRows.first().toMap();
-            activeFyName = act.value("year_name").toString();
-            activeFromDate = act.value("start_date").toString();
-            activeToDate = act.value("end_date").toString();
-        }
+    if (cleanName.isEmpty()) {
+        m_drModel.clear();
+        m_crModel.clear();
+        emit statementTotalsChanged();
+        emit statementLoaded();
+        return;
     }
 
-    if (!cleanName.isEmpty()) {
-        QString namePattern = cleanName;
-        namePattern.replace(QChar(0x00A0), '%');
-        namePattern.replace(' ', '%');
-        QString wildcard = "%" + namePattern + "%";
+    PartitionedLedgerData partData = FiscalYearHelper::partitionPartyTransactions(cleanName, m_fromDate, m_toDate);
+    m_fromDate = partData.effectiveFromDate;
+    m_toDate = partData.effectiveToDate;
+    m_rawDrEntries = partData.drEntries;
+    m_rawCrEntries = partData.crEntries;
 
-        // Find party info from master
-        QVariantList pRows = DatabaseManager::instance().executeQuery(
-            "SELECT id, legacy_id, opening_balance, balance_type FROM parties WHERE name = ? OR name LIKE ? OR name LIKE ? LIMIT 1;",
-            {cleanName, "%" + cleanName + "%", wildcard}
-        );
-        int partyId = 0;
-        int legacyCode = 0;
-        double initialOp = 0.0;
-        QString initialOpType = "Cr";
-        if (!pRows.isEmpty()) {
-            partyId = pRows.first().toMap().value("id").toInt();
-            legacyCode = pRows.first().toMap().value("legacy_id").toInt();
-            initialOp = pRows.first().toMap().value("opening_balance").toDouble();
-            initialOpType = pRows.first().toMap().value("balance_type").toString();
-        }
-
-        // 1. Calculate Opening Balance from prior transactions
-        double priorDr = 0.0;
-        double priorCr = 0.0;
-        if (initialOpType.compare("Dr", Qt::CaseInsensitive) == 0) priorDr += initialOp;
-        else priorCr += initialOp;
-
-        if (!activeFromDate.isEmpty()) {
-            QVariantList priorRows = DatabaseManager::instance().executeQuery(
-                "SELECT dr_cr, SUM(amount) as total_amt FROM transactions "
-                "WHERE (party_name = ? OR party_name LIKE ? OR party_name LIKE ? OR party_id = ? OR (account_code > 0 AND account_code = ?)) "
-                "AND voucher_date < ? GROUP BY dr_cr;",
-                {cleanName, "%" + cleanName + "%", wildcard, partyId, legacyCode, activeFromDate}
-            );
-            for (const auto& pr : priorRows) {
-                QVariantMap m = pr.toMap();
-                if (m.value("dr_cr").toString().compare("Dr", Qt::CaseInsensitive) == 0) {
-                    priorDr += m.value("total_amt").toDouble();
-                } else {
-                    priorCr += m.value("total_amt").toDouble();
-                }
-            }
-        }
-
-        double netOp = priorDr - priorCr;
-        if (std::abs(netOp) > 0.001) {
-            auto [opIso, opFmt] = parseDateIsoAndFmt(!activeFromDate.isEmpty() ? activeFromDate : "2024-04-01");
-            LedgerStatementEntry opEntry;
-            opEntry.id = -1;
-            opEntry.isSelected = false;
-            opEntry.vIso = opIso;
-            opEntry.vDate = opFmt;
-            opEntry.refNo = "OP-BAL";
-            opEntry.voucherNo = "OP";
-            opEntry.invoiceNo = "";
-            opEntry.voucherType = "OBal";
-            opEntry.legacyType = "OBal";
-            opEntry.transType = "OBal";
-            opEntry.particulars = QString("Opening Balance (%1)").arg(netOp >= 0 ? "Dr" : "Cr");
-            opEntry.amount = std::abs(netOp);
-            opEntry.amountFmt = AccountingEngine::formatIndianCurrency(opEntry.amount, true);
-            opEntry.financialYear = !activeFyName.isEmpty() ? activeFyName : "Opening";
-            opEntry.side = (netOp >= 0) ? "Dr" : "Cr";
-
-            if (netOp >= 0) m_rawDrEntries.append(opEntry);
-            else m_rawCrEntries.append(opEntry);
-        }
-
-        // 2. Fetch all transactions
-        QString sql = "SELECT id, voucher_no, voucher_date, voucher_type, trans_type, opposing_account, dr_cr, amount, invoice_no, narration, financial_year, broker_name, vehicle_no, gr_no, taxable_amount, tds_amount FROM transactions WHERE (party_name = ? OR party_name LIKE ? OR party_name LIKE ? OR party_id = ? OR (account_code > 0 AND account_code = ?))";
-        QVariantList params = {cleanName, "%" + cleanName + "%", wildcard, partyId, legacyCode};
-        if (!activeFromDate.isEmpty() && !activeToDate.isEmpty()) {
-            sql += " AND voucher_date >= ? AND voucher_date <= ?";
-            params << activeFromDate << activeToDate;
-        }
-        sql += " ORDER BY voucher_date ASC, CAST(voucher_no AS INTEGER) ASC, id ASC;";
-
-        QVariantList rows = DatabaseManager::instance().executeQuery(sql, params);
-        for (const auto& r : rows) {
-            QVariantMap t = r.toMap();
-            int vId = t.value("id").toInt();
-            QString vNo = t.value("voucher_no").toString();
-            QString rawType = t.value("trans_type").toString();
-            QString vType = t.value("voucher_type").toString();
-            QString opposing = t.value("opposing_account").toString();
-            QString drCr = t.value("dr_cr").toString();
-            double amt = t.value("amount").toDouble();
-            QString invNo = t.value("invoice_no").toString();
-            QString narr = t.value("narration").toString().trimmed();
-            QString veh = t.value("vehicle_no").toString().trimmed();
-            QString broker = t.value("broker_name").toString().trimmed();
-            auto [isoD, fmtD] = parseDateIsoAndFmt(t.value("voucher_date").toString());
-            QString fyStr = computeFyForIso(isoD, t.value("financial_year").toString());
-
-            if (rawType == "TDS" || vType == "TDS") {
-                rawType = "TDS";
-                vType = "TDS";
-            }
-            QString displayRef = !rawType.isEmpty() ? QString("%1 %2").arg(rawType, vNo).trimmed() : QString("%1 %2").arg(vType, vNo).trimmed();
-            if (displayRef.isEmpty()) displayRef = vNo;
-
-            QString desc;
-            if (rawType == "Sale" || vType == "Sales") {
-                desc = QString("Sales Invoice: %1").arg(!invNo.isEmpty() ? invNo : vNo);
-            } else if (rawType == "Purc" || vType == "Purchase") {
-                desc = QString("Purchase Bill: %1").arg(!invNo.isEmpty() ? invNo : vNo);
-            } else if (rawType == "ChRt" || rawType == "Rcpt" || vType == "Receipt") {
-                desc = QString("Receipt via %1").arg(!opposing.isEmpty() ? opposing : "Bank/Cash");
-            } else if (rawType == "ChPt" || rawType == "Pymt" || vType == "Payment") {
-                desc = QString("Payment to %1").arg(!opposing.isEmpty() ? opposing : "Bank/Cash");
-            } else if (rawType == "TDS" || vType == "TDS") {
-                desc = !narr.isEmpty() ? narr : QString("TDS: %1").arg(!opposing.isEmpty() ? opposing : "TDS");
-            } else if (rawType == "Jrnl" || vType == "Journal") {
-                desc = QString("Journal: %1").arg(!opposing.isEmpty() ? opposing : "A/c");
-            } else if (rawType == "JFrm" || vType == "J-Form") {
-                desc = QString("J-Form: %1").arg(!opposing.isEmpty() ? opposing : "Paddy Purchase");
-            } else {
-                desc = QString("%1: %2").arg(vType, opposing);
-            }
-
-            if (!veh.isEmpty()) desc += " | Veh: " + veh;
-            if (!broker.isEmpty()) desc += " | Broker: " + broker;
-            if (!narr.isEmpty() && rawType != "TDS" && vType != "TDS" && !desc.contains(narr)) desc += " | " + narr;
-
-            double tdsAmt = t.value("tds_amount").toDouble();
-            if ((rawType == "Purc" || vType == "Purchase") && tdsAmt > 0.0) {
-                // Gross up purchase bill on Cr side
-                LedgerStatementEntry item;
-                item.id = vId;
-                item.isSelected = false;
-                item.vIso = isoD;
-                item.vDate = fmtD;
-                item.refNo = displayRef;
-                item.voucherNo = vNo;
-                item.invoiceNo = invNo;
-                item.voucherType = vType;
-                item.legacyType = rawType;
-                item.transType = rawType;
-                item.particulars = QString("B.No. %1").arg(!invNo.isEmpty() ? invNo : vNo);
-                if (!veh.isEmpty()) item.particulars += " | Veh: " + veh;
-                if (!broker.isEmpty()) item.particulars += " | Broker: " + broker;
-                if (!narr.isEmpty()) item.particulars += " | " + narr;
-                item.amount = amt + tdsAmt;
-                item.amountFmt = AccountingEngine::formatIndianCurrency(item.amount, true);
-                item.financialYear = fyStr;
-                item.side = "Cr";
-                m_rawCrEntries.append(item);
-
-                // Add separate TDS deduction on Dr side matching Bahi Khata
-                LedgerStatementEntry tdsItem;
-                tdsItem.id = vId;
-                tdsItem.isSelected = false;
-                tdsItem.vIso = isoD;
-                tdsItem.vDate = fmtD;
-                tdsItem.refNo = displayRef;
-                tdsItem.voucherNo = vNo;
-                tdsItem.invoiceNo = invNo;
-                tdsItem.voucherType = "TDS";
-                tdsItem.legacyType = "TDS";
-                tdsItem.transType = "TDS";
-                tdsItem.particulars = QString("T.D.S. U/S 194Q (B.No. %1)").arg(!invNo.isEmpty() ? invNo : vNo);
-                tdsItem.amount = tdsAmt;
-                tdsItem.amountFmt = AccountingEngine::formatIndianCurrency(tdsItem.amount, true);
-                tdsItem.financialYear = fyStr;
-                tdsItem.side = "Dr";
-                m_rawDrEntries.append(tdsItem);
-            } else {
-                LedgerStatementEntry item;
-                item.id = vId;
-                item.isSelected = false;
-                item.vIso = isoD;
-                item.vDate = fmtD;
-                item.refNo = displayRef;
-                item.voucherNo = vNo;
-                item.invoiceNo = invNo;
-                item.voucherType = vType;
-                item.legacyType = rawType;
-                item.transType = rawType;
-                item.particulars = desc;
-                item.amount = amt;
-                item.amountFmt = AccountingEngine::formatIndianCurrency(item.amount, true);
-                item.financialYear = fyStr;
-                item.side = (drCr.compare("Dr", Qt::CaseInsensitive) == 0) ? "Dr" : "Cr";
-
-                if (drCr.compare("Dr", Qt::CaseInsensitive) == 0) {
-                    m_rawDrEntries.append(item);
-                } else {
-                    m_rawCrEntries.append(item);
-                }
-            }
-        }
-    } else {
-        // Load all transactions across all parties
-        QString sql = "SELECT id, voucher_no, voucher_date, voucher_type, trans_type, party_name, opposing_account, dr_cr, amount, invoice_no, narration, financial_year, broker_name, vehicle_no, taxable_amount, tds_amount FROM transactions";
-        QVariantList params;
-        if (!activeFromDate.isEmpty() && !activeToDate.isEmpty()) {
-            sql += " WHERE voucher_date >= ? AND voucher_date <= ?";
-            params << activeFromDate << activeToDate;
-        }
-        sql += " ORDER BY voucher_date ASC, CAST(voucher_no AS INTEGER) ASC, id ASC;";
-
-        QVariantList rows = DatabaseManager::instance().executeQuery(sql, params);
-        for (const auto& r : rows) {
-            QVariantMap t = r.toMap();
-            int vId = t.value("id").toInt();
-            QString vNo = t.value("voucher_no").toString();
-            QString rawType = t.value("trans_type").toString();
-            QString vType = t.value("voucher_type").toString();
-            QString pName = t.value("party_name").toString();
-            QString opposing = t.value("opposing_account").toString();
-            QString drCr = t.value("dr_cr").toString();
-            double amt = t.value("amount").toDouble();
-            QString invNo = t.value("invoice_no").toString();
-            QString narr = t.value("narration").toString().trimmed();
-            QString veh = t.value("vehicle_no").toString().trimmed();
-            QString broker = t.value("broker_name").toString().trimmed();
-            double tdsAmt = t.value("tds_amount").toDouble();
-            auto [isoD, fmtD] = parseDateIsoAndFmt(t.value("voucher_date").toString());
-            QString fyStr = computeFyForIso(isoD, t.value("financial_year").toString());
-
-            QString displayRef = !rawType.isEmpty() ? QString("%1 %2").arg(rawType, vNo).trimmed() : QString("%1 %2").arg(vType, vNo).trimmed();
-
-            if ((rawType == "Purc" || vType == "Purchase") && tdsAmt > 0.0) {
-                QString desc = QString("[%1] B.No. %2").arg(pName, !invNo.isEmpty() ? invNo : vNo);
-                if (!veh.isEmpty()) desc += " | Veh: " + veh;
-                if (!broker.isEmpty()) desc += " | Broker: " + broker;
-                if (!narr.isEmpty()) desc += " | " + narr;
-
-                LedgerStatementEntry item;
-                item.id = vId; item.isSelected = false; item.vIso = isoD; item.vDate = fmtD;
-                item.refNo = displayRef; item.voucherNo = vNo; item.invoiceNo = invNo;
-                item.voucherType = vType; item.legacyType = rawType; item.transType = rawType;
-                item.particulars = desc; item.amount = amt + tdsAmt;
-                item.amountFmt = AccountingEngine::formatIndianCurrency(item.amount, true);
-                item.financialYear = fyStr; item.side = "Cr";
-                m_rawCrEntries.append(item);
-
-                LedgerStatementEntry tdsItem;
-                tdsItem.id = vId; tdsItem.isSelected = false; tdsItem.vIso = isoD; tdsItem.vDate = fmtD;
-                tdsItem.refNo = displayRef; tdsItem.voucherNo = vNo; tdsItem.invoiceNo = invNo;
-                tdsItem.voucherType = "TDS"; tdsItem.legacyType = "TDS"; tdsItem.transType = "TDS";
-                tdsItem.particulars = QString("[%1] T.D.S. U/S 194Q (B.No. %2)").arg(pName, !invNo.isEmpty() ? invNo : vNo);
-                tdsItem.amount = tdsAmt;
-                tdsItem.amountFmt = AccountingEngine::formatIndianCurrency(tdsItem.amount, true);
-                tdsItem.financialYear = fyStr; tdsItem.side = "Dr";
-                m_rawDrEntries.append(tdsItem);
-            } else {
-                QString desc = QString("[%1] %2").arg(pName, !opposing.isEmpty() ? opposing : vType);
-                if (!veh.isEmpty()) desc += " | Veh: " + veh;
-                if (!broker.isEmpty()) desc += " | Broker: " + broker;
-                if (!narr.isEmpty()) desc += " | " + narr;
-
-                LedgerStatementEntry item;
-                item.id = vId; item.isSelected = false; item.vIso = isoD; item.vDate = fmtD;
-                item.refNo = displayRef; item.voucherNo = vNo; item.invoiceNo = invNo;
-                item.voucherType = vType; item.legacyType = rawType; item.transType = rawType;
-                item.particulars = desc; item.amount = amt;
-                item.amountFmt = AccountingEngine::formatIndianCurrency(item.amount, true);
-                item.financialYear = fyStr; item.side = (drCr.compare("Dr", Qt::CaseInsensitive) == 0) ? "Dr" : "Cr";
-
-                if (drCr.compare("Dr", Qt::CaseInsensitive) == 0) {
-                    m_rawDrEntries.append(item);
-                } else {
-                    m_rawCrEntries.append(item);
-                }
-            }
-        }
-    }
-
-    auto sortFn = [](const LedgerStatementEntry& a, const LedgerStatementEntry& b) {
-        if (a.vIso != b.vIso) return a.vIso < b.vIso;
-        int numA = a.voucherNo.toInt();
-        int numB = b.voucherNo.toInt();
-        if (numA != numB) return numA < numB;
-        return a.id < b.id;
-    };
-
-    std::sort(m_rawDrEntries.begin(), m_rawDrEntries.end(), sortFn);
-    std::sort(m_rawCrEntries.begin(), m_rawCrEntries.end(), sortFn);
-
-    applyFilterInternal();
+    m_drModel.setEntries(m_rawDrEntries);
+    m_crModel.setEntries(m_rawCrEntries);
+    emit statementTotalsChanged();
     emit statementLoaded();
 }
 
 void LedgerStatementController::applyFilterInternal() {
-    QVector<LedgerStatementEntry> drFiltered;
-    QVector<LedgerStatementEntry> crFiltered;
-
-    for (const auto& e : m_rawDrEntries) {
-        if (!m_fromDate.isEmpty() && e.vIso < m_fromDate) continue;
-        if (!m_toDate.isEmpty() && e.vIso > m_toDate) continue;
-        drFiltered.append(e);
-    }
-
-    for (const auto& e : m_rawCrEntries) {
-        if (!m_fromDate.isEmpty() && e.vIso < m_fromDate) continue;
-        if (!m_toDate.isEmpty() && e.vIso > m_toDate) continue;
-        crFiltered.append(e);
-    }
-
-    m_drModel.setEntries(drFiltered);
-    m_crModel.setEntries(crFiltered);
-    emit statementTotalsChanged();
+    reloadData();
 }

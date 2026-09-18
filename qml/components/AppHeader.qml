@@ -113,7 +113,7 @@ Rectangle {
                 }
 
                 Text {
-                    text: root.activePeriodText !== "" ? root.activePeriodText : "Period: (2025-04-01 To 2026-03-31) FY 2025-26"
+                    text: root.activePeriodText !== "" ? root.activePeriodText : ((typeof stockItemsModel !== "undefined" && stockItemsModel) ? ("Period: " + stockItemsModel.get_financial_year()) : "Period")
                     color: "#1E40AF"
                     font.pixelSize: 11
                     font.bold: true

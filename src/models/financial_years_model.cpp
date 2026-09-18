@@ -1,6 +1,7 @@
 #include "financial_years_model.h"
 #include "../database_manager.h"
 #include "../engine/accounting_engine.h"
+#include "../engine/fiscal_year_helper.h"
 #include <QDate>
 #include <QRegularExpression>
 
@@ -15,6 +16,7 @@ FinancialYearsModel::FinancialYearsModel(QObject* parent)
 }
 
 void FinancialYearsModel::reload_data() {
+    FiscalYearHelper::ensureFiscalYearsDiscovered();
     beginResetModel();
     m_data = DatabaseManager::instance().executeQuery("SELECT * FROM financial_years ORDER BY start_date ASC;");
     endResetModel();
@@ -38,7 +40,17 @@ bool FinancialYearsModel::set_active_year(const QString& yearName) {
     );
     if (ok) {
         m_workingDate = "";
-        AccountingEngine::setActivePeriod("", "", yearName);
+        QVariantList rows = DatabaseManager::instance().executeQuery(
+            "SELECT start_date, end_date FROM financial_years WHERE year_name = ? LIMIT 1;",
+            {yearName}
+        );
+        if (!rows.isEmpty()) {
+            QString sd = rows.first().toMap().value("start_date").toString();
+            QString ed = rows.first().toMap().value("end_date").toString();
+            AccountingEngine::setActivePeriod(sd, ed, yearName);
+        } else {
+            AccountingEngine::setActivePeriod("", "", yearName);
+        }
         reload_data();
     }
     return ok;

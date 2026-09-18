@@ -710,6 +710,9 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
     db.executeNonQuery("PRAGMA foreign_keys = OFF;");
     db.beginTransaction();
 
+    db.executeNonQuery("DELETE FROM transport_dispatches;");
+    db.executeNonQuery("DELETE FROM debit_credit_notes;");
+    db.executeNonQuery("DELETE FROM transactions;");
     db.executeNonQuery("DELETE FROM sales_invoices;");
     db.executeNonQuery("DELETE FROM purchase_invoices;");
     db.executeNonQuery("DELETE FROM paddy_arrivals;");
@@ -1599,14 +1602,14 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
             "taxable_amount, tds_amount, tds_rate, row_no) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
             {
-                fyId,
+                (fyId > 0 ? QVariant(fyId) : QVariant()),
                 fyVal,
                 QString::fromStdString(vNo),
                 vDate,
                 vType,
                 QString::fromStdString(rawType),
                 acCode,
-                partyId,
+                (partyId > 0 ? QVariant(partyId) : QVariant()),
                 QString::fromStdString(partyName),
                 QString::fromStdString(opposingStr),
                 QString::fromStdString(drCr),
@@ -1859,15 +1862,15 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
                 "kanda_weight, transport, market_type, due_days, tax_status, challan_no, freight_charges, tcs_amount, tcs_rate, place_of_supply) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Credit', ?, ?, ?, 'Self Sale', 'Paid', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
                 {
-                    fyId,
+                    (fyId > 0 ? QVariant(fyId) : QVariant()),
                     fyVal,
                     vchNumStr,
                     QString::fromStdString(invNo),
                     vDate,
-                    partyRes.primary_party_id,
+                    (partyRes.primary_party_id > 0 ? QVariant(partyRes.primary_party_id) : QVariant()),
                     QString::fromStdString(partyRes.primary_party),
                     QString::fromStdString(gstinVal),
-                    itemId,
+                    (itemId > 0 ? QVariant(itemId) : QVariant()),
                     QString::fromStdString(itemName),
                     QString::fromStdString(hsnCode),
                     bagCount,
@@ -1926,7 +1929,7 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
                         {
                             salesInvId,
                             QString::fromStdString(invNo),
-                            sLine.item_id,
+                            (sLine.item_id > 0 ? QVariant(sLine.item_id) : QVariant()),
                             QString::fromStdString(sLine.item_name),
                             sLine.bags,
                             QString::number(sLine.packing, 'f', 3),
@@ -1946,7 +1949,7 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
                     {
                         salesInvId,
                         QString::fromStdString(invNo),
-                        itemId,
+                        (itemId > 0 ? QVariant(itemId) : QVariant()),
                         QString::fromStdString(itemName),
                         bagCount,
                         (marketType == "Market Type (Without Stock)" ? "" : "0.500"),
@@ -1973,15 +1976,15 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
                 "kanda_weight, transport, market_type, due_days, tax_status, challan_no, freight_charges, tcs_amount, tcs_rate, place_of_supply) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Credit', ?, ?, ?, 'Self Purchase', 'Paid', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
                 {
-                    fyId,
+                    (fyId > 0 ? QVariant(fyId) : QVariant()),
                     fyVal,
                     vchNumStr,
                     QString::fromStdString(invNo),
                     vDate,
-                    partyRes.primary_party_id,
+                    (partyRes.primary_party_id > 0 ? QVariant(partyRes.primary_party_id) : QVariant()),
                     QString::fromStdString(partyRes.primary_party),
                     QString::fromStdString(gstinVal),
-                    itemId,
+                    (itemId > 0 ? QVariant(itemId) : QVariant()),
                     QString::fromStdString(itemName),
                     QString::fromStdString(hsnCode),
                     bagCount,
@@ -2040,7 +2043,7 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
                         {
                             purcInvId,
                             QString::fromStdString(invNo),
-                            pLine.item_id,
+                            (pLine.item_id > 0 ? QVariant(pLine.item_id) : QVariant()),
                             QString::fromStdString(pLine.item_name),
                             pLine.bags,
                             QString::number(pLine.packing, 'f', 3),
@@ -2060,7 +2063,7 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
                     {
                         purcInvId,
                         QString::fromStdString(invNo),
-                        itemId,
+                        (itemId > 0 ? QVariant(itemId) : QVariant()),
                         QString::fromStdString(itemName),
                         bagCount,
                         (marketType == "Market Type (Without Stock)" ? "" : "0.500"),
@@ -2085,7 +2088,7 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
                     {
                         QString::fromStdString(invNo),
                         vDate,
-                        partyRes.primary_party_id,
+                        (partyRes.primary_party_id > 0 ? QVariant(partyRes.primary_party_id) : QVariant()),
                         QString::fromStdString(partyRes.primary_party),
                         QString::fromStdString(itemName),
                         bagCount,
@@ -2113,6 +2116,7 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
     db.executeNonQuery("DELETE FROM milling_batches;");
     db.executeNonQuery("DELETE FROM milling_voucher_items;");
 
+    int batchCount = 0;
     for (const auto& pair : millingGroups) {
         std::string mvNo = pair.first.first;
         std::string mvDate = pair.first.second;
@@ -2169,7 +2173,7 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
             "wastage_qtl, yield_pct, narration) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
             {
-                fyId,
+                (fyId > 0 ? QVariant(fyId) : QVariant()),
                 fyVal,
                 batchNoStr,
                 QString::fromStdString(mvDate),
@@ -2191,7 +2195,7 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
             std::string drcr = cleanText(getField(r, "DrCr"));
             int iCode = parseIntVal(getField(r, "ItemCode"));
             auto itItem = itemCodeMap.find(iCode);
-            int iId = (itItem != itemCodeMap.end()) ? itItem->second.id : 1;
+            int iId = (itItem != itemCodeMap.end()) ? itItem->second.id : 0;
             std::string iName = (itItem != itemCodeMap.end()) ? itItem->second.name : cleanText(getField(r, "ItemName"));
             if (iName.empty()) iName = "Item #" + std::to_string(iCode);
 
@@ -2214,7 +2218,7 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
                     QString::fromStdString(mvDate),
                     rowNo,
                     QString::fromStdString(drcr),
-                    iId,
+                    (iId > 0 ? QVariant(iId) : QVariant()),
                     QString::number(iCode),
                     QString::fromStdString(iName),
                     pct,
@@ -2232,7 +2236,7 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
             .arg(paddyIn, 0, 'f', 2)
             .arg(QString::fromStdString(paddyVariety))
             .arg(totalOut, 0, 'f', 2)
-            .arg(yieldPct, 0, 'f', 2);
+            .arg(yieldPct, 0, 'f', 1);
         if (!batchNarration.empty()) {
             vchNarr += " | " + QString::fromStdString(batchNarration);
         }
@@ -2242,9 +2246,17 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
             "fy_id, financial_year, voucher_no, voucher_date, voucher_type, legacy_type, "
             "party_name, account_type, amount, narration) "
             "VALUES (?, ?, ?, ?, 'Milling', 'Mill', 'Milling / Production Account', 'Production Account', 0.0, ?);",
-            {fyId, fyVal, batchNoStr, QString::fromStdString(mvDate), vchNarr}
+            {
+                (fyId > 0 ? QVariant(fyId) : QVariant()),
+                fyVal,
+                batchNoStr,
+                QString::fromStdString(mvDate),
+                vchNarr
+            }
         );
+        batchCount++;
     }
+    std::cout << "[INFO] Migrated " << batchCount << " Milling production batches!" << std::endl;
 
     // =========================================================
     // PASS 5.3: STOCK TRANSACTIONS (INVENTORY LEDGER)
@@ -2317,16 +2329,6 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
                 stBill = std::get<0>(itFb->second);
                 stPid = std::get<1>(itFb->second);
                 stPname = std::get<2>(itFb->second);
-            } else {
-                int cpCode = parseIntVal(getField(st, "CommissionPartyCode"));
-                if (cpCode == 0) cpCode = parseIntVal(getField(st, "DheriPurchaseFrom"));
-                auto itCp = ledgerDetailMap.find(cpCode);
-                if (itCp != ledgerDetailMap.end()) {
-                    stPid = itCp->second.id;
-                    stPname = itCp->second.name;
-                }
-                std::string dheriBill = cleanText(getField(st, "DheriBillNo"));
-                if (!dheriBill.empty()) stBill = dheriBill;
             }
         }
 
@@ -2341,16 +2343,16 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
             "tax_type, narration, row_no) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
             {
-                stFyId,
+                (stFyId > 0 ? QVariant(stFyId) : QVariant()),
                 stFy,
                 QString::fromStdString(stVno),
                 stDate,
                 QString::fromStdString(stTt),
                 QString::fromStdString(stVt),
-                stPid,
+                (stPid > 0 ? QVariant(stPid) : QVariant()),
                 QString::fromStdString(stPname),
                 QString::fromStdString(stBill),
-                stItemId,
+                (stItemId > 0 ? QVariant(stItemId) : QVariant()),
                 QString::fromStdString(stIcode),
                 QString::fromStdString(stItemName),
                 stBags,
@@ -2498,8 +2500,10 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
             "round_off, grand_total, narration) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0.0, 0.0, ?, ?, ?, ?, ?);",
             {
-                fyId, fyVal, vchNum, vDate, jformNo, zimidarId, zimidarName,
-                partyId, partyName, auctionStatus, dueDays, totalBags, totalWeight,
+                (fyId > 0 ? QVariant(fyId) : QVariant()), fyVal, vchNum, vDate, jformNo,
+                (zimidarId > 0 ? QVariant(zimidarId) : QVariant()), zimidarName,
+                (partyId > 0 ? QVariant(partyId) : QVariant()), partyName,
+                auctionStatus, dueDays, totalBags, totalWeight,
                 goodsAmount, goodsAmount, labourAmount, roundOff, grandTotal, narration
             }
         );
@@ -2531,7 +2535,7 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
                     "voucher_id, voucher_no, item_id, item_name, bags, loose_weight, packing, weight, rate, amount) "
                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
                     {
-                        jfVoucherId, vchNum, itemId, QString::fromStdString(itemName),
+                        jfVoucherId, vchNum, (itemId > 0 ? QVariant(itemId) : QVariant()), QString::fromStdString(itemName),
                         bags, loose, packing, wt, rate, amt
                     }
                 );
@@ -2633,11 +2637,11 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
             "exp_ledger_id, exp_ledger_name, tds_ledger_id, tds_ledger_name) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?);",
             {
-                fyId, fyVal, vchNum, vDate, dayOfWeek, postInBooks, incType,
-                partyId, partyName, incAmt, prevAmt, totTds, narration,
+                (fyId > 0 ? QVariant(fyId) : QVariant()), fyVal, vchNum, vDate, dayOfWeek, postInBooks, incType,
+                (partyId > 0 ? QVariant(partyId) : QVariant()), partyName, incAmt, prevAmt, totTds, narration,
                 rateTds, amtTds, rateSur, amtSur, rateCess, amtCess,
                 totTaxRate, totTaxAmt, netAmt, nonDeductReason,
-                expLedgerId, expLedgerName, tdsLedgerId, tdsLedgerName
+                (expLedgerId > 0 ? QVariant(expLedgerId) : QVariant()), expLedgerName, (tdsLedgerId > 0 ? QVariant(tdsLedgerId) : QVariant()), tdsLedgerName
             }
         );
         tdsCount++;
@@ -2661,7 +2665,7 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
         std::string cItemCode = cleanText(getField(cr, "ItemCode"));
         int iCode = parseIntVal(cItemCode);
         auto itItem = itemCodeMap.find(iCode);
-        int cItemId = (itItem != itemCodeMap.end()) ? itItem->second.id : 1;
+        int cItemId = (itItem != itemCodeMap.end()) ? itItem->second.id : 0;
         std::string cItemName = (itItem != itemCodeMap.end()) ? itItem->second.name : ("Item #" + cItemCode);
 
         int cBags = parseIntVal(getField(cr, "Bags"));
@@ -2674,10 +2678,10 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
             "fy_id, financial_year, closing_date, item_id, item_code, item_name, bags, weight_qtl, rate, amount) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
             {
-                cFyId,
+                (cFyId > 0 ? QVariant(cFyId) : QVariant()),
                 cFy,
                 cDate,
-                cItemId,
+                (cItemId > 0 ? QVariant(cItemId) : QVariant()),
                 QString::fromStdString(cItemCode),
                 QString::fromStdString(cItemName),
                 cBags,

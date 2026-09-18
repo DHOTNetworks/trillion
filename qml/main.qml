@@ -26,9 +26,42 @@ T.ApplicationWindow {
     property bool isShortcutsModalOpen: false
     property bool isPaddyModalOpen: false
     property bool isItemMovementModalOpen: false
-    property bool isPeriodModalOpen: false
     property bool isMdbModalOpen: false
-    property string activePeriodLabel: "FY 2026-27"
+    property string activePeriodLabel: ""
+
+    function restoreActiveViewFocus() {
+        Qt.callLater(function() {
+            if (typeof addVoucherMenu !== "undefined" && addVoucherMenu && addVoucherMenu.opened) {
+                addVoucherMenu.forceActiveFocus()
+            } else if (typeof otherVoucherMenu !== "undefined" && otherVoucherMenu && otherVoucherMenu.opened) {
+                otherVoucherMenu.forceActiveFocus()
+            } else if (typeof ledgerMenu !== "undefined" && ledgerMenu && ledgerMenu.opened) {
+                ledgerMenu.forceActiveFocus()
+            } else if (typeof stockMenu !== "undefined" && stockMenu && stockMenu.opened) {
+                stockMenu.forceActiveFocus()
+            } else if (typeof reportsMenu !== "undefined" && reportsMenu && reportsMenu.opened) {
+                reportsMenu.forceActiveFocus()
+            } else if (mainLoader && mainLoader.item) {
+                if (typeof mainLoader.item.restoreFocus === "function") {
+                    mainLoader.item.restoreFocus()
+                } else {
+                    mainLoader.item.forceActiveFocus()
+                }
+            }
+        })
+    }
+
+    onActiveChanged: {
+        if (window.active) {
+            window.restoreActiveViewFocus()
+        }
+    }
+
+    onCurrentViewIndexChanged: {
+        window.restoreActiveViewFocus()
+    }
+
+    signal requestAccountingPeriodDialog()
     property string pendingEditInvoiceNo: ""
     property string pendingEditVoucherNo: ""
     property int pendingEditVoucherId: 0
@@ -175,8 +208,6 @@ T.ApplicationWindow {
             }
         }
     }
-    Shortcut { sequence: "Alt+F2"; context: Qt.ApplicationShortcut; onActivated: window.isPeriodModalOpen = true }
-    Shortcut { sequence: "Option+F2"; context: Qt.ApplicationShortcut; onActivated: window.isPeriodModalOpen = true }
 
     Shortcut { 
         sequence: "F3"
@@ -238,11 +269,10 @@ T.ApplicationWindow {
         } else if (reportsMenu.opened) {
             window.lastActiveMenuType = 0
             reportsMenu.close()
-        } else if (window.isShortcutsModalOpen || window.isPaddyModalOpen || window.isItemMovementModalOpen || window.isPeriodModalOpen) {
+        } else if (window.isShortcutsModalOpen || window.isPaddyModalOpen || window.isItemMovementModalOpen) {
             window.isShortcutsModalOpen = false
             window.isPaddyModalOpen = false
             window.isItemMovementModalOpen = false
-            window.isPeriodModalOpen = false
         } else if (mainLoader.item && typeof mainLoader.item.hasActivePopup === "function" && mainLoader.item.hasActivePopup()) {
             mainLoader.item.closeActivePopup()
         } else if (mainLoader.item && typeof mainLoader.item.handleEscape === "function") {
@@ -285,7 +315,7 @@ T.ApplicationWindow {
                 visible: window.currentViewIndex === 0
                 activePeriodText: window.activePeriodLabel
                 onShowHelpRequested: window.isShortcutsModalOpen = true
-                onOpenAccountingPeriodRequested: window.isPeriodModalOpen = true
+                onOpenAccountingPeriodRequested: window.requestAccountingPeriodDialog()
                 onOpenMdbMigrationRequested: window.isMdbModalOpen = true
                 onSwitchFirmRequested: window.currentViewIndex = 22
             }
@@ -315,15 +345,15 @@ T.ApplicationWindow {
                         case 11: return "views/NewStockItemView.qml"
                         case 12: return "views/ModifyStockItemView.qml"
                         case 13: return "views/StockDetailView.qml"
-                        case 14: return "views/SalesVoucherView.qml"
-                        case 15: return "views/PurchaseVoucherView.qml"
-                        case 16: return "views/ChequeVoucherView.qml"
-                        case 17: return "views/JournalVoucherView.qml"
+                        case 14: return ""
+                        case 15: return ""
+                        case 16: return ""
+                        case 17: return ""
                         case 18: return "views/MillingVoucherView.qml"
                         case 19: return "views/MillingStatementView.qml"
                         case 20: return "views/SalesRegisterView.qml"
                         case 21: return "views/PurchaseRegisterView.qml"
-                        case 22: return "views/FirmSelecterView.qml"
+                        case 22: return ""
                         case 23: return "views/JFormVoucherView.qml"
                         case 24: return "views/TdsVoucherView.qml"
                         case 25: return "views/InterestCalculatorView.qml"
@@ -337,52 +367,6 @@ T.ApplicationWindow {
                 onLoaded: {
                     if (window.currentViewIndex === 8 && item && typeof item.focusSearch === "function") {
                         Qt.callLater(item.focusSearch)
-                    }
-
-                    // 14: SalesVoucherView
-                    if (window.currentViewIndex === 14 && item) {
-                        if (window.pendingEditInvoiceNo !== "" || window.pendingEditVoucherNo !== "" || window.pendingEditVoucherId > 0) {
-                            var salesIdOrNo = window.pendingEditInvoiceNo !== "" ? window.pendingEditInvoiceNo : (window.pendingEditVoucherId > 0 ? window.pendingEditVoucherId : window.pendingEditVoucherNo)
-                            var sDate = window.pendingEditVoucherDate || ""
-                            window.pendingEditInvoiceNo = ""
-                            window.pendingEditVoucherNo = ""
-                            window.pendingEditVoucherId = 0
-                            window.pendingEditVoucherDate = ""
-                            Qt.callLater(function() {
-                                if (item && typeof item.loadInvoiceForEditing === "function") {
-                                    item.loadInvoiceForEditing(salesIdOrNo, sDate)
-                                }
-                            })
-                        } else {
-                            Qt.callLater(function() {
-                                if (item && typeof item.openDateModal === "function") {
-                                    item.openDateModal()
-                                }
-                            })
-                        }
-                    }
-
-                    // 15: PurchaseVoucherView
-                    if (window.currentViewIndex === 15 && item) {
-                        if (window.pendingEditInvoiceNo !== "" || window.pendingEditVoucherNo !== "" || window.pendingEditVoucherId > 0) {
-                            var purcIdOrNo = window.pendingEditInvoiceNo !== "" ? window.pendingEditInvoiceNo : (window.pendingEditVoucherId > 0 ? window.pendingEditVoucherId : window.pendingEditVoucherNo)
-                            var pDate = window.pendingEditVoucherDate || ""
-                            window.pendingEditInvoiceNo = ""
-                            window.pendingEditVoucherNo = ""
-                            window.pendingEditVoucherId = 0
-                            window.pendingEditVoucherDate = ""
-                            Qt.callLater(function() {
-                                if (item && typeof item.loadInvoiceForEditing === "function") {
-                                    item.loadInvoiceForEditing(purcIdOrNo, pDate)
-                                }
-                            })
-                        } else {
-                            Qt.callLater(function() {
-                                if (item && typeof item.openDateModal === "function") {
-                                    item.openDateModal()
-                                }
-                            })
-                        }
                     }
 
                     // 16: ChequeVoucherView
@@ -509,12 +493,22 @@ T.ApplicationWindow {
                             window.lastActiveMenuType = 0
                             window.lastReportsSubmenuIndex = 0
                         } else {
+                            Qt.callLater(function() {
+                                if (item && typeof item.restoreFocus === "function") {
+                                    item.restoreFocus()
+                                } else if (item) {
+                                    item.forceActiveFocus()
+                                }
+                            })
+                        }
+                    } else if (item) {
+                        Qt.callLater(function() {
                             if (item && typeof item.restoreFocus === "function") {
                                 item.restoreFocus()
                             } else if (item) {
                                 item.forceActiveFocus()
                             }
-                        }
+                        })
                     }
                 }
             }
@@ -530,7 +524,7 @@ T.ApplicationWindow {
                 function onOpenPaddy() { window.navigateToView(1) }
                 function onOpenLedgerMenu() { window.openLedgerMasterMenu() }
                 function onOpenStockMenu() { window.openStockMasterMenu() }
-                function onOpenPeriodModal() { window.isPeriodModalOpen = true }
+                function onOpenPeriodModal() { window.requestAccountingPeriodDialog() }
                 function onCancelRequested() { window.navigateBack() }
                 function onSavedSuccess() { window.navigateBack() }
                 function onInvoiceSaved() { window.navigateBack() }
@@ -719,24 +713,22 @@ T.ApplicationWindow {
             window.lastActiveMenuType = 5
             window.lastReportsSubmenuIndex = selIdx
             window.lastDashboardMenuIndex = 4
-            if (act === "Milling Statement") {
-                window.navigateToView(19)
-            } else if (act === "Stock Register") {
-                window.navigateToView(13)
-            } else if (act === "Item Movement") {
-                window.navigateToView(13)
+            if (act === "Balance Sheet") {
+                window.navigateToView(29)
+            } else if (act === "Profit & Loss") {
+                window.navigateToView(30)
             } else if (act === "Ledger Statement") {
                 window.navigateToView(8)
             } else if (act === "Sales Register") {
                 window.navigateToView(20)
             } else if (act === "Purchase Register") {
                 window.navigateToView(21)
+            } else if (act === "Stock Register") {
+                window.navigateToView(13)
+            } else if (act === "Milling Statement") {
+                window.navigateToView(19)
             } else if (act === "Interest Calculator") {
                 window.navigateToView(25)
-            } else if (act === "Transport Register") {
-                window.navigateToView(27)
-            } else if (act === "Debit Credit Notes") {
-                window.navigateToView(28)
             }
         }
     }
@@ -745,7 +737,7 @@ T.ApplicationWindow {
     Rectangle {
         anchors.fill: parent
         color: "#66000000"
-        visible: window.isShortcutsModalOpen || window.isPaddyModalOpen || window.isItemMovementModalOpen || window.isPeriodModalOpen || window.isMdbModalOpen
+        visible: window.isShortcutsModalOpen || window.isPaddyModalOpen || window.isItemMovementModalOpen || window.isMdbModalOpen
 
         MouseArea {
             anchors.fill: parent
@@ -753,7 +745,6 @@ T.ApplicationWindow {
                 window.isShortcutsModalOpen = false
                 window.isPaddyModalOpen = false
                 window.isItemMovementModalOpen = false
-                window.isPeriodModalOpen = false
                 window.isMdbModalOpen = false
             }
         }
@@ -763,7 +754,10 @@ T.ApplicationWindow {
             id: mdbMigrationModal
             anchors.centerIn: parent
             visible: window.isMdbModalOpen
-            onCloseRequested: window.isMdbModalOpen = false
+            onCloseRequested: {
+                window.isMdbModalOpen = false
+                window.restoreActiveViewFocus()
+            }
             onMigrationSuccess: {
                 if (typeof dashboardCtrl !== "undefined" && dashboardCtrl) {
                     dashboardCtrl.refresh_stats()
@@ -774,46 +768,7 @@ T.ApplicationWindow {
                 if (mainLoader.item && typeof mainLoader.item.loadStockItems !== "undefined") {
                     mainLoader.item.loadStockItems()
                 }
-            }
-        }
-
-        // Accounting Period / Financial Year Modal (Bahi-Khata Style)
-        AccountingPeriodModal {
-            id: accountingPeriodModal
-            anchors.centerIn: parent
-            visible: window.isPeriodModalOpen
-            onCloseRequested: window.isPeriodModalOpen = false
-            onPeriodSelected: function(fromIso, toIso, fyLabel) {
-                if (typeof stockItemsModel !== "undefined" && stockItemsModel) {
-                    stockItemsModel.set_accounting_period(fromIso, toIso, fyLabel)
-                }
-                var s_fmt = fromIso.indexOf("-") !== -1 ? fromIso.split("-").reverse().join("-") : fromIso
-                var e_fmt = toIso.indexOf("-") !== -1 ? toIso.split("-").reverse().join("-") : toIso
-                window.activePeriodLabel = s_fmt + " To " + e_fmt + " (" + fyLabel + ")"
-                if (typeof dashboardCtrl !== "undefined" && dashboardCtrl) {
-                    dashboardCtrl.refresh_stats(fromIso, toIso, fyLabel)
-                }
-                if (mainLoader.item && typeof mainLoader.item.activePeriodText !== "undefined") {
-                    mainLoader.item.activePeriodText = s_fmt + " To " + e_fmt + " (" + fyLabel + ")"
-                }
-                if (mainLoader.item && typeof mainLoader.item.loadDashboardStats !== "undefined") {
-                    mainLoader.item.loadDashboardStats()
-                }
-                if (mainLoader.item && typeof mainLoader.item.loadStockItems !== "undefined") {
-                    mainLoader.item.loadStockItems()
-                }
-                if (mainLoader.item && typeof mainLoader.item.syncDateInputsWithActivePeriod === "function") {
-                    mainLoader.item.syncDateInputsWithActivePeriod()
-                }
-                if (mainLoader.item && typeof mainLoader.item.syncWithActivePeriod === "function") {
-                    mainLoader.item.syncWithActivePeriod()
-                }
-                if (mainLoader.item && typeof mainLoader.item.reloadStatementData === "function") {
-                    mainLoader.item.reloadStatementData()
-                }
-                if (mainLoader.item && typeof mainLoader.item.loadPartyStatement !== "undefined") {
-                    mainLoader.item.loadPartyStatement(mainLoader.item.currentPartyName || "")
-                }
+                window.restoreActiveViewFocus()
             }
         }
 
@@ -821,15 +776,24 @@ T.ApplicationWindow {
         KeyboardShortcutsModal {
             anchors.centerIn: parent
             visible: window.isShortcutsModalOpen
-            onCloseRequested: window.isShortcutsModalOpen = false
+            onCloseRequested: {
+                window.isShortcutsModalOpen = false
+                window.restoreActiveViewFocus()
+            }
         }
 
         // New Paddy Arrival Entry
         NewPaddyModal {
             anchors.centerIn: parent
             visible: window.isPaddyModalOpen
-            onCloseRequested: window.isPaddyModalOpen = false
-            onSavedSuccess: window.isPaddyModalOpen = false
+            onCloseRequested: {
+                window.isPaddyModalOpen = false
+                window.restoreActiveViewFocus()
+            }
+            onSavedSuccess: {
+                window.isPaddyModalOpen = false
+                window.restoreActiveViewFocus()
+            }
         }
 
         // SIDE-BY-SIDE ITEM MOVEMENT POPUP MODAL
@@ -837,14 +801,19 @@ T.ApplicationWindow {
             id: itemMovementModal
             anchors.centerIn: parent
             visible: window.isItemMovementModalOpen
-            onCloseRequested: window.isItemMovementModalOpen = false
+            onCloseRequested: {
+                window.isItemMovementModalOpen = false
+                window.restoreActiveViewFocus()
+            }
             onOpenInvoiceRequested: function(invNo, invType) {
                 window.isItemMovementModalOpen = false
-                window.pendingEditInvoiceNo = invNo
+                window.pendingEditInvoiceNo = invNo || ""
+                window.pendingEditVoucherNo = invNo || ""
+                window.pendingEditVoucherId = 0
                 if (invType === "Purchase") {
-                    window.currentViewIndex = 15 // PurchaseVoucherView
+                    window.navigateToView(15) // PurchaseVoucherView
                 } else {
-                    window.currentViewIndex = 14 // SalesVoucherView
+                    window.navigateToView(14) // SalesVoucherView
                 }
             }
         }

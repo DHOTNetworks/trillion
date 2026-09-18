@@ -5,24 +5,7 @@
 #include <QVector>
 #include <QVariantMap>
 #include <QVariantList>
-
-struct LedgerStatementEntry {
-    int id = 0;
-    bool isSelected = false;
-    QString vIso;
-    QString vDate;
-    QString refNo;
-    QString voucherNo;
-    QString invoiceNo;
-    QString voucherType;
-    QString legacyType;
-    QString transType;
-    QString particulars;
-    double amount = 0.0;
-    QString amountFmt;
-    QString financialYear;
-    QString side; // "Dr" or "Cr"
-};
+#include "../engine/fiscal_year_helper.h"
 
 class LedgerStatementSideModel : public QAbstractListModel {
     Q_OBJECT
@@ -118,6 +101,8 @@ public:
     double crSelectedTotal() const { return m_crModel.selectedTotal(); }
     QString drSelectedTotalFmt() const { return m_drModel.selectedTotalFmt(); }
     QString crSelectedTotalFmt() const { return m_crModel.selectedTotalFmt(); }
+    QString fromDate() const { return m_fromDate; }
+    QString toDate() const { return m_toDate; }
     double netBalance() const;
     QString netBalanceFmt() const;
     QString netBalanceType() const;

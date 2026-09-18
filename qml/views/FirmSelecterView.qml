@@ -7,6 +7,7 @@ Rectangle {
     id: root
     anchors.fill: parent
     color: "#F8FAFC" // Clean, bright light theme background matching ERP
+    focus: true
 
     signal firmOpened(string firmId, string firmName)
     signal cancelRequested()
@@ -18,10 +19,39 @@ Rectangle {
     property var firmsList: []
     property int selectedIndex: 0
 
+    function restoreFocus() {
+        if (listView.visible) {
+            listView.forceActiveFocus()
+        } else {
+            root.forceActiveFocus()
+        }
+    }
+
     Component.onCompleted: {
         root.currentFolder = root.appDataFolder
         refreshFirms()
-        listView.forceActiveFocus()
+        restoreFocus()
+    }
+
+    Keys.onUpPressed: function(event) {
+        event.accepted = true
+        if (root.selectedIndex > 0) root.selectedIndex--
+    }
+    Keys.onDownPressed: function(event) {
+        event.accepted = true
+        if (root.selectedIndex < firmsModel.count - 1) root.selectedIndex++
+    }
+    Keys.onReturnPressed: function(event) {
+        event.accepted = true
+        root.openSelectedFirm()
+    }
+    Keys.onEnterPressed: function(event) {
+        event.accepted = true
+        root.openSelectedFirm()
+    }
+    Keys.onEscapePressed: function(event) {
+        event.accepted = true
+        root.handleEscape()
     }
 
     function refreshFirms() {
@@ -114,6 +144,12 @@ Rectangle {
             root.refreshFirms()
             root.firmOpened(firmManager.currentFirmId, firmManager.currentFirmName)
         }
+    }
+
+    MouseArea {
+        anchors.fill: parent
+        z: -1
+        onClicked: root.restoreFocus()
     }
 
     // MAIN CONTENT CONTAINER
@@ -226,6 +262,7 @@ Rectangle {
                             firmManager.set_active_firm_folder(root.currentFolder)
                         }
                         root.refreshFirms()
+                        root.restoreFocus()
                     }
                 }
 

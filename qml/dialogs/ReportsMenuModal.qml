@@ -26,21 +26,19 @@ T.Popup {
         item6.resetMouseTracking()
         item7.resetMouseTracking()
         item8.resetMouseTracking()
-        item9.resetMouseTracking()
         Qt.callLater(function() { menuScope.forceActiveFocus() })
     }
 
     function triggerSelected() {
         var act = ""
-        if (selectedIndex === 0) act = "Milling Statement"
-        else if (selectedIndex === 1) act = "Stock Register"
-        else if (selectedIndex === 2) act = "Item Movement"
-        else if (selectedIndex === 3) act = "Ledger Statement"
-        else if (selectedIndex === 4) act = "Sales Register"
-        else if (selectedIndex === 5) act = "Purchase Register"
-        else if (selectedIndex === 6) act = "Interest Calculator"
-        else if (selectedIndex === 7) act = "Transport Register"
-        else if (selectedIndex === 8) act = "Debit Credit Notes"
+        if (selectedIndex === 0) act = "Balance Sheet"
+        else if (selectedIndex === 1) act = "Profit & Loss"
+        else if (selectedIndex === 2) act = "Ledger Statement"
+        else if (selectedIndex === 3) act = "Sales Register"
+        else if (selectedIndex === 4) act = "Purchase Register"
+        else if (selectedIndex === 5) act = "Stock Register"
+        else if (selectedIndex === 6) act = "Milling Statement"
+        else if (selectedIndex === 7) act = "Interest Calculator"
         var sel = selectedIndex
         root.close()
         root.actionSelected(act, sel)
@@ -61,11 +59,11 @@ T.Popup {
         Keys.onUpPressed: function(event) {
             event.accepted = true
             if (root.selectedIndex > 0) root.selectedIndex--
-            else root.selectedIndex = 8
+            else root.selectedIndex = 7
         }
         Keys.onDownPressed: function(event) {
             event.accepted = true
-            if (root.selectedIndex < 8) root.selectedIndex++
+            if (root.selectedIndex < 7) root.selectedIndex++
             else root.selectedIndex = 0
         }
         Keys.onReturnPressed: function(event) {
@@ -88,7 +86,6 @@ T.Popup {
         Keys.onDigit6Pressed: function(event) { event.accepted = true; root.selectedIndex = 5; root.triggerSelected() }
         Keys.onDigit7Pressed: function(event) { event.accepted = true; root.selectedIndex = 6; root.triggerSelected() }
         Keys.onDigit8Pressed: function(event) { event.accepted = true; root.selectedIndex = 7; root.triggerSelected() }
-        Keys.onDigit9Pressed: function(event) { event.accepted = true; root.selectedIndex = 8; root.triggerSelected() }
 
         ColumnLayout {
             id: mainCol
@@ -117,112 +114,100 @@ T.Popup {
 
             Rectangle { Layout.fillWidth: true; height: 1; color: "#CBD5E1" }
 
-            // Item 1: Milling Statement
+            // Item 1: Balance Sheet
             NavMenuItem {
                 id: item1
                 index: 0
                 selectedIndex: root.selectedIndex
-                text: "1. Milling Statement & Yield Register"
+                text: "1. Balance Sheet (Bahi-Khata T-Format)"
                 activeColor: "#059669"
                 activeBorderColor: "#047857"
                 onItemHovered: root.selectedIndex = 0
                 onItemClicked: { root.selectedIndex = 0; root.triggerSelected() }
             }
 
-            // Item 2: Stock Register
+            // Item 2: Profit & Loss
             NavMenuItem {
                 id: item2
                 index: 1
                 selectedIndex: root.selectedIndex
-                text: "2. Stock Summary Register"
+                text: "2. Profit & Loss Statement"
                 activeColor: "#059669"
                 activeBorderColor: "#047857"
                 onItemHovered: root.selectedIndex = 1
                 onItemClicked: { root.selectedIndex = 1; root.triggerSelected() }
             }
 
-            // Item 3: Item Movement
+            // Item 3: Ledger Statement
             NavMenuItem {
                 id: item3
                 index: 2
                 selectedIndex: root.selectedIndex
-                text: "3. Item Movement Analysis"
+                text: "3. Party & Ledger Statements"
                 activeColor: "#059669"
                 activeBorderColor: "#047857"
                 onItemHovered: root.selectedIndex = 2
                 onItemClicked: { root.selectedIndex = 2; root.triggerSelected() }
             }
 
-            // Item 4: Ledger Statement
+            // Item 4: Sales Register
             NavMenuItem {
                 id: item4
                 index: 3
                 selectedIndex: root.selectedIndex
-                text: "4. Party & Ledger Statements"
+                text: "4. Sales Invoices Register"
                 activeColor: "#059669"
                 activeBorderColor: "#047857"
                 onItemHovered: root.selectedIndex = 3
                 onItemClicked: { root.selectedIndex = 3; root.triggerSelected() }
             }
 
-            // Item 5: Sales Register
+            // Item 5: Purchase Register
             NavMenuItem {
                 id: item5
                 index: 4
                 selectedIndex: root.selectedIndex
-                text: "5. Sales Invoices Register"
+                text: "5. Purchase Invoices Register"
                 activeColor: "#059669"
                 activeBorderColor: "#047857"
                 onItemHovered: root.selectedIndex = 4
                 onItemClicked: { root.selectedIndex = 4; root.triggerSelected() }
             }
 
-            // Item 6: Purchase Register
+            // Item 6: Stock Register
             NavMenuItem {
                 id: item6
                 index: 5
                 selectedIndex: root.selectedIndex
-                text: "6. Purchase Invoices Register"
+                text: "6. Stock Summary Register"
                 activeColor: "#059669"
                 activeBorderColor: "#047857"
                 onItemHovered: root.selectedIndex = 5
                 onItemClicked: { root.selectedIndex = 5; root.triggerSelected() }
             }
 
-            // Item 7: Interest Calculator
+            // Item 7: Milling Statement
             NavMenuItem {
                 id: item7
                 index: 6
                 selectedIndex: root.selectedIndex
-                text: "7. Interest Calculator"
+                text: "7. Milling Statement & Yield Register"
                 activeColor: "#059669"
                 activeBorderColor: "#047857"
                 onItemHovered: root.selectedIndex = 6
                 onItemClicked: { root.selectedIndex = 6; root.triggerSelected() }
             }
 
-            // Item 8: Transport, Weighbridge & e-Way Register
+            // Item 8: Interest Calculator
             NavMenuItem {
                 id: item8
                 index: 7
                 selectedIndex: root.selectedIndex
-                text: "8. Transport, Weighbridge & e-Way Register"
+                text: "8. Interest Calculator & Ledger Accruals"
                 activeColor: "#059669"
                 activeBorderColor: "#047857"
                 onItemHovered: root.selectedIndex = 7
                 onItemClicked: { root.selectedIndex = 7; root.triggerSelected() }
-            }
-
-            // Item 9: GST Debit Notes & Credit Notes Register
-            NavMenuItem {
-                id: item9
-                index: 8
-                selectedIndex: root.selectedIndex
-                text: "9. GST Debit Notes & Credit Notes Register"
-                activeColor: "#059669"
-                activeBorderColor: "#047857"
-                onItemHovered: root.selectedIndex = 8
-                onItemClicked: { root.selectedIndex = 8; root.triggerSelected() }
             }
         }
     }

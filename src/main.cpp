@@ -83,6 +83,56 @@ int main(int argc, char* argv[]) {
     app.setFont(defaultAppFont);
 #endif
 
+    // App-wide clean dialog style ensuring high readability on all OS themes (macOS Dark Mode safe)
+    app.setStyleSheet(
+        "QDialog, QMessageBox, QInputDialog {"
+        "  background-color: #FFFFFF;"
+        "  color: #0F172A;"
+        "  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;"
+        "}"
+        "QDialog QLabel, QMessageBox QLabel, QInputDialog QLabel {"
+        "  color: #0F172A;"
+        "  background: transparent;"
+        "  font-size: 13px;"
+        "  font-weight: 600;"
+        "}"
+        "QDialog QPushButton, QMessageBox QPushButton, QInputDialog QPushButton {"
+        "  background-color: #F1F5F9;"
+        "  color: #0F172A;"
+        "  border: 1px solid #CBD5E1;"
+        "  border-radius: 3px;"
+        "  padding: 5px 16px;"
+        "  font-size: 12px;"
+        "  font-weight: 700;"
+        "  min-width: 70px;"
+        "  min-height: 24px;"
+        "}"
+        "QDialog QPushButton:hover, QMessageBox QPushButton:hover, QInputDialog QPushButton:hover {"
+        "  background-color: #E2E8F0;"
+        "}"
+        "QDialog QPushButton:default, QMessageBox QPushButton:default, QInputDialog QPushButton:default {"
+        "  background-color: #0284C7;"
+        "  color: #FFFFFF;"
+        "  border: 1px solid #0369A1;"
+        "}"
+        "QDialog QPushButton:default:hover, QMessageBox QPushButton:default:hover, QInputDialog QPushButton:default:hover {"
+        "  background-color: #0369A1;"
+        "}"
+        "QDialog QLineEdit, QInputDialog QLineEdit {"
+        "  background-color: #FFFFFF;"
+        "  color: #0F172A;"
+        "  border: 1.5px solid #7F9DB9;"
+        "  border-radius: 3px;"
+        "  padding: 5px 8px;"
+        "  font-size: 13px;"
+        "  font-weight: 700;"
+        "}"
+        "QDialog QLineEdit:focus, QInputDialog QLineEdit:focus {"
+        "  border: 2px solid #0284C7;"
+        "  background-color: #FFFFDD;"
+        "}"
+    );
+
     QString appDir = QCoreApplication::applicationDirPath();
     QString cwd = QDir::currentPath();
 
@@ -367,7 +417,7 @@ int main(int argc, char* argv[]) {
     }
 
     std::cout << "[SUCCESS] Creating Hybrid MainWindow..." << std::endl << std::flush;
-    MainWindow mainWindow(qmlWindow, &ledgerStatementCtrl, &printExportCtrl);
+    MainWindow mainWindow(qmlWindow, &ledgerStatementCtrl, &printExportCtrl, &dashboardCtrl, &firmManager, &bahiKhataMigrator);
     mainWindow.show();
     mainWindow.raise();
     mainWindow.activateWindow();

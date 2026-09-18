@@ -23,10 +23,14 @@ T.ScrollView {
     signal openPeriodModal()
 
     property int selectedMenuIndex: 0
-    property string activePeriodText: ""
+    property string activePeriodText: (typeof window !== "undefined" && window && window.activePeriodLabel !== "") ? window.activePeriodLabel : ""
+
+    function restoreFocus() {
+        root.forceActiveFocus()
+    }
 
     Component.onCompleted: {
-        root.forceActiveFocus()
+        restoreFocus()
         loadDashboardStats()
     }
 
@@ -41,6 +45,9 @@ T.ScrollView {
                 root.activePeriodText = s_fmt + " To " + e_fmt + " (" + fy + ")"
             } else if (fy) {
                 root.activePeriodText = fy
+            }
+            if (window && root.activePeriodText !== "") {
+                window.activePeriodLabel = root.activePeriodText
             }
             if (typeof dashboardCtrl !== "undefined" && dashboardCtrl) {
                 dashboardCtrl.refresh_stats(sd, ed, fy)
@@ -78,6 +85,36 @@ T.ScrollView {
         triggerSelectedMenu()
     }
 
+    Keys.onDigit1Pressed: function(event) {
+        event.accepted = true
+        selectedMenuIndex = 0
+        triggerSelectedMenu()
+    }
+
+    Keys.onDigit2Pressed: function(event) {
+        event.accepted = true
+        selectedMenuIndex = 1
+        triggerSelectedMenu()
+    }
+
+    Keys.onDigit3Pressed: function(event) {
+        event.accepted = true
+        selectedMenuIndex = 2
+        triggerSelectedMenu()
+    }
+
+    Keys.onDigit4Pressed: function(event) {
+        event.accepted = true
+        selectedMenuIndex = 3
+        triggerSelectedMenu()
+    }
+
+    Keys.onDigit5Pressed: function(event) {
+        event.accepted = true
+        selectedMenuIndex = 4
+        triggerSelectedMenu()
+    }
+
     function triggerSelectedMenu() {
         if (selectedMenuIndex === 0) {
             root.openLedgerMenu()
@@ -90,6 +127,12 @@ T.ScrollView {
         } else if (selectedMenuIndex === 4) {
             root.openReportsMenu()
         }
+    }
+
+    MouseArea {
+        anchors.fill: parent
+        z: -1
+        onClicked: root.restoreFocus()
     }
 
     ColumnLayout {
@@ -249,7 +292,7 @@ T.ScrollView {
                                 ColumnLayout {
                                     spacing: 0
                                     Text { 
-                                        text: root.activePeriodText !== "" ? root.activePeriodText : ((typeof stockItemsModel !== "undefined" && stockItemsModel ? stockItemsModel.get_financial_year() : "FY 2026-27") + " (Active)")
+                                        text: root.activePeriodText !== "" ? root.activePeriodText : ((typeof stockItemsModel !== "undefined" && stockItemsModel ? stockItemsModel.get_financial_year() : "") + " (Active)")
                                         color: "#15803D"
                                         font.pixelSize: 11
                                         font.bold: true 

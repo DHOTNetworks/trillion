@@ -1,6 +1,7 @@
 #include "stock_items_model.h"
 #include "../database_manager.h"
 #include "../engine/accounting_engine.h"
+#include "../engine/fiscal_year_helper.h"
 #include <algorithm>
 
 StockItemsModel::StockItemsModel(QObject* parent)
@@ -15,20 +16,11 @@ StockItemsModel::StockItemsModel(QObject* parent)
 }
 
 void StockItemsModel::initActivePeriod() {
-    QVariantList rows = DatabaseManager::instance().executeQuery(
-        "SELECT year_name, start_date, end_date FROM financial_years WHERE is_active = 1 LIMIT 1;"
-    );
-    if (rows.isEmpty()) {
-        rows = DatabaseManager::instance().executeQuery(
-            "SELECT year_name, start_date, end_date FROM financial_years ORDER BY start_date DESC LIMIT 1;"
-        );
-    }
-    if (!rows.isEmpty()) {
-        QVariantMap r = rows.first().toMap();
-        m_currentFinancialYear = r.value("year_name").toString();
-        m_currentFromDate = r.value("start_date").toString();
-        m_currentToDate = r.value("end_date").toString();
-    }
+    FiscalYearHelper::ensureFiscalYearsDiscovered();
+    FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
+    m_currentFinancialYear = activeFy.name;
+    m_currentFromDate = activeFy.startDate;
+    m_currentToDate = activeFy.endDate;
     AccountingEngine::setActivePeriod(m_currentFromDate, m_currentToDate, m_currentFinancialYear);
 }
 

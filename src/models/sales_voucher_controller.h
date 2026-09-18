@@ -195,10 +195,10 @@ public:
     double taxableAmount() const { return m_taxableAmount; }
 
     double gstRate() const { return m_gstRate; }
-    void setGstRate(double r) { if (std::abs(m_gstRate - r) > 0.001) { m_gstRate = r; emit gstRateChanged(); recalculateTotals(); } }
+    Q_INVOKABLE void setGstRate(double r) { if (std::abs(m_gstRate - r) > 0.001) { m_gstRate = r; emit gstRateChanged(); recalculateTotals(); } }
 
     bool isInterstate() const { return m_isInterstate; }
-    void setIsInterstate(bool b) { if (m_isInterstate != b) { m_isInterstate = b; emit isInterstateChanged(); recalculateTotals(); } }
+    Q_INVOKABLE void setIsInterstate(bool b) { if (m_isInterstate != b) { m_isInterstate = b; emit isInterstateChanged(); recalculateTotals(); } }
 
     double cgstAmount() const { return m_cgstAmount; }
     double sgstAmount() const { return m_sgstAmount; }
@@ -206,10 +206,10 @@ public:
     double totalTaxAmount() const { return m_totalTaxAmount; }
 
     double freightCharges() const { return m_freightCharges; }
-    void setFreightCharges(double f) { if (std::abs(m_freightCharges - f) > 0.001) { m_freightCharges = f; recalculateTotals(); } }
+    Q_INVOKABLE void setFreightCharges(double f) { if (std::abs(m_freightCharges - f) > 0.001) { m_freightCharges = f; recalculateTotals(); } }
 
     double tcsRate() const { return m_tcsRate; }
-    void setTcsRate(double r) { if (std::abs(m_tcsRate - r) > 0.001) { m_tcsRate = r; recalculateTotals(); } }
+    Q_INVOKABLE void setTcsRate(double r) { if (std::abs(m_tcsRate - r) > 0.001) { m_tcsRate = r; recalculateTotals(); } }
 
     double tcsAmount() const { return m_tcsAmount; }
     double roundOff() const { return m_roundOff; }
@@ -223,34 +223,34 @@ public:
     QString grandTotalFmt() const;
 
     double dami() const { return m_dami; }
-    void setDami(double v) { if (std::abs(m_dami - v) > 0.001) { m_dami = v; recalculateTotals(); } }
+    Q_INVOKABLE void setDami(double v) { if (std::abs(m_dami - v) > 0.001) { m_dami = v; recalculateTotals(); } }
 
     double labour() const { return m_labour; }
-    void setLabour(double v) { if (std::abs(m_labour - v) > 0.001) { m_labour = v; recalculateTotals(); } }
+    Q_INVOKABLE void setLabour(double v) { if (std::abs(m_labour - v) > 0.001) { m_labour = v; recalculateTotals(); } }
 
     double auction() const { return m_auction; }
-    void setAuction(double v) { if (std::abs(m_auction - v) > 0.001) { m_auction = v; recalculateTotals(); } }
+    Q_INVOKABLE void setAuction(double v) { if (std::abs(m_auction - v) > 0.001) { m_auction = v; recalculateTotals(); } }
 
     double marketFee() const { return m_marketFee; }
-    void setMarketFee(double v) { if (std::abs(m_marketFee - v) > 0.001) { m_marketFee = v; recalculateTotals(); } }
+    Q_INVOKABLE void setMarketFee(double v) { if (std::abs(m_marketFee - v) > 0.001) { m_marketFee = v; recalculateTotals(); } }
 
     double hrdf() const { return m_hrdf; }
-    void setHrdf(double v) { if (std::abs(m_hrdf - v) > 0.001) { m_hrdf = v; recalculateTotals(); } }
+    Q_INVOKABLE void setHrdf(double v) { if (std::abs(m_hrdf - v) > 0.001) { m_hrdf = v; recalculateTotals(); } }
 
     double otherExp() const { return m_otherExp; }
-    void setOtherExp(double v) { if (std::abs(m_otherExp - v) > 0.001) { m_otherExp = v; recalculateTotals(); } }
+    Q_INVOKABLE void setOtherExp(double v) { if (std::abs(m_otherExp - v) > 0.001) { m_otherExp = v; recalculateTotals(); } }
 
     double welfare() const { return m_welfare; }
-    void setWelfare(double v) { if (std::abs(m_welfare - v) > 0.001) { m_welfare = v; recalculateTotals(); } }
+    Q_INVOKABLE void setWelfare(double v) { if (std::abs(m_welfare - v) > 0.001) { m_welfare = v; recalculateTotals(); } }
 
     double dhrmd() const { return m_dhrmd; }
-    void setDhrmd(double v) { if (std::abs(m_dhrmd - v) > 0.001) { m_dhrmd = v; recalculateTotals(); } }
+    Q_INVOKABLE void setDhrmd(double v) { if (std::abs(m_dhrmd - v) > 0.001) { m_dhrmd = v; recalculateTotals(); } }
 
     double sutli() const { return m_sutli; }
-    void setSutli(double v) { if (std::abs(m_sutli - v) > 0.001) { m_sutli = v; recalculateTotals(); } }
+    Q_INVOKABLE void setSutli(double v) { if (std::abs(m_sutli - v) > 0.001) { m_sutli = v; recalculateTotals(); } }
 
     double lessAmount() const { return m_lessAmount; }
-    void setLessAmount(double v) { if (std::abs(m_lessAmount - v) > 0.001) { m_lessAmount = v; recalculateTotals(); } }
+    Q_INVOKABLE void setLessAmount(double v) { if (std::abs(m_lessAmount - v) > 0.001) { m_lessAmount = v; recalculateTotals(); } }
 
     QString vehicleNo() const { return m_vehicleNo; }
     void setVehicleNo(const QString &v) { if (m_vehicleNo != v) { m_vehicleNo = v; emit vehicleNoChanged(); } }

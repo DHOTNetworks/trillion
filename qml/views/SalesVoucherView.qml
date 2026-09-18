@@ -37,12 +37,11 @@ Item {
     readonly property int totalBags: (typeof salesVoucherCtrl !== "undefined" && salesVoucherCtrl) ? salesVoucherCtrl.totalBags : 0
     readonly property real totalWeight: (typeof salesVoucherCtrl !== "undefined" && salesVoucherCtrl) ? salesVoucherCtrl.totalWeightQtl : 0.0
     readonly property real taxableAmount: (typeof salesVoucherCtrl !== "undefined" && salesVoucherCtrl) ? salesVoucherCtrl.taxableAmount : 0.0
-    readonly property real gstTaxAmount: (typeof salesVoucherCtrl !== "undefined" && salesVoucherCtrl) ? salesVoucherCtrl.totalTaxAmount : 0.0
-    readonly property real otherExpAmount: (typeof salesVoucherCtrl !== "undefined" && salesVoucherCtrl) ? salesVoucherCtrl.otherExp : 0.0
-    readonly property real lessAmount: (typeof salesVoucherCtrl !== "undefined" && salesVoucherCtrl) ? salesVoucherCtrl.lessAmount : 0.0
-    readonly property real freightAmount: (typeof salesVoucherCtrl !== "undefined" && salesVoucherCtrl) ? salesVoucherCtrl.freightCharges : 0.0
+    property real otherExpAmount: (typeof salesVoucherCtrl !== "undefined" && salesVoucherCtrl) ? salesVoucherCtrl.otherExp : 0.0
+    property real lessAmount: (typeof salesVoucherCtrl !== "undefined" && salesVoucherCtrl) ? salesVoucherCtrl.lessAmount : 0.0
+    property real freightAmount: (typeof salesVoucherCtrl !== "undefined" && salesVoucherCtrl) ? salesVoucherCtrl.freightCharges : 0.0
     readonly property real roundOffAmount: (typeof salesVoucherCtrl !== "undefined" && salesVoucherCtrl) ? salesVoucherCtrl.roundOff : 0.0
-    readonly property real tcsAmount: (typeof salesVoucherCtrl !== "undefined" && salesVoucherCtrl) ? salesVoucherCtrl.tcsAmount : 0.0
+    property real tcsAmount: (typeof salesVoucherCtrl !== "undefined" && salesVoucherCtrl) ? salesVoucherCtrl.tcsAmount : 0.0
     readonly property real grandTotal: (typeof salesVoucherCtrl !== "undefined" && salesVoucherCtrl) ? salesVoucherCtrl.grandTotal : 0.0
     
     property string statusMessage: ""

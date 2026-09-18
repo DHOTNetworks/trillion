@@ -30,6 +30,10 @@ public:
     QString lastSide() const { return m_lastSide; }
     int lastIndex() const { return m_lastIndex; }
 
+    LedgerTableView* drTable() const { return m_drTable; }
+    LedgerTableView* crTable() const { return m_crTable; }
+    AccountSearchBox* searchBox() const { return m_searchBox; }
+
 signals:
     void backRequested();
     void alterVoucherRequested(int targetViewIndex, const QVariantMap& entry);
@@ -40,6 +44,8 @@ public slots:
     void exportPdf();
     void exportCsv();
     void focusSearch();
+    void onTotalsChanged();
+    void onSwitchSideRequested(const QString& targetSide);
 
 protected:
     void keyPressEvent(QKeyEvent* event) override;
@@ -49,9 +55,7 @@ protected:
 private slots:
     void onPartySelected(const QString& partyName);
     void onDateFilterApplied();
-    void onTotalsChanged();
     void onVoucherActivated(const QVariantMap& entry);
-    void onSwitchSideRequested(const QString& targetSide);
 
 private:
     void setupUi();

@@ -255,13 +255,13 @@ void TransportDispatchController::reload() {
     DatabaseManager::instance().executeNonQuery(
         "INSERT INTO transport_dispatches ("
         "  fy_id, financial_year, dispatch_date, dispatch_time, slip_no, voucher_no, invoice_no, "
-        "  voucher_type, party_name, item_name, grade, vehicle_no, driver_name, transporter_name, "
+        "  voucher_type, party_id, party_name, item_id, item_name, grade, vehicle_no, driver_name, transporter_name, "
         "  gr_no, destination, distance_km, bag_count, net_weight_qtl, total_freight, "
         "  advance_freight, balance_freight, freight_payment_status, eway_bill_no, irn_no, notes"
         ") "
         "SELECT "
         "  si.fy_id, si.financial_year, si.invoice_date, si.bill_time, 'DISP-' || si.invoice_no, si.voucher_no, si.invoice_no, "
-        "  'Sale', si.customer_name, si.item_name, si.grade, si.vehicle_no, si.driver_name, si.transport, "
+        "  'Sale', si.customer_id, si.customer_name, si.item_id, si.item_name, si.grade, si.vehicle_no, si.driver_name, si.transport, "
         "  si.gr_no, si.shipping_address, si.distance, si.bag_count, "
         "  CASE WHEN CAST(si.kanda_weight AS REAL) > 0 THEN CAST(si.kanda_weight AS REAL) ELSE si.weight_qtl END, "
         "  si.freight_charges, 0.0, si.freight_charges, "
@@ -277,13 +277,13 @@ void TransportDispatchController::reload() {
     DatabaseManager::instance().executeNonQuery(
         "INSERT INTO transport_dispatches ("
         "  fy_id, financial_year, dispatch_date, slip_no, voucher_no, invoice_no, "
-        "  voucher_type, party_name, item_name, vehicle_no, driver_name, transporter_name, "
+        "  voucher_type, party_id, party_name, item_id, item_name, vehicle_no, driver_name, transporter_name, "
         "  gr_no, bag_count, net_weight_qtl, total_freight, "
         "  advance_freight, balance_freight, freight_payment_status, eway_bill_no, notes"
         ") "
         "SELECT "
         "  pi.fy_id, pi.financial_year, pi.invoice_date, 'INW-' || pi.invoice_no, pi.voucher_no, pi.invoice_no, "
-        "  'Purchase', pi.supplier_name, pi.item_name, pi.vehicle_no, pi.driver_name, pi.transport, "
+        "  'Purchase', pi.supplier_id, pi.supplier_name, pi.item_id, pi.item_name, pi.vehicle_no, pi.driver_name, pi.transport, "
         "  pi.gr_no, pi.bag_count, "
         "  CASE WHEN CAST(pi.kanda_weight AS REAL) > 0 THEN CAST(pi.kanda_weight AS REAL) ELSE pi.weight_qtl END, "
         "  pi.freight_charges, 0.0, pi.freight_charges, "
@@ -492,7 +492,7 @@ QVariantMap TransportDispatchController::saveDispatch(const QVariantMap &data) {
     QVariant partyIdVal = QVariant();
     if (!partyName.isEmpty()) {
         QVariant pid = DatabaseManager::instance().executeScalar(
-            "SELECT id FROM parties WHERE party_name = ? COLLATE NOCASE;", {partyName}
+            "SELECT id FROM parties WHERE name = ? COLLATE NOCASE;", {partyName}
         );
         if (pid.isValid() && pid.toInt() > 0) {
             partyIdVal = pid.toInt();
@@ -502,7 +502,7 @@ QVariantMap TransportDispatchController::saveDispatch(const QVariantMap &data) {
     QVariant itemIdVal = QVariant();
     if (!itemName.isEmpty()) {
         QVariant iid = DatabaseManager::instance().executeScalar(
-            "SELECT id FROM stock_items WHERE item_name = ? COLLATE NOCASE;", {itemName}
+            "SELECT id FROM stock_items WHERE name = ? COLLATE NOCASE;", {itemName}
         );
         if (iid.isValid() && iid.toInt() > 0) {
             itemIdVal = iid.toInt();

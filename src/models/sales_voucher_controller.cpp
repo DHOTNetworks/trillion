@@ -561,23 +561,51 @@ void SalesVoucherController::recalculateTotals()
     int bags = 0;
     double weight = 0.0;
     double taxable = 0.0;
+    double totalTax = 0.0;
+    double cgst = 0.0;
+    double sgst = 0.0;
+    double igst = 0.0;
+    bool hasLineItems = false;
 
     for (const auto &item : m_lineItemsModel.items()) {
+        if (item.itemName.trimmed().isEmpty() && item.amount <= 0.0001 && item.bags <= 0) {
+            continue;
+        }
+
+        hasLineItems = true;
         bags += item.bags;
         weight += item.weightQtl;
         taxable += item.amount;
+
+        if (item.amount > 0.0001 && item.gstPct > 0.0001) {
+            double itemTax = FinancialMathService::round2(item.amount * (item.gstPct / 100.0));
+            totalTax += itemTax;
+            if (m_isInterstate) {
+                igst += itemTax;
+            } else {
+                double half = FinancialMathService::round2(itemTax / 2.0);
+                cgst += half;
+                sgst += (itemTax - half);
+            }
+        }
     }
 
     m_totalBags = bags;
     m_totalWeightQtl = FinancialMathService::round2(weight);
     m_taxableAmount = FinancialMathService::round2(taxable);
 
-    // GST Calculation
-    QVariantMap gst = FinancialMathService::instance().calculateGst(m_taxableAmount, m_gstRate, m_isInterstate);
-    m_cgstAmount = gst.value("cgst").toDouble();
-    m_sgstAmount = gst.value("sgst").toDouble();
-    m_igstAmount = gst.value("igst").toDouble();
-    m_totalTaxAmount = gst.value("totalTax").toDouble();
+    if (!hasLineItems && m_taxableAmount > 0.0001 && m_gstRate > 0.0001) {
+        QVariantMap gst = FinancialMathService::instance().calculateGst(m_taxableAmount, m_gstRate, m_isInterstate);
+        m_cgstAmount = gst.value("cgst").toDouble();
+        m_sgstAmount = gst.value("sgst").toDouble();
+        m_igstAmount = gst.value("igst").toDouble();
+        m_totalTaxAmount = gst.value("totalTax").toDouble();
+    } else {
+        m_cgstAmount = cgst;
+        m_sgstAmount = sgst;
+        m_igstAmount = igst;
+        m_totalTaxAmount = totalTax;
+    }
 
     // Additional Expenses
     double expenses = m_dami + m_labour + m_auction + m_marketFee + m_hrdf + m_otherExp + m_welfare + m_dhrmd + m_sutli + m_freightCharges - m_lessAmount;
