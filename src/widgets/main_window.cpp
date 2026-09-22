@@ -290,7 +290,11 @@ void MainWindow::checkQmlView() {
         navigateToView(33);
     } else if (vIdx == 34 && m_stackedWidget->currentWidget() != m_gstrReportsWidget) {
         navigateToView(34);
-    } else if (vIdx != 0 && vIdx != 8 && vIdx != 29 && vIdx != 30 && vIdx != 14 && vIdx != 15 && vIdx != 16 && vIdx != 17 && vIdx != 22 && vIdx != 6 && vIdx != 7 && vIdx != 18 && vIdx != 19 && vIdx != 20 && vIdx != 33 && vIdx != 34 && m_stackedWidget->currentWidget() != m_qmlContainer) {
+    } else if (vIdx == 35 && m_stackedWidget->currentWidget() != m_millingStatementWidget) {
+        navigateToView(35);
+    } else if (vIdx == 36 && m_stackedWidget->currentWidget() != m_customClosingStockWidget) {
+        navigateToView(36);
+    } else if (vIdx != 0 && vIdx != 8 && vIdx != 29 && vIdx != 30 && vIdx != 14 && vIdx != 15 && vIdx != 16 && vIdx != 17 && vIdx != 22 && vIdx != 6 && vIdx != 7 && vIdx != 18 && vIdx != 19 && vIdx != 20 && vIdx != 33 && vIdx != 34 && vIdx != 35 && vIdx != 36 && m_stackedWidget->currentWidget() != m_qmlContainer) {
         m_stackedWidget->setCurrentWidget(m_qmlContainer);
         if (m_qmlContainer) {
             m_qmlContainer->setFocus(Qt::OtherFocusReason);
@@ -324,6 +328,7 @@ int MainWindow::currentViewIndex() const {
     if (cur == m_dayBookWidget) return 33;
     if (cur == m_gstrReportsWidget) return 34;
     if (cur == m_millingStatementWidget) return 35;
+    if (cur == m_customClosingStockWidget) return 36;
     if (m_qmlWindow) {
         return m_qmlWindow->property("currentViewIndex").toInt();
     }
@@ -352,6 +357,10 @@ void MainWindow::restoreActiveViewFocus() {
         m_dayBookWidget->setFocus(Qt::OtherFocusReason);
     } else if (vIdx == 34 && m_gstrReportsWidget) {
         m_gstrReportsWidget->setFocus(Qt::OtherFocusReason);
+    } else if (vIdx == 35 && m_millingStatementWidget) {
+        m_millingStatementWidget->setFocus(Qt::OtherFocusReason);
+    } else if (vIdx == 36 && m_customClosingStockWidget) {
+        m_customClosingStockWidget->setFocus(Qt::OtherFocusReason);
     } else if (vIdx == 6 && m_newLedgerWidget) {
         m_newLedgerWidget->setFocus(Qt::OtherFocusReason);
         m_newLedgerWidget->focusFirstField();

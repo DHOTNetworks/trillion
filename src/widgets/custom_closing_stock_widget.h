@@ -24,6 +24,9 @@ public:
 signals:
     void backRequested();
 
+protected:
+    void keyPressEvent(QKeyEvent* event) override;
+
 private slots:
     void onDateChanged();
     void onLoadLiveStockClicked();

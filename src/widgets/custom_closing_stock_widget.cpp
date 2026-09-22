@@ -8,6 +8,7 @@
 #include <QTextStream>
 #include <QDoubleSpinBox>
 #include <QSpinBox>
+#include <QKeyEvent>
 
 namespace MahadevERP {
 
@@ -22,6 +23,15 @@ CustomClosingStockWidget::CustomClosingStockWidget(PrintExportController* printC
         m_dateEdit->setDate(QDate::currentDate());
     }
     reloadData();
+}
+
+void CustomClosingStockWidget::keyPressEvent(QKeyEvent* event) {
+    if (event->key() == Qt::Key_Escape || (event->modifiers() & Qt::AltModifier && event->key() == Qt::Key_Left)) {
+        event->accept();
+        emit backRequested();
+        return;
+    }
+    QWidget::keyPressEvent(event);
 }
 
 void CustomClosingStockWidget::setupUi() {
