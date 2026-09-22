@@ -33,10 +33,15 @@ dist/
 
 # Local SQLite databases (keep data folder template if needed)
 data/
-*.bak
 *.md
 !README.md
 !THIRD_PARTY_NOTICES.md
+!docs/*.md
+!docs/**/*.md
+!decompiled-data/*.md
+!impl*.md
+!SCRATCH.md
+!TOOL-USAGE.md
 *.db
 *.db-shm
 *.db-wal
