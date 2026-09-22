@@ -1,6 +1,6 @@
 # MahadevERP Native QtWidgets UI & Design System Rules
 
-This document establishes the mandatory design, layout, styling, and keyboard navigation rules for all native C++20 Qt 6 QtWidgets across the Mahadev Rice Mill ERP codebase.
+This document establishes the mandatory design, layout, styling, custom helper usage, and keyboard navigation rules for all native C++20 Qt 6 QtWidgets across the Mahadev Rice Mill ERP codebase.
 
 ---
 
@@ -29,7 +29,7 @@ Every full-screen native widget in MahadevERP must strictly follow the standard 
 +-----------------------------------------------------------------------------------------+
 | Tier 1: Header Bar Card (Title, Subtitle, KbdBadgeButtons: [Back], [Save], [PDF], etc.)|
 +-----------------------------------------------------------------------------------------+
-| Tier 2: Filter & Control Bar Card (As on Date, Date Range, Search, Status Badge, FY)    |
+| Tier 2: Filter & Control Bar Card (As on Date, Search [Ctrl+F], Status Badge, FY Alt+F2)|
 +-----------------------------------------------------------------------------------------+
 | Tier 3: High-Performance Data Surface (QTableWidget / QTreeView with Dark Navy Headers)  |
 |                                                                                         |
@@ -47,7 +47,7 @@ Every full-screen native widget in MahadevERP must strictly follow the standard 
 
 ### Tier 2: Filter & Control Bar Card
 * Height: `52px` to `58px`.
-* Controls (`QDateEdit`, `QComboBox`, `QLineEdit`):
+* Controls (`QDateEdit`, `QComboBox`, `QLineEdit`, `AccountingDateEdit`):
   * `background-color: #FFFFFF; color: #0F172A; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 4px 10px; font-weight: 700; font-size: 12px;`
   * Focus state: `border: 2px solid #2563EB; background-color: #FFFFF0;`
 * Status badges:
@@ -102,6 +102,8 @@ Every full-screen native widget in MahadevERP must strictly follow the standard 
   * `Alt+Del` or `Alt+D`: Delete / Reset.
   * `Alt+P`: Export PDF.
   * `Alt+E`: Export Excel / CSV.
+  * `Ctrl+F`: Focus search filter box.
+  * `Alt+F2`: Open Accounting Period dialog.
 * Implement `keyPressEvent(QKeyEvent* event)` on every custom widget class.
 * Action buttons must visually display their shortcut badge via `KbdBadgeButton`.
 
@@ -115,7 +117,81 @@ Every full-screen native widget in MahadevERP must strictly follow the standard 
 
 ---
 
-## 5. Main Window Stack & Navigation Integration Checklist
+## 5. Standard Custom Helpers & Components Guide
+
+All new and refactored UI components MUST use the project's native custom helpers instead of raw Qt primitives:
+
+### A. Dialogs & Messages: Use `CustomMessageBox` and `CustomInputDialog`
+* **Never use raw `QMessageBox`** (which renders unstyled standard OS dialogs).
+* **Information dialog**:
+  ```cpp
+  CustomMessageBox::information(this, "Title", "Formatted informational message.");
+  ```
+* **Critical / Error dialog**:
+  ```cpp
+  CustomMessageBox::critical(this, "Save Failed", QString("Error: %1").arg(errorMsg));
+  ```
+* **Confirmation prompt**:
+  ```cpp
+  bool confirmed = CustomMessageBox::question(this, "Confirm Action", "Are you sure?", "Yes, Proceed", "Cancel");
+  ```
+* **Themed input prompt**:
+  ```cpp
+  bool ok = false;
+  QString text = CustomInputDialog::getText(this, "New Group", "Enter Group Name:", "", &ok);
+  ```
+
+### B. Fiscal Year & Accounting Period: Use `FiscalYearHelper` & `AccountingPeriodDialog`
+* **Get Active Financial Year**:
+  ```cpp
+  FiscalYearInfo fy = FiscalYearHelper::getActiveFiscalYear();
+  // fy.name ("2025-2026"), fy.startDate ("2025-04-01"), fy.endDate ("2026-03-31")
+  ```
+* **Global Period Selector Trigger (`Alt+F2`)**:
+  ```cpp
+  QString fIso, tIso, fyLabel;
+  bool applied = AccountingPeriodDialog::selectAndApplyGlobalPeriod(this, &fIso, &tIso, &fyLabel);
+  if (applied) {
+      reloadData();
+  }
+  ```
+* **Date Boundary Clamping**:
+  ```cpp
+  bool inYear = FiscalYearHelper::isDateInActiveYear(targetDate);
+  ```
+
+### C. Fast Date Inputs: Use `AccountingDateEdit` & `VoucherDateDialog`
+* **`AccountingDateEdit`**: High-speed numeric typing with automatic slash/dash auto-formatting, date clamping, and calendar popup.
+* **`VoucherDateDialog`**: Compact calendar modal for vouchers (`F2` shortcut).
+
+### D. Party & Account Auto-Complete: Use `AccountSearchBox` & `PartySearchWidget`
+* For selecting accounts/ledgers with real-time fuzzy search, keyboard navigation (`Up`/`Down`/`Enter`), and current balance badge preview:
+  ```cpp
+  AccountSearchBox* search = new AccountSearchBox(parent);
+  connect(search, &AccountSearchBox::accountSelected, this, &MyWidget::onPartySelected);
+  ```
+
+### E. Grid Item Master Delegates: Use `ItemSearchDelegate`
+* For embedded item selection in `QTableWidget` / `QTableView` with live stock balance, unit, and standard rates.
+
+### F. Action Buttons with Badges: Use `KbdBadgeButton`
+* For all toolbar and header action buttons:
+  ```cpp
+  KbdBadgeButton* btn = new KbdBadgeButton("Save", "Ctrl+S", QColor("#16A34A"), QColor("#15803D"), QColor("#FFFFFF"), QColor("#16A34A"), parent);
+  ```
+
+### G. Printing & File Exports: Use `PrintExportController`
+* For PDF report rendering, CSV table export, and opening files in OS:
+  ```cpp
+  if (m_printCtrl) {
+      QString outPath = m_printCtrl->export_stock_register_pdf(fromDate, toDate, targetPath);
+      m_printCtrl->open_file_in_os(outPath);
+  }
+  ```
+
+---
+
+## 6. Main Window Stack & Navigation Integration Checklist
 When introducing a new native QtWidgets view (e.g., `View N`):
 1. **Instantiation in `MainWindow::MainWindow`**: Add instance to `m_stackedWidget` and connect `backRequested` signal to `navigateToView(0)`.
 2. **Handle in `MainWindow::checkQmlView()`**: Add `else if (vIdx == N && m_stackedWidget->currentWidget() != m_targetWidget) { navigateToView(N); }`.

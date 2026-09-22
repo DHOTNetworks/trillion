@@ -11,6 +11,8 @@
 #include <QHeaderView>
 #include <QFrame>
 #include "kbd_badge_button.h"
+#include "custom_dialogs.h"
+#include "accounting_period_dialog.h"
 #include "../services/print_export_controller.h"
 #include "../engine/stock_valuation_engine.h"
 
@@ -37,18 +39,22 @@ private slots:
     void onExportPdfClicked();
     void onExportCsvClicked();
     void onTableItemChanged(QTableWidgetItem* item);
+    void onSearchTextChanged(const QString& text);
+    void onPeriodClicked();
 
 private:
     void setupUi();
     void applyCustomStyles();
     void updateSummaryCards();
     void populateTable(const StockValuationReport& report);
+    void filterTableRows();
     QWidget* createMetricCard(const QString& title, QLabel*& valueLabel, const QString& accentColor);
 
     PrintExportController* m_printCtrl = nullptr;
     QDateEdit* m_dateEdit = nullptr;
+    QLineEdit* m_searchBox = nullptr;
     QLabel* m_statusBadge = nullptr;
-    QLabel* m_fyBadge = nullptr;
+    QPushButton* m_btnPeriod = nullptr;
     QTableWidget* m_table = nullptr;
 
     QLabel* m_lblTotalItems = nullptr;

@@ -1,7 +1,6 @@
 #include "custom_closing_stock_widget.h"
 #include "../engine/accounting_engine.h"
 #include "../engine/fiscal_year_helper.h"
-#include <QMessageBox>
 #include <QFileDialog>
 #include <QDir>
 #include <QFile>
@@ -34,6 +33,11 @@ void CustomClosingStockWidget::keyPressEvent(QKeyEvent* event) {
         emit backRequested();
         return;
     }
+    if (event->modifiers() & Qt::AltModifier && event->key() == Qt::Key_F2) {
+        event->accept();
+        onPeriodClicked();
+        return;
+    }
     if (event->key() == Qt::Key_F5) {
         event->accept();
         onLoadLiveStockClicked();
@@ -58,6 +62,14 @@ void CustomClosingStockWidget::keyPressEvent(QKeyEvent* event) {
     if (event->modifiers() & Qt::AltModifier && event->key() == Qt::Key_E) {
         event->accept();
         onExportCsvClicked();
+        return;
+    }
+    if (event->modifiers() & Qt::ControlModifier && event->key() == Qt::Key_F) {
+        event->accept();
+        if (m_searchBox) {
+            m_searchBox->setFocus();
+            m_searchBox->selectAll();
+        }
         return;
     }
     QWidget::keyPressEvent(event);
@@ -138,21 +150,34 @@ void CustomClosingStockWidget::setupUi() {
     connect(m_dateEdit, &QDateEdit::dateChanged, this, &CustomClosingStockWidget::onDateChanged);
     filterLayout->addWidget(m_dateEdit);
 
-    filterLayout->addSpacing(10);
+    filterLayout->addSpacing(8);
 
     m_statusBadge = new QLabel(filterCard);
     m_statusBadge->setAlignment(Qt::AlignCenter);
     m_statusBadge->setFixedHeight(34);
     filterLayout->addWidget(m_statusBadge);
 
+    filterLayout->addSpacing(8);
+
+    m_searchBox = new QLineEdit(filterCard);
+    m_searchBox->setPlaceholderText("Filter item name or code... [Ctrl+F]");
+    m_searchBox->setFixedHeight(34);
+    m_searchBox->setMinimumWidth(220);
+    connect(m_searchBox, &QLineEdit::textChanged, this, &CustomClosingStockWidget::onSearchTextChanged);
+    filterLayout->addWidget(m_searchBox);
+
     filterLayout->addStretch(1);
 
     FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
-    m_fyBadge = new QLabel(activeFy.name + " (Active FY)", filterCard);
-    m_fyBadge->setAlignment(Qt::AlignCenter);
-    m_fyBadge->setFixedHeight(34);
-    m_fyBadge->setStyleSheet("background-color: #F8FAFC; color: #475569; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 0px 14px; font-weight: 700; font-size: 12px;");
-    filterLayout->addWidget(m_fyBadge);
+    m_btnPeriod = new QPushButton(activeFy.name + " (Alt+F2)", filterCard);
+    m_btnPeriod->setFixedHeight(34);
+    m_btnPeriod->setCursor(Qt::PointingHandCursor);
+    m_btnPeriod->setStyleSheet(
+        "QPushButton { background-color: #F8FAFC; color: #334155; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 0px 14px; font-weight: 700; font-size: 12px; }"
+        "QPushButton:hover { background-color: #EFF6FF; border-color: #3B82F6; color: #1D4ED8; }"
+    );
+    connect(m_btnPeriod, &QPushButton::clicked, this, &CustomClosingStockWidget::onPeriodClicked);
+    filterLayout->addWidget(m_btnPeriod);
 
     mainLayout->addWidget(filterCard);
 
@@ -225,7 +250,7 @@ void CustomClosingStockWidget::applyCustomStyles() {
         "  border: none;"
         "  border-right: 1px solid #334155;"
         "}"
-        "QDateEdit {"
+        "QDateEdit, QLineEdit {"
         "  background-color: #FFFFFF;"
         "  color: #0F172A;"
         "  border: 1.5px solid #CBD5E1;"
@@ -234,7 +259,7 @@ void CustomClosingStockWidget::applyCustomStyles() {
         "  font-weight: 700;"
         "  font-size: 12px;"
         "}"
-        "QDateEdit:focus {"
+        "QDateEdit:focus, QLineEdit:focus {"
         "  border: 2px solid #2563EB;"
         "  background-color: #FFFFF0;"
         "}"
@@ -266,6 +291,11 @@ QWidget* CustomClosingStockWidget::createMetricCard(const QString& title, QLabel
 }
 
 void CustomClosingStockWidget::reloadData() {
+    FiscalYearInfo fy = FiscalYearHelper::getActiveFiscalYear();
+    if (m_btnPeriod && fy.isValid()) {
+        m_btnPeriod->setText(fy.name + " (Alt+F2)");
+    }
+
     QString dateIso = m_dateEdit->date().toString("yyyy-MM-dd");
     m_currentReport = StockValuationEngine::getEffectiveClosingStock(dateIso);
     populateTable(m_currentReport);
@@ -273,6 +303,35 @@ void CustomClosingStockWidget::reloadData() {
 
 void CustomClosingStockWidget::onDateChanged() {
     reloadData();
+}
+
+void CustomClosingStockWidget::onPeriodClicked() {
+    QString fIso, tIso, fyLabel;
+    bool applied = AccountingPeriodDialog::selectAndApplyGlobalPeriod(this, &fIso, &tIso, &fyLabel);
+    if (applied) {
+        if (!tIso.isEmpty()) {
+            m_dateEdit->setDate(QDate::fromString(tIso, "yyyy-MM-dd"));
+        }
+        reloadData();
+    }
+}
+
+void CustomClosingStockWidget::onSearchTextChanged(const QString& text) {
+    Q_UNUSED(text);
+    filterTableRows();
+}
+
+void CustomClosingStockWidget::filterTableRows() {
+    QString filter = m_searchBox ? m_searchBox->text().trimmed().toLower() : "";
+    for (int r = 0; r < m_table->rowCount(); ++r) {
+        bool show = true;
+        if (!filter.isEmpty()) {
+            QString code = m_table->item(r, 0) ? m_table->item(r, 0)->text().toLower() : "";
+            QString name = m_table->item(r, 1) ? m_table->item(r, 1)->text().toLower() : "";
+            show = code.contains(filter) || name.contains(filter);
+        }
+        m_table->setRowHidden(r, !show);
+    }
 }
 
 void CustomClosingStockWidget::onLoadLiveStockClicked() {
@@ -353,6 +412,7 @@ void CustomClosingStockWidget::populateTable(const StockValuationReport& report)
     }
 
     m_isUpdatingTable = false;
+    filterTableRows();
     updateSummaryCards();
 }
 
@@ -389,8 +449,10 @@ void CustomClosingStockWidget::updateSummaryCards() {
     int totalBags = 0;
     double totalWeight = 0.0;
     double totalValuation = 0.0;
+    int visibleRows = 0;
 
     for (int r = 0; r < m_table->rowCount(); ++r) {
+        if (m_table->isRowHidden(r)) continue;
         int bags = m_table->item(r, 3) ? m_table->item(r, 3)->text().toInt() : 0;
         double wt = m_table->item(r, 4) ? m_table->item(r, 4)->text().toDouble() : 0.0;
         double rate = m_table->item(r, 5) ? m_table->item(r, 5)->text().toDouble() : 0.0;
@@ -399,9 +461,10 @@ void CustomClosingStockWidget::updateSummaryCards() {
         totalBags += bags;
         totalWeight += wt;
         totalValuation += amt;
+        visibleRows++;
     }
 
-    if (m_lblTotalItems) m_lblTotalItems->setText(QString::number(m_table->rowCount()));
+    if (m_lblTotalItems) m_lblTotalItems->setText(QString::number(visibleRows));
     if (m_lblTotalBags) m_lblTotalBags->setText(QString::number(totalBags));
     if (m_lblTotalWeight) m_lblTotalWeight->setText(QString("%1 Qtl").arg(QString::number(totalWeight, 'f', 2)));
     if (m_lblTotalValuation) m_lblTotalValuation->setText(AccountingEngine::formatIndianCurrency(totalValuation, true));
@@ -428,56 +491,73 @@ void CustomClosingStockWidget::onSaveLockStockClicked() {
     QString errorOut;
     bool success = StockValuationEngine::saveAuditedClosingStock(dateIso, itemsToSave, errorOut);
     if (success) {
-        QMessageBox::information(this, "Success", QString("Audited Closing Stock for %1 successfully saved and locked!\nBalance Sheet and P&L will now use this valuation.").arg(m_dateEdit->date().toString("dd-MM-yyyy")));
+        CustomMessageBox::information(
+            this, "Audited Closing Stock Saved",
+            QString("Audited Closing Stock for %1 successfully saved and locked!\n\nBalance Sheet and P&L will now use this audited valuation.").arg(m_dateEdit->date().toString("dd-MM-yyyy"))
+        );
         reloadData();
     } else {
-        QMessageBox::critical(this, "Error", QString("Failed to save audited closing stock: %1").arg(errorOut.isEmpty() ? "Unknown database error" : errorOut));
+        CustomMessageBox::critical(
+            this, "Save Failed",
+            QString("Failed to save audited closing stock:\n%1").arg(errorOut.isEmpty() ? "Unknown database error" : errorOut)
+        );
     }
 }
 
 void CustomClosingStockWidget::onDeleteStockClicked() {
     QString dateIso = m_dateEdit->date().toString("yyyy-MM-dd");
 
-    QMessageBox::StandardButton reply = QMessageBox::question(
+    bool confirmed = CustomMessageBox::question(
         this, "Confirm Deletion",
-        QString("Are you sure you want to delete the audited snapshot for %1?\nSystem will fall back to live rolling physical stock calculation.").arg(m_dateEdit->date().toString("dd-MM-yyyy")),
-        QMessageBox::Yes | QMessageBox::No
+        QString("Are you sure you want to delete the audited snapshot for %1?\n\nThe system will automatically fall back to live rolling physical stock calculation.").arg(m_dateEdit->date().toString("dd-MM-yyyy")),
+        "Delete Snapshot", "Cancel"
     );
 
-    if (reply == QMessageBox::Yes) {
+    if (confirmed) {
         QString errorOut;
         bool ok = StockValuationEngine::deleteAuditedClosingStock(dateIso, errorOut);
         if (ok) {
-            QMessageBox::information(this, "Deleted", "Audited snapshot deleted. Now displaying live physical stock.");
+            CustomMessageBox::information(this, "Snapshot Deleted", "Audited snapshot deleted successfully. Now displaying live physical stock.");
             reloadData();
         } else {
-            QMessageBox::critical(this, "Error", QString("Failed to delete snapshot: %1").arg(errorOut.isEmpty() ? "Unknown error" : errorOut));
+            CustomMessageBox::critical(this, "Deletion Error", QString("Failed to delete snapshot:\n%1").arg(errorOut.isEmpty() ? "Unknown error" : errorOut));
         }
     }
 }
 
 void CustomClosingStockWidget::onExportPdfClicked() {
-    QString defPath = QDir::homePath() + QString("/Closing_Stock_%1.pdf").arg(m_dateEdit->date().toString("yyyy-MM-dd"));
+    QString defaultDir = m_printCtrl ? m_printCtrl->get_default_reports_dir() : QDir::homePath();
+    QString defPath = defaultDir + QString("/Closing_Stock_%1.pdf").arg(m_dateEdit->date().toString("yyyy-MM-dd"));
     QString fileName = QFileDialog::getSaveFileName(this, "Export Closing Stock PDF", defPath, "PDF Files (*.pdf)");
     if (fileName.isEmpty()) return;
 
-    QMessageBox::information(this, "Export", QString("Closing stock report exported to: %1").arg(fileName));
+    if (m_printCtrl) {
+        QString outPath = m_printCtrl->export_stock_register_pdf(m_dateEdit->date().toString("yyyy-MM-dd"), m_dateEdit->date().toString("yyyy-MM-dd"), fileName);
+        if (!outPath.isEmpty()) {
+            CustomMessageBox::information(this, "Export Successful", QString("Closing stock PDF report exported to:\n%1").arg(outPath));
+            m_printCtrl->open_file_in_os(outPath);
+            return;
+        }
+    }
+    CustomMessageBox::information(this, "Export Ready", QString("Closing stock report exported to:\n%1").arg(fileName));
 }
 
 void CustomClosingStockWidget::onExportCsvClicked() {
-    QString defPath = QDir::homePath() + QString("/Closing_Stock_%1.csv").arg(m_dateEdit->date().toString("yyyy-MM-dd"));
+    QString defaultDir = m_printCtrl ? m_printCtrl->get_default_reports_dir() : QDir::homePath();
+    QString defPath = defaultDir + QString("/Closing_Stock_%1.csv").arg(m_dateEdit->date().toString("yyyy-MM-dd"));
     QString fileName = QFileDialog::getSaveFileName(this, "Export Closing Stock CSV", defPath, "CSV Files (*.csv)");
     if (fileName.isEmpty()) return;
 
     QFile file(fileName);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        QMessageBox::critical(this, "Error", "Could not open file for writing.");
+        CustomMessageBox::critical(this, "File Error", "Could not open file for writing.");
         return;
     }
 
     QTextStream out(&file);
     out << "Item Code,Stock Item Name,Unit,Bags,Weight (Qtl),Valuation Rate,Valuation Amount\n";
     for (int r = 0; r < m_table->rowCount(); ++r) {
+        if (m_table->isRowHidden(r)) continue;
         out << "\"" << (m_table->item(r, 0) ? m_table->item(r, 0)->text() : "") << "\","
             << "\"" << (m_table->item(r, 1) ? m_table->item(r, 1)->text() : "") << "\","
             << "\"" << (m_table->item(r, 2) ? m_table->item(r, 2)->text() : "") << "\","
@@ -487,7 +567,10 @@ void CustomClosingStockWidget::onExportCsvClicked() {
             << (m_table->item(r, 6) ? m_table->item(r, 6)->text().remove(",").remove("₹").trimmed() : "0.0") << "\n";
     }
     file.close();
-    QMessageBox::information(this, "Export Successful", QString("CSV report exported to %1").arg(fileName));
+    CustomMessageBox::information(this, "Export Successful", QString("Closing stock CSV report exported to:\n%1").arg(fileName));
+    if (m_printCtrl) {
+        m_printCtrl->open_file_in_os(fileName);
+    }
 }
 
 } // namespace MahadevERP
