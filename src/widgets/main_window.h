@@ -19,6 +19,8 @@
 #include "mandi_reports_widget.h"
 #include "day_book_widget.h"
 #include "gstr_reports_widget.h"
+#include "milling_statement_widget.h"
+#include "custom_closing_stock_widget.h"
 #include "../models/ledger_statement_model.h"
 #include "../models/balance_sheet_controller.h"
 #include "../models/profit_loss_controller.h"
@@ -116,6 +118,10 @@ private:
     MandiReportsWidget* m_mandiReportsWidget = nullptr;
     MahadevERP::DayBookWidget* m_dayBookWidget = nullptr;
     MahadevERP::GstrReportsWidget* m_gstrReportsWidget = nullptr;
+    MahadevERP::MillingStatementWidget* m_millingStatementWidget = nullptr;
+    MahadevERP::CustomClosingStockWidget* m_customClosingStockWidget = nullptr;
+
+
 
     LedgerStatementController* m_ledgerCtrl = nullptr;
     BalanceSheetController* m_balanceSheetCtrl = nullptr;

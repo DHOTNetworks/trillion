@@ -186,6 +186,17 @@ MainWindow::MainWindow(QQuickWindow* qmlWindow,
     connect(m_gstrReportsWidget, &MahadevERP::GstrReportsWidget::backRequested, this, [this]() { navigateToView(0); });
     m_stackedWidget->addWidget(m_gstrReportsWidget);
 
+    // Index 16: Native C++ Milling Statement & Out-turn Register (View 35)
+    m_millingStatementWidget = new MahadevERP::MillingStatementWidget(m_printExportCtrl, this);
+    connect(m_millingStatementWidget, &MahadevERP::MillingStatementWidget::backRequested, this, [this]() { navigateToView(0); });
+    connect(m_millingStatementWidget, &MahadevERP::MillingStatementWidget::newBatchRequested, this, [this]() { navigateToView(18); });
+    m_stackedWidget->addWidget(m_millingStatementWidget);
+
+    // Index 17: Native C++ Custom Closing Stock & Valuation Register (View 36)
+    m_customClosingStockWidget = new MahadevERP::CustomClosingStockWidget(m_printExportCtrl, this);
+    connect(m_customClosingStockWidget, &MahadevERP::CustomClosingStockWidget::backRequested, this, [this]() { navigateToView(0); });
+    m_stackedWidget->addWidget(m_customClosingStockWidget);
+
     // Global Shortcuts for Accounting Period (Alt+F2) and Context-Aware F2 (Date / Period)
     QShortcut* altF2Shortcut = new QShortcut(QKeySequence(Qt::ALT | Qt::Key_F2), this);
     connect(altF2Shortcut, &QShortcut::activated, this, &MainWindow::openAccountingPeriodDialog);
@@ -312,6 +323,7 @@ int MainWindow::currentViewIndex() const {
     if (cur == m_mandiReportsWidget) return 20;
     if (cur == m_dayBookWidget) return 33;
     if (cur == m_gstrReportsWidget) return 34;
+    if (cur == m_millingStatementWidget) return 35;
     if (m_qmlWindow) {
         return m_qmlWindow->property("currentViewIndex").toInt();
     }
@@ -759,6 +771,25 @@ void MainWindow::navigateToView(int viewIndex) {
             if (!eDate.isValid()) eDate = QDate::currentDate();
             m_gstrReportsWidget->loadReturns(sDate, eDate);
             m_gstrReportsWidget->setFocus();
+        }
+    } else if (viewIndex == 35) {
+        // Show C++ Milling Statement & Out-turn Register
+        if (m_millingStatementWidget) {
+            m_stackedWidget->setCurrentWidget(m_millingStatementWidget);
+            FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
+            QDate sDate = QDate::fromString(activeFy.startDate, "yyyy-MM-dd");
+            QDate eDate = QDate::fromString(activeFy.endDate, "yyyy-MM-dd");
+            if (!sDate.isValid()) sDate = QDate(2023, 4, 1);
+            if (!eDate.isValid()) eDate = QDate::currentDate();
+            m_millingStatementWidget->loadMillingData(sDate, eDate);
+            m_millingStatementWidget->setFocus();
+        }
+    } else if (viewIndex == 36) {
+        // Show C++ Stock Valuation & Custom Closing Stock Widget
+        if (m_customClosingStockWidget) {
+            m_stackedWidget->setCurrentWidget(m_customClosingStockWidget);
+            m_customClosingStockWidget->reloadData();
+            m_customClosingStockWidget->setFocus();
         }
     } else {
         // Show QML view stack

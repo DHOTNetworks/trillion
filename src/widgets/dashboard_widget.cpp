@@ -514,9 +514,10 @@ void DashboardWidget::openStockMenu(int initialIndex) {
         {"1. New Stock Item Master", "Alt+I", 11},
         {"2. Modify Stock Item Master", "Enter", 12},
         {"3. Stock Detail & Item Movement Summary", "Alt+4", 13},
-        {"4. Raw Paddy Stock Register", "", 13},
-        {"5. Finished Rice Stock Register", "", 13},
-        {"6. By-Products & Husk Stock Register", "", 13}
+        {"4. Closing Stock Valuation & Year-End Audit", "Alt+C", 36},
+        {"5. Raw Paddy Stock Register", "", 13},
+        {"6. Finished Rice Stock Register", "", 13},
+        {"7. By-Products & Husk Stock Register", "", 13}
     };
     DashboardSubmenuDialog dlg("STOCK MASTER MENU", "#16A34A", items, initialIndex, this);
     if (dlg.exec() == QDialog::Accepted && dlg.selectedViewIndex() >= 0) {
@@ -587,10 +588,11 @@ void DashboardWidget::openReportsMenu(int initialIndex) {
         {"3. Mandi Form M & Statutory Returns (HSAMB)", "Alt+M", 20},
         {"4. Sales Register & Summary", "", 3},
         {"5. Purchase Register & Summary", "", 4},
-        {"6. Milling Production Statement", "", 32},
+        {"6. Milling Production & Out-turn Statement", "Alt+M", 35},
         {"7. Balance Sheet (Final Accounts)", "F7", 29},
         {"8. Profit & Loss Statement (Trading & P&L)", "F6", 30},
-        {"9. Interest Calculation & Register (Aank / Rokka)", "", 25}
+        {"9. Closing Stock Valuation & Year-End Audit", "Alt+C", 36},
+        {"10. Interest Calculation & Register (Aank / Rokka)", "Alt+A", 8}
     };
     DashboardSubmenuDialog dlg("REPORTS & REGISTERS MENU", "#059669", items, initialIndex, this);
     if (dlg.exec() == QDialog::Accepted && dlg.selectedViewIndex() >= 0) {

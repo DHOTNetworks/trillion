@@ -43,6 +43,7 @@
 #include "../src/models/balance_sheet_controller.h"
 #include "../src/engine/profit_loss_calculator.h"
 #include "../src/models/profit_loss_controller.h"
+#include "../src/engine/stock_valuation_engine.h"
 #include <QQmlEngine>
 #include <QQmlComponent>
 #include <QQmlContext>
@@ -96,6 +97,7 @@ private slots:
     // 9. Balance Sheet & Profit and Loss Reporting Systems
     void testBalanceSheetCalculations();
     void testProfitLossCalculations();
+    void testStockValuationEnginePipeline();
 
     // 10. View Compilation & Statement Parsers
     void testCanaraBankStatementPdfParser();
@@ -1100,13 +1102,41 @@ void LogicBoardTestSuite::testFirmTypeResolutionAndDynamicFiscalYears() {
 void LogicBoardTestSuite::testBalanceSheetCalculations() {
     qDebug() << "[TEST] Running Balance Sheet Engine calculations...";
 
-    // 1. Calculate Balance Sheet as of FY 2026-27 year-end (2027-03-31)
+    // 1. Calculate Balance Sheet as of FY 2025-26 year-end (2026-03-31) - Audited Bahi-Khata Reference
+    BalanceSheetData data2526 = BalanceSheetCalculator::calculate("2026-03-31");
+    QCOMPARE(data2526.asOnDate, QString("2026-03-31"));
+    QCOMPARE(data2526.financialYear, QString("FY 2025-26"));
+    QVERIFY(!data2526.firmName.isEmpty());
+
+    // Audited Bahi-Khata Mathematical Invariants:
+    // Closing stock: 22,98,85,143.91
+    QCOMPARE(data2526.closingStockValue, 229885143.91);
+    // Net Profit: 94,55,615.13
+    QCOMPARE(data2526.netProfit, 9455615.13);
+    // Grand Total: 42,79,96,193.95
+    QCOMPARE(data2526.totalLiabilities, 427996193.95);
+    QCOMPARE(data2526.totalAssets, 427996193.95);
+    QVERIFY(data2526.isBalanced);
+    QVERIFY(data2526.difference < 0.01);
+
+    // Validate Capital Account & Partners breakdown
+    bool foundCapital = false;
+    for (const auto& g : data2526.liabilitiesGroups) {
+        if (g.name.contains("Capital", Qt::CaseInsensitive)) {
+            foundCapital = true;
+            QCOMPARE(g.amount, 98243356.35);
+            QVERIFY(g.children.size() >= 2);
+        }
+    }
+    QVERIFY(foundCapital);
+
+    // 2. Calculate Balance Sheet as of FY 2026-27 year-end (2027-03-31)
     BalanceSheetData data = BalanceSheetCalculator::calculate("2027-03-31");
     QCOMPARE(data.asOnDate, QString("2027-03-31"));
     QCOMPARE(data.financialYear, QString("FY 2026-27"));
     QVERIFY(!data.firmName.isEmpty());
 
-    // 2. Validate Liabilities structure & groups
+    // 3. Validate Liabilities structure & groups
     QVERIFY(data.liabilitiesGroups.size() > 0);
     bool hasCapital = false;
     bool hasCreditors = false;
@@ -1118,7 +1148,7 @@ void LogicBoardTestSuite::testBalanceSheetCalculations() {
     QVERIFY(hasCapital || hasCreditors);
     QVERIFY(data.totalLiabilities > 0.0);
 
-    // 3. Validate Assets structure & groups
+    // 4. Validate Assets structure & groups
     QVERIFY(data.assetsGroups.size() > 0);
     bool hasStockOrDebtors = false;
     for (const auto& g : data.assetsGroups) {
@@ -1130,14 +1160,14 @@ void LogicBoardTestSuite::testBalanceSheetCalculations() {
     QVERIFY(hasStockOrDebtors);
     QVERIFY(data.totalAssets > 0.0);
 
-    // 4. Validate Controller and Export methods
+    // 5. Validate Controller and Export methods
     BalanceSheetController ctrl;
     ctrl.reload("2027-03-31");
     QCOMPARE(ctrl.asOnDate(), QString("2027-03-31"));
     QCOMPARE(ctrl.totalLiabilities(), data.totalLiabilities);
     QCOMPARE(ctrl.totalAssets(), data.totalAssets);
 
-    // 5. Test PDF and CSV Export generation
+    // 6. Test PDF and CSV Export generation
     QString testPdfPath = QDir::tempPath() + "/test_balance_sheet.pdf";
     QString outPdf = ctrl.exportPdf(testPdfPath);
     QVERIFY(QFile::exists(outPdf));
@@ -1148,7 +1178,7 @@ void LogicBoardTestSuite::testBalanceSheetCalculations() {
     QVERIFY(QFile::exists(outCsv));
     QFile::remove(outCsv);
 
-    qDebug() << "[TEST] Balance Sheet Engine test passed. Total Liabilities:" << data.totalLiabilitiesFmt << "Total Assets:" << data.totalAssetsFmt;
+    qDebug() << "[TEST] Balance Sheet Engine test passed. FY 25-26 Total:" << data2526.totalLiabilitiesFmt << "FY 26-27 Total:" << data.totalLiabilitiesFmt;
 }
 
 void LogicBoardTestSuite::testProfitLossCalculations() {
@@ -1214,6 +1244,81 @@ void LogicBoardTestSuite::testProfitLossCalculations() {
     QFile::remove(outCsv);
 
     qDebug() << "[TEST] Profit & Loss Engine test passed. Gross Profit: ₹" << ctrl.grossProfitFmt() << "Net Profit: ₹" << ctrl.netProfitFmt();
+}
+
+void LogicBoardTestSuite::testStockValuationEnginePipeline() {
+    qDebug() << "[TEST] Running Stock Valuation Engine Pipeline test...";
+
+    // 1. Test audited snapshot resolution for FY 2025-26
+    QVERIFY(StockValuationEngine::hasAuditedClosingStock("2026-03-31"));
+    StockValuationReport rep2526 = StockValuationEngine::getEffectiveClosingStock("2026-03-31");
+    QVERIFY(rep2526.isAuditedSnapshot);
+    QCOMPARE(rep2526.totalValuation, 229885143.91);
+    QCOMPARE(rep2526.items.size(), 10);
+    QVERIFY(rep2526.totalBags > 0);
+    QVERIFY(rep2526.totalWeightQtl > 0.0);
+
+    // 2. Test live physical stock calculation on future date without audited snapshot (e.g. 2027-06-30)
+    StockValuationReport liveRep = StockValuationEngine::calculateLivePhysicalStock("2027-06-30");
+    QVERIFY(!liveRep.isAuditedSnapshot);
+    QVERIFY(liveRep.items.size() > 0);
+    QVERIFY(liveRep.totalValuation >= 0.0);
+
+    // 3. Test saving custom audited snapshot for a specific test date
+    QString testDate = "2027-09-30";
+    QVector<StockValuationItem> testItems;
+    StockValuationItem itm1;
+    itm1.itemId = 1;
+    itm1.itemCode = "1001";
+    itm1.itemName = "Test Basmati Rice 1121";
+    itm1.bags = 500;
+    itm1.weightQtl = 250.0;
+    itm1.rate = 4000.0;
+    itm1.amount = 1000000.0; // 10,00,000.00
+    testItems.append(itm1);
+
+    StockValuationItem itm2;
+    itm2.itemId = 2;
+    itm2.itemCode = "1002";
+    itm2.itemName = "Test Rice Bran";
+    itm2.bags = 200;
+    itm2.weightQtl = 100.0;
+    itm2.rate = 2500.0;
+    itm2.amount = 250000.0; // 2,50,000.00
+    testItems.append(itm2);
+
+    QString err;
+    bool saveOk = StockValuationEngine::saveAuditedClosingStock(testDate, testItems, err);
+    QVERIFY2(saveOk, qPrintable(err));
+    QVERIFY(StockValuationEngine::hasAuditedClosingStock(testDate));
+
+    // Retrieve and verify
+    StockValuationReport savedRep = StockValuationEngine::getEffectiveClosingStock(testDate);
+    QVERIFY(savedRep.isAuditedSnapshot);
+    QCOMPARE(savedRep.totalBags, 700);
+    QCOMPARE(savedRep.totalWeightQtl, 350.0);
+    QCOMPARE(savedRep.totalValuation, 1250000.00);
+    QCOMPARE(savedRep.items.size(), 2);
+
+    // 4. Test deleting custom closing stock snapshot
+    bool delOk = StockValuationEngine::deleteAuditedClosingStock(testDate, err);
+    QVERIFY2(delOk, qPrintable(err));
+    QVERIFY(!StockValuationEngine::hasAuditedClosingStock(testDate));
+
+    // 5. Test 1-click auto-lock year-end closing stock snapshot
+    QString lockDate = "2027-03-31";
+    bool lockOk = StockValuationEngine::autoLockYearEndClosingStock(lockDate, err);
+    QVERIFY2(lockOk, qPrintable(err));
+    QVERIFY(StockValuationEngine::hasAuditedClosingStock(lockDate));
+
+    StockValuationReport lockedRep = StockValuationEngine::getEffectiveClosingStock(lockDate);
+    QVERIFY(lockedRep.isAuditedSnapshot);
+    QVERIFY(lockedRep.totalValuation > 0.0);
+
+    // Clean up test lock date
+    StockValuationEngine::deleteAuditedClosingStock(lockDate, err);
+
+    qDebug() << "[TEST] Stock Valuation Engine Pipeline test passed successfully!";
 }
 
 extern int qInitResources_MahadevRiceMillERP_raw_qml_0();

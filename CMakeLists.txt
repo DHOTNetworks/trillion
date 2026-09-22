@@ -213,6 +213,8 @@ set(SOURCES
     src/widgets/accounting_period_dialog.cpp
     src/engine/balance_sheet_calculator.h
     src/engine/balance_sheet_calculator.cpp
+    src/engine/stock_valuation_engine.h
+    src/engine/stock_valuation_engine.cpp
     src/models/balance_sheet_controller.h
     src/models/balance_sheet_controller.cpp
     src/printing/balance_sheet_printer.h
@@ -227,6 +229,8 @@ set(SOURCES
     src/models/profit_loss_controller.cpp
     src/widgets/profit_loss_widget.h
     src/widgets/profit_loss_widget.cpp
+    src/widgets/custom_closing_stock_widget.h
+    src/widgets/custom_closing_stock_widget.cpp
     src/widgets/voucher_common.h
     src/widgets/voucher_date_dialog.h
     src/widgets/voucher_date_dialog.cpp
@@ -270,6 +274,8 @@ set(SOURCES
     src/widgets/day_book_widget.cpp
     src/widgets/gstr_reports_widget.h
     src/widgets/gstr_reports_widget.cpp
+    src/widgets/milling_statement_widget.h
+    src/widgets/milling_statement_widget.cpp
     src/engine/mandi_calculator.h
     src/engine/mandi_calculator.cpp
     src/engine/aank_interest_engine.h
@@ -499,6 +505,8 @@ set(TEST_SOURCES
     src/models/debit_credit_note_controller.cpp
     src/engine/balance_sheet_calculator.h
     src/engine/balance_sheet_calculator.cpp
+    src/engine/stock_valuation_engine.h
+    src/engine/stock_valuation_engine.cpp
     src/models/balance_sheet_controller.h
     src/models/balance_sheet_controller.cpp
     src/engine/profit_loss_calculator.h

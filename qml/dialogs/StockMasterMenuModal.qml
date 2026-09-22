@@ -20,6 +20,7 @@ T.Popup {
         item1.resetMouseTracking()
         item2.resetMouseTracking()
         item3.resetMouseTracking()
+        item4.resetMouseTracking()
         Qt.callLater(function() { menuScope.forceActiveFocus() })
     }
 
@@ -28,6 +29,7 @@ T.Popup {
         if (selectedIndex === 0) act = "New Stock Item"
         else if (selectedIndex === 1) act = "Modify Stock Item"
         else if (selectedIndex === 2) act = "Stock Details"
+        else if (selectedIndex === 3) act = "Closing Stock Valuation"
         var sel = selectedIndex
         root.close()
         root.actionSelected(act, sel)
@@ -48,11 +50,11 @@ T.Popup {
         Keys.onUpPressed: function(event) {
             event.accepted = true
             if (root.selectedIndex > 0) root.selectedIndex--
-            else root.selectedIndex = 2
+            else root.selectedIndex = 3
         }
         Keys.onDownPressed: function(event) {
             event.accepted = true
-            if (root.selectedIndex < 2) root.selectedIndex++
+            if (root.selectedIndex < 3) root.selectedIndex++
             else root.selectedIndex = 0
         }
         Keys.onReturnPressed: function(event) {
@@ -70,6 +72,7 @@ T.Popup {
         Keys.onDigit1Pressed: function(event) { event.accepted = true; root.selectedIndex = 0; root.triggerSelected() }
         Keys.onDigit2Pressed: function(event) { event.accepted = true; root.selectedIndex = 1; root.triggerSelected() }
         Keys.onDigit3Pressed: function(event) { event.accepted = true; root.selectedIndex = 2; root.triggerSelected() }
+        Keys.onDigit4Pressed: function(event) { event.accepted = true; root.selectedIndex = 3; root.triggerSelected() }
 
         ColumnLayout {
             id: mainCol
@@ -132,6 +135,18 @@ T.Popup {
                 activeBorderColor: "#15803D"
                 onItemHovered: root.selectedIndex = 2
                 onItemClicked: { root.selectedIndex = 2; root.triggerSelected() }
+            }
+
+            // Item 4
+            NavMenuItem {
+                id: item4
+                index: 3
+                selectedIndex: root.selectedIndex
+                text: "4. Closing Stock Valuation & Audit"
+                activeColor: "#16A34A"
+                activeBorderColor: "#15803D"
+                onItemHovered: root.selectedIndex = 3
+                onItemClicked: { root.selectedIndex = 3; root.triggerSelected() }
             }
         }
     }

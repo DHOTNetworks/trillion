@@ -1,6 +1,7 @@
 #include "ledger_statement_widget.h"
 #include "engine/accounting_engine.h"
 #include "engine/fiscal_year_helper.h"
+#include "database_manager.h"
 #include <QPainter>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -9,6 +10,8 @@
 #include <QKeyEvent>
 #include <QDate>
 #include <QTimer>
+#include <QHeaderView>
+#include <QMessageBox>
 #include <cmath>
 
 LedgerStatementWidget::LedgerStatementWidget(LedgerStatementController* controller,
@@ -25,6 +28,7 @@ LedgerStatementWidget::LedgerStatementWidget(LedgerStatementController* controll
     if (m_controller) {
         connect(m_controller, &LedgerStatementController::statementTotalsChanged, this, &LedgerStatementWidget::onTotalsChanged);
         connect(m_controller, &LedgerStatementController::statementLoaded, this, &LedgerStatementWidget::onTotalsChanged);
+        connect(m_controller, &LedgerStatementController::statementLoaded, this, &LedgerStatementWidget::recalculateAankStatement);
     }
 }
 
@@ -45,15 +49,19 @@ void LedgerStatementWidget::setupUi() {
 
     QVBoxLayout* titleLayout = new QVBoxLayout();
     titleLayout->setSpacing(1);
-    QLabel* titleLabel = new QLabel("Account Ledger Statement (2-Column Dr / Cr)", headerCard);
-    titleLabel->setStyleSheet("font-size: 16px; font-weight: bold; color: #0F172A; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', 'Noto Sans', 'Liberation Sans', Arial, sans-serif; border: none; background: transparent;");
-    QLabel* subtitleLabel = new QLabel("Side-by-side Credit (Cr) and Debit (Dr) accounting ledger with interactive reconciliation.", headerCard);
-    subtitleLabel->setStyleSheet("font-size: 11px; color: #64748B; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', 'Noto Sans', 'Liberation Sans', Arial, sans-serif; border: none; background: transparent;");
+    QLabel* titleLabel = new QLabel("Account Ledger Statement & Mandi Aank Rokka", headerCard);
+    titleLabel->setStyleSheet("font-size: 16px; font-weight: bold; color: #0F172A; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif; border: none; background: transparent;");
+    QLabel* subtitleLabel = new QLabel("Side-by-side Credit (Cr) & Debit (Dr) double-entry ledger with Aank daily product interest calculation.", headerCard);
+    subtitleLabel->setStyleSheet("font-size: 11px; color: #64748B; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif; border: none; background: transparent;");
     titleLayout->addWidget(titleLabel);
     titleLayout->addWidget(subtitleLabel);
     headerLayout->addLayout(titleLayout);
 
     headerLayout->addStretch(1);
+
+    m_toggleAankBtn = new KbdBadgeButton("Aank Interest (Rokka)", "Alt+A", QColor("#7C3AED"), QColor("#6D28D9"), QColor("#FFFFFF"), QColor("#7C3AED"), headerCard);
+    connect(m_toggleAankBtn, &QPushButton::clicked, this, &LedgerStatementWidget::toggleAankMode);
+    headerLayout->addWidget(m_toggleAankBtn);
 
     m_printBtn = new KbdBadgeButton("Print Statement", "Ctrl+P", QColor("#2563EB"), QColor("#1D4ED8"), QColor("#FFFFFF"), QColor("#2563EB"), headerCard);
     connect(m_printBtn, &QPushButton::clicked, this, &LedgerStatementWidget::printStatement);
@@ -82,7 +90,7 @@ void LedgerStatementWidget::setupUi() {
     filterLayout->setSpacing(10);
 
     m_searchBox = new AccountSearchBox(filterCard);
-    m_searchBox->setMinimumWidth(400);
+    m_searchBox->setMinimumWidth(380);
     if (m_controller) {
         m_searchBox->setSearchFunction([this](const QString& q) {
             return m_controller->searchParties(q);
@@ -127,7 +135,20 @@ void LedgerStatementWidget::setupUi() {
     filterLayout->addStretch(1);
     mainLayout->addWidget(filterCard);
 
-    // ================= 3. 2-COLUMN TABLES =================
+    // ================= 3. TABS CONTAINER =================
+    m_viewTabs = new QTabWidget(this);
+    m_viewTabs->setStyleSheet(
+        "QTabWidget::pane { border: 1px solid #CBD5E1; background: #FFFFFF; border-radius: 8px; top: -1px; }"
+        "QTabBar::tab { background: #E2E8F0; color: #1E293B; font-size: 12px; font-weight: 700; padding: 7px 18px; margin-right: 4px; border-top-left-radius: 6px; border-top-right-radius: 6px; border: 1px solid #CBD5E1; border-bottom: none; }"
+        "QTabBar::tab:selected { background: #2563EB; color: #FFFFFF; }"
+    );
+
+    // ---------- TAB 1: 2-COLUMN LEDGER VIEW ----------
+    m_twoColumnWidget = new QWidget(m_viewTabs);
+    auto* twoColLayout = new QVBoxLayout(m_twoColumnWidget);
+    twoColLayout->setContentsMargins(8, 8, 8, 8);
+    twoColLayout->setSpacing(8);
+
     QHBoxLayout* tablesLayout = new QHBoxLayout();
     tablesLayout->setSpacing(10);
 
@@ -135,7 +156,7 @@ void LedgerStatementWidget::setupUi() {
     QVBoxLayout* crSideLayout = new QVBoxLayout();
     crSideLayout->setSpacing(4);
 
-    QFrame* crBanner = new QFrame(this);
+    QFrame* crBanner = new QFrame(m_twoColumnWidget);
     crBanner->setFixedHeight(32);
     crBanner->setStyleSheet("background-color: #DCFCE7; border: 1px solid #86EFAC; border-radius: 6px;");
     QHBoxLayout* crBannerLayout = new QHBoxLayout(crBanner);
@@ -149,7 +170,7 @@ void LedgerStatementWidget::setupUi() {
     crBannerLayout->addWidget(crBadge);
     crSideLayout->addWidget(crBanner);
 
-    m_crTable = new LedgerTableView("Cr", m_controller ? m_controller->crModel() : nullptr, this);
+    m_crTable = new LedgerTableView("Cr", m_controller ? m_controller->crModel() : nullptr, m_twoColumnWidget);
     connect(m_crTable, &LedgerTableView::voucherActivated, this, [this](const QVariantMap& entry) {
         m_lastSide = "Cr";
         int row = m_crTable->selectedRowIndex();
@@ -160,7 +181,7 @@ void LedgerStatementWidget::setupUi() {
     crSideLayout->addWidget(m_crTable, 1);
 
     // Cr Footer
-    QFrame* crFooter = new QFrame(this);
+    QFrame* crFooter = new QFrame(m_twoColumnWidget);
     crFooter->setFixedHeight(32);
     crFooter->setStyleSheet("background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 6px;");
     QHBoxLayout* crFooterLayout = new QHBoxLayout(crFooter);
@@ -180,7 +201,7 @@ void LedgerStatementWidget::setupUi() {
     QVBoxLayout* drSideLayout = new QVBoxLayout();
     drSideLayout->setSpacing(4);
 
-    QFrame* drBanner = new QFrame(this);
+    QFrame* drBanner = new QFrame(m_twoColumnWidget);
     drBanner->setFixedHeight(32);
     drBanner->setStyleSheet("background-color: #DBEAFE; border: 1px solid #93C5FD; border-radius: 6px;");
     QHBoxLayout* drBannerLayout = new QHBoxLayout(drBanner);
@@ -194,7 +215,7 @@ void LedgerStatementWidget::setupUi() {
     drBannerLayout->addWidget(drBadge);
     drSideLayout->addWidget(drBanner);
 
-    m_drTable = new LedgerTableView("Dr", m_controller ? m_controller->drModel() : nullptr, this);
+    m_drTable = new LedgerTableView("Dr", m_controller ? m_controller->drModel() : nullptr, m_twoColumnWidget);
     connect(m_drTable, &LedgerTableView::voucherActivated, this, [this](const QVariantMap& entry) {
         m_lastSide = "Dr";
         int row = m_drTable->selectedRowIndex();
@@ -205,7 +226,7 @@ void LedgerStatementWidget::setupUi() {
     drSideLayout->addWidget(m_drTable, 1);
 
     // Dr Footer
-    QFrame* drFooter = new QFrame(this);
+    QFrame* drFooter = new QFrame(m_twoColumnWidget);
     drFooter->setFixedHeight(32);
     drFooter->setStyleSheet("background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 6px;");
     QHBoxLayout* drFooterLayout = new QHBoxLayout(drFooter);
@@ -220,13 +241,12 @@ void LedgerStatementWidget::setupUi() {
     drSideLayout->addWidget(drFooter);
 
     tablesLayout->addLayout(drSideLayout, 1);
+    twoColLayout->addLayout(tablesLayout, 1);
 
-    mainLayout->addLayout(tablesLayout, 1);
-
-    // ================= 4. BOTTOM NET RECONCILIATION SUMMARY =================
-    QFrame* summaryBar = new QFrame(this);
+    // Bottom Net Reconciliation Summary
+    QFrame* summaryBar = new QFrame(m_twoColumnWidget);
     summaryBar->setFixedHeight(44);
-    summaryBar->setStyleSheet("background-color: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 8px;");
+    summaryBar->setStyleSheet("background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 6px;");
     QHBoxLayout* summaryLayout = new QHBoxLayout(summaryBar);
     summaryLayout->setContentsMargins(16, 0, 16, 0);
 
@@ -245,7 +265,133 @@ void LedgerStatementWidget::setupUi() {
     summaryLayout->addStretch(1);
     summaryLayout->addWidget(m_checkedDiffLabel);
 
-    mainLayout->addWidget(summaryBar);
+    twoColLayout->addWidget(summaryBar);
+    m_viewTabs->addTab(m_twoColumnWidget, "  2-Column Ledger (Dr / Cr)  ");
+
+    // ---------- TAB 2: AANK DAILY PRODUCT & INTEREST STATEMENT ----------
+    m_aankWidget = new QWidget(m_viewTabs);
+    auto* aankLayout = new QVBoxLayout(m_aankWidget);
+    aankLayout->setContentsMargins(8, 8, 8, 8);
+    aankLayout->setSpacing(8);
+
+    // Aank Control Card
+    QFrame* aankControlCard = new QFrame(m_aankWidget);
+    aankControlCard->setFixedHeight(46);
+    aankControlCard->setStyleSheet("background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px;");
+    QHBoxLayout* aankControlLayout = new QHBoxLayout(aankControlCard);
+    aankControlLayout->setContentsMargins(12, 4, 12, 4);
+    aankControlLayout->setSpacing(12);
+
+    QLabel* drRateLbl = new QLabel("Dr Interest Rate (%):", aankControlCard);
+    drRateLbl->setStyleSheet("font-size: 11px; font-weight: 700; color: #1D4ED8;");
+    aankControlLayout->addWidget(drRateLbl);
+
+    m_drInterestRateSpin = new QDoubleSpinBox(aankControlCard);
+    m_drInterestRateSpin->setRange(0.0, 100.0);
+    m_drInterestRateSpin->setValue(12.0);
+    m_drInterestRateSpin->setSingleStep(0.25);
+    m_drInterestRateSpin->setFixedHeight(28);
+    m_drInterestRateSpin->setMinimumWidth(75);
+    connect(m_drInterestRateSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &LedgerStatementWidget::recalculateAankStatement);
+    aankControlLayout->addWidget(m_drInterestRateSpin);
+
+    QLabel* crRateLbl = new QLabel("Cr Interest Rate (%):", aankControlCard);
+    crRateLbl->setStyleSheet("font-size: 11px; font-weight: 700; color: #15803D;");
+    aankControlLayout->addWidget(crRateLbl);
+
+    m_crInterestRateSpin = new QDoubleSpinBox(aankControlCard);
+    m_crInterestRateSpin->setRange(0.0, 100.0);
+    m_crInterestRateSpin->setValue(12.0);
+    m_crInterestRateSpin->setSingleStep(0.25);
+    m_crInterestRateSpin->setFixedHeight(28);
+    m_crInterestRateSpin->setMinimumWidth(75);
+    connect(m_crInterestRateSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &LedgerStatementWidget::recalculateAankStatement);
+    aankControlLayout->addWidget(m_crInterestRateSpin);
+
+    m_leapYearDivisorCheck = new QCheckBox("366-Day Leap Year Basis", aankControlCard);
+    m_leapYearDivisorCheck->setStyleSheet("font-size: 11px; font-weight: 600; color: #475569;");
+    connect(m_leapYearDivisorCheck, &QCheckBox::toggled, this, &LedgerStatementWidget::recalculateAankStatement);
+    aankControlLayout->addWidget(m_leapYearDivisorCheck);
+
+    aankControlLayout->addStretch(1);
+
+    m_recomputeAankBtn = new KbdBadgeButton("Recalculate", "F5", QColor("#2563EB"), QColor("#1D4ED8"), QColor("#FFFFFF"), QColor("#2563EB"), aankControlCard);
+    connect(m_recomputeAankBtn, &QPushButton::clicked, this, &LedgerStatementWidget::recalculateAankStatement);
+    aankControlLayout->addWidget(m_recomputeAankBtn);
+
+    m_postInterestVoucherBtn = new KbdBadgeButton("Post Interest Voucher", "Alt+I", QColor("#059669"), QColor("#047857"), QColor("#FFFFFF"), QColor("#059669"), aankControlCard);
+    connect(m_postInterestVoucherBtn, &QPushButton::clicked, this, &LedgerStatementWidget::onPostInterestVoucherClicked);
+    aankControlLayout->addWidget(m_postInterestVoucherBtn);
+
+    aankLayout->addWidget(aankControlCard);
+
+    // Aank Table
+    m_aankTable = new QTableWidget(m_aankWidget);
+    m_aankTable->setColumnCount(12);
+    m_aankTable->setHorizontalHeaderLabels({
+        "Date", "Vch No", "Type", "Particulars / Narration", "Debit (₹)", "Credit (₹)",
+        "Running Bal (₹)", "Side", "Days", "Dr Aank (Product)", "Cr Aank (Product)", "Interest (₹)"
+    });
+    m_aankTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+    m_aankTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+    m_aankTable->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+    m_aankTable->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Stretch);
+    m_aankTable->horizontalHeader()->setSectionResizeMode(4, QHeaderView::ResizeToContents);
+    m_aankTable->horizontalHeader()->setSectionResizeMode(5, QHeaderView::ResizeToContents);
+    m_aankTable->horizontalHeader()->setSectionResizeMode(6, QHeaderView::ResizeToContents);
+    m_aankTable->horizontalHeader()->setSectionResizeMode(7, QHeaderView::ResizeToContents);
+    m_aankTable->horizontalHeader()->setSectionResizeMode(8, QHeaderView::ResizeToContents);
+    m_aankTable->horizontalHeader()->setSectionResizeMode(9, QHeaderView::ResizeToContents);
+    m_aankTable->horizontalHeader()->setSectionResizeMode(10, QHeaderView::ResizeToContents);
+    m_aankTable->horizontalHeader()->setSectionResizeMode(11, QHeaderView::ResizeToContents);
+    m_aankTable->setSelectionBehavior(QAbstractItemView::SelectRows);
+    m_aankTable->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_aankTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    m_aankTable->setAlternatingRowColors(true);
+    m_aankTable->verticalHeader()->setVisible(false);
+    m_aankTable->verticalHeader()->setDefaultSectionSize(26);
+    m_aankTable->setStyleSheet(
+        "QTableWidget { background-color: #FFFFFF; alternate-background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 6px; font-size: 11px; }"
+        "QHeaderView::section { background-color: #0F172A; color: #FFFFFF; font-weight: 700; font-size: 11px; padding: 5px 6px; border: none; }"
+    );
+    aankLayout->addWidget(m_aankTable, 1);
+
+    // Aank Summary Bar Card
+    QFrame* aankSummaryBar = new QFrame(m_aankWidget);
+    aankSummaryBar->setFixedHeight(46);
+    aankSummaryBar->setStyleSheet("background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 6px;");
+    QHBoxLayout* aankSummaryLayout = new QHBoxLayout(aankSummaryBar);
+    aankSummaryLayout->setContentsMargins(14, 4, 14, 4);
+    aankSummaryLayout->setSpacing(14);
+
+    m_aankTotalDrLabel = new QLabel("Dr Aank: 0.00", aankSummaryBar);
+    m_aankTotalDrLabel->setStyleSheet("color: #1D4ED8; font-weight: 700; font-size: 11px;");
+    aankSummaryLayout->addWidget(m_aankTotalDrLabel);
+
+    m_aankDrInterestLabel = new QLabel("Dr Int: ₹0.00", aankSummaryBar);
+    m_aankDrInterestLabel->setStyleSheet("color: #1D4ED8; font-weight: 800; font-size: 12px;");
+    aankSummaryLayout->addWidget(m_aankDrInterestLabel);
+
+    aankSummaryLayout->addSpacing(15);
+
+    m_aankTotalCrLabel = new QLabel("Cr Aank: 0.00", aankSummaryBar);
+    m_aankTotalCrLabel->setStyleSheet("color: #15803D; font-weight: 700; font-size: 11px;");
+    aankSummaryLayout->addWidget(m_aankTotalCrLabel);
+
+    m_aankCrInterestLabel = new QLabel("Cr Int: ₹0.00", aankSummaryBar);
+    m_aankCrInterestLabel->setStyleSheet("color: #15803D; font-weight: 800; font-size: 12px;");
+    aankSummaryLayout->addWidget(m_aankCrInterestLabel);
+
+    aankSummaryLayout->addStretch(1);
+
+    m_aankNetInterestLabel = new QLabel("Net Accrued Interest: ₹0.00", aankSummaryBar);
+    m_aankNetInterestLabel->setStyleSheet("color: #0F172A; font-weight: 800; font-size: 13px;");
+    aankSummaryLayout->addWidget(m_aankNetInterestLabel);
+
+    aankLayout->addWidget(aankSummaryBar);
+    m_viewTabs->addTab(m_aankWidget, "  Aank Daily Product & Interest Statement (Rokka)  ");
+
+    mainLayout->addWidget(m_viewTabs, 1);
 
     // Global Shortcuts
     new QShortcut(QKeySequence("Alt+S"), this, SLOT(focusSearch()));
@@ -254,6 +400,223 @@ void LedgerStatementWidget::setupUi() {
     new QShortcut(QKeySequence("Ctrl+P"), this, SLOT(printStatement()));
     new QShortcut(QKeySequence("Alt+P"), this, SLOT(exportPdf()));
     new QShortcut(QKeySequence("Alt+F"), this, SLOT(onDateFilterApplied()));
+    new QShortcut(QKeySequence("Alt+A"), this, SLOT(toggleAankMode()));
+    new QShortcut(QKeySequence("Alt+I"), this, SLOT(onPostInterestVoucherClicked()));
+}
+
+void LedgerStatementWidget::toggleAankMode() {
+    if (m_viewTabs->currentIndex() == 0) {
+        m_viewTabs->setCurrentIndex(1);
+        recalculateAankStatement();
+    } else {
+        m_viewTabs->setCurrentIndex(0);
+    }
+}
+
+void LedgerStatementWidget::recalculateAankStatement() {
+    QString partyName = m_searchBox->currentPartyName().trimmed();
+    if (partyName.isEmpty()) {
+        m_aankTable->setRowCount(0);
+        m_aankTotalDrLabel->setText("Dr Aank: 0.00");
+        m_aankTotalCrLabel->setText("Cr Aank: 0.00");
+        m_aankDrInterestLabel->setText("Dr Int: ₹0.00");
+        m_aankCrInterestLabel->setText("Cr Int: ₹0.00");
+        m_aankNetInterestLabel->setText("Net Accrued Interest: ₹0.00");
+        return;
+    }
+
+    QDate fromDt = QDate::fromString(m_fromDateEdit->isoDate(), "yyyy-MM-dd");
+    QDate toDt = QDate::fromString(m_toDateEdit->isoDate(), "yyyy-MM-dd");
+    if (!fromDt.isValid()) fromDt = QDate(2025, 4, 1);
+    if (!toDt.isValid()) toDt = QDate::currentDate();
+
+    // Query party opening balance and interest rate
+    QVariantList pRows = DatabaseManager::instance().executeQuery(
+        "SELECT id, opening_balance, balance_type, interest_rate FROM parties WHERE name = ? LIMIT 1;",
+        {partyName}
+    );
+
+    double opBal = 0.0;
+    QString opDrCr = "Cr";
+    int partyId = 0;
+    if (!pRows.isEmpty()) {
+        QVariantMap pr = pRows.first().toMap();
+        partyId = pr.value("id").toInt();
+        opBal = pr.value("opening_balance").toDouble();
+        opDrCr = pr.value("balance_type").toString();
+        double savedRate = pr.value("interest_rate").toDouble();
+        if (savedRate > 0.0 && m_drInterestRateSpin->value() == 12.0) {
+            m_drInterestRateSpin->setValue(savedRate);
+            m_crInterestRateSpin->setValue(savedRate);
+        }
+    }
+
+    // Partition prior transactions before fromDt to determine opening balance on fromDt
+    PartitionedLedgerData partData = FiscalYearHelper::partitionPartyTransactions(partyName, m_fromDateEdit->isoDate(), m_toDateEdit->isoDate());
+    if (std::abs(partData.netOpeningBalance) > 0.001) {
+        opBal = std::abs(partData.netOpeningBalance);
+        opDrCr = partData.openingBalanceType;
+    }
+
+    // Query all transaction vouchers for this party in date range
+    QString sql = QString(
+        "SELECT voucher_date AS date, voucher_no, voucher_type, narration, "
+        "CASE WHEN dr_cr = 'Dr' THEN amount ELSE 0.0 END AS debit, "
+        "CASE WHEN dr_cr = 'Cr' THEN amount ELSE 0.0 END AS credit "
+        "FROM transactions WHERE party_name = ? AND voucher_date >= ? AND voucher_date <= ? "
+        "ORDER BY voucher_date ASC, id ASC;"
+    );
+    QVariantList rawRows = DatabaseManager::instance().executeQuery(sql, {partyName, m_fromDateEdit->isoDate(), m_toDateEdit->isoDate()});
+
+    QList<QVariantMap> rawVouchers;
+    for (const auto& var : rawRows) rawVouchers.append(var.toMap());
+
+    m_currentAankStatement = MahadevERP::AankInterestEngine::calculateStatement(
+        partyId, partyName, opBal, opDrCr, fromDt, toDt,
+        m_drInterestRateSpin->value(), m_crInterestRateSpin->value(),
+        rawVouchers, m_leapYearDivisorCheck->isChecked()
+    );
+
+    // Populate Aank Table
+    m_aankTable->setRowCount(0);
+    int row = 0;
+    for (const auto& e : m_currentAankStatement.entries) {
+        m_aankTable->insertRow(row);
+        m_aankTable->setItem(row, 0, new QTableWidgetItem(e.date.toString("dd-MM-yyyy")));
+        m_aankTable->setItem(row, 1, new QTableWidgetItem(e.voucherNo));
+        m_aankTable->setItem(row, 2, new QTableWidgetItem(e.voucherType));
+        m_aankTable->setItem(row, 3, new QTableWidgetItem(e.narration));
+
+        auto* drItem = new QTableWidgetItem(e.debitAmount > 0.0 ? AccountingEngine::formatCurrency(e.debitAmount) : "");
+        drItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        if (e.debitAmount > 0.0) drItem->setForeground(QColor("#1D4ED8"));
+        m_aankTable->setItem(row, 4, drItem);
+
+        auto* crItem = new QTableWidgetItem(e.creditAmount > 0.0 ? AccountingEngine::formatCurrency(e.creditAmount) : "");
+        crItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        if (e.creditAmount > 0.0) crItem->setForeground(QColor("#15803D"));
+        m_aankTable->setItem(row, 5, crItem);
+
+        double absBal = std::abs(e.runningBalance);
+        auto* balItem = new QTableWidgetItem(AccountingEngine::formatCurrency(absBal));
+        balItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        m_aankTable->setItem(row, 6, balItem);
+
+        QString side = e.runningBalance >= 0 ? "Dr" : "Cr";
+        auto* sideItem = new QTableWidgetItem(side);
+        sideItem->setTextAlignment(Qt::AlignCenter);
+        sideItem->setForeground(e.runningBalance >= 0 ? QColor("#1D4ED8") : QColor("#15803D"));
+        m_aankTable->setItem(row, 7, sideItem);
+
+        auto* daysItem = new QTableWidgetItem(QString::number(e.days));
+        daysItem->setTextAlignment(Qt::AlignCenter);
+        m_aankTable->setItem(row, 8, daysItem);
+
+        double drAank = (e.runningBalance >= 0) ? e.productAank : 0.0;
+        auto* drAankItem = new QTableWidgetItem(drAank > 0.0 ? AccountingEngine::formatCurrency(drAank) : "");
+        drAankItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        drAankItem->setForeground(QColor("#1D4ED8"));
+        m_aankTable->setItem(row, 9, drAankItem);
+
+        double crAank = (e.runningBalance < 0) ? std::abs(e.productAank) : 0.0;
+        auto* crAankItem = new QTableWidgetItem(crAank > 0.0 ? AccountingEngine::formatCurrency(crAank) : "");
+        crAankItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        crAankItem->setForeground(QColor("#15803D"));
+        m_aankTable->setItem(row, 10, crAankItem);
+
+        auto* intItem = new QTableWidgetItem(AccountingEngine::formatCurrency(std::abs(e.interestAmount)));
+        intItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        if (e.interestAmount > 0.0) intItem->setForeground(QColor("#1D4ED8"));
+        else if (e.interestAmount < 0.0) intItem->setForeground(QColor("#15803D"));
+        m_aankTable->setItem(row, 11, intItem);
+
+        row++;
+    }
+
+    // Update Summary Labels
+    m_aankTotalDrLabel->setText(QString("Dr Aank: %1").arg(AccountingEngine::formatIndianCurrency(m_currentAankStatement.totalDrAank)));
+    m_aankTotalCrLabel->setText(QString("Cr Aank: %1").arg(AccountingEngine::formatIndianCurrency(m_currentAankStatement.totalCrAank)));
+    m_aankDrInterestLabel->setText(QString("Dr Int (@%1%): %2").arg(m_drInterestRateSpin->value()).arg(AccountingEngine::formatIndianCurrency(m_currentAankStatement.totalDrInterest)));
+    m_aankCrInterestLabel->setText(QString("Cr Int (@%1%): %2").arg(m_crInterestRateSpin->value()).arg(AccountingEngine::formatIndianCurrency(m_currentAankStatement.totalCrInterest)));
+
+    QString netType = m_currentAankStatement.netInterest >= 0 ? "Dr (Receivable)" : "Cr (Payable)";
+    QString netColor = m_currentAankStatement.netInterest >= 0 ? "#1D4ED8" : "#15803D";
+    m_aankNetInterestLabel->setText(QString("Net Accrued Interest: %1 %2").arg(AccountingEngine::formatIndianCurrency(std::abs(m_currentAankStatement.netInterest))).arg(netType));
+    m_aankNetInterestLabel->setStyleSheet(QString("color: %1; font-weight: 800; font-size: 13px;").arg(netColor));
+}
+
+void LedgerStatementWidget::onPostInterestVoucherClicked() {
+    QString partyName = m_searchBox->currentPartyName().trimmed();
+    if (partyName.isEmpty() || std::abs(m_currentAankStatement.netInterest) < 0.01) {
+        QMessageBox::warning(this, "Interest Posting", "No interest amount available to post.");
+        return;
+    }
+
+    double netInt = m_currentAankStatement.netInterest;
+    QString isDr = (netInt >= 0) ? "Dr (Receivable from Party)" : "Cr (Payable to Party)";
+    QString msg = QString("Do you want to post an Interest Voucher for %1?\n\nParty: %2\nPeriod: %3 to %4\nNet Interest: %5 %6")
+        .arg(partyName)
+        .arg(partyName)
+        .arg(m_fromDateEdit->isoDate())
+        .arg(m_toDateEdit->isoDate())
+        .arg(AccountingEngine::formatIndianCurrency(std::abs(netInt)))
+        .arg(isDr);
+
+    if (QMessageBox::question(this, "Confirm Interest Posting", msg, QMessageBox::Yes | QMessageBox::No) != QMessageBox::Yes) {
+        return;
+    }
+
+    // Post Interest Journal Voucher in SQLite
+    FiscalYearInfo fy = FiscalYearHelper::getActiveFiscalYear();
+    QString vDate = m_toDateEdit->isoDate();
+    QString vNo = QString("INT-%1").arg(QDate::fromString(vDate, "yyyy-MM-dd").toString("yyyyMMdd"));
+    QString narr = QString("Interest accrued from %1 to %2 @ Dr %3% / Cr %4%")
+        .arg(m_fromDateEdit->isoDate())
+        .arg(m_toDateEdit->isoDate())
+        .arg(m_drInterestRateSpin->value())
+        .arg(m_crInterestRateSpin->value());
+
+    DatabaseManager::instance().beginTransaction();
+
+    // 1. Header Voucher
+    DatabaseManager::instance().executeNonQuery(
+        "INSERT INTO vouchers (fy_id, financial_year, voucher_no, voucher_date, voucher_type, legacy_type, party_name, amount, narration) "
+        "VALUES (?, ?, ?, ?, 'Journal', 'Jrnl', ?, ?, ?);",
+        {1, fy.name, vNo, vDate, partyName, std::abs(netInt), narr}
+    );
+
+    // 2. Double-Entry Posting
+    if (netInt >= 0) {
+        // Debit Party, Credit Interest Received
+        DatabaseManager::instance().executeNonQuery(
+            "INSERT INTO transactions (financial_year, voucher_no, voucher_date, voucher_type, trans_type, party_name, opposing_account, dr_cr, amount, narration) "
+            "VALUES (?, ?, ?, 'Journal', 'Jrnl', ?, 'Interest Received A/c', 'Dr', ?, ?);",
+            {fy.name, vNo, vDate, partyName, std::abs(netInt), narr}
+        );
+        DatabaseManager::instance().executeNonQuery(
+            "INSERT INTO transactions (financial_year, voucher_no, voucher_date, voucher_type, trans_type, party_name, opposing_account, dr_cr, amount, narration) "
+            "VALUES (?, ?, ?, 'Journal', 'Jrnl', 'Interest Received A/c', ?, 'Cr', ?, ?);",
+            {fy.name, vNo, vDate, partyName, std::abs(netInt), narr}
+        );
+    } else {
+        // Debit Interest Paid, Credit Party
+        DatabaseManager::instance().executeNonQuery(
+            "INSERT INTO transactions (financial_year, voucher_no, voucher_date, voucher_type, trans_type, party_name, opposing_account, dr_cr, amount, narration) "
+            "VALUES (?, ?, ?, 'Journal', 'Jrnl', 'Interest Paid A/c', ?, 'Dr', ?, ?);",
+            {fy.name, vNo, vDate, partyName, std::abs(netInt), narr}
+        );
+        DatabaseManager::instance().executeNonQuery(
+            "INSERT INTO transactions (financial_year, voucher_no, voucher_date, voucher_type, trans_type, party_name, opposing_account, dr_cr, amount, narration) "
+            "VALUES (?, ?, ?, 'Journal', 'Jrnl', ?, 'Interest Paid A/c', 'Cr', ?, ?);",
+            {fy.name, vNo, vDate, partyName, std::abs(netInt), narr}
+        );
+    }
+
+    DatabaseManager::instance().commit();
+
+    QMessageBox::information(this, "Success", "Interest Voucher posted successfully!\nVoucher No: " + vNo);
+    if (m_controller) m_controller->refresh();
+    recalculateAankStatement();
 }
 
 void LedgerStatementWidget::loadParty(const QString& partyName, const QString& fromDate, const QString& toDate) {
@@ -278,6 +641,7 @@ void LedgerStatementWidget::loadParty(const QString& partyName, const QString& f
     }
 
     updateHeadersAndTotals();
+    recalculateAankStatement();
 
     // Default focus to Dr table if entries exist, else Cr
     if (m_controller && m_controller->drModel()->rowCount() > 0) {
@@ -312,6 +676,7 @@ void LedgerStatementWidget::restoreState(const QString& partyName, const QString
     }
 
     updateHeadersAndTotals();
+    recalculateAankStatement();
 
     m_lastSide = side;
     m_lastIndex = rowIndex;
@@ -343,6 +708,7 @@ void LedgerStatementWidget::resetSearch() {
         m_controller->loadPartyStatement("", activeFy.startDate, activeFy.endDate);
     }
     updateHeadersAndTotals();
+    recalculateAankStatement();
     m_searchBox->setFocus();
     m_searchBox->selectAll();
 }
@@ -384,6 +750,7 @@ void LedgerStatementWidget::onDateFilterApplied() {
 
         m_controller->applyDateFilter(fIso, tIso);
         updateHeadersAndTotals();
+        recalculateAankStatement();
     }
 }
 
@@ -423,7 +790,7 @@ void LedgerStatementWidget::updateHeadersAndTotals() {
     }
 
     m_netBalanceLabel->setText(QString("Closing Balance: %1 %2").arg(AccountingEngine::formatIndianCurrency(diff, true), balType));
-    m_netBalanceLabel->setStyleSheet(QString("color: %1; font-weight: bold; font-size: 14px; border: none; background: transparent; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', 'Noto Sans', 'Liberation Sans', Arial, sans-serif;").arg(balColor));
+    m_netBalanceLabel->setStyleSheet(QString("color: %1; font-weight: bold; font-size: 14px; border: none; background: transparent; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;").arg(balColor));
 
     double checkedDiff = std::abs(m_controller->drSelectedTotal() - m_controller->crSelectedTotal());
     m_checkedDiffLabel->setText(QString("Checked Difference: %1").arg(AccountingEngine::formatIndianCurrency(checkedDiff, true)));
@@ -588,4 +955,3 @@ void LedgerStatementWidget::paintEvent(QPaintEvent* event) {
     painter.fillRect(rect(), QColor("#F8FAFC"));
     QWidget::paintEvent(event);
 }
-

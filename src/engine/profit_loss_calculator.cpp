@@ -1,5 +1,6 @@
 #include "profit_loss_calculator.h"
 #include "balance_sheet_calculator.h"
+#include "stock_valuation_engine.h"
 #include "fiscal_year_helper.h"
 #include "accounting_engine.h"
 #include "../database_manager.h"
@@ -8,11 +9,15 @@
 #include <algorithm>
 
 double ProfitLossCalculator::calculateClosingStockValuation(const QString& asOnDateIso) {
-    return BalanceSheetCalculator::calculateClosingStockValuation(asOnDateIso);
+    StockValuationReport rep = StockValuationEngine::getEffectiveClosingStock(asOnDateIso);
+    return rep.totalValuation;
 }
 
 double ProfitLossCalculator::calculateOpeningStockValuation(const QString& fyStartDateIso) {
-    return BalanceSheetCalculator::calculateOpeningStockValuation(fyStartDateIso);
+    if (fyStartDateIso.isEmpty()) return 0.0;
+    QDate sDate = QDate::fromString(fyStartDateIso, "yyyy-MM-dd");
+    QDate priorDate = sDate.addDays(-1);
+    return calculateClosingStockValuation(priorDate.toString("yyyy-MM-dd"));
 }
 
 ProfitLossData ProfitLossCalculator::calculate(const QString& requestedFromDate, const QString& requestedToDate) {
@@ -205,7 +210,8 @@ ProfitLossData ProfitLossCalculator::calculate(const QString& requestedFromDate,
         itm.groupName = grp;
         itm.level = 2;
 
-        if (grp.contains("Direct Expense", Qt::CaseInsensitive) || grp.contains("Manufacturing", Qt::CaseInsensitive) || grp.contains("Milling Expense", Qt::CaseInsensitive)) {
+        QString gLower = grp.toLower();
+        if (gLower.contains("direct expense") || gLower.contains("manufacturing") || gLower.contains("milling") || gLower.contains("trading exp")) {
             double amt = (dr > 0.0) ? dr : (netBal > 0 ? netBal : 0.0);
             if (amt > 0.0) {
                 itm.amount = amt;
@@ -213,7 +219,7 @@ ProfitLossData ProfitLossCalculator::calculate(const QString& requestedFromDate,
                 itm.side = "Dr";
                 directExpByGroup[grp].append(itm);
             }
-        } else if (grp.contains("Indirect Expense", Qt::CaseInsensitive) || grp.contains("Administrative", Qt::CaseInsensitive) || grp.contains("Salary", Qt::CaseInsensitive) || grp.contains("Bank Charges", Qt::CaseInsensitive) || grp.contains("Depreciation", Qt::CaseInsensitive)) {
+        } else if (gLower.contains("indirect expense") || gLower.contains("expenditure") || gLower.contains("thekedar") || gLower.contains("administrative") || gLower.contains("salary") || gLower.contains("bank charge") || gLower.contains("depreciation")) {
             double amt = (dr > 0.0) ? dr : (netBal > 0 ? netBal : 0.0);
             if (amt > 0.0) {
                 itm.amount = amt;
@@ -221,7 +227,7 @@ ProfitLossData ProfitLossCalculator::calculate(const QString& requestedFromDate,
                 itm.side = "Dr";
                 indirectExpByGroup[grp].append(itm);
             }
-        } else if (grp.contains("Indirect Income", Qt::CaseInsensitive) || grp.contains("Income", Qt::CaseInsensitive)) {
+        } else if (gLower.contains("indirect income") || gLower.contains("income") || gLower.contains("profit & loss")) {
             double amt = (cr > 0.0) ? cr : (netBal < 0 ? -netBal : 0.0);
             if (amt > 0.0) {
                 itm.amount = amt;
@@ -229,7 +235,7 @@ ProfitLossData ProfitLossCalculator::calculate(const QString& requestedFromDate,
                 itm.side = "Cr";
                 indirectIncByGroup[grp].append(itm);
             }
-        } else if (grp.contains("Sales", Qt::CaseInsensitive)) {
+        } else if (gLower.contains("sale")) {
             double amt = (cr > 0.0) ? cr : (netBal < 0 ? -netBal : 0.0);
             if (amt > 0.0) {
                 itm.amount = amt;
@@ -237,7 +243,7 @@ ProfitLossData ProfitLossCalculator::calculate(const QString& requestedFromDate,
                 itm.side = "Cr";
                 salesByGroup[grp].append(itm);
             }
-        } else if (grp.contains("Purchase", Qt::CaseInsensitive)) {
+        } else if (gLower.contains("purchase")) {
             double amt = (dr > 0.0) ? dr : (netBal > 0 ? netBal : 0.0);
             if (amt > 0.0) {
                 itm.amount = amt;
@@ -255,25 +261,24 @@ ProfitLossData ProfitLossCalculator::calculate(const QString& requestedFromDate,
     ProfitLossItem openingStockGrp;
     openingStockGrp.name = "Opening Stock";
     openingStockGrp.groupName = "Trading Dr";
-    openingStockGrp.amount = data.openingStockValue;
-    openingStockGrp.amountFmt = AccountingEngine::formatIndianCurrency(data.openingStockValue, true);
+
+    QDate sDate = QDate::fromString(data.fromDate, "yyyy-MM-dd");
+    QString priorDateIso = sDate.addDays(-1).toString("yyyy-MM-dd");
+    StockValuationReport opRep = StockValuationEngine::getEffectiveClosingStock(priorDateIso);
+
+    data.openingStockValue = opRep.totalValuation;
+    openingStockGrp.amount = opRep.totalValuation;
+    openingStockGrp.amountFmt = opRep.totalValuationFmt;
     openingStockGrp.side = "Dr";
     openingStockGrp.isGroup = true;
     openingStockGrp.level = 1;
 
-    // Opening stock sub-items
-    QVariantList stockItems = DatabaseManager::instance().executeQuery(
-        "SELECT name, opening_qty, opening_value, purchase_rate FROM stock_items WHERE opening_qty > 0;"
-    );
-    for (const auto& sVar : stockItems) {
-        QVariantMap s = sVar.toMap();
+    for (const auto& s : opRep.items) {
         ProfitLossItem sItm;
-        sItm.name = s.value("name").toString() + QString(" (%1 Qtl)").arg(s.value("opening_qty").toDouble(), 0, 'f', 1);
+        sItm.name = s.itemName + QString(" (%1 Qtl)").arg(s.weightQtl, 0, 'f', 1);
         sItm.groupName = "Opening Stock";
-        double val = s.value("opening_value").toDouble();
-        if (val <= 0.0) val = s.value("opening_qty").toDouble() * s.value("purchase_rate", 3000).toDouble();
-        sItm.amount = val;
-        sItm.amountFmt = AccountingEngine::formatIndianCurrency(val, true);
+        sItm.amount = s.amount;
+        sItm.amountFmt = s.amountFmt;
         sItm.side = "Dr";
         sItm.level = 2;
         openingStockGrp.children.append(sItm);
@@ -368,12 +373,26 @@ ProfitLossData ProfitLossCalculator::calculate(const QString& requestedFromDate,
     ProfitLossItem closingStockGrp;
     closingStockGrp.name = "Closing Stock";
     closingStockGrp.groupName = "Trading Cr";
-    closingStockGrp.amount = data.closingStockValue;
-    closingStockGrp.amountFmt = AccountingEngine::formatIndianCurrency(data.closingStockValue, true);
+
+    StockValuationReport clRep = StockValuationEngine::getEffectiveClosingStock(data.toDate);
+    data.closingStockValue = clRep.totalValuation;
+    closingStockGrp.amount = clRep.totalValuation;
+    closingStockGrp.amountFmt = clRep.totalValuationFmt;
     closingStockGrp.side = "Cr";
     closingStockGrp.isGroup = true;
     closingStockGrp.isCalculated = true;
     closingStockGrp.level = 1;
+
+    for (const auto& s : clRep.items) {
+        ProfitLossItem sItm;
+        sItm.name = s.itemName + QString(" (%1 Qtl)").arg(s.weightQtl, 0, 'f', 1);
+        sItm.groupName = "Closing Stock";
+        sItm.amount = s.amount;
+        sItm.amountFmt = s.amountFmt;
+        sItm.side = "Cr";
+        sItm.level = 2;
+        closingStockGrp.children.append(sItm);
+    }
     data.tradingCrGroups.append(closingStockGrp);
 
     // 3. Gross Loss c/d (if Gross Loss > 0)

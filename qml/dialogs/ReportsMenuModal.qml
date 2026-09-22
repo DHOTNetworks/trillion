@@ -26,6 +26,9 @@ T.Popup {
         item6.resetMouseTracking()
         item7.resetMouseTracking()
         item8.resetMouseTracking()
+        item9.resetMouseTracking()
+        item10.resetMouseTracking()
+        item11.resetMouseTracking()
         Qt.callLater(function() { menuScope.forceActiveFocus() })
     }
 
@@ -39,6 +42,9 @@ T.Popup {
         else if (selectedIndex === 5) act = "Stock Register"
         else if (selectedIndex === 6) act = "Milling Statement"
         else if (selectedIndex === 7) act = "Interest Calculator"
+        else if (selectedIndex === 8) act = "Day Book"
+        else if (selectedIndex === 9) act = "GST Returns"
+        else if (selectedIndex === 10) act = "Closing Stock Valuation"
         var sel = selectedIndex
         root.close()
         root.actionSelected(act, sel)
@@ -59,11 +65,11 @@ T.Popup {
         Keys.onUpPressed: function(event) {
             event.accepted = true
             if (root.selectedIndex > 0) root.selectedIndex--
-            else root.selectedIndex = 7
+            else root.selectedIndex = 10
         }
         Keys.onDownPressed: function(event) {
             event.accepted = true
-            if (root.selectedIndex < 7) root.selectedIndex++
+            if (root.selectedIndex < 10) root.selectedIndex++
             else root.selectedIndex = 0
         }
         Keys.onReturnPressed: function(event) {
@@ -86,6 +92,7 @@ T.Popup {
         Keys.onDigit6Pressed: function(event) { event.accepted = true; root.selectedIndex = 5; root.triggerSelected() }
         Keys.onDigit7Pressed: function(event) { event.accepted = true; root.selectedIndex = 6; root.triggerSelected() }
         Keys.onDigit8Pressed: function(event) { event.accepted = true; root.selectedIndex = 7; root.triggerSelected() }
+        Keys.onDigit9Pressed: function(event) { event.accepted = true; root.selectedIndex = 8; root.triggerSelected() }
 
         ColumnLayout {
             id: mainCol
@@ -208,6 +215,42 @@ T.Popup {
                 activeBorderColor: "#047857"
                 onItemHovered: root.selectedIndex = 7
                 onItemClicked: { root.selectedIndex = 7; root.triggerSelected() }
+            }
+
+            // Item 9: Day Book
+            NavMenuItem {
+                id: item9
+                index: 8
+                selectedIndex: root.selectedIndex
+                text: "9. Day Book (Daily Transaction Register)"
+                activeColor: "#059669"
+                activeBorderColor: "#047857"
+                onItemHovered: root.selectedIndex = 8
+                onItemClicked: { root.selectedIndex = 8; root.triggerSelected() }
+            }
+
+            // Item 10: GST Returns
+            NavMenuItem {
+                id: item10
+                index: 9
+                selectedIndex: root.selectedIndex
+                text: "10. GST Compliance & Returns (GSTR-1/2/3B)"
+                activeColor: "#059669"
+                activeBorderColor: "#047857"
+                onItemHovered: root.selectedIndex = 9
+                onItemClicked: { root.selectedIndex = 9; root.triggerSelected() }
+            }
+
+            // Item 11: Closing Stock Valuation & Audit
+            NavMenuItem {
+                id: item11
+                index: 10
+                selectedIndex: root.selectedIndex
+                text: "11. Closing Stock Valuation & Audit"
+                activeColor: "#059669"
+                activeBorderColor: "#047857"
+                onItemHovered: root.selectedIndex = 10
+                onItemClicked: { root.selectedIndex = 10; root.triggerSelected() }
             }
         }
     }

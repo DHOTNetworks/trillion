@@ -4,12 +4,17 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QVariantMap>
+#include <QTabWidget>
+#include <QTableWidget>
+#include <QDoubleSpinBox>
+#include <QCheckBox>
 #include "account_search_box.h"
 #include "accounting_date_edit.h"
 #include "ledger_table_view.h"
 #include "kbd_badge_button.h"
 #include "../models/ledger_statement_model.h"
 #include "../services/print_export_controller.h"
+#include "../engine/aank_interest_engine.h"
 
 class LedgerStatementWidget : public QWidget {
     Q_OBJECT
@@ -46,6 +51,9 @@ public slots:
     void focusSearch();
     void onTotalsChanged();
     void onSwitchSideRequested(const QString& targetSide);
+    void recalculateAankStatement();
+    void onPostInterestVoucherClicked();
+    void toggleAankMode();
 
 protected:
     void keyPressEvent(QKeyEvent* event) override;
@@ -66,6 +74,7 @@ private:
     PrintExportController* m_printExportCtrl = nullptr;
 
     // Header Actions
+    KbdBadgeButton* m_toggleAankBtn = nullptr;
     KbdBadgeButton* m_printBtn = nullptr;
     KbdBadgeButton* m_pdfBtn = nullptr;
     KbdBadgeButton* m_csvBtn = nullptr;
@@ -78,7 +87,11 @@ private:
     AccountingDateEdit* m_toDateEdit = nullptr;
     QPushButton* m_applyFilterBtn = nullptr;
 
-    // Side Banners & Tables
+    // Tab Container
+    QTabWidget* m_viewTabs = nullptr;
+
+    // --- Tab 1: 2-Column Ledger ---
+    QWidget* m_twoColumnWidget = nullptr;
     QLabel* m_crHeaderLabel = nullptr;
     QLabel* m_drHeaderLabel = nullptr;
     LedgerTableView* m_crTable = nullptr;
@@ -95,7 +108,25 @@ private:
     QLabel* m_netBalanceLabel = nullptr;
     QLabel* m_checkedDiffLabel = nullptr;
 
+    // --- Tab 2: Aank Statement ---
+    QWidget* m_aankWidget = nullptr;
+    QTableWidget* m_aankTable = nullptr;
+    QDoubleSpinBox* m_drInterestRateSpin = nullptr;
+    QDoubleSpinBox* m_crInterestRateSpin = nullptr;
+    QCheckBox* m_leapYearDivisorCheck = nullptr;
+    KbdBadgeButton* m_recomputeAankBtn = nullptr;
+    KbdBadgeButton* m_postInterestVoucherBtn = nullptr;
+
+    QLabel* m_aankTotalDrLabel = nullptr;
+    QLabel* m_aankTotalCrLabel = nullptr;
+    QLabel* m_aankDrInterestLabel = nullptr;
+    QLabel* m_aankCrInterestLabel = nullptr;
+    QLabel* m_aankNetInterestLabel = nullptr;
+
+    MahadevERP::AankInterestStatement m_currentAankStatement;
+
     // State Tracking
     QString m_lastSide = "Dr";
     int m_lastIndex = 0;
 };
+

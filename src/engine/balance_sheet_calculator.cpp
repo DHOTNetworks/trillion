@@ -1,4 +1,5 @@
 #include "balance_sheet_calculator.h"
+#include "stock_valuation_engine.h"
 #include "../database_manager.h"
 #include "accounting_engine.h"
 #include "fiscal_year_helper.h"
@@ -11,190 +12,8 @@
 #include <QDebug>
 
 double BalanceSheetCalculator::calculateClosingStockValuation(const QString& asOnDateIso) {
-    QString targetDate = asOnDateIso.trimmed();
-    if (targetDate.isEmpty()) targetDate = "9999-12-31";
-
-    double totalValuation = 0.0;
-
-    // 1. Fetch all stock items in one query
-    QVariantList items = DatabaseManager::instance().executeQuery(
-        "SELECT id, code, name, unit, purchase_rate, sale_rate FROM stock_items ORDER BY name COLLATE NOCASE ASC;"
-    );
-    if (items.isEmpty()) return 0.0;
-
-    // 2. Fetch all audited custom closing stocks on or before targetDate in one batch
-    QVariantList customList = DatabaseManager::instance().executeQuery(
-        "SELECT item_id, item_name, item_code, closing_date, weight_qtl, rate FROM custom_closing_stocks "
-        "WHERE closing_date <= ? ORDER BY closing_date ASC;",
-        {targetDate}
-    );
-
-    struct CustomClosingInfo {
-        QString closingDate;
-        double weight = 0.0;
-        double rate = 0.0;
-    };
-    QHash<int, CustomClosingInfo> customByItemId;
-    QHash<QString, CustomClosingInfo> customByCode;
-    QHash<QString, CustomClosingInfo> customByName;
-
-    for (const auto& cVar : customList) {
-        QVariantMap c = cVar.toMap();
-        int itemId = c.value("item_id").toInt();
-        QString iCode = c.value("item_code").toString().trimmed().toLower();
-        QString iName = c.value("item_name").toString().trimmed().toLower();
-        CustomClosingInfo info;
-        info.closingDate = c.value("closing_date").toString().trimmed();
-        info.weight = c.value("weight_qtl").toDouble();
-        info.rate = c.value("rate").toDouble();
-
-        if (itemId > 0) customByItemId[itemId] = info;
-        if (!iCode.isEmpty()) customByCode[iCode] = info;
-        if (!iName.isEmpty()) customByName[iName] = info;
-    }
-
-    // 3. Batch query stock transactions up to targetDate
-    QVariantList transList = DatabaseManager::instance().executeQuery(
-        "SELECT item_id, item_code, item_name, trans_type, voucher_date, SUM(weight_qtl) as tot_qty "
-        "FROM stock_transactions WHERE voucher_date <= ? "
-        "GROUP BY item_id, item_code, item_name, trans_type, voucher_date;",
-        {targetDate}
-    );
-
-    struct StockTx {
-        int itemId = 0;
-        QString code;
-        QString name;
-        QString transType;
-        QString date;
-        double qty = 0.0;
-    };
-    QVector<StockTx> allTx;
-    allTx.reserve(transList.size());
-    for (const auto& tVar : transList) {
-        QVariantMap t = tVar.toMap();
-        StockTx tx;
-        tx.itemId = t.value("item_id").toInt();
-        tx.code = t.value("item_code").toString().trimmed().toLower();
-        tx.name = t.value("item_name").toString().trimmed().toLower();
-        tx.transType = t.value("trans_type").toString().trimmed();
-        tx.date = t.value("voucher_date").toString().trimmed();
-        tx.qty = t.value("tot_qty").toDouble();
-        allTx.append(tx);
-    }
-
-    // 4. Batch query milling voucher items up to targetDate
-    QVariantList millList = DatabaseManager::instance().executeQuery(
-        "SELECT item_code, drcr, batch_date, SUM(weight_qtl) as tot_qty "
-        "FROM milling_voucher_items WHERE batch_date <= ? "
-        "GROUP BY item_code, drcr, batch_date;",
-        {targetDate}
-    );
-
-    struct MillTx {
-        QString code;
-        QString drcr;
-        QString date;
-        double qty = 0.0;
-    };
-    QVector<MillTx> allMill;
-    allMill.reserve(millList.size());
-    for (const auto& mVar : millList) {
-        QVariantMap m = mVar.toMap();
-        MillTx mx;
-        mx.code = m.value("item_code").toString().trimmed().toLower();
-        mx.drcr = m.value("drcr").toString().trimmed();
-        mx.date = m.value("batch_date").toString().trimmed();
-        mx.qty = m.value("tot_qty").toDouble();
-        allMill.append(mx);
-    }
-
-    // 5. Compute closing stock per item in memory (O(1) lookups)
-    for (const auto& itemVar : items) {
-        QVariantMap item = itemVar.toMap();
-        int itemId = item.value("id").toInt();
-        QString itemCode = item.value("code").toString().trimmed().toLower();
-        QString itemName = item.value("name").toString().trimmed().toLower();
-        double pRate = item.value("purchase_rate").toDouble();
-        double sRate = item.value("sale_rate").toDouble();
-        double rate = (pRate > 0.0) ? pRate : ((sRate > 0.0) ? sRate : 0.0);
-
-        bool hasCustom = false;
-        CustomClosingInfo cInfo;
-        if (itemId > 0 && customByItemId.contains(itemId)) {
-            hasCustom = true;
-            cInfo = customByItemId[itemId];
-        } else if (!itemCode.isEmpty() && customByCode.contains(itemCode)) {
-            hasCustom = true;
-            cInfo = customByCode[itemCode];
-        } else if (!itemName.isEmpty() && customByName.contains(itemName)) {
-            hasCustom = true;
-            cInfo = customByName[itemName];
-        }
-
-        double closingQty = 0.0;
-        if (hasCustom) {
-            double opQty = cInfo.weight;
-            if (cInfo.rate > 0.0) rate = cInfo.rate;
-            QString cDate = cInfo.closingDate;
-
-            double inQty = 0.0;
-            double outQty = 0.0;
-            for (const auto& tx : allTx) {
-                if ((tx.itemId == itemId || tx.code == itemCode || tx.name == itemName) && tx.date > cDate && tx.date <= targetDate) {
-                    if (tx.transType == "Purc" || tx.transType == "Inward" || tx.transType == "P") inQty += tx.qty;
-                    else if (tx.transType == "Sale" || tx.transType == "Outward" || tx.transType == "S") outQty += tx.qty;
-                }
-            }
-
-            double millIn = 0.0;
-            double millOut = 0.0;
-            for (const auto& mx : allMill) {
-                if ((mx.code == itemCode || mx.code == QString::number(itemId)) && mx.date > cDate && mx.date <= targetDate) {
-                    if (mx.drcr == "Dr") millIn += mx.qty;
-                    else if (mx.drcr == "Cr") millOut += mx.qty;
-                }
-            }
-
-            closingQty = opQty + inQty + millIn - outQty - millOut;
-        } else {
-            double inQty = 0.0;
-            double outQty = 0.0;
-            for (const auto& tx : allTx) {
-                if (tx.itemId == itemId || tx.code == itemCode || tx.name == itemName) {
-                    if (tx.transType == "Purc" || tx.transType == "Inward" || tx.transType == "P") inQty += tx.qty;
-                    else if (tx.transType == "Sale" || tx.transType == "Outward" || tx.transType == "S") outQty += tx.qty;
-                }
-            }
-
-            double millIn = 0.0;
-            double millOut = 0.0;
-            for (const auto& mx : allMill) {
-                if (mx.code == itemCode || mx.code == QString::number(itemId)) {
-                    if (mx.drcr == "Dr") millIn += mx.qty;
-                    else if (mx.drcr == "Cr") millOut += mx.qty;
-                }
-            }
-
-            closingQty = inQty + millIn - outQty - millOut;
-        }
-
-        if (closingQty > 0.001) {
-            totalValuation += (closingQty * rate);
-        }
-    }
-
-    // Fallback to inventory table if valuation is 0
-    if (totalValuation < 0.01) {
-        QVariant invVal = DatabaseManager::instance().executeScalar(
-            "SELECT SUM(current_stock_qtl * sale_rate) FROM inventory WHERE current_stock_qtl > 0;"
-        );
-        if (invVal.isValid() && invVal.toDouble() > 0.0) {
-            totalValuation = invVal.toDouble();
-        }
-    }
-
-    return totalValuation;
+    StockValuationReport rep = StockValuationEngine::getEffectiveClosingStock(asOnDateIso);
+    return rep.totalValuation;
 }
 
 double BalanceSheetCalculator::calculateOpeningStockValuation(const QString& fyStartDateIso) {
@@ -421,14 +240,6 @@ BalanceSheetData BalanceSheetCalculator::calculate(const QString& requestedAsOnD
         item.isGroup = false;
 
         QString targetGrp = gName;
-        if (gName == "Sundry Debtors" || gName == "Sundry Creditors" ||
-            gName == "Local Mandi Creditors" || gName == "Mandi Debtors") {
-            if (netBal < 0) {
-                targetGrp = "Sundry Creditors";
-            } else {
-                targetGrp = "Sundry Debtors";
-            }
-        }
 
         if (netBal < 0) {
             // Credit balance -> Liabilities side under this Account Group
@@ -467,36 +278,23 @@ BalanceSheetData BalanceSheetCalculator::calculate(const QString& requestedAsOnD
     stockGroup.level = 0;
     stockGroup.amount = 0.0;
 
-    // Fetch breakdown of closing stock from custom_closing_stocks or stock_items
-    QVariantList customStocks = DatabaseManager::instance().executeQuery(
-        "SELECT item_name, weight_qtl, rate, amount FROM custom_closing_stocks "
-        "WHERE (closing_date = ? OR financial_year = ? OR financial_year = ?) AND amount > 0 ORDER BY item_name COLLATE NOCASE ASC;",
-        {data.asOnDate, data.financialYear, "FY " + data.financialYear}
-    );
+    StockValuationReport stockRep = StockValuationEngine::getEffectiveClosingStock(data.asOnDate);
+    data.closingStockValue = stockRep.totalValuation;
+    stockGroup.amount = stockRep.totalValuation;
+    stockGroup.amountFmt = stockRep.totalValuationFmt;
 
-    double sumCustomStock = 0.0;
-    for (const auto& csVar : customStocks) {
-        QVariantMap cs = csVar.toMap();
+    for (const auto& s : stockRep.items) {
         BalanceSheetItem sItem;
-        sItem.name = cs.value("item_name").toString().trimmed();
-        sItem.amount = cs.value("amount").toDouble();
-        sItem.amountFmt = AccountingEngine::formatIndianCurrency(sItem.amount, true);
+        sItem.name = s.itemName;
+        sItem.amount = s.amount;
+        sItem.amountFmt = s.amountFmt;
         sItem.balanceType = "Dr";
         sItem.level = 1;
         sItem.isCalculated = true;
         stockGroup.children.append(sItem);
-        sumCustomStock += sItem.amount;
-    }
-
-    if (sumCustomStock > 0.01) {
-        stockGroup.amount = sumCustomStock;
-        data.closingStockValue = sumCustomStock;
-    } else if (data.closingStockValue > 0.01) {
-        stockGroup.amount = data.closingStockValue;
     }
 
     if (stockGroup.amount > 0.01) {
-        stockGroup.amountFmt = AccountingEngine::formatIndianCurrency(stockGroup.amount, true);
         assetGroupMap["Trading Items Stock A/c"] = stockGroup;
     }
 

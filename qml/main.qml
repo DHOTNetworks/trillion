@@ -648,6 +648,8 @@ T.ApplicationWindow {
                 window.navigateToView(12)
             } else if (act === "Stock Details") {
                 window.navigateToView(13)
+            } else if (act === "Closing Stock Valuation") {
+                window.navigateToView(36)
             } else {
                 window.navigateToView(2)
             }
@@ -743,9 +745,15 @@ T.ApplicationWindow {
             } else if (act === "Stock Register") {
                 window.navigateToView(13)
             } else if (act === "Milling Statement") {
-                window.navigateToView(19)
+                window.navigateToView(35)
             } else if (act === "Interest Calculator") {
                 window.navigateToView(25)
+            } else if (act === "Day Book") {
+                window.navigateToView(33)
+            } else if (act === "GST Returns") {
+                window.navigateToView(34)
+            } else if (act === "Closing Stock Valuation") {
+                window.navigateToView(36)
             }
         }
     }
