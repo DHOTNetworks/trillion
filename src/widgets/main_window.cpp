@@ -158,6 +158,34 @@ MainWindow::MainWindow(QQuickWindow* qmlWindow,
     connect(m_modifyLedgerWidget, &ModifyLedgerWidget::savedSuccess, this, &MainWindow::onModifyLedgerSaved);
     m_stackedWidget->addWidget(m_modifyLedgerWidget);
 
+    // Index 11: Native C++ J-Form Mandi Procurement Widget (View 18)
+    m_jformVoucherWidget = new JFormVoucherWidget(m_printExportCtrl, this);
+    connect(m_jformVoucherWidget, &JFormVoucherWidget::backRequested, this, &MainWindow::onJFormVoucherBackRequested);
+    connect(m_jformVoucherWidget, &JFormVoucherWidget::voucherSaved, this, &MainWindow::onJFormVoucherSaved);
+    m_stackedWidget->addWidget(m_jformVoucherWidget);
+
+    // Index 12: Native C++ I-Form Mandi Buyer Issue Widget (View 19)
+    m_iformVoucherWidget = new IFormVoucherWidget(m_printExportCtrl, this);
+    connect(m_iformVoucherWidget, &IFormVoucherWidget::backRequested, this, &MainWindow::onIFormVoucherBackRequested);
+    connect(m_iformVoucherWidget, &IFormVoucherWidget::voucherSaved, this, &MainWindow::onIFormVoucherSaved);
+    m_stackedWidget->addWidget(m_iformVoucherWidget);
+
+    // Index 13: Native C++ Mandi Operations & Reports Widget (View 20)
+    m_mandiReportsWidget = new MandiReportsWidget(m_printExportCtrl, this);
+    connect(m_mandiReportsWidget, &MandiReportsWidget::backRequested, this, &MainWindow::onMandiReportsBackRequested);
+    m_stackedWidget->addWidget(m_mandiReportsWidget);
+
+    // Index 14: Native C++ Day Book Widget (View 33)
+    m_dayBookWidget = new MahadevERP::DayBookWidget(m_printExportCtrl, this);
+    connect(m_dayBookWidget, &MahadevERP::DayBookWidget::backRequested, this, [this]() { navigateToView(0); });
+    connect(m_dayBookWidget, &MahadevERP::DayBookWidget::alterVoucherRequested, this, &MainWindow::onLedgerAlterVoucherRequested);
+    m_stackedWidget->addWidget(m_dayBookWidget);
+
+    // Index 15: Native C++ GST Compliance & Returns Widget (View 34)
+    m_gstrReportsWidget = new MahadevERP::GstrReportsWidget(m_printExportCtrl, this);
+    connect(m_gstrReportsWidget, &MahadevERP::GstrReportsWidget::backRequested, this, [this]() { navigateToView(0); });
+    m_stackedWidget->addWidget(m_gstrReportsWidget);
+
     // Global Shortcuts for Accounting Period (Alt+F2) and Context-Aware F2 (Date / Period)
     QShortcut* altF2Shortcut = new QShortcut(QKeySequence(Qt::ALT | Qt::Key_F2), this);
     connect(altF2Shortcut, &QShortcut::activated, this, &MainWindow::openAccountingPeriodDialog);
@@ -173,6 +201,10 @@ MainWindow::MainWindow(QQuickWindow* qmlWindow,
             m_chequeVoucherWidget->openDateDialog();
         } else if (vIdx == 17 && m_journalVoucherWidget) {
             m_journalVoucherWidget->openDateDialog();
+        } else if (vIdx == 18 && m_jformVoucherWidget) {
+            m_jformVoucherWidget->openDateDialog();
+        } else if (vIdx == 19 && m_iformVoucherWidget) {
+            m_iformVoucherWidget->openDateDialog();
         } else {
             openAccountingPeriodDialog();
         }
@@ -237,7 +269,17 @@ void MainWindow::checkQmlView() {
         navigateToView(6);
     } else if (vIdx == 7 && m_stackedWidget->currentWidget() != m_modifyLedgerWidget) {
         navigateToView(7);
-    } else if (vIdx != 0 && vIdx != 8 && vIdx != 29 && vIdx != 30 && vIdx != 14 && vIdx != 15 && vIdx != 16 && vIdx != 17 && vIdx != 22 && vIdx != 6 && vIdx != 7 && m_stackedWidget->currentWidget() != m_qmlContainer) {
+    } else if (vIdx == 18 && (m_stackedWidget->currentWidget() != m_jformVoucherWidget || hasPending)) {
+        navigateToView(18);
+    } else if (vIdx == 19 && (m_stackedWidget->currentWidget() != m_iformVoucherWidget || hasPending)) {
+        navigateToView(19);
+    } else if (vIdx == 20 && m_stackedWidget->currentWidget() != m_mandiReportsWidget) {
+        navigateToView(20);
+    } else if (vIdx == 33 && m_stackedWidget->currentWidget() != m_dayBookWidget) {
+        navigateToView(33);
+    } else if (vIdx == 34 && m_stackedWidget->currentWidget() != m_gstrReportsWidget) {
+        navigateToView(34);
+    } else if (vIdx != 0 && vIdx != 8 && vIdx != 29 && vIdx != 30 && vIdx != 14 && vIdx != 15 && vIdx != 16 && vIdx != 17 && vIdx != 22 && vIdx != 6 && vIdx != 7 && vIdx != 18 && vIdx != 19 && vIdx != 20 && vIdx != 33 && vIdx != 34 && m_stackedWidget->currentWidget() != m_qmlContainer) {
         m_stackedWidget->setCurrentWidget(m_qmlContainer);
         if (m_qmlContainer) {
             m_qmlContainer->setFocus(Qt::OtherFocusReason);
@@ -265,6 +307,11 @@ int MainWindow::currentViewIndex() const {
     if (cur == m_firmSelectorWidget) return 22;
     if (cur == m_newLedgerWidget) return 6;
     if (cur == m_modifyLedgerWidget) return 7;
+    if (cur == m_jformVoucherWidget) return 18;
+    if (cur == m_iformVoucherWidget) return 19;
+    if (cur == m_mandiReportsWidget) return 20;
+    if (cur == m_dayBookWidget) return 33;
+    if (cur == m_gstrReportsWidget) return 34;
     if (m_qmlWindow) {
         return m_qmlWindow->property("currentViewIndex").toInt();
     }
@@ -283,6 +330,16 @@ void MainWindow::restoreActiveViewFocus() {
         m_chequeVoucherWidget->setFocus(Qt::OtherFocusReason);
     } else if (vIdx == 17 && m_journalVoucherWidget) {
         m_journalVoucherWidget->setFocus(Qt::OtherFocusReason);
+    } else if (vIdx == 18 && m_jformVoucherWidget) {
+        m_jformVoucherWidget->setFocus(Qt::OtherFocusReason);
+    } else if (vIdx == 19 && m_iformVoucherWidget) {
+        m_iformVoucherWidget->setFocus(Qt::OtherFocusReason);
+    } else if (vIdx == 20 && m_mandiReportsWidget) {
+        m_mandiReportsWidget->setFocus(Qt::OtherFocusReason);
+    } else if (vIdx == 33 && m_dayBookWidget) {
+        m_dayBookWidget->setFocus(Qt::OtherFocusReason);
+    } else if (vIdx == 34 && m_gstrReportsWidget) {
+        m_gstrReportsWidget->setFocus(Qt::OtherFocusReason);
     } else if (vIdx == 6 && m_newLedgerWidget) {
         m_newLedgerWidget->setFocus(Qt::OtherFocusReason);
         m_newLedgerWidget->focusFirstField();
@@ -390,6 +447,16 @@ void MainWindow::openAccountingPeriodDialog() {
                 m_qmlWindow->contentItem()->forceActiveFocus(Qt::OtherFocusReason);
             }
         }
+    } else if (m_stackedWidget->currentWidget() == m_dashboardWidget) {
+        if (m_dashboardWidget) {
+            m_dashboardWidget->setFocus(Qt::OtherFocusReason);
+            m_dashboardWidget->activateWindow();
+            QTimer::singleShot(0, m_dashboardWidget, [this]() {
+                if (m_dashboardWidget) {
+                    m_dashboardWidget->setFocus(Qt::OtherFocusReason);
+                }
+            });
+        }
     } else if (m_stackedWidget->currentWidget() == m_ledgerWidget) {
         if (m_ledgerWidget) m_ledgerWidget->setFocus();
     } else if (m_stackedWidget->currentWidget() == m_balanceSheetWidget) {
@@ -400,6 +467,15 @@ void MainWindow::openAccountingPeriodDialog() {
         if (m_chequeVoucherWidget) m_chequeVoucherWidget->setFocus();
     } else if (m_stackedWidget->currentWidget() == m_journalVoucherWidget) {
         if (m_journalVoucherWidget) m_journalVoucherWidget->setFocus();
+    } else if (m_stackedWidget->currentWidget() == m_jformVoucherWidget) {
+        if (m_jformVoucherWidget) m_jformVoucherWidget->setFocus();
+    } else if (m_stackedWidget->currentWidget() == m_iformVoucherWidget) {
+        if (m_iformVoucherWidget) m_iformVoucherWidget->setFocus();
+    } else if (m_stackedWidget->currentWidget() == m_mandiReportsWidget) {
+        if (m_mandiReportsWidget) {
+            m_mandiReportsWidget->setFocus();
+            m_mandiReportsWidget->setWorkingPeriod(fIso, tIso);
+        }
     }
 }
 
@@ -508,6 +584,11 @@ void MainWindow::navigateToView(int viewIndex) {
                 }
             } else {
                 m_salesVoucherWidget->resetForm();
+                QTimer::singleShot(0, this, [this]() {
+                    if (m_salesVoucherWidget && m_stackedWidget->currentWidget() == m_salesVoucherWidget) {
+                        m_salesVoucherWidget->openDateDialog(true);
+                    }
+                });
             }
             m_salesVoucherWidget->setFocus();
         }
@@ -526,6 +607,11 @@ void MainWindow::navigateToView(int viewIndex) {
                 }
             } else {
                 m_purchaseVoucherWidget->resetForm();
+                QTimer::singleShot(0, this, [this]() {
+                    if (m_purchaseVoucherWidget && m_stackedWidget->currentWidget() == m_purchaseVoucherWidget) {
+                        m_purchaseVoucherWidget->openDateDialog(true);
+                    }
+                });
             }
             m_purchaseVoucherWidget->setFocus();
         }
@@ -554,6 +640,11 @@ void MainWindow::navigateToView(int viewIndex) {
                 }
             } else {
                 m_chequeVoucherWidget->resetForm();
+                QTimer::singleShot(0, this, [this]() {
+                    if (m_chequeVoucherWidget && m_stackedWidget->currentWidget() == m_chequeVoucherWidget) {
+                        m_chequeVoucherWidget->openDateDialog(true);
+                    }
+                });
             }
             m_chequeVoucherWidget->setFocus();
         }
@@ -572,6 +663,11 @@ void MainWindow::navigateToView(int viewIndex) {
                 }
             } else {
                 m_journalVoucherWidget->resetForm();
+                QTimer::singleShot(0, this, [this]() {
+                    if (m_journalVoucherWidget && m_stackedWidget->currentWidget() == m_journalVoucherWidget) {
+                        m_journalVoucherWidget->openDateDialog(true);
+                    }
+                });
             }
             m_journalVoucherWidget->setFocus();
         }
@@ -598,6 +694,71 @@ void MainWindow::navigateToView(int viewIndex) {
             m_modifyLedgerWidget->resetForm();
             m_modifyLedgerWidget->setFocus();
             m_modifyLedgerWidget->focusSearch();
+        }
+    } else if (viewIndex == 18) {
+        // Show C++ J-Form Procurement Voucher Widget
+        if (m_jformVoucherWidget) {
+            m_stackedWidget->setCurrentWidget(m_jformVoucherWidget);
+            if (!pendingInv.isEmpty() || !pendingVNo.isEmpty() || pendingId > 0) {
+                QVariant target = !pendingInv.isEmpty() ? QVariant(pendingInv) : (!pendingVNo.isEmpty() ? QVariant(pendingVNo) : QVariant(pendingId));
+                m_jformVoucherWidget->loadVoucherForEditing(target, pendingDate);
+            } else {
+                m_jformVoucherWidget->resetForm();
+                QTimer::singleShot(0, this, [this]() {
+                    if (m_jformVoucherWidget && m_stackedWidget->currentWidget() == m_jformVoucherWidget) {
+                        m_jformVoucherWidget->openDateDialog(true);
+                    }
+                });
+            }
+            m_jformVoucherWidget->setFocus();
+        }
+    } else if (viewIndex == 19) {
+        // Show C++ I-Form Mandi Buyer Issue Widget
+        if (m_iformVoucherWidget) {
+            m_stackedWidget->setCurrentWidget(m_iformVoucherWidget);
+            if (!pendingInv.isEmpty() || !pendingVNo.isEmpty() || pendingId > 0) {
+                QVariant target = !pendingInv.isEmpty() ? QVariant(pendingInv) : (!pendingVNo.isEmpty() ? QVariant(pendingVNo) : QVariant(pendingId));
+                m_iformVoucherWidget->loadVoucherForEditing(target, pendingDate);
+            } else {
+                m_iformVoucherWidget->resetForm();
+                QTimer::singleShot(0, this, [this]() {
+                    if (m_iformVoucherWidget && m_stackedWidget->currentWidget() == m_iformVoucherWidget) {
+                        m_iformVoucherWidget->openDateDialog(true);
+                    }
+                });
+            }
+            m_iformVoucherWidget->setFocus();
+        }
+    } else if (viewIndex == 20) {
+        // Show C++ Mandi Reports & Form M Widget
+        if (m_mandiReportsWidget) {
+            m_stackedWidget->setCurrentWidget(m_mandiReportsWidget);
+            m_mandiReportsWidget->refreshAllTabs();
+            m_mandiReportsWidget->setFocus();
+        }
+    } else if (viewIndex == 33) {
+        // Show C++ Day Book Widget
+        if (m_dayBookWidget) {
+            m_stackedWidget->setCurrentWidget(m_dayBookWidget);
+            FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
+            QDate sDate = QDate::fromString(activeFy.startDate, "yyyy-MM-dd");
+            QDate eDate = QDate::fromString(activeFy.endDate, "yyyy-MM-dd");
+            if (!sDate.isValid()) sDate = QDate(2025, 4, 1);
+            if (!eDate.isValid()) eDate = QDate::currentDate();
+            m_dayBookWidget->loadDayBookData(sDate, eDate);
+            m_dayBookWidget->setFocus();
+        }
+    } else if (viewIndex == 34) {
+        // Show C++ GST Compliance & Returns Dashboard
+        if (m_gstrReportsWidget) {
+            m_stackedWidget->setCurrentWidget(m_gstrReportsWidget);
+            FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
+            QDate sDate = QDate::fromString(activeFy.startDate, "yyyy-MM-dd");
+            QDate eDate = QDate::fromString(activeFy.endDate, "yyyy-MM-dd");
+            if (!sDate.isValid()) sDate = QDate(2025, 4, 1);
+            if (!eDate.isValid()) eDate = QDate::currentDate();
+            m_gstrReportsWidget->loadReturns(sDate, eDate);
+            m_gstrReportsWidget->setFocus();
         }
     } else {
         // Show QML view stack
@@ -809,6 +970,14 @@ void MainWindow::onLedgerAlterVoucherRequested(int targetViewIndex, const QVaria
             m_previousViewIndex = 8;
             navigateToView(17);
             return;
+        } else if (targetViewIndex == 18) {
+            m_previousViewIndex = 8;
+            navigateToView(18);
+            return;
+        } else if (targetViewIndex == 19) {
+            m_previousViewIndex = 8;
+            navigateToView(19);
+            return;
         } else if (targetViewIndex == 24) {
             m_qmlWindow->setProperty("targetTdsVoucherId", itemId);
         }
@@ -818,6 +987,42 @@ void MainWindow::onLedgerAlterVoucherRequested(int targetViewIndex, const QVaria
         }
         QMetaObject::invokeMethod(m_qmlWindow, "navigateToView", Q_ARG(QVariant, targetViewIndex));
     }
+}
+
+void MainWindow::onJFormVoucherBackRequested() {
+    if (m_previousViewIndex == 8) {
+        m_previousViewIndex = 0;
+        navigateToView(8);
+        return;
+    }
+    navigateToView(0);
+}
+
+void MainWindow::onJFormVoucherSaved(const QString& jformNo) {
+    Q_UNUSED(jformNo);
+    if (m_ledgerWidget && !m_ledgerWidget->currentParty().isEmpty()) {
+        m_ledgerWidget->loadParty(m_ledgerWidget->currentParty(), m_ledgerWidget->fromDate(), m_ledgerWidget->toDate());
+    }
+}
+
+void MainWindow::onIFormVoucherBackRequested() {
+    if (m_previousViewIndex == 8) {
+        m_previousViewIndex = 0;
+        navigateToView(8);
+        return;
+    }
+    navigateToView(0);
+}
+
+void MainWindow::onIFormVoucherSaved(const QString& iformNo) {
+    Q_UNUSED(iformNo);
+    if (m_ledgerWidget && !m_ledgerWidget->currentParty().isEmpty()) {
+        m_ledgerWidget->loadParty(m_ledgerWidget->currentParty(), m_ledgerWidget->fromDate(), m_ledgerWidget->toDate());
+    }
+}
+
+void MainWindow::onMandiReportsBackRequested() {
+    navigateToView(0);
 }
 
 void MainWindow::closeEvent(QCloseEvent* event) {

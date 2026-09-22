@@ -25,6 +25,16 @@ void FinancialYearsModel::reload_data() {
 }
 
 QVariantMap FinancialYearsModel::get_active_year() const {
+    FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
+    if (activeFy.isValid()) {
+        QVariantMap m;
+        m["year_name"] = activeFy.name;
+        m["start_date"] = activeFy.startDate;
+        m["end_date"] = activeFy.endDate;
+        m["is_active"] = 1;
+        m["is_locked"] = activeFy.isLocked ? 1 : 0;
+        return m;
+    }
     QVariantList rows = DatabaseManager::instance().executeQuery("SELECT * FROM financial_years WHERE is_active = 1 LIMIT 1;");
     if (!rows.isEmpty()) {
         return rows.first().toMap();
@@ -209,13 +219,13 @@ QVariantMap FinancialYearsModel::validate_voucher_date(const QString& input, con
     res["isoDate"] = "";
     res["error"] = "";
 
-    QVariantMap activeFy = get_active_year();
-    QString fyName = activeFy.value("year_name").toString();
-    QDate fyStart = QDate::fromString(activeFy.value("start_date").toString(), "yyyy-MM-dd");
-    QDate fyEnd = QDate::fromString(activeFy.value("end_date").toString(), "yyyy-MM-dd");
+    FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
+    QString fyName = activeFy.name;
+    QDate fyStart = QDate::fromString(activeFy.startDate, "yyyy-MM-dd");
+    QDate fyEnd = QDate::fromString(activeFy.endDate, "yyyy-MM-dd");
     res["fyName"] = fyName;
-    res["startDate"] = activeFy.value("start_date").toString();
-    res["endDate"] = activeFy.value("end_date").toString();
+    res["startDate"] = activeFy.startDate;
+    res["endDate"] = activeFy.endDate;
     res["startFormatted"] = fyStart.isValid() ? fyStart.toString("dd-MM-yyyy") : "";
     res["endFormatted"] = fyEnd.isValid() ? fyEnd.toString("dd-MM-yyyy") : "";
 
@@ -234,10 +244,20 @@ QVariantMap FinancialYearsModel::validate_voucher_date(const QString& input, con
     res["formattedDate"] = d.toString("dd-MM-yyyy");
     res["isoDate"] = d.toString("yyyy-MM-dd");
 
+    // Dynamic resolution of specific financial year for this voucher date
+    FiscalYearInfo matchedFy = FiscalYearHelper::getFiscalYearForDate(res["isoDate"].toString());
+    if (matchedFy.isValid()) {
+        res["resolvedFyName"] = matchedFy.name;
+        res["resolvedStartDate"] = matchedFy.startDate;
+        res["resolvedEndDate"] = matchedFy.endDate;
+    } else {
+        res["resolvedFyName"] = AccountingEngine::resolveFinancialYear(res["isoDate"].toString());
+    }
+
     if (fyStart.isValid() && fyEnd.isValid()) {
         if (d < fyStart || d > fyEnd) {
             res["valid"] = false;
-            res["error"] = QString("Date %1 is outside the active Financial Year (%2: %3 to %4).\nPlease enter a date within this period or switch the Financial Year in FY Selector (Alt+F).")
+            res["error"] = QString("Date %1 is outside the active Period (%2: %3 to %4).\nPlease enter a date within this period or switch the Financial Year in FY Selector (Alt+F).")
                                 .arg(d.toString("dd-MM-yyyy"), fyName, fyStart.toString("dd-MM-yyyy"), fyEnd.toString("dd-MM-yyyy"));
             return res;
         }

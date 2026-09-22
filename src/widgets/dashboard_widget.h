@@ -49,6 +49,7 @@ public slots:
 
 protected:
     void showEvent(QShowEvent* event) override;
+    void focusInEvent(QFocusEvent* event) override;
     void keyPressEvent(QKeyEvent* event) override;
 
 private slots:

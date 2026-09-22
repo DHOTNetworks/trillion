@@ -340,10 +340,13 @@ PartitionedLedgerData FiscalYearHelper::partitionPartyTransactions(
     const QString& requestedToDate
 ) {
     PartitionedLedgerData result;
-    result.activeFy = getActiveFiscalYear();
-
     QString fIso = normalizeToIso(requestedFromDate);
     QString tIso = normalizeToIso(requestedToDate);
+    if (!fIso.isEmpty()) {
+        result.activeFy = getFiscalYearForDate(fIso);
+    } else {
+        result.activeFy = getActiveFiscalYear();
+    }
     clampDateRangeToFiscalYear(fIso, tIso, result.activeFy);
 
     result.effectiveFromDate = fIso;
@@ -359,10 +362,10 @@ PartitionedLedgerData FiscalYearHelper::partitionPartyTransactions(
     namePattern.replace(' ', '%');
     QString wildcard = "%" + namePattern + "%";
 
-    // 1. Fetch party info from master
+    // 1. Fetch party info from master with exact match
     QVariantList pRows = DatabaseManager::instance().executeQuery(
-        "SELECT id, legacy_id, opening_balance, balance_type FROM parties WHERE name = ? OR name LIKE ? OR name LIKE ? LIMIT 1;",
-        {cleanName, "%" + cleanName + "%", wildcard}
+        "SELECT id, legacy_id, name, opening_balance, balance_type FROM parties WHERE name = ? COLLATE NOCASE OR alias = ? COLLATE NOCASE LIMIT 1;",
+        {cleanName, cleanName}
     );
     int partyId = 0;
     int legacyCode = 0;
@@ -385,12 +388,22 @@ PartitionedLedgerData FiscalYearHelper::partitionPartyTransactions(
     }
 
     if (!result.effectiveFromDate.isEmpty()) {
-        QVariantList priorRows = DatabaseManager::instance().executeQuery(
-            "SELECT dr_cr, SUM(amount) as total_amt FROM transactions "
-            "WHERE (party_name = ? OR party_name LIKE ? OR party_name LIKE ? OR party_id = ? OR (account_code > 0 AND account_code = ?)) "
-            "AND voucher_date < ? GROUP BY dr_cr;",
-            {cleanName, "%" + cleanName + "%", wildcard, partyId, legacyCode, result.effectiveFromDate}
-        );
+        QVariantList priorRows;
+        if (partyId > 0 || legacyCode > 0) {
+            priorRows = DatabaseManager::instance().executeQuery(
+                "SELECT dr_cr, SUM(amount) as total_amt FROM transactions "
+                "WHERE (party_id = ? OR (account_code > 0 AND account_code = ?)) "
+                "AND voucher_date < ? GROUP BY dr_cr;",
+                {partyId, legacyCode, result.effectiveFromDate}
+            );
+        } else {
+            priorRows = DatabaseManager::instance().executeQuery(
+                "SELECT dr_cr, SUM(amount) as total_amt FROM transactions "
+                "WHERE party_name = ? COLLATE NOCASE "
+                "AND voucher_date < ? GROUP BY dr_cr;",
+                {cleanName, result.effectiveFromDate}
+            );
+        }
         for (const auto& pr : priorRows) {
             QVariantMap m = pr.toMap();
             if (m.value("dr_cr").toString().compare("Dr", Qt::CaseInsensitive) == 0) {
@@ -434,14 +447,25 @@ PartitionedLedgerData FiscalYearHelper::partitionPartyTransactions(
     }
 
     // 4. Fetch Fiscal Transactions (Strictly between effectiveFromDate and effectiveToDate)
-    QString sql = "SELECT id, voucher_no, voucher_date, voucher_type, trans_type, opposing_account, dr_cr, amount, "
-                  "invoice_no, narration, financial_year, broker_name, vehicle_no, gr_no, taxable_amount, tds_amount "
-                  "FROM transactions "
-                  "WHERE (party_name = ? OR party_name LIKE ? OR party_name LIKE ? OR party_id = ? OR (account_code > 0 AND account_code = ?)) "
-                  "AND voucher_date >= ? AND voucher_date <= ? "
-                  "ORDER BY voucher_date ASC, CAST(voucher_no AS INTEGER) ASC, id ASC;";
-
-    QVariantList params = {cleanName, "%" + cleanName + "%", wildcard, partyId, legacyCode, result.effectiveFromDate, result.effectiveToDate};
+    QString sql;
+    QVariantList params;
+    if (partyId > 0 || legacyCode > 0) {
+        sql = "SELECT id, voucher_no, voucher_date, voucher_type, trans_type, opposing_account, dr_cr, amount, "
+              "invoice_no, narration, financial_year, broker_name, vehicle_no, gr_no, taxable_amount, tds_amount "
+              "FROM transactions "
+              "WHERE (party_id = ? OR (account_code > 0 AND account_code = ?)) "
+              "AND voucher_date >= ? AND voucher_date <= ? "
+              "ORDER BY voucher_date ASC, CAST(voucher_no AS INTEGER) ASC, id ASC;";
+        params = {partyId, legacyCode, result.effectiveFromDate, result.effectiveToDate};
+    } else {
+        sql = "SELECT id, voucher_no, voucher_date, voucher_type, trans_type, opposing_account, dr_cr, amount, "
+              "invoice_no, narration, financial_year, broker_name, vehicle_no, gr_no, taxable_amount, tds_amount "
+              "FROM transactions "
+              "WHERE party_name = ? COLLATE NOCASE "
+              "AND voucher_date >= ? AND voucher_date <= ? "
+              "ORDER BY voucher_date ASC, CAST(voucher_no AS INTEGER) ASC, id ASC;";
+        params = {cleanName, result.effectiveFromDate, result.effectiveToDate};
+    }
     QVariantList rows = DatabaseManager::instance().executeQuery(sql, params);
 
     for (const auto& r : rows) {

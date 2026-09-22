@@ -146,19 +146,15 @@ void AppKeyboardController::handleArrowKey(const QString& direction) {
         if (bw) {
             QTreeWidget* lt = bw->liabilitiesTree();
             QTreeWidget* at = bw->assetsTree();
-            if (direction == "Left" && lt && at) {
-                int curIdx = at->currentItem() ? at->indexOfTopLevelItem(at->currentItem()) : 0;
+            if (direction == "Left" && lt) {
                 lt->setFocus(Qt::OtherFocusReason);
-                if (lt->topLevelItemCount() > 0) {
-                    int target = qBound(0, curIdx, lt->topLevelItemCount() - 1);
-                    lt->setCurrentItem(lt->topLevelItem(target));
+                if (!lt->currentItem() && lt->topLevelItemCount() > 0) {
+                    lt->setCurrentItem(lt->topLevelItem(0));
                 }
-            } else if (direction == "Right" && at && lt) {
-                int curIdx = lt->currentItem() ? lt->indexOfTopLevelItem(lt->currentItem()) : 0;
+            } else if (direction == "Right" && at) {
                 at->setFocus(Qt::OtherFocusReason);
-                if (at->topLevelItemCount() > 0) {
-                    int target = qBound(0, curIdx, at->topLevelItemCount() - 1);
-                    at->setCurrentItem(at->topLevelItem(target));
+                if (!at->currentItem() && at->topLevelItemCount() > 0) {
+                    at->setCurrentItem(at->topLevelItem(0));
                 }
             }
         }
@@ -167,19 +163,15 @@ void AppKeyboardController::handleArrowKey(const QString& direction) {
         if (pw) {
             QTreeWidget* et = pw->expensesTree();
             QTreeWidget* it = pw->incomesTree();
-            if (direction == "Left" && et && it) {
-                int curIdx = it->currentItem() ? it->indexOfTopLevelItem(it->currentItem()) : 0;
+            if (direction == "Left" && et) {
                 et->setFocus(Qt::OtherFocusReason);
-                if (et->topLevelItemCount() > 0) {
-                    int target = qBound(0, curIdx, et->topLevelItemCount() - 1);
-                    et->setCurrentItem(et->topLevelItem(target));
+                if (!et->currentItem() && et->topLevelItemCount() > 0) {
+                    et->setCurrentItem(et->topLevelItem(0));
                 }
-            } else if (direction == "Right" && it && et) {
-                int curIdx = et->currentItem() ? et->indexOfTopLevelItem(et->currentItem()) : 0;
+            } else if (direction == "Right" && it) {
                 it->setFocus(Qt::OtherFocusReason);
-                if (it->topLevelItemCount() > 0) {
-                    int target = qBound(0, curIdx, it->topLevelItemCount() - 1);
-                    it->setCurrentItem(it->topLevelItem(target));
+                if (!it->currentItem() && it->topLevelItemCount() > 0) {
+                    it->setCurrentItem(it->topLevelItem(0));
                 }
             }
         }

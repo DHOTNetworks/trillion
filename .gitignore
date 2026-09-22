@@ -38,6 +38,9 @@ data/
 !README.md
 !THIRD_PARTY_NOTICES.md
 *.db
+*.db-shm
+*.db-wal
+*.class
 *.pdf
 *.xls
 *.xlsx

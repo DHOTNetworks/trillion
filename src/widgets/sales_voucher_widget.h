@@ -36,7 +36,7 @@ public:
     void setWorkingDate(const QString& dateStr);
 
 public slots:
-    void openDateDialog();
+    void openDateDialog(bool isInitial = false);
     void openAlterVoucherDialog();
     void loadPreviousVoucher();
     void loadNextVoucher();

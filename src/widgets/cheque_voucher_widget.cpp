@@ -380,7 +380,7 @@ void ChequeVoucherWidget::onDateChanged(const QDate& date) {
     updateFiscalYearAndVoucherNo();
 }
 
-void ChequeVoucherWidget::openDateDialog() {
+void ChequeVoucherWidget::openDateDialog(bool isInitial) {
     QString curIso = m_dateEdit ? m_dateEdit->isoDate() : QDate::currentDate().toString("yyyy-MM-dd");
     QString displayDate, isoDate;
     if (VoucherDateDialog::getVoucherDate(this, curIso, &displayDate, &isoDate)) {
@@ -388,6 +388,12 @@ void ChequeVoucherWidget::openDateDialog() {
             m_dateEdit->setIsoDate(isoDate);
             updateDayOfWeek(m_dateEdit->date());
             updateFiscalYearAndVoucherNo();
+            focusFirstRow();
+        }
+    } else {
+        if (isInitial) {
+            emit backRequested();
+        } else {
             focusFirstRow();
         }
     }
@@ -628,8 +634,8 @@ void ChequeVoucherWidget::recalculateTotals() {
     }
 }
 
-bool ChequeVoucherWidget::loadVoucherForEditing(const QVariant& vchNoOrId, const QString& /*dateHint*/) {
-    QVariantMap data = m_vouchersModel.get_cheque_voucher(vchNoOrId.toString());
+bool ChequeVoucherWidget::loadVoucherForEditing(const QVariant& vchNoOrId, const QString& dateHint) {
+    QVariantMap data = m_vouchersModel.get_cheque_voucher(vchNoOrId, dateHint);
     if (data.isEmpty()) {
         setStatusMessage("Voucher not found for alteration.", true);
         return false;
@@ -797,12 +803,7 @@ void ChequeVoucherWidget::focusFirstRow() {
 
 void ChequeVoucherWidget::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
-    if (!m_hasInitialDateOpened && !isEditMode()) {
-        m_hasInitialDateOpened = true;
-        QTimer::singleShot(50, this, &ChequeVoucherWidget::openDateDialog);
-    } else {
-        focusFirstRow();
-    }
+    focusFirstRow();
 }
 
 void ChequeVoucherWidget::keyPressEvent(QKeyEvent* event) {

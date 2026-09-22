@@ -1,6 +1,7 @@
 #include "vouchers_model.h"
 #include "../database_manager.h"
 #include "../engine/accounting_engine.h"
+#include "../engine/fiscal_year_helper.h"
 #include <QDate>
 #include <QRegularExpression>
 
@@ -215,32 +216,103 @@ bool VouchersModel::add_journal_voucher(const QString& dr_party, const QString& 
     return ok;
 }
 
-QVariantMap VouchersModel::get_voucher(const QString& vchNoOrId) {
-    QVariantList rows = DatabaseManager::instance().executeQuery(
-        "SELECT * FROM vouchers WHERE voucher_no = ? OR id = ? LIMIT 1;",
-        {vchNoOrId, vchNoOrId}
-    );
-    if (!rows.isEmpty()) return rows.first().toMap();
+QVariantMap VouchersModel::get_voucher(const QVariant& vchNoOrId, const QString& dateHint, const QString& partyHint) {
+    QString q = vchNoOrId.toString().trimmed();
+    if (q.isEmpty() && dateHint.isEmpty() && partyHint.isEmpty()) return {};
 
-    QVariantList tx = DatabaseManager::instance().executeQuery(
-        "SELECT * FROM transactions WHERE voucher_no = ? OR id = ? LIMIT 1;",
-        {vchNoOrId, vchNoOrId}
-    );
-    if (!tx.isEmpty()) return tx.first().toMap();
+    static const QRegularExpression prefixRe(QStringLiteral("^(Sale|Sales|Purc|Purchase|Pur|Jrnl|Journal|ChPt|ChRt|Pymt|Rcpt|TDS|JFrm|J-Form)[-\\s#]*"), QRegularExpression::CaseInsensitiveOption);
+    QString cleanQ = q;
+    cleanQ = cleanQ.remove(prefixRe).trimmed();
+
+    QString isoDate = FiscalYearHelper::normalizeToIso(dateHint);
+    bool isNum = false;
+    int numId = cleanQ.toInt(&isNum);
+
+    QVariantList rows;
+
+    // 0. If dateHint provided and exact voucher_no matches on that date
+    if (!isoDate.isEmpty() && (!q.isEmpty() || !cleanQ.isEmpty())) {
+        rows = DatabaseManager::instance().executeQuery(
+            "SELECT * FROM vouchers WHERE (voucher_no = ? OR voucher_no = ?) AND voucher_date = ? ORDER BY id DESC LIMIT 1;",
+            {q, cleanQ, isoDate}
+        );
+        if (rows.isEmpty()) {
+            rows = DatabaseManager::instance().executeQuery(
+                "SELECT * FROM transactions WHERE (voucher_no = ? OR voucher_no = ?) AND voucher_date = ? ORDER BY id DESC LIMIT 1;",
+                {q, cleanQ, isoDate}
+            );
+        }
+    }
+
+    // 0b. If dateHint provided and matches by Financial Year
+    if (rows.isEmpty() && !isoDate.isEmpty() && (!q.isEmpty() || !cleanQ.isEmpty())) {
+        FiscalYearInfo fy = FiscalYearHelper::getFiscalYearForDate(isoDate);
+        if (fy.isValid()) {
+            rows = DatabaseManager::instance().executeQuery(
+                "SELECT * FROM vouchers WHERE (voucher_no = ? OR voucher_no = ?) AND (financial_year = ? OR (voucher_date >= ? AND voucher_date <= ?)) ORDER BY id DESC LIMIT 1;",
+                {q, cleanQ, fy.name, fy.startDate, fy.endDate}
+            );
+            if (rows.isEmpty()) {
+                rows = DatabaseManager::instance().executeQuery(
+                    "SELECT * FROM transactions WHERE (voucher_no = ? OR voucher_no = ?) AND (financial_year = ? OR (voucher_date >= ? AND voucher_date <= ?)) ORDER BY id DESC LIMIT 1;",
+                    {q, cleanQ, fy.name, fy.startDate, fy.endDate}
+                );
+            }
+        }
+    }
+
+    // 1. If exact numeric ID in vouchers or transactions
+    if (rows.isEmpty() && isNum && numId > 0) {
+        rows = DatabaseManager::instance().executeQuery(
+            "SELECT * FROM vouchers WHERE id = ? LIMIT 1;",
+            {numId}
+        );
+        if (rows.isEmpty()) {
+            rows = DatabaseManager::instance().executeQuery(
+                "SELECT * FROM transactions WHERE id = ? LIMIT 1;",
+                {numId}
+            );
+        }
+    }
+
+    // 2. Lookup by voucher_no fallback
+    if (rows.isEmpty() && (!q.isEmpty() || !cleanQ.isEmpty())) {
+        rows = DatabaseManager::instance().executeQuery(
+            "SELECT * FROM vouchers WHERE voucher_no = ? OR voucher_no = ? ORDER BY voucher_date DESC, id DESC LIMIT 1;",
+            {q, cleanQ}
+        );
+        if (rows.isEmpty()) {
+            rows = DatabaseManager::instance().executeQuery(
+                "SELECT * FROM transactions WHERE voucher_no = ? OR voucher_no = ? ORDER BY voucher_date DESC, id DESC LIMIT 1;",
+                {q, cleanQ}
+            );
+        }
+    }
+
+    if (!rows.isEmpty()) return rows.first().toMap();
     return {};
 }
 
-QVariantMap VouchersModel::get_cheque_voucher(const QString& vchNoOrId) {
-    QVariantMap v = get_voucher(vchNoOrId);
+QVariantMap VouchersModel::get_cheque_voucher(const QVariant& vchNoOrId, const QString& dateHint, const QString& partyHint) {
+    QVariantMap v = get_voucher(vchNoOrId, dateHint, partyHint);
     if (v.isEmpty()) return {};
 
     QString vNo = v.value("voucher_no").toString();
     QString vDate = v.value("voucher_date").toString();
 
-    QVariantList txRows = DatabaseManager::instance().executeQuery(
-        "SELECT * FROM transactions WHERE voucher_no = ? AND voucher_date = ? ORDER BY id ASC;",
-        {vNo, vDate}
-    );
+    QVariantList txRows;
+    if (!vDate.isEmpty()) {
+        txRows = DatabaseManager::instance().executeQuery(
+            "SELECT * FROM transactions WHERE voucher_no = ? AND voucher_date = ? ORDER BY id ASC;",
+            {vNo, vDate}
+        );
+    }
+    if (txRows.isEmpty()) {
+        txRows = DatabaseManager::instance().executeQuery(
+            "SELECT * FROM transactions WHERE voucher_no = ? ORDER BY id ASC;",
+            {vNo}
+        );
+    }
 
     QVariantList items;
     if (!txRows.isEmpty()) {
@@ -282,17 +354,26 @@ QVariantMap VouchersModel::get_cheque_voucher(const QString& vchNoOrId) {
     return v;
 }
 
-QVariantMap VouchersModel::get_journal_voucher(const QString& vchNoOrId) {
-    QVariantMap v = get_voucher(vchNoOrId);
+QVariantMap VouchersModel::get_journal_voucher(const QVariant& vchNoOrId, const QString& dateHint, const QString& partyHint) {
+    QVariantMap v = get_voucher(vchNoOrId, dateHint, partyHint);
     if (v.isEmpty()) return {};
 
     QString vNo = v.value("voucher_no").toString();
     QString vDate = v.value("voucher_date").toString();
 
-    QVariantList txRows = DatabaseManager::instance().executeQuery(
-        "SELECT * FROM transactions WHERE voucher_no = ? AND voucher_date = ? ORDER BY id ASC;",
-        {vNo, vDate}
-    );
+    QVariantList txRows;
+    if (!vDate.isEmpty()) {
+        txRows = DatabaseManager::instance().executeQuery(
+            "SELECT * FROM transactions WHERE voucher_no = ? AND voucher_date = ? ORDER BY id ASC;",
+            {vNo, vDate}
+        );
+    }
+    if (txRows.isEmpty()) {
+        txRows = DatabaseManager::instance().executeQuery(
+            "SELECT * FROM transactions WHERE voucher_no = ? ORDER BY id ASC;",
+            {vNo}
+        );
+    }
 
     QVariantList items;
     if (!txRows.isEmpty()) {

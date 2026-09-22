@@ -277,6 +277,10 @@ T.ScrollView {
                                         salesListView.forceActiveFocus()
                                         if (salesListView.currentIndex < 0 && salesListView.count > 0) salesListView.currentIndex = 0
                                     }
+                                    Keys.onEscapePressed: function(event) {
+                                        event.accepted = true
+                                        root.cancelRequested()
+                                    }
                                 }
 
                                 Text {
@@ -352,6 +356,10 @@ T.ScrollView {
                             var it = salesRegisterCtrl.model.get(currentIndex)
                             if (it) root.openInvoice(it.invNoVal, it.vchNoVal, it.id, it.dateVal)
                         }
+                    }
+                    Keys.onEscapePressed: function(event) {
+                        event.accepted = true
+                        root.cancelRequested()
                     }
                     Keys.onUpPressed: function(event) {
                         event.accepted = true

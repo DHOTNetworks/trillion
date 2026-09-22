@@ -814,88 +814,6 @@ void DatabaseManager::ensureTablesExist() {
     executeNonQuery("CREATE INDEX IF NOT EXISTS idx_dcn_invoice ON debit_credit_notes(original_invoice_no);");
     executeNonQuery("CREATE INDEX IF NOT EXISTS idx_dcn_party ON debit_credit_notes(party_name);");
 
-    auto addColumnIfNotExists = [this](const QString& table, const QString& column, const QString& type) {
-        QVariantList cols = executeQuery(QString("PRAGMA table_info(%1);").arg(table));
-        for (const auto& c : cols) {
-            if (c.toMap().value("name").toString().compare(column, Qt::CaseInsensitive) == 0) {
-                return;
-            }
-        }
-        executeNonQuery(QString("ALTER TABLE %1 ADD COLUMN %2 %3;").arg(table, column, type));
-    };
-
-    // Ensure columns exist on existing databases
-    addColumnIfNotExists("sales_invoices", "market_type", "TEXT DEFAULT 'Market Type (With Stock)'");
-    addColumnIfNotExists("sales_invoices", "due_days", "INTEGER DEFAULT 0");
-    addColumnIfNotExists("sales_invoices", "tax_status", "TEXT DEFAULT 'GST / Exempt'");
-    addColumnIfNotExists("sales_invoices", "challan_no", "TEXT");
-    addColumnIfNotExists("sales_invoices", "freight_charges", "REAL DEFAULT 0.0");
-    addColumnIfNotExists("sales_invoices", "tcs_amount", "REAL DEFAULT 0.0");
-    addColumnIfNotExists("sales_invoices", "tcs_rate", "REAL DEFAULT 0.0");
-    addColumnIfNotExists("sales_invoices", "place_of_supply", "TEXT");
-    addColumnIfNotExists("sales_invoice_items", "grade", "TEXT DEFAULT ''");
-    executeNonQuery(
-        "UPDATE sales_invoice_items "
-        "SET grade = (SELECT grade FROM sales_invoices WHERE sales_invoices.id = sales_invoice_items.invoice_id) "
-        "WHERE (grade IS NULL OR grade = '') "
-        "  AND EXISTS (SELECT 1 FROM sales_invoices WHERE sales_invoices.id = sales_invoice_items.invoice_id AND sales_invoices.grade != '');"
-    );
-
-    addColumnIfNotExists("purchase_invoices", "market_type", "TEXT DEFAULT 'Market Type (With Stock)'");
-    addColumnIfNotExists("purchase_invoices", "due_days", "INTEGER DEFAULT 0");
-    addColumnIfNotExists("purchase_invoices", "tax_status", "TEXT DEFAULT 'GST / Exempt'");
-    addColumnIfNotExists("purchase_invoices", "challan_no", "TEXT");
-    addColumnIfNotExists("purchase_invoices", "freight_charges", "REAL DEFAULT 0.0");
-    addColumnIfNotExists("purchase_invoices", "tcs_amount", "REAL DEFAULT 0.0");
-    addColumnIfNotExists("purchase_invoices", "tcs_rate", "REAL DEFAULT 0.0");
-    addColumnIfNotExists("purchase_invoices", "place_of_supply", "TEXT");
-    addColumnIfNotExists("purchase_invoice_items", "grade", "TEXT DEFAULT ''");
-    executeNonQuery(
-        "UPDATE purchase_invoice_items "
-        "SET grade = (SELECT grade FROM purchase_invoices WHERE purchase_invoices.id = purchase_invoice_items.invoice_id) "
-        "WHERE (grade IS NULL OR grade = '') "
-        "  AND EXISTS (SELECT 1 FROM purchase_invoices WHERE purchase_invoices.id = purchase_invoice_items.invoice_id AND purchase_invoices.grade != '');"
-    );
-
-    addColumnIfNotExists("vouchers", "due_days", "INTEGER DEFAULT 0");
-    addColumnIfNotExists("vouchers", "market_type", "TEXT");
-    addColumnIfNotExists("vouchers", "tax_status", "TEXT");
-    addColumnIfNotExists("vouchers", "place_of_supply", "TEXT");
-    addColumnIfNotExists("vouchers", "challan_no", "TEXT");
-
-    addColumnIfNotExists("transactions", "due_days", "INTEGER DEFAULT 0");
-    addColumnIfNotExists("transactions", "place_of_supply", "TEXT");
-    addColumnIfNotExists("transactions", "market_type", "TEXT");
-
-    // Parties Master Bahi-Khata attributes
-    addColumnIfNotExists("parties", "party_station", "TEXT");
-    addColumnIfNotExists("parties", "use_routes", "INTEGER DEFAULT 0");
-    addColumnIfNotExists("parties", "shop_no", "TEXT");
-    addColumnIfNotExists("parties", "tin", "TEXT");
-    addColumnIfNotExists("parties", "urn", "TEXT");
-    addColumnIfNotExists("parties", "stock_not_calc", "INTEGER DEFAULT 0");
-    addColumnIfNotExists("parties", "use_credit_limit", "INTEGER DEFAULT 1");
-    addColumnIfNotExists("parties", "show_date_totals", "INTEGER DEFAULT 0");
-    addColumnIfNotExists("parties", "calc_direct_expense", "INTEGER DEFAULT 0");
-    addColumnIfNotExists("parties", "set_title_case", "INTEGER DEFAULT 1");
-    addColumnIfNotExists("parties", "ledger_open_from", "TEXT");
-    addColumnIfNotExists("parties", "books_start_from", "TEXT DEFAULT '01-04-2023'");
-
-    addColumnIfNotExists("jform_vouchers", "vehicle_no", "TEXT");
-    addColumnIfNotExists("jform_vouchers", "driver_name", "TEXT");
-    addColumnIfNotExists("jform_vouchers", "gate_pass_no", "TEXT");
-    addColumnIfNotExists("jform_vouchers", "eway_bill_no", "TEXT");
-    addColumnIfNotExists("jform_vouchers", "bill_time", "TEXT");
-    addColumnIfNotExists("jform_vouchers", "sauda_date", "TEXT");
-    addColumnIfNotExists("jform_vouchers", "mandi_place", "TEXT");
-    addColumnIfNotExists("jform_vouchers", "procurement_mode", "TEXT");
-    addColumnIfNotExists("jform_vouchers", "lot_no", "TEXT");
-    addColumnIfNotExists("jform_vouchers", "grade", "TEXT");
-    addColumnIfNotExists("jform_vouchers", "transport_name", "TEXT");
-    addColumnIfNotExists("jform_vouchers", "broker_name", "TEXT");
-    addColumnIfNotExists("jform_vouchers", "challan_no", "TEXT");
-    addColumnIfNotExists("jform_vouchers", "kanda_weight", "TEXT");
-
     // 7d. J-Form Voucher Line Items
     executeNonQuery(
         "CREATE TABLE IF NOT EXISTS jform_voucher_items ("
@@ -911,6 +829,71 @@ void DatabaseManager::ensureTablesExist() {
         "rate REAL DEFAULT 0.0,"
         "amount REAL DEFAULT 0.0,"
         "FOREIGN KEY (voucher_id) REFERENCES jform_vouchers(id) ON DELETE CASCADE"
+        ");"
+    );
+
+    // 7d-2. I-Form Mandi Buyer Issue Vouchers
+    executeNonQuery(
+        "CREATE TABLE IF NOT EXISTS iform_vouchers ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "fy_id INTEGER,"
+        "financial_year TEXT DEFAULT 'FY 2025-26',"
+        "voucher_no INTEGER NOT NULL,"
+        "voucher_date TEXT NOT NULL,"
+        "iform_no TEXT NOT NULL,"
+        "buyer_id INTEGER,"
+        "buyer_name TEXT NOT NULL,"
+        "broker_name TEXT,"
+        "due_days INTEGER DEFAULT 0,"
+        "vehicle_no TEXT,"
+        "driver_name TEXT,"
+        "gr_no TEXT,"
+        "gate_pass_no TEXT,"
+        "total_bags INTEGER DEFAULT 0,"
+        "total_weight REAL DEFAULT 0.0,"
+        "goods_amount REAL DEFAULT 0.0,"
+        "dami_rate REAL DEFAULT 2.5,"
+        "dami_amount REAL DEFAULT 0.0,"
+        "mandi_fee_rate REAL DEFAULT 2.0,"
+        "mandi_fee_amount REAL DEFAULT 0.0,"
+        "hrdf_rate REAL DEFAULT 0.5,"
+        "hrdf_amount REAL DEFAULT 0.0,"
+        "labour_amount REAL DEFAULT 0.0,"
+        "taxable_amount REAL DEFAULT 0.0,"
+        "tax_amount REAL DEFAULT 0.0,"
+        "round_off REAL DEFAULT 0.0,"
+        "grand_total REAL DEFAULT 0.0,"
+        "narration TEXT,"
+        "created_at DATETIME DEFAULT CURRENT_TIMESTAMP,"
+        "FOREIGN KEY (buyer_id) REFERENCES parties(id),"
+        "FOREIGN KEY (fy_id) REFERENCES financial_years(id)"
+        ");"
+    );
+
+    // 7d-3. I-Form Voucher Line Items
+    executeNonQuery(
+        "CREATE TABLE IF NOT EXISTS iform_voucher_items ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "voucher_id INTEGER NOT NULL,"
+        "voucher_no INTEGER,"
+        "item_id INTEGER,"
+        "item_name TEXT NOT NULL,"
+        "bags INTEGER DEFAULT 0,"
+        "loose_weight REAL DEFAULT 0.0,"
+        "packing REAL DEFAULT 0.500,"
+        "weight REAL DEFAULT 0.0,"
+        "rate REAL DEFAULT 0.0,"
+        "amount REAL DEFAULT 0.0,"
+        "dami_rate REAL DEFAULT 2.5,"
+        "dami_amount REAL DEFAULT 0.0,"
+        "mandi_fee_rate REAL DEFAULT 2.0,"
+        "mandi_fee_amount REAL DEFAULT 0.0,"
+        "hrdf_rate REAL DEFAULT 0.5,"
+        "hrdf_amount REAL DEFAULT 0.0,"
+        "labour_amount REAL DEFAULT 0.0,"
+        "tax_rate REAL DEFAULT 0.0,"
+        "tax_amount REAL DEFAULT 0.0,"
+        "FOREIGN KEY (voucher_id) REFERENCES iform_vouchers(id) ON DELETE CASCADE"
         ");"
     );
 
@@ -1042,9 +1025,11 @@ void DatabaseManager::ensureTablesExist() {
         "FOREIGN KEY (fy_id) REFERENCES financial_years(id)"
         ");"
     );
-    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_transactions_party ON transactions(party_name, voucher_date);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_transactions_party_name ON transactions(party_name, voucher_date);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_transactions_party_id_date ON transactions(party_id, voucher_date);");
     executeNonQuery("CREATE INDEX IF NOT EXISTS idx_transactions_account_code ON transactions(account_code, voucher_date);");
     executeNonQuery("CREATE INDEX IF NOT EXISTS idx_transactions_voucher ON transactions(voucher_no, voucher_type, voucher_date);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_transactions_voucher_key ON transactions(trans_type, voucher_no, voucher_date);");
     executeNonQuery("CREATE INDEX IF NOT EXISTS idx_transactions_fy ON transactions(financial_year);");
 
     // 9. Account Groups Table
@@ -1150,6 +1135,100 @@ void DatabaseManager::ensureTablesExist() {
         ");"
     );
 
+    // 13. Bank Narration Aliases & Mapping Memory
+    executeNonQuery(
+        "CREATE TABLE IF NOT EXISTS bank_narration_aliases ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "bank_code TEXT DEFAULT 'CNRB',"
+        "narration_pattern TEXT UNIQUE COLLATE NOCASE,"
+        "mapped_party_name TEXT NOT NULL,"
+        "voucher_type TEXT,"
+        "created_at TEXT"
+        ");"
+    );
+
+    auto addColumnIfNotExists = [this](const QString& table, const QString& column, const QString& type) {
+        QVariantList cols = executeQuery(QString("PRAGMA table_info(%1);").arg(table));
+        for (const auto& c : cols) {
+            if (c.toMap().value("name").toString().compare(column, Qt::CaseInsensitive) == 0) {
+                return;
+            }
+        }
+        executeNonQuery(QString("ALTER TABLE %1 ADD COLUMN %2 %3;").arg(table, column, type));
+    };
+
+    // Ensure columns exist on existing databases
+    addColumnIfNotExists("sales_invoices", "market_type", "TEXT DEFAULT 'Market Type (With Stock)'");
+    addColumnIfNotExists("sales_invoices", "due_days", "INTEGER DEFAULT 0");
+    addColumnIfNotExists("sales_invoices", "tax_status", "TEXT DEFAULT 'GST / Exempt'");
+    addColumnIfNotExists("sales_invoices", "challan_no", "TEXT");
+    addColumnIfNotExists("sales_invoices", "freight_charges", "REAL DEFAULT 0.0");
+    addColumnIfNotExists("sales_invoices", "tcs_amount", "REAL DEFAULT 0.0");
+    addColumnIfNotExists("sales_invoices", "tcs_rate", "REAL DEFAULT 0.0");
+    addColumnIfNotExists("sales_invoices", "place_of_supply", "TEXT");
+    addColumnIfNotExists("sales_invoice_items", "grade", "TEXT DEFAULT ''");
+    executeNonQuery(
+        "UPDATE sales_invoice_items "
+        "SET grade = (SELECT grade FROM sales_invoices WHERE sales_invoices.id = sales_invoice_items.invoice_id) "
+        "WHERE (grade IS NULL OR grade = '') "
+        "  AND EXISTS (SELECT 1 FROM sales_invoices WHERE sales_invoices.id = sales_invoice_items.invoice_id AND sales_invoices.grade != '');"
+    );
+
+    addColumnIfNotExists("purchase_invoices", "market_type", "TEXT DEFAULT 'Market Type (With Stock)'");
+    addColumnIfNotExists("purchase_invoices", "due_days", "INTEGER DEFAULT 0");
+    addColumnIfNotExists("purchase_invoices", "tax_status", "TEXT DEFAULT 'GST / Exempt'");
+    addColumnIfNotExists("purchase_invoices", "challan_no", "TEXT");
+    addColumnIfNotExists("purchase_invoices", "freight_charges", "REAL DEFAULT 0.0");
+    addColumnIfNotExists("purchase_invoices", "tcs_amount", "REAL DEFAULT 0.0");
+    addColumnIfNotExists("purchase_invoices", "tcs_rate", "REAL DEFAULT 0.0");
+    addColumnIfNotExists("purchase_invoices", "place_of_supply", "TEXT");
+    addColumnIfNotExists("purchase_invoice_items", "grade", "TEXT DEFAULT ''");
+    executeNonQuery(
+        "UPDATE purchase_invoice_items "
+        "SET grade = (SELECT grade FROM purchase_invoices WHERE purchase_invoices.id = purchase_invoice_items.invoice_id) "
+        "WHERE (grade IS NULL OR grade = '') "
+        "  AND EXISTS (SELECT 1 FROM purchase_invoices WHERE purchase_invoices.id = purchase_invoice_items.invoice_id AND purchase_invoices.grade != '');"
+    );
+
+    addColumnIfNotExists("vouchers", "due_days", "INTEGER DEFAULT 0");
+    addColumnIfNotExists("vouchers", "market_type", "TEXT");
+    addColumnIfNotExists("vouchers", "tax_status", "TEXT");
+    addColumnIfNotExists("vouchers", "place_of_supply", "TEXT");
+    addColumnIfNotExists("vouchers", "challan_no", "TEXT");
+
+    addColumnIfNotExists("transactions", "due_days", "INTEGER DEFAULT 0");
+    addColumnIfNotExists("transactions", "place_of_supply", "TEXT");
+    addColumnIfNotExists("transactions", "market_type", "TEXT");
+
+    // Parties Master Bahi-Khata attributes
+    addColumnIfNotExists("parties", "party_station", "TEXT");
+    addColumnIfNotExists("parties", "use_routes", "INTEGER DEFAULT 0");
+    addColumnIfNotExists("parties", "shop_no", "TEXT");
+    addColumnIfNotExists("parties", "tin", "TEXT");
+    addColumnIfNotExists("parties", "urn", "TEXT");
+    addColumnIfNotExists("parties", "stock_not_calc", "INTEGER DEFAULT 0");
+    addColumnIfNotExists("parties", "use_credit_limit", "INTEGER DEFAULT 1");
+    addColumnIfNotExists("parties", "show_date_totals", "INTEGER DEFAULT 0");
+    addColumnIfNotExists("parties", "calc_direct_expense", "INTEGER DEFAULT 0");
+    addColumnIfNotExists("parties", "set_title_case", "INTEGER DEFAULT 1");
+    addColumnIfNotExists("parties", "ledger_open_from", "TEXT");
+    addColumnIfNotExists("parties", "books_start_from", "TEXT DEFAULT '01-04-2023'");
+
+    addColumnIfNotExists("jform_vouchers", "vehicle_no", "TEXT");
+    addColumnIfNotExists("jform_vouchers", "driver_name", "TEXT");
+    addColumnIfNotExists("jform_vouchers", "gate_pass_no", "TEXT");
+    addColumnIfNotExists("jform_vouchers", "eway_bill_no", "TEXT");
+    addColumnIfNotExists("jform_vouchers", "bill_time", "TEXT");
+    addColumnIfNotExists("jform_vouchers", "sauda_date", "TEXT");
+    addColumnIfNotExists("jform_vouchers", "mandi_place", "TEXT");
+    addColumnIfNotExists("jform_vouchers", "procurement_mode", "TEXT");
+    addColumnIfNotExists("jform_vouchers", "lot_no", "TEXT");
+    addColumnIfNotExists("jform_vouchers", "grade", "TEXT");
+    addColumnIfNotExists("jform_vouchers", "transport_name", "TEXT");
+    addColumnIfNotExists("jform_vouchers", "broker_name", "TEXT");
+    addColumnIfNotExists("jform_vouchers", "challan_no", "TEXT");
+    addColumnIfNotExists("jform_vouchers", "kanda_weight", "TEXT");
+
     // Ensure all Stock Item columns exist for backward compatibility
     addColumnIfNotExists("stock_items", "trading_group", "TEXT");
     addColumnIfNotExists("stock_items", "group_code", "INTEGER");
@@ -1208,16 +1287,4 @@ void DatabaseManager::ensureTablesExist() {
     addColumnIfNotExists("stock_items", "dami_ledger_id", "INTEGER");
     addColumnIfNotExists("stock_items", "market_fee_ledger_id", "INTEGER");
     addColumnIfNotExists("stock_items", "hrdf_ledger_id", "INTEGER");
-
-    // 13. Bank Narration Aliases & Mapping Memory
-    executeNonQuery(
-        "CREATE TABLE IF NOT EXISTS bank_narration_aliases ("
-        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
-        "bank_code TEXT DEFAULT 'CNRB',"
-        "narration_pattern TEXT UNIQUE COLLATE NOCASE,"
-        "mapped_party_name TEXT NOT NULL,"
-        "voucher_type TEXT,"
-        "created_at TEXT"
-        ");"
-    );
 }

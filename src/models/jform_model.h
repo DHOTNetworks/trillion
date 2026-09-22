@@ -16,6 +16,8 @@ public:
     Q_INVOKABLE QVariantMap get_zimidar_balance(int zimidarId);
     Q_INVOKABLE bool save_jform_voucher(const QVariantMap& data, const QVariantList& items);
     Q_INVOKABLE QVariantMap get_jform_voucher(const QVariant& voucherIdOrNo);
+    Q_INVOKABLE QVariantMap get_previous_jform_voucher(int currentId = 0, const QString& currentJfOrVchNo = "");
+    Q_INVOKABLE QVariantMap get_next_jform_voucher(int currentId = 0, const QString& currentJfOrVchNo = "");
     Q_INVOKABLE QVariantList get_jform_register(const QString& fromDate = "", const QString& toDate = "");
     Q_INVOKABLE bool delete_jform_voucher(int voucherId);
 

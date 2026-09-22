@@ -77,8 +77,15 @@ T.ApplicationWindow {
     property int lastViewedStatementIndex: 0
 
     function navigateToView(targetIndex) {
+        if (targetIndex === 0) {
+            window.navigationHistory = []
+            window.currentViewIndex = 0
+            return
+        }
         if (window.currentViewIndex !== targetIndex) {
-            if (window.currentViewIndex !== 22) {
+            if (window.currentViewIndex === 0) {
+                window.navigationHistory = [0]
+            } else if (window.currentViewIndex !== 22) {
                 window.navigationHistory.push(window.currentViewIndex)
             }
             window.currentViewIndex = targetIndex
@@ -88,6 +95,12 @@ T.ApplicationWindow {
     function navigateBack() {
         if (window.navigationHistory.length > 0) {
             var prevIndex = window.navigationHistory.pop()
+            while (prevIndex === window.currentViewIndex && window.navigationHistory.length > 0) {
+                prevIndex = window.navigationHistory.pop()
+            }
+            if (prevIndex === window.currentViewIndex) {
+                prevIndex = 0
+            }
             window.currentViewIndex = prevIndex
         } else {
             window.currentViewIndex = 0
@@ -334,8 +347,8 @@ T.ApplicationWindow {
                         case 0: return "views/DashboardView.qml"
                         case 1: return "views/PaddyProcurementView.qml"
                         case 2: return "views/MillingView.qml"
-                        case 3: return "views/SalesInvoicingView.qml"
-                        case 4: return "views/VoucherLedgerView.qml"
+                        case 3: return "views/SalesRegisterView.qml"
+                        case 4: return "views/PurchaseRegisterView.qml"
                         case 5: return "views/ReportsView.qml"
                         case 6: return "views/NewLedgerView.qml"
                         case 7: return "views/ModifyLedgerView.qml"
@@ -349,9 +362,9 @@ T.ApplicationWindow {
                         case 15: return ""
                         case 16: return ""
                         case 17: return ""
-                        case 18: return "views/MillingVoucherView.qml"
-                        case 19: return "views/MillingStatementView.qml"
-                        case 20: return "views/SalesRegisterView.qml"
+                        case 18: return ""
+                        case 19: return ""
+                        case 20: return ""
                         case 21: return "views/PurchaseRegisterView.qml"
                         case 22: return ""
                         case 23: return "views/JFormVoucherView.qml"
@@ -360,6 +373,10 @@ T.ApplicationWindow {
                         case 26: return "views/BankStatementImportView.qml"
                         case 27: return "views/TransportDispatchRegisterView.qml"
                         case 28: return "views/DebitCreditNoteView.qml"
+                        case 31: return "views/MillingVoucherView.qml"
+                        case 32: return "views/MillingStatementView.qml"
+                        case 33: return "views/SalesRegisterView.qml"
+                        case 34: return "views/PurchaseRegisterView.qml"
                         default: return "views/DashboardView.qml"
                     }
                 }
@@ -404,8 +421,8 @@ T.ApplicationWindow {
                         }
                     }
 
-                    // 18: MillingVoucherView
-                    if (window.currentViewIndex === 18 && item) {
+                    // 31: MillingVoucherView
+                    if ((window.currentViewIndex === 31 || window.currentViewIndex === 18) && item) {
                         if (window.pendingEditVoucherId > 0 || window.pendingEditVoucherNo !== "") {
                             var millIdOrNo = window.pendingEditVoucherId > 0 ? window.pendingEditVoucherId : window.pendingEditVoucherNo
                             window.pendingEditVoucherId = 0

@@ -137,6 +137,7 @@ void DashboardWidget::setupUi() {
     // Open Firm Button (Alt+F1)
     m_openFirmBtn = new QPushButton("Open Firm  [Alt+F1]", this);
     m_openFirmBtn->setFixedHeight(36);
+    m_openFirmBtn->setFocusPolicy(Qt::NoFocus);
     m_openFirmBtn->setCursor(Qt::PointingHandCursor);
     m_openFirmBtn->setStyleSheet(
         "QPushButton { background-color: #FFFFFF; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 0px 14px; font-weight: 700; color: #334155; font-size: 12px; }"
@@ -148,6 +149,7 @@ void DashboardWidget::setupUi() {
     // Sync Bahi-Khata Data Button
     m_syncBtn = new QPushButton("Sync Data", this);
     m_syncBtn->setFixedHeight(36);
+    m_syncBtn->setFocusPolicy(Qt::NoFocus);
     m_syncBtn->setCursor(Qt::PointingHandCursor);
     m_syncBtn->setStyleSheet(
         "QPushButton { background-color: #EFF6FF; border: 1.5px solid #3B82F6; border-radius: 6px; padding: 0px 14px; font-weight: 700; color: #1D4ED8; font-size: 12px; }"
@@ -159,6 +161,7 @@ void DashboardWidget::setupUi() {
     // Period Button
     m_periodBtn = new QPushButton(this);
     m_periodBtn->setFixedHeight(36);
+    m_periodBtn->setFocusPolicy(Qt::NoFocus);
     m_periodBtn->setCursor(Qt::PointingHandCursor);
     m_periodBtn->setStyleSheet(
         "QPushButton { background-color: #F0FDF4; border: 1.5px solid #16A34A; border-radius: 6px; padding: 0px 14px; font-weight: 700; color: #15803D; font-size: 12px; }"
@@ -170,6 +173,7 @@ void DashboardWidget::setupUi() {
     // New Paddy Slip Button (with F2 badge)
     m_newPaddyBtn = new QPushButton("New Paddy Slip  [F2]", this);
     m_newPaddyBtn->setFixedHeight(36);
+    m_newPaddyBtn->setFocusPolicy(Qt::NoFocus);
     m_newPaddyBtn->setCursor(Qt::PointingHandCursor);
     m_newPaddyBtn->setStyleSheet(
         "QPushButton { background-color: #16A34A; border: none; border-radius: 6px; padding: 0px 16px; font-weight: 700; color: #FFFFFF; font-size: 12px; }"
@@ -181,6 +185,7 @@ void DashboardWidget::setupUi() {
     // New Invoice Button
     m_newInvoiceBtn = new QPushButton("New Invoice", this);
     m_newInvoiceBtn->setFixedHeight(36);
+    m_newInvoiceBtn->setFocusPolicy(Qt::NoFocus);
     m_newInvoiceBtn->setCursor(Qt::PointingHandCursor);
     m_newInvoiceBtn->setStyleSheet(
         "QPushButton { background-color: #2563EB; border: none; border-radius: 6px; padding: 0px 18px; font-weight: 700; color: #FFFFFF; font-size: 12px; }"
@@ -532,7 +537,7 @@ void DashboardWidget::openAddVoucherMenu(int initialIndex) {
         {"1. Sales Voucher Entry (Tax Invoice)", "F8", 14},
         {"2. Purchase Voucher Entry (Purchase Bill)", "F9", 15},
         {"3. Paddy Procurement Slip (Kachha / Mandi)", "F2", 1},
-        {"4. Milling Production Entry", "", 18},
+        {"4. Milling Production Entry", "", 31},
         {"5. Cheque / Bank Payment Voucher", "F3", 16},
         {"6. Journal Voucher Entry", "F5", 17}
     };
@@ -552,11 +557,14 @@ void DashboardWidget::openOtherVoucherMenu(int initialIndex) {
     m_selectedMenuIndex = 3;
     updateSelection(3);
     QVector<DashboardSubmenuDialog::SubmenuItem> items = {
-        {"1. J-Form Mandi Procurement Voucher", "F11", 23},
-        {"2. TDS Deduction Voucher Entry", "F12", 24},
-        {"3. Bank Statement Auto-Import & Reconciliation", "Ctrl+B", 26},
-        {"4. Transport Dispatch & Gate Pass Register", "Alt+T", 27},
-        {"5. GST Debit Notes & Credit Notes", "Alt+D", 28}
+        {"1. J-Form Mandi Procurement Voucher", "F11", 18},
+        {"2. I-Form Mandi Buyer Issue Voucher", "Alt+I", 19},
+        {"3. Mandi Form M & Statutory Returns (HSAMB)", "Alt+M", 20},
+        {"4. TDS Deduction Voucher Entry", "F12", 24},
+        {"5. Bank Statement Auto-Import & Reconciliation", "Ctrl+B", 26},
+        {"6. Transport Dispatch & Gate Pass Register", "Alt+T", 27},
+        {"7. GST Debit Notes & Credit Notes", "Alt+D", 28},
+        {"8. GSTR-2A Matching & ITC Reconciliation", "Alt+G", 34}
     };
     DashboardSubmenuDialog dlg("OTHER VOUCHERS MENU", "#7C3AED", items, initialIndex, this);
     if (dlg.exec() == QDialog::Accepted && dlg.selectedViewIndex() >= 0) {
@@ -574,12 +582,15 @@ void DashboardWidget::openReportsMenu(int initialIndex) {
     m_selectedMenuIndex = 4;
     updateSelection(4);
     QVector<DashboardSubmenuDialog::SubmenuItem> items = {
-        {"1. Sales Register & Summary", "", 20},
-        {"2. Purchase Register & Summary", "", 21},
-        {"3. Milling Production Statement", "", 19},
-        {"4. Balance Sheet (Final Accounts)", "F7", 29},
-        {"5. Profit & Loss Statement (Trading & P&L)", "F6", 30},
-        {"6. Interest Calculation & Register", "", 25}
+        {"1. Day Book (Daily Audit & Transaction Register)", "Alt+D", 33},
+        {"2. GST Compliance Dashboard (GSTR-1, 2A Match, 3B)", "Alt+G", 34},
+        {"3. Mandi Form M & Statutory Returns (HSAMB)", "Alt+M", 20},
+        {"4. Sales Register & Summary", "", 3},
+        {"5. Purchase Register & Summary", "", 4},
+        {"6. Milling Production Statement", "", 32},
+        {"7. Balance Sheet (Final Accounts)", "F7", 29},
+        {"8. Profit & Loss Statement (Trading & P&L)", "F6", 30},
+        {"9. Interest Calculation & Register (Aank / Rokka)", "", 25}
     };
     DashboardSubmenuDialog dlg("REPORTS & REGISTERS MENU", "#059669", items, initialIndex, this);
     if (dlg.exec() == QDialog::Accepted && dlg.selectedViewIndex() >= 0) {
@@ -671,6 +682,11 @@ void DashboardWidget::showEvent(QShowEvent* event) {
         m_selectedMenuIndex = 0;
         updateSelection(0);
     }
+}
+
+void DashboardWidget::focusInEvent(QFocusEvent* event) {
+    QWidget::focusInEvent(event);
+    updateSelection(m_selectedMenuIndex);
 }
 
 void DashboardWidget::keyPressEvent(QKeyEvent* event) {

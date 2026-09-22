@@ -14,6 +14,11 @@
 #include "journal_voucher_widget.h"
 #include "new_ledger_widget.h"
 #include "modify_ledger_widget.h"
+#include "jform_voucher_widget.h"
+#include "iform_voucher_widget.h"
+#include "mandi_reports_widget.h"
+#include "day_book_widget.h"
+#include "gstr_reports_widget.h"
 #include "../models/ledger_statement_model.h"
 #include "../models/balance_sheet_controller.h"
 #include "../models/profit_loss_controller.h"
@@ -47,6 +52,11 @@ public:
     JournalVoucherWidget* journalVoucherWidget() const { return m_journalVoucherWidget; }
     NewLedgerWidget* newLedgerWidget() const { return m_newLedgerWidget; }
     ModifyLedgerWidget* modifyLedgerWidget() const { return m_modifyLedgerWidget; }
+    JFormVoucherWidget* jformVoucherWidget() const { return m_jformVoucherWidget; }
+    IFormVoucherWidget* iformVoucherWidget() const { return m_iformVoucherWidget; }
+    MandiReportsWidget* mandiReportsWidget() const { return m_mandiReportsWidget; }
+    MahadevERP::DayBookWidget* dayBookWidget() const { return m_dayBookWidget; }
+    MahadevERP::GstrReportsWidget* gstrReportsWidget() const { return m_gstrReportsWidget; }
     QStackedWidget* stackedWidget() const { return m_stackedWidget; }
     QWidget* qmlContainer() const { return m_qmlContainer; }
     QQuickWindow* qmlWindow() const { return m_qmlWindow; }
@@ -77,6 +87,11 @@ public slots:
     void onNewLedgerSaved();
     void onModifyLedgerBackRequested();
     void onModifyLedgerSaved();
+    void onJFormVoucherBackRequested();
+    void onJFormVoucherSaved(const QString& jformNo);
+    void onIFormVoucherBackRequested();
+    void onIFormVoucherSaved(const QString& iformNo);
+    void onMandiReportsBackRequested();
 
 protected:
     void closeEvent(QCloseEvent* event) override;
@@ -96,6 +111,11 @@ private:
     JournalVoucherWidget* m_journalVoucherWidget = nullptr;
     NewLedgerWidget* m_newLedgerWidget = nullptr;
     ModifyLedgerWidget* m_modifyLedgerWidget = nullptr;
+    JFormVoucherWidget* m_jformVoucherWidget = nullptr;
+    IFormVoucherWidget* m_iformVoucherWidget = nullptr;
+    MandiReportsWidget* m_mandiReportsWidget = nullptr;
+    MahadevERP::DayBookWidget* m_dayBookWidget = nullptr;
+    MahadevERP::GstrReportsWidget* m_gstrReportsWidget = nullptr;
 
     LedgerStatementController* m_ledgerCtrl = nullptr;
     BalanceSheetController* m_balanceSheetCtrl = nullptr;

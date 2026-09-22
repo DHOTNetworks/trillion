@@ -252,10 +252,38 @@ set(SOURCES
     src/widgets/cheque_voucher_widget.cpp
     src/widgets/journal_voucher_widget.h
     src/widgets/journal_voucher_widget.cpp
+    src/models/iform_model.h
+    src/models/iform_model.cpp
+    src/models/mandi_reports_controller.h
+    src/models/mandi_reports_controller.cpp
     src/widgets/new_ledger_widget.h
     src/widgets/new_ledger_widget.cpp
     src/widgets/modify_ledger_widget.h
     src/widgets/modify_ledger_widget.cpp
+    src/widgets/jform_voucher_widget.h
+    src/widgets/jform_voucher_widget.cpp
+    src/widgets/iform_voucher_widget.h
+    src/widgets/iform_voucher_widget.cpp
+    src/widgets/mandi_reports_widget.h
+    src/widgets/mandi_reports_widget.cpp
+    src/widgets/day_book_widget.h
+    src/widgets/day_book_widget.cpp
+    src/widgets/gstr_reports_widget.h
+    src/widgets/gstr_reports_widget.cpp
+    src/engine/mandi_calculator.h
+    src/engine/mandi_calculator.cpp
+    src/engine/aank_interest_engine.h
+    src/engine/aank_interest_engine.cpp
+    src/engine/gst_tax_engine.h
+    src/engine/gst_tax_engine.cpp
+    src/engine/milling_yield_engine.h
+    src/engine/milling_yield_engine.cpp
+    src/engine/gstr1_engine.h
+    src/engine/gstr1_engine.cpp
+    src/engine/gstr2_reconciler.h
+    src/engine/gstr2_reconciler.cpp
+    src/engine/gstr3b_engine.h
+    src/engine/gstr3b_engine.cpp
     src/widgets/main_window.h
     src/widgets/main_window.cpp
 )
@@ -483,6 +511,10 @@ set(TEST_SOURCES
     src/printing/profit_loss_printer.cpp
     src/engine/bahi_khata_migrator.h
     src/engine/bahi_khata_migrator.cpp
+    src/models/iform_model.h
+    src/models/iform_model.cpp
+    src/models/mandi_reports_controller.h
+    src/models/mandi_reports_controller.cpp
     ${CMAKE_CURRENT_BINARY_DIR}/.qt/rcc/qrc_MahadevRiceMillERP_raw_qml_0.cpp
 )
 
@@ -517,5 +549,54 @@ if(APPLE)
     target_link_libraries(LogicBoardTestSuite PRIVATE iconv)
 endif()
 add_test(NAME LogicBoardTestSuite COMMAND LogicBoardTestSuite)
+
+# Engines & Compliance Test Suite
+set(ENGINE_TEST_SOURCES
+    tests/test_engines.cpp
+    src/engine/mandi_calculator.h
+    src/engine/mandi_calculator.cpp
+    src/engine/aank_interest_engine.h
+    src/engine/aank_interest_engine.cpp
+    src/engine/gst_tax_engine.h
+    src/engine/gst_tax_engine.cpp
+    src/engine/milling_yield_engine.h
+    src/engine/milling_yield_engine.cpp
+    src/engine/gstr1_engine.h
+    src/engine/gstr1_engine.cpp
+    src/engine/gstr2_reconciler.h
+    src/engine/gstr2_reconciler.cpp
+    src/engine/gstr3b_engine.h
+    src/engine/gstr3b_engine.cpp
+    src/database_manager.h
+    src/database_manager.cpp
+)
+
+add_executable(EnginesTestSuite ${ENGINE_TEST_SOURCES})
+target_include_directories(EnginesTestSuite PRIVATE
+    src
+    src/engine
+    src/models
+    src/services
+    third_party/sqlite
+    third_party/libmdb
+    third_party/miniz
+    third_party/libxls/include
+)
+target_compile_definitions(EnginesTestSuite PRIVATE HAS_LIBMDB=1)
+target_link_libraries(EnginesTestSuite PRIVATE
+    sqlite3_embedded
+    libmdb_embedded
+    miniz_embedded
+    libxls_embedded
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Sql
+    Qt6::Widgets
+    Qt6::Test
+)
+if(APPLE)
+    target_link_libraries(EnginesTestSuite PRIVATE iconv)
+endif()
+add_test(NAME EnginesTestSuite COMMAND EnginesTestSuite)
 
 

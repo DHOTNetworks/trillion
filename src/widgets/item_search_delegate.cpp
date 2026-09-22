@@ -274,7 +274,15 @@ ItemSearchDelegate::ItemSearchDelegate(QObject* parent)
 QWidget* ItemSearchDelegate::createEditor(QWidget* parent, const QStyleOptionViewItem& option, const QModelIndex& index) const {
     Q_UNUSED(option);
 
-    if (index.column() == 1) { // Stock Item Name
+    bool isItemCol = (index.column() == 0 || index.column() == 1);
+    if (const QAbstractItemModel* m = index.model()) {
+        QString h = m->headerData(index.column(), Qt::Horizontal, Qt::DisplayRole).toString().toLower();
+        if (!h.isEmpty()) {
+            isItemCol = (h.contains("item") || h.contains("description") || h.contains("commodity"));
+        }
+    }
+
+    if (isItemCol) {
         ItemSearchEditor* editor = new ItemSearchEditor(parent);
         connect(editor, &ItemSearchEditor::itemChosen, this, [this, editor, index](const QVariantMap& data) {
             emit const_cast<ItemSearchDelegate*>(this)->commitData(editor);

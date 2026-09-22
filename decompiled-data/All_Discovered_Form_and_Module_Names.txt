@@ -1,0 +1,739 @@
+
+Name                                     Category            
+----                                     --------            
+frm1stGroupBalance                       Form (UI Window)    
+frm2ndGroupBalance                       Form (UI Window)    
+frm3rdGroupBalance                       Form (UI Window)    
+frm4thGroupBalance                       Form (UI Window)    
+frmAcceptYesNo                           Form (UI Window)    
+frmAccountBooksRajasthan                 Form (UI Window)    
+frmAccountInfo                           Form (UI Window)    
+frmAgeWiseReportOptions                  Form (UI Window)    
+frmAnnualIFrmSaleReport                  Form (UI Window)    
+frmAnnualReportOptions                   Form (UI Window)    
+frmAuditTrail                            Form (UI Window)    
+frmAutoClosingStock                      Form (UI Window)    
+frmAutoEntryExpenses                     Form (UI Window)    
+frmAutoSaleScreen                        Form (UI Window)    
+frmAutoVoucherEntryOptions               Form (UI Window)    
+frmBalanceSheet                          Form (UI Window)    
+frmBalanceSheetOptions                   Form (UI Window)    
+frmBalesSrNoList                         Form (UI Window)    
+frmBalSheetOptions                       Form (UI Window)    
+frmBankAccount                           Form (UI Window)    
+frmBankAccountsList                      Form (UI Window)    
+frmBardanaPartiesList                    Form (UI Window)    
+frmBardanaStockOptions                   Form (UI Window)    
+frmBardanaStockReportBCPA                Form (UI Window)    
+frmBardanaStockReportParty               Form (UI Window)    
+frmBardanaVoucher                        Form (UI Window)    
+frmBikriIssueVoucher                     Form (UI Window)    
+frmBikriVoucher                          Form (UI Window)    
+frmBikriVoucherOptions                   Form (UI Window)    
+frmBikriVouchers                         Form (UI Window)    
+frmBillSeries                            Form (UI Window)    
+frmBillWisePendingBillsOptions           Form (UI Window)    
+frmBillWiseReportAutomatic               Form (UI Window)    
+frmBillWiseReportManual                  Form (UI Window)    
+frmBillWiseVoucherOptions                Form (UI Window)    
+frmBooksSettings                         Form (UI Window)    
+frmBreakAccountingYear                   Form (UI Window)    
+frmBrokerageVoucher                      Form (UI Window)    
+frmBrokerList                            Form (UI Window)    
+frmBSheetOptions                         Form (UI Window)    
+frmCalculator                            Form (UI Window)    
+frmCapitalAccount                        Form (UI Window)    
+frmCapitalAccountsList                   Form (UI Window)    
+frmCashBankInflowOutflow                 Form (UI Window)    
+frmCashBook                              Form (UI Window)    
+frmCashBookFlat                          Form (UI Window)    
+frmCashBookOptions                       Form (UI Window)    
+frmCashDailyBalance                      Form (UI Window)    
+frmChallanVoucher                        Form (UI Window)    
+frmChallanVouchers                       Form (UI Window)    
+frmCheckPasswd                           Form (UI Window)    
+frmChequePrintingOptions                 Form (UI Window)    
+frmChequePrintingVoucher                 Form (UI Window)    
+frmChequesList                           Form (UI Window)    
+frmChqPymtVoucher                        Form (UI Window)    
+frmChqPymtVoucherA                       Form (UI Window)    
+frmChqRcptVoucher                        Form (UI Window)    
+frmChqRcptVoucherA                       Form (UI Window)    
+frmClosingStock                          Form (UI Window)    
+frmClosingStockReport                    Form (UI Window)    
+frmClStockOptions                        Form (UI Window)    
+frmCommissionBasisItemDailyBalance       Form (UI Window)    
+frmCommissionBasisItemDailyVouchers      Form (UI Window)    
+frmCommissionBasisItemMonthlyBalance     Form (UI Window)    
+frmCommissionBasisPartyStock             Form (UI Window)    
+frmCommonSettings                        Form (UI Window)    
+frmCommunicationDealerOptions            Form (UI Window)    
+frmCompanies                             Form (UI Window)    
+frmCompaniesListForBackup                Form (UI Window)    
+frmCompanyList                           Form (UI Window)    
+frmCompanyMainMenu                       Form (UI Window)    
+frmCompanyOpenProgress                   Form (UI Window)    
+frmCompanyWiseStock                      Form (UI Window)    
+frmCompoundInterestDates                 Form (UI Window)    
+frmCottonBalesWeightNote                 Form (UI Window)    
+frmCottonPurcVoucher                     Form (UI Window)    
+frmCottonSaleVoucher                     Form (UI Window)    
+frmCreateGroup                           Form (UI Window)    
+frmCreateNewCompany                      Form (UI Window)    
+frmCreateStockGroup                      Form (UI Window)    
+frmCreateStockUnit                       Form (UI Window)    
+frmCSTSaleCFormOptions                   Form (UI Window)    
+frmCustomerReceipt                       Form (UI Window)    
+frmCustomerReceiptByRouter               Form (UI Window)    
+frmD2PurchaseAnnexure                    Form (UI Window)    
+frmD2PurchaseList                        Form (UI Window)    
+frmDailyBalance                          Form (UI Window)    
+frmDailyVouchers                         Form (UI Window)    
+frmDalaliVoucher                         Form (UI Window)    
+frmDamiCommissionTDSPartiesReport        Form (UI Window)    
+frmDamiCommissionTDSPartiesVouchers      Form (UI Window)    
+frmDamiCommissionTDSReport               Form (UI Window)    
+frmDate                                  Form (UI Window)    
+frmDateCriteria                          Form (UI Window)    
+frmDateTotalDetail                       Form (UI Window)    
+frmDayBook                               Form (UI Window)    
+frmDDDetailForPump                       Form (UI Window)    
+frmDebitCreditNote                       Form (UI Window)    
+frmDebitCreditNoteIssuedOptions          Form (UI Window)    
+frmDebitCreditNoteOptions                Form (UI Window)    
+frmDebitCreditNoteReceivedOptions        Form (UI Window)    
+frmDeliveryChallan                       Form (UI Window)    
+frmDepChart                              Form (UI Window)    
+frmDheriesInOutReport                    Form (UI Window)    
+frmDigiSignForm                          Form (UI Window)    
+frmDisplayInfo                           Form (UI Window)    
+frmDisplayInfoRajasthan                  Form (UI Window)    
+frmEInvoiceOptions                       Form (UI Window)    
+frmEmptyBalanceSummary                   Form (UI Window)    
+frmEmptyBalanceSummaryParty              Form (UI Window)    
+frmEmptyVouchers                         Form (UI Window)    
+frmExciseSalePurcVoucher                 Form (UI Window)    
+frmExportSaleVoucher                     Form (UI Window)    
+frmFarmersListWithBankAccount            Form (UI Window)    
+frmForm                                  Form (UI Window)    
+frmForm16AOptions                        Form (UI Window)    
+frmForm26QNewOptions                     Form (UI Window)    
+frmForm26QOptions                        Form (UI Window)    
+frmForm26QquarterlyReturn                Form (UI Window)    
+frmForm26QquarterlyReturnNew             Form (UI Window)    
+frmForm26Qquarters                       Form (UI Window)    
+frmFormIssueOptions                      Form (UI Window)    
+frmFormsList                             Form (UI Window)    
+frmFormsStockReport                      Form (UI Window)    
+frmFormsStockVouchers                    Form (UI Window)    
+frmFormST38List                          Form (UI Window)    
+frmFormsVoucher                          Form (UI Window)    
+frmFormsVoucherOptions                   Form (UI Window)    
+frmFormsVouchers                         Form (UI Window)    
+frmFormVATC4                             Form (UI Window)    
+frmFormVATC4Sale                         Form (UI Window)    
+frmFreeTaxQuarters                       Form (UI Window)    
+frmFreeTaxReport                         Form (UI Window)    
+frmFreightForm16AOptions                 Form (UI Window)    
+frmFreightTDSReport                      Form (UI Window)    
+frmFreightTDSReportVouchers              Form (UI Window)    
+frmGatePassVoucher                       Form (UI Window)    
+frmGatePassVoucherOptions                Form (UI Window)    
+frmGatePassVouchers                      Form (UI Window)    
+frmGateRegister                          Form (UI Window)    
+frmGoodsReturnPartiesDetail              Form (UI Window)    
+frmGoodsReturnQuarters                   Form (UI Window)    
+frmGoodsReturnVoucherOptions             Form (UI Window)    
+frmGovtSaleVoucher                       Form (UI Window)    
+frmGroupFirmReportUtilities              Form (UI Window)    
+frmGroupLedgerOptions                    Form (UI Window)    
+frmGroupLedgerVouchers                   Form (UI Window)    
+frmGroupList                             Form (UI Window)    
+frmGroupReportOptions                    Form (UI Window)    
+frmGroupTrialBalance                     Form (UI Window)    
+frmGroupTrialOptions                     Form (UI Window)    
+frmGroupVouchers                         Form (UI Window)    
+frmGSTExpReverseVch                      Form (UI Window)    
+frmGSTReportsDateCriteria                Form (UI Window)    
+frmGSTReportsOptions                     Form (UI Window)    
+frmGSTVoucherOptions                     Form (UI Window)    
+frmHRDFReport                            Form (UI Window)    
+frmIFormVoucher                          Form (UI Window)    
+frmIFormVoucherA                         Form (UI Window)    
+frmIfrmIndicater                         Form (UI Window)    
+frmInterestCalculator                    Form (UI Window)    
+frmInterestCalculatorUtilities           Form (UI Window)    
+frmInterestCDSettings                    Form (UI Window)    
+frmInterestFigures                       Form (UI Window)    
+frmInventoryInfo                         Form (UI Window)    
+frmJFormBrokerReport                     Form (UI Window)    
+frmJFormVoucher                          Form (UI Window)    
+frmJFormVoucherA                         Form (UI Window)    
+frmJFrmIFrmDiffReport                    Form (UI Window)    
+frmJFrmIFrmItemDailyBalance              Form (UI Window)    
+frmJFrmIFrmItemDailyVouchers             Form (UI Window)    
+frmJFrmIFrmItemMonthlyBalance            Form (UI Window)    
+frmJFrmIFrmItemsStock                    Form (UI Window)    
+frmJointTradingReport                    Form (UI Window)    
+frmJournal                               Form (UI Window)    
+frmJournalBook                           Form (UI Window)    
+frmJournalVoucher                        Form (UI Window)    
+frmJournalVoucherA                       Form (UI Window)    
+frmKachiAadhatReportOptions              Form (UI Window)    
+frmLagatBikriExp                         Form (UI Window)    
+frmLagatBikriVoucherOptions              Form (UI Window)    
+frmLedger                                Form (UI Window)    
+frmLedgerInterest                        Form (UI Window)    
+frmLedgerList                            Form (UI Window)    
+frmLedgerListNew                         Form (UI Window)    
+frmLedgerReconciliation                  Form (UI Window)    
+frmLedgersTINPANList                     Form (UI Window)    
+frmLedgersTree                           Form (UI Window)    
+frmLedgersTreeForFinalReports            Form (UI Window)    
+frmLedgerVouchers                        Form (UI Window)    
+frmLedgerVouchersAlreadyOpen             Form (UI Window)    
+frmLessCommissionLedger                  Form (UI Window)    
+frmListAccounts                          Form (UI Window)    
+frmLLFormList                            Form (UI Window)    
+frmLLFormOptions                         Form (UI Window)    
+frmLLFormPrint                           Form (UI Window)    
+frmLLFormRcptNo                          Form (UI Window)    
+frmLogoMargins                           Form (UI Window)    
+frmMandiDheriesReportsRajasthan          Form (UI Window)    
+frmMandiExpSettings                      Form (UI Window)    
+frmMandiFeeReportsRajasthan              Form (UI Window)    
+frmMandiReportOptions                    Form (UI Window)    
+frmMandiSalePurcVoucher                  Form (UI Window)    
+frmMandiSinglePartyPendingBags           Form (UI Window)    
+frmMandiTypeInterest                     Form (UI Window)    
+frmMandiTypeInterestCalculator           Form (UI Window)    
+frmManualVoucher                         Form (UI Window)    
+frmManualVoucherOptions                  Form (UI Window)    
+frmManualVouchers                        Form (UI Window)    
+frmMarketAFormReport                     Form (UI Window)    
+frmMarketCommttAnnualReports             Form (UI Window)    
+frmMarketCommttReportsOptions            Form (UI Window)    
+frmMarketCommttReportsOptionsFull        Form (UI Window)    
+frmMarketFeeReport                       Form (UI Window)    
+frmMarketMFormReport                     Form (UI Window)    
+frmMarketTypeInterest                    Form (UI Window)    
+frmMemo                                  Form (UI Window)    
+frmMemoRegister                          Form (UI Window)    
+frmMemoVoucher                           Form (UI Window)    
+frmMemoVoucherA                          Form (UI Window)    
+frmMilkChillingCentreOptions             Form (UI Window)    
+frmMilkDairyOptions                      Form (UI Window)    
+frmMilkFATSNFVoucher                     Form (UI Window)    
+frmMilkFATVoucher                        Form (UI Window)    
+frmMilkFATVouchers                       Form (UI Window)    
+frmMilkPartyDetailsOptions               Form (UI Window)    
+frmMilkRateList                          Form (UI Window)    
+frmMilkRateListNew                       Form (UI Window)    
+frmMilkSocietyReport                     Form (UI Window)    
+frmMilkVoucher                           Form (UI Window)    
+frmMilkVouchers                          Form (UI Window)    
+frmMillingVoucher                        Form (UI Window)    
+frmMillingVoucherOptions                 Form (UI Window)    
+frmMillingVoucherWithAmount              Form (UI Window)    
+frmMktSalePurcCanadaOptions              Form (UI Window)    
+frmMktSalePurcVoucher                    Form (UI Window)    
+frmMktSalePurcVoucherCanada              Form (UI Window)    
+frmMonthlyBalance                        Form (UI Window)    
+frmMoreVouchers                          Form (UI Window)    
+frmMTOptions                             Form (UI Window)    
+frmMultiLedgerGroup                      Form (UI Window)    
+frmMultiLedgerGroupList                  Form (UI Window)    
+frmMultiLedgerGroupOptions               Form (UI Window)    
+frmNewVchVchListOptions                  Form (UI Window)    
+frmNonWovenIndustryOptions               Form (UI Window)    
+frmNonWovenSalePurcVoucher               Form (UI Window)    
+frmOtherAppOwner                         Form (UI Window)    
+frmOtherInfo                             Form (UI Window)    
+frmOtherReportsRajasthan                 Form (UI Window)    
+frmOtherUtilities                        Form (UI Window)    
+frmOtherUtilitiesLedger                  Form (UI Window)    
+frmPartiesListForForm16A                 Form (UI Window)    
+frmPartiesListForForms                   Form (UI Window)    
+frmPartiesListFormVATC4                  Form (UI Window)    
+frmPartiesListFormVATC4Sale              Form (UI Window)    
+frmPartyPendingFormsDetail               Form (UI Window)    
+frmPayment                               Form (UI Window)    
+frmPaymentReport                         Form (UI Window)    
+frmPaymentReportOptions                  Form (UI Window)    
+frmPaymentVoucher                        Form (UI Window)    
+frmPaymentVoucherA                       Form (UI Window)    
+frmPDF                                   Form (UI Window)    
+frmPeriodPaymentSummary                  Form (UI Window)    
+frmPeriodPaymentSummaryOptions           Form (UI Window)    
+frmPirateMe                              Form (UI Window)    
+frmPirateMeOld                           Form (UI Window)    
+frmPostDatedChequeOptions                Form (UI Window)    
+frmPostDatedCheques                      Form (UI Window)    
+frmPostDatedChequesSingleParty           Form (UI Window)    
+frmPostDatedChequeVoucher                Form (UI Window)    
+frmPowderVoucher                         Form (UI Window)    
+frmPowderVoucherOptions                  Form (UI Window)    
+frmPrinting                              Form (UI Window)    
+frmPrintingParameters                    Form (UI Window)    
+frmPrintInvoicesPDF                      Form (UI Window)    
+frmPrintLedgerBookOptions                Form (UI Window)    
+frmPrintPDFInvoices                      Form (UI Window)    
+frmProductWiseReports                    Form (UI Window)    
+frmProfitLoss                            Form (UI Window)    
+frmProfitLossSummary                     Form (UI Window)    
+frmProgressBar                           Form (UI Window)    
+frmProgressBarNew                        Form (UI Window)    
+frmPunjabVAT18                           Form (UI Window)    
+frmPunjabVAT2324                         Form (UI Window)    
+frmPurchaseRegister                      Form (UI Window)    
+frmPurchaseRegisterForBCPA               Form (UI Window)    
+frmPurchaseRegisterOptions               Form (UI Window)    
+frmPurchaseReturnVoucher                 Form (UI Window)    
+frmPurchaseReturnVoucherA                Form (UI Window)    
+frmPurchaseVoucher                       Form (UI Window)    
+frmPurchaseVoucherA                      Form (UI Window)    
+frmPurcPymtDueGroupReport                Form (UI Window)    
+frmPurcPymtDueReportVouchers             Form (UI Window)    
+frmPurcSaleDetail                        Form (UI Window)    
+frmPurcTDS194Q                           Form (UI Window)    
+frmQuarterlyReturn                       Form (UI Window)    
+frmQuarterlyReturnExcelOptions           Form (UI Window)    
+frmQuarterlyReturnFormsOptionsRaj        Form (UI Window)    
+frmQuarterlyReturnLP7urd                 Form (UI Window)    
+frmQuarterlyReturnOptions                Form (UI Window)    
+frmQuarters                              Form (UI Window)    
+frmQuarterSelectionOptions               Form (UI Window)    
+frmQuitYN                                Form (UI Window)    
+frmRajasthanVATReportOptions             Form (UI Window)    
+frmRajKUMFReport                         Form (UI Window)    
+frmRajKUMFReportOptions                  Form (UI Window)    
+frmRajMFeeKKKJointReportOptions          Form (UI Window)    
+frmRebateMFeePurcReportRaj               Form (UI Window)    
+frmReceipt                               Form (UI Window)    
+frmReceiptVoucher                        Form (UI Window)    
+frmReceiptVoucherA                       Form (UI Window)    
+frmReceiptVoucherBillWise                Form (UI Window)    
+frmReceiveForm16ATDSVoucher              Form (UI Window)    
+frmReceiveForm16ATDSVouchers             Form (UI Window)    
+frmRegisterSummaryRajasthan              Form (UI Window)    
+frmReminders                             Form (UI Window)    
+frmRiceBranVoucher                       Form (UI Window)    
+frmRiceBranVouchers                      Form (UI Window)    
+frmRiceHuskVoucher                       Form (UI Window)    
+frmRiceHuskVouchers                      Form (UI Window)    
+frmRouteDetail                           Form (UI Window)    
+frmRoutersList                           Form (UI Window)    
+frmRoutes                                Form (UI Window)    
+frmRoutesBook                            Form (UI Window)    
+frmRTGSVoucher                           Form (UI Window)    
+frmRTGSVoucherOptions                    Form (UI Window)    
+frmRTGSVouchers                          Form (UI Window)    
+frmSalePurcFullReport                    Form (UI Window)    
+frmSalePurchaseGoodsReturnOptions        Form (UI Window)    
+frmSaleRegister                          Form (UI Window)    
+frmSaleRegisterForBCPA                   Form (UI Window)    
+frmSaleRegisterProductWise               Form (UI Window)    
+frmSaleRegisterTaxRateWise               Form (UI Window)    
+frmSaleReturnVoucher                     Form (UI Window)    
+frmSaleReturnVoucherA                    Form (UI Window)    
+frmSaleSchemeDetail                      Form (UI Window)    
+frmSaleTaxReportOptions                  Form (UI Window)    
+frmSaleVoucher                           Form (UI Window)    
+frmSaleVoucherA                          Form (UI Window)    
+frmSaudaInOutReport                      Form (UI Window)    
+frmSaudaPendings                         Form (UI Window)    
+frmSaudaRegisterOptions                  Form (UI Window)    
+frmSaudaTransactions                     Form (UI Window)    
+frmSaudaVoucher                          Form (UI Window)    
+frmSaudaVouchers                         Form (UI Window)    
+frmSelfPurchasePendingDheries            Form (UI Window)    
+frmSelfPurchasePendingDheriesSingleGroup Form (UI Window)    
+frmSelfPurchaseQuarters                  Form (UI Window)    
+frmSelfPurchaseReport                    Form (UI Window)    
+frmSelfPurchaseVoucher                   Form (UI Window)    
+frmSelfTradingItemDailyBalance           Form (UI Window)    
+frmSelfTradingItemDailyVouchers          Form (UI Window)    
+frmSelfTradingItemMonthlyBalance         Form (UI Window)    
+frmSelfTradingItemsStock                 Form (UI Window)    
+frmSelfTradingItemsStockDetailed         Form (UI Window)    
+frmSendSMS                               Form (UI Window)    
+frmSetAccountingYear                     Form (UI Window)    
+frmSetAdminCode                          Form (UI Window)    
+frmSetDataBackupDirectory                Form (UI Window)    
+frmSetGroupFirms                         Form (UI Window)    
+frmSettings                              Form (UI Window)    
+frmShowAccountFlatType                   Form (UI Window)    
+frmShowCommissionBasisParties            Form (UI Window)    
+frmShowInterest                          Form (UI Window)    
+frmShowStockGodowns                      Form (UI Window)    
+frmSimpleStockOptions                    Form (UI Window)    
+frmSIMReportOptions                      Form (UI Window)    
+frmSIMReportParties                      Form (UI Window)    
+frmSIMReportVouchers                     Form (UI Window)    
+frmSingleEntryVoucher                    Form (UI Window)    
+frmSocialNGOVoucherOptions               Form (UI Window)    
+frmSocietyCodeWiseList                   Form (UI Window)    
+frmSoftDrinksVoucherOptions              Form (UI Window)    
+frmSolventVoucherOptions                 Form (UI Window)    
+frmSplash                                Form (UI Window)    
+frmST38ListOptions                       Form (UI Window)    
+frmStaffSalaryAutoEntryList              Form (UI Window)    
+frmStartingMenu                          Form (UI Window)    
+frmStatePurcOptions                      Form (UI Window)    
+frmStateSaleOptions                      Form (UI Window)    
+frmStationList                           Form (UI Window)    
+frmStatutoryFormsOptions                 Form (UI Window)    
+frmStockConverterVoucher                 Form (UI Window)    
+frmStockGodown                           Form (UI Window)    
+frmStockGodownList                       Form (UI Window)    
+frmStockGroup                            Form (UI Window)    
+frmStockGroupList                        Form (UI Window)    
+frmStockGroupListForTradingReport        Form (UI Window)    
+frmStockItem                             Form (UI Window)    
+frmStockItemList                         Form (UI Window)    
+frmStockItemStockSummary                 Form (UI Window)    
+frmStockRegisterDetailedGroups           Form (UI Window)    
+frmStockRegisterDetailedItemWise         Form (UI Window)    
+frmStockRegisterForPesticide             Form (UI Window)    
+frmStockReportOptions                    Form (UI Window)    
+frmStockReportOptionsMarket              Form (UI Window)    
+frmStockSummary                          Form (UI Window)    
+frmStockSummaryOptions                   Form (UI Window)    
+frmStockTransferGodownVouchers           Form (UI Window)    
+frmStockTransferVoucher                  Form (UI Window)    
+frmStockTransferVoucherA                 Form (UI Window)    
+frmStockTransferVoucherOptions           Form (UI Window)    
+frmStockUnit                             Form (UI Window)    
+frmStockUnitList                         Form (UI Window)    
+frmTaxAudit                              Form (UI Window)    
+frmTaxChallansRajasthan                  Form (UI Window)    
+frmTaxDepositVoucher                     Form (UI Window)    
+frmTaxOptions                            Form (UI Window)    
+frmTCSReportOptions                      Form (UI Window)    
+frmTCSVoucher                            Form (UI Window)    
+frmTCSVoucherOptions                     Form (UI Window)    
+frmTDS194QReportOptions                  Form (UI Window)    
+frmTDSAcknowledgementNos                 Form (UI Window)    
+frmTDSDepositChallanOptions              Form (UI Window)    
+frmTDSDeposits                           Form (UI Window)    
+frmTDSDepositVoucher                     Form (UI Window)    
+frmTDSOptions                            Form (UI Window)    
+frmTDSRegister                           Form (UI Window)    
+frmTDSReportsRajasthan                   Form (UI Window)    
+frmTDSTCSVoucherOptions                  Form (UI Window)    
+frmTDSVoucher                            Form (UI Window)    
+frmTDSVoucherOptions                     Form (UI Window)    
+frmTDSVouchers                           Form (UI Window)    
+frmtest                                  Form (UI Window)    
+frmTimberVoucher                         Form (UI Window)    
+frmTools                                 Form (UI Window)    
+frmTradingBalances                       Form (UI Window)    
+frmTradingReport                         Form (UI Window)    
+frmTradingReportOptions                  Form (UI Window)    
+frmTransactionsTotals                    Form (UI Window)    
+frmTransactionsVouchers                  Form (UI Window)    
+frmTrialBalance                          Form (UI Window)    
+frmTrialBalanceFlat                      Form (UI Window)    
+frmTrialBalanceOptions                   Form (UI Window)    
+frmVAT07IIOptionRaj                      Form (UI Window)    
+frmVAT07OptionsRaj                       Form (UI Window)    
+frmVAT08IOptionRaj                       Form (UI Window)    
+frmVAT08OptionsRaj                       Form (UI Window)    
+frmVATAnnualReportOptionsRaj             Form (UI Window)    
+frmVATAnnualReturnFormsOptionsRaj        Form (UI Window)    
+frmVATAsCommissionAgentOptionsRaj        Form (UI Window)    
+frmVATConsignmentSaleSummaryOptionsRaj   Form (UI Window)    
+frmVATForm4850ListRaj                    Form (UI Window)    
+frmVATFormWiseSalesOptionsRaj            Form (UI Window)    
+frmVATMonthWiseReport                    Form (UI Window)    
+frmVATOtherFormsOptionsRaj               Form (UI Window)    
+frmVATQuarterlyReportOptionsRaj          Form (UI Window)    
+frmVATQuarters                           Form (UI Window)    
+frmVATReport                             Form (UI Window)    
+frmVATReportOptions                      Form (UI Window)    
+frmVATReportOptionsPunjab                Form (UI Window)    
+frmVATReportOptionsRajasthan             Form (UI Window)    
+frmVATReportRaj                          Form (UI Window)    
+frmVATSummaryOptionsAnnualRaj            Form (UI Window)    
+frmVATSummaryOptionsRaj                  Form (UI Window)    
+frmVoucherImage                          Form (UI Window)    
+frmVoucherSearchingOptions               Form (UI Window)    
+frmVoucherSettings                       Form (UI Window)    
+frmWholesaleDealerOptions                Form (UI Window)    
+frmWholesaleVoucher                      Form (UI Window)    
+frmWholesaleVoucher1                     Form (UI Window)    
+frmWholesaleVoucherNew                   Form (UI Window)    
+frmYearlyBalance                         Form (UI Window)    
+frmYieldChart                            Form (UI Window)    
+modity                                   Standard Code Module
+rptAankTypeInterest                      Report              
+rptAankTypeInterestfrm                   Report              
+rptApplicationPartyForForm               Report              
+rptApplicationPartyForFormfrm            Report              
+rptBalanceSheet                          Report              
+rptBalanceSheetfrm                       Report              
+rptBalanceSheetGrouped                   Report              
+rptBalanceSheetGroupedfrm                Report              
+rptBalesSrNoList                         Report              
+rptBalesSrNoListfrm                      Report              
+rptBardanaPartiesListBCPA                Report              
+rptBardanaPartiesListBCPAfrm             Report              
+rptBardanaStockReport                    Report              
+rptBardanaStockReportfrm                 Report              
+rptBikriIssue                            Report              
+rptBikriIssuefrm                         Report              
+rptBikriVouchersList                     Report              
+rptBikriVouchersListfrm                  Report              
+rptCashBook                              Report              
+rptCashBookfrm                           Report              
+rptCFormContents                         Report              
+rptCFormContentsfrm                      Report              
+rptChallan                               Report              
+rptChallanfrm                            Report              
+rptChallanVoucher                        Report              
+rptChallanVoucherfrm                     Report              
+rptChequePrinting                        Report              
+rptChequePrintingfrm                     Report              
+rptChequePrintingLandscape               Report              
+rptChequePrintingLandscapefrm            Report              
+rptChequesList                           Report              
+rptChequesListfrm                        Report              
+rptCottonSaleInvoice                     Report              
+rptCottonSaleInvoicefrm                  Report              
+rptD2PurchaseList                        Report              
+rptD2PurchaseListfrm                     Report              
+rptDebitCreditNote                       Report              
+rptDebitCreditNotefrm                    Report              
+rptDebitCreditNoteGST                    Report              
+rptDebitCreditNoteGSTfrm                 Report              
+rptFformPurcReport                       Report              
+rptFformPurcReportfrm                    Report              
+rptFlatTypeInterest                      Report              
+rptFlatTypeInterestfrm                   Report              
+rptForm16A                               Report              
+rptForm16Afrm                            Report              
+rptForm16ANew                            Report              
+rptForm16ANewfrm                         Report              
+rptForm26Q                               Report              
+rptForm26QAnnexure                       Report              
+rptForm26QAnnexurefrm                    Report              
+rptForm26Qfrm                            Report              
+rptForm27aTDS                            Report              
+rptForm27aTDSfrm                         Report              
+rptFormD1                                Report              
+rptFormD1frm                             Report              
+rptFormIssue                             Report              
+rptFormIssuedReport                      Report              
+rptFormIssuedReportfrm                   Report              
+rptFormIssuefrm                          Report              
+rptFormIssueWithCST                      Report              
+rptFormIssueWithCSTfrm                   Report              
+rptFormLP7urd                            Report              
+rptFormLP7urdfrm                         Report              
+rptFormsStockReportRaj                   Report              
+rptFormsStockReportRajfrm                Report              
+rptGatePassVouchers                      Report              
+rptGatePassVouchersfrm                   Report              
+rptGateRegister                          Report              
+rptGateRegisterfrm                       Report              
+rptGroupTrialBalance                     Report              
+rptGroupTrialBalancefrm                  Report              
+rptIFormPrint                            Report              
+rptIFormPrintfrm                         Report              
+rptJForm                                 Report              
+rptJForm1New                             Report              
+rptJForm1Newfrm                          Report              
+rptJFormfrm                              Report              
+rptJrnlBook                              Report              
+rptJrnlBookfrm                           Report              
+rptLedgerAccount                         Report              
+rptLedgerAccounts                        Report              
+rptLedgerBook                            Report              
+rptLedgerBookfrm                         Report              
+rptLetterPad                             Report              
+rptLetterPadfrm                          Report              
+rptLLFormList                            Report              
+rptLLFormListfrm                         Report              
+rptLLFormListShort                       Report              
+rptLLFormListShortfrm                    Report              
+rptLLFormPrint                           Report              
+rptLLFormPrintfrm                        Report              
+rptMandiTypeInterest                     Report              
+rptMandiTypeInterestfrm                  Report              
+rptMarketComttCottonForm                 Report              
+rptMarketComttCottonFormfrm              Report              
+rptMFeeHRDF                              Report              
+rptMFeeHRDFfrm                           Report              
+rptMformAform                            Report              
+rptMformAformfrm                         Report              
+rptMilkParchiThermal                     Report              
+rptMilkParchiThermalfrm                  Report              
+rptMilkPaymentPlan                       Report              
+rptMilkPaymentPlanfrm                    Report              
+rptMilkPurcSaleRegister                  Report              
+rptMilkPurcSaleRegisterfrm               Report              
+rptMilkSocietyReport                     Report              
+rptMilkSocietyReportfrm                  Report              
+rptMktCommttAnnualReports                Report              
+rptMktCommttAnnualReportsfrm             Report              
+rptMonthlyVATBalance                     Report              
+rptMonthlyVATBalancefrm                  Report              
+rptMTSlips                               Report              
+rptMTSlipsfrm                            Report              
+rptNILFormsRaj                           Report              
+rptNILFormsRajfrm                        Report              
+rptPartiesInterestList                   Report              
+rptPartiesInterestListfrm                Report              
+rptPartiesPurcReportBCPA                 Report              
+rptPartiesPurcReportBCPAfrm              Report              
+rptPaymentReport                         Report              
+rptPaymentReportfrm                      Report              
+rptPR3                                   Report              
+rptPR3frm                                Report              
+rptPR4                                   Report              
+rptPR4frm                                Report              
+rptPR8                                   Report              
+rptPR8frm                                Report              
+rptPrintVoucher                          Report              
+rptPrintVoucherfrm                       Report              
+rptPurchaseKapasParchi                   Report              
+rptPurchaseKapasParchifrm                Report              
+rptPurchaseRegister                      Report              
+rptPurchaseRegisterfrm                   Report              
+rptQuarterlyReportBillWise               Report              
+rptQuarterlyReportBillWisefrm            Report              
+rptQuarterlyReportPartyWise              Report              
+rptQuarterlyReportPartyWisefrm           Report              
+rptRajKUMF                               Report              
+rptRajKUMFfrm                            Report              
+rptRcptPymtDetail                        Report              
+rptRcptPymtDetailfrm                     Report              
+rptRcptPymtPlan                          Report              
+rptRcptPymtPlanDetailed                  Report              
+rptRcptPymtPlanDetailedfrm               Report              
+rptRcptPymtPlanDetailedShort             Report              
+rptRcptPymtPlanDetailedShortfrm          Report              
+rptRcptPymtPlanfrm                       Report              
+rptRcptPymtPlanShort                     Report              
+rptRcptPymtPlanShortfrm                  Report              
+rptRebateMFeePurcReportRaj               Report              
+rptRebateMFeePurcReportRajfrm            Report              
+rptReceiptSocialNGO                      Report              
+rptReceiptSocialNGOfrm                   Report              
+rptReceiptSocialNGOShortSlip             Report              
+rptReceiptSocialNGOShortSlipfrm          Report              
+rptReceivedForm16AVouchersList           Report              
+rptReceivedForm16AVouchersListfrm        Report              
+rptRTGSLetter                            Report              
+rptRTGSLetterfrm                         Report              
+rptSaleEstimateList                      Report              
+rptSaleEstimateListfrm                   Report              
+rptSaleInvoice                           Report              
+rptSaleInvoiceCanada                     Report              
+rptSaleInvoiceCanadafrm                  Report              
+rptSaleInvoiceElectronics                Report              
+rptSaleInvoiceElectronicsCustom          Report              
+rptSaleInvoiceElectronicsCustomfrm       Report              
+rptSaleInvoiceElectronicsfrm             Report              
+rptSaleInvoiceEstimate                   Report              
+rptSaleInvoiceEstimatefrm                Report              
+rptSaleInvoiceFormat                     Report              
+rptSaleInvoiceFormat2                    Report              
+rptSaleInvoiceFormat2frm                 Report              
+rptSaleInvoiceFormatCustom               Report              
+rptSaleInvoiceFormatCustomfrm            Report              
+rptSaleInvoicefrm                        Report              
+rptSaleInvoiceMandiType                  Report              
+rptSaleInvoiceMandiTypefrm               Report              
+rptSaleInvoiceMarket                     Report              
+rptSaleInvoiceMarketDMP                  Report              
+rptSaleInvoiceMarketDMPfrm               Report              
+rptSaleInvoiceMarketfrm                  Report              
+rptSaleInvoiceMedical                    Report              
+rptSaleInvoiceMedicalfrm                 Report              
+rptSaleInvoiceMiniSlip                   Report              
+rptSaleInvoiceMiniSlipfrm                Report              
+rptSaleInvoicePesticide                  Report              
+rptSaleInvoicePesticidefrm               Report              
+rptSaleInvoiceShortSlip                  Report              
+rptSaleInvoiceShortSlipfrm               Report              
+rptSaleInvoiceThermal                    Report              
+rptSaleInvoiceThermalfrm                 Report              
+rptSaleInvoiceWholesale                  Report              
+rptSaleInvoiceWholesalefrm               Report              
+rptSaleInvoiceWholesaleWithNag           Report              
+rptSaleInvoiceWholesaleWithNagfrm        Report              
+rptSaleRegister                          Report              
+rptSaleRegisterfrm                       Report              
+rptSaleRegisterProductWise               Report              
+rptSaleRegisterProductWisefrm            Report              
+rptSaleSchemeReport                      Report              
+rptSaleSchemeReportfrm                   Report              
+rptSaudaPendings                         Report              
+rptSaudaPendingsfrm                      Report              
+rptSaudaVouchers                         Report              
+rptSaudaVouchersfrm                      Report              
+rptSelfTradingPendingDheries             Report              
+rptSelfTradingPendingDheriesfrm          Report              
+rptST38List                              Report              
+rptST38Listfrm                           Report              
+rptStockRegister                         Report              
+rptStockRegisterfrm                      Report              
+rptStockRegisterGodown                   Report              
+rptStockRegisterGodownfrm                Report              
+rptStockRegisterPesticide                Report              
+rptStockRegisterPesticidefrm             Report              
+rptStockReportDetailed                   Report              
+rptStockReportDetailedfrm                Report              
+rptStockTransferInvoice                  Report              
+rptStockTransferInvoice1                 Report              
+rptStockTransferInvoicefrm               Report              
+rptStockTransferInvoicefrm1              Report              
+rptTaxAuditRaj                           Report              
+rptTaxAuditRajfrm                        Report              
+rptTaxDeposits                           Report              
+rptTaxDepositsfrm                        Report              
+rptTaxReportRaj                          Report              
+rptTaxReportRajfrm                       Report              
+rptTimberBillDetail                      Report              
+rptTimberBillDetailfrm                   Report              
+rptTradingAccount                        Report              
+rptTradingAccountfrm                     Report              
+rptTrialBalance                          Report              
+rptTrialBalancefrm                       Report              
+rptVAT07ARaj                             Report              
+rptVAT07ARajfrm                          Report              
+rptVAT07NewRaj                           Report              
+rptVAT07NewRajfrm                        Report              
+rptVAT08IIIRaj                           Report              
+rptVAT08IIIRajfrm                        Report              
+rptVAT08NewRaj                           Report              
+rptVAT08NewRajfrm                        Report              
+rptVAT10RajI                             Report              
+rptVAT10RajIfrm                          Report              
+rptVAT1819Punjab                         Report              
+rptVAT1819Punjabfrm                      Report              
+rptVAT2324Punjab                         Report              
+rptVAT2324Punjabfrm                      Report              
+rptVAT4850Raj                            Report              
+rptVAT4850Rajfrm                         Report              
+rptVATA4                                 Report              
+rptVATA4frm                              Report              
+rptVATC4                                 Report              
+rptVATC4Feb11                            Report              
+rptVATC4Feb11frm                         Report              
+rptVATC4frm                              Report              
+rptVATC4Raj                              Report              
+rptVATC4Rajfrm                           Report              
+rptVATCertificateBCPA                    Report              
+rptVATCertificateBCPAfrm                 Report              
+rptVATD2                                 Report              
+rptVATD2frm                              Report              
+rptVATReport                             Report              
+rptVATReportfrm                          Report              
+rptVehicleWiseReport                     Report              
+rptVehicleWiseReportfrm                  Report              
+rptVoucherEntries                        Report              
+
+
+

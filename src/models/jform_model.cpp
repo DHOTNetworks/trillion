@@ -309,6 +309,47 @@ QVariantMap JFormModel::get_jform_voucher(const QVariant& voucherIdOrNo) {
     return res;
 }
 
+QVariantMap JFormModel::get_previous_jform_voucher(int currentId, const QString& currentJfOrVchNo) {
+    auto& db = DatabaseManager::instance();
+    QVariant targetId;
+    if (currentId > 0) {
+        targetId = db.executeScalar("SELECT id FROM jform_vouchers WHERE id < ? ORDER BY id DESC LIMIT 1;", {currentId});
+    }
+    if (!targetId.isValid() && !currentJfOrVchNo.trimmed().isEmpty()) {
+        QVariant curRowId = db.executeScalar("SELECT id FROM jform_vouchers WHERE jform_no = ? OR voucher_no = ? LIMIT 1;",
+                                             {currentJfOrVchNo, currentJfOrVchNo});
+        if (curRowId.isValid()) {
+            targetId = db.executeScalar("SELECT id FROM jform_vouchers WHERE id < ? ORDER BY id DESC LIMIT 1;", {curRowId.toInt()});
+        }
+    }
+    if (!targetId.isValid()) {
+        targetId = db.executeScalar("SELECT id FROM jform_vouchers ORDER BY id DESC LIMIT 1;");
+    }
+    if (targetId.isValid()) {
+        return get_jform_voucher(targetId.toInt());
+    }
+    return {};
+}
+
+QVariantMap JFormModel::get_next_jform_voucher(int currentId, const QString& currentJfOrVchNo) {
+    auto& db = DatabaseManager::instance();
+    QVariant targetId;
+    if (currentId > 0) {
+        targetId = db.executeScalar("SELECT id FROM jform_vouchers WHERE id > ? ORDER BY id ASC LIMIT 1;", {currentId});
+    }
+    if (!targetId.isValid() && !currentJfOrVchNo.trimmed().isEmpty()) {
+        QVariant curRowId = db.executeScalar("SELECT id FROM jform_vouchers WHERE jform_no = ? OR voucher_no = ? LIMIT 1;",
+                                             {currentJfOrVchNo, currentJfOrVchNo});
+        if (curRowId.isValid()) {
+            targetId = db.executeScalar("SELECT id FROM jform_vouchers WHERE id > ? ORDER BY id ASC LIMIT 1;", {curRowId.toInt()});
+        }
+    }
+    if (targetId.isValid()) {
+        return get_jform_voucher(targetId.toInt());
+    }
+    return {};
+}
+
 QVariantList JFormModel::get_jform_register(const QString& fromDate, const QString& toDate) {
     auto& db = DatabaseManager::instance();
     QString sql = "SELECT * FROM jform_vouchers ";

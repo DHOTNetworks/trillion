@@ -35,7 +35,7 @@ public:
     void setWorkingDate(const QString& dateStr);
 
 public slots:
-    void openDateDialog();
+    void openDateDialog(bool isInitial = false);
     void saveVoucher();
     void deleteVoucher();
     void addNewRow(const QString& drcr = "", const QString& ledger = "", double debit = 0.0, double credit = 0.0, const QString& ref = "");

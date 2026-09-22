@@ -24,6 +24,8 @@
 #include "../src/models/financial_years_model.h"
 #include "../src/models/milling_model.h"
 #include "../src/models/jform_model.h"
+#include "../src/models/iform_model.h"
+#include "../src/models/mandi_reports_controller.h"
 #include "../src/models/tds_model.h"
 #include "../src/models/stock_items_model.h"
 #include "../src/models/account_groups_model.h"
@@ -65,6 +67,7 @@ private slots:
 
     // 3. Fiscal Year Partitioning & Clamping
     void testFiscalYearPartitioningAndClamping();
+    void testZeroLeakagePartyPartitioning();
 
     // 4. Voucher Controllers & ViewModels Tests
     void testSalesVoucherControllerCalculations();
@@ -139,6 +142,33 @@ void LogicBoardTestSuite::testBahiKhataMdbStationAndLedgerMigration() {
     QStringList stations018 = partiesModel2.get_stations();
     qDebug() << "[TEST MIGRATION 018] Distinct Stations Count:" << stations018.size() << "Sample:" << stations018.mid(0, 10);
     QVERIFY(stations018.size() > 5);
+
+    // 3. Migrate Data.004 (Mandi Firm: Sushil Kr Pradeep Kr) into sushil_kr_pardeep_kr_data_004.db
+    QString db004Path = "data/sushil_kr_pardeep_kr_data_004.db";
+    if (QFile::exists("../data")) db004Path = "../data/sushil_kr_pardeep_kr_data_004.db";
+    DatabaseManager::instance().switchDatabase(db004Path);
+    QString mdb004 = "Bahi-Khata-Data/Data.004";
+    if (!QFile::exists(mdb004) && QFile::exists("../Bahi-Khata-Data/Data.004")) mdb004 = "../Bahi-Khata-Data/Data.004";
+    bool ok3 = migrator.migrate_mdb_file(mdb004);
+    qDebug() << "[TEST MIGRATION] Data.004 migration success:" << ok3;
+    QVERIFY(ok3);
+
+    // Verify J-Forms and I-Forms migrated
+    QVariant jfCount = DatabaseManager::instance().executeScalar("SELECT COUNT(*) FROM jform_vouchers;");
+    QVariant ifCount = DatabaseManager::instance().executeScalar("SELECT COUNT(*) FROM iform_vouchers;");
+    qDebug() << "[TEST MIGRATION 004] J-Form Count:" << jfCount.toInt() << "I-Form Count:" << ifCount.toInt();
+    QVERIFY(jfCount.toInt() > 0);
+    QVERIFY(ifCount.toInt() > 0);
+
+    // Verify Form M statutory report generation
+    MandiReportsController mandiCtrl;
+    QVariantMap formM = mandiCtrl.get_form_m_return("2011-04-01", "2027-03-31");
+    qDebug() << "[TEST MIGRATION 004] Form M Total Bags:" << formM.value("total_bags").toInt()
+             << "Total Weight:" << formM.value("total_weight").toDouble()
+             << "Total Market Fee:" << formM.value("total_mandi_fee").toDouble()
+             << "Total HRDF:" << formM.value("total_hrdf").toDouble();
+    QVERIFY(formM.value("total_bags").toInt() > 0);
+    QVERIFY(formM.value("total_mandi_fee").toDouble() > 0.0);
 
     // Reset back to isolated test unit DB for subsequent tests
     QString testDbPath = "data/test_unit_suite.db";
@@ -353,6 +383,93 @@ void LogicBoardTestSuite::testFiscalYearPartitioningAndClamping() {
     }
 }
 
+void LogicBoardTestSuite::testZeroLeakagePartyPartitioning() {
+    qDebug() << "[TEST] Running Zero-Leakage Party Partitioning validation...";
+    auto& db = DatabaseManager::instance();
+
+    // 1. Insert two distinct parties that share overlapping keywords in their names
+    db.executeNonQuery("INSERT INTO parties (name, group_name, opening_balance, balance_type, legacy_id) "
+                       "VALUES ('Canara Bank Isolation Test', 'Bank Accounts', 50000.0, 'Dr', 9901);");
+    int canaraId = static_cast<int>(db.lastInsertedId());
+
+    db.executeNonQuery("INSERT INTO parties (name, group_name, opening_balance, balance_type, legacy_id) "
+                       "VALUES ('IndusInd Bank Isolation Test', 'Bank Accounts', 20000.0, 'Dr', 9902);");
+    int indusId = static_cast<int>(db.lastInsertedId());
+
+    // 2. Insert distinct transactions for each party in active FY 2025-26
+    db.executeNonQuery("INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_date, voucher_type, "
+                       "trans_type, account_code, party_id, party_name, opposing_account, dr_cr, amount) "
+                       "VALUES (1, 'FY 2025-26', 'V-CANARA-1', '2025-06-15', 'Payment', 'ChPt', 9901, ?, 'Canara Bank Isolation Test', 'Vendor A', 'Cr', 15000.0);",
+                       {canaraId});
+
+    db.executeNonQuery("INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_date, voucher_type, "
+                       "trans_type, account_code, party_id, party_name, opposing_account, dr_cr, amount) "
+                       "VALUES (1, 'FY 2025-26', 'V-INDUS-1', '2025-07-20', 'Payment', 'ChPt', 9902, ?, 'IndusInd Bank Isolation Test', 'Vendor B', 'Cr', 8000.0);",
+                       {indusId});
+
+    // Also insert prior year transactions (2024-05-10 in FY 2024-25)
+    db.executeNonQuery("INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_date, voucher_type, "
+                       "trans_type, account_code, party_id, party_name, opposing_account, dr_cr, amount) "
+                       "VALUES (1, 'FY 2024-25', 'V-CANARA-PRIOR', '2024-05-10', 'Receipt', 'ChRt', 9901, ?, 'Canara Bank Isolation Test', 'Customer X', 'Dr', 25000.0);",
+                       {canaraId});
+
+    db.executeNonQuery("INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_date, voucher_type, "
+                       "trans_type, account_code, party_id, party_name, opposing_account, dr_cr, amount) "
+                       "VALUES (1, 'FY 2024-25', 'V-INDUS-PRIOR', '2024-06-10', 'Receipt', 'ChRt', 9902, ?, 'IndusInd Bank Isolation Test', 'Customer Y', 'Dr', 100000.0);",
+                       {indusId});
+
+    // 3. Partition transactions for Canara Bank in FY 2025-26 (2025-04-01 to 2026-03-31)
+    PartitionedLedgerData canaraPart = FiscalYearHelper::partitionPartyTransactions("Canara Bank Isolation Test", "2025-04-01", "2026-03-31");
+
+    // Prior debit: 50,000 (initial op) + 25,000 (prior tx) = 75,000.00
+    QCOMPARE(canaraPart.priorDebit, 75000.0);
+    QCOMPARE(canaraPart.priorCredit, 0.0);
+    QCOMPARE(canaraPart.netOpeningBalance, 75000.0);
+    QCOMPARE(canaraPart.openingBalanceType, QString("Dr"));
+
+    // Verify ZERO IndusInd transactions in Canara Bank's partitioned entries
+    for (const auto& e : canaraPart.drEntries) {
+        QVERIFY(!e.voucherNo.contains("INDUS", Qt::CaseInsensitive));
+        QVERIFY(!e.particulars.contains("IndusInd", Qt::CaseInsensitive));
+    }
+    for (const auto& e : canaraPart.crEntries) {
+        QVERIFY(!e.voucherNo.contains("INDUS", Qt::CaseInsensitive));
+        QVERIFY(!e.particulars.contains("IndusInd", Qt::CaseInsensitive));
+    }
+    // Verify Canara period credit has exactly 1 entry: V-CANARA-1 for 15,000
+    bool foundCanaraTx = false;
+    for (const auto& e : canaraPart.crEntries) {
+        if (e.voucherNo == "V-CANARA-1") {
+            foundCanaraTx = true;
+            QCOMPARE(e.amount, 15000.0);
+        }
+    }
+    QVERIFY(foundCanaraTx);
+
+    // 4. Partition transactions for IndusInd Bank in FY 2025-26
+    PartitionedLedgerData indusPart = FiscalYearHelper::partitionPartyTransactions("IndusInd Bank Isolation Test", "2025-04-01", "2026-03-31");
+
+    // Prior debit: 20,000 (initial op) + 100,000 (prior tx) = 120,000.00 (Zero from Canara)
+    QCOMPARE(indusPart.priorDebit, 120000.0);
+    QCOMPARE(indusPart.priorCredit, 0.0);
+    QCOMPARE(indusPart.netOpeningBalance, 120000.0);
+
+    for (const auto& e : indusPart.drEntries) {
+        QVERIFY(!e.voucherNo.contains("CANARA", Qt::CaseInsensitive));
+        QVERIFY(!e.particulars.contains("Canara", Qt::CaseInsensitive));
+    }
+    for (const auto& e : indusPart.crEntries) {
+        QVERIFY(!e.voucherNo.contains("CANARA", Qt::CaseInsensitive));
+        QVERIFY(!e.particulars.contains("Canara", Qt::CaseInsensitive));
+    }
+
+    // 5. Clean up test records
+    db.executeNonQuery("DELETE FROM transactions WHERE voucher_no LIKE 'V-CANARA%' OR voucher_no LIKE 'V-INDUS%';");
+    db.executeNonQuery("DELETE FROM parties WHERE id IN (?, ?);", {canaraId, indusId});
+
+    qDebug() << "[TEST] Zero-Leakage Party Partitioning validation passed successfully!";
+}
+
 // -------------------------------------------------------------
 // 4. Voucher Controllers & ViewModels Tests
 // -------------------------------------------------------------
@@ -529,6 +646,25 @@ void LogicBoardTestSuite::testPerFinancialYearVoucherNumbering() {
     // Date string resolution: 01-05-2026 belongs to FY 2026-27
     QString vchByDate = salesModel.get_next_voucher_no("01-05-2026");
     QCOMPARE(vchByDate, vch2627);
+
+    // Multi-Year Voucher Lookup Disambiguation Test
+    auto& db = DatabaseManager::instance();
+    // Insert same voucher_no '999' into two different fiscal years
+    db.executeNonQuery("INSERT INTO vouchers (voucher_no, voucher_date, voucher_type, party_name, account_type, amount, narration, financial_year) "
+                       "VALUES ('999', '2023-08-15', 'Payment', 'Old FY 23-24 Party', 'Cash', 1000.0, 'Old Year Test', 'FY 2023-24');");
+    db.executeNonQuery("INSERT INTO vouchers (voucher_no, voucher_date, voucher_type, party_name, account_type, amount, narration, financial_year) "
+                       "VALUES ('999', '2026-07-09', 'Payment', 'New FY 26-27 Party', 'Canara Bank CC', 3544780.0, 'New Year Test', 'FY 2026-27');");
+
+    VouchersModel vchModel;
+    // Querying with date 2026-07-09 must return the 2026 voucher
+    QVariantMap vch2026 = vchModel.get_cheque_voucher("999", "09-07-2026");
+    QCOMPARE(vch2026.value("party_name").toString(), QString("New FY 26-27 Party"));
+    QCOMPARE(vch2026.value("amount").toDouble(), 3544780.0);
+
+    // Querying with date 2023-08-15 must return the 2023 voucher
+    QVariantMap vch2023 = vchModel.get_cheque_voucher("ChPt 999", "15-08-2023");
+    QCOMPARE(vch2023.value("party_name").toString(), QString("Old FY 23-24 Party"));
+    QCOMPARE(vch2023.value("amount").toDouble(), 1000.0);
 }
 
 // -------------------------------------------------------------

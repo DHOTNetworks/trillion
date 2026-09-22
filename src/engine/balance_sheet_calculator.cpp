@@ -465,7 +465,7 @@ BalanceSheetData BalanceSheetCalculator::calculate(const QString& requestedAsOnD
     stockGroup.groupName = "Stock-in-Hand";
     stockGroup.isGroup = true;
     stockGroup.level = 0;
-    stockGroup.amount = data.closingStockValue;
+    stockGroup.amount = 0.0;
 
     // Fetch breakdown of closing stock from custom_closing_stocks or stock_items
     QVariantList customStocks = DatabaseManager::instance().executeQuery(
@@ -491,9 +491,14 @@ BalanceSheetData BalanceSheetCalculator::calculate(const QString& requestedAsOnD
     if (sumCustomStock > 0.01) {
         stockGroup.amount = sumCustomStock;
         data.closingStockValue = sumCustomStock;
+    } else if (data.closingStockValue > 0.01) {
+        stockGroup.amount = data.closingStockValue;
     }
-    stockGroup.amountFmt = AccountingEngine::formatIndianCurrency(stockGroup.amount, true);
-    assetGroupMap["Trading Items Stock A/c"] = stockGroup;
+
+    if (stockGroup.amount > 0.01) {
+        stockGroup.amountFmt = AccountingEngine::formatIndianCurrency(stockGroup.amount, true);
+        assetGroupMap["Trading Items Stock A/c"] = stockGroup;
+    }
 
     // 10. Reconcile Net Profit & Balance Sheet Totals
     double sumLiabBeforeProfit = 0.0;

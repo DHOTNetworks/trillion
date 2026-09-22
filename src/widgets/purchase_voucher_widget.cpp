@@ -983,7 +983,7 @@ void PurchaseVoucherWidget::onStockItemConfigured(int row, const QVariantMap& it
     focusTableAt(row, 2);
 }
 
-void PurchaseVoucherWidget::openDateDialog() {
+void PurchaseVoucherWidget::openDateDialog(bool isInitial) {
     QString curDate = m_invoiceDateEdit ? m_invoiceDateEdit->formattedDate() : "";
     QString newDisp, newIso;
     if (VoucherDateDialog::getVoucherDate(this, curDate, &newDisp, &newIso)) {
@@ -996,7 +996,9 @@ void PurchaseVoucherWidget::openDateDialog() {
             m_partySearchWidget->selectAll();
         }
     } else {
-        if (m_partySearchWidget) {
+        if (isInitial) {
+            emit backRequested();
+        } else if (m_partySearchWidget) {
             m_partySearchWidget->setFocus();
         }
     }
@@ -1004,10 +1006,7 @@ void PurchaseVoucherWidget::openDateDialog() {
 
 void PurchaseVoucherWidget::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
-    if (!m_hasInitialDateOpened && !isEditMode()) {
-        m_hasInitialDateOpened = true;
-        QTimer::singleShot(50, this, &PurchaseVoucherWidget::openDateDialog);
-    } else if (m_partySearchWidget) {
+    if (m_partySearchWidget) {
         m_partySearchWidget->setFocus();
     }
 }

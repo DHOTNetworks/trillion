@@ -26,6 +26,7 @@ public:
     bool executeNonQuery(const QString& sql, const QVariantList& params = {});
     QVariant executeScalar(const QString& sql, const QVariantList& params = {});
     qint64 lastInsertedId();
+    void ensureTablesExist();
 
 private:
     DatabaseManager();
@@ -36,6 +37,4 @@ private:
     sqlite3* m_db = nullptr;
     QRecursiveMutex m_mutex;
     QString m_dbPath;
-
-    void ensureTablesExist();
 };

@@ -785,6 +785,7 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
     auto tdsRows = readTableRows(mdb, "TDSDeductions");
 
     auto& db = DatabaseManager::instance();
+    db.ensureTablesExist();
     db.executeNonQuery("PRAGMA foreign_keys = OFF;");
     db.beginTransaction();
 
@@ -2745,6 +2746,198 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
         jformCount++;
     }
     std::cout << "[INFO] Migrated " << jformCount << " J-Form vouchers!" << std::endl;
+
+
+    // =========================================================
+    // PASS 3.6: I-FORM MANDI ISSUE VOUCHERS (TransType == 'IFrm')
+    // =========================================================
+    updateProgress(90, "Migrating I-Form Mandi Buyer Issue Vouchers...");
+
+    // Group StockTransactions where TransType == 'IFrm' by (VoucherNumber, VoucherDate)
+    std::map<std::pair<std::string, std::string>, std::vector<std::map<std::string, std::string>>> iformStockGroups;
+    for (const auto& st : stockTransRows) {
+        std::string tt = cleanText(getField(st, "TransType"));
+        if (tt != "IFrm") continue;
+        std::string vNo = cleanText(getField(st, "VoucherNumber"));
+        QString vDate = parseDateFormatted(QString::fromStdString(getField(st, "VoucherDate")));
+        iformStockGroups[{vNo, vDate.toStdString()}].push_back(st);
+    }
+
+    // Group Transactions where TransType == 'IFrm' by (VoucherNumber, VoucherDate)
+    std::map<std::pair<std::string, std::string>, std::vector<std::map<std::string, std::string>>> iformTxGroups;
+    for (const auto& tr : transRows) {
+        std::string tt = cleanText(getField(tr, "TransType"));
+        if (tt != "IFrm") continue;
+        std::string vNo = cleanText(getField(tr, "VoucherNumber"));
+        QString vDate = parseDateFormatted(QString::fromStdString(getField(tr, "VoucherDate")));
+        iformTxGroups[{vNo, vDate.toStdString()}].push_back(tr);
+    }
+
+    int iformCount = 0;
+    std::set<std::pair<std::string, std::string>> allIFormKeys;
+    for (const auto& p : iformStockGroups) allIFormKeys.insert(p.first);
+    for (const auto& p : iformTxGroups) allIFormKeys.insert(p.first);
+
+    for (const auto& k : allIFormKeys) {
+        std::string vNo = k.first;
+        QString vDate = QString::fromStdString(k.second);
+        int vchNum = parseIntVal(vNo, 1);
+        QString fyVal = computeFinancialYear(vDate);
+        int fyId = fyNameToId.count(fyVal) ? fyNameToId[fyVal] : 1;
+
+        QString iformNo = QString::fromStdString(vNo);
+        int buyerId = 0;
+        QString buyerName = "";
+        QString brokerName = "";
+        QString vehicleNo = "";
+        int dueDays = 0;
+        double goodsAmount = 0.0;
+        double damiAmount = 0.0;
+        double damiRate = 2.5;
+        double mandiFeeAmount = 0.0;
+        double mandiFeeRate = 2.0;
+        double hrdfAmount = 0.0;
+        double hrdfRate = 0.5;
+        double labourAmount = 0.0;
+        double taxAmount = 0.0;
+        double roundOff = 0.0;
+        double grandTotal = 0.0;
+        QString narration = "";
+
+        // Check Transactions for header and breakdown details
+        auto itTx = iformTxGroups.find(k);
+        if (itTx != iformTxGroups.end()) {
+            for (const auto& tr : itTx->second) {
+                std::string invNo = cleanText(getField(tr, "InvoiceNo"));
+                if (!invNo.empty()) iformNo = QString::fromStdString(invNo);
+
+                std::string stNarr = cleanText(getField(tr, "Narration"));
+                if (!stNarr.empty() && narration.isEmpty()) narration = QString::fromStdString(stNarr);
+
+                std::string bName = cleanText(getField(tr, "BrokerName"));
+                if (!bName.empty() && brokerName.isEmpty()) brokerName = QString::fromStdString(bName);
+
+                int dDays = parseIntVal(getField(tr, "DueDays"));
+                if (dDays > 0) dueDays = dDays;
+
+                std::string entryType = cleanText(getField(tr, "EntryType"));
+                std::string drCr = cleanText(getField(tr, "DrCr"));
+                double amt = parseDoubleVal(getField(tr, "Amount"));
+                int acCode = parseIntVal(getField(tr, "AccountCode"));
+                std::string acName = "";
+                auto itP = ledgerDetailMap.find(acCode);
+                if (itP != ledgerDetailMap.end()) {
+                    acName = itP->second.name;
+                }
+                std::string acNameLower = toLowerStr(acName);
+
+                if (drCr == "Dr") {
+                    grandTotal = amt;
+                    if (buyerId == 0 && itP != ledgerDetailMap.end()) {
+                        buyerId = itP->second.id;
+                        buyerName = QString::fromStdString(itP->second.name);
+                    }
+                } else if (drCr == "Cr") {
+                    if (acNameLower.find("dami") != std::string::npos || acNameLower.find("commission") != std::string::npos) {
+                        damiAmount += amt;
+                    } else if (acNameLower.find("market fee") != std::string::npos || acNameLower.find("mkt fee") != std::string::npos) {
+                        mandiFeeAmount += amt;
+                    } else if (acNameLower.find("h.r.d.f") != std::string::npos || acNameLower.find("hrdf") != std::string::npos) {
+                        hrdfAmount += amt;
+                    } else if (acNameLower.find("labour") != std::string::npos || acNameLower.find("hamali") != std::string::npos) {
+                        labourAmount += amt;
+                    } else if (acNameLower.find("vat") != std::string::npos || acNameLower.find("gst") != std::string::npos || acNameLower.find("tax") != std::string::npos) {
+                        taxAmount += amt;
+                    } else if (acNameLower.find("maal") != std::string::npos || acNameLower.find("sale") != std::string::npos || acNameLower.find("purchase") != std::string::npos) {
+                        goodsAmount += amt;
+                    } else if (entryType == "Round Off") {
+                        roundOff -= amt;
+                    }
+                }
+            }
+        }
+
+        // Sum items from stock transactions
+        int totalBags = 0;
+        double totalWeight = 0.0;
+        double stockGoodsAmount = 0.0;
+
+        auto itStock = iformStockGroups.find(k);
+        if (itStock != iformStockGroups.end()) {
+            for (const auto& st : itStock->second) {
+                totalBags += parseIntVal(getField(st, "Bags"));
+                totalWeight += parseDoubleVal(getField(st, "Weight"));
+                stockGoodsAmount += parseDoubleVal(getField(st, "Amount"));
+                double mfRate = parseDoubleVal(getField(st, "MarketFeeRate"));
+                if (mfRate > 0) mandiFeeRate = mfRate;
+                double hrRate = parseDoubleVal(getField(st, "HRDFRate"));
+                if (hrRate > 0) hrdfRate = hrRate;
+            }
+        }
+
+        if (goodsAmount <= 0.001) goodsAmount = stockGoodsAmount;
+        if (grandTotal <= 0.001) grandTotal = goodsAmount + damiAmount + mandiFeeAmount + hrdfAmount + labourAmount + taxAmount + roundOff;
+        if (buyerName.isEmpty()) buyerName = "Mandi Buyer";
+
+        db.executeNonQuery(
+            "INSERT INTO iform_vouchers ("
+            "fy_id, financial_year, voucher_no, voucher_date, iform_no, buyer_id, buyer_name, "
+            "broker_name, due_days, vehicle_no, total_bags, total_weight, "
+            "goods_amount, dami_rate, dami_amount, mandi_fee_rate, mandi_fee_amount, "
+            "hrdf_rate, hrdf_amount, labour_amount, taxable_amount, tax_amount, "
+            "round_off, grand_total, narration) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+            {
+                (fyId > 0 ? QVariant(fyId) : QVariant()), fyVal, vchNum, vDate, iformNo,
+                (buyerId > 0 ? QVariant(buyerId) : QVariant()), buyerName,
+                brokerName, dueDays, vehicleNo, totalBags, totalWeight,
+                goodsAmount, damiRate, damiAmount, mandiFeeRate, mandiFeeAmount,
+                hrdfRate, hrdfAmount, labourAmount, goodsAmount, taxAmount,
+                roundOff, grandTotal, narration
+            }
+        );
+
+        QVariant newIFormId = db.executeScalar("SELECT last_insert_rowid();");
+        int ifVoucherId = newIFormId.toInt();
+
+        // Insert line items
+        if (itStock != iformStockGroups.end()) {
+            for (const auto& st : itStock->second) {
+                int iCode = parseIntVal(getField(st, "ItemCode"));
+                int itemId = 0;
+                std::string itemName = "Paddy";
+                auto itItem = itemCodeMap.find(iCode);
+                if (itItem != itemCodeMap.end()) {
+                    itemId = itItem->second.id;
+                    itemName = itItem->second.name;
+                }
+
+                int bags = parseIntVal(getField(st, "Bags"));
+                double loose = parseDoubleVal(getField(st, "LooseWeight"));
+                double packing = parseDoubleVal(getField(st, "Packing"), 0.500);
+                double wt = parseDoubleVal(getField(st, "Weight"));
+                double rate = parseDoubleVal(getField(st, "Rate"));
+                double amt = parseDoubleVal(getField(st, "Amount"));
+                double lineDami = (amt * damiRate) / 100.0;
+                double lineMFee = (amt * mandiFeeRate) / 100.0;
+                double lineHRDF = (amt * hrdfRate) / 100.0;
+
+                db.executeNonQuery(
+                    "INSERT INTO iform_voucher_items ("
+                    "voucher_id, voucher_no, item_id, item_name, bags, loose_weight, packing, weight, rate, amount, "
+                    "dami_rate, dami_amount, mandi_fee_rate, mandi_fee_amount, hrdf_rate, hrdf_amount, labour_amount, tax_rate, tax_amount) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0.0, 0.0, 0.0);",
+                    {
+                        ifVoucherId, vchNum, (itemId > 0 ? QVariant(itemId) : QVariant()), QString::fromStdString(itemName),
+                        bags, loose, packing, wt, rate, amt,
+                        damiRate, lineDami, mandiFeeRate, lineMFee, hrdfRate, lineHRDF
+                    }
+                );
+            }
+        }
+        iformCount++;
+    }
+    std::cout << "[INFO] Migrated " << iformCount << " I-Form vouchers!" << std::endl;
 
 
     // =========================================================

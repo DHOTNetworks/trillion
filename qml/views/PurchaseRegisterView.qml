@@ -193,6 +193,10 @@ T.ScrollView {
                                         purchaseListView.forceActiveFocus()
                                         if (purchaseListView.currentIndex < 0 && purchaseListView.count > 0) purchaseListView.currentIndex = 0
                                     }
+                                    Keys.onEscapePressed: function(event) {
+                                        event.accepted = true
+                                        root.cancelRequested()
+                                    }
                                 }
 
                                 Text {
@@ -268,6 +272,10 @@ T.ScrollView {
                             var it = purchaseRegisterCtrl.model.get(currentIndex)
                             if (it) root.openInvoice(it.invNoVal, it.vchNoVal, it.id, it.dateVal)
                         }
+                    }
+                    Keys.onEscapePressed: function(event) {
+                        event.accepted = true
+                        root.cancelRequested()
                     }
                     Keys.onUpPressed: function(event) {
                         event.accepted = true

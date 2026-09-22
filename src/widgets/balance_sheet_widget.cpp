@@ -538,6 +538,22 @@ bool BalanceSheetWidget::eventFilter(QObject* watched, QEvent* event) {
                 handleItemDrillDown(tree->currentItem());
                 return true;
             }
+        } else if (kEvent->key() == Qt::Key_Right && watched == m_liabilitiesTree) {
+            if (m_assetsTree) {
+                m_assetsTree->setFocus(Qt::OtherFocusReason);
+                if (!m_assetsTree->currentItem() && m_assetsTree->topLevelItemCount() > 0) {
+                    m_assetsTree->setCurrentItem(m_assetsTree->topLevelItem(0));
+                }
+                return true;
+            }
+        } else if (kEvent->key() == Qt::Key_Left && watched == m_assetsTree) {
+            if (m_liabilitiesTree) {
+                m_liabilitiesTree->setFocus(Qt::OtherFocusReason);
+                if (!m_liabilitiesTree->currentItem() && m_liabilitiesTree->topLevelItemCount() > 0) {
+                    m_liabilitiesTree->setCurrentItem(m_liabilitiesTree->topLevelItem(0));
+                }
+                return true;
+            }
         }
     }
     return QWidget::eventFilter(watched, event);
@@ -606,28 +622,20 @@ void BalanceSheetWidget::keyPressEvent(QKeyEvent* event) {
 
     // Switch between Liabilities (Left) and Assets (Right) columns
     if (event->key() == Qt::Key_Left) {
-        if (!m_liabilitiesTree->hasFocus()) {
+        if (m_liabilitiesTree) {
             event->accept();
-            m_lastAssetIndex = m_assetsTree->indexOfTopLevelItem(m_assetsTree->currentItem());
             m_liabilitiesTree->setFocus(Qt::OtherFocusReason);
-            if (m_liabilitiesTree->currentItem()) {
-                m_liabilitiesTree->setCurrentItem(m_liabilitiesTree->currentItem());
-            } else if (m_liabilitiesTree->topLevelItemCount() > 0) {
-                int idx = qBound(0, m_lastLiabIndex, m_liabilitiesTree->topLevelItemCount() - 1);
-                m_liabilitiesTree->setCurrentItem(m_liabilitiesTree->topLevelItem(idx));
+            if (!m_liabilitiesTree->currentItem() && m_liabilitiesTree->topLevelItemCount() > 0) {
+                m_liabilitiesTree->setCurrentItem(m_liabilitiesTree->topLevelItem(0));
             }
             return;
         }
     } else if (event->key() == Qt::Key_Right) {
-        if (!m_assetsTree->hasFocus()) {
+        if (m_assetsTree) {
             event->accept();
-            m_lastLiabIndex = m_liabilitiesTree->indexOfTopLevelItem(m_liabilitiesTree->currentItem());
             m_assetsTree->setFocus(Qt::OtherFocusReason);
-            if (m_assetsTree->currentItem()) {
-                m_assetsTree->setCurrentItem(m_assetsTree->currentItem());
-            } else if (m_assetsTree->topLevelItemCount() > 0) {
-                int idx = qBound(0, m_lastAssetIndex, m_assetsTree->topLevelItemCount() - 1);
-                m_assetsTree->setCurrentItem(m_assetsTree->topLevelItem(idx));
+            if (!m_assetsTree->currentItem() && m_assetsTree->topLevelItemCount() > 0) {
+                m_assetsTree->setCurrentItem(m_assetsTree->topLevelItem(0));
             }
             return;
         }

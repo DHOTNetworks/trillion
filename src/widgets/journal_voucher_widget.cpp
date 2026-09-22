@@ -339,7 +339,7 @@ void JournalVoucherWidget::onDateChanged(const QDate& date) {
     updateFiscalYearAndVoucherNo();
 }
 
-void JournalVoucherWidget::openDateDialog() {
+void JournalVoucherWidget::openDateDialog(bool isInitial) {
     QString curIso = m_dateEdit ? m_dateEdit->isoDate() : QDate::currentDate().toString("yyyy-MM-dd");
     QString displayDate, isoDate;
     if (VoucherDateDialog::getVoucherDate(this, curIso, &displayDate, &isoDate)) {
@@ -347,6 +347,12 @@ void JournalVoucherWidget::openDateDialog() {
             m_dateEdit->setIsoDate(isoDate);
             updateDayOfWeek(m_dateEdit->date());
             updateFiscalYearAndVoucherNo();
+            focusFirstRow();
+        }
+    } else {
+        if (isInitial) {
+            emit backRequested();
+        } else {
             focusFirstRow();
         }
     }
@@ -587,8 +593,8 @@ void JournalVoucherWidget::recalculateTotals() {
     }
 }
 
-bool JournalVoucherWidget::loadVoucherForEditing(const QVariant& vchNoOrId, const QString& /*dateHint*/) {
-    QVariantMap data = m_vouchersModel.get_journal_voucher(vchNoOrId.toString());
+bool JournalVoucherWidget::loadVoucherForEditing(const QVariant& vchNoOrId, const QString& dateHint) {
+    QVariantMap data = m_vouchersModel.get_journal_voucher(vchNoOrId, dateHint);
     if (data.isEmpty()) {
         setStatusMessage("Journal Voucher not found for alteration.", true);
         return false;
@@ -752,12 +758,7 @@ void JournalVoucherWidget::focusFirstRow() {
 
 void JournalVoucherWidget::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
-    if (!m_hasInitialDateOpened && !isEditMode()) {
-        m_hasInitialDateOpened = true;
-        QTimer::singleShot(50, this, &JournalVoucherWidget::openDateDialog);
-    } else {
-        focusFirstRow();
-    }
+    focusFirstRow();
 }
 
 void JournalVoucherWidget::keyPressEvent(QKeyEvent* event) {
