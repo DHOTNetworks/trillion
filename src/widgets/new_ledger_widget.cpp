@@ -294,31 +294,30 @@ QWidget* NewLedgerWidget::createHeaderSection() {
 
     layout->addStretch(1);
 
-    // Right: Total Opening Bal. Monitor
+    // Right: Total Opening Bal. Monitor Card
     auto* balCard = new QFrame(card);
-    balCard->setFixedHeight(36);
-    balCard->setFixedWidth(270);
-    balCard->setStyleSheet("background-color: #1E293B; border: 1px solid #334155; border-radius: 5px;");
+    balCard->setFixedHeight(38);
+    balCard->setStyleSheet("background-color: #1E293B; border: 1px solid #334155; border-radius: 6px;");
     auto* balLayout = new QVBoxLayout(balCard);
-    balLayout->setContentsMargins(6, 2, 6, 2);
-    balLayout->setSpacing(0);
+    balLayout->setContentsMargins(10, 2, 10, 2);
+    balLayout->setSpacing(1);
 
     auto* drCrRow = new QHBoxLayout();
-    drCrRow->setSpacing(4);
-    auto* totLbl = new QLabel("OPENING BAL:", balCard);
-    totLbl->setStyleSheet("color: #F87171; font-size: 9px; font-weight: 800; border: none; background: transparent;");
-    m_totalDrLbl = new QLabel("Dr. 0.00", balCard);
-    m_totalDrLbl->setStyleSheet("color: #F8FAFC; font-size: 10px; font-weight: 700; border: none; background: transparent;");
-    m_totalCrLbl = new QLabel("Cr. 0.00", balCard);
-    m_totalCrLbl->setStyleSheet("color: #F8FAFC; font-size: 10px; font-weight: 700; border: none; background: transparent;");
+    drCrRow->setSpacing(14);
+
+    m_totalDrLbl = new QLabel("Dr: ₹0.00", balCard);
+    m_totalDrLbl->setStyleSheet("color: #93C5FD; font-size: 11px; font-weight: 700; border: none; background: transparent;");
+
+    m_totalCrLbl = new QLabel("Cr: ₹0.00", balCard);
+    m_totalCrLbl->setStyleSheet("color: #86EFAC; font-size: 11px; font-weight: 700; border: none; background: transparent;");
     m_totalCrLbl->setAlignment(Qt::AlignRight);
-    drCrRow->addWidget(totLbl);
+
     drCrRow->addWidget(m_totalDrLbl);
     drCrRow->addWidget(m_totalCrLbl);
     balLayout->addLayout(drCrRow);
 
-    m_diffBalLbl = new QLabel("Diff. 0.00 (Balanced)", balCard);
-    m_diffBalLbl->setStyleSheet("color: #4ADE80; font-size: 9px; font-weight: 800; border: none; background: transparent;");
+    m_diffBalLbl = new QLabel("Diff: ₹0.00 (Balanced)", balCard);
+    m_diffBalLbl->setStyleSheet("color: #4ADE80; font-size: 10px; font-weight: 800; border: none; background: transparent;");
     m_diffBalLbl->setAlignment(Qt::AlignCenter);
     balLayout->addWidget(m_diffBalLbl);
 
@@ -754,16 +753,20 @@ void NewLedgerWidget::updateTotalOpeningBalDisplay() {
     double diff = summary.value("diff").toDouble();
     QString diffType = summary.value("diff_type").toString();
 
-    if (m_totalDrLbl) m_totalDrLbl->setText(QString("Dr. %1").arg(AccountingEngine::formatIndianCurrency(dr, false)));
-    if (m_totalCrLbl) m_totalCrLbl->setText(QString("Cr. %1").arg(AccountingEngine::formatIndianCurrency(cr, false)));
+    if (m_totalDrLbl) {
+        m_totalDrLbl->setText(QString("Dr: %1").arg(AccountingEngine::formatIndianCurrency(dr, true)));
+    }
+    if (m_totalCrLbl) {
+        m_totalCrLbl->setText(QString("Cr: %1").arg(AccountingEngine::formatIndianCurrency(cr, true)));
+    }
 
     if (m_diffBalLbl) {
         if (diffType == "Balanced" || diff <= 0.001) {
-            m_diffBalLbl->setText("Diff. 0.00 (Balanced)");
+            m_diffBalLbl->setText("Diff: ₹0.00 (Balanced)");
             m_diffBalLbl->setStyleSheet("color: #4ADE80; font-size: 10px; font-weight: 800; border: none; background: transparent;");
         } else {
-            m_diffBalLbl->setText(QString("Diff. %1 %2").arg(AccountingEngine::formatIndianCurrency(diff, false), diffType));
-            m_diffBalLbl->setStyleSheet("color: #38BDF8; font-size: 10px; font-weight: 800; border: none; background: transparent;");
+            m_diffBalLbl->setText(QString("Diff: %1 %2").arg(AccountingEngine::formatIndianCurrency(diff, true), diffType));
+            m_diffBalLbl->setStyleSheet("color: #F87171; font-size: 10px; font-weight: 800; border: none; background: transparent;");
         }
     }
 }
