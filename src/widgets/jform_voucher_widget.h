@@ -12,7 +12,7 @@
 #include <QGroupBox>
 #include <QFrame>
 #include "accounting_date_edit.h"
-#include "party_search_widget.h"
+#include "account_search_box.h"
 #include "item_search_delegate.h"
 #include "../models/jform_model.h"
 #include "../models/parties_model.h"
@@ -99,7 +99,7 @@ private:
     QLabel* m_fyBadgeLabel = nullptr;
 
     // Farmer Search & Info
-    PartySearchWidget* m_farmerSearch = nullptr;
+    AccountSearchBox* m_farmerSearch = nullptr;
     QLabel* m_farmerBalanceLabel = nullptr;
     QComboBox* m_saleStatusCombo = nullptr;
     QLineEdit* m_dueDaysEdit = nullptr;

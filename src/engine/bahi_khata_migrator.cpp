@@ -122,13 +122,17 @@ static QString parseDateFormatted(const QString& raw) {
 }
 
 static QString computeFinancialYear(const QString& isoDate) {
-    if (isoDate.length() < 7) return "FY 2025-26";
+    if (isoDate.length() < 7) {
+        QDate cur = QDate::currentDate();
+        int curYr = (cur.month() >= 4) ? cur.year() : (cur.year() - 1);
+        return QString("FY %1-%2").arg(curYr).arg(QString::number((curYr + 1) % 100).rightJustified(2, '0'));
+    }
     int year = isoDate.left(4).toInt();
     int month = isoDate.mid(5, 2).toInt();
     if (month >= 4) {
-        return QString("FY %1-%2").arg(year).arg(QString::number(year + 1).right(2));
+        return QString("FY %1-%2").arg(year).arg(QString::number((year + 1) % 100).rightJustified(2, '0'));
     } else {
-        return QString("FY %1-%2").arg(year - 1).arg(QString::number(year).right(2));
+        return QString("FY %1-%2").arg(year - 1).arg(QString::number(year % 100).rightJustified(2, '0'));
     }
 }
 
@@ -234,7 +238,7 @@ BahiKhataMigrator::BahiKhataMigrator(QObject* parent) : QObject(parent) {}
 BahiKhataMigrator::~BahiKhataMigrator() = default;
 
 QString BahiKhataMigrator::choose_mdb_file(const QString& startDir) {
-    QString filter = "Bahi Khata Databases (Data.* *.0* *.001 *.002 *.003 *.004 *.005 *.006 *.007 *.008 *.009 *.mdb *.accdb);;All Files (*)";
+    QString filter = "Bahi Khata Databases (Data.* *.0* *.mdb *.accdb);;All Files (*.*)";
     return QFileDialog::getOpenFileName(nullptr, "Select Bahi Khata Database File (Data.* or *.mdb)", startDir, filter);
 }
 
@@ -507,7 +511,7 @@ QVariantMap BahiKhataMigrator::inspect_mdb_file(const QString& mdbFilePath) {
         mdb = mdb_open(cleanPath.toUtf8().constData(), MDB_NOFLAGS);
     }
     if (!mdb) {
-        result["error"] = "Unable to open Jet database file. Ensure it is a valid .mdb / .004 file.";
+        result["error"] = "Unable to open Jet database file. Ensure it is a valid .mdb / Data.*** file.";
         return result;
     }
 
@@ -569,8 +573,8 @@ QVariantMap BahiKhataMigrator::inspect_mdb_file(const QString& mdbFilePath) {
         result["firmType"] = firmType;
         result["gstin"] = gstin;
         result["pan"] = pan;
-        result["station"] = station.isEmpty() ? "Sirsa" : station;
-        result["state"] = state.isEmpty() ? "Haryana" : state;
+        result["station"] = station;
+        result["state"] = state;
         result["stateCode"] = extractStateCode(gstin, state);
         result["pincode"] = extractPincode(address);
         result["address"] = address;
@@ -872,8 +876,8 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
                 firmType,
                 business,
                 address,
-                station.isEmpty() ? "Sirsa" : station,
-                state.isEmpty() ? "Haryana" : state,
+                station,
+                state,
                 stateCode,
                 pincode,
                 phone,
@@ -953,14 +957,16 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
         }
     }
 
-    // Ensure all financial years from min(earliestYear, booksStartYear) up to max(latestYear, 2026) exist
-    int startY = 2026;
+    // Ensure all financial years from min(earliestYear, booksStartYear) up to max(latestYear, currentYear) exist
+    QDate cur = QDate::currentDate();
+    int currentFyStartYear = (cur.month() >= 4) ? cur.year() : (cur.year() - 1);
+    int startY = currentFyStartYear;
     if (booksStartYear > 2000) startY = std::min(startY, booksStartYear);
     if (earliestYear < 9999 && earliestYear > 2000) startY = std::min(startY, earliestYear);
-    int targetMaxYear = std::max(latestYear, 2026);
+    int targetMaxYear = std::max(latestYear, currentFyStartYear);
 
     for (int y = startY; y <= targetMaxYear; ++y) {
-        QString fyName = QString("FY %1-%2").arg(y).arg(QString::number(y + 1).right(2));
+        QString fyName = QString("FY %1-%2").arg(y).arg(QString::number((y + 1) % 100).rightJustified(2, '0'));
         if (seenFys.find(fyName) == seenFys.end()) {
             seenFys.insert(fyName);
             QString fromD = QString("%1-04-01").arg(y);
@@ -978,8 +984,8 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
         }
     }
 
-    // Activate the current operational FY (prefer 2026-27 or latest)
-    QString activeFy = seenFys.count("FY 2026-27") ? "FY 2026-27" : latestFyName;
+    // Activate the latest operational FY
+    QString activeFy = latestFyName;
     if (!activeFy.isEmpty()) {
         db.executeNonQuery("UPDATE financial_years SET is_active = 0;");
         db.executeNonQuery("UPDATE financial_years SET is_active = 1 WHERE year_name = ?;", {activeFy});
@@ -1408,7 +1414,7 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
 
         // 5. Trading Posting Accounts
         int purcLedgerCode = parseIntVal(getField(item, "PurchaseLedger"));
-        std::string purcLedger = "Purchase Accounts";
+        std::string purcLedger = "";
         if (ledgerCodeMap.count(purcLedgerCode)) purcLedger = ledgerCodeMap[purcLedgerCode];
         int purcLedgerId = legacyIdToPartyId.count(purcLedgerCode) ? legacyIdToPartyId[purcLedgerCode] : 0;
 
@@ -1418,7 +1424,7 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
         int purcRetLedgerId = legacyIdToPartyId.count(purcRetLedgerCode) ? legacyIdToPartyId[purcRetLedgerCode] : purcLedgerId;
 
         int saleLedgerCode = parseIntVal(getField(item, "SaleLedger"));
-        std::string saleLedger = "Sales Accounts";
+        std::string saleLedger = "";
         if (ledgerCodeMap.count(saleLedgerCode)) saleLedger = ledgerCodeMap[saleLedgerCode];
         int saleLedgerId = legacyIdToPartyId.count(saleLedgerCode) ? legacyIdToPartyId[saleLedgerCode] : 0;
 
@@ -1428,7 +1434,7 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
         int saleRetLedgerId = legacyIdToPartyId.count(saleRetLedgerCode) ? legacyIdToPartyId[saleRetLedgerCode] : saleLedgerId;
 
         int stockLedgerCode = parseIntVal(getField(item, "StockLedger"));
-        std::string stockLedger = "Stock-in-Hand";
+        std::string stockLedger = "";
         if (ledgerCodeMap.count(stockLedgerCode)) stockLedger = ledgerCodeMap[stockLedgerCode];
         int stockLedgerId = legacyIdToPartyId.count(stockLedgerCode) ? legacyIdToPartyId[stockLedgerCode] : 0;
 
@@ -1482,6 +1488,8 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
         double silai3 = parseDoubleVal(getField(item, "SilaiRate3"));
         double loading3 = parseDoubleVal(getField(item, "LoadingRate3"));
 
+        std::string companyName = cleanText(getField(item, "CompanyName"));
+
         db.executeNonQuery(
             "INSERT INTO stock_items ("
             "name, code, item_type, goods_type, trading_group, group_code, company_name, category_name, unit, unit_code, "
@@ -1498,7 +1506,7 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
             "utrai_rate_2, jharai_rate_2, bharai_rate_2, tulai_rate_2, khichai_rate_2, silai_rate_2, loading_rate_2, "
             "utrai_rate_3, jharai_rate_3, bharai_rate_3, tulai_rate_3, khichai_rate_3, silai_rate_3, loading_rate_3, "
             "legacy_code) "
-            "VALUES (?, ?, ?, ?, ?, ?, 'Mill Master', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
             {
                 QString::fromStdString(iName),
                 QString::fromStdString(code),
@@ -1506,6 +1514,7 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
                 QString::fromStdString(goodsType),
                 QString::fromStdString(tradingGroup),
                 groupCode,
+                QString::fromStdString(companyName),
                 QString::fromStdString(tradingGroup),
                 QString::fromStdString(unit),
                 unitCode,

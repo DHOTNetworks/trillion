@@ -1,6 +1,7 @@
 #include "paddy_procurement_controller.h"
 #include "paddy_arrivals_model.h"
 #include "financial_years_model.h"
+#include "../database_manager.h"
 #include "../services/accounting_date_service.h"
 #include "../services/financial_math_service.h"
 #include <cmath>
@@ -87,7 +88,15 @@ void PaddyProcurementController::resetForm(const QString &workingDate) {
     m_farmerName.clear();
     emit farmerNameChanged();
 
-    m_paddyVariety = "Sona Masoori";
+    QVariant lastVar = DatabaseManager::instance().executeScalar(
+        "SELECT paddy_variety FROM paddy_arrivals WHERE paddy_variety IS NOT NULL AND TRIM(paddy_variety) != '' ORDER BY id DESC LIMIT 1;"
+    );
+    if (!lastVar.isValid() || lastVar.isNull()) {
+        lastVar = DatabaseManager::instance().executeScalar(
+            "SELECT name FROM stock_items WHERE item_type LIKE '%Paddy%' OR trading_group LIKE '%Paddy%' OR name LIKE '%Paddy%' LIMIT 1;"
+        );
+    }
+    m_paddyVariety = (lastVar.isValid() && !lastVar.isNull()) ? lastVar.toString().trimmed() : "";
     emit paddyVarietyChanged();
 
     m_bagCount = 0;

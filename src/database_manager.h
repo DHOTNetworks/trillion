@@ -10,7 +10,7 @@ class DatabaseManager {
 public:
     static DatabaseManager& instance();
 
-    bool initDatabase(const QString& dbPath = "mahadev_accounting.db");
+    bool initDatabase(const QString& dbPath);
     bool switchDatabase(const QString& newDbPath);
     sqlite3* getConnection();
     QString dbPath() const { return m_dbPath; }
@@ -27,6 +27,10 @@ public:
     QVariant executeScalar(const QString& sql, const QVariantList& params = {});
     qint64 lastInsertedId();
     void ensureTablesExist();
+
+    // App Settings Key-Value Store
+    QString getSetting(const QString& key, const QString& defaultVal = "");
+    bool setSetting(const QString& key, const QString& val);
 
 private:
     DatabaseManager();

@@ -178,6 +178,7 @@ void LedgerStatementWidget::setupUi() {
         openVoucherForEntry(entry);
     });
     connect(m_crTable, &LedgerTableView::switchSideRequested, this, &LedgerStatementWidget::onSwitchSideRequested);
+    connect(m_crTable, &LedgerTableView::focusSearchRequested, this, &LedgerStatementWidget::focusSearch);
     crSideLayout->addWidget(m_crTable, 1);
 
     // Cr Footer
@@ -223,6 +224,7 @@ void LedgerStatementWidget::setupUi() {
         openVoucherForEntry(entry);
     });
     connect(m_drTable, &LedgerTableView::switchSideRequested, this, &LedgerStatementWidget::onSwitchSideRequested);
+    connect(m_drTable, &LedgerTableView::focusSearchRequested, this, &LedgerStatementWidget::focusSearch);
     drSideLayout->addWidget(m_drTable, 1);
 
     // Dr Footer
@@ -393,12 +395,22 @@ void LedgerStatementWidget::setupUi() {
 
     mainLayout->addWidget(m_viewTabs, 1);
 
+    // Tab Order Chain
+    setTabOrder(m_searchBox, m_fromDateEdit);
+    setTabOrder(m_fromDateEdit, m_toDateEdit);
+    setTabOrder(m_toDateEdit, m_applyFilterBtn);
+    setTabOrder(m_applyFilterBtn, m_crTable);
+    setTabOrder(m_crTable, m_drTable);
+
     // Global Shortcuts
     new QShortcut(QKeySequence("Alt+S"), this, SLOT(focusSearch()));
     new QShortcut(QKeySequence("Alt+L"), this, SLOT(focusSearch()));
+    new QShortcut(QKeySequence("Ctrl+F"), this, SLOT(focusSearch()));
+    new QShortcut(QKeySequence("F3"), this, SLOT(focusSearch()));
     new QShortcut(QKeySequence("Ctrl+E"), this, SLOT(openSelectedVoucher()));
     new QShortcut(QKeySequence("Ctrl+P"), this, SLOT(printStatement()));
     new QShortcut(QKeySequence("Alt+P"), this, SLOT(exportPdf()));
+    new QShortcut(QKeySequence("Alt+E"), this, SLOT(exportCsv()));
     new QShortcut(QKeySequence("Alt+F"), this, SLOT(onDateFilterApplied()));
     new QShortcut(QKeySequence("Alt+A"), this, SLOT(toggleAankMode()));
     new QShortcut(QKeySequence("Alt+I"), this, SLOT(onPostInterestVoucherClicked()));
@@ -427,7 +439,11 @@ void LedgerStatementWidget::recalculateAankStatement() {
 
     QDate fromDt = QDate::fromString(m_fromDateEdit->isoDate(), "yyyy-MM-dd");
     QDate toDt = QDate::fromString(m_toDateEdit->isoDate(), "yyyy-MM-dd");
-    if (!fromDt.isValid()) fromDt = QDate(2025, 4, 1);
+    if (!fromDt.isValid()) {
+        FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
+        fromDt = QDate::fromString(activeFy.startDate, "yyyy-MM-dd");
+        if (!fromDt.isValid()) fromDt = QDate(QDate::currentDate().month() < 4 ? QDate::currentDate().year() - 1 : QDate::currentDate().year(), 4, 1);
+    }
     if (!toDt.isValid()) toDt = QDate::currentDate();
 
     // Query party opening balance and interest rate
@@ -928,7 +944,27 @@ void LedgerStatementWidget::exportCsv() {
 
 void LedgerStatementWidget::keyPressEvent(QKeyEvent* event) {
     if (event->key() == Qt::Key_Escape) {
+        if (m_searchBox && m_searchBox->isPopupVisible()) {
+            event->ignore();
+            return;
+        }
         emit backRequested();
+        event->accept();
+        return;
+    }
+    if (event->key() == Qt::Key_F2) {
+        m_fromDateEdit->setFocus();
+        m_fromDateEdit->selectAll();
+        event->accept();
+        return;
+    }
+    if (event->key() == Qt::Key_F3 || (event->key() == Qt::Key_F && (event->modifiers() & Qt::ControlModifier)) || (event->key() == Qt::Key_S && (event->modifiers() & Qt::AltModifier))) {
+        focusSearch();
+        event->accept();
+        return;
+    }
+    if (event->key() == Qt::Key_Slash && !(event->modifiers() & (Qt::ControlModifier | Qt::AltModifier))) {
+        focusSearch();
         event->accept();
         return;
     }
@@ -945,9 +981,12 @@ void LedgerStatementWidget::showEvent(QShowEvent* event) {
     if (m_searchBox->currentPartyName().isEmpty() || curFrom < activeFy.startDate || curTo > activeFy.endDate) {
         m_fromDateEdit->setIsoDate(activeFy.startDate);
         m_toDateEdit->setIsoDate(activeFy.endDate);
-        m_searchBox->setFocus();
-        m_searchBox->selectAll();
     }
+    
+    // Automatically focus the search box on open with text selected and popup ready
+    QTimer::singleShot(0, this, [this]() {
+        focusSearch();
+    });
 }
 
 void LedgerStatementWidget::paintEvent(QPaintEvent* event) {

@@ -56,6 +56,21 @@ public:
     static bool question(QWidget* parent, const QString& title, const QString& message,
                          const QString& yesText = "Yes", const QString& noText = "No");
 
+    // Convenience aliases
+    static void showInformation(QWidget* parent, const QString& title, const QString& message) {
+        information(parent, title, message);
+    }
+    static void showWarning(QWidget* parent, const QString& title, const QString& message) {
+        warning(parent, title, message);
+    }
+    static void showCritical(QWidget* parent, const QString& title, const QString& message) {
+        critical(parent, title, message);
+    }
+    static bool showConfirmation(QWidget* parent, const QString& title, const QString& message,
+                                 const QString& yesText = "Yes", const QString& noText = "No") {
+        return question(parent, title, message, yesText, noText);
+    }
+
 protected:
     void keyPressEvent(QKeyEvent* event) override;
 

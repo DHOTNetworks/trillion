@@ -7,6 +7,7 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QKeyEvent>
+#include <QDate>
 #include "../engine/fiscal_year_helper.h"
 #include "../models/financial_years_model.h"
 
@@ -24,6 +25,8 @@ public:
                               const QString& currentDate,
                               QString* outDisplayDate,
                               QString* outIsoDate = nullptr);
+
+    static QDate selectDate(QWidget* parent, const QDate& currentDate = QDate());
 
 protected:
     void keyPressEvent(QKeyEvent* event) override;

@@ -127,7 +127,7 @@ QVariantMap MandiReportsController::get_farmer_dheri_statement(int zimidarId, co
     if (zimidarId <= 0) return res;
 
     auto& db = DatabaseManager::instance();
-    QVariant zName = db.executeScalar("SELECT party_name FROM parties WHERE id = ?;", {zimidarId});
+    QVariant zName = db.executeScalar("SELECT name FROM parties WHERE id = ?;", {zimidarId});
     QString farmerName = zName.isValid() ? zName.toString() : "Farmer";
     res["farmer_id"] = zimidarId;
     res["farmer_name"] = farmerName;
@@ -178,7 +178,7 @@ QVariantMap MandiReportsController::get_farmer_dheri_statement(int zimidarId, co
     res["total_credits"] = totalCredits;
     res["total_debits"] = totalDebits;
     res["net_balance"] = std::abs(netBalance);
-    res["net_balance_drcr"] = netBalance >= 0.0 ? "Cr" : "Dr";
+    res["balance_type"] = (netBalance >= 0) ? "Cr" : "Dr";
 
     return res;
 }
@@ -188,14 +188,28 @@ QVariantMap MandiReportsController::get_dami_commission_register(const QString& 
     auto& db = DatabaseManager::instance();
 
     QString query =
-        "SELECT iv.id, iv.voucher_no, iv.voucher_date, iv.iform_no, iv.buyer_name, iv.broker_name, "
-        "  iv.total_bags, iv.total_weight, iv.goods_amount, iv.dami_rate, iv.dami_amount "
-        "FROM iform_vouchers iv "
-        "WHERE iv.dami_amount > 0 ";
+        "SELECT "
+        "  iv.voucher_date, "
+        "  iv.iform_no, "
+        "  iv.buyer_name, "
+        "  iv.broker_name, "
+        "  iv.total_bags, "
+        "  iv.total_weight, "
+        "  iv.goods_amount, "
+        "  iv.mandi_fee_amount, "
+        "  iv.hrdf_amount, "
+        "  iv.dami_amount "
+        "FROM iform_vouchers iv ";
+
+    QStringList where;
     QVariantList params;
     if (!fromDate.isEmpty() && !toDate.isEmpty()) {
-        query += "AND iv.voucher_date >= ? AND iv.voucher_date <= ? ";
+        where << "iv.voucher_date >= ? AND iv.voucher_date <= ?";
         params << fromDate << toDate;
+    }
+
+    if (!where.isEmpty()) {
+        query += "WHERE " + where.join(" AND ") + " ";
     }
     query += "ORDER BY iv.voucher_date ASC, iv.voucher_no ASC;";
 
@@ -203,18 +217,27 @@ QVariantMap MandiReportsController::get_dami_commission_register(const QString& 
     double totalDami = 0.0;
     double totalGoods = 0.0;
     double totalWeight = 0.0;
+    int totalBags = 0;
+    double totalMandiFee = 0.0;
+    double totalHrdf = 0.0;
 
     for (const auto& r : rows) {
         QVariantMap m = r.toMap();
         totalDami += m.value("dami_amount").toDouble();
         totalGoods += m.value("goods_amount").toDouble();
         totalWeight += m.value("total_weight").toDouble();
+        totalBags += m.value("total_bags").toInt();
+        totalMandiFee += m.value("mandi_fee_amount").toDouble();
+        totalHrdf += m.value("hrdf_amount").toDouble();
     }
 
     res["entries"] = rows;
     res["total_dami"] = totalDami;
     res["total_goods"] = totalGoods;
     res["total_weight"] = totalWeight;
+    res["total_bags"] = totalBags;
+    res["total_mandi_fee"] = totalMandiFee;
+    res["total_hrdf"] = totalHrdf;
 
     return res;
 }
@@ -222,21 +245,19 @@ QVariantMap MandiReportsController::get_dami_commission_register(const QString& 
 QVariantList MandiReportsController::get_zimidar_list() {
     auto& db = DatabaseManager::instance();
     return db.executeQuery(
-        "SELECT p.id, p.party_name, p.station, p.mobile_no, p.current_balance, p.balance_type "
+        "SELECT p.id, p.name AS party_name, p.party_station AS station, p.mobile AS mobile_no, p.opening_balance AS current_balance, p.balance_type "
         "FROM parties p "
-        "LEFT JOIN account_groups g ON p.group_id = g.id "
-        "WHERE g.group_name LIKE '%Zimidar%' OR g.group_name LIKE '%Farmer%' OR p.party_type = 'Farmer' "
-        "ORDER BY p.party_name ASC;"
+        "WHERE p.group_name LIKE '%Zimidar%' OR p.group_name LIKE '%Farmer%' OR p.party_type = 'Farmer' "
+        "ORDER BY p.name ASC;"
     );
 }
 
 QVariantList MandiReportsController::get_buyer_list() {
     auto& db = DatabaseManager::instance();
     return db.executeQuery(
-        "SELECT p.id, p.party_name, p.station, p.gstin, p.current_balance, p.balance_type "
+        "SELECT p.id, p.name AS party_name, p.party_station AS station, p.gstin, p.opening_balance AS current_balance, p.balance_type "
         "FROM parties p "
-        "LEFT JOIN account_groups g ON p.group_id = g.id "
-        "WHERE g.group_name LIKE '%Sundry Debtors%' OR g.group_name LIKE '%Mandi Debtors%' OR g.group_name LIKE '%Debtors%' "
-        "ORDER BY p.party_name ASC;"
+        "WHERE p.group_name LIKE '%Sundry Debtors%' OR p.group_name LIKE '%Mandi Debtors%' OR p.group_name LIKE '%Debtors%' "
+        "ORDER BY p.name ASC;"
     );
 }

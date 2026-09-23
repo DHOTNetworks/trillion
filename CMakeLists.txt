@@ -205,6 +205,8 @@ set(SOURCES
     src/widgets/accounting_date_edit.cpp
     src/widgets/account_search_box.h
     src/widgets/account_search_box.cpp
+    src/widgets/account_search_delegate.h
+    src/widgets/account_search_delegate.cpp
     src/widgets/ledger_table_view.h
     src/widgets/ledger_table_view.cpp
     src/widgets/ledger_statement_widget.h
@@ -276,6 +278,42 @@ set(SOURCES
     src/widgets/gstr_reports_widget.cpp
     src/widgets/milling_statement_widget.h
     src/widgets/milling_statement_widget.cpp
+    src/widgets/keyboard_shortcuts_dialog.h
+    src/widgets/keyboard_shortcuts_dialog.cpp
+    src/widgets/print_copy_options_dialog.h
+    src/widgets/print_copy_options_dialog.cpp
+    src/widgets/weighbridge_kanda_dialog.h
+    src/widgets/weighbridge_kanda_dialog.cpp
+    src/widgets/item_movement_dialog.h
+    src/widgets/item_movement_dialog.cpp
+    src/widgets/new_group_widget.h
+    src/widgets/new_group_widget.cpp
+    src/widgets/modify_group_widget.h
+    src/widgets/modify_group_widget.cpp
+    src/widgets/new_stock_item_widget.h
+    src/widgets/new_stock_item_widget.cpp
+    src/widgets/modify_stock_item_widget.h
+    src/widgets/modify_stock_item_widget.cpp
+    src/widgets/sales_register_widget.h
+    src/widgets/sales_register_widget.cpp
+    src/widgets/purchase_register_widget.h
+    src/widgets/purchase_register_widget.cpp
+    src/widgets/stock_detail_widget.h
+    src/widgets/stock_detail_widget.cpp
+    src/widgets/paddy_procurement_widget.h
+    src/widgets/paddy_procurement_widget.cpp
+    src/widgets/milling_voucher_widget.h
+    src/widgets/milling_voucher_widget.cpp
+    src/widgets/tds_voucher_widget.h
+    src/widgets/tds_voucher_widget.cpp
+    src/widgets/interest_calculator_widget.h
+    src/widgets/interest_calculator_widget.cpp
+    src/widgets/bank_statement_import_widget.h
+    src/widgets/bank_statement_import_widget.cpp
+    src/widgets/transport_dispatch_widget.h
+    src/widgets/transport_dispatch_widget.cpp
+    src/widgets/debit_credit_note_widget.h
+    src/widgets/debit_credit_note_widget.cpp
     src/engine/mandi_calculator.h
     src/engine/mandi_calculator.cpp
     src/engine/aank_interest_engine.h

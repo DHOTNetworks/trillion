@@ -130,7 +130,7 @@ void JournalVoucherWidget::setupUi() {
     m_dayOfWeekLabel->setStyleSheet("color: #0284C7; font-weight: 700; font-size: 11.5px; border: none; background: transparent;");
     metaLayout->addWidget(m_dayOfWeekLabel);
 
-    m_fyBadge = new QLabel("FY 2026-27", metaCard);
+    m_fyBadge = new QLabel(FiscalYearHelper::getActiveFiscalYear().name, metaCard);
     m_fyBadge->setStyleSheet(
         "background-color: #F1F5F9; color: #475569; border: 1px solid #CBD5E1; "
         "padding: 4px 8px; border-radius: 6px; font-weight: 700; font-size: 11px;"
@@ -411,8 +411,8 @@ void JournalVoucherWidget::setupRowWidgets(int row, const QString& drcr, const Q
     typeCombo->installEventFilter(this);
     m_table->setCellWidget(row, 0, typeCombo);
 
-    // 1. Particulars (PartySearchWidget)
-    auto* searchWidget = new PartySearchWidget(m_table);
+    // 1. Particulars (AccountSearchBox)
+    auto* searchWidget = new AccountSearchBox(m_table);
     searchWidget->setPartyName(ledger);
     searchWidget->installEventFilter(this);
     connect(searchWidget, &QLineEdit::returnPressed, this, [this]() {
@@ -645,7 +645,7 @@ void JournalVoucherWidget::saveVoucher() {
 
     for (int r = 0; r < m_table->rowCount(); ++r) {
         auto* typeCombo = qobject_cast<QComboBox*>(m_table->cellWidget(r, 0));
-        auto* searchWidget = qobject_cast<PartySearchWidget*>(m_table->cellWidget(r, 1));
+        auto* searchWidget = qobject_cast<AccountSearchBox*>(m_table->cellWidget(r, 1));
         auto* debitInput = qobject_cast<QLineEdit*>(m_table->cellWidget(r, 2));
         auto* creditInput = qobject_cast<QLineEdit*>(m_table->cellWidget(r, 3));
         auto* refInput = qobject_cast<QLineEdit*>(m_table->cellWidget(r, 4));
@@ -920,13 +920,12 @@ bool JournalVoucherWidget::eventFilter(QObject* watched, QEvent* event) {
                     return true;
                 }
             }
-            // 2. Column 1: Particulars (PartySearchWidget)
+            // 2. Column 1: Particulars (AccountSearchBox)
             else if (targetCol == 1) {
-                auto* search = qobject_cast<PartySearchWidget*>(watched);
+                auto* search = qobject_cast<AccountSearchBox*>(watched);
 
                 if (key == Qt::Key_Return || key == Qt::Key_Enter || key == Qt::Key_Tab) {
                     if (search && !search->text().trimmed().isEmpty()) {
-                        search->selectCurrentListItem();
                         return true;
                     } else {
                         // Empty ledger field: finish rows and move to narration
@@ -1009,7 +1008,7 @@ bool JournalVoucherWidget::eventFilter(QObject* watched, QEvent* event) {
             else if (targetCol == 4) {
                 auto* edit = qobject_cast<QLineEdit*>(watched);
                 if (key == Qt::Key_Return || key == Qt::Key_Enter || key == Qt::Key_Tab) {
-                    auto* search = qobject_cast<PartySearchWidget*>(m_table->cellWidget(targetRow, 1));
+                    auto* search = qobject_cast<AccountSearchBox*>(m_table->cellWidget(targetRow, 1));
                     bool hasLedger = search && !search->currentPartyName().isEmpty();
 
                     if (!hasLedger) {

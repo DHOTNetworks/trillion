@@ -32,6 +32,7 @@ public:
     ~DashboardWidget() override = default;
 
     void refreshStats();
+    void focusMenu();
     void setControllers(DashboardController* dashCtrl, FirmManager* firmMgr, BahiKhataMigrator* migrator = nullptr);
 
 signals:

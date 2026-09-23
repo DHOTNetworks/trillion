@@ -53,18 +53,18 @@ ProfitLossData ProfitLossCalculator::calculate(const QString& requestedFromDate,
     );
     if (!firmRows.isEmpty()) {
         QVariantMap firm = firmRows.first().toMap();
-        data.firmName = firm.value("company_name", "MAHADEV RICE INDUSTRY").toString().trimmed();
-        QString addr = firm.value("address", "Mandi Dabwali Road").toString().trimmed();
-        QString city = firm.value("city", "Sirsa").toString().trimmed();
-        QString state = firm.value("state", "Haryana").toString().trimmed();
+        data.firmName = firm.value("company_name").toString().trimmed();
+        QString addr = firm.value("address").toString().trimmed();
+        QString city = firm.value("city").toString().trimmed();
+        QString state = firm.value("state").toString().trimmed();
         if (!city.isEmpty()) addr += ", " + city;
         if (!state.isEmpty()) addr += " (" + state + ")";
         data.firmAddress = addr;
-        data.firmGstin = firm.value("gstin", "06AAAAA0000A1Z5").toString().trimmed();
+        data.firmGstin = firm.value("gstin").toString().trimmed();
     } else {
-        data.firmName = "MAHADEV RICE INDUSTRY";
-        data.firmAddress = "Mandi Dabwali Road, Sirsa (Haryana)";
-        data.firmGstin = "06AAAAA0000A1Z5";
+        data.firmName = "";
+        data.firmAddress = "";
+        data.firmGstin = "";
     }
 
     // 3. Stock Valuations

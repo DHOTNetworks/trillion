@@ -14,18 +14,42 @@ QString BankStatementExcelParser::parseDateToIso(const QString& rawDate) {
     QString s = rawDate.trimmed();
     if (s.isEmpty()) return "";
 
+    // If ISO datetime e.g. 2025-04-01T12:00:00, take left 10
+    if (s.contains('T') && s.length() >= 10 && s.indexOf('T') == 10) {
+        s = s.left(10);
+    }
+    // If has time portion e.g. "01-04-2025 12:30:00" or "01-Apr-2025 10:00"
+    static const QRegularExpression reTimeSuffix(R"(^(\S+)\s+\d{1,2}:\d{2}(?::\d{2})?)");
+    auto matchTime = reTimeSuffix.match(s);
+    if (matchTime.hasMatch()) {
+        s = matchTime.captured(1).trimmed();
+    }
+
+    // 1. Check for Excel serial numeric date (e.g. 45658 -> 2025-01-01)
+    bool isNum = false;
+    double dVal = s.toDouble(&isNum);
+    if (isNum && dVal >= 30000 && dVal <= 75000) {
+        QDate dt = QDate(1899, 12, 30).addDays(static_cast<int>(dVal));
+        if (dt.isValid()) {
+            return dt.toString("yyyy-MM-dd");
+        }
+    }
+
     static const QMap<QString, QString> monthMap = {
         {"JAN", "01"}, {"FEB", "02"}, {"MAR", "03"}, {"APR", "04"},
         {"MAY", "05"}, {"JUN", "06"}, {"JUL", "07"}, {"AUG", "08"},
         {"SEP", "09"}, {"OCT", "10"}, {"NOV", "11"}, {"DEC", "12"}
     };
 
-    // Format: 01-APR-2025 or 01-Apr-2025
+    // Format: 01-APR-2025, 01-Apr-2025, 1-4-2025, 2025-04-01
     QStringList parts = s.split('-');
     if (parts.size() == 3) {
         if (parts[0].length() == 4) {
             // YYYY-MM-DD
-            return s;
+            int yr = parts[0].toInt();
+            int mon = parts[1].toInt();
+            int day = parts[2].toInt();
+            return QString("%1-%2-%3").arg(yr, 4, 10, QChar('0')).arg(mon, 2, 10, QChar('0')).arg(day, 2, 10, QChar('0'));
         }
         int day = parts[0].toInt();
         QString monStr = parts[1].toUpper().left(3);
@@ -38,9 +62,15 @@ QString BankStatementExcelParser::parseDateToIso(const QString& rawDate) {
         return QString("%1-%2-%3").arg(yr, 4, 10, QChar('0')).arg(mon).arg(day, 2, 10, QChar('0'));
     }
 
-    // Format: 01/04/2025
+    // Format: 01/04/2025 or 1/4/2025 or 2025/04/01
     parts = s.split('/');
     if (parts.size() == 3) {
+        if (parts[0].length() == 4) {
+            int yr = parts[0].toInt();
+            int mon = parts[1].toInt();
+            int day = parts[2].toInt();
+            return QString("%1-%2-%3").arg(yr, 4, 10, QChar('0')).arg(mon, 2, 10, QChar('0')).arg(day, 2, 10, QChar('0'));
+        }
         int day = parts[0].toInt();
         int mon = parts[1].toInt();
         int yr = parts[2].toInt();
@@ -48,14 +78,34 @@ QString BankStatementExcelParser::parseDateToIso(const QString& rawDate) {
         return QString("%1-%2-%3").arg(yr, 4, 10, QChar('0')).arg(mon, 2, 10, QChar('0')).arg(day, 2, 10, QChar('0'));
     }
 
-    // Format: 01.04.2025
+    // Format: 01.04.2025 or 1.4.2025 or 2025.04.01
     parts = s.split('.');
     if (parts.size() == 3) {
+        if (parts[0].length() == 4) {
+            int yr = parts[0].toInt();
+            int mon = parts[1].toInt();
+            int day = parts[2].toInt();
+            return QString("%1-%2-%3").arg(yr, 4, 10, QChar('0')).arg(mon, 2, 10, QChar('0')).arg(day, 2, 10, QChar('0'));
+        }
         int day = parts[0].toInt();
         int mon = parts[1].toInt();
         int yr = parts[2].toInt();
         if (yr < 100) yr += 2000;
         return QString("%1-%2-%3").arg(yr, 4, 10, QChar('0')).arg(mon, 2, 10, QChar('0')).arg(day, 2, 10, QChar('0'));
+    }
+
+    // Format with spaces: e.g. 15 Apr 2025
+    parts = s.split(' ', Qt::SkipEmptyParts);
+    if (parts.size() == 3) {
+        int day = parts[0].toInt();
+        QString monStr = parts[1].toUpper().left(3);
+        QString mon = monthMap.value(monStr, "");
+        if (mon.isEmpty()) {
+            mon = QString("%1").arg(parts[1].toInt(), 2, 10, QChar('0'));
+        }
+        int yr = parts[2].toInt();
+        if (yr < 100) yr += 2000;
+        return QString("%1-%2-%3").arg(yr, 4, 10, QChar('0')).arg(mon).arg(day, 2, 10, QChar('0'));
     }
 
     return s;

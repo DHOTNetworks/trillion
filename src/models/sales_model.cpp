@@ -1,6 +1,7 @@
 #include "sales_model.h"
 #include "../database_manager.h"
 #include "../engine/accounting_engine.h"
+#include "../engine/fiscal_year_helper.h"
 #include <QDate>
 #include <QRegularExpression>
 
@@ -22,8 +23,14 @@ void SalesModel::reload_data() {
     emit countChanged();
 }
 
-static QString incrementInvoiceStr(const QString& invStr, const QString& defaultPrefix = "MRI/2627-") {
-    if (invStr.trimmed().isEmpty()) return defaultPrefix + "1";
+static QString incrementInvoiceStr(const QString& invStr, const QString& defaultPrefix = "") {
+    QString pfx = defaultPrefix;
+    if (pfx.isEmpty()) {
+        FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
+        QString shortFy = activeFy.name.mid(3).remove('-').remove(' ');
+        pfx = "INV/" + shortFy + "-";
+    }
+    if (invStr.trimmed().isEmpty()) return pfx + "1";
     QString invClean = invStr.trimmed();
     QRegularExpression re("^(.*?)(\\d+)$");
     QRegularExpressionMatch m = re.match(invClean);
@@ -153,15 +160,18 @@ bool SalesModel::add_sales_invoice_full(
     QString dt = invoice_date.isEmpty() ? QDate::currentDate().toString("yyyy-MM-dd") : invoice_date;
     
     // Resolve Financial Year
-    QVariantList fyRows = DatabaseManager::instance().executeQuery(
-        "SELECT id, year_name FROM financial_years WHERE start_date <= ? AND end_date >= ? LIMIT 1;",
-        {dt, dt}
+    FiscalYearInfo fy = FiscalYearHelper::getFiscalYearForDate(dt);
+    int fyId = 1;
+    QString fyLabel = fy.name;
+    QVariant fyIdVar = DatabaseManager::instance().executeScalar(
+        "SELECT id FROM financial_years WHERE year_name = ? LIMIT 1;",
+        {fy.name}
     );
-    int fyId = 28;
-    QString fyLabel = "FY 2026-27";
-    if (!fyRows.isEmpty()) {
-        fyId = fyRows.first().toMap().value("id").toInt();
-        fyLabel = fyRows.first().toMap().value("year_name").toString();
+    if (fyIdVar.isValid() && !fyIdVar.isNull()) {
+        fyId = fyIdVar.toInt();
+    } else {
+        QVariant anyFy = DatabaseManager::instance().executeScalar("SELECT id FROM financial_years WHERE is_active = 1 LIMIT 1;");
+        if (anyFy.isValid() && !anyFy.isNull()) fyId = anyFy.toInt();
     }
 
     QString vchNo = voucher_no.isEmpty() ? get_next_voucher_no(fyLabel) : voucher_no;
@@ -247,7 +257,16 @@ bool SalesModel::add_sales_invoice_full(
 
     // 2. Guaranteed Double-Entry Ledger Posting:
     // Debit: Customer Account for Total Amount
-    // Credit: Sales Account for Taxable Amount + GST Output Accounts
+    // Credit: Stock Item's Specific Sale Account for Taxable Amount + GST Output Accounts
+    QString itemSaleLedger = "";
+    QVariantList itemMeta = DatabaseManager::instance().executeQuery(
+        "SELECT sale_ledger, sale_ledger_id FROM stock_items WHERE id = ? LIMIT 1;",
+        {itemId}
+    );
+    if (!itemMeta.isEmpty()) {
+        itemSaleLedger = itemMeta.first().toMap().value("sale_ledger").toString().trimmed();
+    }
+
     QString vchNarr = QString("Sales Invoice %1 - %2 (%3 Qtl @ ₹%4)").arg(invNo, item_name, QString::number(weight_qtl), QString::number(rate_per_qtl));
     if (!narration.isEmpty()) vchNarr += " | " + narration;
 
@@ -257,10 +276,10 @@ bool SalesModel::add_sales_invoice_full(
         "account_type, amount, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount, round_off, vehicle_no, eway_bill_no, "
         "broker_name, sauda_date, dami, labour, auction, m_fee, hrdf, other_exp, welfare, dhrmd, sutli, less_amount, narration, "
         "due_days, market_type, tax_status, place_of_supply, challan_no"
-        ") VALUES (?, ?, ?, ?, ?, 'Sales', 'Sale', ?, ?, ?, 'Sales Account', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+        ") VALUES (?, ?, ?, ?, ?, 'Sales', 'Sale', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
         {
             fyId, fyLabel, vchNo, invNo, dt, customerId, customerId, party_ledger,
-            total_amount, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount, round_off, vehicle_no, eway_bill_no,
+            itemSaleLedger, total_amount, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount, round_off, vehicle_no, eway_bill_no,
             broker_name, sauda_date, dami, labour, auction, m_fee, hrdf, other_exp, welfare, dhrmd, sutli, less_amount, vchNarr,
             due_days, market_type, tax_status, place_of_supply, challan_no
         }
@@ -787,15 +806,18 @@ bool SalesModel::update_sales_invoice_full(
     const QString& place_of_supply
 ) {
     QString dt = invoice_date.isEmpty() ? QDate::currentDate().toString("yyyy-MM-dd") : invoice_date;
-    QVariantList fyRows = DatabaseManager::instance().executeQuery(
-        "SELECT id, year_name FROM financial_years WHERE start_date <= ? AND end_date >= ? LIMIT 1;",
-        {dt, dt}
+    FiscalYearInfo fy = FiscalYearHelper::getFiscalYearForDate(dt);
+    int fyId = 1;
+    QString fyLabel = fy.name;
+    QVariant fyIdVar = DatabaseManager::instance().executeScalar(
+        "SELECT id FROM financial_years WHERE year_name = ? LIMIT 1;",
+        {fy.name}
     );
-    int fyId = 28;
-    QString fyLabel = "FY 2026-27";
-    if (!fyRows.isEmpty()) {
-        fyId = fyRows.first().toMap().value("id").toInt();
-        fyLabel = fyRows.first().toMap().value("year_name").toString();
+    if (fyIdVar.isValid() && !fyIdVar.isNull()) {
+        fyId = fyIdVar.toInt();
+    } else {
+        QVariant anyFy = DatabaseManager::instance().executeScalar("SELECT id FROM financial_years WHERE is_active = 1 LIMIT 1;");
+        if (anyFy.isValid() && !anyFy.isNull()) fyId = anyFy.toInt();
     }
 
     QVariant itemRow = DatabaseManager::instance().executeScalar(

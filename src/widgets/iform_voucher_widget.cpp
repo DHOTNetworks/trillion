@@ -79,7 +79,7 @@ void IFormVoucherWidget::setupUi() {
     headerLayout->setSpacing(8);
 
     headerLayout->addWidget(new QLabel("Buyer Name (Enter to Search / F3 New):", this), 0, 0);
-    m_buyerSearch = new PartySearchWidget(this);
+    m_buyerSearch = new AccountSearchBox(this);
     headerLayout->addWidget(m_buyerSearch, 0, 1, 1, 2);
 
     m_buyerBalanceLabel = new QLabel("Date Bal. 0.00", this);
@@ -211,7 +211,7 @@ void IFormVoucherWidget::setupUi() {
 
     // Connect signals
     connect(m_dateEdit, &AccountingDateEdit::dateChanged, this, &IFormVoucherWidget::onDateChanged);
-    connect(m_buyerSearch, &PartySearchWidget::partySelected, this, &IFormVoucherWidget::onBuyerSelected);
+    connect(m_buyerSearch, &AccountSearchBox::partyDataSelected, this, &IFormVoucherWidget::onBuyerSelected);
     connect(m_table, &QTableWidget::cellChanged, this, &IFormVoucherWidget::onTableCellChanged);
     connect(m_itemDelegate, &ItemSearchDelegate::stockItemConfigured, this, &IFormVoucherWidget::onStockItemConfigured);
     connect(m_itemDelegate, &ItemSearchDelegate::moveNextRequested, this, &IFormVoucherWidget::advanceCell);

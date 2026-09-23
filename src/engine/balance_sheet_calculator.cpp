@@ -56,9 +56,9 @@ BalanceSheetData BalanceSheetCalculator::calculate(const QString& requestedAsOnD
         data.firmAddress = addr;
         data.firmGstin = firm.value("gstin").toString().trimmed();
     } else {
-        data.firmName = "MAHADEV RICE INDUSTRY";
-        data.firmAddress = "Mandi Dabwali Road, Sirsa (Haryana)";
-        data.firmGstin = "06AAAAA0000A1Z5";
+        data.firmName = "";
+        data.firmAddress = "";
+        data.firmGstin = "";
     }
 
     // 3. Stock Valuations (Optimized in-memory calculation)

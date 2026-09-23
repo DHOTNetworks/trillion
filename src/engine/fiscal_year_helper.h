@@ -58,6 +58,8 @@ public:
     static FiscalYearInfo getFiscalYearForDate(const QString& dateStr);
     static FiscalYearInfo getFiscalYearByName(const QString& fyName);
     static QList<FiscalYearInfo> getAllFiscalYears();
+    static void setActiveFiscalYear(const QString& fyNameOrLabel);
+    static void setActiveCustomPeriod(const QString& fromIso, const QString& toIso, const QString& label = "");
 
     // 2. Normalization & Formatting
     static QString normalizeToIso(const QString& dateStr);

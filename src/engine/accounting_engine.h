@@ -31,9 +31,11 @@ public:
                 s_activeFyLabel = fyVal.toString().trimmed();
                 return s_activeFyLabel;
             }
-            if (!s_activeFyLabel.isEmpty()) return s_activeFyLabel;
             QVariant lastFy = DatabaseManager::instance().executeScalar("SELECT year_name FROM financial_years ORDER BY start_date DESC LIMIT 1;");
-            return lastFy.isValid() ? lastFy.toString().trimmed() : "FY 2026-27";
+            if (lastFy.isValid() && !lastFy.toString().trimmed().isEmpty()) return lastFy.toString().trimmed();
+            QDate cur = QDate::currentDate();
+            int startYr = (cur.month() >= 4) ? cur.year() : (cur.year() - 1);
+            return QString("FY %1-%2").arg(startYr).arg(QString::number((startYr + 1) % 100).rightJustified(2, '0'));
         }
 
         if (raw.startsWith("FY ")) return raw;

@@ -9,7 +9,7 @@
 #include <QFrame>
 #include <QVariantMap>
 #include <QVariantList>
-#include "party_search_widget.h"
+#include "account_search_box.h"
 #include "accounting_date_edit.h"
 #include "../models/cheque_voucher_controller.h"
 #include "../models/vouchers_model.h"

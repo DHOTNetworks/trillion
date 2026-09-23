@@ -270,7 +270,7 @@ QWidget* CustomClosingStockWidget::createMetricCard(const QString& title, QLabel
     QFrame* card = new QFrame(this);
     card->setFixedHeight(62);
     card->setStyleSheet(QString(
-        "QFrame { background-color: #FFFFFF; border: 1.5px solid #E2E8F0; border-left: 4px solid %1; border-radius: 8px; }"
+        "QFrame { background-color: #FFFFFF; border: 1.5px solid #E2E8F0; border-left: 4px solid %1; border-radius: 8px; } QLabel { border: none; background: transparent; }"
     ).arg(accentColor));
 
     QVBoxLayout* layout = new QVBoxLayout(card);

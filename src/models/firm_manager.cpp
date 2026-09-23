@@ -65,13 +65,21 @@ void FirmManager::loadRegistry() {
             m_activeFolder = QDir::cleanPath(QDir::current().filePath("data"));
             QJsonArray arr = root.value("firms").toArray();
             for (const auto& v : arr) {
-                registeredFirms.append(v.toObject().toVariantMap());
+                QVariantMap f = v.toObject().toVariantMap();
+                QString dbName = f.value("db_name").toString();
+                QString dbPath = f.value("db_path").toString();
+                if (dbName == "mahadev_accounting.db" || dbName == "mahadev_rice.db") continue;
+                if (dbPath.endsWith("mahadev_accounting.db") || dbPath.endsWith("mahadev_rice.db")) continue;
+                if (!dbPath.isEmpty() && QFile::exists(dbPath) && QFileInfo(dbPath).size() == 0) continue;
+                registeredFirms.append(f);
             }
         }
     }
 
-    if (!settingsFirmId.isEmpty()) {
+    if (!settingsFirmId.isEmpty() && settingsFirmId != "mahadev_rice") {
         m_activeFirmId = settingsFirmId;
+    } else if (m_activeFirmId == "mahadev_rice") {
+        m_activeFirmId.clear();
     }
 
     // Auto-discover any .db databases present in data/ that are not yet in registry
@@ -79,8 +87,12 @@ void FirmManager::loadRegistry() {
     if (dataDir.exists()) {
         QStringList dbFiles = dataDir.entryList({"*.db"}, QDir::Files, QDir::Name);
         for (const QString& dbName : dbFiles) {
-            if (dbName == "mahadev_accounting.db") continue;
+            if (dbName == "mahadev_accounting.db" || dbName == "mahadev_rice.db") continue;
             if (dbName.endsWith("-wal") || dbName.endsWith("-shm")) continue;
+            if (dbName.startsWith("test_unit_suite")) continue;
+            QString fullPath = dataDir.filePath(dbName);
+            if (QFileInfo(fullPath).size() == 0) continue;
+
             QString slug = dbName;
             slug.remove(".db");
 
@@ -93,7 +105,6 @@ void FirmManager::loadRegistry() {
             }
 
             if (!existsInReg) {
-                QString fullPath = dataDir.filePath(dbName);
                 QVariantMap firm;
                 firm["id"] = slug;
                 firm["db_name"] = dbName;
@@ -151,10 +162,6 @@ void FirmManager::loadRegistry() {
         f = m;
     }
 
-    if (m_activeFirmId.isEmpty() && !registeredFirms.isEmpty()) {
-        m_activeFirmId = registeredFirms.first().toMap().value("id").toString();
-    }
-
     saveRegistry(registeredFirms);
 }
 
@@ -182,6 +189,7 @@ void FirmManager::saveRegistry(const QVariantList& firms) {
 }
 
 QString FirmManager::currentFirmName() const {
+    if (m_activeFirmId.isEmpty()) return "";
     QVariantMap info = currentFirmInfo();
     QString name = info.value("company_name").toString();
     if (name.isEmpty()) {
@@ -191,12 +199,15 @@ QString FirmManager::currentFirmName() const {
                 return f.toMap().value("name").toString();
             }
         }
-        return "Company";
+        return "";
     }
     return name;
 }
 
 QVariantMap FirmManager::currentFirmInfo() const {
+    if (m_activeFirmId.isEmpty() || DatabaseManager::instance().getConnection() == nullptr) {
+        return {};
+    }
     QVariantList rows = DatabaseManager::instance().executeQuery("SELECT * FROM company_info LIMIT 1;");
     if (!rows.isEmpty()) {
         return rows.first().toMap();
@@ -259,17 +270,35 @@ QVariantList FirmManager::scan_folder_for_firms(const QString& folderPath) {
     QString targetCanonical = dir.canonicalPath();
 
     QStringList dbFiles = dir.entryList({"*.db"}, QDir::Files, QDir::Name);
-    QStringList mdbFiles = dir.entryList({"Data.*"}, QDir::Files, QDir::Name);
+    QStringList mdbCandidates = dir.entryList({"Data.*", "data.*", "DATA.*", "*.mdb", "*.accdb", "*.0*"}, QDir::Files, QDir::Name);
+    QStringList mdbFiles;
+    for (const QString& f : mdbCandidates) {
+        if (f.endsWith(".ldb", Qt::CaseInsensitive) ||
+            f.endsWith(".db", Qt::CaseInsensitive) ||
+            f.endsWith(".db-wal", Qt::CaseInsensitive) ||
+            f.endsWith(".db-shm", Qt::CaseInsensitive) ||
+            f.endsWith(".json", Qt::CaseInsensitive) ||
+            f.endsWith(".txt", Qt::CaseInsensitive) ||
+            f.endsWith(".log", Qt::CaseInsensitive) ||
+            f.endsWith(".bak", Qt::CaseInsensitive)) {
+            continue;
+        }
+        if (!mdbFiles.contains(f)) {
+            mdbFiles.append(f);
+        }
+    }
 
     // If scanning the App's Working Folder's data/ directory or any folder primarily with .db files:
     bool isAppData = (targetCanonical == appDataCanonical) || (!dbFiles.isEmpty() && mdbFiles.isEmpty());
 
     if (isAppData) {
         for (const QString& dbName : dbFiles) {
-            if (dbName == "mahadev_accounting.db") continue; // skip legacy/backup template
+            if (dbName == "mahadev_accounting.db" || dbName == "mahadev_rice.db") continue; // skip legacy/mock templates
             if (dbName.endsWith("-wal") || dbName.endsWith("-shm")) continue;
+            if (dbName.startsWith("test_unit_suite")) continue;
 
             QString fullPath = dir.filePath(dbName);
+            if (QFileInfo(fullPath).size() == 0) continue;
             QString slug = dbName;
             slug.remove(".db");
 
@@ -324,7 +353,7 @@ QVariantList FirmManager::scan_folder_for_firms(const QString& folderPath) {
             if (!firm.contains("name") || firm["name"].toString().isEmpty()) {
                 firm["name"] = slug.replace("_", " ").toUpper();
             }
-            if (!firm.contains("city") || firm["city"].toString().isEmpty()) firm["city"] = "Sirsa";
+            if (!firm.contains("city")) firm["city"] = "";
             firm["firm_type"] = BahiKhataMigrator::resolveFirmTypeFromPan(
                 firm.value("firm_type").toString(),
                 firm.value("pan").toString(),
@@ -369,8 +398,8 @@ QVariantList FirmManager::scan_folder_for_firms(const QString& folderPath) {
         firm["db_path"] = "data/" + slug + ".db";
         firm["gstin"] = insp.value("gstin").toString();
         firm["pan"] = insp.value("pan").toString();
-        firm["city"] = insp.value("station").toString().isEmpty() ? "Sirsa" : insp.value("station").toString();
-        firm["state"] = insp.value("state").toString().isEmpty() ? "Haryana" : insp.value("state").toString();
+        firm["city"] = insp.value("station").toString();
+        firm["state"] = insp.value("state").toString();
         firm["firm_type"] = insp.value("firmType").toString();
         firm["business"] = insp.value("business").toString();
 
@@ -490,9 +519,8 @@ bool FirmManager::prepare_firm_for_import(const QString& mdbFilePath, const QStr
     firm["folder"] = fi.absolutePath();
     firm["full_path"] = fi.absoluteFilePath();
     firm["gstin"] = insp.value("gstin").toString();
-    firm["pan"] = insp.value("pan").toString();
-    firm["city"] = insp.value("station").toString().isEmpty() ? "Sirsa" : insp.value("station").toString();
-    firm["state"] = insp.value("state").toString().isEmpty() ? "Haryana" : insp.value("state").toString();
+    firm["city"] = insp.value("station").toString();
+    firm["state"] = insp.value("state").toString();
     firm["firm_type"] = insp.value("firmType").toString();
     firm["business"] = insp.value("business").toString();
     firm["is_imported"] = true;
@@ -544,10 +572,12 @@ bool FirmManager::create_new_firm(const QVariantMap& firmInfo) {
     DatabaseManager::instance().switchDatabase(targetDbPath);
 
     // Flexible date parsing for books_from (e.g., "1.4.24", "01/04/2024", "2024-04-01", "1-4-24", "01.04.2024")
+    QDate cur = QDate::currentDate();
+    int currentFyStartYear = (cur.month() >= 4) ? cur.year() : (cur.year() - 1);
     QString rawBooksFrom = firmInfo.value("books_from").toString().trimmed();
-    if (rawBooksFrom.isEmpty()) rawBooksFrom = "2026-04-01";
+    if (rawBooksFrom.isEmpty()) rawBooksFrom = QString("%1-04-01").arg(currentFyStartYear);
 
-    int startYear = 2026;
+    int startYear = currentFyStartYear;
     int startMonth = 4;
     int startDay = 1;
 
@@ -570,8 +600,7 @@ bool FirmManager::create_new_firm(const QVariantMap& firmInfo) {
 
     // Determine the starting FY year
     int fyStartYear = (startMonth >= 4) ? startYear : (startYear - 1);
-    int currentYear = 2026; // Base active year
-    int targetEndYear = std::max(currentYear, fyStartYear);
+    int targetEndYear = std::max(currentFyStartYear, fyStartYear);
 
     QString formattedBooksFrom = QString("%1-%2-%3")
         .arg(startYear, 4, 10, QChar('0'))
@@ -589,18 +618,18 @@ bool FirmManager::create_new_firm(const QVariantMap& firmInfo) {
         {
             compName,
             resolvedFirmType,
-            firmInfo.value("business_type", "Rice Mill & Grain Processing").toString(),
+            firmInfo.value("business_type").toString(),
             firmInfo.value("address").toString(),
-            firmInfo.value("city", "Sirsa").toString(),
-            firmInfo.value("state", "Haryana").toString(),
-            firmInfo.value("state_code", "06").toString(),
-            firmInfo.value("pincode", "125055").toString(),
+            firmInfo.value("city").toString(),
+            firmInfo.value("state").toString(),
+            firmInfo.value("state_code").toString(),
+            firmInfo.value("pincode").toString(),
             firmInfo.value("phone").toString(),
             firmInfo.value("mobile").toString(),
             firmInfo.value("email").toString(),
             gstin,
             pan,
-            firmInfo.value("fssai_no", "10822019000152").toString(),
+            firmInfo.value("fssai_no").toString(),
             firmInfo.value("ml_no").toString(),
             firmInfo.value("bank_name").toString(),
             firmInfo.value("bank_account").toString(),
@@ -614,7 +643,7 @@ bool FirmManager::create_new_firm(const QVariantMap& firmInfo) {
     // Create all Financial Years from fyStartYear to targetEndYear (e.g. 2024 -> FY 2024-25, FY 2025-26, FY 2026-27, FY 2027-28)
     DatabaseManager::instance().executeNonQuery("DELETE FROM financial_years;");
     for (int y = fyStartYear; y <= targetEndYear; ++y) {
-        QString fyName = QString("FY %1-%2").arg(y).arg(QString::number(y + 1).right(2));
+        QString fyName = QString("FY %1-%2").arg(y).arg(QString::number((y + 1) % 100).rightJustified(2, '0'));
         QString fyStart = QString("%1-04-01").arg(y);
         QString fyEnd = QString("%1-03-31").arg(y + 1);
         int isActive = (y == targetEndYear) ? 1 : 0;
@@ -636,8 +665,8 @@ bool FirmManager::create_new_firm(const QVariantMap& firmInfo) {
     regItem["folder"] = QDir::current().filePath("data");
     regItem["gstin"] = gstin;
     regItem["pan"] = pan;
-    regItem["city"] = firmInfo.value("city", "Sirsa").toString();
-    regItem["state"] = firmInfo.value("state", "Haryana").toString();
+    regItem["city"] = firmInfo.value("city").toString();
+    regItem["state"] = firmInfo.value("state").toString();
     regItem["firm_type"] = resolvedFirmType;
     regItem["is_imported"] = true;
     regItem["period"] = QString("%1-04-01 To %2-03-31").arg(fyStartYear).arg(targetEndYear + 1);

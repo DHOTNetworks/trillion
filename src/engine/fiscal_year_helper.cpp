@@ -167,7 +167,7 @@ void FiscalYearHelper::ensureFiscalYearsDiscovered() {
 }
 
 FiscalYearInfo FiscalYearHelper::getActiveFiscalYear() {
-    // 1. Check AccountingEngine cache if set explicitly (e.g., custom user period selection)
+    // 1. Check AccountingEngine in-memory cache if active
     QString cFrom = AccountingEngine::getActiveFromDate();
     QString cTo = AccountingEngine::getActiveToDate();
     QString cLabel = AccountingEngine::getActiveFyLabel();
@@ -184,7 +184,20 @@ FiscalYearInfo FiscalYearHelper::getActiveFiscalYear() {
     ensureFiscalYearsDiscovered();
     FiscalYearInfo info;
 
-    // 2. Query database for active year first (guaranteed single source of truth for the active database)
+    // 2. Check Database saved settings for last selected FY/period across app restarts
+    QString lastFy = DatabaseManager::instance().getSetting("last_selected_fy");
+    QString lastFrom = DatabaseManager::instance().getSetting("last_from_date");
+    QString lastTo = DatabaseManager::instance().getSetting("last_to_date");
+    if (!lastFrom.isEmpty() && !lastTo.isEmpty()) {
+        info.name = !lastFy.isEmpty() ? lastFy : QString("%1 To %2").arg(formatDisplayDate(lastFrom), formatDisplayDate(lastTo));
+        info.startDate = normalizeToIso(lastFrom);
+        info.endDate = normalizeToIso(lastTo);
+        info.isActive = true;
+        AccountingEngine::setActivePeriod(info.startDate, info.endDate, info.name);
+        return info;
+    }
+
+    // 3. Query database for active year first (guaranteed single source of truth for the active database)
     QVariantList activeRows = DatabaseManager::instance().executeQuery(
         "SELECT year_name, start_date, end_date, is_active, is_locked FROM financial_years WHERE is_active = 1 LIMIT 1;"
     );
@@ -200,7 +213,7 @@ FiscalYearInfo FiscalYearHelper::getActiveFiscalYear() {
         return info;
     }
 
-    // 3. Fallback to the latest year in database
+    // 4. Fallback to the latest year in database
     QVariantList latestRows = DatabaseManager::instance().executeQuery(
         "SELECT year_name, start_date, end_date, is_active, is_locked FROM financial_years ORDER BY start_date DESC LIMIT 1;"
     );
@@ -216,7 +229,7 @@ FiscalYearInfo FiscalYearHelper::getActiveFiscalYear() {
         return info;
     }
 
-    // 4. Default fallback based on current date
+    // 5. Default fallback based on current date
     QDate today = QDate::currentDate();
     int startY = (today.month() >= 4) ? today.year() : today.year() - 1;
     int endY = startY + 1;
@@ -227,6 +240,30 @@ FiscalYearInfo FiscalYearHelper::getActiveFiscalYear() {
 
     AccountingEngine::setActivePeriod(info.startDate, info.endDate, info.name);
     return info;
+}
+
+void FiscalYearHelper::setActiveFiscalYear(const QString& fyNameOrLabel) {
+    if (fyNameOrLabel.trimmed().isEmpty()) return;
+    FiscalYearInfo fy = getFiscalYearByName(fyNameOrLabel.trimmed());
+    if (fy.isValid()) {
+        DatabaseManager::instance().executeNonQuery("UPDATE financial_years SET is_active = 0;");
+        DatabaseManager::instance().executeNonQuery("UPDATE financial_years SET is_active = 1 WHERE year_name = ?;", {fy.name});
+        DatabaseManager::instance().setSetting("last_selected_fy", fy.name);
+        DatabaseManager::instance().setSetting("last_from_date", fy.startDate);
+        DatabaseManager::instance().setSetting("last_to_date", fy.endDate);
+        AccountingEngine::setActivePeriod(fy.startDate, fy.endDate, fy.name);
+    }
+}
+
+void FiscalYearHelper::setActiveCustomPeriod(const QString& fromIso, const QString& toIso, const QString& label) {
+    QString f = normalizeToIso(fromIso);
+    QString t = normalizeToIso(toIso);
+    if (f.isEmpty() || t.isEmpty()) return;
+    QString lbl = !label.isEmpty() ? label : QString("%1 To %2").arg(formatDisplayDate(f), formatDisplayDate(t));
+    DatabaseManager::instance().setSetting("last_selected_fy", lbl);
+    DatabaseManager::instance().setSetting("last_from_date", f);
+    DatabaseManager::instance().setSetting("last_to_date", t);
+    AccountingEngine::setActivePeriod(f, t, lbl);
 }
 
 FiscalYearInfo FiscalYearHelper::getFiscalYearForDate(const QString& dateStr) {

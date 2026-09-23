@@ -393,7 +393,7 @@ void PurchaseVoucherController::resetForm(const QString &workingDate)
     m_dueDays = 30;
     emit dueDaysChanged();
 
-    m_purchaseAccount = "Purchase Account";
+    m_purchaseAccount.clear();
     emit purchaseAccountChanged();
 
     m_gstRate = 5.0;

@@ -104,7 +104,19 @@ void GstrReportsWidget::setupUi() {
 
     filterLayout->addStretch(1);
 
-    QLabel* gstinBadge = new QLabel("GSTIN: 06ABKFM5928Q1ZG (Haryana - 06)", filterCard);
+    QVariantList compRows = DatabaseManager::instance().executeQuery("SELECT company_name, gstin, state, state_code FROM company_info LIMIT 1;");
+    QString legalName = "";
+    QString gstin = "";
+    QString state = "";
+    if (!compRows.isEmpty()) {
+        QVariantMap c = compRows.first().toMap();
+        legalName = c.value("company_name").toString().trimmed();
+        gstin = c.value("gstin").toString().trimmed();
+        state = c.value("state").toString().trimmed();
+    }
+    QString badgeText = gstin.isEmpty() ? (legalName.isEmpty() ? "GST Return Portal" : legalName) : QString("GSTIN: %1%2").arg(gstin, state.isEmpty() ? "" : " (" + state + ")");
+
+    QLabel* gstinBadge = new QLabel(badgeText, filterCard);
     gstinBadge->setAlignment(Qt::AlignCenter);
     gstinBadge->setFixedHeight(34);
     gstinBadge->setStyleSheet("background-color: #EFF6FF; color: #1D4ED8; border: 1.5px solid #93C5FD; border-radius: 6px; padding: 0px 14px; font-weight: 800; font-size: 12px;");
@@ -315,7 +327,9 @@ void GstrReportsWidget::setupUi() {
     // Initialize with active financial year dates
     QDate sDate = QDate::fromString(activeFy.startDate, "yyyy-MM-dd");
     QDate eDate = QDate::fromString(activeFy.endDate, "yyyy-MM-dd");
-    if (!sDate.isValid()) sDate = QDate(2025, 4, 1);
+    if (!sDate.isValid()) {
+        sDate = QDate((QDate::currentDate().month() >= 4 ? QDate::currentDate().year() : QDate::currentDate().year() - 1), 4, 1);
+    }
     if (!eDate.isValid()) eDate = QDate::currentDate();
     m_fromDateEdit->setDate(sDate);
     m_toDateEdit->setDate(eDate);
@@ -416,9 +430,19 @@ void GstrReportsWidget::loadReturns(const QDate& fromDate, const QDate& toDate) 
     m_fromDateEdit->setDate(fromDate);
     m_toDateEdit->setDate(toDate);
 
-    QString gstin = "06ABKFM5928Q1ZG"; // Mahadev Rice Industry GSTIN
-    QString legalName = "MAHADEV RICE INDUSTRY";
+    QVariantList compRows = DatabaseManager::instance().executeQuery("SELECT company_name, gstin, state, state_code FROM company_info LIMIT 1;");
+    QString legalName = "";
+    QString gstin = "";
     QString stateCode = "06";
+    if (!compRows.isEmpty()) {
+        QVariantMap c = compRows.first().toMap();
+        legalName = c.value("company_name").toString().trimmed();
+        gstin = c.value("gstin").toString().trimmed();
+        stateCode = c.value("state_code").toString().trimmed();
+        if (stateCode.isEmpty() && gstin.length() >= 2 && gstin.left(2).toInt() > 0) {
+            stateCode = gstin.left(2);
+        }
+    }
 
     // 1. Generate GSTR-1
     m_currentGstr1Payload = Gstr1Engine::generateFromDatabase(gstin, legalName, stateCode, fromDate, toDate);

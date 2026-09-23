@@ -80,7 +80,8 @@ void DashboardWidget::onSyncClicked() {
     if (fullPath.isEmpty() || !QFile::exists(fullPath)) {
         QDir firmDir("/Users/karan/Firm Data");
         if (firmDir.exists()) {
-            for (const auto& f : firmDir.entryInfoList({"*.004", "*.001", "*.002", "*.003", "*.mdb"}, QDir::Files)) {
+            for (const auto& f : firmDir.entryInfoList({"Data.*", "data.*", "DATA.*", "*.mdb", "*.accdb", "*.0*"}, QDir::Files)) {
+                if (f.fileName().endsWith(".ldb", Qt::CaseInsensitive) || f.fileName().endsWith(".bak", Qt::CaseInsensitive)) continue;
                 fullPath = f.absoluteFilePath();
                 break;
             }
@@ -88,7 +89,7 @@ void DashboardWidget::onSyncClicked() {
     }
 
     if (fullPath.isEmpty() || !QFile::exists(fullPath)) {
-        fullPath = QFileDialog::getOpenFileName(this, "Select Bahi-Khata Data File to Sync", "/Users/karan/Firm Data", "Bahi-Khata Files (*.004 *.001 *.002 *.003 *.mdb);;All Files (*.*)");
+        fullPath = QFileDialog::getOpenFileName(this, "Select Bahi-Khata Data File to Sync", "/Users/karan/Firm Data", "Bahi-Khata Databases (Data.* *.0* *.mdb *.accdb);;All Files (*.*)");
     }
 
     if (!fullPath.isEmpty() && QFile::exists(fullPath)) {
@@ -248,7 +249,7 @@ QWidget* DashboardWidget::createLeftSection() {
     tag->setStyleSheet("color: #2563EB; font-size: 10px; font-weight: 800; letter-spacing: 1px; border: none; background: transparent;");
     nameBox->addWidget(tag);
 
-    m_firmNameLabel = new QLabel("Mahadev Rice Mill", card);
+    m_firmNameLabel = new QLabel("—", card);
     m_firmNameLabel->setWordWrap(true);
     m_firmNameLabel->setStyleSheet("color: #0F172A; font-size: 13px; font-weight: 800; border: none; background: transparent;");
     nameBox->addWidget(m_firmNameLabel);
@@ -277,7 +278,7 @@ QWidget* DashboardWidget::createLeftSection() {
     fyIcon->setStyleSheet("color: #16A34A; font-size: 11px; font-weight: 800; border: none; background: transparent;");
     fyLayout->addWidget(fyIcon);
 
-    m_fyBadgeLabel = new QLabel("FY 2026-27 (Active)", fyBox);
+    m_fyBadgeLabel = new QLabel(FiscalYearHelper::getActiveFiscalYear().name + " (Active)", fyBox);
     m_fyBadgeLabel->setWordWrap(true);
     m_fyBadgeLabel->setStyleSheet("color: #15803D; font-size: 11px; font-weight: 800; border: none; background: transparent;");
     fyLayout->addWidget(m_fyBadgeLabel, 1);
@@ -297,11 +298,11 @@ QWidget* DashboardWidget::createLeftSection() {
         layout->addLayout(l);
     };
 
-    makeField("GSTIN Number:", m_gstinLabel, "06ABKFM5928Q1ZG");
-    makeField("PAN Number:", m_panLabel, "ABKFM5928Q");
-    makeField("Statutory / License:", m_statutoryLabel, "FSSAI: 10822019000152");
-    makeField("Business Type:", m_businessTypeLabel, "Paddy Milling & Grain ERP");
-    makeField("Location:", m_locationLabel, "Sirsa, Haryana");
+    makeField("GSTIN Number:", m_gstinLabel, "—");
+    makeField("PAN Number:", m_panLabel, "—");
+    makeField("Statutory / License:", m_statutoryLabel, "—");
+    makeField("Business Type:", m_businessTypeLabel, "—");
+    makeField("Location:", m_locationLabel, "—");
 
     layout->addStretch(1);
 
@@ -610,30 +611,31 @@ void DashboardWidget::refreshStats() {
     updatePeriodBadge();
 
     // 1. Dynamic Firm Info
-    if (m_firmMgr) {
+    QVariantList cRows = DatabaseManager::instance().executeQuery("SELECT company_name, gstin, pan_no, fssai_no, ml_no, business_type, city, state FROM company_info LIMIT 1;");
+    if (!cRows.isEmpty()) {
+        QVariantMap info = cRows.first().toMap();
+        QString name = info.value("company_name").toString().trimmed();
+        if (m_firmNameLabel) m_firmNameLabel->setText(name.isEmpty() ? "—" : name);
+        if (m_gstinLabel) m_gstinLabel->setText(info.value("gstin").toString().trimmed().isEmpty() ? "—" : info.value("gstin").toString().trimmed());
+        if (m_panLabel) m_panLabel->setText(info.value("pan_no").toString().trimmed().isEmpty() ? "—" : info.value("pan_no").toString().trimmed());
+        if (m_statutoryLabel) {
+            QString stat = info.value("fssai_no").toString().trimmed();
+            if (!stat.isEmpty()) m_statutoryLabel->setText("FSSAI: " + stat);
+            else if (!info.value("ml_no").toString().trimmed().isEmpty()) m_statutoryLabel->setText("ML: " + info.value("ml_no").toString().trimmed());
+            else m_statutoryLabel->setText("—");
+        }
+        if (m_businessTypeLabel) m_businessTypeLabel->setText(info.value("business_type").toString().trimmed().isEmpty() ? "—" : info.value("business_type").toString().trimmed());
+        if (m_locationLabel) {
+            QString city = info.value("city").toString().trimmed();
+            QString state = info.value("state").toString().trimmed();
+            QString loc = city;
+            if (!state.isEmpty()) loc += (loc.isEmpty() ? "" : ", ") + state;
+            m_locationLabel->setText(loc.isEmpty() ? "—" : loc);
+        }
+    } else if (m_firmMgr) {
         if (m_firmNameLabel) {
             QString name = m_firmMgr->currentFirmName();
-            m_firmNameLabel->setText(name.isEmpty() ? "Mahadev Rice Mill" : name);
-        }
-        QVariantMap info = m_firmMgr->currentFirmInfo();
-        if (m_gstinLabel && info.contains("gstin") && !info["gstin"].toString().isEmpty()) {
-            m_gstinLabel->setText(info["gstin"].toString());
-        }
-        if (m_panLabel && info.contains("pan_no") && !info["pan_no"].toString().isEmpty()) {
-            m_panLabel->setText(info["pan_no"].toString());
-        }
-        if (m_statutoryLabel && info.contains("fssai_no") && !info["fssai_no"].toString().isEmpty()) {
-            m_statutoryLabel->setText("FSSAI: " + info["fssai_no"].toString());
-        } else if (m_statutoryLabel && info.contains("ml_no") && !info["ml_no"].toString().isEmpty()) {
-            m_statutoryLabel->setText("ML: " + info["ml_no"].toString());
-        }
-        if (m_businessTypeLabel && info.contains("business_type") && !info["business_type"].toString().isEmpty()) {
-            m_businessTypeLabel->setText(info["business_type"].toString());
-        }
-        if (m_locationLabel && info.contains("city") && !info["city"].toString().isEmpty()) {
-            QString loc = info["city"].toString();
-            if (info.contains("state") && !info["state"].toString().isEmpty()) loc += ", " + info["state"].toString();
-            m_locationLabel->setText(loc);
+            m_firmNameLabel->setText(name.isEmpty() ? "—" : name);
         }
     }
 
@@ -667,10 +669,16 @@ void DashboardWidget::updatePeriodBadge() {
     }
 }
 
+void DashboardWidget::focusMenu() {
+    setFocus(Qt::OtherFocusReason);
+    activateWindow();
+    updateSelection(m_selectedMenuIndex);
+}
+
 void DashboardWidget::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
     refreshStats();
-    setFocus();
+    focusMenu();
 
     if (m_reopenSubmenuOnReturn && m_lastOpenedMenuIndex >= 0) {
         int menuIdx = m_lastOpenedMenuIndex;

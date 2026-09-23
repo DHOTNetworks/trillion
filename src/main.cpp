@@ -171,30 +171,33 @@ int main(int argc, char* argv[]) {
 
     // Initialize Multi-Firm Manager
     FirmManager firmManager;
-    QString resolvedDbPath = "data/mahadev_rice.db";
-    QVariantList registeredFirms = firmManager.get_registered_firms();
-    for (const auto& f : registeredFirms) {
-        if (f.toMap().value("id").toString() == firmManager.currentFirmId()) {
-            resolvedDbPath = f.toMap().value("db_path").toString();
-            break;
-        }
-    }
-    if (!QFile::exists(resolvedDbPath)) {
-        if (QFile::exists(dataDir.filePath("mahadev_rice.db"))) {
-            resolvedDbPath = dataDir.filePath("mahadev_rice.db");
-        } else if (QFile::exists(dataDir.filePath("mahadev_accounting.db"))) {
-            resolvedDbPath = dataDir.filePath("mahadev_accounting.db");
+    QString resolvedDbPath = "";
+    QString activeFirmId = firmManager.currentFirmId();
+    if (!activeFirmId.isEmpty()) {
+        QVariantList registeredFirms = firmManager.get_registered_firms();
+        for (const auto& f : registeredFirms) {
+            if (f.toMap().value("id").toString() == activeFirmId) {
+                QString candPath = f.toMap().value("db_path").toString();
+                if (QFile::exists(candPath)) {
+                    resolvedDbPath = candPath;
+                }
+                break;
+            }
         }
     }
 
     std::cout << "[INFO] Launch Directory: " << launchDir.absolutePath().toStdString() << std::endl;
     std::cout << "[INFO] Data Directory: " << dataDir.absolutePath().toStdString() << std::endl;
-    std::cout << "[INFO] Active Firm: " << firmManager.currentFirmName().toStdString() << std::endl;
-    std::cout << "[INFO] Active SQLite database at: " << resolvedDbPath.toStdString() << std::endl << std::flush;
+    std::cout << "[INFO] Active Firm: " << (firmManager.currentFirmName().isEmpty() ? "None (Firm Selector)" : firmManager.currentFirmName().toStdString()) << std::endl;
 
-    bool dbOk = DatabaseManager::instance().initDatabase(resolvedDbPath);
-    if (!dbOk) {
-        std::cerr << "[ERROR] Failed to initialize SQLite database at: " << resolvedDbPath.toStdString() << std::endl << std::flush;
+    if (!resolvedDbPath.isEmpty()) {
+        std::cout << "[INFO] Active SQLite database at: " << resolvedDbPath.toStdString() << std::endl << std::flush;
+        bool dbOk = DatabaseManager::instance().initDatabase(resolvedDbPath);
+        if (!dbOk) {
+            std::cerr << "[ERROR] Failed to initialize SQLite database at: " << resolvedDbPath.toStdString() << std::endl << std::flush;
+        }
+    } else {
+        std::cout << "[INFO] No firm database pre-selected. App will present Firm Selector." << std::endl << std::flush;
     }
 
     // Instantiate C++ Models matching Python backend

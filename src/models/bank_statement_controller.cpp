@@ -1,5 +1,6 @@
 #include "bank_statement_controller.h"
 #include "../database_manager.h"
+#include "../engine/fiscal_year_helper.h"
 #include "../services/financial_math_service.h"
 #include "../services/accounting_date_service.h"
 #include "../services/bank_statement_excel_parser.h"
@@ -132,18 +133,18 @@ void BankStatementRowsModel::applyFilter() {
     beginResetModel();
     m_visibleIndices.clear();
 
-    QString q = m_searchQuery.trimmed().toLower();
-    QString ft = m_filterType.toUpper();
+    QString q = m_searchQuery.toLower();
+    QString ft = m_filterType.toUpper().trimmed();
 
     for (int i = 0; i < m_allRows.size(); ++i) {
         const auto &r = m_allRows[i];
 
-        if (ft == "RECEIPTS" && r.deposit <= 0.001) continue;
-        if (ft == "PAYMENTS" && r.withdrawal <= 0.001) continue;
-        if (ft == "CHARGES" && r.category != "BANK_CHARGES") continue;
-        if (ft == "INTEREST" && r.category != "INTEREST_DEBIT") continue;
-        if (ft == "UNMATCHED" && r.confidence != "UNMATCHED") continue;
-        if (ft == "DUPLICATES" && !r.isDuplicate) continue;
+        if ((ft.contains("RECEIPT") || ft.contains("DEPOSIT")) && r.deposit <= 0.001) continue;
+        if ((ft.contains("PAYMENT") || ft.contains("WITHDRAWAL")) && r.withdrawal <= 0.001) continue;
+        if (ft.contains("CHARGE") && r.category != "BANK_CHARGES") continue;
+        if (ft.contains("INTEREST") && r.category != "INTEREST_DEBIT") continue;
+        if (ft.contains("UNMATCH") && r.confidence != "UNMATCHED") continue;
+        if (ft.contains("DUPLICATE") && !r.isDuplicate) continue;
 
         if (!q.isEmpty()) {
             bool matches = r.cleanNarration.toLower().contains(q) ||
@@ -152,7 +153,8 @@ void BankStatementRowsModel::applyFilter() {
                            r.suggestedDrAccount.toLower().contains(q) ||
                            r.suggestedCrAccount.toLower().contains(q) ||
                            r.extractedParty.toLower().contains(q) ||
-                           r.dateStr.contains(q);
+                           r.dateStr.toLower().contains(q) ||
+                           r.isoDate.toLower().contains(q);
             if (!matches) continue;
         }
 
@@ -239,6 +241,7 @@ QVariantMap BankStatementRowsModel::getRow(int visibleIndex) const {
     map["rowIndex"] = r.index;
     map["vDate"] = r.dateStr;
     map["isoDate"] = r.isoDate;
+    map["date"] = !r.dateStr.isEmpty() ? r.dateStr : r.isoDate;
     map["narration"] = r.rawNarration;
     map["utrRef"] = r.utrRef;
     map["withdrawal"] = r.withdrawal;
@@ -1126,15 +1129,18 @@ QVariantMap BankStatementController::postSelectedVouchers() {
         QString dt = r.isoDate;
 
         // Financial Year Resolution
-        QVariantList fyRows = DatabaseManager::instance().executeQuery(
-            "SELECT id, year_name FROM financial_years WHERE start_date <= ? AND end_date >= ? LIMIT 1;",
-            {dt, dt}
+        FiscalYearInfo fy = FiscalYearHelper::getFiscalYearForDate(dt);
+        int fyId = 1;
+        QString fyLabel = fy.name;
+        QVariant fyIdVar = DatabaseManager::instance().executeScalar(
+            "SELECT id FROM financial_years WHERE year_name = ? LIMIT 1;",
+            {fy.name}
         );
-        int fyId = 28;
-        QString fyLabel = "FY 2026-27";
-        if (!fyRows.isEmpty()) {
-            fyId = fyRows.first().toMap().value("id").toInt();
-            fyLabel = fyRows.first().toMap().value("year_name").toString();
+        if (fyIdVar.isValid() && !fyIdVar.isNull()) {
+            fyId = fyIdVar.toInt();
+        } else {
+            QVariant anyFy = DatabaseManager::instance().executeScalar("SELECT id FROM financial_years WHERE is_active = 1 LIMIT 1;");
+            if (anyFy.isValid() && !anyFy.isNull()) fyId = anyFy.toInt();
         }
 
         QString vchNo = vModel.get_next_voucher_no(vchType, fyLabel);

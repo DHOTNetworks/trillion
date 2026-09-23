@@ -43,27 +43,10 @@ QVariantMap FinancialYearsModel::get_active_year() const {
 }
 
 bool FinancialYearsModel::set_active_year(const QString& yearName) {
-    DatabaseManager::instance().executeNonQuery("UPDATE financial_years SET is_active = 0;");
-    bool ok = DatabaseManager::instance().executeNonQuery(
-        "UPDATE financial_years SET is_active = 1 WHERE year_name = ?;",
-        {yearName}
-    );
-    if (ok) {
-        m_workingDate = "";
-        QVariantList rows = DatabaseManager::instance().executeQuery(
-            "SELECT start_date, end_date FROM financial_years WHERE year_name = ? LIMIT 1;",
-            {yearName}
-        );
-        if (!rows.isEmpty()) {
-            QString sd = rows.first().toMap().value("start_date").toString();
-            QString ed = rows.first().toMap().value("end_date").toString();
-            AccountingEngine::setActivePeriod(sd, ed, yearName);
-        } else {
-            AccountingEngine::setActivePeriod("", "", yearName);
-        }
-        reload_data();
-    }
-    return ok;
+    FiscalYearHelper::setActiveFiscalYear(yearName);
+    m_workingDate = "";
+    reload_data();
+    return true;
 }
 
 QVariantList FinancialYearsModel::get_all_years() const {

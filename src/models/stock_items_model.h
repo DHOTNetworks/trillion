@@ -57,9 +57,9 @@ signals:
     void periodChanged(const QString& fy, const QString& fromDate, const QString& toDate);
 
 private:
-    QString m_currentFinancialYear = "FY 2026-27";
-    QString m_currentFromDate = "2026-04-01";
-    QString m_currentToDate = "2027-03-31";
+    QString m_currentFinancialYear;
+    QString m_currentFromDate;
+    QString m_currentToDate;
 
     void initActivePeriod();
 };

@@ -10,7 +10,7 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QScrollArea>
-#include "party_search_widget.h"
+#include "account_search_box.h"
 #include "../models/parties_model.h"
 
 class ModifyLedgerWidget : public QWidget {
@@ -59,7 +59,7 @@ private:
     int m_selectedPartyId = -1;
 
     // Top Search Card
-    PartySearchWidget* m_partySearchWidget = nullptr;
+    AccountSearchBox* m_partySearchWidget = nullptr;
 
     // Top Header & Live Balance Summary Monitor
     QComboBox* m_prefixCombo = nullptr;

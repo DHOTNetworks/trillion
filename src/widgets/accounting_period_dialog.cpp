@@ -1,6 +1,7 @@
 #include "accounting_period_dialog.h"
 #include "../database_manager.h"
 #include "../engine/accounting_engine.h"
+#include "../engine/fiscal_year_helper.h"
 #include "../services/accounting_date_service.h"
 #include <QFrame>
 #include <QPainter>
@@ -241,7 +242,7 @@ void AccountingPeriodDialog::setupUi() {
 
     previewLayout->addStretch(1);
 
-    m_previewFyBadge = new QLabel("FY 2026-27", previewCard);
+    m_previewFyBadge = new QLabel(FiscalYearHelper::getActiveFiscalYear().name, previewCard);
     m_previewFyBadge->setStyleSheet("color: #10B981; background-color: #064E3B; border-radius: 4px; padding: 4px 10px; font-size: 12px; font-weight: 800; border: none;");
     previewLayout->addWidget(m_previewFyBadge);
 

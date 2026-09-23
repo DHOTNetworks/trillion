@@ -72,15 +72,18 @@ QString VouchersModel::get_next_voucher_no(const QString& v_type, const QString&
 
 bool VouchersModel::add_voucher(const QString& vch_type, const QString& party_name, const QString& vch_date, const QString& account_type, double amount, const QString& narration) {
     QString dt = vch_date.isEmpty() ? QDate::currentDate().toString("yyyy-MM-dd") : vch_date;
-    QVariantList fyRows = DatabaseManager::instance().executeQuery(
-        "SELECT id, year_name FROM financial_years WHERE start_date <= ? AND end_date >= ? LIMIT 1;",
-        {dt, dt}
+    FiscalYearInfo fy = FiscalYearHelper::getFiscalYearForDate(dt);
+    int fyId = 1;
+    QString fyLabel = fy.name;
+    QVariant fyIdVar = DatabaseManager::instance().executeScalar(
+        "SELECT id FROM financial_years WHERE year_name = ? LIMIT 1;",
+        {fy.name}
     );
-    int fyId = 28;
-    QString fyLabel = "FY 2026-27";
-    if (!fyRows.isEmpty()) {
-        fyId = fyRows.first().toMap().value("id").toInt();
-        fyLabel = fyRows.first().toMap().value("year_name").toString();
+    if (fyIdVar.isValid() && !fyIdVar.isNull()) {
+        fyId = fyIdVar.toInt();
+    } else {
+        QVariant anyFy = DatabaseManager::instance().executeScalar("SELECT id FROM financial_years WHERE is_active = 1 LIMIT 1;");
+        if (anyFy.isValid() && !anyFy.isNull()) fyId = anyFy.toInt();
     }
 
     QString vchNo = get_next_voucher_no(vch_type, fyLabel);
@@ -114,15 +117,18 @@ bool VouchersModel::add_voucher(const QString& vch_type, const QString& party_na
 
 bool VouchersModel::add_cheque_voucher(const QString& vch_type, const QString& dr_party, const QString& cr_party, double amount, const QString& chq_no, const QString& narration, const QString& vch_date) {
     QString dt = vch_date.isEmpty() ? QDate::currentDate().toString("yyyy-MM-dd") : vch_date;
-    QVariantList fyRows = DatabaseManager::instance().executeQuery(
-        "SELECT id, year_name FROM financial_years WHERE start_date <= ? AND end_date >= ? LIMIT 1;",
-        {dt, dt}
+    FiscalYearInfo fy = FiscalYearHelper::getFiscalYearForDate(dt);
+    int fyId = 1;
+    QString fyLabel = fy.name;
+    QVariant fyIdVar = DatabaseManager::instance().executeScalar(
+        "SELECT id FROM financial_years WHERE year_name = ? LIMIT 1;",
+        {fy.name}
     );
-    int fyId = 28;
-    QString fyLabel = "FY 2026-27";
-    if (!fyRows.isEmpty()) {
-        fyId = fyRows.first().toMap().value("id").toInt();
-        fyLabel = fyRows.first().toMap().value("year_name").toString();
+    if (fyIdVar.isValid() && !fyIdVar.isNull()) {
+        fyId = fyIdVar.toInt();
+    } else {
+        QVariant anyFy = DatabaseManager::instance().executeScalar("SELECT id FROM financial_years WHERE is_active = 1 LIMIT 1;");
+        if (anyFy.isValid() && !anyFy.isNull()) fyId = anyFy.toInt();
     }
 
     QString vchNo = get_next_voucher_no(vch_type, fyLabel);
@@ -166,15 +172,18 @@ bool VouchersModel::add_cheque_voucher(const QString& vch_type, const QString& d
 
 bool VouchersModel::add_journal_voucher(const QString& dr_party, const QString& cr_party, double amount, const QString& ref_no, const QString& narration, const QString& vch_date, const QString& vch_type) {
     QString dt = vch_date.isEmpty() ? QDate::currentDate().toString("yyyy-MM-dd") : vch_date;
-    QVariantList fyRows = DatabaseManager::instance().executeQuery(
-        "SELECT id, year_name FROM financial_years WHERE start_date <= ? AND end_date >= ? LIMIT 1;",
-        {dt, dt}
+    FiscalYearInfo fy = FiscalYearHelper::getFiscalYearForDate(dt);
+    int fyId = 1;
+    QString fyLabel = fy.name;
+    QVariant fyIdVar = DatabaseManager::instance().executeScalar(
+        "SELECT id FROM financial_years WHERE year_name = ? LIMIT 1;",
+        {fy.name}
     );
-    int fyId = 28;
-    QString fyLabel = "FY 2026-27";
-    if (!fyRows.isEmpty()) {
-        fyId = fyRows.first().toMap().value("id").toInt();
-        fyLabel = fyRows.first().toMap().value("year_name").toString();
+    if (fyIdVar.isValid() && !fyIdVar.isNull()) {
+        fyId = fyIdVar.toInt();
+    } else {
+        QVariant anyFy = DatabaseManager::instance().executeScalar("SELECT id FROM financial_years WHERE is_active = 1 LIMIT 1;");
+        if (anyFy.isValid() && !anyFy.isNull()) fyId = anyFy.toInt();
     }
 
     QString vchNo = get_next_voucher_no("Jrnl", fyLabel);
@@ -440,15 +449,18 @@ bool VouchersModel::save_multi_row_voucher(
     }
     if (dt.isEmpty()) dt = QDate::currentDate().toString("yyyy-MM-dd");
 
-    QVariantList fyRows = DatabaseManager::instance().executeQuery(
-        "SELECT id, year_name FROM financial_years WHERE start_date <= ? AND end_date >= ? LIMIT 1;",
-        {dt, dt}
+    FiscalYearInfo fy = FiscalYearHelper::getFiscalYearForDate(dt);
+    int fyId = 1;
+    QString fyLabel = fy.name;
+    QVariant fyIdVar = DatabaseManager::instance().executeScalar(
+        "SELECT id FROM financial_years WHERE year_name = ? LIMIT 1;",
+        {fy.name}
     );
-    int fyId = 28;
-    QString fyLabel = "FY 2026-27";
-    if (!fyRows.isEmpty()) {
-        fyId = fyRows.first().toMap().value("id").toInt();
-        fyLabel = fyRows.first().toMap().value("year_name").toString();
+    if (fyIdVar.isValid() && !fyIdVar.isNull()) {
+        fyId = fyIdVar.toInt();
+    } else {
+        QVariant anyFy = DatabaseManager::instance().executeScalar("SELECT id FROM financial_years WHERE is_active = 1 LIMIT 1;");
+        if (anyFy.isValid() && !anyFy.isNull()) fyId = anyFy.toInt();
     }
 
     QString activeVchNo = vch_no.trimmed();

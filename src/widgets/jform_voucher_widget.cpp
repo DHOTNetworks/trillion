@@ -80,7 +80,7 @@ void JFormVoucherWidget::setupUi() {
     headerLayout->setSpacing(8);
 
     headerLayout->addWidget(new QLabel("Farmer Name (Enter to Search / F3 New):", this), 0, 0);
-    m_farmerSearch = new PartySearchWidget(this);
+    m_farmerSearch = new AccountSearchBox(this);
     headerLayout->addWidget(m_farmerSearch, 0, 1, 1, 2);
 
     m_farmerBalanceLabel = new QLabel("Date Bal. 0.00", this);
@@ -200,7 +200,7 @@ void JFormVoucherWidget::setupUi() {
 
     // Connect signals
     connect(m_dateEdit, &AccountingDateEdit::dateChanged, this, &JFormVoucherWidget::onDateChanged);
-    connect(m_farmerSearch, &PartySearchWidget::partySelected, this, &JFormVoucherWidget::onFarmerSelected);
+    connect(m_farmerSearch, &AccountSearchBox::partyDataSelected, this, &JFormVoucherWidget::onFarmerSelected);
     connect(m_table, &QTableWidget::cellChanged, this, &JFormVoucherWidget::onTableCellChanged);
     connect(m_itemDelegate, &ItemSearchDelegate::stockItemConfigured, this, &JFormVoucherWidget::onStockItemConfigured);
     connect(m_itemDelegate, &ItemSearchDelegate::moveNextRequested, this, &JFormVoucherWidget::advanceCell);

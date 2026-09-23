@@ -9,11 +9,17 @@ class KbdBadgeButton : public QPushButton {
 
 public:
     explicit KbdBadgeButton(const QString& text, const QString& shortcut = "",
-                           const QColor& bgColor = QColor("#2563EB"),
+                           QWidget* parent = nullptr);
+
+    explicit KbdBadgeButton(const QString& text, const QString& shortcut,
+                           const QColor& bgColor,
                            const QColor& hoverColor = QColor("#1D4ED8"),
                            const QColor& textColor = QColor("#FFFFFF"),
                            const QColor& borderColor = QColor(Qt::transparent),
                            QWidget* parent = nullptr);
+
+    void setPrimaryColor(const QColor& bg, const QColor& hover = QColor());
+    void setTextColor(const QColor& color);
 
     void setButtonColors(const QColor& bg, const QColor& hover, const QColor& text = QColor("#FFFFFF"),
                          const QColor& border = QColor(Qt::transparent), const QColor& badgeBg = QColor(),

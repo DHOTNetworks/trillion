@@ -1,6 +1,7 @@
 #include "parties_model.h"
 #include "../database_manager.h"
 #include "../engine/accounting_engine.h"
+#include "../engine/fiscal_year_helper.h"
 #include <QDate>
 #include <algorithm>
 
@@ -908,11 +909,8 @@ static std::pair<QString, QString> parseDates(const QString& dStr) {
 
 static QString computeFyForDate(const QString& isoDate, const QString& explicitFy = "") {
     if (!explicitFy.trimmed().isEmpty()) return explicitFy.trimmed();
-    if (isoDate >= "2026-04-01" && isoDate <= "2027-03-31") return "FY 2026-27";
-    if (isoDate >= "2025-04-01" && isoDate <= "2026-03-31") return "FY 2025-26";
-    if (isoDate >= "2024-04-01" && isoDate <= "2025-03-31") return "FY 2024-25";
-    if (isoDate >= "2023-04-01" && isoDate <= "2024-03-31") return "FY 2023-24";
-    return "FY 2025-26";
+    FiscalYearInfo fy = FiscalYearHelper::getFiscalYearForDate(isoDate);
+    return fy.name;
 }
 
 QVariantMap PartiesModel::get_party_statement(const QString& partyName) {

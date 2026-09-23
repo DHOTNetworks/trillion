@@ -178,16 +178,16 @@ private:
     double m_gstRate = 5.0;
     double m_cessRate = 0.0;
 
-    double m_packingKg = 50.0;
+    double m_packingKg = 0.0;
 
     int m_openingBags = 0;
     double m_openingQty = 0.0;
     double m_openingRate = 0.0;
     double m_openingValue = 0.0;
 
-    QString m_purchaseLedger = "Purchase Account";
-    QString m_saleLedger = "Sales Account";
-    QString m_stockLedger = "Stock In Hand";
+    QString m_purchaseLedger;
+    QString m_saleLedger;
+    QString m_stockLedger;
 
     QString m_statusMessage;
     bool m_isError = false;

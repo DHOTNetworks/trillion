@@ -669,18 +669,29 @@ void NewLedgerWidget::populateDropdowns() {
 void NewLedgerWidget::resetForm() {
     populateDropdowns();
 
+    QVariantList compRows = DatabaseManager::instance().executeQuery("SELECT state, state_code, pincode FROM company_info LIMIT 1;");
+    QString defState = "";
+    QString defStateCode = "";
+    QString defPincode = "";
+    if (!compRows.isEmpty()) {
+        QVariantMap c = compRows.first().toMap();
+        defState = c.value("state").toString().trimmed();
+        defStateCode = c.value("state_code").toString().trimmed();
+        defPincode = c.value("pincode").toString().trimmed();
+    }
+
     setComboText(m_prefixCombo, "None");
     m_nameInput->clear();
     m_aliasInput->clear();
     setComboText(m_stationCombo, "");
-    setComboText(m_stateCombo, "Haryana");
-    m_stateCodeInput->setText("06");
-    m_pincodeInput->setText("125055");
+    setComboText(m_stateCombo, defState);
+    m_stateCodeInput->setText(defStateCode.isEmpty() && !defState.isEmpty() ? m_partiesModel.get_state_code_for_state(defState) : defStateCode);
+    m_pincodeInput->setText(defPincode);
     m_useRoutesCheck->setChecked(false);
     setComboText(m_routeCombo, "None");
 
-    setComboText(m_groupCombo, "Sundry Debtors");
-    m_parentGroupLbl->setText("(Sundry Debtors)");
+    setComboText(m_groupCombo, "");
+    m_parentGroupLbl->setText("");
 
     QString fyStart = m_partiesModel.get_financial_year_start();
     m_booksFromInput->setText(fyStart);
@@ -946,11 +957,17 @@ void NewLedgerWidget::executeSave() {
 
     QString station = getComboText(m_stationCombo);
     QString state = getComboText(m_stateCombo);
-    if (state.isEmpty()) state = "Haryana";
+    if (state.isEmpty()) {
+        QVariant v = DatabaseManager::instance().executeScalar("SELECT state FROM company_info LIMIT 1;");
+        if (v.isValid() && !v.isNull()) state = v.toString().trimmed();
+    }
     QString stateCode = m_stateCodeInput->text().trimmed();
-    if (stateCode.isEmpty()) stateCode = m_partiesModel.get_state_code_for_state(state);
+    if (stateCode.isEmpty() && !state.isEmpty()) stateCode = m_partiesModel.get_state_code_for_state(state);
     QString pincode = m_pincodeInput->text().trimmed();
-    if (pincode.isEmpty()) pincode = "125055";
+    if (pincode.isEmpty()) {
+        QVariant v = DatabaseManager::instance().executeScalar("SELECT pincode FROM company_info LIMIT 1;");
+        if (v.isValid() && !v.isNull()) pincode = v.toString().trimmed();
+    }
 
     int useRoutes = m_useRoutesCheck->isChecked() ? 1 : 0;
     QString route = useRoutes ? getComboText(m_routeCombo) : "";

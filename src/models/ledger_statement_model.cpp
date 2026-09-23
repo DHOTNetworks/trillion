@@ -47,11 +47,8 @@ static std::pair<QString, QString> parseDateIsoAndFmt(const QString& dStr) {
 
 static QString computeFyForIso(const QString& isoDate, const QString& explicitFy = "") {
     if (!explicitFy.trimmed().isEmpty()) return explicitFy.trimmed();
-    if (isoDate >= "2026-04-01" && isoDate <= "2027-03-31") return "FY 2026-27";
-    if (isoDate >= "2025-04-01" && isoDate <= "2026-03-31") return "FY 2025-26";
-    if (isoDate >= "2024-04-01" && isoDate <= "2025-03-31") return "FY 2024-25";
-    if (isoDate >= "2023-04-01" && isoDate <= "2024-03-31") return "FY 2023-24";
-    return "FY 2026-27";
+    FiscalYearInfo fy = FiscalYearHelper::getFiscalYearForDate(isoDate);
+    return fy.name;
 }
 
 // ======================== LedgerStatementSideModel ========================

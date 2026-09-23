@@ -1,11 +1,28 @@
 # MahadevERP Native QtWidgets UI & Design System Rules
 
-This document establishes the mandatory design, layout, styling, custom helper usage, and keyboard navigation rules for all native C++20 Qt 6 QtWidgets across the Mahadev Rice Mill ERP codebase.
+This document establishes the mandatory design, layout, styling, custom helper usage, single-slate architecture, and keyboard navigation rules for all native C++20 Qt 6 QtWidgets across the Mahadev Rice Mill ERP codebase.
 
 ---
 
-## 1. Zero Unstyled / Palette Invariant (Mandatory Contrast Rule)
-* **Never rely on OS default palettes**: On macOS and Windows, system palettes in dark mode or dynamic appearance will cause light-on-light (invisible text) or unstyled gray blocks if background colors are set without explicit foreground colors.
+## 1. Strict Single-Slate Architecture (Zero-Scroll Rule)
+
+* **Zero Unnecessary Scrolling**: Primary master creation/alteration views (Items, Groups, Ledgers, Firms) and voucher entry forms (Sales, Purchase, Mandi, Milling, Payment, Journal, TDS, Notes) **must be strictly Single-Slate**. Users must be able to view, fill, and submit all fields on a standard desktop resolution (`1024x768` to `1920x1080`) without vertical scrolling.
+* **Layout Organization**:
+  * Organize input forms into 2-column or 3-column side-by-side grouped cards (`QHBoxLayout` containing structured `QFrame` cards) instead of stacked vertical sections.
+  * Use compact form grids (`QGridLayout` with `8px` vertical spacing, `10px` horizontal spacing).
+  * Group logically into:
+    1. **Identity & Classification** (Names, Codes, Categories, Units).
+    2. **Pricing, Tax & Statutory Matrix** (Rates, HSN/SAC, GST %, Cess, Discounts).
+    3. **Opening Balances, Valuation & Ledger Mapping** (Quantities, Rates, Computed Values, Default Accounts).
+* **Sticky Header & Action Footer**:
+  * Header and Action Footer are fixed at top and bottom.
+  * Content area takes remaining space with stretch factor 1.
+
+---
+
+## 2. Zero Unstyled / Palette Invariant (Mandatory Contrast Rule)
+
+* **Never rely on OS default palettes**: On macOS and Windows, system palettes in dark mode or dynamic appearance cause light-on-light (invisible text) or unstyled gray blocks if background colors are set without explicit foreground colors.
 * **Explicit Item Foregrounds**:
   * Every `QTableWidgetItem` must explicitly have its foreground set:
     ```cpp
@@ -21,32 +38,31 @@ This document establishes the mandatory design, layout, styling, custom helper u
 
 ---
 
-## 2. Standard 4-Tier Screen Hierarchy
+## 3. Standard 4-Tier Screen Hierarchy (Registers & Reports)
 
-Every full-screen native widget in MahadevERP must strictly follow the standard 4-Tier layout:
+Every full-screen register and reporting view in MahadevERP must strictly follow the standard 4-Tier layout:
 
 ```
 +-----------------------------------------------------------------------------------------+
 | Tier 1: Header Bar Card (Title, Subtitle, KbdBadgeButtons: [Back], [Save], [PDF], etc.)|
 +-----------------------------------------------------------------------------------------+
-| Tier 2: Filter & Control Bar Card (As on Date, Search [Ctrl+F], Status Badge, FY Alt+F2)|
+| Tier 2: Filter & Control Bar Card (From/To Date, Search [Ctrl+F], FY Badge, Period F2) |
 +-----------------------------------------------------------------------------------------+
-| Tier 3: High-Performance Data Surface (QTableWidget / QTreeView with Dark Navy Headers)  |
-|                                                                                         |
+| Tier 3: High-Performance Data Surface (QTableWidget with Dark Navy #0F172A Headers)    |
 |                                                                                         |
 +-----------------------------------------------------------------------------------------+
-| Tier 4: Summary Metrics Footer Cards (Total Items, Bags, Weight, Grand Valuation ₹)    |
+| Tier 4: Summary Metrics Footer Cards (4 distinct cards with left colored stripe borders)|
 +-----------------------------------------------------------------------------------------+
 ```
 
 ### Tier 1: Header Bar Card
 * `QFrame` container: `background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px;`
-* Title: `font-size: 16px; font-weight: 800; color: #0F172A; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;`
+* Title: `font-size: 16px; font-weight: 800; color: #0F172A;`
 * Subtitle: `font-size: 11px; color: #64748B;`
 * Action buttons: Use `KbdBadgeButton` with standard color accents.
 
 ### Tier 2: Filter & Control Bar Card
-* Height: `52px` to `58px`.
+* Height: `48px` to `54px`.
 * Controls (`QDateEdit`, `QComboBox`, `QLineEdit`, `AccountingDateEdit`):
   * `background-color: #FFFFFF; color: #0F172A; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 4px 10px; font-weight: 700; font-size: 12px;`
   * Focus state: `border: 2px solid #2563EB; background-color: #FFFFF0;`
@@ -82,7 +98,7 @@ Every full-screen native widget in MahadevERP must strictly follow the standard 
     border-right: 1px solid #334155;
   }
   ```
-* Row height: `30px` (or `28px` for compact ledgers).
+* Row height: `28px` to `30px`.
 * Selection mode: `QAbstractItemView::SelectRows` + `QAbstractItemView::SingleSelection`.
 
 ### Tier 4: Summary Metrics Footer Cards
@@ -94,14 +110,15 @@ Every full-screen native widget in MahadevERP must strictly follow the standard 
 
 ---
 
-## 3. Keyboard-First Architecture
+## 4. Keyboard-First Architecture
 * Every primary action must have a designated keyboard shortcut:
-  * `Esc` or `Alt+Left`: Return to Dashboard.
-  * `F5`: Refresh data / Recalculate live stock.
-  * `Ctrl+S` or `Alt+S`: Save / Lock snapshot.
-  * `Alt+Del` or `Alt+D`: Delete / Reset.
-  * `Alt+P`: Export PDF.
-  * `Alt+E`: Export Excel / CSV.
+  * `Esc`: Return to Dashboard.
+  * `F2`: Contextual Date / Accounting Period dialog.
+  * `F5`: Refresh data / Clear form.
+  * `Ctrl+S` or `F2`: Save voucher / Master.
+  * `Alt+Del` or `Del`: Delete entry.
+  * `Alt+P` or `Ctrl+P`: Export / Print PDF.
+  * `Alt+E`: Export CSV.
   * `Ctrl+F`: Focus search filter box.
   * `Alt+F2`: Open Accounting Period dialog.
 * Implement `keyPressEvent(QKeyEvent* event)` on every custom widget class.
@@ -109,93 +126,30 @@ Every full-screen native widget in MahadevERP must strictly follow the standard 
 
 ---
 
-## 4. Financial Formatting & Alignment Rules
-* **Text / Descriptions / Party Names**: Left-aligned (`Qt::AlignLeft | Qt::AlignVCenter`), bold Segoe UI.
-* **Codes / Dates / Units / Voucher Numbers**: Center-aligned (`Qt::AlignCenter`).
-* **Quantities / Bags / Weights**: Right-aligned (`Qt::AlignRight | Qt::AlignVCenter`), 2 decimal places for weights (`'f', 2`).
-* **Currency & Valuation Amounts**: Right-aligned, formatted with `AccountingEngine::formatIndianCurrency(val, true)` (e.g. `₹42,79,96,193.95`).
+## 5. Standard Custom Helpers & Global Fiscal Year Synchronization
 
----
+All native QtWidgets MUST use the project's native custom helpers:
 
-## 5. Standard Custom Helpers & Components Guide
-
-All new and refactored UI components MUST use the project's native custom helpers instead of raw Qt primitives:
-
-### A. Dialogs & Messages: Use `CustomMessageBox` and `CustomInputDialog`
-* **Never use raw `QMessageBox`** (which renders unstyled standard OS dialogs).
-* **Information dialog**:
-  ```cpp
-  CustomMessageBox::information(this, "Title", "Formatted informational message.");
-  ```
-* **Critical / Error dialog**:
-  ```cpp
-  CustomMessageBox::critical(this, "Save Failed", QString("Error: %1").arg(errorMsg));
-  ```
-* **Confirmation prompt**:
-  ```cpp
-  bool confirmed = CustomMessageBox::question(this, "Confirm Action", "Are you sure?", "Yes, Proceed", "Cancel");
-  ```
-* **Themed input prompt**:
-  ```cpp
-  bool ok = false;
-  QString text = CustomInputDialog::getText(this, "New Group", "Enter Group Name:", "", &ok);
-  ```
-
-### B. Fiscal Year & Accounting Period: Use `FiscalYearHelper` & `AccountingPeriodDialog`
-* **Get Active Financial Year**:
+### A. Global Fiscal Year Synchronization (`FiscalYearHelper`)
+* Every view MUST initialize its date range from `FiscalYearHelper::getActiveFiscalYear()`.
+* Every view must handle period changes when `AccountingPeriodDialog::selectAndApplyGlobalPeriod()` is invoked.
   ```cpp
   FiscalYearInfo fy = FiscalYearHelper::getActiveFiscalYear();
-  // fy.name ("2025-2026"), fy.startDate ("2025-04-01"), fy.endDate ("2026-03-31")
-  ```
-* **Global Period Selector Trigger (`Alt+F2`)**:
-  ```cpp
-  QString fIso, tIso, fyLabel;
-  bool applied = AccountingPeriodDialog::selectAndApplyGlobalPeriod(this, &fIso, &tIso, &fyLabel);
-  if (applied) {
-      reloadData();
-  }
-  ```
-* **Date Boundary Clamping**:
-  ```cpp
-  bool inYear = FiscalYearHelper::isDateInActiveYear(targetDate);
+  m_fromDateEdit->setDate(QDate::fromString(fy.startDate, "yyyy-MM-dd"));
+  m_toDateEdit->setDate(QDate::fromString(fy.endDate, "yyyy-MM-dd"));
   ```
 
-### C. Fast Date Inputs: Use `AccountingDateEdit` & `VoucherDateDialog`
-* **`AccountingDateEdit`**: High-speed numeric typing with automatic slash/dash auto-formatting, date clamping, and calendar popup.
-* **`VoucherDateDialog`**: Compact calendar modal for vouchers (`F2` shortcut).
+### B. Dialogs & Messages (`CustomMessageBox` & `CustomInputDialog`)
+* Never use raw unstyled `QMessageBox`. Use `CustomMessageBox::information`, `CustomMessageBox::critical`, `CustomMessageBox::question`.
 
-### D. Party & Account Auto-Complete: Use `AccountSearchBox` & `PartySearchWidget`
-* For selecting accounts/ledgers with real-time fuzzy search, keyboard navigation (`Up`/`Down`/`Enter`), and current balance badge preview:
-  ```cpp
-  AccountSearchBox* search = new AccountSearchBox(parent);
-  connect(search, &AccountSearchBox::accountSelected, this, &MyWidget::onPartySelected);
-  ```
+### C. Party & Account Auto-Complete (`AccountSearchBox`)
+* Use `AccountSearchBox` for searching and picking ledger accounts with live balance badge.
 
-### E. Grid Item Master Delegates: Use `ItemSearchDelegate`
-* For embedded item selection in `QTableWidget` / `QTableView` with live stock balance, unit, and standard rates.
+### D. Grid Item Master Delegates (`ItemSearchDelegate`)
+* Use `ItemSearchDelegate` for fast inline item/commodity search in table rows.
 
-### F. Action Buttons with Badges: Use `KbdBadgeButton`
-* For all toolbar and header action buttons:
-  ```cpp
-  KbdBadgeButton* btn = new KbdBadgeButton("Save", "Ctrl+S", QColor("#16A34A"), QColor("#15803D"), QColor("#FFFFFF"), QColor("#16A34A"), parent);
-  ```
+### E. Action Buttons with Badges (`KbdBadgeButton`)
+* For toolbar action buttons displaying their keyboard shortcuts.
 
-### G. Printing & File Exports: Use `PrintExportController`
-* For PDF report rendering, CSV table export, and opening files in OS:
-  ```cpp
-  if (m_printCtrl) {
-      QString outPath = m_printCtrl->export_stock_register_pdf(fromDate, toDate, targetPath);
-      m_printCtrl->open_file_in_os(outPath);
-  }
-  ```
-
----
-
-## 6. Main Window Stack & Navigation Integration Checklist
-When introducing a new native QtWidgets view (e.g., `View N`):
-1. **Instantiation in `MainWindow::MainWindow`**: Add instance to `m_stackedWidget` and connect `backRequested` signal to `navigateToView(0)`.
-2. **Handle in `MainWindow::checkQmlView()`**: Add `else if (vIdx == N && m_stackedWidget->currentWidget() != m_targetWidget) { navigateToView(N); }`.
-3. **Exclude from QML Fallback in `checkQmlView()`**: Add `vIdx != N` to the `else if` condition before `m_qmlContainer`.
-4. **Register in `MainWindow::currentViewIndex()`**: Add `if (cur == m_targetWidget) return N;`.
-5. **Register in `MainWindow::restoreActiveViewFocus()`**: Add `else if (vIdx == N && m_targetWidget) { m_targetWidget->setFocus(Qt::OtherFocusReason); }`.
-6. **Register in `DashboardWidget` Menus**: Add menu items in `dashboard_widget.cpp` (`openStockMenu`, `openReportsMenu`, etc.).
+### F. Print & Exports (`PrintExportController`)
+* For PDF report generation, CSV table exports, and opening files in OS viewer.

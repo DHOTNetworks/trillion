@@ -323,6 +323,13 @@ int LedgerTableView::selectedRowIndex() const {
 }
 
 void LedgerTableView::keyPressEvent(QKeyEvent* event) {
+    if (event->key() == Qt::Key_Slash || event->key() == Qt::Key_F3 ||
+        (event->key() == Qt::Key_S && (event->modifiers() & Qt::AltModifier)) ||
+        (event->key() == Qt::Key_F && (event->modifiers() & Qt::ControlModifier))) {
+        emit focusSearchRequested();
+        event->accept();
+        return;
+    }
     if (event->key() == Qt::Key_Space) {
         int row = selectedRowIndex();
         if (row >= 0 && m_adapter) {

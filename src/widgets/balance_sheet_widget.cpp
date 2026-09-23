@@ -45,7 +45,7 @@ void BalanceSheetWidget::setupUi() {
         "background-color: #86EFAC; color: #064E3B; font-size: 14.5px; font-weight: 900; "
         "font-style: italic; border: 1px solid #4ADE80; border-radius: 4px; letter-spacing: 0.5px;"
     );
-    compBanner->setText("M/S MAHADEV RICE INDUSTRY (2025-2026)");
+    compBanner->setText("—");
     m_firmLabel = compBanner;
     mainLayout->addWidget(compBanner);
 

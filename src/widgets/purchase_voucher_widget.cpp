@@ -240,9 +240,9 @@ void PurchaseVoucherWidget::setupUi() {
     m_partyTagLabel->setStyleSheet("color: #1E293B; font-size: 12px; font-weight: 800;");
     row2->addWidget(m_partyTagLabel);
 
-    m_partySearchWidget = new PartySearchWidget(this);
+    m_partySearchWidget = new AccountSearchBox(this);
     m_partySearchWidget->setFixedHeight(26);
-    connect(m_partySearchWidget, &PartySearchWidget::partySelected, this, &PurchaseVoucherWidget::onPartySelected);
+    connect(m_partySearchWidget, &AccountSearchBox::partyDataSelected, this, &PurchaseVoucherWidget::onPartySelected);
     row2->addWidget(m_partySearchWidget, 1);
 
     rootLayout->addLayout(row2);
@@ -487,7 +487,13 @@ void PurchaseVoucherWidget::setupUi() {
     m_posCombo = new QComboBox(logMatrixFrame);
     m_posCombo->setFixedHeight(24);
     m_posCombo->setEditable(true);
-    m_posCombo->addItems({"Same as Supplier", "Haryana (06)", "Punjab (03)", "Delhi (07)", "Rajasthan (08)", "Uttar Pradesh (09)"});
+    QStringList posList = {"Same as Supplier"};
+    PartiesModel pModel;
+    for (const QString& st : pModel.get_states()) {
+        QString c = pModel.get_state_code_for_state(st);
+        posList.append(c.isEmpty() ? st : QString("%1 (%2)").arg(st, c));
+    }
+    m_posCombo->addItems(posList);
 
     m_poNoEdit = new QLineEdit(logMatrixFrame); m_poNoEdit->setFixedHeight(24);
     m_gradeEdit = new QLineEdit(logMatrixFrame); m_gradeEdit->setFixedHeight(24);
@@ -823,7 +829,7 @@ void PurchaseVoucherWidget::setupNavigationChains() {
         if (m_partySearchWidget) { m_partySearchWidget->setFocus(); m_partySearchWidget->selectAll(); }
     });
     VoucherCommon::installGridNavigation(m_partySearchWidget, m_dueDaysEdit, m_posCombo, nullptr);
-    connect(m_partySearchWidget, &PartySearchWidget::returnPressed, this, [this]() {
+    connect(m_partySearchWidget, &AccountSearchBox::returnPressed, this, [this]() {
         focusTableAt(0, 1);
     });
     VoucherCommon::installGridNavigation(m_posCombo, m_partySearchWidget, m_vehicleNoEdit, [this]() {

@@ -62,18 +62,18 @@ void StockMasterController::resetForm() {
     m_itemType = "Paddy"; emit itemTypeChanged();
     m_goodsType = "Goods"; emit goodsTypeChanged();
     m_companyName.clear(); emit companyNameChanged();
-    m_stockGroup = "Raw Material"; emit stockGroupChanged();
-    m_unit = "QTL"; emit unitChanged();
+    m_stockGroup.clear(); emit stockGroupChanged();
+    m_unit.clear(); emit unitChanged();
 
     m_purchaseRate = 0.0; emit purchaseRateChanged();
     m_saleRate = 0.0; emit saleRateChanged();
     m_mrp = 0.0; emit mrpChanged();
     m_discount = 0.0; emit discountChanged();
-    m_hsnCode = "1006"; emit hsnCodeChanged();
-    m_gstRate = 5.0; emit gstRateChanged();
+    m_hsnCode.clear(); emit hsnCodeChanged();
+    m_gstRate = 0.0; emit gstRateChanged();
     m_cessRate = 0.0; emit cessRateChanged();
 
-    m_packingKg = 50.0; emit packingKgChanged();
+    m_packingKg = 0.0; emit packingKgChanged();
 
     m_openingBags = 0;
     m_openingQty = 0.0;
@@ -81,9 +81,9 @@ void StockMasterController::resetForm() {
     m_openingValue = 0.0;
     emit openingStockChanged();
 
-    m_purchaseLedger = "Purchase Account"; emit purchaseLedgerChanged();
-    m_saleLedger = "Sales Account"; emit saleLedgerChanged();
-    m_stockLedger = "Stock In Hand"; emit stockLedgerChanged();
+    m_purchaseLedger.clear(); emit purchaseLedgerChanged();
+    m_saleLedger.clear(); emit saleLedgerChanged();
+    m_stockLedger.clear(); emit stockLedgerChanged();
 
     m_statusMessage.clear();
     m_isError = false;
@@ -103,21 +103,21 @@ bool StockMasterController::loadItem(int id) {
 
     m_name = item.value("name").toString(); emit nameChanged();
     m_code = item.value("code").toString(); emit codeChanged();
-    m_itemType = item.value("item_type", "Paddy").toString(); emit itemTypeChanged();
+    m_itemType = item.value("item_type").toString(); emit itemTypeChanged();
     m_goodsType = item.value("goods_type", "Goods").toString(); emit goodsTypeChanged();
     m_companyName = item.value("company_name").toString(); emit companyNameChanged();
-    m_stockGroup = item.value("stock_group", "Raw Material").toString(); emit stockGroupChanged();
-    m_unit = item.value("unit", "QTL").toString(); emit unitChanged();
+    m_stockGroup = item.value("trading_group", item.value("stock_group").toString()).toString(); emit stockGroupChanged();
+    m_unit = item.value("unit").toString(); emit unitChanged();
 
     m_purchaseRate = item.value("purchase_rate", 0.0).toDouble(); emit purchaseRateChanged();
     m_saleRate = item.value("sale_rate", 0.0).toDouble(); emit saleRateChanged();
     m_mrp = item.value("mrp", 0.0).toDouble(); emit mrpChanged();
     m_discount = item.value("discount", 0.0).toDouble(); emit discountChanged();
-    m_hsnCode = item.value("hsn_code", "1006").toString(); emit hsnCodeChanged();
-    m_gstRate = item.value("gst_rate", 5.0).toDouble(); emit gstRateChanged();
+    m_hsnCode = item.value("hsn_code").toString(); emit hsnCodeChanged();
+    m_gstRate = item.value("gst_rate", 0.0).toDouble(); emit gstRateChanged();
     m_cessRate = item.value("cess_rate", 0.0).toDouble(); emit cessRateChanged();
 
-    m_packingKg = item.value("packing_kg", 50.0).toDouble(); emit packingKgChanged();
+    m_packingKg = item.value("packing_kg", 0.0).toDouble(); emit packingKgChanged();
 
     m_openingBags = item.value("opening_bags", 0).toInt();
     m_openingQty = item.value("opening_qty", 0.0).toDouble();
@@ -125,9 +125,9 @@ bool StockMasterController::loadItem(int id) {
     m_openingValue = item.value("opening_value", 0.0).toDouble();
     emit openingStockChanged();
 
-    m_purchaseLedger = item.value("purchase_ledger", "Purchase Account").toString(); emit purchaseLedgerChanged();
-    m_saleLedger = item.value("sale_ledger", "Sales Account").toString(); emit saleLedgerChanged();
-    m_stockLedger = item.value("stock_ledger", "Stock In Hand").toString(); emit stockLedgerChanged();
+    m_purchaseLedger = item.value("purchase_ledger").toString(); emit purchaseLedgerChanged();
+    m_saleLedger = item.value("sale_ledger").toString(); emit saleLedgerChanged();
+    m_stockLedger = item.value("stock_ledger").toString(); emit stockLedgerChanged();
 
     m_statusMessage.clear();
     m_isError = false;

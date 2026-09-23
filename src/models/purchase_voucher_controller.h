@@ -359,7 +359,7 @@ private:
     QString m_partyLedger;
     QString m_gstin;
     int m_dueDays = 30;
-    QString m_purchaseAccount = "Purchase Account";
+    QString m_purchaseAccount;
 
     int m_totalBags = 0;
     double m_totalWeightQtl = 0.0;

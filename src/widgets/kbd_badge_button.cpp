@@ -3,6 +3,20 @@
 #include <QPaintEvent>
 #include <QFontMetrics>
 
+KbdBadgeButton::KbdBadgeButton(const QString& text, const QString& shortcut, QWidget* parent)
+    : QPushButton(parent)
+    , m_shortcut(shortcut)
+    , m_bgColor(QColor("#2563EB"))
+    , m_hoverColor(QColor("#1D4ED8"))
+    , m_textColor(QColor("#FFFFFF"))
+    , m_borderColor(QColor(Qt::transparent))
+{
+    setText(text);
+    setFixedHeight(34);
+    setCursor(Qt::PointingHandCursor);
+    setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+}
+
 KbdBadgeButton::KbdBadgeButton(const QString& text, const QString& shortcut,
                                const QColor& bgColor, const QColor& hoverColor,
                                const QColor& textColor, const QColor& borderColor,
@@ -18,6 +32,17 @@ KbdBadgeButton::KbdBadgeButton(const QString& text, const QString& shortcut,
     setFixedHeight(34);
     setCursor(Qt::PointingHandCursor);
     setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+}
+
+void KbdBadgeButton::setPrimaryColor(const QColor& bg, const QColor& hover) {
+    m_bgColor = bg;
+    m_hoverColor = hover.isValid() ? hover : bg.darker(110);
+    update();
+}
+
+void KbdBadgeButton::setTextColor(const QColor& color) {
+    m_textColor = color;
+    update();
 }
 
 void KbdBadgeButton::setButtonColors(const QColor& bg, const QColor& hover, const QColor& text,

@@ -88,7 +88,7 @@ void MdbMigrationDialog::setupUi() {
     tagLabel->setStyleSheet("font-size: 11px; font-weight: 800; color: #2563EB; letter-spacing: 1.0px;");
     titleBox->addWidget(tagLabel);
 
-    QLabel* titleLabel = new QLabel("In-App Database Importer (Data.004)", this);
+    QLabel* titleLabel = new QLabel("In-App Database Importer (Data.* / .mdb)", this);
     titleLabel->setStyleSheet("font-size: 17px; font-weight: 800; color: #0F172A;");
     titleBox->addWidget(titleLabel);
     header->addLayout(titleBox);
@@ -128,7 +128,7 @@ void MdbMigrationDialog::setupUi() {
     if (!m_filePath.isEmpty()) {
         m_fileLabel->setText(m_filePath);
     } else {
-        m_fileLabel->setText("No file selected (Click browse to select Data.004)");
+        m_fileLabel->setText("No file selected (Click browse to select Data.*** or .mdb)");
         m_fileLabel->setStyleSheet("font-size: 13px; color: #94A3B8; border: none; background: transparent;");
     }
     fileLayout->addWidget(m_fileLabel, 1);
@@ -165,7 +165,7 @@ void MdbMigrationDialog::setupUi() {
     QVBoxLayout* emptyLayout = new QVBoxLayout(emptyPage);
     emptyLayout->setContentsMargins(0, 20, 0, 20);
     emptyLayout->setAlignment(Qt::AlignCenter);
-    m_emptyPlaceholderLabel = new QLabel("Select a database file (e.g. Data.004, Data.001) to inspect and migrate", emptyPage);
+    m_emptyPlaceholderLabel = new QLabel("Select a Bahi-Khata database file (e.g. Data.***, *.mdb) to inspect and migrate", emptyPage);
     m_emptyPlaceholderLabel->setWordWrap(true);
     m_emptyPlaceholderLabel->setAlignment(Qt::AlignCenter);
     m_emptyPlaceholderLabel->setStyleSheet("font-size: 13px; color: #64748B; border: none; background: transparent;");
@@ -289,7 +289,7 @@ void MdbMigrationDialog::onBrowseClicked() {
     if (!m_filePath.isEmpty()) {
         startDir = QFileInfo(m_filePath).absolutePath();
     }
-    QString picked = QFileDialog::getOpenFileName(this, "Select Bahi-Khata Database File", startDir, "Bahi-Khata Files (*.004 *.001 *.002 *.003 *.mdb);;All Files (*.*)");
+    QString picked = QFileDialog::getOpenFileName(this, "Select Bahi-Khata Database File", startDir, "Bahi-Khata Databases (Data.* *.0* *.mdb *.accdb);;All Files (*.*)");
     if (!picked.isEmpty()) {
         m_filePath = picked;
         m_fileLabel->setText(m_filePath);
@@ -324,7 +324,7 @@ void MdbMigrationDialog::inspectFile() {
         m_startBtn->setEnabled(true);
     } else {
         QString err = m_inspectionData.value("error").toString();
-        m_emptyPlaceholderLabel->setText(err.isEmpty() ? "Unable to open Jet database file. Ensure it is a valid .mdb / .004 file." : err);
+        m_emptyPlaceholderLabel->setText(err.isEmpty() ? "Unable to open Jet database file. Ensure it is a valid .mdb / Data.*** file." : err);
         m_emptyPlaceholderLabel->setStyleSheet("font-size: 13px; font-weight: 700; color: #DC2626; border: none; background: transparent;");
         m_previewStack->setCurrentIndex(0);
         m_startBtn->setVisible(false);

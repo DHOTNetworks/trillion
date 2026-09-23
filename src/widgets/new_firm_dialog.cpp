@@ -6,6 +6,7 @@
 #include <QFrame>
 #include <QKeyEvent>
 #include <QMessageBox>
+#include <QDate>
 
 NewFirmDialog::NewFirmDialog(FirmManager* firmMgr, QWidget* parent)
     : QDialog(parent)
@@ -193,15 +194,15 @@ void NewFirmDialog::setupUi() {
     grid3->addWidget(m_addressEdit, 1, 0, 1, 2);
 
     grid3->addWidget(makeFieldLabel("City / Station"), 2, 0);
-    m_cityEdit = makeLineEdit("City Name", "Sirsa");
+    m_cityEdit = makeLineEdit("City Name");
     grid3->addWidget(m_cityEdit, 3, 0);
 
     grid3->addWidget(makeFieldLabel("State"), 2, 1);
-    m_stateEdit = makeLineEdit("State Name", "Haryana");
+    m_stateEdit = makeLineEdit("State Name");
     grid3->addWidget(m_stateEdit, 3, 1);
 
     grid3->addWidget(makeFieldLabel("Pincode"), 4, 0);
-    m_pinEdit = makeLineEdit("Pincode", "125055");
+    m_pinEdit = makeLineEdit("Pincode");
     grid3->addWidget(m_pinEdit, 5, 0);
 
     grid3->addWidget(makeFieldLabel("Phone / Mobile"), 4, 1);
@@ -338,19 +339,27 @@ void NewFirmDialog::onCreateClicked() {
     info["ml_no"] = m_mlNoEdit->text().trimmed();
     info["fssai_no"] = m_fssaiEdit->text().trimmed();
     info["address"] = m_addressEdit->text().trimmed();
-    info["city"] = m_cityEdit->text().trimmed().isEmpty() ? "Sirsa" : m_cityEdit->text().trimmed();
-    info["state"] = m_stateEdit->text().trimmed().isEmpty() ? "Haryana" : m_stateEdit->text().trimmed();
-    info["state_code"] = "06";
-    info["pincode"] = m_pinEdit->text().trimmed().isEmpty() ? "125055" : m_pinEdit->text().trimmed();
+    info["city"] = m_cityEdit->text().trimmed();
+    info["state"] = m_stateEdit->text().trimmed();
+    QString gstinVal = m_gstinEdit->text().trimmed();
+    info["state_code"] = (gstinVal.length() >= 2 && gstinVal.left(2).toInt() > 0) ? gstinVal.left(2) : "";
+    info["pincode"] = m_pinEdit->text().trimmed();
     info["phone"] = m_phoneEdit->text().trimmed();
     info["mobile"] = m_mobileEdit->text().trimmed();
     info["bank_name"] = m_bankNameEdit->text().trimmed();
     info["bank_account"] = m_bankAccEdit->text().trimmed();
     info["ifsc_code"] = m_ifscEdit->text().trimmed();
-    info["books_from"] = m_booksFromEdit->text().trimmed().isEmpty() ? "2026-04-01" : m_booksFromEdit->text().trimmed();
-    info["acc_year_from"] = "2026-04-01";
-    info["acc_year_to"] = "2027-03-31";
-    info["fy_name"] = "FY 2026-27";
+
+    QDate cur = QDate::currentDate();
+    int startYr = (cur.month() >= 4) ? cur.year() : (cur.year() - 1);
+    QString booksFrom = QString("%1-04-01").arg(startYr);
+    QString accYearTo = QString("%1-03-31").arg(startYr + 1);
+    QString fyName = QString("FY %1-%2").arg(startYr).arg(QString::number((startYr + 1) % 100).rightJustified(2, '0'));
+
+    info["books_from"] = booksFrom;
+    info["acc_year_from"] = booksFrom;
+    info["acc_year_to"] = accYearTo;
+    info["fy_name"] = fyName;
 
     if (m_firmMgr) {
         bool ok = m_firmMgr->create_new_firm(info);

@@ -106,7 +106,16 @@ void MillingStatementWidget::setupUi() {
     m_varietyCombo = new QComboBox(filterCard);
     m_varietyCombo->setFixedHeight(34);
     m_varietyCombo->setMinimumWidth(160);
-    m_varietyCombo->addItems({"All Varieties", "Paddy Basmati", "Basmati 1121", "PR-106", "1509 Steam", "Sharbati", "Sugandha"});
+    m_varietyCombo->addItem("All Varieties");
+    QVariantList stockItems = DatabaseManager::instance().executeQuery(
+        "SELECT DISTINCT name FROM stock_items WHERE name != '' ORDER BY name ASC;"
+    );
+    for (const QVariant& row : stockItems) {
+        QString vName = row.toMap().value("name").toString();
+        if (!vName.isEmpty()) {
+            m_varietyCombo->addItem(vName);
+        }
+    }
     connect(m_varietyCombo, &QComboBox::currentTextChanged, this, &MillingStatementWidget::onRefreshClicked);
     filterLayout->addWidget(m_varietyCombo);
 
@@ -262,7 +271,7 @@ void MillingStatementWidget::setupUi() {
     // Initialize with active financial year dates
     QDate sDate = QDate::fromString(activeFy.startDate, "yyyy-MM-dd");
     QDate eDate = QDate::fromString(activeFy.endDate, "yyyy-MM-dd");
-    if (!sDate.isValid()) sDate = QDate(2023, 4, 1);
+    if (!sDate.isValid()) sDate = QDate(QDate::currentDate().month() < 4 ? QDate::currentDate().year() - 1 : QDate::currentDate().year(), 4, 1);
     if (!eDate.isValid()) eDate = QDate::currentDate();
     m_fromDateEdit->setDate(sDate);
     m_toDateEdit->setDate(eDate);

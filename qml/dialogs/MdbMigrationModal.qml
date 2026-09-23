@@ -64,7 +64,7 @@ Rectangle {
             ColumnLayout {
                 spacing: 2
                 Text { text: "DATABASE MIGRATION & SYNC"; color: "#2563EB"; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.0 }
-                Text { text: "In-App Database Importer (Data.004)"; color: "#0F172A"; font.pixelSize: 17; font.bold: true }
+                Text { text: "In-App Database Importer (Data.* / .mdb)"; color: "#0F172A"; font.pixelSize: 17; font.bold: true }
             }
 
             Item { Layout.fillWidth: true }
@@ -99,7 +99,7 @@ Rectangle {
                 spacing: 10
 
                 Text {
-                    text: selectedFilePath !== "" ? selectedFilePath : "No file selected (Click browse to select Data.004)"
+                    text: selectedFilePath !== "" ? selectedFilePath : "No file selected (Click browse to select Data.*** or .mdb)"
                     color: selectedFilePath !== "" ? "#0F172A" : "#94A3B8"
                     font.pixelSize: 13
                     elide: Text.ElideMiddle
@@ -157,7 +157,7 @@ Rectangle {
                         Text { Layout.alignment: Qt.AlignHCenter; text: (inspectionData && inspectionData.error) ? "" : ""; font.pixelSize: 32 }
                         Text {
                             Layout.alignment: Qt.AlignHCenter
-                            text: (inspectionData && inspectionData.error) ? inspectionData.error : "Select a database file (e.g. Data.004, Data.001) to inspect and migrate"
+                            text: (inspectionData && inspectionData.error) ? inspectionData.error : "Select a Bahi-Khata database file (e.g. Data.***, *.mdb) to inspect and migrate"
                             color: (inspectionData && inspectionData.error) ? "#DC2626" : "#64748B"
                             font.pixelSize: 13
                             font.bold: (inspectionData && inspectionData.error) ? true : false

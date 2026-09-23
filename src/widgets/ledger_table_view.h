@@ -53,6 +53,7 @@ public:
 signals:
     void voucherActivated(const QVariantMap& entry);
     void switchSideRequested(const QString& targetSide);
+    void focusSearchRequested();
 
 protected:
     void keyPressEvent(QKeyEvent* event) override;

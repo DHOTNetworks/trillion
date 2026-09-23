@@ -1,6 +1,7 @@
 #include "milling_model.h"
 #include "../database_manager.h"
 #include "../engine/accounting_engine.h"
+#include "../engine/fiscal_year_helper.h"
 #include <QDate>
 #include <QRegularExpression>
 
@@ -83,15 +84,18 @@ bool MillingModel::add_milling_voucher(
         }
     }
 
-    QVariantList fyRows = DatabaseManager::instance().executeQuery(
-        "SELECT id, year_name FROM financial_years WHERE start_date <= ? AND end_date >= ? LIMIT 1;",
-        {dt, dt}
+    FiscalYearInfo fy = FiscalYearHelper::getFiscalYearForDate(dt);
+    int fyId = 1;
+    QString fyLabel = fy.name;
+    QVariant fyIdVar = DatabaseManager::instance().executeScalar(
+        "SELECT id FROM financial_years WHERE year_name = ? LIMIT 1;",
+        {fy.name}
     );
-    int fyId = 28;
-    QString fyLabel = "FY 2026-27";
-    if (!fyRows.isEmpty()) {
-        fyId = fyRows.first().toMap().value("id").toInt();
-        fyLabel = fyRows.first().toMap().value("year_name").toString();
+    if (fyIdVar.isValid() && !fyIdVar.isNull()) {
+        fyId = fyIdVar.toInt();
+    } else {
+        QVariant anyFy = DatabaseManager::instance().executeScalar("SELECT id FROM financial_years WHERE is_active = 1 LIMIT 1;");
+        if (anyFy.isValid() && !anyFy.isNull()) fyId = anyFy.toInt();
     }
 
     QString bNo = batch_no.trimmed();
@@ -297,15 +301,18 @@ bool MillingModel::add_milling_voucher_full(
     const QString& operator_name, const QString& notes
 ) {
     QString dt = batch_date.isEmpty() ? QDate::currentDate().toString("yyyy-MM-dd") : batch_date;
-    QVariantList fyRows = DatabaseManager::instance().executeQuery(
-        "SELECT id, year_name FROM financial_years WHERE start_date <= ? AND end_date >= ? LIMIT 1;",
-        {dt, dt}
+    FiscalYearInfo fy = FiscalYearHelper::getFiscalYearForDate(dt);
+    int fyId = 1;
+    QString fyLabel = fy.name;
+    QVariant fyIdVar = DatabaseManager::instance().executeScalar(
+        "SELECT id FROM financial_years WHERE year_name = ? LIMIT 1;",
+        {fy.name}
     );
-    int fyId = 28;
-    QString fyLabel = "FY 2026-27";
-    if (!fyRows.isEmpty()) {
-        fyId = fyRows.first().toMap().value("id").toInt();
-        fyLabel = fyRows.first().toMap().value("year_name").toString();
+    if (fyIdVar.isValid() && !fyIdVar.isNull()) {
+        fyId = fyIdVar.toInt();
+    } else {
+        QVariant anyFy = DatabaseManager::instance().executeScalar("SELECT id FROM financial_years WHERE is_active = 1 LIMIT 1;");
+        if (anyFy.isValid() && !anyFy.isNull()) fyId = anyFy.toInt();
     }
 
     QString bNo = batch_no.isEmpty() ? get_next_batch_no(fyLabel) : batch_no;

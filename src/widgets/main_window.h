@@ -21,6 +21,20 @@
 #include "gstr_reports_widget.h"
 #include "milling_statement_widget.h"
 #include "custom_closing_stock_widget.h"
+#include "new_group_widget.h"
+#include "modify_group_widget.h"
+#include "new_stock_item_widget.h"
+#include "modify_stock_item_widget.h"
+#include "sales_register_widget.h"
+#include "purchase_register_widget.h"
+#include "stock_detail_widget.h"
+#include "paddy_procurement_widget.h"
+#include "milling_voucher_widget.h"
+#include "tds_voucher_widget.h"
+#include "interest_calculator_widget.h"
+#include "bank_statement_import_widget.h"
+#include "transport_dispatch_widget.h"
+#include "debit_credit_note_widget.h"
 #include "../models/ledger_statement_model.h"
 #include "../models/balance_sheet_controller.h"
 #include "../models/profit_loss_controller.h"
@@ -59,6 +73,23 @@ public:
     MandiReportsWidget* mandiReportsWidget() const { return m_mandiReportsWidget; }
     MahadevERP::DayBookWidget* dayBookWidget() const { return m_dayBookWidget; }
     MahadevERP::GstrReportsWidget* gstrReportsWidget() const { return m_gstrReportsWidget; }
+    MahadevERP::MillingStatementWidget* millingStatementWidget() const { return m_millingStatementWidget; }
+    MahadevERP::CustomClosingStockWidget* customClosingStockWidget() const { return m_customClosingStockWidget; }
+    MahadevERP::NewGroupWidget* newGroupWidget() const { return m_newGroupWidget; }
+    MahadevERP::ModifyGroupWidget* modifyGroupWidget() const { return m_modifyGroupWidget; }
+    MahadevERP::NewStockItemWidget* newStockItemWidget() const { return m_newStockItemWidget; }
+    MahadevERP::ModifyStockItemWidget* modifyStockItemWidget() const { return m_modifyStockItemWidget; }
+    MahadevERP::SalesRegisterWidget* salesRegisterWidget() const { return m_salesRegisterWidget; }
+    MahadevERP::PurchaseRegisterWidget* purchaseRegisterWidget() const { return m_purchaseRegisterWidget; }
+    MahadevERP::StockDetailWidget* stockDetailWidget() const { return m_stockDetailWidget; }
+    MahadevERP::PaddyProcurementWidget* paddyProcurementWidget() const { return m_paddyProcurementWidget; }
+    MahadevERP::MillingVoucherWidget* millingVoucherWidget() const { return m_millingVoucherWidget; }
+    MahadevERP::TdsVoucherWidget* tdsVoucherWidget() const { return m_tdsVoucherWidget; }
+    MahadevERP::InterestCalculatorWidget* interestCalculatorWidget() const { return m_interestCalcWidget; }
+    MahadevERP::BankStatementImportWidget* bankStatementWidget() const { return m_bankStatementWidget; }
+    MahadevERP::TransportDispatchWidget* transportDispatchWidget() const { return m_transportDispatchWidget; }
+    MahadevERP::DebitCreditNoteWidget* debitCreditNoteWidget() const { return m_debitCreditNoteWidget; }
+
     QStackedWidget* stackedWidget() const { return m_stackedWidget; }
     QWidget* qmlContainer() const { return m_qmlContainer; }
     QQuickWindow* qmlWindow() const { return m_qmlWindow; }
@@ -121,7 +152,20 @@ private:
     MahadevERP::MillingStatementWidget* m_millingStatementWidget = nullptr;
     MahadevERP::CustomClosingStockWidget* m_customClosingStockWidget = nullptr;
 
-
+    MahadevERP::NewGroupWidget* m_newGroupWidget = nullptr;
+    MahadevERP::ModifyGroupWidget* m_modifyGroupWidget = nullptr;
+    MahadevERP::NewStockItemWidget* m_newStockItemWidget = nullptr;
+    MahadevERP::ModifyStockItemWidget* m_modifyStockItemWidget = nullptr;
+    MahadevERP::SalesRegisterWidget* m_salesRegisterWidget = nullptr;
+    MahadevERP::PurchaseRegisterWidget* m_purchaseRegisterWidget = nullptr;
+    MahadevERP::StockDetailWidget* m_stockDetailWidget = nullptr;
+    MahadevERP::PaddyProcurementWidget* m_paddyProcurementWidget = nullptr;
+    MahadevERP::MillingVoucherWidget* m_millingVoucherWidget = nullptr;
+    MahadevERP::TdsVoucherWidget* m_tdsVoucherWidget = nullptr;
+    MahadevERP::InterestCalculatorWidget* m_interestCalcWidget = nullptr;
+    MahadevERP::BankStatementImportWidget* m_bankStatementWidget = nullptr;
+    MahadevERP::TransportDispatchWidget* m_transportDispatchWidget = nullptr;
+    MahadevERP::DebitCreditNoteWidget* m_debitCreditNoteWidget = nullptr;
 
     LedgerStatementController* m_ledgerCtrl = nullptr;
     BalanceSheetController* m_balanceSheetCtrl = nullptr;
@@ -134,4 +178,3 @@ private:
     int m_previousViewIndex = 0;
     bool m_isNavigating = false;
 };
-

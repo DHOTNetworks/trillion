@@ -16,6 +16,7 @@ DatabaseManager& DatabaseManager::instance() {
 
 bool DatabaseManager::initDatabase(const QString& dbPath) {
     QMutexLocker locker(&m_mutex);
+    if (dbPath.trimmed().isEmpty()) return false;
     if (m_db) return true;
 
     m_dbPath = dbPath;
@@ -190,17 +191,25 @@ QVariant DatabaseManager::executeScalar(const QString& sql, const QVariantList& 
 }
 
 void DatabaseManager::ensureTablesExist() {
+    // -1. Application Key-Value Settings
+    executeNonQuery(
+        "CREATE TABLE IF NOT EXISTS app_settings ("
+        "key TEXT PRIMARY KEY,"
+        "value TEXT"
+        ");"
+    );
+
     // 0. Company Info
     executeNonQuery(
         "CREATE TABLE IF NOT EXISTS company_info ("
         "id INTEGER PRIMARY KEY AUTOINCREMENT,"
         "company_name TEXT NOT NULL,"
-        "firm_type TEXT DEFAULT 'Partnership Firm',"
+        "firm_type TEXT,"
         "business_type TEXT,"
         "address TEXT,"
         "city TEXT,"
-        "state TEXT DEFAULT 'Haryana',"
-        "state_code TEXT DEFAULT '06',"
+        "state TEXT,"
+        "state_code TEXT,"
         "pincode TEXT,"
         "phone TEXT,"
         "mobile TEXT,"
@@ -237,19 +246,19 @@ void DatabaseManager::ensureTablesExist() {
         "id INTEGER PRIMARY KEY AUTOINCREMENT,"
         "name TEXT NOT NULL,"
         "alias TEXT,"
-        "prefix TEXT DEFAULT 'M/s',"
-        "group_name TEXT DEFAULT 'Sundry Debtors',"
-        "party_type TEXT NOT NULL DEFAULT 'Buyer',"
-        "special_type TEXT DEFAULT 'Rice Buyer',"
+        "prefix TEXT,"
+        "group_name TEXT,"
+        "party_type TEXT,"
+        "special_type TEXT,"
         "opening_balance REAL DEFAULT 0.0,"
         "balance_type TEXT DEFAULT 'Cr',"
         "mailing_name TEXT,"
         "address TEXT,"
         "city TEXT,"
         "district TEXT,"
-        "state TEXT DEFAULT 'Haryana',"
+        "state TEXT,"
         "state_code TEXT,"
-        "pincode TEXT DEFAULT '125055',"
+        "pincode TEXT,"
         "country TEXT DEFAULT 'India',"
         "route TEXT,"
         "mobile TEXT,"
@@ -319,7 +328,7 @@ void DatabaseManager::ensureTablesExist() {
         "goods_type TEXT DEFAULT 'Goods',"
         "trading_group TEXT,"
         "group_code INTEGER,"
-        "company_name TEXT DEFAULT 'Mill Master',"
+        "company_name TEXT,"
         "category_name TEXT,"
         "unit TEXT DEFAULT 'Qtl.',"
         "unit_code INTEGER,"
@@ -1287,4 +1296,22 @@ void DatabaseManager::ensureTablesExist() {
     addColumnIfNotExists("stock_items", "dami_ledger_id", "INTEGER");
     addColumnIfNotExists("stock_items", "market_fee_ledger_id", "INTEGER");
     addColumnIfNotExists("stock_items", "hrdf_ledger_id", "INTEGER");
+}
+
+QString DatabaseManager::getSetting(const QString& key, const QString& defaultVal) {
+    if (key.trimmed().isEmpty()) return defaultVal;
+    QVariant v = executeScalar("SELECT value FROM app_settings WHERE key = ? LIMIT 1;", {key.trimmed()});
+    if (v.isValid() && !v.isNull()) {
+        return v.toString();
+    }
+    return defaultVal;
+}
+
+bool DatabaseManager::setSetting(const QString& key, const QString& val) {
+    if (key.trimmed().isEmpty()) return false;
+    return executeNonQuery(
+        "INSERT INTO app_settings (key, value) VALUES (?, ?) "
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value;",
+        {key.trimmed(), val}
+    );
 }

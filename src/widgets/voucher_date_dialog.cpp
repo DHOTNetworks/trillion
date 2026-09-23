@@ -188,3 +188,12 @@ bool VoucherDateDialog::getVoucherDate(QWidget* parent,
     }
     return false;
 }
+
+QDate VoucherDateDialog::selectDate(QWidget* parent, const QDate& currentDate) {
+    QString curStr = currentDate.isValid() ? currentDate.toString("dd-MM-yyyy") : "";
+    QString disp, iso;
+    if (getVoucherDate(parent, curStr, &disp, &iso)) {
+        return QDate::fromString(iso, "yyyy-MM-dd");
+    }
+    return QDate();
+}

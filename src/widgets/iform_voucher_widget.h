@@ -9,7 +9,7 @@
 #include <QGroupBox>
 #include <QFrame>
 #include "accounting_date_edit.h"
-#include "party_search_widget.h"
+#include "account_search_box.h"
 #include "item_search_delegate.h"
 #include "../models/iform_model.h"
 #include "../models/parties_model.h"
@@ -91,7 +91,7 @@ private:
     QLabel* m_fyBadgeLabel = nullptr;
 
     // Buyer Search & Info
-    PartySearchWidget* m_buyerSearch = nullptr;
+    AccountSearchBox* m_buyerSearch = nullptr;
     QLabel* m_buyerBalanceLabel = nullptr;
     QLineEdit* m_brokerNameEdit = nullptr;
     QLineEdit* m_dueDaysEdit = nullptr;

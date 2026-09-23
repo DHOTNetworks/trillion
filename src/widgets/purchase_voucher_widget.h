@@ -12,7 +12,7 @@
 #include <QGroupBox>
 #include <QFrame>
 #include "accounting_date_edit.h"
-#include "party_search_widget.h"
+#include "account_search_box.h"
 #include "item_search_delegate.h"
 #include "../models/purchase_voucher_controller.h"
 #include "../models/purchase_model.h"
@@ -136,7 +136,7 @@ private:
 
     // Row 2: Party Controls
     QLabel* m_partyTagLabel = nullptr;
-    PartySearchWidget* m_partySearchWidget = nullptr;
+    AccountSearchBox* m_partySearchWidget = nullptr;
     QLabel* m_partyBalLabel = nullptr;
     QLineEdit* m_gstinDisplay = nullptr;
     QComboBox* m_posCombo = nullptr;

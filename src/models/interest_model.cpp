@@ -1,6 +1,7 @@
 #include "interest_model.h"
 #include "../database_manager.h"
 #include "../engine/accounting_engine.h"
+#include "../engine/fiscal_year_helper.h"
 #include <QDate>
 #include <cmath>
 #include <algorithm>
@@ -311,15 +312,18 @@ bool InterestModel::post_interest_voucher(
     auto& db = DatabaseManager::instance();
 
     // Resolve FY
-    QVariantList fyRows = db.executeQuery(
-        "SELECT id, year_name FROM financial_years WHERE start_date <= ? AND end_date >= ? LIMIT 1;",
-        {isoD, isoD}
+    FiscalYearInfo fy = FiscalYearHelper::getFiscalYearForDate(isoD);
+    int fyId = 1;
+    QString fyLabel = fy.name;
+    QVariant fyIdVar = db.executeScalar(
+        "SELECT id FROM financial_years WHERE year_name = ? LIMIT 1;",
+        {fy.name}
     );
-    int fyId = 28;
-    QString fyLabel = "FY 2025-26";
-    if (!fyRows.isEmpty()) {
-        fyId = fyRows.first().toMap().value("id").toInt();
-        fyLabel = fyRows.first().toMap().value("year_name").toString();
+    if (fyIdVar.isValid() && !fyIdVar.isNull()) {
+        fyId = fyIdVar.toInt();
+    } else {
+        QVariant anyFy = db.executeScalar("SELECT id FROM financial_years WHERE is_active = 1 LIMIT 1;");
+        if (anyFy.isValid() && !anyFy.isNull()) fyId = anyFy.toInt();
     }
 
     // Next voucher number for Jrnl

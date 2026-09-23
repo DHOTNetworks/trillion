@@ -246,25 +246,39 @@ void FirmSelectorWidget::setupUi() {
     // Page 1: Empty State
     m_emptyStateWidget = new QWidget(m_centerStack);
     QVBoxLayout* emptyLayout = new QVBoxLayout(m_emptyStateWidget);
-    emptyLayout->setContentsMargins(40, 60, 40, 60);
-    emptyLayout->setSpacing(12);
+    emptyLayout->setContentsMargins(40, 50, 40, 50);
+    emptyLayout->setSpacing(14);
     emptyLayout->setAlignment(Qt::AlignCenter);
 
-    QLabel* emptyIcon = new QLabel("📁", m_emptyStateWidget);
-    emptyIcon->setStyleSheet("font-size: 40px; border: none; background: transparent;");
+    QLabel* emptyIcon = new QLabel("🏢", m_emptyStateWidget);
+    emptyIcon->setStyleSheet("font-size: 48px; border: none; background: transparent;");
     emptyIcon->setAlignment(Qt::AlignCenter);
     emptyLayout->addWidget(emptyIcon);
 
-    m_emptyStateLabel = new QLabel("No native databases found in data/ folder.", m_emptyStateWidget);
-    m_emptyStateLabel->setStyleSheet("font-size: 14px; font-weight: 600; color: #64748B; border: none; background: transparent;");
+    m_emptyStateLabel = new QLabel("No company databases found in data/ folder.\nPlease create a new firm to get started, or import external Bahi-Khata data.", m_emptyStateWidget);
+    m_emptyStateLabel->setStyleSheet("font-size: 14px; font-weight: 600; color: #475569; border: none; background: transparent;");
     m_emptyStateLabel->setAlignment(Qt::AlignCenter);
     emptyLayout->addWidget(m_emptyStateLabel);
 
-    m_emptyStateBtn = new QPushButton("Import External Data", m_emptyStateWidget);
-    m_emptyStateBtn->setFixedSize(220, 36);
+    QHBoxLayout* emptyBtnRow = new QHBoxLayout();
+    emptyBtnRow->setSpacing(12);
+    emptyBtnRow->setAlignment(Qt::AlignCenter);
+
+    QPushButton* createBtn = new QPushButton("➕ Create New Firm", m_emptyStateWidget);
+    createBtn->setFixedSize(190, 38);
+    createBtn->setCursor(Qt::PointingHandCursor);
+    createBtn->setStyleSheet(
+        "QPushButton { background-color: #16A34A; border: none; border-radius: 6px; font-weight: 700; color: #FFFFFF; font-size: 13px; }"
+        "QPushButton:hover { background-color: #15803D; }"
+    );
+    connect(createBtn, &QPushButton::clicked, this, &FirmSelectorWidget::openNewFirmDialog);
+    emptyBtnRow->addWidget(createBtn);
+
+    m_emptyStateBtn = new QPushButton("📥 Import External Data", m_emptyStateWidget);
+    m_emptyStateBtn->setFixedSize(190, 38);
     m_emptyStateBtn->setCursor(Qt::PointingHandCursor);
     m_emptyStateBtn->setStyleSheet(
-        "QPushButton { background-color: #EFF6FF; border: 1px solid #BFDBFE; border-radius: 6px; font-weight: 700; color: #1D4ED8; font-size: 12px; }"
+        "QPushButton { background-color: #EFF6FF; border: 1.5px solid #BFDBFE; border-radius: 6px; font-weight: 700; color: #1D4ED8; font-size: 13px; }"
         "QPushButton:hover { background-color: #DBEAFE; }"
     );
     connect(m_emptyStateBtn, &QPushButton::clicked, this, [this]() {
@@ -274,7 +288,9 @@ void FirmSelectorWidget::setupUi() {
             resetToAppData();
         }
     });
-    emptyLayout->addWidget(m_emptyStateBtn);
+    emptyBtnRow->addWidget(m_emptyStateBtn);
+
+    emptyLayout->addLayout(emptyBtnRow);
     m_centerStack->addWidget(m_emptyStateWidget);
 
     tableContainerLayout->addWidget(m_centerStack);
@@ -336,7 +352,7 @@ void FirmSelectorWidget::updateHeaderAndFolderStyles() {
         m_table->horizontalHeaderItem(0)->setText("Source File");
     }
 
-    if (m_firmMgr && !m_firmMgr->currentFirmName().isEmpty()) {
+    if (m_firmMgr && !m_firmMgr->currentFirmId().isEmpty()) {
         m_backBtn->setVisible(true);
     } else {
         m_backBtn->setVisible(false);
@@ -407,7 +423,7 @@ void FirmSelectorWidget::refreshFirms() {
         m_table->setItem(i, 3, gstinItem);
 
         // Col 4: City
-        QTableWidgetItem* cityItem = new QTableWidgetItem(map.value("city", "Sirsa").toString());
+        QTableWidgetItem* cityItem = new QTableWidgetItem(map.value("city", "").toString());
         cityItem->setForeground(QColor("#334155"));
         m_table->setItem(i, 4, cityItem);
 

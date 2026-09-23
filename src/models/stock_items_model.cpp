@@ -111,15 +111,15 @@ QStringList StockItemsModel::get_stock_groups() const {
         "SELECT DISTINCT group_name FROM stock_groups WHERE group_name IS NOT NULL AND group_name != '' "
         "UNION "
         "SELECT DISTINCT trading_group FROM stock_items WHERE trading_group IS NOT NULL AND trading_group != '' "
+        "UNION "
+        "SELECT DISTINCT name FROM parties WHERE group_name LIKE '%Trading%' OR group_name LIKE '%Stock%' "
         "ORDER BY 1 COLLATE NOCASE ASC;"
     );
     for (const auto& r : rows) {
         QString g = r.toMap().value("group_name").toString().trimmed();
         if (g.isEmpty()) g = r.toMap().value("trading_group").toString().trimmed();
+        if (g.isEmpty()) g = r.toMap().value("name").toString().trimmed();
         if (!g.isEmpty() && !list.contains(g)) list.append(g);
-    }
-    if (list.isEmpty()) {
-        list = {"Paddy Basmati 1401", "Paddy Parmal", "Rice", "Paddy Husk", "Primary"};
     }
     return list;
 }
@@ -146,9 +146,6 @@ QStringList StockItemsModel::get_units() const {
         if (u.isEmpty()) u = r.toMap().value("unit").toString().trimmed();
         if (!u.isEmpty() && !list.contains(u)) list.append(u);
     }
-    if (list.isEmpty()) {
-        list = {"Qtl.", "Bags", "Kg", "Nos", "Pcs", "MT"};
-    }
     return list;
 }
 
@@ -160,6 +157,12 @@ static int resolvePartyId(DatabaseManager& db, const QString& name) {
     if (name.trimmed().isEmpty()) return 0;
     QVariant v = db.executeScalar("SELECT id FROM parties WHERE name = ? OR alias = ? LIMIT 1;", {name.trimmed(), name.trimmed()});
     return (v.isValid() && !v.isNull()) ? v.toInt() : 0;
+}
+
+static QString resolvePartyName(DatabaseManager& db, int partyId) {
+    if (partyId <= 0) return QString();
+    QVariant v = db.executeScalar("SELECT id, name FROM parties WHERE id = ? LIMIT 1;", {partyId});
+    return (v.isValid() && !v.isNull()) ? v.toMap().value("name", v.toString()).toString().trimmed() : QString();
 }
 
 bool StockItemsModel::save_stock_item_full(const QVariantMap& d) {
@@ -178,7 +181,7 @@ bool StockItemsModel::save_stock_item_full(const QVariantMap& d) {
     QString goodsType = d.value("goods_type", "Goods").toString().trimmed();
     QString tradingGroup = d.value("trading_group", "Primary").toString().trimmed();
     int groupCode = d.value("group_code", 0).toInt();
-    QString companyName = d.value("company_name", "Mill Master").toString().trimmed();
+    QString companyName = d.value("company_name").toString().trimmed();
     QString unit = d.value("unit", "Qtl.").toString().trimmed();
     int unitCode = d.value("unit_code", 0).toInt();
     QString rateCalcOn = d.value("rate_calc_on", "N/A").toString().trimmed();
@@ -238,29 +241,34 @@ bool StockItemsModel::save_stock_item_full(const QVariantMap& d) {
         openingValue = openingQty * (openingRate > 0.0 ? openingRate : purchaseRate);
     }
 
-    QString purchaseLedger = d.value("purchase_ledger", "Purchase Accounts").toString().trimmed();
+    QString purchaseLedger = d.value("purchase_ledger").toString().trimmed();
     int purchaseLedgerId = d.value("purchase_ledger_id", 0).toInt();
-    if (purchaseLedgerId <= 0) purchaseLedgerId = resolvePartyId(db, purchaseLedger);
+    if (purchaseLedgerId <= 0 && !purchaseLedger.isEmpty()) purchaseLedgerId = resolvePartyId(db, purchaseLedger);
+    if (purchaseLedgerId > 0 && purchaseLedger.isEmpty()) purchaseLedger = resolvePartyName(db, purchaseLedgerId);
 
     QString purchaseReturnLedger = d.value("purchase_return_ledger", purchaseLedger).toString().trimmed();
     int purchaseReturnLedgerId = d.value("purchase_return_ledger_id", 0).toInt();
-    if (purchaseReturnLedgerId <= 0) purchaseReturnLedgerId = resolvePartyId(db, purchaseReturnLedger);
+    if (purchaseReturnLedgerId <= 0 && !purchaseReturnLedger.isEmpty()) purchaseReturnLedgerId = resolvePartyId(db, purchaseReturnLedger);
+    if (purchaseReturnLedgerId > 0 && purchaseReturnLedger.isEmpty()) purchaseReturnLedger = resolvePartyName(db, purchaseReturnLedgerId);
 
-    QString saleLedger = d.value("sale_ledger", "Sales Accounts").toString().trimmed();
+    QString saleLedger = d.value("sale_ledger").toString().trimmed();
     int saleLedgerId = d.value("sale_ledger_id", 0).toInt();
-    if (saleLedgerId <= 0) saleLedgerId = resolvePartyId(db, saleLedger);
+    if (saleLedgerId <= 0 && !saleLedger.isEmpty()) saleLedgerId = resolvePartyId(db, saleLedger);
+    if (saleLedgerId > 0 && saleLedger.isEmpty()) saleLedger = resolvePartyName(db, saleLedgerId);
 
     QString saleReturnLedger = d.value("sale_return_ledger", saleLedger).toString().trimmed();
     int saleReturnLedgerId = d.value("sale_return_ledger_id", 0).toInt();
-    if (saleReturnLedgerId <= 0) saleReturnLedgerId = resolvePartyId(db, saleReturnLedger);
+    if (saleReturnLedgerId <= 0 && !saleReturnLedger.isEmpty()) saleReturnLedgerId = resolvePartyId(db, saleReturnLedger);
+    if (saleReturnLedgerId > 0 && saleReturnLedger.isEmpty()) saleReturnLedger = resolvePartyName(db, saleReturnLedgerId);
 
-    QString stockLedger = d.value("stock_ledger", "Stock-in-Hand").toString().trimmed();
+    QString stockLedger = d.value("stock_ledger").toString().trimmed();
     int stockLedgerId = d.value("stock_ledger_id", 0).toInt();
-    if (stockLedgerId <= 0) stockLedgerId = resolvePartyId(db, stockLedger);
+    if (stockLedgerId <= 0 && !stockLedger.isEmpty()) stockLedgerId = resolvePartyId(db, stockLedger);
+    if (stockLedgerId > 0 && stockLedger.isEmpty()) stockLedger = resolvePartyName(db, stockLedgerId);
 
-    QString gstLedger = d.value("gst_ledger", "Duties & Taxes").toString().trimmed();
+    QString gstLedger = d.value("gst_ledger").toString().trimmed();
     int gstLedgerId = d.value("gst_ledger_id", 0).toInt();
-    if (gstLedgerId <= 0) gstLedgerId = resolvePartyId(db, gstLedger);
+    if (gstLedgerId <= 0 && !gstLedger.isEmpty()) gstLedgerId = resolvePartyId(db, gstLedger);
 
     int isMillingItem = d.value("is_milling_item", 0).toInt();
     int includeInTrading = d.value("include_in_trading", 1).toInt();
@@ -348,7 +356,7 @@ bool StockItemsModel::update_stock_item_full(int itemId, const QVariantMap& d) {
     QString goodsType = d.value("goods_type", "Goods").toString().trimmed();
     QString tradingGroup = d.value("trading_group", "Primary").toString().trimmed();
     int groupCode = d.value("group_code", 0).toInt();
-    QString companyName = d.value("company_name", "Mill Master").toString().trimmed();
+    QString companyName = d.value("company_name").toString().trimmed();
     QString unit = d.value("unit", "Qtl.").toString().trimmed();
     int unitCode = d.value("unit_code", 0).toInt();
     QString rateCalcOn = d.value("rate_calc_on", "N/A").toString().trimmed();
@@ -405,29 +413,34 @@ bool StockItemsModel::update_stock_item_full(int itemId, const QVariantMap& d) {
     double openingRate = d.value("opening_rate", 0.0).toDouble();
     double openingValue = d.value("opening_value", 0.0).toDouble();
 
-    QString purchaseLedger = d.value("purchase_ledger", "Purchase Accounts").toString().trimmed();
+    QString purchaseLedger = d.value("purchase_ledger").toString().trimmed();
     int purchaseLedgerId = d.value("purchase_ledger_id", 0).toInt();
-    if (purchaseLedgerId <= 0) purchaseLedgerId = resolvePartyId(db, purchaseLedger);
+    if (purchaseLedgerId <= 0 && !purchaseLedger.isEmpty()) purchaseLedgerId = resolvePartyId(db, purchaseLedger);
+    if (purchaseLedgerId > 0 && purchaseLedger.isEmpty()) purchaseLedger = resolvePartyName(db, purchaseLedgerId);
 
     QString purchaseReturnLedger = d.value("purchase_return_ledger", purchaseLedger).toString().trimmed();
     int purchaseReturnLedgerId = d.value("purchase_return_ledger_id", 0).toInt();
-    if (purchaseReturnLedgerId <= 0) purchaseReturnLedgerId = resolvePartyId(db, purchaseReturnLedger);
+    if (purchaseReturnLedgerId <= 0 && !purchaseReturnLedger.isEmpty()) purchaseReturnLedgerId = resolvePartyId(db, purchaseReturnLedger);
+    if (purchaseReturnLedgerId > 0 && purchaseReturnLedger.isEmpty()) purchaseReturnLedger = resolvePartyName(db, purchaseReturnLedgerId);
 
-    QString saleLedger = d.value("sale_ledger", "Sales Accounts").toString().trimmed();
+    QString saleLedger = d.value("sale_ledger").toString().trimmed();
     int saleLedgerId = d.value("sale_ledger_id", 0).toInt();
-    if (saleLedgerId <= 0) saleLedgerId = resolvePartyId(db, saleLedger);
+    if (saleLedgerId <= 0 && !saleLedger.isEmpty()) saleLedgerId = resolvePartyId(db, saleLedger);
+    if (saleLedgerId > 0 && saleLedger.isEmpty()) saleLedger = resolvePartyName(db, saleLedgerId);
 
     QString saleReturnLedger = d.value("sale_return_ledger", saleLedger).toString().trimmed();
     int saleReturnLedgerId = d.value("sale_return_ledger_id", 0).toInt();
-    if (saleReturnLedgerId <= 0) saleReturnLedgerId = resolvePartyId(db, saleReturnLedger);
+    if (saleReturnLedgerId <= 0 && !saleReturnLedger.isEmpty()) saleReturnLedgerId = resolvePartyId(db, saleReturnLedger);
+    if (saleReturnLedgerId > 0 && saleReturnLedger.isEmpty()) saleReturnLedger = resolvePartyName(db, saleReturnLedgerId);
 
-    QString stockLedger = d.value("stock_ledger", "Stock-in-Hand").toString().trimmed();
+    QString stockLedger = d.value("stock_ledger").toString().trimmed();
     int stockLedgerId = d.value("stock_ledger_id", 0).toInt();
-    if (stockLedgerId <= 0) stockLedgerId = resolvePartyId(db, stockLedger);
+    if (stockLedgerId <= 0 && !stockLedger.isEmpty()) stockLedgerId = resolvePartyId(db, stockLedger);
+    if (stockLedgerId > 0 && stockLedger.isEmpty()) stockLedger = resolvePartyName(db, stockLedgerId);
 
-    QString gstLedger = d.value("gst_ledger", "Duties & Taxes").toString().trimmed();
+    QString gstLedger = d.value("gst_ledger").toString().trimmed();
     int gstLedgerId = d.value("gst_ledger_id", 0).toInt();
-    if (gstLedgerId <= 0) gstLedgerId = resolvePartyId(db, gstLedger);
+    if (gstLedgerId <= 0 && !gstLedger.isEmpty()) gstLedgerId = resolvePartyId(db, gstLedger);
 
     int isMillingItem = d.value("is_milling_item", 0).toInt();
     int includeInTrading = d.value("include_in_trading", 1).toInt();

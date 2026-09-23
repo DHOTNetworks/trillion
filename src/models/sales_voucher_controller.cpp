@@ -394,7 +394,7 @@ void SalesVoucherController::resetForm(const QString &workingDate)
     m_dueDays = 30;
     emit dueDaysChanged();
 
-    m_salesAccount = "Sales Account";
+    m_salesAccount.clear();
     emit salesAccountChanged();
 
     m_gstRate = 5.0;
