@@ -2,7 +2,6 @@
 
 #include <QMainWindow>
 #include <QStackedWidget>
-#include <QQuickWindow>
 #include "dashboard_widget.h"
 #include "ledger_statement_widget.h"
 #include "balance_sheet_widget.h"
@@ -40,22 +39,54 @@
 #include "../models/profit_loss_controller.h"
 #include "../models/dashboard_controller.h"
 #include "../models/firm_manager.h"
+#include "../models/account_groups_model.h"
+#include "../models/stock_master_controller.h"
+#include "../models/stock_items_model.h"
+#include "../models/sales_register_model.h"
+#include "../models/purchase_register_model.h"
+#include "../models/stock_register_model.h"
+#include "../models/paddy_arrivals_model.h"
+#include "../models/paddy_procurement_controller.h"
+#include "../models/milling_batch_controller.h"
+#include "../models/milling_model.h"
+#include "../models/tds_voucher_controller.h"
+#include "../models/interest_model.h"
+#include "../models/bank_statement_controller.h"
+#include "../models/transport_dispatch_controller.h"
+#include "../models/debit_credit_note_controller.h"
 #include "../engine/bahi_khata_migrator.h"
 #include "../services/print_export_controller.h"
 
 class AppKeyboardController;
 
+struct MainWindowDependencies {
+    DashboardController* dashCtrl = nullptr;
+    FirmManager* firmMgr = nullptr;
+    PrintExportController* printExportCtrl = nullptr;
+    BahiKhataMigrator* migrator = nullptr;
+    LedgerStatementController* ledgerCtrl = nullptr;
+    AccountGroupsModel* groupsModel = nullptr;
+    StockMasterController* stockMasterCtrl = nullptr;
+    StockItemsModel* stockItemsModel = nullptr;
+    SalesRegisterController* salesRegisterCtrl = nullptr;
+    PurchaseRegisterController* purchaseRegisterCtrl = nullptr;
+    StockRegisterController* stockRegisterCtrl = nullptr;
+    PaddyArrivalsModel* paddyModel = nullptr;
+    PaddyProcurementController* paddyProcurementCtrl = nullptr;
+    MillingBatchController* millingBatchCtrl = nullptr;
+    MillingModel* millingModel = nullptr;
+    TdsVoucherController* tdsVoucherCtrl = nullptr;
+    InterestModel* interestModel = nullptr;
+    BankStatementController* bankStatementCtrl = nullptr;
+    TransportDispatchController* transportDispatchCtrl = nullptr;
+    DebitCreditNoteController* debitCreditNoteCtrl = nullptr;
+};
+
 class MainWindow : public QMainWindow {
     Q_OBJECT
 
 public:
-    explicit MainWindow(QQuickWindow* qmlWindow,
-                        LedgerStatementController* ledgerCtrl,
-                        PrintExportController* printExportCtrl,
-                        DashboardController* dashCtrl = nullptr,
-                        FirmManager* firmMgr = nullptr,
-                        BahiKhataMigrator* migrator = nullptr,
-                        QWidget* parent = nullptr);
+    explicit MainWindow(const MainWindowDependencies& deps, QWidget* parent = nullptr);
 
     DashboardWidget* dashboardWidget() const { return m_dashboardWidget; }
     LedgerStatementWidget* ledgerWidget() const { return m_ledgerWidget; }
@@ -91,8 +122,6 @@ public:
     MahadevERP::DebitCreditNoteWidget* debitCreditNoteWidget() const { return m_debitCreditNoteWidget; }
 
     QStackedWidget* stackedWidget() const { return m_stackedWidget; }
-    QWidget* qmlContainer() const { return m_qmlContainer; }
-    QQuickWindow* qmlWindow() const { return m_qmlWindow; }
 
     int currentViewIndex() const;
     void restoreActiveViewFocus();
@@ -100,7 +129,6 @@ public:
 
 public slots:
     void navigateToView(int viewIndex);
-    void checkQmlView();
     void openAccountingPeriodDialog();
     void onLedgerBackRequested();
     void onLedgerAlterVoucherRequested(int targetViewIndex, const QVariantMap& entry);
@@ -132,8 +160,6 @@ protected:
 private:
     QStackedWidget* m_stackedWidget = nullptr;
     DashboardWidget* m_dashboardWidget = nullptr;
-    QWidget* m_qmlContainer = nullptr;
-    QQuickWindow* m_qmlWindow = nullptr;
     LedgerStatementWidget* m_ledgerWidget = nullptr;
     BalanceSheetWidget* m_balanceSheetWidget = nullptr;
     ProfitLossWidget* m_profitLossWidget = nullptr;
@@ -174,7 +200,35 @@ private:
     DashboardController* m_dashCtrl = nullptr;
     FirmManager* m_firmMgr = nullptr;
     BahiKhataMigrator* m_bahiKhataMigrator = nullptr;
+    AccountGroupsModel* m_groupsModel = nullptr;
+    StockMasterController* m_stockMasterCtrl = nullptr;
+    StockItemsModel* m_stockItemsModel = nullptr;
+    SalesRegisterController* m_salesRegisterCtrl = nullptr;
+    PurchaseRegisterController* m_purchaseRegisterCtrl = nullptr;
+    StockRegisterController* m_stockRegisterCtrl = nullptr;
+    PaddyArrivalsModel* m_paddyModel = nullptr;
+    PaddyProcurementController* m_paddyProcurementCtrl = nullptr;
+    MillingBatchController* m_millingBatchCtrl = nullptr;
+    MillingModel* m_millingModel = nullptr;
+    TdsVoucherController* m_tdsVoucherCtrl = nullptr;
+    InterestModel* m_interestModel = nullptr;
+    BankStatementController* m_bankStatementCtrl = nullptr;
+    TransportDispatchController* m_transportDispatchCtrl = nullptr;
+    DebitCreditNoteController* m_debitCreditNoteCtrl = nullptr;
+
     AppKeyboardController* m_keyboardCtrl = nullptr;
     int m_previousViewIndex = 0;
     bool m_isNavigating = false;
+
+    // Navigation Transfer State
+    QString m_pendingEditInvoiceNo;
+    QString m_pendingEditVoucherNo;
+    int m_pendingEditVoucherId = 0;
+    QString m_pendingEditVoucherDate;
+    QString m_targetChequeMode;
+    QString m_targetStatementParty;
+    QString m_lastViewedStatementFromDate;
+    QString m_lastViewedStatementToDate;
+    QString m_lastViewedStatementSide;
+    int m_lastViewedStatementIndex = 0;
 };

@@ -5,8 +5,6 @@
 #include "../widgets/ledger_statement_widget.h"
 #include "../widgets/sales_voucher_widget.h"
 #include "../widgets/purchase_voucher_widget.h"
-#include "../widgets/ledger_table_view.h"
-#include <QQuickItem>
 #include <QTimer>
 #include <QLineEdit>
 #include <QTextEdit>
@@ -96,11 +94,8 @@ void AppKeyboardController::handleEscape() {
         }
     }
 
-    // 6. QML Views Stack
-    QQuickWindow* qw = m_mainWindow->qmlWindow();
-    if (qw) {
-        QMetaObject::invokeMethod(qw, "handleUniversalEscape");
-    }
+    // 6. Default Escape fallback to Dashboard
+    navigateTo(0);
 }
 
 void AppKeyboardController::handleEnter() {

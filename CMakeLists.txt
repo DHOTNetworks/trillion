@@ -10,9 +10,6 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-# Disable private module warning for internal qmltc vtables
-set(QT_NO_PRIVATE_MODULE_WARNING ON)
-
 # Cross-platform compiler flags (MSVC / Clang / GCC)
 if(MSVC)
     add_compile_options(/utf-8 /MP)
@@ -23,14 +20,9 @@ endif()
 find_package(Qt6 6.5 REQUIRED COMPONENTS
     Core
     Gui
-    Quick
-    Qml
-    QuickControls2
-    QuickLayouts
     Sql
     Svg
     Widgets
-    QuickWidgets
     PrintSupport
     Test
 )
@@ -182,8 +174,6 @@ set(SOURCES
     src/models/stock_master_controller.cpp
     src/services/print_export_controller.h
     src/services/print_export_controller.cpp
-    src/models/generic_list_model.h
-    src/models/generic_list_model.cpp
     src/models/global_key_filter.h
     src/services/app_keyboard_controller.h
     src/services/app_keyboard_controller.cpp
@@ -335,77 +325,6 @@ set(SOURCES
 qt_add_executable(${PROJECT_NAME} ${SOURCES})
 
 # Standard Qt 6 QML Module Compilation
-qt_add_qml_module(${PROJECT_NAME}
-    URI MahadevERP
-    VERSION 1.0
-    RESOURCE_PREFIX /
-    DEPENDENCIES
-        QtQuick
-        QtQuick.Layouts
-        QtQuick.Templates
-    SOURCES
-        src/models/generic_list_model.h
-        src/models/generic_list_model.cpp
-    QML_FILES
-        qml/main.qml
-        qml/components/AppHeader.qml
-        qml/components/AutoCompletePartySearch.qml
-        qml/components/CustomInput.qml
-        qml/components/CustomWhiteCombo.qml
-        qml/components/CustomCheckBox.qml
-        qml/components/CustomRadioButton.qml
-        qml/components/FastTable.qml
-        qml/components/FormNavigationScope.qml
-        qml/components/KbdBadge.qml
-        qml/components/NavMenuItem.qml
-        qml/components/Sidebar.qml
-        qml/components/StatCard.qml
-        qml/dialogs/AddVoucherMenuModal.qml
-        qml/dialogs/ConfirmationModal.qml
-        qml/dialogs/ItemMovementModal.qml
-        qml/dialogs/KeyboardShortcutsModal.qml
-        qml/dialogs/LedgerMasterMenuModal.qml
-        qml/dialogs/MdbMigrationModal.qml
-        qml/dialogs/NewLedgerModal.qml
-        qml/dialogs/NewPaddyModal.qml
-        qml/dialogs/OtherVouchersMenuModal.qml
-        qml/dialogs/ReportsMenuModal.qml
-        qml/dialogs/StockMasterMenuModal.qml
-        qml/dialogs/NewFirmModal.qml
-        qml/dialogs/PrintCopyOptionsModal.qml
-        qml/dialogs/VoucherDateModal.qml
-        qml/dialogs/WeighbridgeKandaModal.qml
-        qml/views/ChequeVoucherView.qml
-        qml/views/DashboardView.qml
-        qml/views/FirmSelecterView.qml
-        qml/views/InterestCalculatorView.qml
-        qml/views/JFormVoucherView.qml
-        qml/views/JournalVoucherView.qml
-        qml/views/MillingStatementView.qml
-        qml/views/MillingView.qml
-        qml/views/MillingVoucherView.qml
-        qml/views/ModifyGroupView.qml
-        qml/views/ModifyLedgerView.qml
-        qml/views/ModifyStockItemView.qml
-        qml/views/NewGroupView.qml
-        qml/views/NewLedgerView.qml
-        qml/views/NewStockItemView.qml
-        qml/views/PaddyProcurementView.qml
-        qml/views/PurchaseRegisterView.qml
-        qml/views/PurchaseVoucherView.qml
-        qml/views/ReportsView.qml
-        qml/views/SalesInvoicingView.qml
-        qml/views/SalesRegisterView.qml
-        qml/views/SalesVoucherView.qml
-        qml/views/StockDetailView.qml
-        qml/views/ViewLedgerStatementView.qml
-        qml/views/VoucherLedgerView.qml
-        qml/views/TdsVoucherView.qml
-        qml/views/BankStatementImportView.qml
-        qml/views/TransportDispatchRegisterView.qml
-        qml/views/DebitCreditNoteView.qml
-)
-
 target_include_directories(${PROJECT_NAME} PRIVATE
     src
     src/widgets
@@ -428,12 +347,8 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::Core
     Qt6::Gui
     Qt6::Sql
-    Qt6::Qml
-    Qt6::Quick
-    Qt6::QuickControls2
-    Qt6::QuickLayouts
+    Qt6::Svg
     Qt6::Widgets
-    Qt6::QuickWidgets
     Qt6::PrintSupport
 )
 
@@ -466,8 +381,6 @@ set(TEST_SOURCES
     src/services/financial_math_service.cpp
     src/models/base_table_model.h
     src/models/base_table_model.cpp
-    src/models/generic_list_model.h
-    src/models/generic_list_model.cpp
     src/models/sales_voucher_controller.h
     src/models/sales_voucher_controller.cpp
     src/models/purchase_voucher_controller.h
@@ -561,7 +474,6 @@ set(TEST_SOURCES
     src/models/iform_model.cpp
     src/models/mandi_reports_controller.h
     src/models/mandi_reports_controller.cpp
-    ${CMAKE_CURRENT_BINARY_DIR}/.qt/rcc/qrc_MahadevRiceMillERP_raw_qml_0.cpp
 )
 
 add_executable(LogicBoardTestSuite ${TEST_SOURCES})
@@ -586,8 +498,6 @@ target_link_libraries(LogicBoardTestSuite PRIVATE
     Qt6::Gui
     Qt6::Widgets
     Qt6::PrintSupport
-    Qt6::Qml
-    Qt6::Quick
     Qt6::Test
 )
 

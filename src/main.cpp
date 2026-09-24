@@ -1,9 +1,4 @@
 #include <QApplication>
-#include <QQmlApplicationEngine>
-#include <QQmlContext>
-#include <QQmlError>
-#include <QQuickStyle>
-#include <QQuickWindow>
 #include <QIcon>
 #include <QFont>
 #include <QDir>
@@ -55,14 +50,6 @@
 
 int main(int argc, char* argv[]) {
     std::cout << "[INIT] Starting Mahadev Rice Mill ERP native executable..." << std::endl << std::flush;
-
-#ifdef Q_OS_WIN
-    // Direct3D 11 backend provides ultra-fast native hardware acceleration on Windows
-    QQuickWindow::setGraphicsApi(QSGRendererInterface::Direct3D11);
-#endif
-
-    // Force Basic Style for dark theme
-    QQuickStyle::setStyle("Basic");
 
     QApplication app(argc, argv);
     app.setApplicationName("Mahadev Rice Mill ERP & Accounting");
@@ -343,110 +330,30 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    QQmlApplicationEngine engine;
+    MainWindowDependencies deps;
+    deps.dashCtrl = &dashboardCtrl;
+    deps.firmMgr = &firmManager;
+    deps.printExportCtrl = &printExportCtrl;
+    deps.migrator = &bahiKhataMigrator;
+    deps.ledgerCtrl = &ledgerStatementCtrl;
+    deps.groupsModel = &groupsModel;
+    deps.stockMasterCtrl = &stockMasterCtrl;
+    deps.stockItemsModel = &stockItemsModel;
+    deps.salesRegisterCtrl = &salesRegisterCtrl;
+    deps.purchaseRegisterCtrl = &purchaseRegisterCtrl;
+    deps.stockRegisterCtrl = &stockRegisterCtrl;
+    deps.paddyModel = &paddyModel;
+    deps.paddyProcurementCtrl = &paddyProcurementCtrl;
+    deps.millingBatchCtrl = &millingBatchCtrl;
+    deps.millingModel = &millingModel;
+    deps.tdsVoucherCtrl = &tdsVoucherCtrl;
+    deps.interestModel = &interestModel;
+    deps.bankStatementCtrl = &bankStatementCtrl;
+    deps.transportDispatchCtrl = &transportDispatchCtrl;
+    deps.debitCreditNoteCtrl = &debitCreditNoteCtrl;
 
-    // Capture all QML engine warnings & errors
-    QObject::connect(&engine, &QQmlApplicationEngine::warnings, [](const QList<QQmlError>& warnings) {
-        for (const auto& w : warnings) {
-            std::cerr << "[QML WARNING] " << w.toString().toStdString() << std::endl << std::flush;
-        }
-    });
-
-    GlobalKeyFilter globalKeyFilter;
-    app.installEventFilter(&globalKeyFilter);
-
-    // Register all Context Properties (100% 1-to-1 match with Python PySide6)
-    QQmlContext* ctx = engine.rootContext();
-    ctx->setContextProperty("globalKeyFilter", &globalKeyFilter);
-    ctx->setContextProperty("dashboardCtrl", &dashboardCtrl);
-    ctx->setContextProperty("paddyModel", &paddyModel);
-    ctx->setContextProperty("millingModel", &millingModel);
-    ctx->setContextProperty("salesModel", &salesModel);
-    ctx->setContextProperty("purchaseModel", &purchaseModel);
-    ctx->setContextProperty("vouchersModel", &vouchersModel);
-    ctx->setContextProperty("partiesModel", &partiesModel);
-    ctx->setContextProperty("groupsModel", &groupsModel);
-    ctx->setContextProperty("stockItemsModel", &stockItemsModel);
-    ctx->setContextProperty("financialYearsModel", &financialYearsModel);
-    ctx->setContextProperty("bahiKhataMigrator", &bahiKhataMigrator);
-    ctx->setContextProperty("firmManager", &firmManager);
-    ctx->setContextProperty("jformModel", &jformModel);
-    ctx->setContextProperty("tdsModel", &tdsModel);
-    ctx->setContextProperty("interestModel", &interestModel);
-    ctx->setContextProperty("ledgerStatementCtrl", &ledgerStatementCtrl);
-    ctx->setContextProperty("purchaseRegisterCtrl", &purchaseRegisterCtrl);
-    ctx->setContextProperty("salesRegisterCtrl", &salesRegisterCtrl);
-    ctx->setContextProperty("stockRegisterCtrl", &stockRegisterCtrl);
-    ctx->setContextProperty("millingStatementCtrl", &millingStatementCtrl);
-    ctx->setContextProperty("printExportCtrl", &printExportCtrl);
-    ctx->setContextProperty("dateService", &dateService);
-    ctx->setContextProperty("mathService", &mathService);
-    ctx->setContextProperty("salesVoucherCtrl", &salesVoucherCtrl);
-    ctx->setContextProperty("purchaseVoucherCtrl", &purchaseVoucherCtrl);
-    ctx->setContextProperty("journalVoucherCtrl", &journalVoucherCtrl);
-    ctx->setContextProperty("chequeVoucherCtrl", &chequeVoucherCtrl);
-    ctx->setContextProperty("tdsVoucherCtrl", &tdsVoucherCtrl);
-    ctx->setContextProperty("jformVoucherCtrl", &jformVoucherCtrl);
-    ctx->setContextProperty("millingBatchCtrl", &millingBatchCtrl);
-    ctx->setContextProperty("paddyProcurementCtrl", &paddyProcurementCtrl);
-    ctx->setContextProperty("ledgerMasterCtrl", &ledgerMasterCtrl);
-    ctx->setContextProperty("stockMasterCtrl", &stockMasterCtrl);
-    ctx->setContextProperty("bankStatementCtrl", &bankStatementCtrl);
-    ctx->setContextProperty("transportDispatchCtrl", &transportDispatchCtrl);
-    ctx->setContextProperty("debitCreditNoteCtrl", &debitCreditNoteCtrl);
-
-    // Add import paths (Embedded QRC + local file fallbacks)
-    engine.addImportPath(":/");
-    engine.addImportPath(":/MahadevERP");
-    engine.addImportPath(":/MahadevERP/qml");
-    engine.addImportPath("qrc:/");
-    engine.addImportPath("qrc:/MahadevERP");
-    engine.addImportPath("qrc:/MahadevERP/qml");
-    engine.addImportPath(QDir(appDir).filePath("qml"));
-    engine.addImportPath(QDir(appDir).filePath("qml/components"));
-    engine.addImportPath(QDir(appDir).filePath("qml/views"));
-    engine.addImportPath(QDir(appDir).filePath("qml/dialogs"));
-    engine.addImportPath(QDir::current().filePath("qml"));
-
-    // Determine Main QML URL (prefer compiled QRC resource)
-    QUrl mainQmlUrl("qrc:/MahadevERP/qml/main.qml");
-    if (!QFile::exists(":/MahadevERP/qml/main.qml")) {
-        QString localAppQml = QDir(appDir).filePath("qml/main.qml");
-        QString localCurQml = QDir::current().filePath("qml/main.qml");
-        if (QFile::exists(localAppQml)) {
-            mainQmlUrl = QUrl::fromLocalFile(localAppQml);
-        } else if (QFile::exists(localCurQml)) {
-            mainQmlUrl = QUrl::fromLocalFile(localCurQml);
-        } else if (QFile::exists("/Users/karan/MahadevAc/qml/main.qml")) {
-            mainQmlUrl = QUrl::fromLocalFile("/Users/karan/MahadevAc/qml/main.qml");
-        }
-    }
-
-    std::cout << "[INFO] Loading main QML: " << mainQmlUrl.toString().toStdString() << std::endl << std::flush;
-
-    engine.load(mainQmlUrl);
-
-    const auto rootObjs = engine.rootObjects();
-    if (rootObjs.isEmpty()) {
-        std::cerr << "[FATAL] No root QML objects created after engine.load()!" << std::endl << std::flush;
-        return -1;
-    }
-
-    QQuickWindow* qmlWindow = nullptr;
-    for (QObject* obj : rootObjs) {
-        qmlWindow = qobject_cast<QQuickWindow*>(obj);
-        if (qmlWindow) {
-            break;
-        }
-    }
-
-    if (!qmlWindow) {
-        std::cerr << "[FATAL] Root QML object is not a QQuickWindow!" << std::endl << std::flush;
-        return -1;
-    }
-
-    std::cout << "[SUCCESS] Creating Hybrid MainWindow..." << std::endl << std::flush;
-    MainWindow mainWindow(qmlWindow, &ledgerStatementCtrl, &printExportCtrl, &dashboardCtrl, &firmManager, &bahiKhataMigrator);
+    std::cout << "[SUCCESS] Launching Pure Native QtWidgets MainWindow..." << std::endl << std::flush;
+    MainWindow mainWindow(deps);
     mainWindow.show();
     mainWindow.raise();
     mainWindow.activateWindow();

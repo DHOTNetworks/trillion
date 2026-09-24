@@ -29,7 +29,6 @@
 #include "../src/models/tds_model.h"
 #include "../src/models/stock_items_model.h"
 #include "../src/models/account_groups_model.h"
-#include "../src/models/generic_list_model.h"
 #include "../src/services/canara_bank_statement_parser.h"
 #include "../src/services/bank_statement_excel_parser.h"
 #include "../src/models/bank_statement_controller.h"
@@ -44,9 +43,6 @@
 #include "../src/engine/profit_loss_calculator.h"
 #include "../src/models/profit_loss_controller.h"
 #include "../src/engine/stock_valuation_engine.h"
-#include <QQmlEngine>
-#include <QQmlComponent>
-#include <QQmlContext>
 
 class LogicBoardTestSuite : public QObject {
     Q_OBJECT
@@ -103,7 +99,6 @@ private slots:
     void testCanaraBankStatementPdfParser();
     void testNativeXlsBankStatementParser();
     void testBankStatementControllerPosting();
-    void testAllQmlViewsInstantiable();
     void testBahiKhataMdbStationAndLedgerMigration();
 };
 
@@ -1319,83 +1314,6 @@ void LogicBoardTestSuite::testStockValuationEnginePipeline() {
     StockValuationEngine::deleteAuditedClosingStock(lockDate, err);
 
     qDebug() << "[TEST] Stock Valuation Engine Pipeline test passed successfully!";
-}
-
-extern int qInitResources_MahadevRiceMillERP_raw_qml_0();
-
-void LogicBoardTestSuite::testAllQmlViewsInstantiable() {
-    qInitResources_MahadevRiceMillERP_raw_qml_0();
-
-    QQmlEngine engine;
-    qmlRegisterType<GenericListModel>("MahadevERP", 1, 0, "GenericListModel");
-
-    PartiesModel partiesModel;
-    VouchersModel vouchersModel;
-    SalesModel salesModel;
-    PurchaseModel purchaseModel;
-    FinancialYearsModel financialYearsModel;
-    MillingModel millingModel;
-    JFormModel jformModel;
-    TdsModel tdsModel;
-    StockItemsModel stockItemsModel;
-    AccountGroupsModel accountGroupsModel;
-    BankStatementController bankStatementCtrl;
-    TransportDispatchController transportDispatchCtrl;
-    DebitCreditNoteController debitCreditNoteCtrl;
-
-    engine.rootContext()->setContextProperty("partiesModel", &partiesModel);
-    engine.rootContext()->setContextProperty("vouchersModel", &vouchersModel);
-    engine.rootContext()->setContextProperty("salesModel", &salesModel);
-    engine.rootContext()->setContextProperty("purchaseModel", &purchaseModel);
-    engine.rootContext()->setContextProperty("financialYearsModel", &financialYearsModel);
-    engine.rootContext()->setContextProperty("millingModel", &millingModel);
-    engine.rootContext()->setContextProperty("jformModel", &jformModel);
-    engine.rootContext()->setContextProperty("tdsModel", &tdsModel);
-    engine.rootContext()->setContextProperty("stockItemsModel", &stockItemsModel);
-    engine.rootContext()->setContextProperty("accountGroupsModel", &accountGroupsModel);
-    engine.rootContext()->setContextProperty("bankStatementCtrl", &bankStatementCtrl);
-    engine.rootContext()->setContextProperty("transportDispatchCtrl", &transportDispatchCtrl);
-    engine.rootContext()->setContextProperty("debitCreditNoteCtrl", &debitCreditNoteCtrl);
-
-    QStringList viewsToTest = {
-        "ChequeVoucherView.qml",
-        "JournalVoucherView.qml",
-        "SalesVoucherView.qml",
-        "PurchaseVoucherView.qml",
-        "JFormVoucherView.qml",
-        "MillingVoucherView.qml",
-        "TdsVoucherView.qml",
-        "NewLedgerView.qml",
-        "ModifyLedgerView.qml",
-        "NewStockItemView.qml",
-        "ModifyStockItemView.qml",
-        "DashboardView.qml",
-        "PaddyProcurementView.qml",
-        "MillingView.qml",
-        "SalesInvoicingView.qml",
-        "VoucherLedgerView.qml",
-        "ReportsView.qml",
-        "SalesRegisterView.qml",
-        "PurchaseRegisterView.qml",
-        "MillingStatementView.qml",
-        "StockDetailView.qml",
-        "ViewLedgerStatementView.qml",
-        "BankStatementImportView.qml",
-        "TransportDispatchRegisterView.qml",
-        "DebitCreditNoteView.qml"
-    };
-
-    for (const QString& vName : viewsToTest) {
-        QUrl qrcUrl(QString("qrc:/MahadevERP/qml/views/%1").arg(vName));
-        QQmlComponent comp(&engine, qrcUrl);
-        if (!comp.isReady()) {
-            qCritical() << "Failed to load view:" << vName << comp.errors();
-        }
-        QVERIFY2(comp.isReady(), qPrintable(QString("Failed to compile view: %1 (errors: %2)").arg(vName, comp.errorString())));
-        QObject* obj = comp.create();
-        QVERIFY2(obj != nullptr, qPrintable(QString("Failed to instantiate view: %1").arg(vName)));
-        delete obj;
-    }
 }
 
 QTEST_MAIN(LogicBoardTestSuite)

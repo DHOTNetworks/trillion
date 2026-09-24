@@ -78,7 +78,8 @@ void DashboardWidget::onSyncClicked() {
         }
     }
     if (fullPath.isEmpty() || !QFile::exists(fullPath)) {
-        QDir firmDir("/Users/karan/Firm Data");
+        QString defaultFirmDir = m_firmMgr ? m_firmMgr->get_app_data_folder() : QDir::current().filePath("data");
+        QDir firmDir(defaultFirmDir);
         if (firmDir.exists()) {
             for (const auto& f : firmDir.entryInfoList({"Data.*", "data.*", "DATA.*", "*.mdb", "*.accdb", "*.0*"}, QDir::Files)) {
                 if (f.fileName().endsWith(".ldb", Qt::CaseInsensitive) || f.fileName().endsWith(".bak", Qt::CaseInsensitive)) continue;
@@ -86,10 +87,9 @@ void DashboardWidget::onSyncClicked() {
                 break;
             }
         }
-    }
-
-    if (fullPath.isEmpty() || !QFile::exists(fullPath)) {
-        fullPath = QFileDialog::getOpenFileName(this, "Select Bahi-Khata Data File to Sync", "/Users/karan/Firm Data", "Bahi-Khata Databases (Data.* *.0* *.mdb *.accdb);;All Files (*.*)");
+        if (fullPath.isEmpty() || !QFile::exists(fullPath)) {
+            fullPath = QFileDialog::getOpenFileName(this, "Select Bahi-Khata Data File to Sync", defaultFirmDir, "Bahi-Khata Databases (Data.* *.0* *.mdb *.accdb);;All Files (*.*)");
+        }
     }
 
     if (!fullPath.isEmpty() && QFile::exists(fullPath)) {

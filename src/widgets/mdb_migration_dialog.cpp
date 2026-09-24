@@ -285,7 +285,7 @@ void MdbMigrationDialog::setupUi() {
 }
 
 void MdbMigrationDialog::onBrowseClicked() {
-    QString startDir = "/Users/karan/Firm Data";
+    QString startDir = m_firmMgr ? m_firmMgr->get_app_data_folder() : QDir::current().filePath("data");
     if (!m_filePath.isEmpty()) {
         startDir = QFileInfo(m_filePath).absolutePath();
     }
