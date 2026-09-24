@@ -40,6 +40,7 @@ bool DatabaseManager::initDatabase(const QString& dbPath) {
     executeNonQuery("PRAGMA journal_mode=WAL;");
     executeNonQuery("PRAGMA synchronous=NORMAL;");
     executeNonQuery("PRAGMA foreign_keys=ON;");
+    executeNonQuery("PRAGMA busy_timeout=5000;"); // 5-second automatic lock wait for multi-instance concurrency
     executeNonQuery("PRAGMA cache_size=-64000;"); // 64 MB page cache
     executeNonQuery("PRAGMA temp_store=MEMORY;");
     executeNonQuery("PRAGMA mmap_size=268435456;"); // 256 MB memory-mapped I/O for instant reads

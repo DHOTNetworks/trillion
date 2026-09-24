@@ -173,7 +173,32 @@ int main(int argc, char* argv[]) {
     FirmManager firmManager;
     QString resolvedDbPath = "";
     QString activeFirmId = firmManager.currentFirmId();
-    if (!activeFirmId.isEmpty()) {
+
+    for (int i = 1; i < argc; ++i) {
+        QString arg = argv[i];
+        if ((arg == "--firm" || arg == "-f") && i + 1 < argc) {
+            QString target = argv[++i];
+            QVariantList registeredFirms = firmManager.get_registered_firms();
+            bool found = false;
+            for (const auto& f : registeredFirms) {
+                QVariantMap m = f.toMap();
+                if (m.value("id").toString().compare(target, Qt::CaseInsensitive) == 0 ||
+                    m.value("name").toString().compare(target, Qt::CaseInsensitive) == 0) {
+                    activeFirmId = m.value("id").toString();
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                activeFirmId = target;
+            }
+            firmManager.switch_to_firm(activeFirmId);
+        } else if ((arg == "--db" || arg == "-d") && i + 1 < argc) {
+            resolvedDbPath = argv[++i];
+        }
+    }
+
+    if (resolvedDbPath.isEmpty() && !activeFirmId.isEmpty()) {
         QVariantList registeredFirms = firmManager.get_registered_firms();
         for (const auto& f : registeredFirms) {
             if (f.toMap().value("id").toString() == activeFirmId) {
