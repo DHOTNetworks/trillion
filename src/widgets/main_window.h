@@ -34,6 +34,23 @@
 #include "bank_statement_import_widget.h"
 #include "transport_dispatch_widget.h"
 #include "debit_credit_note_widget.h"
+#include "tds_tcs_hub_dialog.h"
+#include "tds_options_dialog.h"
+#include "tcs_options_dialog.h"
+#include "../models/menu_tree_manager.h"
+#include "tax_challan_creation_widget.h"
+#include "tax_challan_register_widget.h"
+#include "tcs_receipt_voucher_widget.h"
+#include "tcs_receipt_list_widget.h"
+#include "tds_vouchers_list_widget.h"
+#include "advance_payment_194q_widget.h"
+#include "advance_payment_194q_list_widget.h"
+#include "form16a_entry_dialog.h"
+#include "form16a_list_widget.h"
+#include "tds_acknowledgement_dialog.h"
+#include "tcs_config_dialog.h"
+#include "../models/tax_challan_controller.h"
+#include "../models/tcs_receipt_voucher_controller.h"
 #include "../models/ledger_statement_model.h"
 #include "../models/balance_sheet_controller.h"
 #include "../models/profit_loss_controller.h"
@@ -192,6 +209,21 @@ private:
     MahadevERP::BankStatementImportWidget* m_bankStatementWidget = nullptr;
     MahadevERP::TransportDispatchWidget* m_transportDispatchWidget = nullptr;
     MahadevERP::DebitCreditNoteWidget* m_debitCreditNoteWidget = nullptr;
+    MahadevERP::TdsVouchersListWidget* m_tdsVouchersListWidget = nullptr;
+    MahadevERP::TaxChallanCreationWidget* m_taxChallanCreationWidget = nullptr;
+    MahadevERP::TaxChallanRegisterWidget* m_taxChallanRegisterWidget = nullptr;
+    MahadevERP::TcsReceiptVoucherWidget* m_tcsReceiptVoucherWidget = nullptr;
+    MahadevERP::TcsReceiptListWidget* m_tcsReceiptListWidget = nullptr;
+    MahadevERP::AdvancePayment194QWidget* m_advancePayment194QWidget = nullptr;
+    MahadevERP::AdvancePayment194QListWidget* m_advancePayment194QListWidget = nullptr;
+    MahadevERP::Form16AListWidget* m_form16AListWidget = nullptr;
+
+    TaxChallanController* m_taxChallanCtrl = nullptr;
+    TcsReceiptVoucherController* m_tcsReceiptVoucherCtrl = nullptr;
+
+    void openTdsTcsHub();
+    void openTdsOptions();
+    void openTcsOptions();
 
     LedgerStatementController* m_ledgerCtrl = nullptr;
     BalanceSheetController* m_balanceSheetCtrl = nullptr;

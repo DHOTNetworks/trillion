@@ -16,10 +16,12 @@ public:
     void setSearchFunction(std::function<QVariantList(const QString&)> fn);
     void setPartyName(const QString& partyName);
     void setParty(const QString& partyName, int partyId = 0);
+    void setSelectedPartyId(int partyId);
     void clearParty();
     void clearSelection() { clearParty(); }
     QString currentPartyName() const;
     int currentPartyId() const;
+    int selectedPartyId() const { return currentPartyId(); }
     QVariantMap selectedPartyData() const { return m_selectedPartyData; }
     void openSearchPopup();
     void closeSearchPopup();

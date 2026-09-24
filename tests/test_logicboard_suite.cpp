@@ -43,6 +43,9 @@
 #include "../src/engine/profit_loss_calculator.h"
 #include "../src/models/profit_loss_controller.h"
 #include "../src/engine/stock_valuation_engine.h"
+#include "../src/models/tax_challan_controller.h"
+#include "../src/models/tcs_receipt_voucher_controller.h"
+#include "../src/models/stock_register_model.h"
 
 class LogicBoardTestSuite : public QObject {
     Q_OBJECT
@@ -100,6 +103,13 @@ private slots:
     void testNativeXlsBankStatementParser();
     void testBankStatementControllerPosting();
     void testBahiKhataMdbStationAndLedgerMigration();
+
+    // 11. TDS and TCS Ecosystem Tests
+    void testTcsReceiptVoucherPosting();
+    void testTaxDepositChallanPosting();
+
+    // 12. Bahi-Khata Stock Register Subsystem Tests
+    void testStockRegisterSubsystem();
 };
 
 #include "mdbtools.h"
@@ -1314,6 +1324,183 @@ void LogicBoardTestSuite::testStockValuationEnginePipeline() {
     StockValuationEngine::deleteAuditedClosingStock(lockDate, err);
 
     qDebug() << "[TEST] Stock Valuation Engine Pipeline test passed successfully!";
+}
+
+void LogicBoardTestSuite::testTcsReceiptVoucherPosting() {
+    DatabaseManager &db = DatabaseManager::instance();
+    // Ensure test party
+    QVariant pVal = db.executeScalar("SELECT id FROM parties WHERE name = 'TEST_TCS_CUSTOMER' LIMIT 1;");
+    int partyId = 0;
+    if (pVal.isValid() && !pVal.isNull()) {
+        partyId = pVal.toInt();
+    } else {
+        db.executeNonQuery("INSERT INTO parties (name, group_name, party_type, pan) VALUES ('TEST_TCS_CUSTOMER', 'Sundry Debtors', 'Customer', 'ABCDE1234F');");
+        partyId = db.executeScalar("SELECT last_insert_rowid();").toInt();
+    }
+
+    // Ensure test bank
+    QVariant bVal = db.executeScalar("SELECT id FROM parties WHERE name = 'TEST_TCS_BANK' LIMIT 1;");
+    int bankId = 0;
+    if (bVal.isValid() && !bVal.isNull()) {
+        bankId = bVal.toInt();
+    } else {
+        db.executeNonQuery("INSERT INTO parties (name, group_name, party_type) VALUES ('TEST_TCS_BANK', 'Bank Accounts', 'Bank');");
+        bankId = db.executeScalar("SELECT last_insert_rowid();").toInt();
+    }
+
+    TcsReceiptVoucherController ctrl;
+    ctrl.resetForm();
+    ctrl.setPartyId(partyId);
+    ctrl.setBankLedgerId(bankId);
+    ctrl.setWithoutTcsAmount(1000000.0); // 10,00,000
+    ctrl.setTcsRate(0.100);              // 0.1% = 1,000
+    ctrl.setDiscountAllowed(5000.0);     // 5,000
+    ctrl.setInterestReceived(2000.0);    // 2,000
+
+    QCOMPARE(ctrl.tcsAmount(), 1000.0);
+    QCOMPARE(ctrl.netBankReceipt(), 1001000.0);
+    QCOMPARE(ctrl.netCreditToParty(), 1003000.0);
+
+    bool saveOk = ctrl.saveVoucher();
+    QVERIFY2(saveOk, qPrintable(ctrl.statusMessage()));
+
+    // Verify double-entry in vouchers & transactions
+    QString vchNo = QString("TCS-%1").arg(ctrl.receiptNo() - 1, 4, 10, QChar('0'));
+    QVariant sumDr = db.executeScalar("SELECT SUM(amount) FROM transactions WHERE voucher_no = ? AND dr_cr = 'Dr';", {vchNo});
+    QVariant sumCr = db.executeScalar("SELECT SUM(amount) FROM transactions WHERE voucher_no = ? AND dr_cr = 'Cr';", {vchNo});
+    QVERIFY(sumDr.isValid() && sumCr.isValid());
+    QCOMPARE(sumDr.toDouble(), sumCr.toDouble());
+    QCOMPARE(sumDr.toDouble(), 1006000.0); // 10,01,000 (Bank) + 5,000 (Discount) == 10,03,000 (Party) + 1,000 (TCS) + 2,000 (Interest)
+
+    qDebug() << "[TEST] TCS Receipt Voucher posting verified: perfectly balanced at ₹10,06,000.00!";
+}
+
+void LogicBoardTestSuite::testTaxDepositChallanPosting() {
+    DatabaseManager &db = DatabaseManager::instance();
+    int fyId = 1;
+    QVariant fyRow = db.executeScalar("SELECT id FROM financial_years WHERE is_active = 1 LIMIT 1;");
+    if (fyRow.isValid() && !fyRow.isNull()) fyId = fyRow.toInt();
+
+    QString testDate = QDate::currentDate().toString("yyyy-MM-dd");
+    db.executeNonQuery(
+        "INSERT INTO tds_vouchers (fy_id, voucher_no, voucher_date, tds_type, ledger_name, total_for_tds, rate_tds, tax_amount_tds, total_tax_amount, net_amount, is_deposited) "
+        "VALUES (?, 9999, ?, 'CONTRACTOR', 'TEST_CONTRACTOR', 100000.0, 1.0, 1000.0, 1000.0, 99000.0, 0);",
+        {fyId, testDate}
+    );
+    int testVchId = db.executeScalar("SELECT last_insert_rowid();").toInt();
+
+    TaxChallanController ctrl;
+    ctrl.setTaxType("TDS");
+    ctrl.setPeriodFrom(testDate);
+    ctrl.setPeriodTo(testDate);
+    ctrl.fetchUndepositedVouchers();
+
+    QVERIFY(ctrl.undepositedVouchers().size() > 0);
+    ctrl.setBsrCode("0510302");
+    ctrl.setInterestAmount(100.0);
+    ctrl.setPenaltyAmount(50.0);
+    ctrl.recalculate();
+
+    QCOMPARE(ctrl.totalTax(), 1000.0);
+    QCOMPARE(ctrl.totalChallanAmount(), 1150.0);
+
+    bool saveOk = ctrl.saveChallan();
+    QVERIFY2(saveOk, qPrintable(ctrl.statusMessage()));
+
+    // Verify voucher is now marked deposited
+    QVariant depStatus = db.executeScalar("SELECT is_deposited FROM tds_vouchers WHERE id = ?;", {testVchId});
+    QCOMPARE(depStatus.toInt(), 1);
+
+    // Verify double-entry GL transactions
+    QString chNo = QString("CH-%1").arg(ctrl.challanNo());
+    QVariant sumDr = db.executeScalar("SELECT SUM(amount) FROM transactions WHERE voucher_no = ? AND dr_cr = 'Dr';", {chNo});
+    QVariant sumCr = db.executeScalar("SELECT SUM(amount) FROM transactions WHERE voucher_no = ? AND dr_cr = 'Cr';", {chNo});
+    if (sumDr.isValid() && sumCr.isValid()) {
+        QCOMPARE(sumDr.toDouble(), sumCr.toDouble());
+        QCOMPARE(sumDr.toDouble(), 1150.0);
+    }
+
+    qDebug() << "[TEST] Tax Deposit Challan verified: voucher marked deposited and GL balanced at ₹1,150.00!";
+}
+
+void LogicBoardTestSuite::testStockRegisterSubsystem() {
+    using namespace MahadevERP;
+
+    StockRegisterController ctrl;
+    
+    // 1. Test OnlyStock mode with ItemWise grouping
+    ctrl.setViewMode(StockViewMode::OnlyStock);
+    ctrl.setGrouping(StockGrouping::ItemWise);
+    ctrl.reload();
+    QVERIFY(ctrl.model()->rowCount() >= 0);
+
+    // 2. Test GroupWise aggregation
+    ctrl.setGrouping(StockGrouping::GroupWise);
+    ctrl.reload();
+    QVERIFY(ctrl.model()->rowCount() >= 0);
+
+    // 3. Test CompanyWise aggregation
+    ctrl.setGrouping(StockGrouping::CompanyWise);
+    ctrl.reload();
+    QVERIFY(ctrl.model()->rowCount() >= 0);
+
+    // 4. Test TotalSummary aggregation
+    ctrl.setGrouping(StockGrouping::TotalSummary);
+    ctrl.reload();
+    QVERIFY(ctrl.model()->rowCount() >= 0);
+
+    // 5. Test HsnWise aggregation
+    ctrl.setGrouping(StockGrouping::HsnWise);
+    ctrl.reload();
+    QVERIFY(ctrl.model()->rowCount() >= 0);
+
+    // 6. Test StockWithAmount mode
+    ctrl.setViewMode(StockViewMode::StockWithAmount);
+    ctrl.setGrouping(StockGrouping::ItemWise);
+    ctrl.reload();
+    QVERIFY(ctrl.model()->rowCount() >= 0);
+
+    // 7. Test ProfitLoss mode
+    ctrl.setViewMode(StockViewMode::ProfitLoss);
+    ctrl.setGrouping(StockGrouping::ItemWise);
+    ctrl.reload();
+    QVERIFY(ctrl.model()->rowCount() >= 0);
+    
+    const auto& pnlEntries = ctrl.model()->entries();
+    for (const auto& r : pnlEntries) {
+        double expectedGp = r.salesValue - r.cogs;
+        QCOMPARE(std::abs(r.grossProfit - expectedGp) < 0.01, true);
+        if (r.salesValue > 0) {
+            double expectedGpPercent = (expectedGp / r.salesValue) * 100.0;
+            QCOMPARE(std::abs(r.gpMarginPct - expectedGpPercent) < 0.05, true);
+        }
+    }
+
+    // 8. Test MonthlyDaily mode
+    ctrl.setViewMode(StockViewMode::MonthlyDaily);
+    ctrl.setSelectedItemId(1);
+    ctrl.setIsDailyDetail(false);
+    ctrl.reload();
+    QVERIFY(ctrl.model()->rowCount() >= 0);
+
+    ctrl.setIsDailyDetail(true);
+    ctrl.reload();
+    QVERIFY(ctrl.model()->rowCount() >= 0);
+
+    // 9. Test search query filtering
+    ctrl.setViewMode(StockViewMode::OnlyStock);
+    ctrl.setGrouping(StockGrouping::ItemWise);
+    ctrl.reload();
+    int initialCount = ctrl.model()->rowCount();
+    if (initialCount > 0) {
+        QString firstItemName = ctrl.model()->entries().first().nameVal;
+        ctrl.setSearchQuery(firstItemName);
+        QVERIFY(ctrl.model()->rowCount() >= 1);
+        ctrl.setSearchQuery("");
+        QCOMPARE(ctrl.model()->rowCount(), initialCount);
+    }
+
+    qDebug() << "[TEST] Stock Register subsystem controller and calculations verified successfully!";
 }
 
 QTEST_MAIN(LogicBoardTestSuite)

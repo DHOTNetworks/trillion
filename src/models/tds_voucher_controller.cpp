@@ -361,3 +361,13 @@ bool TdsVoucherController::saveVoucher() {
         return false;
     }
 }
+
+QVariantList TdsVoucherController::getTdsVouchersList() const {
+    TdsModel tModel;
+    return tModel.get_tds_register();
+}
+
+bool TdsVoucherController::deleteVoucher(int voucherId) {
+    TdsModel tModel;
+    return tModel.delete_tds_voucher(voucherId);
+}

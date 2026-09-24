@@ -3,6 +3,7 @@
 #include "mdb_migration_dialog.h"
 #include "../engine/accounting_engine.h"
 #include "../database_manager.h"
+#include "../models/menu_tree_manager.h"
 #include <QSqlQuery>
 #include <QSqlError>
 #include <QDate>
@@ -45,6 +46,19 @@ DashboardWidget::DashboardWidget(DashboardController* dashCtrl,
             refreshStats();
         });
     }
+
+    connect(&MahadevERP::MenuTreeManager::instance(), &MahadevERP::MenuTreeManager::openViewRequested, this, [this](int viewIndex) {
+        QString lastMenu = MahadevERP::MenuTreeManager::instance().lastTriggeredMenuId();
+        if (lastMenu == "ledger_master") m_lastOpenedMenuIndex = 0;
+        else if (lastMenu == "stock_master") m_lastOpenedMenuIndex = 1;
+        else if (lastMenu == "add_voucher") m_lastOpenedMenuIndex = 2;
+        else if (lastMenu == "other_voucher" || lastMenu == "tds_tcs_hub" || lastMenu == "tds_options" || lastMenu == "tcs_options") m_lastOpenedMenuIndex = 3;
+        else if (lastMenu == "reports_register") m_lastOpenedMenuIndex = 4;
+        m_lastSubmenuSelectedIndex = MahadevERP::MenuTreeManager::instance().lastTriggeredSubmenuIndex();
+        m_reopenSubmenuOnReturn = true;
+        emit openViewRequested(viewIndex);
+    });
+
     refreshStats();
 }
 
@@ -488,123 +502,31 @@ void DashboardWidget::triggerMenuIndex(int index, int initialSubmenuIndex) {
 void DashboardWidget::openLedgerMenu(int initialIndex) {
     m_selectedMenuIndex = 0;
     updateSelection(0);
-    QVector<DashboardSubmenuDialog::SubmenuItem> items = {
-        {"1. New Ledger Entry", "F3 / Alt+N", 6},
-        {"2. Modify Existing Ledger", "Enter", 7},
-        {"3. View Ledger Statement (Account Bahi-Khata)", "F4 / Alt+L", 8},
-        {"4. New Account Group", "", 9},
-        {"5. Modify Account Group", "", 10},
-        {"6. All Ledgers Directory / Master List", "Alt+6", 5}
-    };
-    DashboardSubmenuDialog dlg("LEDGER MASTER MENU", "#2563EB", items, initialIndex, this);
-    if (dlg.exec() == QDialog::Accepted && dlg.selectedViewIndex() >= 0) {
-        m_lastOpenedMenuIndex = 0;
-        m_lastSubmenuSelectedIndex = dlg.selectedIndex();
-        m_reopenSubmenuOnReturn = true;
-        emit openViewRequested(dlg.selectedViewIndex());
-    } else {
-        m_reopenSubmenuOnReturn = false;
-        m_lastOpenedMenuIndex = -1;
-    }
+    MahadevERP::MenuTreeManager::instance().executeMenu("ledger_master", this, initialIndex);
 }
 
 void DashboardWidget::openStockMenu(int initialIndex) {
     m_selectedMenuIndex = 1;
     updateSelection(1);
-    QVector<DashboardSubmenuDialog::SubmenuItem> items = {
-        {"1. New Stock Item Master", "Alt+I", 11},
-        {"2. Modify Stock Item Master", "Enter", 12},
-        {"3. Stock Detail & Item Movement Summary", "Alt+4", 13},
-        {"4. Closing Stock Valuation & Year-End Audit", "Alt+C", 36},
-        {"5. Raw Paddy Stock Register", "", 13},
-        {"6. Finished Rice Stock Register", "", 13},
-        {"7. By-Products & Husk Stock Register", "", 13}
-    };
-    DashboardSubmenuDialog dlg("STOCK MASTER MENU", "#16A34A", items, initialIndex, this);
-    if (dlg.exec() == QDialog::Accepted && dlg.selectedViewIndex() >= 0) {
-        m_lastOpenedMenuIndex = 1;
-        m_lastSubmenuSelectedIndex = dlg.selectedIndex();
-        m_reopenSubmenuOnReturn = true;
-        emit openViewRequested(dlg.selectedViewIndex());
-    } else {
-        m_reopenSubmenuOnReturn = false;
-        m_lastOpenedMenuIndex = -1;
-    }
+    MahadevERP::MenuTreeManager::instance().executeMenu("stock_master", this, initialIndex);
 }
 
 void DashboardWidget::openAddVoucherMenu(int initialIndex) {
     m_selectedMenuIndex = 2;
     updateSelection(2);
-    QVector<DashboardSubmenuDialog::SubmenuItem> items = {
-        {"1. Sales Voucher Entry (Tax Invoice)", "F8", 14},
-        {"2. Purchase Voucher Entry (Purchase Bill)", "F9", 15},
-        {"3. Paddy Procurement Slip (Kachha / Mandi)", "F2", 1},
-        {"4. Milling Production Entry", "", 31},
-        {"5. Cheque / Bank Payment Voucher", "F3", 16},
-        {"6. Journal Voucher Entry", "F5", 17}
-    };
-    DashboardSubmenuDialog dlg("ADD VOUCHER MENU", "#2563EB", items, initialIndex, this);
-    if (dlg.exec() == QDialog::Accepted && dlg.selectedViewIndex() >= 0) {
-        m_lastOpenedMenuIndex = 2;
-        m_lastSubmenuSelectedIndex = dlg.selectedIndex();
-        m_reopenSubmenuOnReturn = true;
-        emit openViewRequested(dlg.selectedViewIndex());
-    } else {
-        m_reopenSubmenuOnReturn = false;
-        m_lastOpenedMenuIndex = -1;
-    }
+    MahadevERP::MenuTreeManager::instance().executeMenu("add_voucher", this, initialIndex);
 }
 
 void DashboardWidget::openOtherVoucherMenu(int initialIndex) {
     m_selectedMenuIndex = 3;
     updateSelection(3);
-    QVector<DashboardSubmenuDialog::SubmenuItem> items = {
-        {"1. J-Form Mandi Procurement Voucher", "F11", 18},
-        {"2. I-Form Mandi Buyer Issue Voucher", "Alt+I", 19},
-        {"3. Mandi Form M & Statutory Returns (HSAMB)", "Alt+M", 20},
-        {"4. TDS Deduction Voucher Entry", "F12", 24},
-        {"5. Bank Statement Auto-Import & Reconciliation", "Ctrl+B", 26},
-        {"6. Transport Dispatch & Gate Pass Register", "Alt+T", 27},
-        {"7. GST Debit Notes & Credit Notes", "Alt+D", 28},
-        {"8. GSTR-2A Matching & ITC Reconciliation", "Alt+G", 34}
-    };
-    DashboardSubmenuDialog dlg("OTHER VOUCHERS MENU", "#7C3AED", items, initialIndex, this);
-    if (dlg.exec() == QDialog::Accepted && dlg.selectedViewIndex() >= 0) {
-        m_lastOpenedMenuIndex = 3;
-        m_lastSubmenuSelectedIndex = dlg.selectedIndex();
-        m_reopenSubmenuOnReturn = true;
-        emit openViewRequested(dlg.selectedViewIndex());
-    } else {
-        m_reopenSubmenuOnReturn = false;
-        m_lastOpenedMenuIndex = -1;
-    }
+    MahadevERP::MenuTreeManager::instance().executeMenu("other_voucher", this, initialIndex);
 }
 
 void DashboardWidget::openReportsMenu(int initialIndex) {
     m_selectedMenuIndex = 4;
     updateSelection(4);
-    QVector<DashboardSubmenuDialog::SubmenuItem> items = {
-        {"1. Day Book (Daily Audit & Transaction Register)", "Alt+D", 33},
-        {"2. GST Compliance Dashboard (GSTR-1, 2A Match, 3B)", "Alt+G", 34},
-        {"3. Mandi Form M & Statutory Returns (HSAMB)", "Alt+M", 20},
-        {"4. Sales Register & Summary", "", 3},
-        {"5. Purchase Register & Summary", "", 4},
-        {"6. Milling Production & Out-turn Statement", "Alt+M", 35},
-        {"7. Balance Sheet (Final Accounts)", "F7", 29},
-        {"8. Profit & Loss Statement (Trading & P&L)", "F6", 30},
-        {"9. Closing Stock Valuation & Year-End Audit", "Alt+C", 36},
-        {"10. Interest Calculation & Register (Aank / Rokka)", "Alt+A", 8}
-    };
-    DashboardSubmenuDialog dlg("REPORTS & REGISTERS MENU", "#059669", items, initialIndex, this);
-    if (dlg.exec() == QDialog::Accepted && dlg.selectedViewIndex() >= 0) {
-        m_lastOpenedMenuIndex = 4;
-        m_lastSubmenuSelectedIndex = dlg.selectedIndex();
-        m_reopenSubmenuOnReturn = true;
-        emit openViewRequested(dlg.selectedViewIndex());
-    } else {
-        m_reopenSubmenuOnReturn = false;
-        m_lastOpenedMenuIndex = -1;
-    }
+    MahadevERP::MenuTreeManager::instance().executeMenu("reports_register", this, initialIndex);
 }
 
 void DashboardWidget::refreshStats() {

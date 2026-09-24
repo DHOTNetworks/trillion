@@ -134,6 +134,8 @@ public:
     Q_INVOKABLE void updatePartyInfo(const QString &partyName);
     Q_INVOKABLE void recalculateTotals();
     Q_INVOKABLE bool saveVoucher();
+    Q_INVOKABLE QVariantList getTdsVouchersList() const;
+    Q_INVOKABLE bool deleteVoucher(int voucherId);
 
 signals:
     void editVoucherIdChanged();

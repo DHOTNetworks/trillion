@@ -127,6 +127,19 @@ void AccountSearchBox::setParty(const QString& partyName, int partyId) {
     closeSearchPopup();
 }
 
+void AccountSearchBox::setSelectedPartyId(int partyId) {
+    if (partyId <= 0) {
+        clearParty();
+        return;
+    }
+    QVariant v = DatabaseManager::instance().executeScalar(
+        "SELECT name FROM parties WHERE id = ? LIMIT 1;", {partyId}
+    );
+    if (v.isValid() && !v.isNull()) {
+        setParty(v.toString(), partyId);
+    }
+}
+
 void AccountSearchBox::clearParty() {
     m_programmaticChange = true;
     clear();

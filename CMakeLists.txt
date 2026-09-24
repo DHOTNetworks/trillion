@@ -162,12 +162,18 @@ set(SOURCES
     src/models/cheque_voucher_controller.cpp
     src/models/tds_voucher_controller.h
     src/models/tds_voucher_controller.cpp
+    src/models/tax_challan_controller.h
+    src/models/tax_challan_controller.cpp
+    src/models/tcs_receipt_voucher_controller.h
+    src/models/tcs_receipt_voucher_controller.cpp
     src/models/jform_voucher_controller.h
     src/models/jform_voucher_controller.cpp
     src/models/milling_batch_controller.h
     src/models/milling_batch_controller.cpp
     src/models/paddy_procurement_controller.h
     src/models/paddy_procurement_controller.cpp
+    src/models/menu_tree_manager.h
+    src/models/menu_tree_manager.cpp
     src/models/ledger_master_controller.h
     src/models/ledger_master_controller.cpp
     src/models/stock_master_controller.h
@@ -296,6 +302,36 @@ set(SOURCES
     src/widgets/milling_voucher_widget.cpp
     src/widgets/tds_voucher_widget.h
     src/widgets/tds_voucher_widget.cpp
+    src/widgets/tds_tcs_hub_dialog.h
+    src/widgets/tds_tcs_hub_dialog.cpp
+    src/widgets/tds_options_dialog.h
+    src/widgets/tds_options_dialog.cpp
+    src/widgets/tcs_options_dialog.h
+    src/widgets/tcs_options_dialog.cpp
+    src/widgets/tax_challan_creation_widget.h
+    src/widgets/tax_challan_creation_widget.cpp
+    src/widgets/tax_challan_register_widget.h
+    src/widgets/tax_challan_register_widget.cpp
+    src/widgets/tcs_receipt_voucher_widget.h
+    src/widgets/tcs_receipt_voucher_widget.cpp
+    src/widgets/tcs_receipt_list_widget.h
+    src/widgets/tcs_receipt_list_widget.cpp
+    src/widgets/tds_vouchers_list_widget.h
+    src/widgets/tds_vouchers_list_widget.cpp
+    src/widgets/advance_payment_194q_widget.h
+    src/widgets/advance_payment_194q_widget.cpp
+    src/widgets/advance_payment_194q_list_widget.h
+    src/widgets/advance_payment_194q_list_widget.cpp
+    src/widgets/form16a_entry_dialog.h
+    src/widgets/form16a_entry_dialog.cpp
+    src/widgets/form16a_list_widget.h
+    src/widgets/form16a_list_widget.cpp
+    src/widgets/tds_acknowledgement_dialog.h
+    src/widgets/tds_acknowledgement_dialog.cpp
+    src/widgets/tcs_config_dialog.h
+    src/widgets/tcs_config_dialog.cpp
+    src/widgets/navigation_menu_dialog.h
+    src/widgets/navigation_menu_dialog.cpp
     src/widgets/interest_calculator_widget.h
     src/widgets/interest_calculator_widget.cpp
     src/widgets/bank_statement_import_widget.h
@@ -391,6 +427,10 @@ set(TEST_SOURCES
     src/models/cheque_voucher_controller.cpp
     src/models/tds_voucher_controller.h
     src/models/tds_voucher_controller.cpp
+    src/models/tax_challan_controller.h
+    src/models/tax_challan_controller.cpp
+    src/models/tcs_receipt_voucher_controller.h
+    src/models/tcs_receipt_voucher_controller.cpp
     src/models/jform_voucher_controller.h
     src/models/jform_voucher_controller.cpp
     src/models/milling_batch_controller.h

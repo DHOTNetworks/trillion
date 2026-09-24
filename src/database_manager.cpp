@@ -947,6 +947,171 @@ void DatabaseManager::ensureTablesExist() {
         ");"
     );
 
+    // 7f. Tax Deposit Challans (ITNS 281 for TDS and TCS)
+    executeNonQuery(
+        "CREATE TABLE IF NOT EXISTS tax_deposit_challans ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "fy_id INTEGER NOT NULL,"
+        "tax_type TEXT NOT NULL CHECK(tax_type IN ('TDS', 'TCS')),"
+        "challan_no TEXT NOT NULL,"
+        "challan_date TEXT NOT NULL,"
+        "post_in_books INTEGER DEFAULT 1,"
+        "period_from TEXT NOT NULL,"
+        "period_to TEXT NOT NULL,"
+        "basic_tax REAL DEFAULT 0.0,"
+        "surcharge REAL DEFAULT 0.0,"
+        "cess REAL DEFAULT 0.0,"
+        "total_tax REAL DEFAULT 0.0,"
+        "interest_amount REAL DEFAULT 0.0,"
+        "interest_ledger_id INTEGER,"
+        "penalty_amount REAL DEFAULT 0.0,"
+        "penalty_ledger_id INTEGER,"
+        "other_amount REAL DEFAULT 0.0,"
+        "other_ledger_id INTEGER,"
+        "total_challan_amount REAL DEFAULT 0.0,"
+        "bank_ledger_id INTEGER NOT NULL,"
+        "cheque_no TEXT,"
+        "cheque_date TEXT,"
+        "bsr_code TEXT,"
+        "minor_head TEXT DEFAULT '200',"
+        "major_head TEXT DEFAULT '0021',"
+        "voucher_id INTEGER,"
+        "narration TEXT,"
+        "created_at DATETIME DEFAULT CURRENT_TIMESTAMP,"
+        "FOREIGN KEY (fy_id) REFERENCES financial_years(id),"
+        "FOREIGN KEY (bank_ledger_id) REFERENCES parties(id),"
+        "FOREIGN KEY (interest_ledger_id) REFERENCES parties(id),"
+        "FOREIGN KEY (penalty_ledger_id) REFERENCES parties(id),"
+        "FOREIGN KEY (other_ledger_id) REFERENCES parties(id)"
+        ");"
+    );
+
+    // 7g. Tax Deposit Challan Items (vouchers linked to challan)
+    executeNonQuery(
+        "CREATE TABLE IF NOT EXISTS tax_deposit_challan_items ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "challan_id INTEGER NOT NULL,"
+        "voucher_type TEXT NOT NULL,"
+        "source_voucher_id INTEGER NOT NULL,"
+        "tax_amount REAL NOT NULL,"
+        "surcharge_amount REAL DEFAULT 0.0,"
+        "cess_amount REAL DEFAULT 0.0,"
+        "total_tax_amount REAL NOT NULL,"
+        "FOREIGN KEY (challan_id) REFERENCES tax_deposit_challans(id) ON DELETE CASCADE"
+        ");"
+    );
+
+    // 7h. TCS Receipt Vouchers
+    executeNonQuery(
+        "CREATE TABLE IF NOT EXISTS tcs_receipt_vouchers ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "fy_id INTEGER NOT NULL,"
+        "receipt_no INTEGER NOT NULL,"
+        "receipt_date TEXT NOT NULL,"
+        "receipt_type TEXT NOT NULL DEFAULT 'BANK',"
+        "post_in_books INTEGER DEFAULT 1,"
+        "party_id INTEGER NOT NULL,"
+        "bank_ledger_id INTEGER NOT NULL,"
+        "bank_amount REAL DEFAULT 0.0,"
+        "without_tcs_amount REAL DEFAULT 0.0,"
+        "tcs_rate REAL DEFAULT 0.10,"
+        "tcs_amount REAL DEFAULT 0.0,"
+        "tcs_received INTEGER DEFAULT 1,"
+        "net_bank_receipt REAL DEFAULT 0.0,"
+        "interest_received REAL DEFAULT 0.0,"
+        "interest_ledger_id INTEGER,"
+        "discount_allowed REAL DEFAULT 0.0,"
+        "discount_ledger_id INTEGER,"
+        "other_amount REAL DEFAULT 0.0,"
+        "other_ledger_id INTEGER,"
+        "net_credit_to_party REAL DEFAULT 0.0,"
+        "tcs_payable_ledger_id INTEGER,"
+        "challan_id INTEGER,"
+        "is_deposited INTEGER DEFAULT 0,"
+        "voucher_id INTEGER,"
+        "narration TEXT,"
+        "created_at DATETIME DEFAULT CURRENT_TIMESTAMP,"
+        "FOREIGN KEY (fy_id) REFERENCES financial_years(id),"
+        "FOREIGN KEY (party_id) REFERENCES parties(id),"
+        "FOREIGN KEY (bank_ledger_id) REFERENCES parties(id),"
+        "FOREIGN KEY (interest_ledger_id) REFERENCES parties(id),"
+        "FOREIGN KEY (discount_ledger_id) REFERENCES parties(id),"
+        "FOREIGN KEY (other_ledger_id) REFERENCES parties(id),"
+        "FOREIGN KEY (tcs_payable_ledger_id) REFERENCES parties(id),"
+        "FOREIGN KEY (challan_id) REFERENCES tax_deposit_challans(id)"
+        ");"
+    );
+
+    // 7i. Advance Payment Vouchers U/S 194-Q
+    executeNonQuery(
+        "CREATE TABLE IF NOT EXISTS advance_payments_194q ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "fy_id INTEGER NOT NULL,"
+        "voucher_no INTEGER NOT NULL,"
+        "voucher_date TEXT NOT NULL,"
+        "post_in_books INTEGER DEFAULT 1,"
+        "supplier_id INTEGER NOT NULL,"
+        "bank_ledger_id INTEGER NOT NULL,"
+        "gross_advance_amount REAL DEFAULT 0.0,"
+        "tds_rate REAL DEFAULT 0.10,"
+        "tds_amount REAL DEFAULT 0.0,"
+        "net_payment_amount REAL DEFAULT 0.0,"
+        "tds_payable_ledger_id INTEGER NOT NULL,"
+        "cheque_no TEXT,"
+        "cheque_date TEXT,"
+        "challan_id INTEGER,"
+        "is_deposited INTEGER DEFAULT 0,"
+        "voucher_id INTEGER,"
+        "narration TEXT,"
+        "created_at DATETIME DEFAULT CURRENT_TIMESTAMP,"
+        "FOREIGN KEY (fy_id) REFERENCES financial_years(id),"
+        "FOREIGN KEY (supplier_id) REFERENCES parties(id),"
+        "FOREIGN KEY (bank_ledger_id) REFERENCES parties(id),"
+        "FOREIGN KEY (tds_payable_ledger_id) REFERENCES parties(id),"
+        "FOREIGN KEY (challan_id) REFERENCES tax_deposit_challans(id)"
+        ");"
+    );
+
+    // 7j. Received Form-16A
+    executeNonQuery(
+        "CREATE TABLE IF NOT EXISTS received_forms_16a ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "fy_id INTEGER NOT NULL,"
+        "certificate_no TEXT NOT NULL,"
+        "receipt_date TEXT NOT NULL,"
+        "party_id INTEGER NOT NULL,"
+        "pan_of_deductor TEXT,"
+        "quarter TEXT NOT NULL,"
+        "gross_amount REAL DEFAULT 0.0,"
+        "tds_amount REAL DEFAULT 0.0,"
+        "tds_receivable_ledger_id INTEGER,"
+        "matched_with_26as INTEGER DEFAULT 0,"
+        "remarks TEXT,"
+        "created_at DATETIME DEFAULT CURRENT_TIMESTAMP,"
+        "FOREIGN KEY (fy_id) REFERENCES financial_years(id),"
+        "FOREIGN KEY (party_id) REFERENCES parties(id),"
+        "FOREIGN KEY (tds_receivable_ledger_id) REFERENCES parties(id)"
+        ");"
+    );
+
+    // 7k. TDS Return Acknowledgements
+    executeNonQuery(
+        "CREATE TABLE IF NOT EXISTS tds_acknowledgements ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "fy_id INTEGER NOT NULL,"
+        "form_type TEXT NOT NULL,"
+        "quarter TEXT NOT NULL,"
+        "ack_number TEXT NOT NULL,"
+        "filing_date TEXT NOT NULL,"
+        "token_number TEXT,"
+        "total_deductees INTEGER DEFAULT 0,"
+        "total_tax_deposited REAL DEFAULT 0.0,"
+        "remarks TEXT,"
+        "created_at DATETIME DEFAULT CURRENT_TIMESTAMP,"
+        "FOREIGN KEY (fy_id) REFERENCES financial_years(id)"
+        ");"
+    );
+
     // 8. Vouchers Table
     executeNonQuery(
         "CREATE TABLE IF NOT EXISTS vouchers ("
@@ -1297,6 +1462,30 @@ void DatabaseManager::ensureTablesExist() {
     addColumnIfNotExists("stock_items", "dami_ledger_id", "INTEGER");
     addColumnIfNotExists("stock_items", "market_fee_ledger_id", "INTEGER");
     addColumnIfNotExists("stock_items", "hrdf_ledger_id", "INTEGER");
+
+    // TDS Vouchers deposit tracking
+    addColumnIfNotExists("tds_vouchers", "challan_id", "INTEGER");
+    addColumnIfNotExists("tds_vouchers", "is_deposited", "INTEGER DEFAULT 0");
+
+    // Ensure Default Tax & Adjustment Ledgers Exist in Parties
+    auto ensureLedgerExists = [this](const QString& name, const QString& group, const QString& type) {
+        QVariant v = executeScalar("SELECT id FROM parties WHERE name = ? LIMIT 1;", {name});
+        if (!v.isValid() || v.isNull()) {
+            executeNonQuery(
+                "INSERT INTO parties (name, group_name, party_type) VALUES (?, ?, ?);",
+                {name, group, type}
+            );
+        }
+    };
+
+    ensureLedgerExists("TDS Payable A/c", "Duties & Taxes (GST)", "Tax");
+    ensureLedgerExists("TCS Payable A/c", "Duties & Taxes (GST)", "Tax");
+    ensureLedgerExists("TDS u/s 194-Q Payable A/c", "Duties & Taxes (GST)", "Tax");
+    ensureLedgerExists("TDS Receivable A/c", "Current Assets", "Asset");
+    ensureLedgerExists("Interest on Tax A/c", "Indirect Expenses", "Expense");
+    ensureLedgerExists("Penalty on Tax A/c", "Indirect Expenses", "Expense");
+    ensureLedgerExists("Discount Allowed A/c", "Indirect Expenses", "Expense");
+    ensureLedgerExists("Interest Received A/c", "Indirect Incomes", "Income");
 }
 
 QString DatabaseManager::getSetting(const QString& key, const QString& defaultVal) {

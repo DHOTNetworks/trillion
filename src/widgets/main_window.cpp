@@ -284,6 +284,70 @@ MainWindow::MainWindow(const MainWindowDependencies& deps, QWidget* parent)
     });
     m_stackedWidget->addWidget(m_debitCreditNoteWidget);
 
+    // TDS & TCS Subsystem Controllers
+    m_taxChallanCtrl = new TaxChallanController(this);
+    m_tcsReceiptVoucherCtrl = new TcsReceiptVoucherController(this);
+
+    // Index 32: TDS Vouchers List (View 50)
+    m_tdsVouchersListWidget = new MahadevERP::TdsVouchersListWidget(m_tdsVoucherCtrl, this);
+    connect(m_tdsVouchersListWidget, &MahadevERP::TdsVouchersListWidget::backRequested, this, [this]() { navigateToView(0); });
+    connect(m_tdsVouchersListWidget, &MahadevERP::TdsVouchersListWidget::newVoucherRequested, this, [this]() { navigateToView(24); });
+    connect(m_tdsVouchersListWidget, &MahadevERP::TdsVouchersListWidget::editVoucherRequested, this, [this](int id) {
+        m_pendingEditVoucherId = id;
+        navigateToView(24);
+    });
+    m_stackedWidget->addWidget(m_tdsVouchersListWidget);
+
+    // Index 33: Tax Challan Creation (View 51)
+    m_taxChallanCreationWidget = new MahadevERP::TaxChallanCreationWidget(m_taxChallanCtrl, this);
+    connect(m_taxChallanCreationWidget, &MahadevERP::TaxChallanCreationWidget::backRequested, this, [this]() { navigateToView(52); });
+    connect(m_taxChallanCreationWidget, &MahadevERP::TaxChallanCreationWidget::challanSaved, this, [this]() { navigateToView(52); });
+    m_stackedWidget->addWidget(m_taxChallanCreationWidget);
+
+    // Index 34: Tax Challan Register (View 52)
+    m_taxChallanRegisterWidget = new MahadevERP::TaxChallanRegisterWidget(m_taxChallanCtrl, "TDS", this);
+    connect(m_taxChallanRegisterWidget, &MahadevERP::TaxChallanRegisterWidget::backRequested, this, [this]() { navigateToView(0); });
+    connect(m_taxChallanRegisterWidget, &MahadevERP::TaxChallanRegisterWidget::newChallanRequested, this, [this](const QString& type) {
+        m_taxChallanCreationWidget->setTaxType(type);
+        navigateToView(51);
+    });
+    m_stackedWidget->addWidget(m_taxChallanRegisterWidget);
+
+    // Index 35: TCS Receipt Voucher (View 53)
+    m_tcsReceiptVoucherWidget = new MahadevERP::TcsReceiptVoucherWidget(m_tcsReceiptVoucherCtrl, this);
+    connect(m_tcsReceiptVoucherWidget, &MahadevERP::TcsReceiptVoucherWidget::backRequested, this, [this]() { navigateToView(0); });
+    connect(m_tcsReceiptVoucherWidget, &MahadevERP::TcsReceiptVoucherWidget::voucherSaved, this, [this]() { navigateToView(54); });
+    m_stackedWidget->addWidget(m_tcsReceiptVoucherWidget);
+
+    // Index 36: TCS Receipt List (View 54)
+    m_tcsReceiptListWidget = new MahadevERP::TcsReceiptListWidget(m_tcsReceiptVoucherCtrl, this);
+    connect(m_tcsReceiptListWidget, &MahadevERP::TcsReceiptListWidget::backRequested, this, [this]() { navigateToView(0); });
+    connect(m_tcsReceiptListWidget, &MahadevERP::TcsReceiptListWidget::newReceiptRequested, this, [this]() { navigateToView(53); });
+    m_stackedWidget->addWidget(m_tcsReceiptListWidget);
+
+    // Index 37: Advance Payment 194-Q (View 55)
+    m_advancePayment194QWidget = new MahadevERP::AdvancePayment194QWidget(this);
+    connect(m_advancePayment194QWidget, &MahadevERP::AdvancePayment194QWidget::backRequested, this, [this]() { navigateToView(0); });
+    connect(m_advancePayment194QWidget, &MahadevERP::AdvancePayment194QWidget::voucherSaved, this, [this]() { navigateToView(56); });
+    m_stackedWidget->addWidget(m_advancePayment194QWidget);
+
+    // Index 38: Advance Payment 194-Q List (View 56)
+    m_advancePayment194QListWidget = new MahadevERP::AdvancePayment194QListWidget(this);
+    connect(m_advancePayment194QListWidget, &MahadevERP::AdvancePayment194QListWidget::backRequested, this, [this]() { navigateToView(0); });
+    connect(m_advancePayment194QListWidget, &MahadevERP::AdvancePayment194QListWidget::newVoucherRequested, this, [this]() { navigateToView(55); });
+    m_stackedWidget->addWidget(m_advancePayment194QListWidget);
+
+    // Index 39: Form-16A Received List (View 57)
+    m_form16AListWidget = new MahadevERP::Form16AListWidget(this);
+    connect(m_form16AListWidget, &MahadevERP::Form16AListWidget::backRequested, this, [this]() { navigateToView(0); });
+    connect(m_form16AListWidget, &MahadevERP::Form16AListWidget::newCertificateRequested, this, [this]() {
+        MahadevERP::Form16AEntryDialog dlg(this);
+        if (dlg.exec() == QDialog::Accepted) {
+            m_form16AListWidget->reloadData();
+        }
+    });
+    m_stackedWidget->addWidget(m_form16AListWidget);
+
     // Global Shortcuts for Accounting Period (Alt+F2) and Context-Aware F2 (Date / Period)
     QShortcut* altF2Shortcut = new QShortcut(QKeySequence(Qt::ALT | Qt::Key_F2), this);
     connect(altF2Shortcut, &QShortcut::activated, this, &MainWindow::openAccountingPeriodDialog);
@@ -316,6 +380,137 @@ MainWindow::MainWindow(const MainWindowDependencies& deps, QWidget* parent)
 
     // Unified Application-Wide Keyboard Navigation Controller
     m_keyboardCtrl = new AppKeyboardController(this, this);
+
+    // Global MenuTreeManager Integration
+    connect(&MahadevERP::MenuTreeManager::instance(), &MahadevERP::MenuTreeManager::openViewRequested, this, &MainWindow::navigateToView);
+
+    auto& menuMgr = MahadevERP::MenuTreeManager::instance();
+    // TDS Deposit Challans (index 2 in tds_options)
+    menuMgr.setItemCallback("tds_options", 2, [this]() {
+        if (m_taxChallanRegisterWidget) m_taxChallanRegisterWidget->setTaxType("TDS");
+    });
+    // TDS Acknowledgement Nos. (index 3 in tds_options)
+    menuMgr.setItemCallback("tds_options", 3, [this]() {
+        MahadevERP::TdsAcknowledgementDialog ackDlg(this);
+        ackDlg.exec();
+    });
+    // Receive Form-16A / 27D (index 6 in tds_options)
+    menuMgr.setItemCallback("tds_options", 6, [this]() {
+        MahadevERP::Form16AEntryDialog fDlg(this);
+        if (fDlg.exec() == QDialog::Accepted && m_form16AListWidget) {
+            m_form16AListWidget->reloadData();
+        }
+    });
+    // TCS Deposit Challans (index 2 in tcs_options)
+    menuMgr.setItemCallback("tcs_options", 2, [this]() {
+        if (m_taxChallanRegisterWidget) m_taxChallanRegisterWidget->setTaxType("TCS");
+    });
+    // TCS Others (index 3 in tcs_options)
+    menuMgr.setItemCallback("tcs_options", 3, [this]() {
+        MahadevERP::TcsConfigDialog cDlg(this);
+        cDlg.exec();
+    });
+
+    // Stock Register Hub - Item Monthly / Daily Stock (index 3 in stock_register_hub)
+    menuMgr.setItemCallback("stock_register_hub", 3, [this]() {
+        m_previousViewIndex = 0;
+        if (m_stockDetailWidget) {
+            m_stockDetailWidget->setViewConfiguration(StockViewMode::MonthlyDaily, StockGrouping::ItemWise, "Item Monthly/Daily Stock");
+        }
+    });
+
+    // Show Only Stock Submenu
+    menuMgr.setItemCallback("stock_only_menu", 0, [this]() {
+        m_previousViewIndex = 0;
+        if (m_stockDetailWidget) m_stockDetailWidget->setViewConfiguration(StockViewMode::OnlyStock, StockGrouping::ItemWise, "Item Stock");
+    });
+    menuMgr.setItemCallback("stock_only_menu", 1, [this]() {
+        m_previousViewIndex = 0;
+        if (m_stockDetailWidget) m_stockDetailWidget->setViewConfiguration(StockViewMode::OnlyStock, StockGrouping::GroupWise, "Group Stock");
+    });
+    menuMgr.setItemCallback("stock_only_menu", 2, [this]() {
+        m_previousViewIndex = 0;
+        if (m_stockDetailWidget) m_stockDetailWidget->setViewConfiguration(StockViewMode::OnlyStock, StockGrouping::CompanyWise, "Company Stock");
+    });
+    menuMgr.setItemCallback("stock_only_menu", 3, [this]() {
+        m_previousViewIndex = 0;
+        if (m_stockDetailWidget) m_stockDetailWidget->setViewConfiguration(StockViewMode::OnlyStock, StockGrouping::TotalSummary, "Total Stock");
+    });
+    menuMgr.setItemCallback("stock_only_menu", 4, [this]() {
+        m_previousViewIndex = 0;
+        if (m_stockDetailWidget) m_stockDetailWidget->setViewConfiguration(StockViewMode::OnlyStock, StockGrouping::HsnWise, "HSN Wise Total Stock");
+    });
+
+    // Show Stock With Amount Submenu
+    menuMgr.setItemCallback("stock_amount_menu", 0, [this]() {
+        m_previousViewIndex = 0;
+        if (m_stockDetailWidget) m_stockDetailWidget->setViewConfiguration(StockViewMode::StockWithAmount, StockGrouping::ItemWise, "Item Stock With Amount");
+    });
+    menuMgr.setItemCallback("stock_amount_menu", 1, [this]() {
+        m_previousViewIndex = 0;
+        if (m_stockDetailWidget) m_stockDetailWidget->setViewConfiguration(StockViewMode::StockWithAmount, StockGrouping::GroupWise, "Group Stock With Amount");
+    });
+    menuMgr.setItemCallback("stock_amount_menu", 2, [this]() {
+        m_previousViewIndex = 0;
+        if (m_stockDetailWidget) m_stockDetailWidget->setViewConfiguration(StockViewMode::StockWithAmount, StockGrouping::CompanyWise, "Company Stock With Amount");
+    });
+    menuMgr.setItemCallback("stock_amount_menu", 3, [this]() {
+        m_previousViewIndex = 0;
+        if (m_stockDetailWidget) m_stockDetailWidget->setViewConfiguration(StockViewMode::StockWithAmount, StockGrouping::TotalSummary, "Total Stock With Amount");
+    });
+    menuMgr.setItemCallback("stock_amount_menu", 4, [this]() {
+        m_previousViewIndex = 0;
+        if (m_stockDetailWidget) m_stockDetailWidget->setViewConfiguration(StockViewMode::StockWithAmount, StockGrouping::HsnWise, "HSN Wise Total Stock With Amount");
+    });
+
+    // Item Wise Profit & Loss Submenu
+    menuMgr.setItemCallback("stock_profit_menu", 0, [this]() {
+        m_previousViewIndex = 0;
+        if (m_stockDetailWidget) m_stockDetailWidget->setViewConfiguration(StockViewMode::ProfitLoss, StockGrouping::ItemWise, "Item Details (P&L)");
+    });
+    menuMgr.setItemCallback("stock_profit_menu", 1, [this]() {
+        m_previousViewIndex = 0;
+        if (m_stockDetailWidget) m_stockDetailWidget->setViewConfiguration(StockViewMode::ProfitLoss, StockGrouping::GroupWise, "Group Details (P&L)");
+    });
+    menuMgr.setItemCallback("stock_profit_menu", 2, [this]() {
+        m_previousViewIndex = 0;
+        if (m_stockDetailWidget) m_stockDetailWidget->setViewConfiguration(StockViewMode::ProfitLoss, StockGrouping::CompanyWise, "Company Details (P&L)");
+    });
+    menuMgr.setItemCallback("stock_profit_menu", 3, [this]() {
+        m_previousViewIndex = 0;
+        if (m_stockDetailWidget) m_stockDetailWidget->setViewConfiguration(StockViewMode::ProfitLoss, StockGrouping::TotalSummary, "Total Items Details (P&L)");
+    });
+    menuMgr.setItemCallback("stock_profit_menu", 4, [this]() {
+        m_previousViewIndex = 0;
+        if (m_stockDetailWidget) m_stockDetailWidget->setViewConfiguration(StockViewMode::ProfitLoss, StockGrouping::HsnWise, "HSN Wise Total Details (P&L)");
+    });
+
+    // Raw Paddy Stock Register (index 4 in stock_master)
+    menuMgr.setItemCallback("stock_master", 4, [this]() {
+        m_previousViewIndex = 0;
+        if (m_stockDetailWidget) {
+            m_stockDetailWidget->setViewConfiguration(StockViewMode::OnlyStock, StockGrouping::ItemWise, "Raw Paddy Stock");
+        }
+        navigateToView(13);
+    });
+
+    // Finished Rice Stock Register (index 5 in stock_master)
+    menuMgr.setItemCallback("stock_master", 5, [this]() {
+        m_previousViewIndex = 0;
+        if (m_stockDetailWidget) {
+            m_stockDetailWidget->setViewConfiguration(StockViewMode::OnlyStock, StockGrouping::ItemWise, "Finished Rice Stock");
+        }
+        navigateToView(13);
+    });
+
+    // By-Products & Husk Stock Register (index 6 in stock_master)
+    menuMgr.setItemCallback("stock_master", 6, [this]() {
+        m_previousViewIndex = 0;
+        if (m_stockDetailWidget) {
+            m_stockDetailWidget->setViewConfiguration(StockViewMode::OnlyStock, StockGrouping::ItemWise, "By-Products & Husk Stock");
+        }
+        navigateToView(13);
+    });
 
     // Explicitly start application on Firm Selector View (View 22)
     navigateToView(22);
@@ -356,6 +551,14 @@ int MainWindow::currentViewIndex() const {
     if (cur == m_gstrReportsWidget) return 34;
     if (cur == m_millingStatementWidget) return 35;
     if (cur == m_customClosingStockWidget) return 36;
+    if (cur == m_tdsVouchersListWidget) return 50;
+    if (cur == m_taxChallanCreationWidget) return 51;
+    if (cur == m_taxChallanRegisterWidget) return 52;
+    if (cur == m_tcsReceiptVoucherWidget) return 53;
+    if (cur == m_tcsReceiptListWidget) return 54;
+    if (cur == m_advancePayment194QWidget) return 55;
+    if (cur == m_advancePayment194QListWidget) return 56;
+    if (cur == m_form16AListWidget) return 57;
     return 0;
 }
 
@@ -819,9 +1022,70 @@ void MainWindow::navigateToView(int viewIndex) {
             m_customClosingStockWidget->reloadData();
             m_customClosingStockWidget->setFocus();
         }
+    } else if (viewIndex == 50) {
+        if (m_tdsVouchersListWidget) {
+            m_stackedWidget->setCurrentWidget(m_tdsVouchersListWidget);
+            m_tdsVouchersListWidget->reloadData();
+            m_tdsVouchersListWidget->setFocus();
+        }
+    } else if (viewIndex == 51) {
+        if (m_taxChallanCreationWidget) {
+            m_stackedWidget->setCurrentWidget(m_taxChallanCreationWidget);
+            m_taxChallanCreationWidget->setFocus();
+        }
+    } else if (viewIndex == 52) {
+        if (m_taxChallanRegisterWidget) {
+            m_stackedWidget->setCurrentWidget(m_taxChallanRegisterWidget);
+            m_taxChallanRegisterWidget->reloadData();
+            m_taxChallanRegisterWidget->setFocus();
+        }
+    } else if (viewIndex == 53) {
+        if (m_tcsReceiptVoucherWidget) {
+            m_stackedWidget->setCurrentWidget(m_tcsReceiptVoucherWidget);
+            m_tcsReceiptVoucherWidget->resetForm();
+            m_tcsReceiptVoucherWidget->setFocus();
+        }
+    } else if (viewIndex == 54) {
+        if (m_tcsReceiptListWidget) {
+            m_stackedWidget->setCurrentWidget(m_tcsReceiptListWidget);
+            m_tcsReceiptListWidget->reloadData();
+            m_tcsReceiptListWidget->setFocus();
+        }
+    } else if (viewIndex == 55) {
+        if (m_advancePayment194QWidget) {
+            m_stackedWidget->setCurrentWidget(m_advancePayment194QWidget);
+            m_advancePayment194QWidget->resetForm();
+            m_advancePayment194QWidget->setFocus();
+        }
+    } else if (viewIndex == 56) {
+        if (m_advancePayment194QListWidget) {
+            m_stackedWidget->setCurrentWidget(m_advancePayment194QListWidget);
+            m_advancePayment194QListWidget->reloadData();
+            m_advancePayment194QListWidget->setFocus();
+        }
+    } else if (viewIndex == 57) {
+        if (m_form16AListWidget) {
+            m_stackedWidget->setCurrentWidget(m_form16AListWidget);
+            m_form16AListWidget->reloadData();
+            m_form16AListWidget->setFocus();
+        }
+    } else if (viewIndex == 60) {
+        openTdsTcsHub();
     }
 
     m_isNavigating = false;
+}
+
+void MainWindow::openTdsTcsHub() {
+    MahadevERP::MenuTreeManager::instance().executeMenu("tds_tcs_hub", this);
+}
+
+void MainWindow::openTdsOptions() {
+    MahadevERP::MenuTreeManager::instance().executeMenu("tds_options", this);
+}
+
+void MainWindow::openTcsOptions() {
+    MahadevERP::MenuTreeManager::instance().executeMenu("tcs_options", this);
 }
 
 void MainWindow::onLedgerBackRequested() {
