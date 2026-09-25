@@ -75,9 +75,21 @@ void MenuTreeManager::executeMenu(const QString& startMenuId, QWidget* parent, i
         m_menus[startMenuId].lastSelectedIndex = initialIndex;
     }
 
+    // Build the full ancestor stack from root down to startMenuId
     m_activeStack.clear();
-    m_activeStack.append(startMenuId);
+    QString curr = startMenuId;
+    QVector<QString> chain;
+    while (!curr.isEmpty() && m_menus.contains(curr)) {
+        chain.prepend(curr);
+        curr = m_menus[curr].parentId;
+    }
+    m_activeStack = chain;
 
+    resumeMenuStack(parent);
+}
+
+void MenuTreeManager::resumeMenuStack(QWidget* parent)
+{
     while (!m_activeStack.isEmpty()) {
         QString currentId = m_activeStack.last();
         if (!m_menus.contains(currentId)) {
@@ -108,19 +120,16 @@ void MenuTreeManager::executeMenu(const QString& startMenuId, QWidget* parent, i
                     m_lastTriggeredMenuId = currentId;
                     m_lastTriggeredSubmenuIndex = selectedIdx;
                     int targetView = item.targetViewIndex;
-                    m_activeStack.clear();
                     emit openViewRequested(targetView);
                     return;
                 } else if (item.actionType == MenuActionType::ExecuteCustom) {
                     if (item.callback) {
                         item.callback();
                     }
-                    // Current menu remains on top of stack so it stays open
                 }
             }
         } else {
-            // Rejected (Escape key pressed or clicked outside)
-            // Pop current menu from stack so user returns to previous menu in tree
+            // Escape pressed or clicked outside: pop current menu so user returns to parent menu
             m_activeStack.removeLast();
         }
     }

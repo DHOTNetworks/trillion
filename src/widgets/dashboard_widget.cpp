@@ -49,13 +49,12 @@ DashboardWidget::DashboardWidget(DashboardController* dashCtrl,
 
     connect(&MahadevERP::MenuTreeManager::instance(), &MahadevERP::MenuTreeManager::openViewRequested, this, [this](int viewIndex) {
         QString lastMenu = MahadevERP::MenuTreeManager::instance().lastTriggeredMenuId();
-        if (lastMenu == "ledger_master") m_lastOpenedMenuIndex = 0;
-        else if (lastMenu == "stock_master") m_lastOpenedMenuIndex = 1;
-        else if (lastMenu == "add_voucher") m_lastOpenedMenuIndex = 2;
-        else if (lastMenu == "other_voucher" || lastMenu == "tds_tcs_hub" || lastMenu == "tds_options" || lastMenu == "tcs_options") m_lastOpenedMenuIndex = 3;
-        else if (lastMenu == "reports_register") m_lastOpenedMenuIndex = 4;
-        m_lastSubmenuSelectedIndex = MahadevERP::MenuTreeManager::instance().lastTriggeredSubmenuIndex();
-        m_reopenSubmenuOnReturn = true;
+        if (lastMenu == "ledger_master") m_selectedMenuIndex = 0;
+        else if (lastMenu == "stock_master") m_selectedMenuIndex = 1;
+        else if (lastMenu == "add_voucher") m_selectedMenuIndex = 2;
+        else if (lastMenu == "other_voucher" || lastMenu == "tds_tcs_hub" || lastMenu == "tds_options" || lastMenu == "tcs_options") m_selectedMenuIndex = 3;
+        else if (lastMenu == "reports_register") m_selectedMenuIndex = 4;
+        updateSelection(m_selectedMenuIndex);
         emit openViewRequested(viewIndex);
     });
 
@@ -600,20 +599,16 @@ void DashboardWidget::focusMenu() {
 void DashboardWidget::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
     refreshStats();
-    focusMenu();
 
-    if (m_reopenSubmenuOnReturn && m_lastOpenedMenuIndex >= 0) {
-        int menuIdx = m_lastOpenedMenuIndex;
-        int subIdx = m_lastSubmenuSelectedIndex;
-        m_reopenSubmenuOnReturn = false;
-        updateSelection(menuIdx);
-        QTimer::singleShot(10, this, [this, menuIdx, subIdx]() {
-            triggerMenuIndex(menuIdx, subIdx);
-        });
-    } else {
-        m_selectedMenuIndex = 0;
-        updateSelection(0);
-    }
+    QString lastMenu = MahadevERP::MenuTreeManager::instance().lastTriggeredMenuId();
+    if (lastMenu == "ledger_master") m_selectedMenuIndex = 0;
+    else if (lastMenu == "stock_master") m_selectedMenuIndex = 1;
+    else if (lastMenu == "add_voucher") m_selectedMenuIndex = 2;
+    else if (lastMenu == "other_voucher") m_selectedMenuIndex = 3;
+    else if (lastMenu == "reports_register") m_selectedMenuIndex = 4;
+
+    updateSelection(m_selectedMenuIndex);
+    focusMenu();
 }
 
 void DashboardWidget::focusInEvent(QFocusEvent* event) {
@@ -661,16 +656,10 @@ void DashboardWidget::keyPressEvent(QKeyEvent* event) {
         event->accept();
         return;
     } else if (event->key() == Qt::Key_F8) {
-        m_lastOpenedMenuIndex = 2;
-        m_lastSubmenuSelectedIndex = 0;
-        m_reopenSubmenuOnReturn = true;
         emit openViewRequested(14);
         event->accept();
         return;
     } else if (event->key() == Qt::Key_F9) {
-        m_lastOpenedMenuIndex = 2;
-        m_lastSubmenuSelectedIndex = 1;
-        m_reopenSubmenuOnReturn = true;
         emit openViewRequested(15);
         event->accept();
         return;

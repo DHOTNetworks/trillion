@@ -75,9 +75,6 @@ private:
     BahiKhataMigrator* m_migrator = nullptr;
 
     int m_selectedMenuIndex = 0;
-    int m_lastOpenedMenuIndex = -1;
-    int m_lastSubmenuSelectedIndex = 0;
-    bool m_reopenSubmenuOnReturn = false;
     QPoint m_initialMousePos;
     bool m_hasMouseMoved = false;
 

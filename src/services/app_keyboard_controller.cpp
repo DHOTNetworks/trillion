@@ -47,55 +47,8 @@ void AppKeyboardController::handleEscape() {
         return;
     }
 
-    int vIdx = currentViewIndex();
-
-    // 2. Ledger Statement Widget (View 8)
-    if (vIdx == 8) {
-        LedgerStatementWidget* lw = m_mainWindow->ledgerWidget();
-        if (lw) {
-            lw->backRequested();
-            return;
-        }
-    }
-
-    // 3. Balance Sheet Widget (View 29)
-    if (vIdx == 29) {
-        BalanceSheetWidget* bw = m_mainWindow->balanceSheetWidget();
-        if (bw) {
-            bw->backRequested();
-            return;
-        }
-    }
-
-    // 4. Profit & Loss Widget (View 30)
-    if (vIdx == 30) {
-        ProfitLossWidget* pw = m_mainWindow->profitLossWidget();
-        if (pw) {
-            pw->backRequested();
-            return;
-        }
-    }
-
-    // 5. Sales Voucher Widget (View 14)
-    if (vIdx == 14) {
-        SalesVoucherWidget* sw = m_mainWindow->salesVoucherWidget();
-        if (sw) {
-            sw->backRequested();
-            return;
-        }
-    }
-
-    // 5b. Purchase Voucher Widget (View 15)
-    if (vIdx == 15) {
-        PurchaseVoucherWidget* pw = m_mainWindow->purchaseVoucherWidget();
-        if (pw) {
-            pw->backRequested();
-            return;
-        }
-    }
-
-    // 6. Default Escape fallback to Dashboard
-    navigateTo(0);
+    // 2. Delegate to unified stack-based navigation unwinding
+    m_mainWindow->navigateBack();
 }
 
 void AppKeyboardController::handleEnter() {

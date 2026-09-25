@@ -70,10 +70,12 @@ public:
 
     // Active Navigation Stack
     const QVector<QString>& navigationStack() const { return m_activeStack; }
+    bool hasActiveStack() const { return !m_activeStack.isEmpty(); }
     void clearNavigationStack() { m_activeStack.clear(); }
 
     // Execute menu loop (handles full stack navigation and Esc-unwinding)
     void executeMenu(const QString& startMenuId, QWidget* parent = nullptr, int initialIndex = -1);
+    void resumeMenuStack(QWidget* parent = nullptr);
 
     // Returns the menu ID that triggered the most recent view transition
     QString lastTriggeredMenuId() const { return m_lastTriggeredMenuId; }

@@ -67,7 +67,7 @@ MainWindow::MainWindow(const MainWindowDependencies& deps, QWidget* parent)
 
     // Index 0: Native C++ Main Dashboard Widget (View 0)
     m_dashboardWidget = new DashboardWidget(m_dashCtrl, m_firmMgr, m_printExportCtrl, m_bahiKhataMigrator, this);
-    connect(m_dashboardWidget, &DashboardWidget::openViewRequested, this, &MainWindow::navigateToView);
+    connect(m_dashboardWidget, &DashboardWidget::openViewRequested, this, [this](int v) { navigateToView(v); });
     connect(m_dashboardWidget, &DashboardWidget::requestAccountingPeriodDialog, this, &MainWindow::openAccountingPeriodDialog);
     m_stackedWidget->addWidget(m_dashboardWidget);
 
@@ -150,137 +150,137 @@ MainWindow::MainWindow(const MainWindowDependencies& deps, QWidget* parent)
 
     // Index 10: Native C++ Modify Ledger Widget (View 7)
     m_modifyLedgerWidget = new ModifyLedgerWidget(this);
-    connect(m_modifyLedgerWidget, &ModifyLedgerWidget::backRequested, this, &MainWindow::onModifyLedgerBackRequested);
-    connect(m_modifyLedgerWidget, &ModifyLedgerWidget::savedSuccess, this, &MainWindow::onModifyLedgerSaved);
+    connect(m_modifyLedgerWidget, &ModifyLedgerWidget::backRequested, this, &MainWindow::navigateBack);
+    connect(m_modifyLedgerWidget, &ModifyLedgerWidget::savedSuccess, this, &MainWindow::navigateBack);
     m_stackedWidget->addWidget(m_modifyLedgerWidget);
 
     // Index 11: Native C++ J-Form Mandi Procurement Widget (View 18)
     m_jformVoucherWidget = new JFormVoucherWidget(m_printExportCtrl, this);
-    connect(m_jformVoucherWidget, &JFormVoucherWidget::backRequested, this, &MainWindow::onJFormVoucherBackRequested);
-    connect(m_jformVoucherWidget, &JFormVoucherWidget::voucherSaved, this, &MainWindow::onJFormVoucherSaved);
+    connect(m_jformVoucherWidget, &JFormVoucherWidget::backRequested, this, &MainWindow::navigateBack);
+    connect(m_jformVoucherWidget, &JFormVoucherWidget::voucherSaved, this, &MainWindow::navigateBack);
     m_stackedWidget->addWidget(m_jformVoucherWidget);
 
     // Index 12: Native C++ I-Form Mandi Buyer Issue Widget (View 19)
     m_iformVoucherWidget = new IFormVoucherWidget(m_printExportCtrl, this);
-    connect(m_iformVoucherWidget, &IFormVoucherWidget::backRequested, this, &MainWindow::onIFormVoucherBackRequested);
-    connect(m_iformVoucherWidget, &IFormVoucherWidget::voucherSaved, this, &MainWindow::onIFormVoucherSaved);
+    connect(m_iformVoucherWidget, &IFormVoucherWidget::backRequested, this, &MainWindow::navigateBack);
+    connect(m_iformVoucherWidget, &IFormVoucherWidget::voucherSaved, this, &MainWindow::navigateBack);
     m_stackedWidget->addWidget(m_iformVoucherWidget);
 
     // Index 13: Native C++ Mandi Operations & Reports Widget (View 20)
     m_mandiReportsWidget = new MandiReportsWidget(m_printExportCtrl, this);
-    connect(m_mandiReportsWidget, &MandiReportsWidget::backRequested, this, &MainWindow::onMandiReportsBackRequested);
+    connect(m_mandiReportsWidget, &MandiReportsWidget::backRequested, this, &MainWindow::navigateBack);
     m_stackedWidget->addWidget(m_mandiReportsWidget);
 
     // Index 14: Native C++ Day Book Widget (View 33)
     m_dayBookWidget = new MahadevERP::DayBookWidget(m_printExportCtrl, this);
-    connect(m_dayBookWidget, &MahadevERP::DayBookWidget::backRequested, this, [this]() { navigateToView(0); });
+    connect(m_dayBookWidget, &MahadevERP::DayBookWidget::backRequested, this, &MainWindow::navigateBack);
     connect(m_dayBookWidget, &MahadevERP::DayBookWidget::alterVoucherRequested, this, &MainWindow::onLedgerAlterVoucherRequested);
     m_stackedWidget->addWidget(m_dayBookWidget);
 
     // Index 15: Native C++ GST Compliance & Returns Widget (View 34)
     m_gstrReportsWidget = new MahadevERP::GstrReportsWidget(m_printExportCtrl, this);
-    connect(m_gstrReportsWidget, &MahadevERP::GstrReportsWidget::backRequested, this, [this]() { navigateToView(0); });
+    connect(m_gstrReportsWidget, &MahadevERP::GstrReportsWidget::backRequested, this, &MainWindow::navigateBack);
     m_stackedWidget->addWidget(m_gstrReportsWidget);
 
     // Index 16: Native C++ Milling Statement & Out-turn Register (View 35)
     m_millingStatementWidget = new MahadevERP::MillingStatementWidget(m_printExportCtrl, this);
-    connect(m_millingStatementWidget, &MahadevERP::MillingStatementWidget::backRequested, this, [this]() { navigateToView(0); });
+    connect(m_millingStatementWidget, &MahadevERP::MillingStatementWidget::backRequested, this, &MainWindow::navigateBack);
     connect(m_millingStatementWidget, &MahadevERP::MillingStatementWidget::newBatchRequested, this, [this]() { navigateToView(31); });
     m_stackedWidget->addWidget(m_millingStatementWidget);
 
     // Index 17: Native C++ Custom Closing Stock & Valuation Register (View 36)
     m_customClosingStockWidget = new MahadevERP::CustomClosingStockWidget(m_printExportCtrl, this);
-    connect(m_customClosingStockWidget, &MahadevERP::CustomClosingStockWidget::backRequested, this, [this]() { navigateToView(0); });
+    connect(m_customClosingStockWidget, &MahadevERP::CustomClosingStockWidget::backRequested, this, &MainWindow::navigateBack);
     m_stackedWidget->addWidget(m_customClosingStockWidget);
 
     // Index 18: Native C++ New Group Widget (View 9)
     m_newGroupWidget = new MahadevERP::NewGroupWidget(m_groupsModel, this);
-    connect(m_newGroupWidget, &MahadevERP::NewGroupWidget::backRequested, this, [this]() { navigateToView(0); });
-    connect(m_newGroupWidget, &MahadevERP::NewGroupWidget::savedSuccess, this, [this]() { navigateToView(0); });
+    connect(m_newGroupWidget, &MahadevERP::NewGroupWidget::backRequested, this, &MainWindow::navigateBack);
+    connect(m_newGroupWidget, &MahadevERP::NewGroupWidget::savedSuccess, this, &MainWindow::navigateBack);
     m_stackedWidget->addWidget(m_newGroupWidget);
 
     // Index 19: Native C++ Modify Group Widget (View 10)
     m_modifyGroupWidget = new MahadevERP::ModifyGroupWidget(m_groupsModel, this);
-    connect(m_modifyGroupWidget, &MahadevERP::ModifyGroupWidget::backRequested, this, [this]() { navigateToView(0); });
-    connect(m_modifyGroupWidget, &MahadevERP::ModifyGroupWidget::savedSuccess, this, [this]() { navigateToView(0); });
+    connect(m_modifyGroupWidget, &MahadevERP::ModifyGroupWidget::backRequested, this, &MainWindow::navigateBack);
+    connect(m_modifyGroupWidget, &MahadevERP::ModifyGroupWidget::savedSuccess, this, &MainWindow::navigateBack);
     m_stackedWidget->addWidget(m_modifyGroupWidget);
 
     // Index 20: Native C++ New Stock Item Widget (View 11)
     m_newStockItemWidget = new MahadevERP::NewStockItemWidget(m_stockMasterCtrl, m_stockItemsModel, this);
-    connect(m_newStockItemWidget, &MahadevERP::NewStockItemWidget::backRequested, this, [this]() { navigateToView(0); });
-    connect(m_newStockItemWidget, &MahadevERP::NewStockItemWidget::savedSuccess, this, [this]() { navigateToView(0); });
+    connect(m_newStockItemWidget, &MahadevERP::NewStockItemWidget::backRequested, this, &MainWindow::navigateBack);
+    connect(m_newStockItemWidget, &MahadevERP::NewStockItemWidget::savedSuccess, this, &MainWindow::navigateBack);
     m_stackedWidget->addWidget(m_newStockItemWidget);
 
     // Index 21: Native C++ Modify Stock Item Widget (View 12)
     m_modifyStockItemWidget = new MahadevERP::ModifyStockItemWidget(m_stockMasterCtrl, m_stockItemsModel, this);
-    connect(m_modifyStockItemWidget, &MahadevERP::ModifyStockItemWidget::backRequested, this, [this]() { navigateToView(0); });
-    connect(m_modifyStockItemWidget, &MahadevERP::ModifyStockItemWidget::savedSuccess, this, [this]() { navigateToView(0); });
+    connect(m_modifyStockItemWidget, &MahadevERP::ModifyStockItemWidget::backRequested, this, &MainWindow::navigateBack);
+    connect(m_modifyStockItemWidget, &MahadevERP::ModifyStockItemWidget::savedSuccess, this, &MainWindow::navigateBack);
     m_stackedWidget->addWidget(m_modifyStockItemWidget);
 
     // Index 22: Native C++ Sales Register Widget (View 3)
     m_salesRegisterWidget = new MahadevERP::SalesRegisterWidget(m_salesRegisterCtrl, m_printExportCtrl, this);
-    connect(m_salesRegisterWidget, &MahadevERP::SalesRegisterWidget::backRequested, this, [this]() { navigateToView(0); });
+    connect(m_salesRegisterWidget, &MahadevERP::SalesRegisterWidget::backRequested, this, &MainWindow::navigateBack);
     connect(m_salesRegisterWidget, &MahadevERP::SalesRegisterWidget::alterInvoiceRequested, this, &MainWindow::onLedgerAlterVoucherRequested);
     connect(m_salesRegisterWidget, &MahadevERP::SalesRegisterWidget::newInvoiceRequested, this, [this]() { navigateToView(14); });
     m_stackedWidget->addWidget(m_salesRegisterWidget);
 
     // Index 23: Native C++ Purchase Register Widget (View 4 / 21)
     m_purchaseRegisterWidget = new MahadevERP::PurchaseRegisterWidget(m_purchaseRegisterCtrl, m_printExportCtrl, this);
-    connect(m_purchaseRegisterWidget, &MahadevERP::PurchaseRegisterWidget::backRequested, this, [this]() { navigateToView(0); });
+    connect(m_purchaseRegisterWidget, &MahadevERP::PurchaseRegisterWidget::backRequested, this, &MainWindow::navigateBack);
     connect(m_purchaseRegisterWidget, &MahadevERP::PurchaseRegisterWidget::alterBillRequested, this, &MainWindow::onLedgerAlterVoucherRequested);
     connect(m_purchaseRegisterWidget, &MahadevERP::PurchaseRegisterWidget::newBillRequested, this, [this]() { navigateToView(15); });
     m_stackedWidget->addWidget(m_purchaseRegisterWidget);
 
     // Index 24: Native C++ Stock Detail Widget (View 13)
     m_stockDetailWidget = new MahadevERP::StockDetailWidget(m_stockRegisterCtrl, m_printExportCtrl, this);
-    connect(m_stockDetailWidget, &MahadevERP::StockDetailWidget::backRequested, this, [this]() { navigateToView(0); });
+    connect(m_stockDetailWidget, &MahadevERP::StockDetailWidget::backRequested, this, &MainWindow::navigateBack);
     m_stackedWidget->addWidget(m_stockDetailWidget);
 
     // Index 25: Native C++ Paddy Procurement Widget (View 1)
     m_paddyProcurementWidget = new MahadevERP::PaddyProcurementWidget(m_paddyModel, m_paddyProcurementCtrl, m_printExportCtrl, this);
-    connect(m_paddyProcurementWidget, &MahadevERP::PaddyProcurementWidget::backRequested, this, [this]() { navigateToView(0); });
+    connect(m_paddyProcurementWidget, &MahadevERP::PaddyProcurementWidget::backRequested, this, &MainWindow::navigateBack);
     m_stackedWidget->addWidget(m_paddyProcurementWidget);
 
     // Index 26: Native C++ Milling Voucher Widget (View 31)
     m_millingVoucherWidget = new MahadevERP::MillingVoucherWidget(m_millingBatchCtrl, m_millingModel, m_printExportCtrl, this);
-    connect(m_millingVoucherWidget, &MahadevERP::MillingVoucherWidget::backRequested, this, [this]() { navigateToView(0); });
+    connect(m_millingVoucherWidget, &MahadevERP::MillingVoucherWidget::backRequested, this, &MainWindow::navigateBack);
     connect(m_millingVoucherWidget, &MahadevERP::MillingVoucherWidget::batchSaved, this, [this](const QString& batchNo) {
         Q_UNUSED(batchNo);
-        navigateToView(0);
+        navigateBack();
     });
     m_stackedWidget->addWidget(m_millingVoucherWidget);
 
     // Index 27: Native C++ TDS Voucher Widget (View 24)
     m_tdsVoucherWidget = new MahadevERP::TdsVoucherWidget(m_tdsVoucherCtrl, m_printExportCtrl, this);
-    connect(m_tdsVoucherWidget, &MahadevERP::TdsVoucherWidget::backRequested, this, [this]() { navigateToView(0); });
+    connect(m_tdsVoucherWidget, &MahadevERP::TdsVoucherWidget::backRequested, this, &MainWindow::navigateBack);
     connect(m_tdsVoucherWidget, &MahadevERP::TdsVoucherWidget::voucherSaved, this, [this](int voucherNo) {
         Q_UNUSED(voucherNo);
-        navigateToView(0);
+        navigateBack();
     });
     m_stackedWidget->addWidget(m_tdsVoucherWidget);
 
     // Index 28: Native C++ Interest Calculator Widget (View 25)
     m_interestCalcWidget = new MahadevERP::InterestCalculatorWidget(m_interestModel, m_printExportCtrl, this);
-    connect(m_interestCalcWidget, &MahadevERP::InterestCalculatorWidget::backRequested, this, [this]() { navigateToView(0); });
+    connect(m_interestCalcWidget, &MahadevERP::InterestCalculatorWidget::backRequested, this, &MainWindow::navigateBack);
     m_stackedWidget->addWidget(m_interestCalcWidget);
 
     // Index 29: Native C++ Bank Statement Import Widget (View 26)
     m_bankStatementWidget = new MahadevERP::BankStatementImportWidget(m_bankStatementCtrl, m_printExportCtrl, this);
-    connect(m_bankStatementWidget, &MahadevERP::BankStatementImportWidget::backRequested, this, [this]() { navigateToView(0); });
-    connect(m_bankStatementWidget, &MahadevERP::BankStatementImportWidget::importCompleted, this, [this]() { navigateToView(0); });
+    connect(m_bankStatementWidget, &MahadevERP::BankStatementImportWidget::backRequested, this, &MainWindow::navigateBack);
+    connect(m_bankStatementWidget, &MahadevERP::BankStatementImportWidget::importCompleted, this, &MainWindow::navigateBack);
     m_stackedWidget->addWidget(m_bankStatementWidget);
 
     // Index 30: Native C++ Transport Dispatch Widget (View 27)
     m_transportDispatchWidget = new MahadevERP::TransportDispatchWidget(m_transportDispatchCtrl, m_printExportCtrl, this);
-    connect(m_transportDispatchWidget, &MahadevERP::TransportDispatchWidget::backRequested, this, [this]() { navigateToView(0); });
+    connect(m_transportDispatchWidget, &MahadevERP::TransportDispatchWidget::backRequested, this, &MainWindow::navigateBack);
     m_stackedWidget->addWidget(m_transportDispatchWidget);
 
     // Index 31: Native C++ Debit / Credit Note Widget (View 28)
     m_debitCreditNoteWidget = new MahadevERP::DebitCreditNoteWidget(m_debitCreditNoteCtrl, m_printExportCtrl, this);
-    connect(m_debitCreditNoteWidget, &MahadevERP::DebitCreditNoteWidget::backRequested, this, [this]() { navigateToView(0); });
+    connect(m_debitCreditNoteWidget, &MahadevERP::DebitCreditNoteWidget::backRequested, this, &MainWindow::navigateBack);
     connect(m_debitCreditNoteWidget, &MahadevERP::DebitCreditNoteWidget::noteSaved, this, [this](const QString& noteNo) {
         Q_UNUSED(noteNo);
-        navigateToView(0);
+        navigateBack();
     });
     m_stackedWidget->addWidget(m_debitCreditNoteWidget);
 
@@ -290,7 +290,7 @@ MainWindow::MainWindow(const MainWindowDependencies& deps, QWidget* parent)
 
     // Index 32: TDS Vouchers List (View 50)
     m_tdsVouchersListWidget = new MahadevERP::TdsVouchersListWidget(m_tdsVoucherCtrl, this);
-    connect(m_tdsVouchersListWidget, &MahadevERP::TdsVouchersListWidget::backRequested, this, [this]() { navigateToView(0); });
+    connect(m_tdsVouchersListWidget, &MahadevERP::TdsVouchersListWidget::backRequested, this, &MainWindow::navigateBack);
     connect(m_tdsVouchersListWidget, &MahadevERP::TdsVouchersListWidget::newVoucherRequested, this, [this]() { navigateToView(24); });
     connect(m_tdsVouchersListWidget, &MahadevERP::TdsVouchersListWidget::editVoucherRequested, this, [this](int id) {
         m_pendingEditVoucherId = id;
@@ -300,13 +300,13 @@ MainWindow::MainWindow(const MainWindowDependencies& deps, QWidget* parent)
 
     // Index 33: Tax Challan Creation (View 51)
     m_taxChallanCreationWidget = new MahadevERP::TaxChallanCreationWidget(m_taxChallanCtrl, this);
-    connect(m_taxChallanCreationWidget, &MahadevERP::TaxChallanCreationWidget::backRequested, this, [this]() { navigateToView(52); });
+    connect(m_taxChallanCreationWidget, &MahadevERP::TaxChallanCreationWidget::backRequested, this, &MainWindow::navigateBack);
     connect(m_taxChallanCreationWidget, &MahadevERP::TaxChallanCreationWidget::challanSaved, this, [this]() { navigateToView(52); });
     m_stackedWidget->addWidget(m_taxChallanCreationWidget);
 
     // Index 34: Tax Challan Register (View 52)
     m_taxChallanRegisterWidget = new MahadevERP::TaxChallanRegisterWidget(m_taxChallanCtrl, "TDS", this);
-    connect(m_taxChallanRegisterWidget, &MahadevERP::TaxChallanRegisterWidget::backRequested, this, [this]() { navigateToView(0); });
+    connect(m_taxChallanRegisterWidget, &MahadevERP::TaxChallanRegisterWidget::backRequested, this, &MainWindow::navigateBack);
     connect(m_taxChallanRegisterWidget, &MahadevERP::TaxChallanRegisterWidget::newChallanRequested, this, [this](const QString& type) {
         m_taxChallanCreationWidget->setTaxType(type);
         navigateToView(51);
@@ -315,31 +315,31 @@ MainWindow::MainWindow(const MainWindowDependencies& deps, QWidget* parent)
 
     // Index 35: TCS Receipt Voucher (View 53)
     m_tcsReceiptVoucherWidget = new MahadevERP::TcsReceiptVoucherWidget(m_tcsReceiptVoucherCtrl, this);
-    connect(m_tcsReceiptVoucherWidget, &MahadevERP::TcsReceiptVoucherWidget::backRequested, this, [this]() { navigateToView(0); });
+    connect(m_tcsReceiptVoucherWidget, &MahadevERP::TcsReceiptVoucherWidget::backRequested, this, &MainWindow::navigateBack);
     connect(m_tcsReceiptVoucherWidget, &MahadevERP::TcsReceiptVoucherWidget::voucherSaved, this, [this]() { navigateToView(54); });
     m_stackedWidget->addWidget(m_tcsReceiptVoucherWidget);
 
     // Index 36: TCS Receipt List (View 54)
     m_tcsReceiptListWidget = new MahadevERP::TcsReceiptListWidget(m_tcsReceiptVoucherCtrl, this);
-    connect(m_tcsReceiptListWidget, &MahadevERP::TcsReceiptListWidget::backRequested, this, [this]() { navigateToView(0); });
+    connect(m_tcsReceiptListWidget, &MahadevERP::TcsReceiptListWidget::backRequested, this, &MainWindow::navigateBack);
     connect(m_tcsReceiptListWidget, &MahadevERP::TcsReceiptListWidget::newReceiptRequested, this, [this]() { navigateToView(53); });
     m_stackedWidget->addWidget(m_tcsReceiptListWidget);
 
     // Index 37: Advance Payment 194-Q (View 55)
     m_advancePayment194QWidget = new MahadevERP::AdvancePayment194QWidget(this);
-    connect(m_advancePayment194QWidget, &MahadevERP::AdvancePayment194QWidget::backRequested, this, [this]() { navigateToView(0); });
+    connect(m_advancePayment194QWidget, &MahadevERP::AdvancePayment194QWidget::backRequested, this, &MainWindow::navigateBack);
     connect(m_advancePayment194QWidget, &MahadevERP::AdvancePayment194QWidget::voucherSaved, this, [this]() { navigateToView(56); });
     m_stackedWidget->addWidget(m_advancePayment194QWidget);
 
     // Index 38: Advance Payment 194-Q List (View 56)
     m_advancePayment194QListWidget = new MahadevERP::AdvancePayment194QListWidget(this);
-    connect(m_advancePayment194QListWidget, &MahadevERP::AdvancePayment194QListWidget::backRequested, this, [this]() { navigateToView(0); });
+    connect(m_advancePayment194QListWidget, &MahadevERP::AdvancePayment194QListWidget::backRequested, this, &MainWindow::navigateBack);
     connect(m_advancePayment194QListWidget, &MahadevERP::AdvancePayment194QListWidget::newVoucherRequested, this, [this]() { navigateToView(55); });
     m_stackedWidget->addWidget(m_advancePayment194QListWidget);
 
     // Index 39: Form-16A Received List (View 57)
     m_form16AListWidget = new MahadevERP::Form16AListWidget(this);
-    connect(m_form16AListWidget, &MahadevERP::Form16AListWidget::backRequested, this, [this]() { navigateToView(0); });
+    connect(m_form16AListWidget, &MahadevERP::Form16AListWidget::backRequested, this, &MainWindow::navigateBack);
     connect(m_form16AListWidget, &MahadevERP::Form16AListWidget::newCertificateRequested, this, [this]() {
         MahadevERP::Form16AEntryDialog dlg(this);
         if (dlg.exec() == QDialog::Accepted) {
@@ -354,19 +354,19 @@ MainWindow::MainWindow(const MainWindowDependencies& deps, QWidget* parent)
 
     // Index 40: Trial Balance Widget (View 39)
     m_trialBalanceWidget = new MahadevERP::TrialBalanceWidget(m_trialBalanceCtrl, m_printExportCtrl, this);
-    connect(m_trialBalanceWidget, &MahadevERP::TrialBalanceWidget::backRequested, this, [this]() { navigateToView(0); });
+    connect(m_trialBalanceWidget, &MahadevERP::TrialBalanceWidget::backRequested, this, &MainWindow::navigateBack);
     connect(m_trialBalanceWidget, &MahadevERP::TrialBalanceWidget::openLedgerRequested, this, &MainWindow::openStatementForParty);
     m_stackedWidget->addWidget(m_trialBalanceWidget);
 
     // Index 41: Capital Accounts Schedule Widget (View 40)
     m_capitalAccountsWidget = new MahadevERP::CapitalAccountsWidget(m_capitalAccountsCtrl, m_printExportCtrl, this);
-    connect(m_capitalAccountsWidget, &MahadevERP::CapitalAccountsWidget::backRequested, this, [this]() { navigateToView(0); });
+    connect(m_capitalAccountsWidget, &MahadevERP::CapitalAccountsWidget::backRequested, this, &MainWindow::navigateBack);
     connect(m_capitalAccountsWidget, &MahadevERP::CapitalAccountsWidget::openLedgerRequested, this, &MainWindow::openStatementForParty);
     m_stackedWidget->addWidget(m_capitalAccountsWidget);
 
     // Index 42: Depreciation Chart Widget (View 41)
     m_depreciationChartWidget = new MahadevERP::DepreciationChartWidget(m_printExportCtrl, this);
-    connect(m_depreciationChartWidget, &MahadevERP::DepreciationChartWidget::backRequested, this, [this]() { navigateToView(0); });
+    connect(m_depreciationChartWidget, &MahadevERP::DepreciationChartWidget::backRequested, this, &MainWindow::navigateBack);
     connect(m_depreciationChartWidget, &MahadevERP::DepreciationChartWidget::openLedgerRequested, this, &MainWindow::openStatementForParty);
     connect(m_depreciationChartWidget, &MahadevERP::DepreciationChartWidget::makeNewLedgerRequested, this, [this]() { navigateToView(6); });
     m_stackedWidget->addWidget(m_depreciationChartWidget);
@@ -405,7 +405,7 @@ MainWindow::MainWindow(const MainWindowDependencies& deps, QWidget* parent)
     m_keyboardCtrl = new AppKeyboardController(this, this);
 
     // Global MenuTreeManager Integration
-    connect(&MahadevERP::MenuTreeManager::instance(), &MahadevERP::MenuTreeManager::openViewRequested, this, &MainWindow::navigateToView);
+    connect(&MahadevERP::MenuTreeManager::instance(), &MahadevERP::MenuTreeManager::openViewRequested, this, [this](int v) { navigateToView(v); });
 
     auto& menuMgr = MahadevERP::MenuTreeManager::instance();
     // TDS Deposit Challans (index 2 in tds_options)
@@ -784,8 +784,20 @@ void MainWindow::openAccountingPeriodDialog() {
 }
 
 void MainWindow::navigateToView(int viewIndex) {
+    navigateToView(viewIndex, true);
+}
+
+void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
     if (m_isNavigating) return;
     m_isNavigating = true;
+
+    int curIdx = currentViewIndex();
+    if (pushToHistory && curIdx != viewIndex && curIdx != 0 && curIdx != 22) {
+        m_viewHistoryStack.append(curIdx);
+    }
+    if (viewIndex == 0 || viewIndex == 22) {
+        m_viewHistoryStack.clear();
+    }
 
     QString pendingInv = m_pendingEditInvoiceNo;
     QString pendingVNo = m_pendingEditVoucherNo;
@@ -797,7 +809,7 @@ void MainWindow::navigateToView(int viewIndex) {
     m_pendingEditVoucherId = 0;
     m_pendingEditVoucherDate.clear();
 
-    qDebug() << "[NAV] navigateToView viewIndex:" << viewIndex << "pendingInv:" << pendingInv << "pendingVNo:" << pendingVNo << "pendingId:" << pendingId << "pendingDate:" << pendingDate;
+    qDebug() << "[NAV] navigateToView viewIndex:" << viewIndex << "pushToHistory:" << pushToHistory << "stackSize:" << m_viewHistoryStack.size();
 
     if (viewIndex == 0) {
         if (m_dashboardWidget) {
@@ -1203,189 +1215,142 @@ void MainWindow::openTcsOptions() {
     MahadevERP::MenuTreeManager::instance().executeMenu("tcs_options", this);
 }
 
+void MainWindow::navigateBack() {
+    int vIdx = currentViewIndex();
+
+    // 1. If we have drilled down from another view in m_viewHistoryStack:
+    while (!m_viewHistoryStack.isEmpty()) {
+        int prevView = m_viewHistoryStack.takeLast();
+        if (prevView != vIdx && prevView != 0 && prevView != 22) {
+            navigateToView(prevView, false /* don't push back onto history */);
+            return;
+        }
+    }
+
+    // 2. If MenuTreeManager has an active menu stack:
+    if (MahadevERP::MenuTreeManager::instance().hasActiveStack()) {
+        navigateToView(0, false);
+        MahadevERP::MenuTreeManager::instance().resumeMenuStack(this);
+        return;
+    }
+
+    // 3. Fallback to Dashboard
+    if (vIdx != 0) {
+        navigateToView(0, false);
+    }
+}
+
 void MainWindow::openStatementForParty(const QString& partyName) {
-    m_previousViewIndex = currentViewIndex();
     m_targetStatementParty = partyName;
     FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
     m_lastViewedStatementFromDate = activeFy.startDate;
     m_lastViewedStatementToDate = activeFy.endDate;
     m_lastViewedStatementSide = "Dr";
     m_lastViewedStatementIndex = 0;
-    navigateToView(8);
+    navigateToView(8, true);
 }
 
 void MainWindow::onLedgerBackRequested() {
-    m_targetStatementParty.clear();
-    m_lastViewedStatementFromDate.clear();
-    m_lastViewedStatementToDate.clear();
-    if (m_previousViewIndex == 29) {
-        m_previousViewIndex = 0;
-        navigateToView(29);
-        return;
-    }
-    if (m_previousViewIndex == 30) {
-        m_previousViewIndex = 0;
-        navigateToView(30);
-        return;
-    }
-    if (m_previousViewIndex == 39) {
-        m_previousViewIndex = 0;
-        navigateToView(39);
-        return;
-    }
-    if (m_previousViewIndex == 40) {
-        m_previousViewIndex = 0;
-        navigateToView(40);
-        return;
-    }
-    if (m_previousViewIndex == 41) {
-        m_previousViewIndex = 0;
-        navigateToView(41);
-        return;
-    }
-    navigateToView(0);
+    navigateBack();
 }
 
 void MainWindow::onSalesVoucherBackRequested() {
-    if (m_previousViewIndex == 8) {
-        m_previousViewIndex = 0;
-        navigateToView(8);
-        return;
-    }
-    navigateToView(0);
+    navigateBack();
 }
 
 void MainWindow::onSalesVoucherSaved(const QString& invoiceNo) {
     Q_UNUSED(invoiceNo);
-    if (m_previousViewIndex == 8) {
-        m_previousViewIndex = 0;
-        navigateToView(8);
-        return;
-    }
-    navigateToView(0);
+    navigateBack();
 }
 
 void MainWindow::onPurchaseVoucherBackRequested() {
-    if (m_previousViewIndex == 8) {
-        m_previousViewIndex = 0;
-        navigateToView(8);
-        return;
-    }
-    navigateToView(0);
+    navigateBack();
 }
 
 void MainWindow::onPurchaseVoucherSaved(const QString& invoiceNo) {
     Q_UNUSED(invoiceNo);
-    if (m_previousViewIndex == 8) {
-        m_previousViewIndex = 0;
-        navigateToView(8);
-        return;
-    }
-    navigateToView(0);
+    navigateBack();
 }
 
 void MainWindow::onChequeVoucherBackRequested() {
-    if (m_previousViewIndex == 8) {
-        m_previousViewIndex = 0;
-        navigateToView(8);
-        return;
-    }
-    navigateToView(0);
+    navigateBack();
 }
 
 void MainWindow::onChequeVoucherSaved(const QString& voucherNo) {
     Q_UNUSED(voucherNo);
-    if (m_previousViewIndex == 8) {
-        m_previousViewIndex = 0;
-        navigateToView(8);
-        return;
-    }
-    navigateToView(0);
+    navigateBack();
 }
 
 void MainWindow::onJournalVoucherBackRequested() {
-    if (m_previousViewIndex == 8) {
-        m_previousViewIndex = 0;
-        navigateToView(8);
-        return;
-    }
-    navigateToView(0);
+    navigateBack();
 }
 
 void MainWindow::onJournalVoucherSaved(const QString& voucherNo) {
     Q_UNUSED(voucherNo);
-    if (m_previousViewIndex == 8) {
-        m_previousViewIndex = 0;
-        navigateToView(8);
-        return;
-    }
-    navigateToView(0);
+    navigateBack();
 }
 
 void MainWindow::onNewLedgerBackRequested() {
-    navigateToView(0);
+    navigateBack();
 }
 
 void MainWindow::onNewLedgerSaved() {
-    navigateToView(0);
+    navigateBack();
 }
 
 void MainWindow::onModifyLedgerBackRequested() {
-    navigateToView(0);
+    navigateBack();
 }
 
 void MainWindow::onModifyLedgerSaved() {
-    navigateToView(0);
+    navigateBack();
 }
 
 void MainWindow::onJFormVoucherBackRequested() {
-    navigateToView(0);
+    navigateBack();
 }
 
 void MainWindow::onJFormVoucherSaved(const QString& jformNo) {
     Q_UNUSED(jformNo);
-    navigateToView(0);
+    navigateBack();
 }
 
 void MainWindow::onIFormVoucherBackRequested() {
-    navigateToView(0);
+    navigateBack();
 }
 
 void MainWindow::onIFormVoucherSaved(const QString& iformNo) {
     Q_UNUSED(iformNo);
-    navigateToView(0);
+    navigateBack();
 }
 
 void MainWindow::onMandiReportsBackRequested() {
-    navigateToView(0);
+    navigateBack();
 }
 
 void MainWindow::onBalanceSheetBackRequested() {
-    navigateToView(0);
+    navigateBack();
 }
 
 void MainWindow::onBalanceSheetPartyStatementRequested(const QString& partyName, const QString& fromDate, const QString& toDate) {
-    m_previousViewIndex = 29;
     m_targetStatementParty = partyName;
     m_lastViewedStatementFromDate = fromDate;
     m_lastViewedStatementToDate = toDate;
-    navigateToView(8);
+    navigateToView(8, true);
 }
 
 void MainWindow::onProfitLossBackRequested() {
-    navigateToView(0);
+    navigateBack();
 }
 
 void MainWindow::onProfitLossPartyStatementRequested(const QString& partyName, const QString& fromDate, const QString& toDate) {
-    m_previousViewIndex = 30;
     m_targetStatementParty = partyName;
     m_lastViewedStatementFromDate = fromDate;
     m_lastViewedStatementToDate = toDate;
-    navigateToView(8);
+    navigateToView(8, true);
 }
 
 void MainWindow::onLedgerAlterVoucherRequested(int targetViewIndex, const QVariantMap& entry) {
-    m_previousViewIndex = currentViewIndex();
     m_pendingEditInvoiceNo = entry.value("invoiceNo", entry.value("voucherNo", "")).toString();
     m_pendingEditVoucherNo = entry.value("voucherNo", "").toString();
     m_pendingEditVoucherId = entry.value("id", 0).toInt();
@@ -1393,7 +1358,7 @@ void MainWindow::onLedgerAlterVoucherRequested(int targetViewIndex, const QVaria
     if (entry.contains("type")) {
         m_targetChequeMode = entry.value("type").toString();
     }
-    navigateToView(targetViewIndex);
+    navigateToView(targetViewIndex, true);
 }
 
 void MainWindow::closeEvent(QCloseEvent* event) {

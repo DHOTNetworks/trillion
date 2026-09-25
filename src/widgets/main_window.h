@@ -156,6 +156,8 @@ public:
 
 public slots:
     void navigateToView(int viewIndex);
+    void navigateToView(int viewIndex, bool pushToHistory);
+    void navigateBack();
     void openAccountingPeriodDialog();
     void openStatementForParty(const QString& partyName);
     void onLedgerBackRequested();
@@ -266,6 +268,7 @@ private:
 
     AppKeyboardController* m_keyboardCtrl = nullptr;
     int m_previousViewIndex = 0;
+    QVector<int> m_viewHistoryStack;
     bool m_isNavigating = false;
 
     // Navigation Transfer State
