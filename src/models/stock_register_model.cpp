@@ -321,6 +321,65 @@ void StockRegisterController::fetchRawData(const QString& fromDate, const QStrin
         double opMasterQty = itmMeta.value("opening_qty").toDouble();
         long long opMasterBags = itmMeta.value("opening_bags").toLongLong();
         double opMasterRate = itmMeta.value("opening_rate").toDouble();
+        if (opMasterRate <= 0.0 && opMasterQty > 0.0) {
+            opMasterRate = itmMeta.value("opening_value").toDouble() / opMasterQty;
+        }
+        if (opMasterRate <= 0.0) opMasterRate = itmMeta.value("purchase_rate", 0.0).toDouble();
+
+        double opQty = opMasterQty;
+        long long opBags = opMasterBags;
+        double opRate = opMasterRate;
+
+        // 1. Opening Stock from custom_closing_stocks or master opening
+        if (!fromDate.isEmpty()) {
+            QVariantList customRows = db.executeQuery(
+                "SELECT closing_date, bags, weight_qtl, rate, amount FROM custom_closing_stocks WHERE (item_id = ? OR item_name = ? OR item_code = ?) AND closing_date < ? ORDER BY closing_date DESC LIMIT 1;",
+                {itmId, itmName, itmCode, fromDate}
+            );
+            if (!customRows.isEmpty()) {
+                QVariantMap customRow = customRows.first().toMap();
+                QString cDate = customRow.value("closing_date").toString();
+                opBags = customRow.value("bags").toLongLong();
+                opQty = customRow.value("weight_qtl").toDouble();
+                if (customRow.value("rate").toDouble() > 0.0) {
+                    opRate = customRow.value("rate").toDouble();
+                }
+
+                // Add intermediate stock transactions between audited closing date and fromDate
+                QVariantList rInt = db.executeQuery(
+                    "SELECT "
+                    "SUM(CASE WHEN trans_type IN ('Purc', 'SlRn', 'Inward', 'P', 'M') THEN weight_qtl ELSE 0 END) AS in_wt, "
+                    "SUM(CASE WHEN trans_type IN ('Purc', 'SlRn', 'Inward', 'P', 'M') THEN bags ELSE 0 END) AS in_bg, "
+                    "SUM(CASE WHEN trans_type IN ('Sale', 'PrRn', 'Outward', 'S') THEN weight_qtl ELSE 0 END) AS out_wt, "
+                    "SUM(CASE WHEN trans_type IN ('Sale', 'PrRn', 'Outward', 'S') THEN bags ELSE 0 END) AS out_bg "
+                    "FROM stock_transactions "
+                    "WHERE (item_id = ? OR item_name = ? OR item_code = ?) AND voucher_date > ? AND voucher_date < ?;",
+                    {itmId, itmName, itmCode, cDate, fromDate}
+                );
+                if (!rInt.isEmpty()) {
+                    QVariantMap ri = rInt.first().toMap();
+                    opQty += (ri.value("in_wt").toDouble() - ri.value("out_wt").toDouble());
+                    opBags += (ri.value("in_bg").toLongLong() - ri.value("out_bg").toLongLong());
+                }
+            } else {
+                // If no custom_closing_stocks before fromDate, roll forward master opening with prior transactions
+                QVariantList rPrior = db.executeQuery(
+                    "SELECT "
+                    "SUM(CASE WHEN trans_type IN ('Purc', 'SlRn', 'Inward', 'P', 'M') THEN weight_qtl ELSE 0 END) AS in_wt, "
+                    "SUM(CASE WHEN trans_type IN ('Purc', 'SlRn', 'Inward', 'P', 'M') THEN bags ELSE 0 END) AS in_bg, "
+                    "SUM(CASE WHEN trans_type IN ('Sale', 'PrRn', 'Outward', 'S') THEN weight_qtl ELSE 0 END) AS out_wt, "
+                    "SUM(CASE WHEN trans_type IN ('Sale', 'PrRn', 'Outward', 'S') THEN bags ELSE 0 END) AS out_bg "
+                    "FROM stock_transactions "
+                    "WHERE (item_id = ? OR item_name = ? OR item_code = ?) AND voucher_date < ?;",
+                    {itmId, itmName, itmCode, fromDate}
+                );
+                if (!rPrior.isEmpty()) {
+                    QVariantMap rp = rPrior.first().toMap();
+                    opQty += (rp.value("in_wt").toDouble() - rp.value("out_wt").toDouble());
+                    opBags += (rp.value("in_bg").toLongLong() - rp.value("out_bg").toLongLong());
+                }
+            }
+        }
 
         if (!m_isDailyDetail) {
             // Monthly Timeline (Apr to Mar)
@@ -329,25 +388,8 @@ void StockRegisterController::fetchRawData(const QString& fromDate, const QStrin
             if (!sDate.isValid()) sDate = QDate(QDate::currentDate().year(), 4, 1);
             if (!eDate.isValid()) eDate = QDate::currentDate();
 
-            double runningQty = opMasterQty;
-            long long runningBags = opMasterBags;
-
-            // Compute opening before start date
-            QVariantList priorTx = db.executeQuery(
-                "SELECT "
-                "SUM(CASE WHEN trans_type IN ('Purc', 'SlRn', 'Inward', 'P', 'M') THEN weight_qtl ELSE 0 END) AS in_wt, "
-                "SUM(CASE WHEN trans_type IN ('Purc', 'SlRn', 'Inward', 'P', 'M') THEN bags ELSE 0 END) AS in_bg, "
-                "SUM(CASE WHEN trans_type IN ('Sale', 'PrRn', 'Outward', 'S') THEN weight_qtl ELSE 0 END) AS out_wt, "
-                "SUM(CASE WHEN trans_type IN ('Sale', 'PrRn', 'Outward', 'S') THEN bags ELSE 0 END) AS out_bg "
-                "FROM stock_transactions "
-                "WHERE (item_id = ? OR item_name = ? OR item_code = ?) AND voucher_date < ?;",
-                {itmId, itmName, itmCode, fromDate}
-            );
-            if (!priorTx.isEmpty()) {
-                QVariantMap p = priorTx.first().toMap();
-                runningQty += (p.value("in_wt").toDouble() - p.value("out_wt").toDouble());
-                runningBags += (p.value("in_bg").toLongLong() - p.value("out_bg").toLongLong());
-            }
+            double runningQty = opQty;
+            long long runningBags = opBags;
 
             // Iterate 12 months or range months
             QDate curMonthStart(sDate.year(), sDate.month(), 1);
@@ -386,7 +428,7 @@ void StockRegisterController::fetchRawData(const QString& fromDate, const QStrin
                 runningQty += (inWt - outWt);
                 runningBags += (inBg - outBg);
 
-                double vRate = opMasterRate;
+                double vRate = opRate;
                 if (inWt > 0.001 && inVal > 0.0) {
                     vRate = inVal / inWt;
                 }
@@ -431,24 +473,8 @@ void StockRegisterController::fetchRawData(const QString& fromDate, const QStrin
             }
         } else {
             // Daily Detail Movements
-            double runningQty = opMasterQty;
-            long long runningBags = opMasterBags;
-
-            QVariantList priorTx = db.executeQuery(
-                "SELECT "
-                "SUM(CASE WHEN trans_type IN ('Purc', 'SlRn', 'Inward', 'P', 'M') THEN weight_qtl ELSE 0 END) AS in_wt, "
-                "SUM(CASE WHEN trans_type IN ('Purc', 'SlRn', 'Inward', 'P', 'M') THEN bags ELSE 0 END) AS in_bg, "
-                "SUM(CASE WHEN trans_type IN ('Sale', 'PrRn', 'Outward', 'S') THEN weight_qtl ELSE 0 END) AS out_wt, "
-                "SUM(CASE WHEN trans_type IN ('Sale', 'PrRn', 'Outward', 'S') THEN bags ELSE 0 END) AS out_bg "
-                "FROM stock_transactions "
-                "WHERE (item_id = ? OR item_name = ? OR item_code = ?) AND voucher_date < ?;",
-                {itmId, itmName, itmCode, fromDate}
-            );
-            if (!priorTx.isEmpty()) {
-                QVariantMap p = priorTx.first().toMap();
-                runningQty += (p.value("in_wt").toDouble() - p.value("out_wt").toDouble());
-                runningBags += (p.value("in_bg").toLongLong() - p.value("out_bg").toLongLong());
-            }
+            double runningQty = opQty;
+            long long runningBags = opBags;
 
             // Opening Balance Row
             StockRegisterEntry opEntry;
@@ -464,9 +490,9 @@ void StockRegisterController::fetchRawData(const QString& fromDate, const QStrin
             opEntry.closeQtyVal = QString::number(runningQty, 'f', 2);
             opEntry.runningBalance = runningQty;
             opEntry.runningBalanceVal = QString::number(runningQty, 'f', 2);
-            opEntry.rate = opMasterRate;
-            opEntry.rateVal = formatINR(opMasterRate);
-            opEntry.closeVal = runningQty * opMasterRate;
+            opEntry.rate = opRate;
+            opEntry.rateVal = formatINR(opRate);
+            opEntry.closeVal = runningQty * opRate;
             opEntry.closeValVal = formatINR(opEntry.closeVal);
             m_allEntries.append(opEntry);
 
@@ -923,12 +949,25 @@ void StockRegisterController::applyFilter() {
         m_totalOpeningQty += e.opQty;
         m_totalInwardQty += e.inQty;
         m_totalOutwardQty += e.outQty;
-        m_totalClosingQty += e.closeQty;
-        m_totalClosingVal += e.closeVal;
+
+        if (m_viewMode != StockViewMode::MonthlyDaily) {
+            m_totalClosingQty += e.closeQty;
+            m_totalClosingVal += e.closeVal;
+        }
 
         m_totalSalesTurnover += e.salesValue;
         m_totalCogs += e.cogs;
         m_totalGrossProfit += e.grossProfit;
+    }
+
+    if (m_viewMode == StockViewMode::MonthlyDaily) {
+        if (!filtered.isEmpty()) {
+            m_totalClosingQty = filtered.last().closeQty;
+            m_totalClosingVal = filtered.last().closeVal;
+        } else {
+            m_totalClosingQty = 0.0;
+            m_totalClosingVal = 0.0;
+        }
     }
 
     m_overallGpMargin = (m_totalSalesTurnover > 0.001) ? ((m_totalGrossProfit / m_totalSalesTurnover) * 100.0) : 0.0;

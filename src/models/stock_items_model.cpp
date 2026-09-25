@@ -922,8 +922,10 @@ QVariantList StockItemsModel::get_item_movements(const QString& itemName, const 
         double opVal = 0.0;
 
         QVariantList customRows = DatabaseManager::instance().executeQuery(
-            "SELECT closing_date, bags, weight_qtl, rate, amount FROM custom_closing_stocks WHERE item_name = ? AND closing_date < ? ORDER BY closing_date DESC LIMIT 1;",
-            {itemName, fromDate}
+            "SELECT closing_date, bags, weight_qtl, rate, amount FROM custom_closing_stocks "
+            "WHERE (item_name = ? OR item_id = (SELECT id FROM stock_items WHERE name = ? LIMIT 1) OR item_code = (SELECT code FROM stock_items WHERE name = ? LIMIT 1)) "
+            "AND closing_date < ? ORDER BY closing_date DESC LIMIT 1;",
+            {itemName, itemName, itemName, fromDate}
         );
         if (!customRows.isEmpty()) {
             QVariantMap c = customRows.first().toMap();
@@ -942,8 +944,8 @@ QVariantList StockItemsModel::get_item_movements(const QString& itemName, const 
                 "SUM(CASE WHEN trans_type IN ('Sale', 'PrRn', 'Outward', 'S') THEN bags ELSE 0 END) AS out_bg, "
                 "SUM(CASE WHEN trans_type IN ('Sale', 'PrRn', 'Outward', 'S') THEN amount ELSE 0 END) AS out_amt "
                 "FROM stock_transactions "
-                "WHERE item_name = ? AND voucher_date > ? AND voucher_date < ?;",
-                {itemName, cDate, fromDate}
+                "WHERE (item_name = ? OR item_id = (SELECT id FROM stock_items WHERE name = ? LIMIT 1) OR item_code = (SELECT code FROM stock_items WHERE name = ? LIMIT 1)) AND voucher_date > ? AND voucher_date < ?;",
+                {itemName, itemName, itemName, cDate, fromDate}
             );
             if (!rInt.isEmpty()) {
                 QVariantMap ri = rInt.first().toMap();
@@ -953,8 +955,8 @@ QVariantList StockItemsModel::get_item_movements(const QString& itemName, const 
             }
         } else {
             QVariantList itmRows = DatabaseManager::instance().executeQuery(
-                "SELECT opening_qty, opening_bags, opening_rate, opening_value FROM stock_items WHERE name = ? LIMIT 1;",
-                {itemName}
+                "SELECT opening_qty, opening_bags, opening_rate, opening_value FROM stock_items WHERE name = ? OR code = ? LIMIT 1;",
+                {itemName, itemName}
             );
             if (!itmRows.isEmpty()) {
                 QVariantMap itm = itmRows.first().toMap();
@@ -972,8 +974,8 @@ QVariantList StockItemsModel::get_item_movements(const QString& itemName, const 
                 "SUM(CASE WHEN trans_type IN ('Sale', 'PrRn', 'Outward', 'S') THEN bags ELSE 0 END) AS out_bg, "
                 "SUM(CASE WHEN trans_type IN ('Sale', 'PrRn', 'Outward', 'S') THEN amount ELSE 0 END) AS out_amt "
                 "FROM stock_transactions "
-                "WHERE item_name = ? AND voucher_date < ?;",
-                {itemName, fromDate}
+                "WHERE (item_name = ? OR item_id = (SELECT id FROM stock_items WHERE name = ? LIMIT 1) OR item_code = (SELECT code FROM stock_items WHERE name = ? LIMIT 1)) AND voucher_date < ?;",
+                {itemName, itemName, itemName, fromDate}
             );
             if (!rPrior.isEmpty()) {
                 QVariantMap rp = rPrior.first().toMap();
@@ -1029,8 +1031,8 @@ QVariantList StockItemsModel::get_item_movements(const QString& itemName, const 
     }
 
     // 3. Inwards & Outwards from stock_transactions
-    QString stSql = "SELECT voucher_date, COALESCE(bill_no, voucher_no, '') AS ref_no, trans_type, party_name, bags, weight_qtl, rate, amount, financial_year FROM stock_transactions WHERE (item_name = ? OR item_id = (SELECT id FROM stock_items WHERE name = ? LIMIT 1))";
-    QVariantList stParams = {itemName, itemName};
+    QString stSql = "SELECT voucher_date, COALESCE(bill_no, voucher_no, '') AS ref_no, trans_type, party_name, bags, weight_qtl, rate, amount, financial_year FROM stock_transactions WHERE (item_name = ? OR item_id = (SELECT id FROM stock_items WHERE name = ? LIMIT 1) OR item_code = (SELECT code FROM stock_items WHERE name = ? LIMIT 1))";
+    QVariantList stParams = {itemName, itemName, itemName};
     if (!fromDate.isEmpty() && !toDate.isEmpty()) {
         stSql += " AND voucher_date >= ? AND voucher_date <= ?";
         stParams << fromDate << toDate;

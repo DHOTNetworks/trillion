@@ -681,10 +681,41 @@ void StockDetailWidget::onTableDoubleClicked(int row, int col) {
     Q_UNUSED(col);
     if (row < 0 || row >= m_table->rowCount()) return;
 
-    QString itemName = m_table->item(row, 0) ? m_table->item(row, 0)->text() : "";
+    StockViewMode mode = m_controller ? m_controller->viewMode() : StockViewMode::OnlyStock;
+    QString itemName;
+    QDate sDate = m_fromDateEdit->date();
+    QDate eDate = m_toDateEdit->date();
+
+    if (mode == StockViewMode::MonthlyDaily) {
+        itemName = m_itemSelectorCombo->currentText();
+        int parenIdx = itemName.lastIndexOf('(');
+        if (parenIdx > 0) {
+            itemName = itemName.left(parenIdx).trimmed();
+        }
+
+        if (m_controller && row < m_controller->model()->entries().size()) {
+            const auto& entry = m_controller->model()->entries().at(row);
+            if (!m_controller->isDailyDetail()) {
+                QDate parsedMonth = QDate::fromString(entry.periodDate, "MMMM yyyy");
+                if (parsedMonth.isValid()) {
+                    sDate = QDate(parsedMonth.year(), parsedMonth.month(), 1);
+                    eDate = sDate.addMonths(1).addDays(-1);
+                }
+            } else {
+                QDate parsedDate = QDate::fromString(entry.periodDate, "dd-MM-yyyy");
+                if (parsedDate.isValid()) {
+                    sDate = parsedDate;
+                    eDate = parsedDate;
+                }
+            }
+        }
+    } else {
+        itemName = m_table->item(row, 0) ? m_table->item(row, 0)->text() : "";
+    }
+
     if (itemName.isEmpty()) return;
 
-    ItemMovementDialog dlg(itemName, m_fromDateEdit->date(), m_toDateEdit->date(), m_printExportCtrl, this);
+    ItemMovementDialog dlg(itemName, sDate, eDate, m_printExportCtrl, this);
     dlg.exec();
 }
 
