@@ -40,17 +40,6 @@ QVector<DepreciationAssetItem> DepreciationCalculator::calculateSchedule(const Q
         "ORDER BY name ASC;"
     );
 
-    // Fallback: If no assets found, insert a default sample asset like "Machinery A/c"
-    if (assetRows.isEmpty()) {
-        QVariantMap sample;
-        sample["id"] = 9991;
-        sample["name"] = "Machinery A/c";
-        sample["group_name"] = "Fixed Assets";
-        sample["opening_balance"] = 0.0;
-        sample["dr_cr"] = "Dr";
-        assetRows.append(sample);
-    }
-
     bool hasPostings = hasExistingDepreciationPostings(fromDate, toDate);
 
     for (const QVariant& v : assetRows) {

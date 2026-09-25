@@ -44,16 +44,6 @@ void CapitalAccountsController::calculate() {
         "WHERE group_name LIKE '%Capital%' OR name LIKE '%Capital%' ORDER BY name ASC;"
     );
 
-    if (capRows.isEmpty()) {
-        QVariantMap sample;
-        sample["id"] = 1;
-        sample["name"] = "Proprietor / Partner Capital A/c";
-        sample["group_name"] = "Capital A/c";
-        sample["opening_balance"] = 0.0;
-        sample["dr_cr"] = "Cr";
-        capRows.append(sample);
-    }
-
     // 2. Compute Net Profit from P&L Engine
     ProfitLossData pnl = ProfitLossCalculator::calculate(fromIso, toIso);
     double totalNetProfit = pnl.netProfit;

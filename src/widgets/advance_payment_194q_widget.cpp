@@ -287,43 +287,68 @@ void AdvancePayment194QWidget::onSaveClicked()
 
     int pId = 0;
     if (postBooks) {
-        QVariant fyVal = db.executeScalar("SELECT id FROM financial_years WHERE is_active = 1 LIMIT 1;");
-        if (!fyVal.isValid()) fyVal = db.executeScalar("SELECT id FROM financial_years ORDER BY id DESC LIMIT 1;");
-        int fyId = fyVal.isValid() ? fyVal.toInt() : 1;
+        QVariant fyVal = db.executeScalar("SELECT id, year_name FROM financial_years WHERE is_active = 1 LIMIT 1;");
+        if (!fyVal.isValid()) fyVal = db.executeScalar("SELECT id, year_name FROM financial_years ORDER BY id DESC LIMIT 1;");
+        int fyId = fyVal.isValid() ? fyVal.toMap().value("id", 1).toInt() : 1;
+        QString fyLabel = fyVal.isValid() ? fyVal.toMap().value("year_name", "").toString() : "";
 
-        QVariant nextVchNo = db.executeScalar("SELECT COALESCE(MAX(voucher_no), 0) + 1 FROM vouchers WHERE voucher_type = 'PAYMENT';");
-        int newNo = nextVchNo.toInt();
+        QString supplierName = db.executeScalar("SELECT name FROM parties WHERE id = ?;", {partyId}).toString();
+        QString bankName = db.executeScalar("SELECT name FROM parties WHERE id = ?;", {bankId}).toString();
+        QString vchFormatted = QString("ADV-%1").arg(vchNo, 4, 10, QChar('0'));
+        QString vchNarration = m_narrationEdit->text().trimmed().isEmpty()
+            ? QString("Advance Payment u/s 194-Q to %1").arg(supplierName)
+            : m_narrationEdit->text().trimmed();
+
+        // Resolve TDS 194-Q Payable Account
+        int tdsId = 0;
+        if (tax > 0.0) {
+            QVariant tdsAcc = db.executeScalar("SELECT id FROM parties WHERE name = 'TDS u/s 194-Q Payable A/c' LIMIT 1;");
+            if (tdsAcc.isValid() && !tdsAcc.isNull()) {
+                tdsId = tdsAcc.toInt();
+            } else {
+                db.executeNonQuery(
+                    "INSERT INTO parties (name, group_name, party_type) VALUES ('TDS u/s 194-Q Payable A/c', 'Duties & Taxes (GST)', 'Tax');"
+                );
+                tdsId = db.executeScalar("SELECT last_insert_rowid();").toInt();
+            }
+        }
 
         bool okH = db.executeNonQuery(
-            "INSERT INTO vouchers (voucher_type, voucher_no, voucher_date, financial_year_id, narration, total_amount) "
-            "VALUES ('PAYMENT', ?, ?, ?, ?, ?);",
-            {newNo, vDateStr, fyId, m_narrationEdit->text().trimmed(), gross}
+            "INSERT INTO vouchers (fy_id, financial_year, voucher_no, voucher_date, voucher_type, legacy_type, party_id, ledger_id, party_name, account_type, amount, narration) "
+            "VALUES (?, ?, ?, ?, 'PAYMENT', 'BANK', ?, ?, ?, 'Dr', ?, ?);",
+            {fyId, fyLabel, vchFormatted, vDateStr, partyId, partyId, supplierName, gross, vchNarration}
         );
         if (!okH) {
             db.rollback();
-            QMessageBox::critical(this, "Database Error", "Failed to create journal voucher header.");
+            QMessageBox::critical(this, "Database Error", "Failed to create payment voucher header.");
             return;
         }
 
         pId = db.lastInsertedId();
 
+        int rowNo = 1;
         // 1. Debit Supplier with Gross Advance
-        db.executeNonQuery("INSERT INTO voucher_items (voucher_id, party_id, debit_amount, credit_amount, particulars) VALUES (?, ?, ?, 0.0, 'Advance Payment u/s 194-Q');",
-                      {pId, partyId, gross});
+        db.executeNonQuery(
+            "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, account_code, party_id, party_name, opposing_account, dr_cr, amount, narration, taxable_amount, tds_amount, tds_rate, row_no) "
+            "VALUES (?, ?, ?, ?, 'PAYMENT', 'BANK', ?, ?, ?, ?, 'Dr', ?, ?, ?, ?, ?, ?);",
+            {fyId, fyLabel, vchFormatted, vDateStr, partyId, partyId, supplierName, bankName, gross, vchNarration, gross, tax, rate, rowNo++}
+        );
 
         // 2. Credit TDS 194-Q Payable A/c
-        if (tax > 0.0) {
-            QVariant tdsAcc = db.executeScalar("SELECT id FROM parties WHERE name = 'TDS u/s 194-Q Payable A/c' LIMIT 1;");
-            int tdsId = tdsAcc.isValid() ? tdsAcc.toInt() : 0;
-            if (tdsId > 0) {
-                db.executeNonQuery("INSERT INTO voucher_items (voucher_id, party_id, debit_amount, credit_amount, particulars) VALUES (?, ?, 0.0, ?, 'TDS u/s 194-Q Withheld');",
-                              {pId, tdsId, tax});
-            }
+        if (tax > 0.0 && tdsId > 0) {
+            db.executeNonQuery(
+                "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, account_code, party_id, party_name, opposing_account, dr_cr, amount, narration, taxable_amount, tds_amount, tds_rate, row_no) "
+                "VALUES (?, ?, ?, ?, 'PAYMENT', 'BANK', ?, ?, ?, ?, 'Cr', ?, ?, ?, ?, ?, ?);",
+                {fyId, fyLabel, vchFormatted, vDateStr, tdsId, tdsId, "TDS u/s 194-Q Payable A/c", supplierName, tax, "TDS u/s 194-Q Withheld", gross, tax, rate, rowNo++}
+            );
         }
 
         // 3. Credit Bank A/c with Net Payment
-        db.executeNonQuery("INSERT INTO voucher_items (voucher_id, party_id, debit_amount, credit_amount, particulars) VALUES (?, ?, 0.0, ?, 'Bank Payment');",
-                      {pId, bankId, net});
+        db.executeNonQuery(
+            "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, account_code, party_id, party_name, opposing_account, dr_cr, amount, narration, taxable_amount, tds_amount, tds_rate, row_no) "
+            "VALUES (?, ?, ?, ?, 'PAYMENT', 'BANK', ?, ?, ?, ?, 'Cr', ?, ?, ?, 0, 0, ?);",
+            {fyId, fyLabel, vchFormatted, vDateStr, bankId, bankId, bankName, supplierName, net, vchNarration, gross, rowNo++}
+        );
     }
 
     bool okAdv = db.executeNonQuery(
