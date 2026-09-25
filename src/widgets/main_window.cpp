@@ -440,72 +440,88 @@ MainWindow::MainWindow(const MainWindowDependencies& deps, QWidget* parent)
         if (m_stockDetailWidget) {
             m_stockDetailWidget->setViewConfiguration(StockViewMode::MonthlyDaily, StockGrouping::ItemWise, "Item Monthly/Daily Stock");
         }
+        navigateToView(13);
     });
 
     // Show Only Stock Submenu
     menuMgr.setItemCallback("stock_only_menu", 0, [this]() {
         m_previousViewIndex = 0;
         if (m_stockDetailWidget) m_stockDetailWidget->setViewConfiguration(StockViewMode::OnlyStock, StockGrouping::ItemWise, "Item Stock");
+        navigateToView(13);
     });
     menuMgr.setItemCallback("stock_only_menu", 1, [this]() {
         m_previousViewIndex = 0;
         if (m_stockDetailWidget) m_stockDetailWidget->setViewConfiguration(StockViewMode::OnlyStock, StockGrouping::GroupWise, "Group Stock");
+        navigateToView(13);
     });
     menuMgr.setItemCallback("stock_only_menu", 2, [this]() {
         m_previousViewIndex = 0;
         if (m_stockDetailWidget) m_stockDetailWidget->setViewConfiguration(StockViewMode::OnlyStock, StockGrouping::CompanyWise, "Company Stock");
+        navigateToView(13);
     });
     menuMgr.setItemCallback("stock_only_menu", 3, [this]() {
         m_previousViewIndex = 0;
         if (m_stockDetailWidget) m_stockDetailWidget->setViewConfiguration(StockViewMode::OnlyStock, StockGrouping::TotalSummary, "Total Stock");
+        navigateToView(13);
     });
     menuMgr.setItemCallback("stock_only_menu", 4, [this]() {
         m_previousViewIndex = 0;
         if (m_stockDetailWidget) m_stockDetailWidget->setViewConfiguration(StockViewMode::OnlyStock, StockGrouping::HsnWise, "HSN Wise Total Stock");
+        navigateToView(13);
     });
 
     // Show Stock With Amount Submenu
     menuMgr.setItemCallback("stock_amount_menu", 0, [this]() {
         m_previousViewIndex = 0;
         if (m_stockDetailWidget) m_stockDetailWidget->setViewConfiguration(StockViewMode::StockWithAmount, StockGrouping::ItemWise, "Item Stock With Amount");
+        navigateToView(13);
     });
     menuMgr.setItemCallback("stock_amount_menu", 1, [this]() {
         m_previousViewIndex = 0;
         if (m_stockDetailWidget) m_stockDetailWidget->setViewConfiguration(StockViewMode::StockWithAmount, StockGrouping::GroupWise, "Group Stock With Amount");
+        navigateToView(13);
     });
     menuMgr.setItemCallback("stock_amount_menu", 2, [this]() {
         m_previousViewIndex = 0;
         if (m_stockDetailWidget) m_stockDetailWidget->setViewConfiguration(StockViewMode::StockWithAmount, StockGrouping::CompanyWise, "Company Stock With Amount");
+        navigateToView(13);
     });
     menuMgr.setItemCallback("stock_amount_menu", 3, [this]() {
         m_previousViewIndex = 0;
         if (m_stockDetailWidget) m_stockDetailWidget->setViewConfiguration(StockViewMode::StockWithAmount, StockGrouping::TotalSummary, "Total Stock With Amount");
+        navigateToView(13);
     });
     menuMgr.setItemCallback("stock_amount_menu", 4, [this]() {
         m_previousViewIndex = 0;
         if (m_stockDetailWidget) m_stockDetailWidget->setViewConfiguration(StockViewMode::StockWithAmount, StockGrouping::HsnWise, "HSN Wise Total Stock With Amount");
+        navigateToView(13);
     });
 
     // Item Wise Profit & Loss Submenu
     menuMgr.setItemCallback("stock_profit_menu", 0, [this]() {
         m_previousViewIndex = 0;
         if (m_stockDetailWidget) m_stockDetailWidget->setViewConfiguration(StockViewMode::ProfitLoss, StockGrouping::ItemWise, "Item Details (P&L)");
+        navigateToView(13);
     });
     menuMgr.setItemCallback("stock_profit_menu", 1, [this]() {
         m_previousViewIndex = 0;
         if (m_stockDetailWidget) m_stockDetailWidget->setViewConfiguration(StockViewMode::ProfitLoss, StockGrouping::GroupWise, "Group Details (P&L)");
+        navigateToView(13);
     });
     menuMgr.setItemCallback("stock_profit_menu", 2, [this]() {
         m_previousViewIndex = 0;
         if (m_stockDetailWidget) m_stockDetailWidget->setViewConfiguration(StockViewMode::ProfitLoss, StockGrouping::CompanyWise, "Company Details (P&L)");
+        navigateToView(13);
     });
     menuMgr.setItemCallback("stock_profit_menu", 3, [this]() {
         m_previousViewIndex = 0;
         if (m_stockDetailWidget) m_stockDetailWidget->setViewConfiguration(StockViewMode::ProfitLoss, StockGrouping::TotalSummary, "Total Items Details (P&L)");
+        navigateToView(13);
     });
     menuMgr.setItemCallback("stock_profit_menu", 4, [this]() {
         m_previousViewIndex = 0;
         if (m_stockDetailWidget) m_stockDetailWidget->setViewConfiguration(StockViewMode::ProfitLoss, StockGrouping::HsnWise, "HSN Wise Total Details (P&L)");
+        navigateToView(13);
     });
 
     // Raw Paddy Stock Register (index 4 in stock_master)

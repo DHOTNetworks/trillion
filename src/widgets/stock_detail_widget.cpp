@@ -252,13 +252,34 @@ void StockDetailWidget::setupUi() {
 
 void StockDetailWidget::populateItemDropdown()
 {
+    int currentId = m_itemSelectorCombo->currentData().toInt();
+    if (currentId <= 0 && m_controller) {
+        currentId = m_controller->selectedItemId();
+    }
+
+    m_itemSelectorCombo->blockSignals(true);
     m_itemSelectorCombo->clear();
     DatabaseManager &db = DatabaseManager::instance();
     QVariantList items = db.executeQuery("SELECT id, name, code FROM stock_items ORDER BY name COLLATE NOCASE ASC;");
-    for (const auto& var : items) {
-        QVariantMap itm = var.toMap();
-        m_itemSelectorCombo->addItem(QString("%1 (%2)").arg(itm.value("name").toString(), itm.value("code").toString()), itm.value("id").toInt());
+    int selectIdx = 0;
+    for (int i = 0; i < items.size(); ++i) {
+        QVariantMap itm = items[i].toMap();
+        int id = itm.value("id").toInt();
+        QString name = itm.value("name").toString();
+        QString code = itm.value("code").toString();
+        QString label = code.isEmpty() ? name : QString("%1 (%2)").arg(name, code);
+        m_itemSelectorCombo->addItem(label, id);
+        if (id == currentId) {
+            selectIdx = i;
+        }
     }
+    if (m_itemSelectorCombo->count() > 0) {
+        m_itemSelectorCombo->setCurrentIndex(selectIdx);
+        if (m_controller) {
+            m_controller->setSelectedItemId(m_itemSelectorCombo->currentData().toInt());
+        }
+    }
+    m_itemSelectorCombo->blockSignals(false);
 }
 
 void StockDetailWidget::setViewConfiguration(StockViewMode mode, StockGrouping grouping, const QString& title)
@@ -266,9 +287,18 @@ void StockDetailWidget::setViewConfiguration(StockViewMode mode, StockGrouping g
     m_isUpdatingUi = true;
     m_customTitle = title;
 
+    if (m_itemSelectorCombo->count() == 0) {
+        populateItemDropdown();
+    }
+
     if (m_controller) {
         m_controller->setViewMode(mode);
         m_controller->setGrouping(grouping);
+        if (mode == StockViewMode::MonthlyDaily && m_itemSelectorCombo->count() > 0) {
+            if (m_controller->selectedItemId() <= 0) {
+                m_controller->setSelectedItemId(m_itemSelectorCombo->currentData().toInt());
+            }
+        }
     }
 
     int modeIdx = m_modeCombo->findData(static_cast<int>(mode));
@@ -374,10 +404,18 @@ void StockDetailWidget::reloadData(const QString& fromDate, const QString& toDat
     if (!fromDate.isEmpty()) m_fromDateEdit->setDate(QDate::fromString(fromDate, "yyyy-MM-dd"));
     if (!toDate.isEmpty()) m_toDateEdit->setDate(QDate::fromString(toDate, "yyyy-MM-dd"));
 
+    if (m_itemSelectorCombo->count() == 0) {
+        populateItemDropdown();
+    }
+
     if (m_controller) {
+        if (m_controller->viewMode() == StockViewMode::MonthlyDaily && m_controller->selectedItemId() <= 0 && m_itemSelectorCombo->count() > 0) {
+            m_controller->setSelectedItemId(m_itemSelectorCombo->currentData().toInt());
+        }
         m_controller->reload(m_fromDateEdit->date().toString("yyyy-MM-dd"), m_toDateEdit->date().toString("yyyy-MM-dd"));
     }
 
+    updateHeaderLabels();
     populateTable();
     updateSummaryMetrics();
 }

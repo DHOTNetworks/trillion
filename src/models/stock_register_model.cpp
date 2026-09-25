@@ -299,8 +299,14 @@ void StockRegisterController::fetchRawData(const QString& fromDate, const QStrin
         // ====================================================================
         int itmId = m_selectedItemId;
         if (itmId <= 0) {
-            QVariant fst = db.executeScalar("SELECT id FROM stock_items ORDER BY name ASC LIMIT 1;");
-            if (fst.isValid()) itmId = fst.toInt();
+            QVariant activeItem = db.executeScalar("SELECT item_id FROM stock_transactions WHERE item_id > 0 ORDER BY voucher_date DESC LIMIT 1;");
+            if (activeItem.isValid() && activeItem.toInt() > 0) {
+                itmId = activeItem.toInt();
+            } else {
+                QVariant fst = db.executeScalar("SELECT id FROM stock_items ORDER BY name COLLATE NOCASE ASC LIMIT 1;");
+                if (fst.isValid()) itmId = fst.toInt();
+            }
+            m_selectedItemId = itmId;
         }
         if (itmId <= 0) return;
 
