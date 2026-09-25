@@ -49,6 +49,13 @@
 #include "form16a_list_widget.h"
 #include "tds_acknowledgement_dialog.h"
 #include "tcs_config_dialog.h"
+#include "trial_balance_widget.h"
+#include "capital_accounts_widget.h"
+#include "depreciation_chart_widget.h"
+#include "joint_reports_dialog.h"
+#include "../models/trial_balance_controller.h"
+#include "../models/capital_accounts_controller.h"
+#include "../engine/depreciation_calculator.h"
 #include "../models/tax_challan_controller.h"
 #include "../models/tcs_receipt_voucher_controller.h"
 #include "../models/ledger_statement_model.h"
@@ -137,6 +144,9 @@ public:
     MahadevERP::BankStatementImportWidget* bankStatementWidget() const { return m_bankStatementWidget; }
     MahadevERP::TransportDispatchWidget* transportDispatchWidget() const { return m_transportDispatchWidget; }
     MahadevERP::DebitCreditNoteWidget* debitCreditNoteWidget() const { return m_debitCreditNoteWidget; }
+    MahadevERP::TrialBalanceWidget* trialBalanceWidget() const { return m_trialBalanceWidget; }
+    MahadevERP::CapitalAccountsWidget* capitalAccountsWidget() const { return m_capitalAccountsWidget; }
+    MahadevERP::DepreciationChartWidget* depreciationChartWidget() const { return m_depreciationChartWidget; }
 
     QStackedWidget* stackedWidget() const { return m_stackedWidget; }
 
@@ -147,6 +157,7 @@ public:
 public slots:
     void navigateToView(int viewIndex);
     void openAccountingPeriodDialog();
+    void openStatementForParty(const QString& partyName);
     void onLedgerBackRequested();
     void onLedgerAlterVoucherRequested(int targetViewIndex, const QVariantMap& entry);
     void onBalanceSheetBackRequested();
@@ -217,9 +228,14 @@ private:
     MahadevERP::AdvancePayment194QWidget* m_advancePayment194QWidget = nullptr;
     MahadevERP::AdvancePayment194QListWidget* m_advancePayment194QListWidget = nullptr;
     MahadevERP::Form16AListWidget* m_form16AListWidget = nullptr;
+    MahadevERP::TrialBalanceWidget* m_trialBalanceWidget = nullptr;
+    MahadevERP::CapitalAccountsWidget* m_capitalAccountsWidget = nullptr;
+    MahadevERP::DepreciationChartWidget* m_depreciationChartWidget = nullptr;
 
     TaxChallanController* m_taxChallanCtrl = nullptr;
     TcsReceiptVoucherController* m_tcsReceiptVoucherCtrl = nullptr;
+    MahadevERP::TrialBalanceController* m_trialBalanceCtrl = nullptr;
+    MahadevERP::CapitalAccountsController* m_capitalAccountsCtrl = nullptr;
 
     void openTdsTcsHub();
     void openTdsOptions();

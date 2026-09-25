@@ -354,6 +354,20 @@ set(SOURCES
     src/engine/gstr2_reconciler.cpp
     src/engine/gstr3b_engine.h
     src/engine/gstr3b_engine.cpp
+    src/engine/depreciation_calculator.h
+    src/engine/depreciation_calculator.cpp
+    src/models/trial_balance_controller.h
+    src/models/trial_balance_controller.cpp
+    src/models/capital_accounts_controller.h
+    src/models/capital_accounts_controller.cpp
+    src/widgets/trial_balance_widget.h
+    src/widgets/trial_balance_widget.cpp
+    src/widgets/capital_accounts_widget.h
+    src/widgets/capital_accounts_widget.cpp
+    src/widgets/depreciation_chart_widget.h
+    src/widgets/depreciation_chart_widget.cpp
+    src/widgets/joint_reports_dialog.h
+    src/widgets/joint_reports_dialog.cpp
     src/widgets/main_window.h
     src/widgets/main_window.cpp
 )
@@ -514,6 +528,12 @@ set(TEST_SOURCES
     src/models/iform_model.cpp
     src/models/mandi_reports_controller.h
     src/models/mandi_reports_controller.cpp
+    src/engine/depreciation_calculator.h
+    src/engine/depreciation_calculator.cpp
+    src/models/trial_balance_controller.h
+    src/models/trial_balance_controller.cpp
+    src/models/capital_accounts_controller.h
+    src/models/capital_accounts_controller.cpp
 )
 
 add_executable(LogicBoardTestSuite ${TEST_SOURCES})

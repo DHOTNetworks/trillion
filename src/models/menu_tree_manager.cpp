@@ -189,7 +189,7 @@ void MenuTreeManager::setupDefaultMenus()
         MenuItem("5. Purchase Register & Summary", "", Qt::Key_5, MenuActionType::OpenView, 4),
         MenuItem("6. Stock Register (View Options)", "S", Qt::Key_6, MenuActionType::OpenSubmenu, -1, "stock_register_hub"),
         MenuItem("7. Milling Production & Out-turn Statement", "Alt+M", Qt::Key_7, MenuActionType::OpenView, 35),
-        MenuItem("8. Balance Sheet (Final Accounts)", "F7", Qt::Key_8, MenuActionType::OpenView, 29),
+        MenuItem("8. Final Reports (Balance Sheet, P&L, Trading, Trial Bal)", "F / F7", Qt::Key_8, MenuActionType::OpenSubmenu, -1, "final_reports_hub"),
         MenuItem("9. Profit & Loss Statement (Trading & P&L)", "F6", Qt::Key_9, MenuActionType::OpenView, 30),
         MenuItem("10. Closing Stock Valuation & Year-End Audit", "Alt+C", 0, MenuActionType::OpenView, 36),
         MenuItem("11. Interest Calculation & Register (Aank / Rokka)", "Alt+A", 0, MenuActionType::OpenView, 8)
@@ -277,6 +277,75 @@ void MenuTreeManager::setupDefaultMenus()
         MenuItem("[Q] Quit / Back", "Esc / Q", Qt::Key_Q, MenuActionType::Back)
     };
     registerMenu(stockProfit);
+
+    // 13. FINAL REPORTS HUB MENU
+    MenuNode finalReportsHub("final_reports_hub", "FINAL REPORTS (ALT+F2: SET PERIOD)", "#059669", "reports_register");
+    finalReportsHub.items = {
+        MenuItem("[B] Balance Sheet", "B", Qt::Key_B, MenuActionType::OpenView, 29),
+        MenuItem("[C] Capital A/cs", "C", Qt::Key_C, MenuActionType::OpenView, 40),
+        MenuItem("[P] Profit & Loss", "P", Qt::Key_P, MenuActionType::OpenView, 30),
+        MenuItem("[T] Trading A/cs", "T", Qt::Key_T, MenuActionType::OpenSubmenu, -1, "trading_reports_hub"),
+        MenuItem("[O] Auto Closing Stock Options", "O", Qt::Key_O, MenuActionType::OpenSubmenu, -1, "auto_closing_stock_hub"),
+        MenuItem("[J] Print Joint Reports", "J", Qt::Key_J, MenuActionType::ExecuteCustom),
+        MenuItem("[D] Done/Undone B/Sheet", "D", Qt::Key_D, MenuActionType::OpenSubmenu, -1, "done_undone_bsheet_hub"),
+        MenuItem("[A] Trial Balance Sheet", "A", Qt::Key_A, MenuActionType::OpenSubmenu, -1, "trial_balance_options_hub"),
+        MenuItem("[E] Depreciation Chart", "E", Qt::Key_E, MenuActionType::OpenSubmenu, -1, "depreciation_options_hub"),
+        MenuItem("[Q] Quit / Back", "Esc / Q", Qt::Key_Q, MenuActionType::Back)
+    };
+    registerMenu(finalReportsHub);
+
+    // 14. TRADING REPORTS HUB
+    MenuNode tradingHub("trading_reports_hub", "REPORT OPTIONS...", "#2563EB", "final_reports_hub");
+    tradingHub.items = {
+        MenuItem("[I] Item Wise", "I", Qt::Key_I, MenuActionType::OpenView, 13),
+        MenuItem("[J] Joint Report (Without Qty.)", "J", Qt::Key_J, MenuActionType::OpenView, 30),
+        MenuItem("[P] Joint Report (With Qty.)", "P", Qt::Key_P, MenuActionType::OpenView, 30),
+        MenuItem("[Y] Production Yield Chart", "Y", Qt::Key_Y, MenuActionType::OpenView, 35),
+        MenuItem("[Q] Quit / Back", "Esc / Q", Qt::Key_Q, MenuActionType::Back)
+    };
+    registerMenu(tradingHub);
+
+    // 15. AUTO CLOSING STOCK OPTIONS HUB
+    MenuNode autoClosingHub("auto_closing_stock_hub", "CLOSING STOCK OPTIONS...", "#D97706", "final_reports_hub");
+    autoClosingHub.items = {
+        MenuItem("[A] Auto Fill Closing Stock", "A", Qt::Key_A, MenuActionType::ExecuteCustom),
+        MenuItem("[R] Remove Filled Closing Stock", "R", Qt::Key_R, MenuActionType::ExecuteCustom),
+        MenuItem("[F] Resave Filled Closing Stock", "F", Qt::Key_F, MenuActionType::ExecuteCustom),
+        MenuItem("[Q] Quit / Back", "Esc / Q", Qt::Key_Q, MenuActionType::Back)
+    };
+    registerMenu(autoClosingHub);
+
+    // 16. DONE / UNDONE B/SHEET HUB
+    MenuNode doneUndoneHub("done_undone_bsheet_hub", "B/SHEET OPTIONS...", "#7C3AED", "final_reports_hub");
+    doneUndoneHub.items = {
+        MenuItem("[D] Done B/Sheet (Lock Audit)", "D", Qt::Key_D, MenuActionType::ExecuteCustom),
+        MenuItem("[U] UnDone B/Sheet (Unlock Draft)", "U", Qt::Key_U, MenuActionType::ExecuteCustom),
+        MenuItem("[Q] Quit / Back", "Esc / Q", Qt::Key_Q, MenuActionType::Back)
+    };
+    registerMenu(doneUndoneHub);
+
+    // 17. TRIAL BALANCE VIEW OPTIONS HUB
+    MenuNode tbOptionsHub("trial_balance_options_hub", "VIEW OPTIONS", "#0284C7", "final_reports_hub");
+    tbOptionsHub.items = {
+        MenuItem("[N] Normal View", "N", Qt::Key_N, MenuActionType::OpenView, 39),
+        MenuItem("[F] Flat View", "F", Qt::Key_F, MenuActionType::OpenView, 39),
+        MenuItem("[G] Flat Grouped", "G", Qt::Key_G, MenuActionType::OpenView, 39),
+        MenuItem("[O] Normal Detailed", "O", Qt::Key_O, MenuActionType::OpenView, 39),
+        MenuItem("[W] Without Op.Bal.", "W", Qt::Key_W, MenuActionType::OpenView, 39),
+        MenuItem("[T] Show Turnover", "T", Qt::Key_T, MenuActionType::OpenView, 39),
+        MenuItem("[B] Show Opening Bal.", "B", Qt::Key_B, MenuActionType::OpenView, 39),
+        MenuItem("[Q] Quit / Back", "Esc / Q", Qt::Key_Q, MenuActionType::Back)
+    };
+    registerMenu(tbOptionsHub);
+
+    // 18. DEPRECIATION OPTIONS HUB
+    MenuNode depOptionsHub("depreciation_options_hub", "DEPRECIATION OPTIONS", "#059669", "final_reports_hub");
+    depOptionsHub.items = {
+        MenuItem("1. Summarized Report", "1", Qt::Key_1, MenuActionType::OpenView, 41),
+        MenuItem("2. Detailed Report", "2", Qt::Key_2, MenuActionType::OpenView, 41),
+        MenuItem("[Q] Quit / Back", "Esc / Q", Qt::Key_Q, MenuActionType::Back)
+    };
+    registerMenu(depOptionsHub);
 }
 
 } // namespace MahadevERP

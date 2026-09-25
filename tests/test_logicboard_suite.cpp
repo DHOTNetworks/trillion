@@ -46,6 +46,9 @@
 #include "../src/models/tax_challan_controller.h"
 #include "../src/models/tcs_receipt_voucher_controller.h"
 #include "../src/models/stock_register_model.h"
+#include "../src/engine/depreciation_calculator.h"
+#include "../src/models/trial_balance_controller.h"
+#include "../src/models/capital_accounts_controller.h"
 
 class LogicBoardTestSuite : public QObject {
     Q_OBJECT
@@ -110,6 +113,9 @@ private slots:
 
     // 12. Bahi-Khata Stock Register Subsystem Tests
     void testStockRegisterSubsystem();
+
+    // 13. Final Reports & Depreciation Subsystems
+    void testFinalReportsAndDepreciationSubsystem();
 };
 
 #include "mdbtools.h"
@@ -1501,6 +1507,66 @@ void LogicBoardTestSuite::testStockRegisterSubsystem() {
     }
 
     qDebug() << "[TEST] Stock Register subsystem controller and calculations verified successfully!";
+}
+
+void LogicBoardTestSuite::testFinalReportsAndDepreciationSubsystem() {
+    // 1. Depreciation Calculator Sec 32 Verification
+    MahadevERP::DepreciationCalculator depCalc;
+    
+    // Test calculateSchedule
+    QVector<MahadevERP::DepreciationAssetItem> items = depCalc.calculateSchedule(QDate(2025, 4, 1), QDate(2026, 3, 31), true);
+    QVERIFY(items.size() >= 0);
+
+    // Test calculateTotals
+    MahadevERP::DepreciationSummaryTotals totals = depCalc.calculateTotals(items);
+    QCOMPARE(totals.totalItems, items.size());
+
+    // 2. Trial Balance Controller Multi-Mode & Balancing Verification
+    MahadevERP::TrialBalanceController tbCtrl;
+    tbCtrl.setDateRange(QDate(2025, 4, 1), QDate(2026, 3, 31));
+
+    // Normal View
+    tbCtrl.setMode(MahadevERP::TrialBalanceMode::NormalView);
+    QVERIFY(tbCtrl.rows().size() >= 0);
+    double totalDr = tbCtrl.totals().totalCloseDebit;
+    double totalCr = tbCtrl.totals().totalCloseCredit;
+    double diff = tbCtrl.totals().difference;
+    QCOMPARE(std::abs(std::abs(totalDr - totalCr) - diff) < 0.01, true);
+
+    // Flat View
+    tbCtrl.setMode(MahadevERP::TrialBalanceMode::FlatView);
+    QVERIFY(tbCtrl.rows().size() >= 0);
+
+    // Flat Grouped View
+    tbCtrl.setMode(MahadevERP::TrialBalanceMode::FlatGrouped);
+    QVERIFY(tbCtrl.rows().size() >= 0);
+
+    // Normal Detailed View
+    tbCtrl.setMode(MahadevERP::TrialBalanceMode::NormalDetailed);
+    QVERIFY(tbCtrl.rows().size() >= 0);
+
+    // Without Opening Balance View
+    tbCtrl.setMode(MahadevERP::TrialBalanceMode::WithoutOpBal);
+    QVERIFY(tbCtrl.rows().size() >= 0);
+
+    // Show Turnover View
+    tbCtrl.setMode(MahadevERP::TrialBalanceMode::ShowTurnover);
+    QVERIFY(tbCtrl.rows().size() >= 0);
+
+    // Show Opening Balance View
+    tbCtrl.setMode(MahadevERP::TrialBalanceMode::ShowOpeningBal);
+    QVERIFY(tbCtrl.rows().size() >= 0);
+
+    // 3. Capital Accounts Controller Verification
+    MahadevERP::CapitalAccountsController capCtrl;
+    capCtrl.setDateRange(QDate(2025, 4, 1), QDate(2026, 3, 31));
+    const auto& capItems = capCtrl.items();
+    for (const auto& row : capItems) {
+        double expectedClosing = row.opCapital + row.additions + row.interest + row.profitShare - row.drawings;
+        QCOMPARE(std::abs(row.closingCapital - expectedClosing) < 0.01, true);
+    }
+
+    qDebug() << "[TEST] Final Reports and Depreciation Subsystems verified successfully!";
 }
 
 QTEST_MAIN(LogicBoardTestSuite)

@@ -348,6 +348,29 @@ MainWindow::MainWindow(const MainWindowDependencies& deps, QWidget* parent)
     });
     m_stackedWidget->addWidget(m_form16AListWidget);
 
+    // Final Reports Subsystem Controllers & Widgets
+    m_trialBalanceCtrl = new MahadevERP::TrialBalanceController(this);
+    m_capitalAccountsCtrl = new MahadevERP::CapitalAccountsController(this);
+
+    // Index 40: Trial Balance Widget (View 39)
+    m_trialBalanceWidget = new MahadevERP::TrialBalanceWidget(m_trialBalanceCtrl, m_printExportCtrl, this);
+    connect(m_trialBalanceWidget, &MahadevERP::TrialBalanceWidget::backRequested, this, [this]() { navigateToView(0); });
+    connect(m_trialBalanceWidget, &MahadevERP::TrialBalanceWidget::openLedgerRequested, this, &MainWindow::openStatementForParty);
+    m_stackedWidget->addWidget(m_trialBalanceWidget);
+
+    // Index 41: Capital Accounts Schedule Widget (View 40)
+    m_capitalAccountsWidget = new MahadevERP::CapitalAccountsWidget(m_capitalAccountsCtrl, m_printExportCtrl, this);
+    connect(m_capitalAccountsWidget, &MahadevERP::CapitalAccountsWidget::backRequested, this, [this]() { navigateToView(0); });
+    connect(m_capitalAccountsWidget, &MahadevERP::CapitalAccountsWidget::openLedgerRequested, this, &MainWindow::openStatementForParty);
+    m_stackedWidget->addWidget(m_capitalAccountsWidget);
+
+    // Index 42: Depreciation Chart Widget (View 41)
+    m_depreciationChartWidget = new MahadevERP::DepreciationChartWidget(m_printExportCtrl, this);
+    connect(m_depreciationChartWidget, &MahadevERP::DepreciationChartWidget::backRequested, this, [this]() { navigateToView(0); });
+    connect(m_depreciationChartWidget, &MahadevERP::DepreciationChartWidget::openLedgerRequested, this, &MainWindow::openStatementForParty);
+    connect(m_depreciationChartWidget, &MahadevERP::DepreciationChartWidget::makeNewLedgerRequested, this, [this]() { navigateToView(6); });
+    m_stackedWidget->addWidget(m_depreciationChartWidget);
+
     // Global Shortcuts for Accounting Period (Alt+F2) and Context-Aware F2 (Date / Period)
     QShortcut* altF2Shortcut = new QShortcut(QKeySequence(Qt::ALT | Qt::Key_F2), this);
     connect(altF2Shortcut, &QShortcut::activated, this, &MainWindow::openAccountingPeriodDialog);
@@ -503,13 +526,60 @@ MainWindow::MainWindow(const MainWindowDependencies& deps, QWidget* parent)
         navigateToView(13);
     });
 
-    // By-Products & Husk Stock Register (index 6 in stock_master)
-    menuMgr.setItemCallback("stock_master", 6, [this]() {
-        m_previousViewIndex = 0;
-        if (m_stockDetailWidget) {
-            m_stockDetailWidget->setViewConfiguration(StockViewMode::OnlyStock, StockGrouping::ItemWise, "By-Products & Husk Stock");
-        }
-        navigateToView(13);
+    // Final Reports Hub & Submenu Callbacks
+    menuMgr.setItemCallback("final_reports_hub", 5, [this]() {
+        MahadevERP::JointReportsDialog dlg(this);
+        dlg.exec();
+    });
+
+    // Auto Closing Stock Options Submenu
+    menuMgr.setItemCallback("auto_closing_stock_hub", 0, [this]() {
+        navigateToView(36);
+    });
+    menuMgr.setItemCallback("auto_closing_stock_hub", 1, [this]() {
+        navigateToView(36);
+    });
+    menuMgr.setItemCallback("auto_closing_stock_hub", 2, [this]() {
+        navigateToView(36);
+    });
+
+    // Done / Undone B/Sheet Submenu
+    menuMgr.setItemCallback("done_undone_bsheet_hub", 0, [this]() {
+        CustomMessageBox::information(this, "Audit Status", "Balance Sheet Locked for Year-End Audit");
+    });
+    menuMgr.setItemCallback("done_undone_bsheet_hub", 1, [this]() {
+        CustomMessageBox::information(this, "Audit Status", "Balance Sheet Unlocked for Adjustments");
+    });
+
+    // Trial Balance View Options Submenu
+    menuMgr.setItemCallback("trial_balance_options_hub", 0, [this]() {
+        if (m_trialBalanceWidget) m_trialBalanceWidget->setMode(MahadevERP::TrialBalanceMode::NormalView);
+    });
+    menuMgr.setItemCallback("trial_balance_options_hub", 1, [this]() {
+        if (m_trialBalanceWidget) m_trialBalanceWidget->setMode(MahadevERP::TrialBalanceMode::FlatView);
+    });
+    menuMgr.setItemCallback("trial_balance_options_hub", 2, [this]() {
+        if (m_trialBalanceWidget) m_trialBalanceWidget->setMode(MahadevERP::TrialBalanceMode::FlatGrouped);
+    });
+    menuMgr.setItemCallback("trial_balance_options_hub", 3, [this]() {
+        if (m_trialBalanceWidget) m_trialBalanceWidget->setMode(MahadevERP::TrialBalanceMode::NormalDetailed);
+    });
+    menuMgr.setItemCallback("trial_balance_options_hub", 4, [this]() {
+        if (m_trialBalanceWidget) m_trialBalanceWidget->setMode(MahadevERP::TrialBalanceMode::WithoutOpBal);
+    });
+    menuMgr.setItemCallback("trial_balance_options_hub", 5, [this]() {
+        if (m_trialBalanceWidget) m_trialBalanceWidget->setMode(MahadevERP::TrialBalanceMode::ShowTurnover);
+    });
+    menuMgr.setItemCallback("trial_balance_options_hub", 6, [this]() {
+        if (m_trialBalanceWidget) m_trialBalanceWidget->setMode(MahadevERP::TrialBalanceMode::ShowOpeningBal);
+    });
+
+    // Depreciation Options Submenu
+    menuMgr.setItemCallback("depreciation_options_hub", 0, [this]() {
+        if (m_depreciationChartWidget) m_depreciationChartWidget->setDetailedMode(false);
+    });
+    menuMgr.setItemCallback("depreciation_options_hub", 1, [this]() {
+        if (m_depreciationChartWidget) m_depreciationChartWidget->setDetailedMode(true);
     });
 
     // Explicitly start application on Firm Selector View (View 22)
@@ -559,6 +629,9 @@ int MainWindow::currentViewIndex() const {
     if (cur == m_advancePayment194QWidget) return 55;
     if (cur == m_advancePayment194QListWidget) return 56;
     if (cur == m_form16AListWidget) return 57;
+    if (cur == m_trialBalanceWidget) return 39;
+    if (cur == m_capitalAccountsWidget) return 40;
+    if (cur == m_depreciationChartWidget) return 41;
     return 0;
 }
 
@@ -613,6 +686,15 @@ void MainWindow::restoreActiveViewFocus() {
         m_millingStatementWidget->setFocus(Qt::OtherFocusReason);
     } else if (vIdx == 36 && m_customClosingStockWidget) {
         m_customClosingStockWidget->setFocus(Qt::OtherFocusReason);
+    } else if (vIdx == 39 && m_trialBalanceWidget) {
+        m_trialBalanceWidget->setFocus(Qt::OtherFocusReason);
+        m_trialBalanceWidget->focusTable();
+    } else if (vIdx == 40 && m_capitalAccountsWidget) {
+        m_capitalAccountsWidget->setFocus(Qt::OtherFocusReason);
+        m_capitalAccountsWidget->focusTable();
+    } else if (vIdx == 41 && m_depreciationChartWidget) {
+        m_depreciationChartWidget->setFocus(Qt::OtherFocusReason);
+        m_depreciationChartWidget->focusTable();
     } else if (vIdx == 6 && m_newLedgerWidget) {
         m_newLedgerWidget->setFocus(Qt::OtherFocusReason);
         m_newLedgerWidget->focusFirstField();
@@ -681,6 +763,18 @@ void MainWindow::openAccountingPeriodDialog() {
 
         if (m_paddyProcurementWidget) {
             m_paddyProcurementWidget->loadArrivals(QDate::fromString(fIso, "yyyy-MM-dd"), QDate::fromString(tIso, "yyyy-MM-dd"));
+        }
+
+        if (m_trialBalanceWidget) {
+            m_trialBalanceWidget->reloadData();
+        }
+
+        if (m_capitalAccountsWidget) {
+            m_capitalAccountsWidget->reloadData();
+        }
+
+        if (m_depreciationChartWidget) {
+            m_depreciationChartWidget->reloadData();
         }
     }
 
@@ -1069,6 +1163,27 @@ void MainWindow::navigateToView(int viewIndex) {
             m_form16AListWidget->reloadData();
             m_form16AListWidget->setFocus();
         }
+    } else if (viewIndex == 39) {
+        if (m_trialBalanceWidget) {
+            m_stackedWidget->setCurrentWidget(m_trialBalanceWidget);
+            m_trialBalanceWidget->reloadData();
+            m_trialBalanceWidget->setFocus();
+            m_trialBalanceWidget->focusTable();
+        }
+    } else if (viewIndex == 40) {
+        if (m_capitalAccountsWidget) {
+            m_stackedWidget->setCurrentWidget(m_capitalAccountsWidget);
+            m_capitalAccountsWidget->reloadData();
+            m_capitalAccountsWidget->setFocus();
+            m_capitalAccountsWidget->focusTable();
+        }
+    } else if (viewIndex == 41) {
+        if (m_depreciationChartWidget) {
+            m_stackedWidget->setCurrentWidget(m_depreciationChartWidget);
+            m_depreciationChartWidget->reloadData();
+            m_depreciationChartWidget->setFocus();
+            m_depreciationChartWidget->focusTable();
+        }
     } else if (viewIndex == 60) {
         openTdsTcsHub();
     }
@@ -1088,6 +1203,17 @@ void MainWindow::openTcsOptions() {
     MahadevERP::MenuTreeManager::instance().executeMenu("tcs_options", this);
 }
 
+void MainWindow::openStatementForParty(const QString& partyName) {
+    m_previousViewIndex = currentViewIndex();
+    m_targetStatementParty = partyName;
+    FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
+    m_lastViewedStatementFromDate = activeFy.startDate;
+    m_lastViewedStatementToDate = activeFy.endDate;
+    m_lastViewedStatementSide = "Dr";
+    m_lastViewedStatementIndex = 0;
+    navigateToView(8);
+}
+
 void MainWindow::onLedgerBackRequested() {
     m_targetStatementParty.clear();
     m_lastViewedStatementFromDate.clear();
@@ -1100,6 +1226,21 @@ void MainWindow::onLedgerBackRequested() {
     if (m_previousViewIndex == 30) {
         m_previousViewIndex = 0;
         navigateToView(30);
+        return;
+    }
+    if (m_previousViewIndex == 39) {
+        m_previousViewIndex = 0;
+        navigateToView(39);
+        return;
+    }
+    if (m_previousViewIndex == 40) {
+        m_previousViewIndex = 0;
+        navigateToView(40);
+        return;
+    }
+    if (m_previousViewIndex == 41) {
+        m_previousViewIndex = 0;
+        navigateToView(41);
         return;
     }
     navigateToView(0);
