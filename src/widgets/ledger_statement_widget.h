@@ -47,6 +47,8 @@ public slots:
     void openSelectedVoucher();
     void printStatement();
     void exportPdf();
+    void exportOdf();
+    void exportExcel();
     void exportCsv();
     void focusSearch();
     void onTotalsChanged();

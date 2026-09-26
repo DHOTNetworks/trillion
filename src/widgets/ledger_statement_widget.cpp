@@ -410,7 +410,8 @@ void LedgerStatementWidget::setupUi() {
     new QShortcut(QKeySequence("Ctrl+E"), this, SLOT(openSelectedVoucher()));
     new QShortcut(QKeySequence("Ctrl+P"), this, SLOT(printStatement()));
     new QShortcut(QKeySequence("Alt+P"), this, SLOT(exportPdf()));
-    new QShortcut(QKeySequence("Alt+E"), this, SLOT(exportCsv()));
+    new QShortcut(QKeySequence("Alt+O"), this, SLOT(exportOdf()));
+    new QShortcut(QKeySequence("Alt+E"), this, SLOT(exportExcel()));
     new QShortcut(QKeySequence("Alt+F"), this, SLOT(onDateFilterApplied()));
     new QShortcut(QKeySequence("Alt+A"), this, SLOT(toggleAankMode()));
     new QShortcut(QKeySequence("Alt+I"), this, SLOT(onPostInterestVoucherClicked()));
@@ -937,6 +938,18 @@ void LedgerStatementWidget::printStatement() {
 void LedgerStatementWidget::exportPdf() {
     if (m_printExportCtrl && !m_searchBox->currentPartyName().isEmpty()) {
         m_printExportCtrl->export_ledger_statement_pdf(m_searchBox->currentPartyName(), m_fromDateEdit->isoDate(), m_toDateEdit->isoDate());
+    }
+}
+
+void LedgerStatementWidget::exportOdf() {
+    if (m_printExportCtrl && !m_searchBox->currentPartyName().isEmpty()) {
+        m_printExportCtrl->export_ledger_statement_odf(m_searchBox->currentPartyName(), m_fromDateEdit->isoDate(), m_toDateEdit->isoDate());
+    }
+}
+
+void LedgerStatementWidget::exportExcel() {
+    if (m_printExportCtrl && !m_searchBox->currentPartyName().isEmpty()) {
+        m_printExportCtrl->export_ledger_statement_excel(m_searchBox->currentPartyName(), m_fromDateEdit->isoDate(), m_toDateEdit->isoDate());
     }
 }
 

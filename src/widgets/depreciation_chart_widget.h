@@ -39,6 +39,9 @@ private slots:
     void onOpenLedgerClicked();
     void onMakeNewLedgerClicked();
     void onExportCsv();
+    void onExportPdf();
+    void onExportOdf();
+    void onExportExcel();
     void onPrintPdf();
 
 private:

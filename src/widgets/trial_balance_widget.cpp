@@ -217,7 +217,9 @@ void TrialBalanceWidget::setupUi() {
         m_searchEdit->selectAll();
     });
     new QShortcut(QKeySequence(Qt::ALT | Qt::Key_P), this, SLOT(onPrintPdf()));
-    new QShortcut(QKeySequence(Qt::ALT | Qt::Key_E), this, SLOT(onExportCsv()));
+    new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_P), this, SLOT(onExportPdf()));
+    new QShortcut(QKeySequence(Qt::ALT | Qt::Key_O), this, SLOT(onExportOdf()));
+    new QShortcut(QKeySequence(Qt::ALT | Qt::Key_E), this, SLOT(onExportExcel()));
 
     configureTableColumns();
 }
@@ -446,8 +448,32 @@ void TrialBalanceWidget::onExportCsv() {
     QMessageBox::information(this, "Exported", "Trial Balance successfully exported to CSV.");
 }
 
+void TrialBalanceWidget::onExportPdf() {
+    if (!m_printExportCtrl) return;
+    QString asOnDate = m_toDateEdit ? m_toDateEdit->date().toString("yyyy-MM-dd") : "";
+    int mode = (m_modeBadge && m_modeBadge->text().contains("Hierarchy")) ? 1 : 0;
+    m_printExportCtrl->export_trial_balance_pdf(asOnDate, mode);
+}
+
+void TrialBalanceWidget::onExportOdf() {
+    if (!m_printExportCtrl) return;
+    QString asOnDate = m_toDateEdit ? m_toDateEdit->date().toString("yyyy-MM-dd") : "";
+    int mode = (m_modeBadge && m_modeBadge->text().contains("Hierarchy")) ? 1 : 0;
+    m_printExportCtrl->export_trial_balance_odf(asOnDate, mode);
+}
+
+void TrialBalanceWidget::onExportExcel() {
+    if (!m_printExportCtrl) return;
+    QString asOnDate = m_toDateEdit ? m_toDateEdit->date().toString("yyyy-MM-dd") : "";
+    int mode = (m_modeBadge && m_modeBadge->text().contains("Hierarchy")) ? 1 : 0;
+    m_printExportCtrl->export_trial_balance_excel(asOnDate, mode);
+}
+
 void TrialBalanceWidget::onPrintPdf() {
-    QMessageBox::information(this, "Print Report", "Trial Balance report (" + m_modeBadge->text() + ") sent to system print preview.");
+    if (!m_printExportCtrl) return;
+    QString asOnDate = m_toDateEdit ? m_toDateEdit->date().toString("yyyy-MM-dd") : "";
+    int mode = (m_modeBadge && m_modeBadge->text().contains("Hierarchy")) ? 1 : 0;
+    m_printExportCtrl->print_trial_balance(asOnDate, mode);
 }
 
 void TrialBalanceWidget::keyPressEvent(QKeyEvent* event) {

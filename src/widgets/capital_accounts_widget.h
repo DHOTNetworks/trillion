@@ -32,6 +32,9 @@ private slots:
     void onDateFilterChanged();
     void onTableDoubleClicked(int row, int col);
     void onExportCsv();
+    void onExportPdf();
+    void onExportOdf();
+    void onExportExcel();
     void onPrintPdf();
 
 private:

@@ -419,8 +419,8 @@ endif()
 # Set Target Properties for macOS and Windows
 set_target_properties(${PROJECT_NAME} PROPERTIES
     MACOSX_BUNDLE TRUE
-    MACOSX_BUNDLE_BUNDLE_NAME "Mahadev Rice Mill ERP"
-    MACOSX_BUNDLE_GUI_IDENTIFIER "com.mahadevagro.ricemill"
+    MACOSX_BUNDLE_BUNDLE_NAME "Mahadev Accounts ERP"
+    MACOSX_BUNDLE_GUI_IDENTIFIER "com.mahadev.accounts"
     MACOSX_BUNDLE_SHORT_VERSION_STRING "0.2.0"
     MACOSX_BUNDLE_VERSION "0.2.0"
     WIN32_EXECUTABLE $<IF:$<CONFIG:Debug>,FALSE,TRUE>

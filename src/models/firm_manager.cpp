@@ -68,8 +68,8 @@ void FirmManager::loadRegistry() {
                 QVariantMap f = v.toObject().toVariantMap();
                 QString dbName = f.value("db_name").toString();
                 QString dbPath = f.value("db_path").toString();
-                if (dbName == "mahadev_accounting.db" || dbName == "mahadev_rice.db") continue;
-                if (dbPath.endsWith("mahadev_accounting.db") || dbPath.endsWith("mahadev_rice.db")) continue;
+                if (dbName == "test.db" || dbName == "mahadev_rice.db") continue;
+                if (dbPath.endsWith("test.db") || dbPath.endsWith("mahadev_rice.db")) continue;
                 if (!dbPath.isEmpty() && QFile::exists(dbPath) && QFileInfo(dbPath).size() == 0) continue;
                 registeredFirms.append(f);
             }
@@ -87,7 +87,7 @@ void FirmManager::loadRegistry() {
     if (dataDir.exists()) {
         QStringList dbFiles = dataDir.entryList({"*.db"}, QDir::Files, QDir::Name);
         for (const QString& dbName : dbFiles) {
-            if (dbName == "mahadev_accounting.db" || dbName == "mahadev_rice.db") continue;
+            if (dbName == "test.db" || dbName == "mahadev_rice.db") continue;
             if (dbName.endsWith("-wal") || dbName.endsWith("-shm")) continue;
             if (dbName.startsWith("test_unit_suite")) continue;
             QString fullPath = dataDir.filePath(dbName);
@@ -293,7 +293,7 @@ QVariantList FirmManager::scan_folder_for_firms(const QString& folderPath) {
 
     if (isAppData) {
         for (const QString& dbName : dbFiles) {
-            if (dbName == "mahadev_accounting.db" || dbName == "mahadev_rice.db") continue; // skip legacy/mock templates
+            if (dbName == "test.db" || dbName == "mahadev_rice.db") continue; // skip legacy/mock templates
             if (dbName.endsWith("-wal") || dbName.endsWith("-shm")) continue;
             if (dbName.startsWith("test_unit_suite")) continue;
 

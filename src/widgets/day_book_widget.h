@@ -32,6 +32,9 @@ private slots:
     void onRefreshClicked();
     void onRowDoubleClicked(int row, int column);
     void onExportPdfClicked();
+    void onExportOdfClicked();
+    void onExportExcelClicked();
+    void onPrintClicked();
     void onDateChanged();
 
 private:

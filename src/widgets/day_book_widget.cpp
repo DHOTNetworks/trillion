@@ -358,10 +358,31 @@ void DayBookWidget::onRowDoubleClicked(int row, int /*column*/) {
 }
 
 void DayBookWidget::onExportPdfClicked() {
-    QString savePath = QFileDialog::getSaveFileName(this, "Save Day Book PDF", "DayBook.pdf", "PDF Files (*.pdf)");
-    if (savePath.isEmpty()) return;
+    if (!m_printExportCtrl) return;
+    QString fDate = m_fromDateEdit ? m_fromDateEdit->date().toString("yyyy-MM-dd") : "";
+    QString tDate = m_toDateEdit ? m_toDateEdit->date().toString("yyyy-MM-dd") : "";
+    m_printExportCtrl->export_day_book_pdf(fDate, tDate);
+}
 
-    QMessageBox::information(this, "Export", "Day book PDF exported successfully to:\n" + savePath);
+void DayBookWidget::onExportOdfClicked() {
+    if (!m_printExportCtrl) return;
+    QString fDate = m_fromDateEdit ? m_fromDateEdit->date().toString("yyyy-MM-dd") : "";
+    QString tDate = m_toDateEdit ? m_toDateEdit->date().toString("yyyy-MM-dd") : "";
+    m_printExportCtrl->export_day_book_odf(fDate, tDate);
+}
+
+void DayBookWidget::onExportExcelClicked() {
+    if (!m_printExportCtrl) return;
+    QString fDate = m_fromDateEdit ? m_fromDateEdit->date().toString("yyyy-MM-dd") : "";
+    QString tDate = m_toDateEdit ? m_toDateEdit->date().toString("yyyy-MM-dd") : "";
+    m_printExportCtrl->export_day_book_excel(fDate, tDate);
+}
+
+void DayBookWidget::onPrintClicked() {
+    if (!m_printExportCtrl) return;
+    QString fDate = m_fromDateEdit ? m_fromDateEdit->date().toString("yyyy-MM-dd") : "";
+    QString tDate = m_toDateEdit ? m_toDateEdit->date().toString("yyyy-MM-dd") : "";
+    m_printExportCtrl->print_day_book(fDate, tDate);
 }
 
 void DayBookWidget::keyPressEvent(QKeyEvent* event) {
@@ -370,6 +391,18 @@ void DayBookWidget::keyPressEvent(QKeyEvent* event) {
         event->accept();
     } else if (event->key() == Qt::Key_F5) {
         onRefreshClicked();
+        event->accept();
+    } else if (event->modifiers() & Qt::AltModifier && event->key() == Qt::Key_P) {
+        onPrintClicked();
+        event->accept();
+    } else if (event->modifiers() & Qt::ControlModifier && event->key() == Qt::Key_P) {
+        onExportPdfClicked();
+        event->accept();
+    } else if (event->modifiers() & Qt::AltModifier && event->key() == Qt::Key_O) {
+        onExportOdfClicked();
+        event->accept();
+    } else if (event->modifiers() & Qt::AltModifier && event->key() == Qt::Key_E) {
+        onExportExcelClicked();
         event->accept();
     } else {
         QWidget::keyPressEvent(event);

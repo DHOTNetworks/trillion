@@ -183,7 +183,9 @@ void CapitalAccountsWidget::setupUi() {
     // Shortcuts
     connect(new QShortcut(QKeySequence(Qt::Key_Escape), this), &QShortcut::activated, this, &CapitalAccountsWidget::backRequested);
     new QShortcut(QKeySequence(Qt::ALT | Qt::Key_P), this, SLOT(onPrintPdf()));
-    new QShortcut(QKeySequence(Qt::ALT | Qt::Key_E), this, SLOT(onExportCsv()));
+    new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_P), this, SLOT(onExportPdf()));
+    new QShortcut(QKeySequence(Qt::ALT | Qt::Key_O), this, SLOT(onExportOdf()));
+    new QShortcut(QKeySequence(Qt::ALT | Qt::Key_E), this, SLOT(onExportExcel()));
 }
 
 void CapitalAccountsWidget::focusTable() {
@@ -303,8 +305,32 @@ void CapitalAccountsWidget::onExportCsv() {
     QMessageBox::information(this, "Export Successful", "Capital Accounts schedule exported to CSV.");
 }
 
+void CapitalAccountsWidget::onExportPdf() {
+    if (!m_printExportCtrl) return;
+    QString fDate = m_fromDateEdit ? m_fromDateEdit->date().toString("yyyy-MM-dd") : "";
+    QString tDate = m_toDateEdit ? m_toDateEdit->date().toString("yyyy-MM-dd") : "";
+    m_printExportCtrl->export_capital_accounts_pdf(fDate, tDate);
+}
+
+void CapitalAccountsWidget::onExportOdf() {
+    if (!m_printExportCtrl) return;
+    QString fDate = m_fromDateEdit ? m_fromDateEdit->date().toString("yyyy-MM-dd") : "";
+    QString tDate = m_toDateEdit ? m_toDateEdit->date().toString("yyyy-MM-dd") : "";
+    m_printExportCtrl->export_capital_accounts_odf(fDate, tDate);
+}
+
+void CapitalAccountsWidget::onExportExcel() {
+    if (!m_printExportCtrl) return;
+    QString fDate = m_fromDateEdit ? m_fromDateEdit->date().toString("yyyy-MM-dd") : "";
+    QString tDate = m_toDateEdit ? m_toDateEdit->date().toString("yyyy-MM-dd") : "";
+    m_printExportCtrl->export_capital_accounts_excel(fDate, tDate);
+}
+
 void CapitalAccountsWidget::onPrintPdf() {
-    QMessageBox::information(this, "Print Report", "Capital Accounts schedule sent to system print preview.");
+    if (!m_printExportCtrl) return;
+    QString fDate = m_fromDateEdit ? m_fromDateEdit->date().toString("yyyy-MM-dd") : "";
+    QString tDate = m_toDateEdit ? m_toDateEdit->date().toString("yyyy-MM-dd") : "";
+    m_printExportCtrl->print_capital_accounts(fDate, tDate);
 }
 
 void CapitalAccountsWidget::keyPressEvent(QKeyEvent* event) {

@@ -6,11 +6,11 @@ from datetime import datetime, date, timedelta
 def get_db_path():
     base_dir = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
     if os.path.basename(base_dir) == 'backend':
-        return os.path.abspath(os.path.join(base_dir, "..", "mahadev_accounting.db"))
-    cand = os.path.join(base_dir, "mahadev_accounting.db")
+        return os.path.abspath(os.path.join(base_dir, "..", "test.db"))
+    cand = os.path.join(base_dir, "test.db")
     if os.path.exists(cand):
         return cand
-    return os.path.abspath(os.path.join(base_dir, "..", "mahadev_accounting.db"))
+    return os.path.abspath(os.path.join(base_dir, "..", "test.db"))
 
 DB_FILE = get_db_path()
 
@@ -663,4 +663,4 @@ def init_db():
 
 if __name__ == "__main__":
     init_db()
-    print("Mahadev Accounting Database Initialized Successfully!")
+    print("Database Initialized Successfully!")

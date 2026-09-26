@@ -51,6 +51,7 @@
 #include "../src/models/trial_balance_controller.h"
 #include "../src/models/capital_accounts_controller.h"
 #include "../src/models/cash_bank_flow_controller.h"
+#include "../src/services/print_export_controller.h"
 
 class LogicBoardTestSuite : public QObject {
     Q_OBJECT
@@ -121,6 +122,9 @@ private slots:
 
     // 14. Cash Book & Flow Statements Subsystem
     void testCashBankFlowAndCashVouchers();
+
+    // 15. Universal Print, PDF, ODF & Excel Export Subsystems
+    void testPrintExportControllerUniversalExports();
 };
 
 #include "mdbtools.h"
@@ -1728,6 +1732,74 @@ void LogicBoardTestSuite::testCashBankFlowAndCashVouchers() {
     QVERIFY(csv.contains("FLOW_TEST_CUSTOMER"));
 
     qDebug() << "[TEST] Cash Book & Flow Statements Subsystem verified successfully!";
+}
+
+void LogicBoardTestSuite::testPrintExportControllerUniversalExports() {
+    PrintExportController ctrl;
+    
+    // 1. Test Generic Export Engines
+    QString sampleHtml = "<html><body><h1>Mahadev Rice Mill Test Statement</h1><p>Sample statement</p></body></html>";
+    QString tmpDir = QDir::tempPath();
+    
+    QString pdfPath = ctrl.exportHtmlToPdf(sampleHtml, "test_sample.pdf", tmpDir + "/test_sample.pdf", false);
+    QVERIFY(!pdfPath.isEmpty());
+    QVERIFY(QFile::exists(pdfPath));
+    QFile::remove(pdfPath);
+    
+    QString odfPath = ctrl.exportHtmlToOdf(sampleHtml, "test_sample.odt", tmpDir + "/test_sample.odt", false);
+    QVERIFY(!odfPath.isEmpty());
+    QVERIFY(QFile::exists(odfPath));
+    QFile::remove(odfPath);
+    
+    QString xlsPath = ctrl.exportHtmlToExcel(sampleHtml, "test_sample.xls", tmpDir + "/test_sample.xls");
+    QVERIFY(!xlsPath.isEmpty());
+    QVERIFY(QFile::exists(xlsPath));
+    QFile::remove(xlsPath);
+    
+    QStringList headers = {"Date", "Particulars", "Debit", "Credit"};
+    QVector<QStringList> rows = {{"01/04/2026", "Opening Balance", "1000.00", "0.00"}};
+    QString csvPath = ctrl.exportTableToCsv(headers, rows, "test_sample.csv", tmpDir + "/test_sample.csv");
+    QVERIFY(!csvPath.isEmpty());
+    QVERIFY(QFile::exists(csvPath));
+    QFile::remove(csvPath);
+
+    // 2. Test HTML Renderers
+    QString tbHtml = ctrl.renderTrialBalanceHtml("2026-03-31", 0);
+    QVERIFY(tbHtml.contains("TRIAL BALANCE", Qt::CaseInsensitive));
+
+    QString plHtml = ctrl.renderProfitLossHtml("2025-04-01", "2026-03-31");
+    QVERIFY(plHtml.contains("PROFIT &amp; LOSS", Qt::CaseInsensitive) || plHtml.contains("PROFIT & LOSS", Qt::CaseInsensitive));
+
+    QString bsHtml = ctrl.renderBalanceSheetHtml("2026-03-31");
+    QVERIFY(bsHtml.contains("BALANCE SHEET", Qt::CaseInsensitive));
+
+    QString dbHtml = ctrl.renderDayBookHtml("2025-04-01", "2026-03-31");
+    QVERIFY(dbHtml.contains("DAY BOOK", Qt::CaseInsensitive));
+
+    QString srHtml = ctrl.renderSalesRegisterHtml("2025-04-01", "2026-03-31");
+    QVERIFY(srHtml.contains("SALES REGISTER", Qt::CaseInsensitive));
+
+    QString prHtml = ctrl.renderPurchaseRegisterHtml("2025-04-01", "2026-03-31");
+    QVERIFY(prHtml.contains("PURCHASE REGISTER", Qt::CaseInsensitive));
+
+    QString mandiHtml = ctrl.renderMandiReportHtml("Form M", "2025-04-01", "2026-03-31");
+    QVERIFY(mandiHtml.contains("FORM M", Qt::CaseInsensitive));
+
+    QString gstrHtml = ctrl.renderGstrReportHtml("GSTR-1", "2025-04-01", "2026-03-31");
+    QVERIFY(gstrHtml.contains("GSTR-1", Qt::CaseInsensitive));
+
+    // 3. Test Statement ODF & Excel Exports
+    QString odfTrial = ctrl.export_trial_balance_odf("2026-03-31", 0, tmpDir + "/test_tb.odt");
+    QVERIFY(!odfTrial.isEmpty());
+    QVERIFY(QFile::exists(odfTrial));
+    QFile::remove(odfTrial);
+
+    QString xlsTrial = ctrl.export_trial_balance_excel("2026-03-31", 0, tmpDir + "/test_tb.xls");
+    QVERIFY(!xlsTrial.isEmpty());
+    QVERIFY(QFile::exists(xlsTrial));
+    QFile::remove(xlsTrial);
+
+    qDebug() << "[TEST] Universal Print, PDF, ODF & Excel Exports Subsystems verified successfully!";
 }
 
 QTEST_MAIN(LogicBoardTestSuite)

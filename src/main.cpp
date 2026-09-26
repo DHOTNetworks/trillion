@@ -139,7 +139,7 @@ int main(int argc, char* argv[]) {
     } else {
         // If launched via Finder/bundle: Contents/MacOS/../../../.. -> project root
         QDir projDir(appDir + "/../../../..");
-        if (projDir.exists("CMakeLists.txt") || projDir.exists("mahadev_accounting.db") || projDir.exists("data")) {
+        if (projDir.exists("CMakeLists.txt") || projDir.exists("test.db") || projDir.exists("data")) {
             launchDir = projDir;
         } else {
             launchDir = QDir(appDir + "/../../..");

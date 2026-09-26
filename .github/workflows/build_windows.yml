@@ -45,9 +45,9 @@ jobs:
           mkdir dist\MahadevRiceMillERP
           copy build\MahadevRiceMillERP.exe dist\MahadevRiceMillERP\
           
-          REM Copy local QML folder & Database template into distribution folder
+          REM Copy local QML folder into distribution folder
           xcopy qml dist\MahadevRiceMillERP\qml\ /E /I /Y
-          copy mahadev_accounting.db dist\MahadevRiceMillERP\
+          if exist test.db copy test.db dist\MahadevRiceMillERP\
           
           REM Deploy Qt runtime plugins and compiler runtime
           windeployqt --qmldir qml --release --compiler-runtime --no-translations dist\MahadevRiceMillERP\MahadevRiceMillERP.exe

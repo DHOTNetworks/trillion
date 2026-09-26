@@ -30,7 +30,7 @@ public:
     static QString extractStateCode(const QString& gstin, const QString& state);
     static QString extractPincode(const QString& address, const QString& fallback = "125055");
 
-    // Full in-process migration of MDB into mahadev_accounting.db
+    // Full in-process migration of MDB into target SQLite database
     Q_INVOKABLE bool migrate_mdb_file(const QString& mdbFilePath);
 
     // Native file picker for MDB/Data.* database files

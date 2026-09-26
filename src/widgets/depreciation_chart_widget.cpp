@@ -252,7 +252,9 @@ void DepreciationChartWidget::setupUi() {
     // Shortcuts
     connect(new QShortcut(QKeySequence(Qt::Key_Escape), this), &QShortcut::activated, this, &DepreciationChartWidget::backRequested);
     new QShortcut(QKeySequence(Qt::ALT | Qt::Key_P), this, SLOT(onPrintPdf()));
-    new QShortcut(QKeySequence(Qt::ALT | Qt::Key_E), this, SLOT(onExportCsv()));
+    new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_P), this, SLOT(onExportPdf()));
+    new QShortcut(QKeySequence(Qt::ALT | Qt::Key_O), this, SLOT(onExportOdf()));
+    new QShortcut(QKeySequence(Qt::ALT | Qt::Key_E), this, SLOT(onExportExcel()));
 }
 
 void DepreciationChartWidget::setDetailedMode(bool isDetailed) {
@@ -447,8 +449,28 @@ void DepreciationChartWidget::onExportCsv() {
     QMessageBox::information(this, "Export Successful", "Depreciation Chart exported to CSV successfully.");
 }
 
+void DepreciationChartWidget::onExportPdf() {
+    if (!m_printExportCtrl) return;
+    QString asOnDate = m_toDateEdit ? m_toDateEdit->date().toString("yyyy-MM-dd") : "";
+    m_printExportCtrl->export_depreciation_chart_pdf(asOnDate);
+}
+
+void DepreciationChartWidget::onExportOdf() {
+    if (!m_printExportCtrl) return;
+    QString asOnDate = m_toDateEdit ? m_toDateEdit->date().toString("yyyy-MM-dd") : "";
+    m_printExportCtrl->export_depreciation_chart_odf(asOnDate);
+}
+
+void DepreciationChartWidget::onExportExcel() {
+    if (!m_printExportCtrl) return;
+    QString asOnDate = m_toDateEdit ? m_toDateEdit->date().toString("yyyy-MM-dd") : "";
+    m_printExportCtrl->export_depreciation_chart_excel(asOnDate);
+}
+
 void DepreciationChartWidget::onPrintPdf() {
-    QMessageBox::information(this, "Print Report", "Depreciation chart sent to system print preview.");
+    if (!m_printExportCtrl) return;
+    QString asOnDate = m_toDateEdit ? m_toDateEdit->date().toString("yyyy-MM-dd") : "";
+    m_printExportCtrl->print_depreciation_chart(asOnDate);
 }
 
 void DepreciationChartWidget::keyPressEvent(QKeyEvent* event) {
