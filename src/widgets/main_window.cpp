@@ -371,35 +371,24 @@ MainWindow::MainWindow(const MainWindowDependencies& deps, QWidget* parent)
     connect(m_depreciationChartWidget, &MahadevERP::DepreciationChartWidget::makeNewLedgerRequested, this, [this]() { navigateToView(6); });
     m_stackedWidget->addWidget(m_depreciationChartWidget);
 
-    // Global Shortcuts for Accounting Period (Alt+F2) and Context-Aware F2 (Date / Period)
+    // Index 43: Native C++ Cash Bank Flow Widget (Views 61, 62, 63)
+    m_cashBankFlowWidget = new MahadevERP::CashBankFlowWidget(m_printExportCtrl, this);
+    connect(m_cashBankFlowWidget, &MahadevERP::CashBankFlowWidget::backRequested, this, &MainWindow::navigateBack);
+    connect(m_cashBankFlowWidget, &MahadevERP::CashBankFlowWidget::partyStatementRequested, this, &MainWindow::openStatementForParty);
+    m_stackedWidget->addWidget(m_cashBankFlowWidget);
+
+    // Index 44: Native C++ Cash Voucher Widget (View 60)
+    m_cashVoucherWidget = new MahadevERP::CashVoucherWidget(m_printExportCtrl, this);
+    connect(m_cashVoucherWidget, &MahadevERP::CashVoucherWidget::backRequested, this, &MainWindow::navigateBack);
+    connect(m_cashVoucherWidget, &MahadevERP::CashVoucherWidget::voucherSaved, this, &MainWindow::onCashVoucherSaved);
+    m_stackedWidget->addWidget(m_cashVoucherWidget);
+
+    // Global Shortcuts for Accounting Period (Alt+F2 and F2)
     QShortcut* altF2Shortcut = new QShortcut(QKeySequence(Qt::ALT | Qt::Key_F2), this);
     connect(altF2Shortcut, &QShortcut::activated, this, &MainWindow::openAccountingPeriodDialog);
 
     QShortcut* f2Shortcut = new QShortcut(QKeySequence(Qt::Key_F2), this);
-    connect(f2Shortcut, &QShortcut::activated, this, [this]() {
-        int vIdx = currentViewIndex();
-        if (vIdx == 14 && m_salesVoucherWidget) {
-            m_salesVoucherWidget->openDateDialog();
-        } else if (vIdx == 15 && m_purchaseVoucherWidget) {
-            m_purchaseVoucherWidget->openDateDialog();
-        } else if (vIdx == 16 && m_chequeVoucherWidget) {
-            m_chequeVoucherWidget->openDateDialog();
-        } else if (vIdx == 17 && m_journalVoucherWidget) {
-            m_journalVoucherWidget->openDateDialog();
-        } else if (vIdx == 18 && m_jformVoucherWidget) {
-            m_jformVoucherWidget->openDateDialog();
-        } else if (vIdx == 19 && m_iformVoucherWidget) {
-            m_iformVoucherWidget->openDateDialog();
-        } else if (vIdx == 24 && m_tdsVoucherWidget) {
-            m_tdsVoucherWidget->openDateDialog();
-        } else if (vIdx == 28 && m_debitCreditNoteWidget) {
-            m_debitCreditNoteWidget->openDateDialog();
-        } else if (vIdx == 31 && m_millingVoucherWidget) {
-            m_millingVoucherWidget->openDateDialog();
-        } else {
-            openAccountingPeriodDialog();
-        }
-    });
+    connect(f2Shortcut, &QShortcut::activated, this, &MainWindow::openAccountingPeriodDialog);
 
     // Unified Application-Wide Keyboard Navigation Controller
     m_keyboardCtrl = new AppKeyboardController(this, this);
@@ -648,10 +637,20 @@ int MainWindow::currentViewIndex() const {
     if (cur == m_trialBalanceWidget) return 39;
     if (cur == m_capitalAccountsWidget) return 40;
     if (cur == m_depreciationChartWidget) return 41;
+    if (cur == m_cashVoucherWidget) return 60;
+    if (cur == m_cashBankFlowWidget) {
+        if (m_cashBankFlowWidget->statementMode() == MahadevERP::FlowStatementType::CashFlow) return 61;
+        if (m_cashBankFlowWidget->statementMode() == MahadevERP::FlowStatementType::BankFlow) return 62;
+        if (m_cashBankFlowWidget->statementMode() == MahadevERP::FlowStatementType::JointFlow) return 63;
+        return 61;
+    }
     return 0;
 }
 
 void MainWindow::restoreActiveViewFocus() {
+    if (QApplication::activeModalWidget() || QApplication::activePopupWidget()) {
+        return;
+    }
     int vIdx = currentViewIndex();
     if (vIdx == 0 && m_dashboardWidget) {
         m_dashboardWidget->focusMenu();
@@ -711,6 +710,10 @@ void MainWindow::restoreActiveViewFocus() {
     } else if (vIdx == 41 && m_depreciationChartWidget) {
         m_depreciationChartWidget->setFocus(Qt::OtherFocusReason);
         m_depreciationChartWidget->focusTable();
+    } else if (vIdx == 60 && m_cashVoucherWidget) {
+        m_cashVoucherWidget->setFocus(Qt::OtherFocusReason);
+    } else if ((vIdx == 61 || vIdx == 62 || vIdx == 63) && m_cashBankFlowWidget) {
+        m_cashBankFlowWidget->setFocus(Qt::OtherFocusReason);
     } else if (vIdx == 6 && m_newLedgerWidget) {
         m_newLedgerWidget->setFocus(Qt::OtherFocusReason);
         m_newLedgerWidget->focusFirstField();
@@ -791,6 +794,10 @@ void MainWindow::openAccountingPeriodDialog() {
 
         if (m_depreciationChartWidget) {
             m_depreciationChartWidget->reloadData();
+        }
+
+        if (m_cashBankFlowWidget) {
+            m_cashBankFlowWidget->setDateRange(fIso, tIso);
         }
     }
 
@@ -934,13 +941,8 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
                 m_salesVoucherWidget->loadInvoiceForEditing(target, pendingDate);
             } else {
                 m_salesVoucherWidget->resetForm();
-                QTimer::singleShot(0, this, [this]() {
-                    if (m_salesVoucherWidget && m_stackedWidget->currentWidget() == m_salesVoucherWidget) {
-                        m_salesVoucherWidget->openDateDialog(true);
-                    }
-                });
+                m_salesVoucherWidget->openDateDialog(true);
             }
-            m_salesVoucherWidget->setFocus();
         }
     } else if (viewIndex == 15) {
         if (m_purchaseVoucherWidget) {
@@ -950,13 +952,8 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
                 m_purchaseVoucherWidget->loadInvoiceForEditing(target, pendingDate);
             } else {
                 m_purchaseVoucherWidget->resetForm();
-                QTimer::singleShot(0, this, [this]() {
-                    if (m_purchaseVoucherWidget && m_stackedWidget->currentWidget() == m_purchaseVoucherWidget) {
-                        m_purchaseVoucherWidget->openDateDialog(true);
-                    }
-                });
+                m_purchaseVoucherWidget->openDateDialog(true);
             }
-            m_purchaseVoucherWidget->setFocus();
         }
     } else if (viewIndex == 16) {
         if (m_chequeVoucherWidget) {
@@ -971,13 +968,8 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
                 m_chequeVoucherWidget->loadVoucherForEditing(target, pendingDate);
             } else {
                 m_chequeVoucherWidget->resetForm();
-                QTimer::singleShot(0, this, [this]() {
-                    if (m_chequeVoucherWidget && m_stackedWidget->currentWidget() == m_chequeVoucherWidget) {
-                        m_chequeVoucherWidget->openDateDialog(true);
-                    }
-                });
+                m_chequeVoucherWidget->openDateDialog(true);
             }
-            m_chequeVoucherWidget->setFocus();
         }
     } else if (viewIndex == 17) {
         if (m_journalVoucherWidget) {
@@ -987,13 +979,8 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
                 m_journalVoucherWidget->loadVoucherForEditing(target, pendingDate);
             } else {
                 m_journalVoucherWidget->resetForm();
-                QTimer::singleShot(0, this, [this]() {
-                    if (m_journalVoucherWidget && m_stackedWidget->currentWidget() == m_journalVoucherWidget) {
-                        m_journalVoucherWidget->openDateDialog(true);
-                    }
-                });
+                m_journalVoucherWidget->openDateDialog(true);
             }
-            m_journalVoucherWidget->setFocus();
         }
     } else if (viewIndex == 18) {
         if (m_jformVoucherWidget) {
@@ -1003,13 +990,8 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
                 m_jformVoucherWidget->loadVoucherForEditing(target, pendingDate);
             } else {
                 m_jformVoucherWidget->resetForm();
-                QTimer::singleShot(0, this, [this]() {
-                    if (m_jformVoucherWidget && m_stackedWidget->currentWidget() == m_jformVoucherWidget) {
-                        m_jformVoucherWidget->openDateDialog(true);
-                    }
-                });
+                m_jformVoucherWidget->openDateDialog(true);
             }
-            m_jformVoucherWidget->setFocus();
         }
     } else if (viewIndex == 19) {
         if (m_iformVoucherWidget) {
@@ -1019,13 +1001,8 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
                 m_iformVoucherWidget->loadVoucherForEditing(target, pendingDate);
             } else {
                 m_iformVoucherWidget->resetForm();
-                QTimer::singleShot(0, this, [this]() {
-                    if (m_iformVoucherWidget && m_stackedWidget->currentWidget() == m_iformVoucherWidget) {
-                        m_iformVoucherWidget->openDateDialog(true);
-                    }
-                });
+                m_iformVoucherWidget->openDateDialog(true);
             }
-            m_iformVoucherWidget->setFocus();
         }
     } else if (viewIndex == 20) {
         if (m_mandiReportsWidget) {
@@ -1213,7 +1190,44 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
             m_depreciationChartWidget->focusTable();
         }
     } else if (viewIndex == 60) {
-        openTdsTcsHub();
+        if (m_cashVoucherWidget) {
+            m_stackedWidget->setCurrentWidget(m_cashVoucherWidget);
+            if (!pendingInv.isEmpty() || !pendingVNo.isEmpty() || pendingId > 0) {
+                QVariant target = !pendingInv.isEmpty() ? QVariant(pendingInv) : (!pendingVNo.isEmpty() ? QVariant(pendingVNo) : QVariant(pendingId));
+                m_cashVoucherWidget->loadVoucherForEditing(target, pendingDate);
+            } else {
+                m_cashVoucherWidget->resetForm();
+                if (!m_targetChequeMode.isEmpty()) {
+                    m_cashVoucherWidget->setVoucherMode(m_targetChequeMode);
+                    m_targetChequeMode.clear();
+                }
+                m_cashVoucherWidget->openDateDialog(true);
+            }
+        }
+    } else if (viewIndex == 61) {
+        if (m_cashBankFlowWidget) {
+            m_cashBankFlowWidget->setStatementMode(MahadevERP::FlowStatementType::CashFlow);
+            m_stackedWidget->setCurrentWidget(m_cashBankFlowWidget);
+            FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
+            m_cashBankFlowWidget->setDateRange(activeFy.startDate, activeFy.endDate);
+            m_cashBankFlowWidget->setFocus();
+        }
+    } else if (viewIndex == 62) {
+        if (m_cashBankFlowWidget) {
+            m_cashBankFlowWidget->setStatementMode(MahadevERP::FlowStatementType::BankFlow);
+            m_stackedWidget->setCurrentWidget(m_cashBankFlowWidget);
+            FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
+            m_cashBankFlowWidget->setDateRange(activeFy.startDate, activeFy.endDate);
+            m_cashBankFlowWidget->setFocus();
+        }
+    } else if (viewIndex == 63) {
+        if (m_cashBankFlowWidget) {
+            m_cashBankFlowWidget->setStatementMode(MahadevERP::FlowStatementType::JointFlow);
+            m_stackedWidget->setCurrentWidget(m_cashBankFlowWidget);
+            FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
+            m_cashBankFlowWidget->setDateRange(activeFy.startDate, activeFy.endDate);
+            m_cashBankFlowWidget->setFocus();
+        }
     }
 
     m_isNavigating = false;
@@ -1294,6 +1308,19 @@ void MainWindow::onChequeVoucherBackRequested() {
 
 void MainWindow::onChequeVoucherSaved(const QString& voucherNo) {
     Q_UNUSED(voucherNo);
+    navigateBack();
+}
+
+void MainWindow::onCashVoucherBackRequested() {
+    navigateBack();
+}
+
+void MainWindow::onCashVoucherSaved(const QString& voucherNo) {
+    Q_UNUSED(voucherNo);
+    navigateBack();
+}
+
+void MainWindow::onCashBankFlowBackRequested() {
     navigateBack();
 }
 

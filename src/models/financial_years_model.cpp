@@ -42,9 +42,11 @@ QVariantMap FinancialYearsModel::get_active_year() const {
     return QVariantMap();
 }
 
+QString FinancialYearsModel::s_workingDate = "";
+
 bool FinancialYearsModel::set_active_year(const QString& yearName) {
     FiscalYearHelper::setActiveFiscalYear(yearName);
-    m_workingDate = "";
+    s_workingDate = "";
     reload_data();
     return true;
 }
@@ -58,9 +60,9 @@ QString FinancialYearsModel::get_working_date() const {
     QDate startD = QDate::fromString(activeFy.value("start_date").toString(), "yyyy-MM-dd");
     QDate endD = QDate::fromString(activeFy.value("end_date").toString(), "yyyy-MM-dd");
 
-    if (!m_workingDate.isEmpty()) {
-        QDate wD = QDate::fromString(m_workingDate, "dd-MM-yyyy");
-        if (!wD.isValid()) wD = QDate::fromString(m_workingDate, "yyyy-MM-dd");
+    if (!s_workingDate.isEmpty()) {
+        QDate wD = QDate::fromString(s_workingDate, "dd-MM-yyyy");
+        if (!wD.isValid()) wD = QDate::fromString(s_workingDate, "yyyy-MM-dd");
         if (wD.isValid() && startD.isValid() && endD.isValid()) {
             if (wD >= startD && wD <= endD) {
                 return wD.toString("dd-MM-yyyy");
@@ -71,29 +73,29 @@ QString FinancialYearsModel::get_working_date() const {
     QDate today = QDate::currentDate();
     if (startD.isValid() && endD.isValid()) {
         if (today >= startD && today <= endD) {
-            m_workingDate = today.toString("dd-MM-yyyy");
-            return m_workingDate;
+            s_workingDate = today.toString("dd-MM-yyyy");
+            return s_workingDate;
         }
         if (today > endD) {
-            m_workingDate = endD.toString("dd-MM-yyyy");
-            return m_workingDate;
+            s_workingDate = endD.toString("dd-MM-yyyy");
+            return s_workingDate;
         }
         if (today < startD) {
-            m_workingDate = startD.toString("dd-MM-yyyy");
-            return m_workingDate;
+            s_workingDate = startD.toString("dd-MM-yyyy");
+            return s_workingDate;
         }
     }
 
-    m_workingDate = today.toString("dd-MM-yyyy");
-    return m_workingDate;
+    s_workingDate = today.toString("dd-MM-yyyy");
+    return s_workingDate;
 }
 
 void FinancialYearsModel::set_working_date(const QString& dateStr) {
     QString parsed = parse_date_pattern(dateStr);
     if (!parsed.isEmpty()) {
-        m_workingDate = parsed;
+        s_workingDate = parsed;
     } else {
-        m_workingDate = dateStr;
+        s_workingDate = dateStr;
     }
 }
 
@@ -239,6 +241,10 @@ QVariantMap FinancialYearsModel::validate_voucher_date(const QString& input, con
 
     if (fyStart.isValid() && fyEnd.isValid()) {
         if (d < fyStart || d > fyEnd) {
+            if (matchedFy.isValid()) {
+                res["valid"] = true;
+                return res;
+            }
             res["valid"] = false;
             res["error"] = QString("Date %1 is outside the active Period (%2: %3 to %4).\nPlease enter a date within this period or switch the Financial Year in FY Selector (Alt+F).")
                                 .arg(d.toString("dd-MM-yyyy"), fyName, fyStart.toString("dd-MM-yyyy"), fyEnd.toString("dd-MM-yyyy"));

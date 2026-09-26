@@ -5,6 +5,10 @@
 #include "../widgets/ledger_statement_widget.h"
 #include "../widgets/sales_voucher_widget.h"
 #include "../widgets/purchase_voucher_widget.h"
+#include "../widgets/cheque_voucher_widget.h"
+#include "../widgets/journal_voucher_widget.h"
+#include "../widgets/cash_voucher_widget.h"
+#include "../widgets/tds_voucher_widget.h"
 #include <QTimer>
 #include <QLineEdit>
 #include <QTextEdit>
@@ -13,6 +17,12 @@
 #include <QDebug>
 
 AppKeyboardController* AppKeyboardController::s_instance = nullptr;
+
+static bool isVoucherActiveView(int vIdx) {
+    return (vIdx == 14 || vIdx == 15 || vIdx == 16 || vIdx == 17 || 
+            vIdx == 18 || vIdx == 19 || vIdx == 24 || vIdx == 28 || 
+            vIdx == 31 || vIdx == 60);
+}
 
 AppKeyboardController::AppKeyboardController(MainWindow* mainWindow, QObject* parent)
     : QObject(parent)
@@ -220,10 +230,21 @@ void AppKeyboardController::restoreFocus() {
 }
 
 bool AppKeyboardController::eventFilter(QObject* watched, QEvent* event) {
-    if (event->type() == QEvent::KeyPress) {
-        QKeyEvent* kEvent = static_cast<QKeyEvent*>(event);
-        if (handleKeyPress(kEvent)) {
-            return true;
+    if (event->type() == QEvent::KeyPress || event->type() == QEvent::KeyRelease || event->type() == QEvent::ShortcutOverride) {
+        if (QApplication::activeModalWidget() || QApplication::activePopupWidget()) {
+            return false;
+        }
+        if (watched && watched->isWidgetType()) {
+            QWidget* w = static_cast<QWidget*>(watched);
+            if (qobject_cast<QDialog*>(w) || qobject_cast<QDialog*>(w->window())) {
+                return false;
+            }
+        }
+        if (event->type() == QEvent::KeyPress) {
+            QKeyEvent* kEvent = static_cast<QKeyEvent*>(event);
+            if (handleKeyPress(kEvent)) {
+                return true;
+            }
         }
     }
     return QObject::eventFilter(watched, event);
@@ -244,19 +265,56 @@ bool AppKeyboardController::handleKeyPress(QKeyEvent* event) {
         return true;
     }
 
-    // 3. Accounting Period Modal (<kbd>F2</kbd> or <kbd>Alt+F2</kbd>)
-    if (key == Qt::Key_F2 || (mods.testFlag(Qt::AltModifier) && key == Qt::Key_F2)) {
+    int vIdx = currentViewIndex();
+
+    // 3. Accounting Period Modal (<kbd>Alt+F2</kbd> or <kbd>F2</kbd>)
+    if ((mods.testFlag(Qt::AltModifier) && key == Qt::Key_F2) || key == Qt::Key_F2) {
         openPeriodModal();
         return true;
     }
 
-    // Save Shortcut (<kbd>Ctrl+S</kbd>) in Sales / Purchase Voucher
+    // Save Shortcut (<kbd>Ctrl+S</kbd>) across all voucher entry forms
     if (mods.testFlag(Qt::ControlModifier) && key == Qt::Key_S) {
-        if (currentViewIndex() == 14 && m_mainWindow && m_mainWindow->salesVoucherWidget()) {
+        if (vIdx == 14 && m_mainWindow && m_mainWindow->salesVoucherWidget()) {
             m_mainWindow->salesVoucherWidget()->saveVoucher();
             return true;
-        } else if (currentViewIndex() == 15 && m_mainWindow && m_mainWindow->purchaseVoucherWidget()) {
+        } else if (vIdx == 15 && m_mainWindow && m_mainWindow->purchaseVoucherWidget()) {
             m_mainWindow->purchaseVoucherWidget()->saveVoucher();
+            return true;
+        } else if (vIdx == 16 && m_mainWindow && m_mainWindow->chequeVoucherWidget()) {
+            m_mainWindow->chequeVoucherWidget()->saveVoucher();
+            return true;
+        } else if (vIdx == 17 && m_mainWindow && m_mainWindow->journalVoucherWidget()) {
+            m_mainWindow->journalVoucherWidget()->saveVoucher();
+            return true;
+        } else if (vIdx == 60 && m_mainWindow && m_mainWindow->cashVoucherWidget()) {
+            m_mainWindow->cashVoucherWidget()->saveVoucher();
+            return true;
+        } else if (vIdx == 24 && m_mainWindow && m_mainWindow->tdsVoucherWidget()) {
+            m_mainWindow->tdsVoucherWidget()->onSaveClicked();
+            return true;
+        }
+    }
+
+    // Delete Shortcut (<kbd>Ctrl+D</kbd>) across voucher entry forms
+    if (mods.testFlag(Qt::ControlModifier) && key == Qt::Key_D) {
+        if (vIdx == 16 && m_mainWindow && m_mainWindow->chequeVoucherWidget()) {
+            m_mainWindow->chequeVoucherWidget()->deleteVoucher();
+            return true;
+        } else if (vIdx == 17 && m_mainWindow && m_mainWindow->journalVoucherWidget()) {
+            m_mainWindow->journalVoucherWidget()->deleteVoucher();
+            return true;
+        } else if (vIdx == 60 && m_mainWindow && m_mainWindow->cashVoucherWidget()) {
+            m_mainWindow->cashVoucherWidget()->deleteVoucher();
+            return true;
+        } else if (vIdx == 14 && m_mainWindow && m_mainWindow->salesVoucherWidget()) {
+            m_mainWindow->salesVoucherWidget()->deleteVoucher();
+            return true;
+        } else if (vIdx == 15 && m_mainWindow && m_mainWindow->purchaseVoucherWidget()) {
+            m_mainWindow->purchaseVoucherWidget()->deleteVoucher();
+            return true;
+        } else if (vIdx == 24 && m_mainWindow && m_mainWindow->tdsVoucherWidget()) {
+            m_mainWindow->tdsVoucherWidget()->onDeleteClicked();
             return true;
         }
     }
@@ -272,8 +330,22 @@ bool AppKeyboardController::handleKeyPress(QKeyEvent* event) {
         }
     }
 
+    // F3 / F4 mode switching in Cheque & Cash Vouchers, or F4 Alter in Sales Voucher: let them handle locally
+    if (key == Qt::Key_F3) {
+        if (vIdx == 16 || vIdx == 60) {
+            return false;
+        }
+    }
+    if (key == Qt::Key_F4) {
+        if (vIdx == 16 || vIdx == 60 || vIdx == 14) {
+            return false;
+        }
+        navigateTo(16);
+        return true;
+    }
+
     if (key == Qt::Key_F8) {
-        if (currentViewIndex() == 14 && m_mainWindow && m_mainWindow->salesVoucherWidget()) {
+        if (vIdx == 14 && m_mainWindow && m_mainWindow->salesVoucherWidget()) {
             m_mainWindow->salesVoucherWidget()->resetForm();
             return true;
         }
@@ -281,16 +353,21 @@ bool AppKeyboardController::handleKeyPress(QKeyEvent* event) {
         return true;
     }
     if (key == Qt::Key_F9) {
-        if (currentViewIndex() == 15 && m_mainWindow && m_mainWindow->purchaseVoucherWidget()) {
+        if (vIdx == 15 && m_mainWindow && m_mainWindow->purchaseVoucherWidget()) {
             m_mainWindow->purchaseVoucherWidget()->resetForm();
             return true;
         }
         navigateTo(15);
         return true;
     }
-    if (key == Qt::Key_F4) { navigateTo(16); return true; } // Cheque
-    if (key == Qt::Key_F7) { navigateTo(17); return true; } // Journal
-    if (key == Qt::Key_F10) { navigateTo(18); return true; } // Milling
+    if (key == Qt::Key_F7) {
+        if (vIdx == 17) {
+            return false;
+        }
+        navigateTo(17);
+        return true;
+    }
+    if (key == Qt::Key_F10) { navigateTo(18); return true; } // J-Form
     if (key == Qt::Key_F12) { navigateTo(13); return true; } // Stock Register
 
     // 5. Expand (<kbd>F5</kbd>) & Collapse (<kbd>F6</kbd>) for Ledger / Financial trees
@@ -320,7 +397,6 @@ bool AppKeyboardController::handleKeyPress(QKeyEvent* event) {
     }
 
     // 8. Auto-Focus and Instant Navigation for Arrow Keys in native views
-    int vIdx = currentViewIndex();
     if (vIdx == 29 || vIdx == 30 || vIdx == 8) {
         QWidget* fw = QApplication::focusWidget();
         bool isTextInput = (qobject_cast<QLineEdit*>(fw) || qobject_cast<QTextEdit*>(fw) || qobject_cast<QComboBox*>(fw));

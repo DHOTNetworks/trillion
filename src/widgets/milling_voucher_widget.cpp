@@ -217,7 +217,6 @@ void MillingVoucherWidget::setupUi() {
     connect(m_producedTable, &QTableWidget::cellChanged, this, &MillingVoucherWidget::onRecalculate);
 
     connect(new QShortcut(QKeySequence(Qt::Key_Escape), this), &QShortcut::activated, this, &MillingVoucherWidget::backRequested);
-    connect(new QShortcut(QKeySequence(Qt::Key_F2), this), &QShortcut::activated, this, [this]() { openDateDialog(); });
     connect(new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_S), this), &QShortcut::activated, this, &MillingVoucherWidget::onSaveClicked);
 }
 

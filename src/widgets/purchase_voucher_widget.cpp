@@ -1012,9 +1012,6 @@ void PurchaseVoucherWidget::openDateDialog(bool isInitial) {
 
 void PurchaseVoucherWidget::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
-    if (m_partySearchWidget) {
-        m_partySearchWidget->setFocus();
-    }
 }
 
 void PurchaseVoucherWidget::resetForm() {
@@ -1538,11 +1535,7 @@ void PurchaseVoucherWidget::openAlterVoucherDialog() {
 }
 
 void PurchaseVoucherWidget::keyPressEvent(QKeyEvent* event) {
-    if (event->key() == Qt::Key_F2) {
-        openDateDialog();
-        event->accept();
-        return;
-    } else if (event->key() == Qt::Key_F4) {
+    if (event->key() == Qt::Key_F4) {
         openAlterVoucherDialog();
         event->accept();
         return;

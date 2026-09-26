@@ -29,25 +29,36 @@ QString VouchersModel::get_next_voucher_no(const QString& v_type, const QString&
     QString fyPattern = "%" + targetFy.mid(3).trimmed() + "%";
 
     QStringList aliases;
-    aliases << prefix;
-    if (prefix == "ChPt" || prefix == "Pymt" || prefix == "Payment") {
-        aliases << "ChPt" << "Pymt" << "Payment" << "Paym";
-    } else if (prefix == "ChRt" || prefix == "Rcpt" || prefix == "Receipt") {
-        aliases << "ChRt" << "Rcpt" << "Receipt" << "Rece";
+    if (prefix == "Pymt" || prefix == "Cash Payment") {
+        prefix = "Pymt";
+        aliases << "Pymt" << "PYMT" << "Cash Payment";
+    } else if (prefix == "Rcpt" || prefix == "Cash Receipt") {
+        prefix = "Rcpt";
+        aliases << "Rcpt" << "RCPT" << "Cash Receipt";
+    } else if (prefix == "ChPt" || prefix == "Cheque Payment" || prefix == "Payment") {
+        prefix = "ChPt";
+        aliases << "ChPt" << "CHPT" << "Cheque Payment" << "Payment" << "Paym";
+    } else if (prefix == "ChRt" || prefix == "Cheque Receipt" || prefix == "Receipt") {
+        prefix = "ChRt";
+        aliases << "ChRt" << "CHRT" << "Cheque Receipt" << "Receipt" << "Rece";
     } else if (prefix == "Jrnl" || prefix == "Jour" || prefix == "Journal") {
+        prefix = "Jrnl";
         aliases << "Jrnl" << "Jour" << "Journal";
     } else if (prefix == "Purc" || prefix == "Purchase") {
+        prefix = "Purc";
         aliases << "Purc" << "Purchase";
     } else if (prefix == "Sale" || prefix == "Sales") {
+        prefix = "Sale";
         aliases << "Sale" << "Sales";
     }
+    aliases << prefix;
     aliases.removeDuplicates();
 
     QStringList whereClauses;
     QVariantList params;
     for (const QString& a : aliases) {
-        whereClauses << "voucher_type = ?" << "voucher_no LIKE ?";
-        params << a << (a + "-%");
+        whereClauses << "voucher_type = ?" << "legacy_type = ?" << "voucher_no LIKE ?";
+        params << a << a << (a + "-%");
     }
 
     QString sql = QString("SELECT voucher_no FROM vouchers WHERE (%1) AND (financial_year = ? OR financial_year LIKE ?);")
@@ -450,17 +461,21 @@ bool VouchersModel::save_multi_row_voucher(
     if (dt.isEmpty()) dt = QDate::currentDate().toString("yyyy-MM-dd");
 
     FiscalYearInfo fy = FiscalYearHelper::getFiscalYearForDate(dt);
-    int fyId = 1;
     QString fyLabel = fy.name;
     QVariant fyIdVar = DatabaseManager::instance().executeScalar(
         "SELECT id FROM financial_years WHERE year_name = ? LIMIT 1;",
         {fy.name}
     );
-    if (fyIdVar.isValid() && !fyIdVar.isNull()) {
-        fyId = fyIdVar.toInt();
+    QVariant fyIdParam;
+    if (fyIdVar.isValid() && !fyIdVar.isNull() && fyIdVar.toInt() > 0) {
+        fyIdParam = fyIdVar.toInt();
     } else {
         QVariant anyFy = DatabaseManager::instance().executeScalar("SELECT id FROM financial_years WHERE is_active = 1 LIMIT 1;");
-        if (anyFy.isValid() && !anyFy.isNull()) fyId = anyFy.toInt();
+        if (anyFy.isValid() && !anyFy.isNull() && anyFy.toInt() > 0) {
+            fyIdParam = anyFy.toInt();
+        } else {
+            fyIdParam = QVariant();
+        }
     }
 
     QString activeVchNo = vch_no.trimmed();
@@ -488,13 +503,30 @@ bool VouchersModel::save_multi_row_voucher(
         }
     }
 
-    QString rawType = (vch_type == "Payment" ? "ChPt" : (vch_type == "Receipt" ? "ChRt" : (vch_type == "Journal" ? "Jrnl" : vch_type)));
+    QString rawType = vch_type;
+    QString normalizedVType = vch_type;
+    if (vch_type == "Cash Payment" || vch_type == "Pymt") {
+        rawType = "Pymt";
+        normalizedVType = "Payment";
+    } else if (vch_type == "Cash Receipt" || vch_type == "Rcpt") {
+        rawType = "Rcpt";
+        normalizedVType = "Receipt";
+    } else if (vch_type == "Cheque Payment" || vch_type == "Payment" || vch_type == "ChPt") {
+        rawType = "ChPt";
+        normalizedVType = "Payment";
+    } else if (vch_type == "Cheque Receipt" || vch_type == "Receipt" || vch_type == "ChRt") {
+        rawType = "ChRt";
+        normalizedVType = "Receipt";
+    } else if (vch_type == "Journal" || vch_type == "Jrnl") {
+        rawType = "Jrnl";
+        normalizedVType = "Journal";
+    }
 
     QVariant pRow = DatabaseManager::instance().executeScalar(
         "SELECT id FROM parties WHERE name = ? COLLATE NOCASE OR alias = ? COLLATE NOCASE LIMIT 1;",
         {primaryDrParty, primaryDrParty}
     );
-    int pId = pRow.isValid() ? pRow.toInt() : 1;
+    QVariant pIdParam = (pRow.isValid() && !pRow.isNull() && pRow.toInt() > 0) ? pRow.toInt() : QVariant();
 
     DatabaseManager::instance().beginTransaction();
 
@@ -511,20 +543,20 @@ bool VouchersModel::save_multi_row_voucher(
             "UPDATE vouchers SET fy_id = ?, financial_year = ?, voucher_no = ?, instrument_no = ?, "
             "voucher_date = ?, voucher_type = ?, legacy_type = ?, party_id = ?, ledger_id = ?, party_name = ?, "
             "account_type = ?, amount = ?, narration = ? WHERE id = ?;",
-            {fyId, fyLabel, activeVchNo, primaryRef, dt, vch_type, rawType, pId, pId, primaryDrParty, primaryCrParty, totalAmount, narration, editId}
+            {fyIdParam, fyLabel, activeVchNo, primaryRef, dt, normalizedVType, rawType, pIdParam, pIdParam, primaryDrParty, primaryCrParty, totalAmount, narration, editId}
         );
 
         // Delete old transactions for this voucher
         DatabaseManager::instance().executeNonQuery(
             "DELETE FROM transactions WHERE (voucher_no = ? OR voucher_no = ?) AND (voucher_type = ? OR trans_type = ?);",
-            {oldVchNo, activeVchNo, vch_type, rawType}
+            {oldVchNo, activeVchNo, normalizedVType, rawType}
         );
     } else {
         // Insert new voucher
         DatabaseManager::instance().executeNonQuery(
             "INSERT INTO vouchers (fy_id, financial_year, voucher_no, instrument_no, voucher_date, voucher_type, legacy_type, party_id, ledger_id, party_name, account_type, amount, narration) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-            {fyId, fyLabel, activeVchNo, primaryRef, dt, vch_type, rawType, pId, pId, primaryDrParty, primaryCrParty, totalAmount, narration}
+            {fyIdParam, fyLabel, activeVchNo, primaryRef, dt, normalizedVType, rawType, pIdParam, pIdParam, primaryDrParty, primaryCrParty, totalAmount, narration}
         );
     }
 
@@ -545,12 +577,12 @@ bool VouchersModel::save_multi_row_voucher(
             "SELECT id FROM parties WHERE name = ? COLLATE NOCASE OR alias = ? COLLATE NOCASE LIMIT 1;",
             {party, party}
         );
-        int partyId = partyIdVar.isValid() ? partyIdVar.toInt() : 0;
+        QVariant partyIdParam = (partyIdVar.isValid() && !partyIdVar.isNull() && partyIdVar.toInt() > 0) ? partyIdVar.toInt() : QVariant();
 
         DatabaseManager::instance().executeNonQuery(
             "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, party_id, party_name, opposing_account, dr_cr, amount, invoice_no, narration, row_no) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-            {fyId, fyLabel, activeVchNo, dt, vch_type, rawType, partyId, party, opposing, drcr, amt, ref, narration, (i + 1)}
+            {fyIdParam, fyLabel, activeVchNo, dt, normalizedVType, rawType, partyIdParam, party, opposing, drcr, amt, ref, narration, (i + 1)}
         );
     }
 

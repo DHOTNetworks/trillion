@@ -169,8 +169,9 @@ void MenuTreeManager::setupDefaultMenus()
         MenuItem("2. Purchase Voucher Entry (Purchase Bill)", "F9", Qt::Key_2, MenuActionType::OpenView, 15),
         MenuItem("3. Paddy Procurement Slip (Kachha / Mandi)", "F2", Qt::Key_3, MenuActionType::OpenView, 1),
         MenuItem("4. Milling Production Entry", "", Qt::Key_4, MenuActionType::OpenView, 31),
-        MenuItem("5. Cheque / Bank Payment Voucher", "F3", Qt::Key_5, MenuActionType::OpenView, 16),
-        MenuItem("6. Journal Voucher Entry", "F5", Qt::Key_6, MenuActionType::OpenView, 17)
+        MenuItem("5. Cheque / Bank Payment & Receipt", "F3", Qt::Key_5, MenuActionType::OpenView, 16),
+        MenuItem("6. Cash Payment & Receipt Voucher", "F6", Qt::Key_6, MenuActionType::OpenView, 60),
+        MenuItem("7. Journal Voucher Entry", "F5", Qt::Key_7, MenuActionType::OpenView, 17)
     };
     registerMenu(addVoucherMenu);
 
@@ -192,18 +193,30 @@ void MenuTreeManager::setupDefaultMenus()
     MenuNode reportsMenu("reports_register", "REPORTS & REGISTERS MENU", "#059669", "");
     reportsMenu.items = {
         MenuItem("1. Day Book (Daily Audit & Transaction Register)", "Alt+D", Qt::Key_1, MenuActionType::OpenView, 33),
-        MenuItem("2. GST Compliance Dashboard (GSTR-1, 2A Match, 3B)", "Alt+G", Qt::Key_2, MenuActionType::OpenView, 34),
-        MenuItem("3. Mandi Form M & Statutory Returns (HSAMB)", "Alt+M", Qt::Key_3, MenuActionType::OpenView, 20),
-        MenuItem("4. Sales Register & Summary", "", Qt::Key_4, MenuActionType::OpenView, 3),
-        MenuItem("5. Purchase Register & Summary", "", Qt::Key_5, MenuActionType::OpenView, 4),
-        MenuItem("6. Stock Register (View Options)", "S", Qt::Key_6, MenuActionType::OpenSubmenu, -1, "stock_register_hub"),
-        MenuItem("7. Milling Production & Out-turn Statement", "Alt+M", Qt::Key_7, MenuActionType::OpenView, 35),
-        MenuItem("8. Final Reports (Balance Sheet, P&L, Trading, Trial Bal)", "F / F7", Qt::Key_8, MenuActionType::OpenSubmenu, -1, "final_reports_hub"),
-        MenuItem("9. Profit & Loss Statement (Trading & P&L)", "F6", Qt::Key_9, MenuActionType::OpenView, 30),
-        MenuItem("10. Closing Stock Valuation & Year-End Audit", "Alt+C", 0, MenuActionType::OpenView, 36),
-        MenuItem("11. Interest Calculation & Register (Aank / Rokka)", "Alt+A", 0, MenuActionType::OpenView, 8)
+        MenuItem("2. Cash Book & Flow Statements (Cash, Bank, Joint)", "Alt+C / C", Qt::Key_2, MenuActionType::OpenSubmenu, -1, "cash_book_hub"),
+        MenuItem("3. GST Compliance Dashboard (GSTR-1, 2A Match, 3B)", "Alt+G", Qt::Key_3, MenuActionType::OpenView, 34),
+        MenuItem("4. Mandi Form M & Statutory Returns (HSAMB)", "Alt+M", Qt::Key_4, MenuActionType::OpenView, 20),
+        MenuItem("5. Sales Register & Summary", "", Qt::Key_5, MenuActionType::OpenView, 3),
+        MenuItem("6. Purchase Register & Summary", "", Qt::Key_6, MenuActionType::OpenView, 4),
+        MenuItem("7. Stock Register (View Options)", "S", Qt::Key_7, MenuActionType::OpenSubmenu, -1, "stock_register_hub"),
+        MenuItem("8. Milling Production & Out-turn Statement", "Alt+M", Qt::Key_8, MenuActionType::OpenView, 35),
+        MenuItem("9. Final Reports (Balance Sheet, P&L, Trading, Trial Bal)", "F / F7", Qt::Key_9, MenuActionType::OpenSubmenu, -1, "final_reports_hub"),
+        MenuItem("10. Profit & Loss Statement (Trading & P&L)", "F6", 0, MenuActionType::OpenView, 30),
+        MenuItem("11. Closing Stock Valuation & Year-End Audit", "Alt+C", 0, MenuActionType::OpenView, 36),
+        MenuItem("12. Interest Calculation & Register (Aank / Rokka)", "Alt+A", 0, MenuActionType::OpenView, 8)
     };
     registerMenu(reportsMenu);
+
+    // 5b. CASH BOOK & FLOW STATEMENTS HUB
+    MenuNode cashBookHub("cash_book_hub", "CASH BOOK & FLOW STATEMENTS", "#2563EB", "reports_register");
+    cashBookHub.items = {
+        MenuItem("[A] Cash Flow Statement", "A", Qt::Key_A, MenuActionType::OpenView, 61),
+        MenuItem("[N] Bank Flow Statement", "N", Qt::Key_N, MenuActionType::OpenView, 62),
+        MenuItem("[J] Cash & Bank Joint Flow", "J", Qt::Key_J, MenuActionType::OpenView, 63),
+        MenuItem("[D] Day-Wise Cash Book", "D", Qt::Key_D, MenuActionType::OpenView, 33),
+        MenuItem("[Q] Quit / Back", "Esc / Q", Qt::Key_Q, MenuActionType::Back)
+    };
+    registerMenu(cashBookHub);
 
     // 6. TDS / TCS HUB MENU
     MenuNode tdsTcsHub("tds_tcs_hub", "TDS / TCS VOUCHER MENU", "#7C3AED", "other_voucher");

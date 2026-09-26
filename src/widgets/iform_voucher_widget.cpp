@@ -954,17 +954,10 @@ void IFormVoucherWidget::retreatCell() {
 
 void IFormVoucherWidget::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
-    if (m_buyerSearch) {
-        m_buyerSearch->setFocus();
-    }
 }
 
 void IFormVoucherWidget::keyPressEvent(QKeyEvent* event) {
-    if (event->key() == Qt::Key_F2) {
-        openDateDialog();
-        event->accept();
-        return;
-    } else if (event->key() == Qt::Key_F4) {
+    if (event->key() == Qt::Key_F4) {
         openAlterVoucherDialog();
         event->accept();
         return;
@@ -1003,10 +996,6 @@ bool IFormVoucherWidget::eventFilter(QObject* watched, QEvent* event) {
 
         if (key == Qt::Key_Escape) {
             emit backRequested();
-            return true;
-        }
-        if (key == Qt::Key_F2) {
-            openDateDialog();
             return true;
         }
         if (key == Qt::Key_F4) {

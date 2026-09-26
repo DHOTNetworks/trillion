@@ -879,9 +879,13 @@ void LedgerStatementWidget::openVoucherForEntry(const QVariantMap& entry) {
     else if (vType == "Purchase" || rawType == "Purc" || rawType == "Purchase" || vType == "Purc" || refNo.startsWith("Purc")) {
         targetViewIndex = 15;
     }
-    // 4. Payment / Receipt (View 16)
-    else if (vType == "Payment" || vType == "Receipt" || rawType == "ChPt" || rawType == "ChRt" || rawType == "Pymt" || rawType == "Rcpt" || rawType == "Bank" ||
-             refNo.startsWith("ChPt") || refNo.startsWith("ChRt") || refNo.startsWith("Pymt") || refNo.startsWith("Rcpt")) {
+    // 4. Cash Payment / Receipt (View 60)
+    else if (rawType == "Pymt" || rawType == "Rcpt" || refNo.startsWith("Pymt") || refNo.startsWith("Rcpt") || vType == "Cash Payment" || vType == "Cash Receipt") {
+        targetViewIndex = 60;
+    }
+    // 4b. Cheque / Bank Payment / Receipt (View 16)
+    else if (vType == "Payment" || vType == "Receipt" || rawType == "ChPt" || rawType == "ChRt" || rawType == "Bank" ||
+             refNo.startsWith("ChPt") || refNo.startsWith("ChRt")) {
         targetViewIndex = 16;
     }
     // 5. Journal Voucher (View 17)

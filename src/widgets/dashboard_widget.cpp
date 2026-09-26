@@ -48,6 +48,7 @@ DashboardWidget::DashboardWidget(DashboardController* dashCtrl,
     }
 
     connect(&MahadevERP::MenuTreeManager::instance(), &MahadevERP::MenuTreeManager::openViewRequested, this, [this](int viewIndex) {
+        Q_UNUSED(viewIndex);
         QString lastMenu = MahadevERP::MenuTreeManager::instance().lastTriggeredMenuId();
         if (lastMenu == "ledger_master") m_selectedMenuIndex = 0;
         else if (lastMenu == "stock_master") m_selectedMenuIndex = 1;
@@ -55,7 +56,6 @@ DashboardWidget::DashboardWidget(DashboardController* dashCtrl,
         else if (lastMenu == "other_voucher" || lastMenu == "tds_tcs_hub" || lastMenu == "tds_options" || lastMenu == "tcs_options") m_selectedMenuIndex = 3;
         else if (lastMenu == "reports_register") m_selectedMenuIndex = 4;
         updateSelection(m_selectedMenuIndex);
-        emit openViewRequested(viewIndex);
     });
 
     refreshStats();

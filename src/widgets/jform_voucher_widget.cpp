@@ -927,17 +927,10 @@ void JFormVoucherWidget::retreatCell() {
 
 void JFormVoucherWidget::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
-    if (m_farmerSearch) {
-        m_farmerSearch->setFocus();
-    }
 }
 
 void JFormVoucherWidget::keyPressEvent(QKeyEvent* event) {
-    if (event->key() == Qt::Key_F2) {
-        openDateDialog();
-        event->accept();
-        return;
-    } else if (event->key() == Qt::Key_F4) {
+    if (event->key() == Qt::Key_F4) {
         openAlterVoucherDialog();
         event->accept();
         return;
@@ -976,10 +969,6 @@ bool JFormVoucherWidget::eventFilter(QObject* watched, QEvent* event) {
 
         if (key == Qt::Key_Escape) {
             emit backRequested();
-            return true;
-        }
-        if (key == Qt::Key_F2) {
-            openDateDialog();
             return true;
         }
         if (key == Qt::Key_F4) {

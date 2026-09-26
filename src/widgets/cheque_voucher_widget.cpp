@@ -803,15 +803,9 @@ void ChequeVoucherWidget::focusFirstRow() {
 
 void ChequeVoucherWidget::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
-    focusFirstRow();
 }
 
 void ChequeVoucherWidget::keyPressEvent(QKeyEvent* event) {
-    if (event->key() == Qt::Key_F2) {
-        openDateDialog();
-        event->accept();
-        return;
-    }
     if (event->key() == Qt::Key_F3) {
         setVoucherMode("Payment");
         event->accept();
@@ -862,11 +856,6 @@ bool ChequeVoucherWidget::eventFilter(QObject* watched, QEvent* event) {
 
         if (key == Qt::Key_D && (keyEvent->modifiers() & Qt::ControlModifier)) {
             deleteVoucher();
-            return true;
-        }
-
-        if (key == Qt::Key_F2) {
-            openDateDialog();
             return true;
         }
 
@@ -991,6 +980,10 @@ bool ChequeVoucherWidget::eventFilter(QObject* watched, QEvent* event) {
 
                 if (key == Qt::Key_Return || key == Qt::Key_Enter || key == Qt::Key_Tab) {
                     if (search && !search->text().trimmed().isEmpty()) {
+                        if (search->isPopupVisible()) {
+                            search->selectCurrentListItem();
+                        }
+                        focusCell(targetRow, amtCol);
                         return true;
                     } else {
                         // Empty ledger field: finish rows and move to narration
@@ -1012,9 +1005,8 @@ bool ChequeVoucherWidget::eventFilter(QObject* watched, QEvent* event) {
                     if (!search || search->cursorPosition() >= search->text().length() || search->hasSelectedText() || search->text().isEmpty()) {
                         if (search && search->isPopupVisible() && !search->text().trimmed().isEmpty()) {
                             search->selectCurrentListItem();
-                        } else {
-                            focusCell(targetRow, amtCol);
                         }
+                        focusCell(targetRow, amtCol);
                         return true;
                     }
                 } else if (key == Qt::Key_Left) {

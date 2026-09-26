@@ -49,6 +49,7 @@
 #include "../src/engine/depreciation_calculator.h"
 #include "../src/models/trial_balance_controller.h"
 #include "../src/models/capital_accounts_controller.h"
+#include "../src/models/cash_bank_flow_controller.h"
 
 class LogicBoardTestSuite : public QObject {
     Q_OBJECT
@@ -116,6 +117,9 @@ private slots:
 
     // 13. Final Reports & Depreciation Subsystems
     void testFinalReportsAndDepreciationSubsystem();
+
+    // 14. Cash Book & Flow Statements Subsystem
+    void testCashBankFlowAndCashVouchers();
 };
 
 #include "mdbtools.h"
@@ -1567,6 +1571,140 @@ void LogicBoardTestSuite::testFinalReportsAndDepreciationSubsystem() {
     }
 
     qDebug() << "[TEST] Final Reports and Depreciation Subsystems verified successfully!";
+}
+
+void LogicBoardTestSuite::testCashBankFlowAndCashVouchers() {
+    DatabaseManager &db = DatabaseManager::instance();
+    VouchersModel vchModel;
+
+    // 1. Next Voucher Number Generation for Cash Payment and Receipt
+    QString nextPymt = vchModel.get_next_voucher_no("Cash Payment");
+    QString nextRcpt = vchModel.get_next_voucher_no("Cash Receipt");
+    QVERIFY(!nextPymt.isEmpty());
+    QVERIFY(!nextRcpt.isEmpty());
+    QVERIFY(nextPymt.startsWith("Pymt-"));
+    QVERIFY(nextRcpt.startsWith("Rcpt-"));
+
+    // 2. Ensure test parties exist
+    QVariant p1 = db.executeScalar("SELECT id FROM parties WHERE name = 'FLOW_TEST_SUPPLIER' LIMIT 1;");
+    if (!p1.isValid() || p1.isNull()) {
+        db.executeNonQuery("INSERT INTO parties (name, group_name, party_type) VALUES ('FLOW_TEST_SUPPLIER', 'Sundry Creditors', 'Supplier');");
+    }
+    QVariant p2 = db.executeScalar("SELECT id FROM parties WHERE name = 'FLOW_TEST_CUSTOMER' LIMIT 1;");
+    if (!p2.isValid() || p2.isNull()) {
+        db.executeNonQuery("INSERT INTO parties (name, group_name, party_type) VALUES ('FLOW_TEST_CUSTOMER', 'Sundry Debtors', 'Customer');");
+    }
+    QVariant p3 = db.executeScalar("SELECT id FROM parties WHERE name = 'Cash In Hand' LIMIT 1;");
+    if (!p3.isValid() || p3.isNull()) {
+        db.executeNonQuery("INSERT INTO parties (name, group_name, party_type) VALUES ('Cash In Hand', 'Cash-In-Hand', 'Cash');");
+    }
+
+    // 3. Post a Cash Payment Voucher (Pymt)
+    // Supplier Dr 25,000 | Cash In Hand Cr 25,000
+    QVariantList pymtRows;
+    QVariantMap r1, r2;
+    r1["drcr"] = "Dr";
+    r1["ledgerName"] = "FLOW_TEST_SUPPLIER";
+    r1["debitAmt"] = 25000.0;
+    r1["creditAmt"] = 0.0;
+    r1["refNo"] = "CASH-PAY-01";
+    pymtRows.append(r1);
+
+    r2["drcr"] = "Cr";
+    r2["ledgerName"] = "Cash In Hand";
+    r2["debitAmt"] = 0.0;
+    r2["creditAmt"] = 25000.0;
+    r2["refNo"] = "";
+    pymtRows.append(r2);
+
+    bool pymtSaved = vchModel.save_multi_row_voucher(0, "Cash Payment", nextPymt, "2025-05-10", "Test Cash Payment", pymtRows);
+    QVERIFY2(pymtSaved, "Cash Payment voucher should be saved successfully");
+
+    // Verify voucher and trans_type
+    QVariant legType = db.executeScalar("SELECT legacy_type FROM vouchers WHERE voucher_no = ? LIMIT 1;", {nextPymt});
+    QCOMPARE(legType.toString(), QString("Pymt"));
+
+    // 4. Post a Cash Receipt Voucher (Rcpt)
+    // Cash In Hand Dr 50,000 | Customer Cr 50,000
+    QVariantList rcptRows;
+    QVariantMap rc1, rc2;
+    rc1["drcr"] = "Dr";
+    rc1["ledgerName"] = "Cash In Hand";
+    rc1["debitAmt"] = 50000.0;
+    rc1["creditAmt"] = 0.0;
+    rc1["refNo"] = "";
+    rcptRows.append(rc1);
+
+    rc2["drcr"] = "Cr";
+    rc2["ledgerName"] = "FLOW_TEST_CUSTOMER";
+    rc2["debitAmt"] = 0.0;
+    rc2["creditAmt"] = 50000.0;
+    rc2["refNo"] = "CASH-REC-01";
+    rcptRows.append(rc2);
+
+    bool rcptSaved = vchModel.save_multi_row_voucher(0, "Cash Receipt", nextRcpt, "2025-05-15", "Test Cash Receipt", rcptRows);
+    QVERIFY2(rcptSaved, "Cash Receipt voucher should be saved successfully");
+
+    QVariant rcptLegType = db.executeScalar("SELECT legacy_type FROM vouchers WHERE voucher_no = ? LIMIT 1;", {nextRcpt});
+    QCOMPARE(rcptLegType.toString(), QString("Rcpt"));
+
+    // 5. Test CashBankFlowController in CashFlow Mode
+    MahadevERP::CashBankFlowController cashCtrl;
+    cashCtrl.setStatementType(MahadevERP::FlowStatementType::CashFlow);
+    cashCtrl.loadData("2025-04-01", "2026-03-31");
+
+    QVERIFY(cashCtrl.partyRows().size() > 0);
+    QVERIFY(cashCtrl.bankCashRows().size() >= 1); // Contains Cash In Hand
+
+    // Find our test parties
+    bool foundSupplier = false;
+    bool foundCustomer = false;
+    for (const auto& row : cashCtrl.partyRows()) {
+        if (row.ledgerName == "FLOW_TEST_SUPPLIER") {
+            foundSupplier = true;
+            QVERIFY(row.payments >= 25000.0);
+        }
+        if (row.ledgerName == "FLOW_TEST_CUSTOMER") {
+            foundCustomer = true;
+            QVERIFY(row.receipts >= 50000.0);
+        }
+    }
+    QVERIFY(foundSupplier);
+    QVERIFY(foundCustomer);
+
+    // Verify grand totals
+    const auto& summary = cashCtrl.summary();
+    QVERIFY(summary.totalReceipts >= 50000.0);
+    QVERIFY(summary.totalPayments >= 25000.0);
+
+    // 6. Test CashBankFlowController in BankFlow Mode
+    MahadevERP::CashBankFlowController bankCtrl;
+    bankCtrl.setStatementType(MahadevERP::FlowStatementType::BankFlow);
+    bankCtrl.loadData("2025-04-01", "2026-03-31");
+    QVERIFY(bankCtrl.summary().rowCount >= 0);
+
+    // 7. Test CashBankFlowController in JointFlow Mode
+    MahadevERP::CashBankFlowController jointCtrl;
+    jointCtrl.setStatementType(MahadevERP::FlowStatementType::JointFlow);
+    jointCtrl.loadData("2025-04-01", "2026-03-31");
+    QVERIFY(jointCtrl.bankCashRows().size() >= 1);
+
+    // 8. Test Search Filter
+    cashCtrl.loadData("2025-04-01", "2026-03-31", "FLOW_TEST_SUPPLIER");
+    QCOMPARE(cashCtrl.partyRows().size(), 1);
+    QCOMPARE(cashCtrl.partyRows().first().ledgerName, QString("FLOW_TEST_SUPPLIER"));
+
+    // Reset filter
+    cashCtrl.loadData("2025-04-01", "2026-03-31", "");
+    QVERIFY(cashCtrl.partyRows().size() >= 2);
+
+    // 9. Test CSV Export generation
+    QString csv = cashCtrl.generateCsvReport();
+    QVERIFY(csv.contains("Cash Flow Statement", Qt::CaseInsensitive));
+    QVERIFY(csv.contains("FLOW_TEST_SUPPLIER"));
+    QVERIFY(csv.contains("FLOW_TEST_CUSTOMER"));
+
+    qDebug() << "[TEST] Cash Book & Flow Statements Subsystem verified successfully!";
 }
 
 QTEST_MAIN(LogicBoardTestSuite)

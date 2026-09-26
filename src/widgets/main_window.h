@@ -52,6 +52,8 @@
 #include "trial_balance_widget.h"
 #include "capital_accounts_widget.h"
 #include "depreciation_chart_widget.h"
+#include "cash_bank_flow_widget.h"
+#include "cash_voucher_widget.h"
 #include "joint_reports_dialog.h"
 #include "../models/trial_balance_controller.h"
 #include "../models/capital_accounts_controller.h"
@@ -147,6 +149,8 @@ public:
     MahadevERP::TrialBalanceWidget* trialBalanceWidget() const { return m_trialBalanceWidget; }
     MahadevERP::CapitalAccountsWidget* capitalAccountsWidget() const { return m_capitalAccountsWidget; }
     MahadevERP::DepreciationChartWidget* depreciationChartWidget() const { return m_depreciationChartWidget; }
+    MahadevERP::CashBankFlowWidget* cashBankFlowWidget() const { return m_cashBankFlowWidget; }
+    MahadevERP::CashVoucherWidget* cashVoucherWidget() const { return m_cashVoucherWidget; }
 
     QStackedWidget* stackedWidget() const { return m_stackedWidget; }
 
@@ -172,6 +176,9 @@ public slots:
     void onPurchaseVoucherSaved(const QString& invoiceNo);
     void onChequeVoucherBackRequested();
     void onChequeVoucherSaved(const QString& voucherNo);
+    void onCashVoucherBackRequested();
+    void onCashVoucherSaved(const QString& voucherNo);
+    void onCashBankFlowBackRequested();
     void onJournalVoucherBackRequested();
     void onJournalVoucherSaved(const QString& voucherNo);
     void onNewLedgerBackRequested();
@@ -233,6 +240,8 @@ private:
     MahadevERP::TrialBalanceWidget* m_trialBalanceWidget = nullptr;
     MahadevERP::CapitalAccountsWidget* m_capitalAccountsWidget = nullptr;
     MahadevERP::DepreciationChartWidget* m_depreciationChartWidget = nullptr;
+    MahadevERP::CashBankFlowWidget* m_cashBankFlowWidget = nullptr;
+    MahadevERP::CashVoucherWidget* m_cashVoucherWidget = nullptr;
 
     TaxChallanController* m_taxChallanCtrl = nullptr;
     TcsReceiptVoucherController* m_tcsReceiptVoucherCtrl = nullptr;

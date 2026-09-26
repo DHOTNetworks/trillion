@@ -22,9 +22,14 @@ public:
                               PrintExportController* printExportCtrl = nullptr,
                               QWidget* parent = nullptr);
 
+public slots:
     void resetForm();
     bool loadVoucherForEditing(int voucherId);
     void openDateDialog();
+    void onSaveClicked();
+    void onDeleteClicked();
+    void saveVoucher() { onSaveClicked(); }
+    void deleteVoucher() { onDeleteClicked(); }
 
 signals:
     void backRequested();
@@ -34,8 +39,6 @@ private slots:
     void onTdsTypeChanged(int index);
     void onPartySelected(const QString& partyName);
     void onRecalculateTax();
-    void onSaveClicked();
-    void onDeleteClicked();
 
 private:
     void setupUi();

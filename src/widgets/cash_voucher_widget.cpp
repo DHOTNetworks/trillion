@@ -1,4 +1,4 @@
-#include "journal_voucher_widget.h"
+#include "cash_voucher_widget.h"
 #include "voucher_date_dialog.h"
 #include "custom_dialogs.h"
 #include "../engine/fiscal_year_helper.h"
@@ -9,14 +9,15 @@
 #include <QHBoxLayout>
 #include <QGridLayout>
 #include <QHeaderView>
-#include <QMessageBox>
 #include <QKeyEvent>
 #include <QDate>
 #include <QApplication>
 #include <QTimer>
 #include <cmath>
 
-JournalVoucherWidget::JournalVoucherWidget(PrintExportController* printExportCtrl, QWidget* parent)
+namespace MahadevERP {
+
+CashVoucherWidget::CashVoucherWidget(PrintExportController* printExportCtrl, QWidget* parent)
     : QWidget(parent)
     , m_printExportCtrl(printExportCtrl)
 {
@@ -25,9 +26,9 @@ JournalVoucherWidget::JournalVoucherWidget(PrintExportController* printExportCtr
     resetForm();
 }
 
-void JournalVoucherWidget::setupUi() {
+void CashVoucherWidget::setupUi() {
     setAttribute(Qt::WA_StyledBackground, true);
-    setStyleSheet("JournalVoucherWidget { background-color: #F8FAFC; }");
+    setStyleSheet("CashVoucherWidget { background-color: #F8FAFC; }");
 
     auto* mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(16, 12, 16, 12);
@@ -45,16 +46,28 @@ void JournalVoucherWidget::setupUi() {
 
     auto* titleBox = new QVBoxLayout();
     titleBox->setSpacing(1);
-    m_modeBadge = new QLabel("JOURNAL VOUCHER", headerCard);
+    m_modeBadge = new QLabel("CASH PAYMENT VOUCHER", headerCard);
     m_modeBadge->setStyleSheet("color: #0F172A; font-size: 15px; font-weight: 800; border: none; background: transparent;");
     titleBox->addWidget(m_modeBadge);
 
-    auto* subTitleLabel = new QLabel("General journal • Multi-leg adjustment & transfer entries (Dr = Cr)", headerCard);
+    auto* subTitleLabel = new QLabel("Double-entry cash voucher • Real-time balance verification (Dr = Cr)", headerCard);
     subTitleLabel->setStyleSheet("color: #64748B; font-size: 11px; border: none; background: transparent;");
     titleBox->addWidget(subTitleLabel);
     headerLayout->addLayout(titleBox);
 
     headerLayout->addStretch(1);
+
+    m_paymentModeBtn = new QPushButton("F3: Payment", headerCard);
+    m_paymentModeBtn->setFixedHeight(32);
+    m_paymentModeBtn->setCursor(Qt::PointingHandCursor);
+    connect(m_paymentModeBtn, &QPushButton::clicked, this, [this]() { setVoucherMode("Payment"); });
+    headerLayout->addWidget(m_paymentModeBtn);
+
+    m_receiptModeBtn = new QPushButton("F4: Receipt", headerCard);
+    m_receiptModeBtn->setFixedHeight(32);
+    m_receiptModeBtn->setCursor(Qt::PointingHandCursor);
+    connect(m_receiptModeBtn, &QPushButton::clicked, this, [this]() { setVoucherMode("Receipt"); });
+    headerLayout->addWidget(m_receiptModeBtn);
 
     m_alterBadge = new QLabel("", headerCard);
     m_alterBadge->setStyleSheet(
@@ -71,7 +84,7 @@ void JournalVoucherWidget::setupUi() {
         "QPushButton { background-color: #F1F5F9; border: 1px solid #CBD5E1; border-radius: 6px; padding: 0px 14px; font-weight: 700; color: #475569; font-size: 12px; }"
         "QPushButton:hover { background-color: #E2E8F0; }"
     );
-    connect(m_backBtn, &QPushButton::clicked, this, &JournalVoucherWidget::backRequested);
+    connect(m_backBtn, &QPushButton::clicked, this, &CashVoucherWidget::backRequested);
     headerLayout->addWidget(m_backBtn);
 
     mainLayout->addWidget(headerCard);
@@ -90,9 +103,10 @@ void JournalVoucherWidget::setupUi() {
     typeTagLabel->setStyleSheet("color: #475569; font-size: 11px; font-weight: 700; border: none; background: transparent;");
     metaLayout->addWidget(typeTagLabel);
 
-    auto* voucherTypePill = new QLabel("Journal Entry", metaCard);
+    auto* voucherTypePill = new QLabel("Cash Payment", metaCard);
+    voucherTypePill->setObjectName("voucherTypePill");
     voucherTypePill->setStyleSheet(
-        "background-color: #F5F3FF; color: #7C3AED; border: 1px solid #DDD6FE; "
+        "background-color: #FEF2F2; color: #DC2626; border: 1px solid #FCA5A5; "
         "padding: 4px 10px; border-radius: 6px; font-weight: 800; font-size: 11px;"
     );
     metaLayout->addWidget(voucherTypePill);
@@ -123,7 +137,7 @@ void JournalVoucherWidget::setupUi() {
         "QLineEdit:focus { border: 1.5px solid #2563EB; background-color: #EFF6FF; }"
     );
     m_dateEdit->installEventFilter(this);
-    connect(m_dateEdit, &AccountingDateEdit::dateChanged, this, &JournalVoucherWidget::onDateChanged);
+    connect(m_dateEdit, &AccountingDateEdit::dateChanged, this, &CashVoucherWidget::onDateChanged);
     metaLayout->addWidget(m_dateEdit);
 
     m_dayOfWeekLabel = new QLabel("", metaCard);
@@ -138,19 +152,25 @@ void JournalVoucherWidget::setupUi() {
     metaLayout->addWidget(m_fyBadge);
 
     metaLayout->addStretch(1);
+
+    m_dateBtn = new QPushButton("Change Date (F2)", metaCard);
+    m_dateBtn->setFixedHeight(30);
+    m_dateBtn->setCursor(Qt::PointingHandCursor);
+    m_dateBtn->setStyleSheet(
+        "QPushButton { background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 6px; padding: 0px 12px; font-weight: 700; color: #334155; font-size: 11px; }"
+        "QPushButton:hover { background-color: #F1F5F9; }"
+    );
+    connect(m_dateBtn, &QPushButton::clicked, this, [this]() { openDateDialog(); });
+    metaLayout->addWidget(m_dateBtn);
+
     mainLayout->addWidget(metaCard);
 
     // ========================================================================
-    // 3. MULTI-ROW TRANSACTION GRID TABLE
+    // 3. MULTI-ROW VOUCHER ENTRY TABLE (SINGLE SLATE)
     // ========================================================================
-    m_table = new QTableWidget(0, 6, this);
-    m_table->setObjectName("voucherTable");
-    m_table->setHorizontalHeaderLabels({"TYPE", "PARTICULARS (ACCOUNT / LEDGER)", "DEBIT (₹)", "CREDIT (₹)", "REF / NARRATION", ""});
-    m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
-    m_table->setSelectionMode(QAbstractItemView::SingleSelection);
-    m_table->setShowGrid(true);
-    m_table->verticalHeader()->setVisible(false);
-    m_table->horizontalHeader()->setStretchLastSection(false);
+    m_table = new QTableWidget(this);
+    m_table->setColumnCount(6);
+    m_table->setHorizontalHeaderLabels({"TYPE", "PARTICULARS (ACCOUNT / LEDGER)", "DEBIT (₹)", "CREDIT (₹)", "CASH MEMO / REF NO", "ACTION"});
     m_table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Fixed);
     m_table->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
     m_table->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Fixed);
@@ -163,6 +183,12 @@ void JournalVoucherWidget::setupUi() {
     m_table->setColumnWidth(3, 140);
     m_table->setColumnWidth(4, 160);
     m_table->setColumnWidth(5, 40);
+
+    m_table->setAlternatingRowColors(true);
+    m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
+    m_table->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_table->verticalHeader()->setVisible(false);
+    m_table->verticalHeader()->setDefaultSectionSize(34);
 
     m_table->setStyleSheet(
         "QTableWidget { background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; gridline-color: #F1F5F9; }"
@@ -188,7 +214,7 @@ void JournalVoucherWidget::setupUi() {
     narrRow->addWidget(narrLabel);
 
     m_narrationInput = new QLineEdit(bottomCard);
-    m_narrationInput->setPlaceholderText("Enter journal narration / remarks...");
+    m_narrationInput->setPlaceholderText("Enter transaction particulars / cash receipt narration...");
     m_narrationInput->setFixedHeight(32);
     m_narrationInput->setStyleSheet(
         "QLineEdit { background-color: #FFFFFF; color: #0F172A; border: 1px solid #CBD5E1; "
@@ -240,16 +266,16 @@ void JournalVoucherWidget::setupUi() {
     auto* actionsRow = new QHBoxLayout();
     actionsRow->setSpacing(8);
 
-    m_dateBtn = new QPushButton("F2: Date", this);
-    m_dateBtn->setFixedHeight(34);
-    m_dateBtn->setCursor(Qt::PointingHandCursor);
-    m_dateBtn->setStyleSheet(
+    auto* dateActionBtn = new QPushButton("F2: Date", this);
+    dateActionBtn->setFixedHeight(34);
+    dateActionBtn->setCursor(Qt::PointingHandCursor);
+    dateActionBtn->setStyleSheet(
         "QPushButton { background-color: #F1F5F9; color: #334155; border: 1px solid #CBD5E1; "
         "padding: 0px 14px; border-radius: 6px; font-weight: 700; font-size: 12px; } "
         "QPushButton:hover { background-color: #E2E8F0; }"
     );
-    connect(m_dateBtn, &QPushButton::clicked, this, &JournalVoucherWidget::openDateDialog);
-    actionsRow->addWidget(m_dateBtn);
+    connect(dateActionBtn, &QPushButton::clicked, this, [this]() { openDateDialog(); });
+    actionsRow->addWidget(dateActionBtn);
 
     m_addRowBtn = new QPushButton("+ Add Row (Insert)", this);
     m_addRowBtn->setFixedHeight(34);
@@ -273,19 +299,19 @@ void JournalVoucherWidget::setupUi() {
         "QPushButton:hover { background-color: #FECACA; }"
     );
     m_deleteBtn->hide();
-    connect(m_deleteBtn, &QPushButton::clicked, this, &JournalVoucherWidget::deleteVoucher);
+    connect(m_deleteBtn, &QPushButton::clicked, this, &CashVoucherWidget::deleteVoucher);
     actionsRow->addWidget(m_deleteBtn);
 
-    m_backBtn = new QPushButton("Esc: Back", this);
-    m_backBtn->setFixedHeight(34);
-    m_backBtn->setCursor(Qt::PointingHandCursor);
-    m_backBtn->setStyleSheet(
+    auto* bottomBackBtn = new QPushButton("Esc: Back", this);
+    bottomBackBtn->setFixedHeight(34);
+    bottomBackBtn->setCursor(Qt::PointingHandCursor);
+    bottomBackBtn->setStyleSheet(
         "QPushButton { background-color: #F1F5F9; color: #475569; border: 1px solid #CBD5E1; "
         "padding: 0px 14px; border-radius: 6px; font-weight: 700; font-size: 12px; } "
         "QPushButton:hover { background-color: #E2E8F0; }"
     );
-    connect(m_backBtn, &QPushButton::clicked, this, &JournalVoucherWidget::backRequested);
-    actionsRow->addWidget(m_backBtn);
+    connect(bottomBackBtn, &QPushButton::clicked, this, &CashVoucherWidget::backRequested);
+    actionsRow->addWidget(bottomBackBtn);
 
     m_saveBtn = new QPushButton("Ctrl+S: Save Voucher", this);
     m_saveBtn->setFixedHeight(34);
@@ -295,94 +321,115 @@ void JournalVoucherWidget::setupUi() {
         "padding: 0px 20px; border-radius: 6px; font-weight: 800; font-size: 13px; } "
         "QPushButton:hover { background-color: #1D4ED8; }"
     );
-    connect(m_saveBtn, &QPushButton::clicked, this, &JournalVoucherWidget::saveVoucher);
+    connect(m_saveBtn, &QPushButton::clicked, this, &CashVoucherWidget::saveVoucher);
     actionsRow->addWidget(m_saveBtn);
 
     mainLayout->addLayout(actionsRow);
+
+    // Initial Date
+    FiscalYearInfo fy = FiscalYearHelper::getActiveFiscalYear();
+    m_dateEdit->setDate(QDate::fromString(fy.startDate, "yyyy-MM-dd"));
+    updateDayOfWeek(m_dateEdit->date());
 }
 
-void JournalVoucherWidget::applyCustomStyles() {
-    // Styling handled via clean Qt style sheets on subcomponents
+void CashVoucherWidget::applyCustomStyles() {
+    setVoucherMode("Payment");
 }
 
-void JournalVoucherWidget::setWorkingDate(const QString& dateStr) {
+void CashVoucherWidget::setVoucherMode(const QString& mode) {
+    m_voucherMode = (mode.compare("Receipt", Qt::CaseInsensitive) == 0 || mode.compare("Rcpt", Qt::CaseInsensitive) == 0) ? "Receipt" : "Payment";
+
+    auto* pill = findChild<QLabel*>("voucherTypePill");
+    if (m_voucherMode == "Payment") {
+        if (m_modeBadge) m_modeBadge->setText("CASH PAYMENT VOUCHER");
+        if (pill) {
+            pill->setText("Cash Payment (Pymt)");
+            pill->setStyleSheet("background-color: #FEF2F2; color: #DC2626; border: 1px solid #FCA5A5; padding: 4px 10px; border-radius: 6px; font-weight: 800; font-size: 11px;");
+        }
+        if (m_paymentModeBtn) m_paymentModeBtn->setStyleSheet("QPushButton { background-color: #DC2626; color: #FFFFFF; border: 1px solid #B91C1C; padding: 0px 12px; border-radius: 6px; font-weight: 700; font-size: 12px; }");
+        if (m_receiptModeBtn) m_receiptModeBtn->setStyleSheet("QPushButton { background-color: #F1F5F9; color: #475569; border: 1px solid #CBD5E1; padding: 0px 12px; border-radius: 6px; font-weight: 700; font-size: 12px; } QPushButton:hover { background-color: #E2E8F0; }");
+    } else {
+        if (m_modeBadge) m_modeBadge->setText("CASH RECEIPT VOUCHER");
+        if (pill) {
+            pill->setText("Cash Receipt (Rcpt)");
+            pill->setStyleSheet("background-color: #F0FDF4; color: #16A34A; border: 1px solid #86EFAC; padding: 4px 10px; border-radius: 6px; font-weight: 800; font-size: 11px;");
+        }
+        if (m_receiptModeBtn) m_receiptModeBtn->setStyleSheet("QPushButton { background-color: #16A34A; color: #FFFFFF; border: 1px solid #15803D; padding: 0px 12px; border-radius: 6px; font-weight: 700; font-size: 12px; }");
+        if (m_paymentModeBtn) m_paymentModeBtn->setStyleSheet("QPushButton { background-color: #F1F5F9; color: #475569; border: 1px solid #CBD5E1; padding: 0px 12px; border-radius: 6px; font-weight: 700; font-size: 12px; } QPushButton:hover { background-color: #E2E8F0; }");
+    }
+
+    if (!isEditMode()) {
+        updateFiscalYearAndVoucherNo();
+    }
+}
+
+void CashVoucherWidget::setWorkingDate(const QString& dateStr) {
     if (m_dateEdit) {
-        m_dateEdit->setIsoDate(dateStr);
+        m_dateEdit->setDate(QDate::fromString(dateStr, "yyyy-MM-dd"));
         updateDayOfWeek(m_dateEdit->date());
         updateFiscalYearAndVoucherNo();
     }
 }
 
-void JournalVoucherWidget::updateFiscalYearAndVoucherNo() {
-    QDate curDate = m_dateEdit ? m_dateEdit->date() : QDate::currentDate();
-    if (!curDate.isValid()) curDate = QDate::currentDate();
-
-    QString isoDate = curDate.toString("yyyy-MM-dd");
-    FiscalYearInfo fy = FiscalYearHelper::getFiscalYearForDate(isoDate);
-    QString fyStr = fy.name;
-    m_fyBadge->setText(fyStr);
-
-    if (!isEditMode()) {
-        QString nextNo = m_vouchersModel.get_next_voucher_no("Jrnl", fyStr);
-        m_voucherNoInput->setText(nextNo);
-    }
+void CashVoucherWidget::onDateChanged(const QDate& date) {
+    updateDayOfWeek(date);
+    updateFiscalYearAndVoucherNo();
 }
 
-void JournalVoucherWidget::updateDayOfWeek(const QDate& date) {
+void CashVoucherWidget::updateDayOfWeek(const QDate& date) {
     if (date.isValid() && m_dayOfWeekLabel) {
         m_dayOfWeekLabel->setText(QString("(%1)").arg(date.toString("dddd")));
     }
 }
 
-void JournalVoucherWidget::onDateChanged(const QDate& date) {
-    updateDayOfWeek(date);
-    updateFiscalYearAndVoucherNo();
-}
+void CashVoucherWidget::updateFiscalYearAndVoucherNo() {
+    if (m_editingVoucherId > 0) return;
 
-void JournalVoucherWidget::openDateDialog(bool isInitial) {
-    QString curIso = m_dateEdit ? m_dateEdit->isoDate() : QDate::currentDate().toString("yyyy-MM-dd");
-    QString displayDate, isoDate;
-    if (VoucherDateDialog::getVoucherDate(this, curIso, &displayDate, &isoDate)) {
-        if (!isoDate.isEmpty() && m_dateEdit) {
-            m_dateEdit->setIsoDate(isoDate);
-            updateDayOfWeek(m_dateEdit->date());
-            updateFiscalYearAndVoucherNo();
-            focusFirstRow();
-        }
-    } else {
-        if (isInitial) {
-            emit backRequested();
-        } else {
-            focusFirstRow();
-        }
+    QString dt = m_dateEdit ? m_dateEdit->isoDate() : "";
+    FiscalYearInfo fy = FiscalYearHelper::getFiscalYearForDate(dt);
+    if (m_fyBadge) {
+        m_fyBadge->setText(fy.name);
+    }
+
+    QString prefix = (m_voucherMode == "Receipt") ? "Rcpt" : "Pymt";
+    QString vNo = m_vouchersModel.get_next_voucher_no(prefix, fy.name);
+    if (m_voucherNoInput) {
+        m_voucherNoInput->setText(vNo);
     }
 }
 
-void JournalVoucherWidget::resetForm() {
+void CashVoucherWidget::resetForm() {
     m_editingVoucherId = 0;
     m_editingVoucherNo.clear();
-    m_hasInitialDateOpened = false;
-    m_alterBadge->hide();
-    m_deleteBtn->hide();
 
-    QDate today = QDate::currentDate();
-    if (m_dateEdit) {
-        m_dateEdit->setDate(today);
-    }
-    updateDayOfWeek(today);
-    updateFiscalYearAndVoucherNo();
-
+    if (m_alterBadge) m_alterBadge->hide();
+    if (m_deleteBtn) m_deleteBtn->hide();
     if (m_narrationInput) m_narrationInput->clear();
     setStatusMessage("", false);
 
+    updateFiscalYearAndVoucherNo();
+
     m_table->setRowCount(0);
-    addNewRow("Dr", "", 0.0, 0.0, "");
-    addNewRow("Cr", "", 0.0, 0.0, "");
+
+    // Standard 2-row initial setup for Cash Voucher
+    if (m_voucherMode == "Payment") {
+        addNewRow("Dr", "", 0.0, 0.0, "");
+        addNewRow("Cr", "Cash", 0.0, 0.0, "");
+    } else {
+        addNewRow("Cr", "", 0.0, 0.0, "");
+        addNewRow("Dr", "Cash", 0.0, 0.0, "");
+    }
 
     recalculateTotals();
 }
 
-void JournalVoucherWidget::focusCell(int row, int col) {
+void CashVoucherWidget::focusFirstRow() {
+    if (m_table->rowCount() > 0) {
+        focusCell(0, 1);
+    }
+}
+
+void CashVoucherWidget::focusCell(int row, int col) {
     if (row < 0 || row >= m_table->rowCount()) return;
     if (col < 0 || col >= m_table->columnCount()) return;
 
@@ -398,11 +445,12 @@ void JournalVoucherWidget::focusCell(int row, int col) {
     }
 }
 
-void JournalVoucherWidget::setupRowWidgets(int row, const QString& drcr, const QString& ledger, double debit, double credit, const QString& ref) {
+void CashVoucherWidget::setupRowWidgets(int row, const QString& drcr, const QString& ledger, double debit, double credit, const QString& ref) {
     // 0. Type (Dr/Cr)
     auto* typeCombo = new QComboBox(m_table);
     typeCombo->addItems({"Dr", "Cr"});
-    typeCombo->setCurrentText(drcr.isEmpty() ? "Dr" : drcr);
+    QString defaultType = drcr.isEmpty() ? ((row == 0) ? (m_voucherMode == "Payment" ? "Dr" : "Cr") : (m_voucherMode == "Payment" ? "Cr" : "Dr")) : drcr;
+    typeCombo->setCurrentText(defaultType);
     typeCombo->setStyleSheet(
         "QComboBox { background-color: #FFFFFF; color: #0F172A; border: 1px solid #CBD5E1; "
         "border-radius: 4px; padding: 2px 6px; font-weight: 800; font-size: 11px; }"
@@ -415,18 +463,6 @@ void JournalVoucherWidget::setupRowWidgets(int row, const QString& drcr, const Q
     auto* searchWidget = new AccountSearchBox(m_table);
     searchWidget->setPartyName(ledger);
     searchWidget->installEventFilter(this);
-    connect(searchWidget, &QLineEdit::returnPressed, this, [this]() {
-        for (int r = 0; r < m_table->rowCount(); ++r) {
-            if (m_table->cellWidget(r, 1) == sender()) {
-                auto* tc = qobject_cast<QComboBox*>(m_table->cellWidget(r, 0));
-                int nextCol = (tc && tc->currentText() == "Cr") ? 3 : 2;
-                QTimer::singleShot(0, this, [this, r, nextCol]() {
-                    focusCell(r, nextCol);
-                });
-                break;
-            }
-        }
-    });
     m_table->setCellWidget(row, 1, searchWidget);
 
     // 2. Debit Amount
@@ -440,7 +476,7 @@ void JournalVoucherWidget::setupRowWidgets(int row, const QString& drcr, const Q
         "QLineEdit:focus { border: 1.5px solid #2563EB; background-color: #EFF6FF; }"
     );
     debitInput->installEventFilter(this);
-    connect(debitInput, &QLineEdit::textChanged, this, &JournalVoucherWidget::onTableRowChanged);
+    connect(debitInput, &QLineEdit::textChanged, this, &CashVoucherWidget::onTableRowChanged);
     m_table->setCellWidget(row, 2, debitInput);
 
     // 3. Credit Amount
@@ -454,13 +490,13 @@ void JournalVoucherWidget::setupRowWidgets(int row, const QString& drcr, const Q
         "QLineEdit:focus { border: 1.5px solid #2563EB; background-color: #EFF6FF; }"
     );
     creditInput->installEventFilter(this);
-    connect(creditInput, &QLineEdit::textChanged, this, &JournalVoucherWidget::onTableRowChanged);
+    connect(creditInput, &QLineEdit::textChanged, this, &CashVoucherWidget::onTableRowChanged);
     m_table->setCellWidget(row, 3, creditInput);
 
-    // 4. Ref / Narration
+    // 4. Cash Memo / Ref No
     auto* refInput = new QLineEdit(m_table);
     refInput->setText(ref);
-    refInput->setPlaceholderText("Ref / Narration");
+    refInput->setPlaceholderText("Memo / Ref No");
     refInput->setStyleSheet(
         "QLineEdit { background-color: #FFFFFF; color: #0F172A; border: 1px solid #CBD5E1; "
         "border-radius: 4px; padding: 2px 8px; font-size: 12px; }"
@@ -524,7 +560,7 @@ void JournalVoucherWidget::setupRowWidgets(int row, const QString& drcr, const Q
     updateColumnStates();
 }
 
-void JournalVoucherWidget::addNewRow(const QString& drcr, const QString& ledger, double debit, double credit, const QString& ref) {
+void CashVoucherWidget::addNewRow(const QString& drcr, const QString& ledger, double debit, double credit, const QString& ref) {
     int row = m_table->rowCount();
     m_table->insertRow(row);
 
@@ -534,7 +570,7 @@ void JournalVoucherWidget::addNewRow(const QString& drcr, const QString& ledger,
             auto* prevCombo = qobject_cast<QComboBox*>(m_table->cellWidget(row - 1, 0));
             defaultType = (prevCombo && prevCombo->currentText() == "Dr") ? "Cr" : "Dr";
         } else {
-            defaultType = "Dr";
+            defaultType = (m_voucherMode == "Payment") ? "Dr" : "Cr";
         }
     }
 
@@ -542,18 +578,20 @@ void JournalVoucherWidget::addNewRow(const QString& drcr, const QString& ledger,
     recalculateTotals();
 }
 
-void JournalVoucherWidget::removeRow(int row) {
+void CashVoucherWidget::removeRow(int row) {
     if (m_table->rowCount() > 2 && row >= 0 && row < m_table->rowCount()) {
         m_table->removeRow(row);
         recalculateTotals();
+    } else if (m_table->rowCount() <= 2) {
+        setStatusMessage("Minimum 2 lines required for double-entry cash voucher.", true);
     }
 }
 
-void JournalVoucherWidget::onTableRowChanged() {
+void CashVoucherWidget::onTableRowChanged() {
     recalculateTotals();
 }
 
-void JournalVoucherWidget::recalculateTotals() {
+void CashVoucherWidget::recalculateTotals() {
     double totalDr = 0.0;
     double totalCr = 0.0;
 
@@ -593,123 +631,151 @@ void JournalVoucherWidget::recalculateTotals() {
     }
 }
 
-bool JournalVoucherWidget::loadVoucherForEditing(const QVariant& vchNoOrId, const QString& dateHint) {
-    QVariantMap data = m_vouchersModel.get_journal_voucher(vchNoOrId, dateHint);
+void CashVoucherWidget::openDateDialog(bool isInitial) {
+    QString curIso = m_dateEdit ? m_dateEdit->isoDate() : QDate::currentDate().toString("yyyy-MM-dd");
+    QString displayDate, isoDate;
+    if (VoucherDateDialog::getVoucherDate(this, curIso, &displayDate, &isoDate)) {
+        if (!isoDate.isEmpty() && m_dateEdit) {
+            m_dateEdit->setIsoDate(isoDate);
+            updateDayOfWeek(m_dateEdit->date());
+            updateFiscalYearAndVoucherNo();
+            focusFirstRow();
+        }
+    } else {
+        if (isInitial) {
+            emit backRequested();
+        } else {
+            focusFirstRow();
+        }
+    }
+}
+
+bool CashVoucherWidget::loadVoucherForEditing(const QVariant& vchNoOrId, const QString& dateHint) {
+    QVariantMap data = m_vouchersModel.get_cheque_voucher(vchNoOrId, dateHint);
     if (data.isEmpty()) {
-        setStatusMessage("Journal Voucher not found for alteration.", true);
+        setStatusMessage("Voucher not found for alteration.", true);
         return false;
     }
 
     m_editingVoucherId = data.value("id").toInt();
     m_editingVoucherNo = data.value("voucher_no").toString();
 
+    QString vType = data.value("voucher_type").toString();
+    QString lType = data.value("legacy_type").toString();
+    if (vType.contains("Receipt", Qt::CaseInsensitive) || lType.contains("Rcpt", Qt::CaseInsensitive)) {
+        setVoucherMode("Receipt");
+    } else {
+        setVoucherMode("Payment");
+    }
+
     m_voucherNoInput->setText(m_editingVoucherNo);
     QString vDate = data.value("voucher_date").toString();
-    if (!vDate.isEmpty()) {
-        m_dateEdit->setDate(QDate::fromString(vDate, "yyyy-MM-dd"));
-    }
+    m_dateEdit->setDate(QDate::fromString(vDate, "yyyy-MM-dd"));
+    updateDayOfWeek(m_dateEdit->date());
+    updateFiscalYearAndVoucherNo();
 
     m_narrationInput->setText(data.value("narration").toString());
 
-    m_alterBadge->setText(QString("ALTERATION MODE (#%1)").arg(m_editingVoucherNo));
+    m_alterBadge->setText(QString("ALTERING #%1").arg(m_editingVoucherNo));
     m_alterBadge->show();
     m_deleteBtn->show();
 
     // Populate rows
     m_table->setRowCount(0);
-    QVariantList rows = data.value("rows").toList();
-    if (rows.isEmpty()) {
-        addNewRow("Dr", data.value("party_name").toString(), data.value("amount").toDouble(), 0.0, "");
-        addNewRow("Cr", data.value("account_type").toString(), 0.0, data.value("amount").toDouble(), "");
+    QVariantList items = data.value("rows").toList();
+    if (!items.isEmpty()) {
+        for (const auto& itVar : items) {
+            QVariantMap item = itVar.toMap();
+            QString drcr = item.value("drcr").toString();
+            QString ledger = item.value("ledgerName").toString();
+            double debit = item.value("debitAmt").toDouble();
+            double credit = item.value("creditAmt").toDouble();
+            QString ref = item.value("refNo").toString();
+            addNewRow(drcr, ledger, debit, credit, ref);
+        }
     } else {
-        for (const auto& rVar : rows) {
-            QVariantMap r = rVar.toMap();
-            QString drcr = r.value("drcr").toString();
-            QString ledger = r.value("ledgerName").toString();
-            double dAmt = r.value("debitAmt").toDouble();
-            double cAmt = r.value("creditAmt").toDouble();
-            QString ref = r.value("refNo").toString();
-            addNewRow(drcr, ledger, dAmt, cAmt, ref);
+        double amt = data.value("amount").toDouble();
+        QString party = data.value("party_name").toString();
+        QString opp = data.value("account_type").toString();
+        if (m_voucherMode == "Payment") {
+            addNewRow("Dr", party, amt, 0.0, "");
+            addNewRow("Cr", opp.isEmpty() ? "Cash" : opp, 0.0, amt, "");
+        } else {
+            addNewRow("Cr", party, 0.0, amt, "");
+            addNewRow("Dr", opp.isEmpty() ? "Cash" : opp, amt, 0.0, "");
         }
     }
 
     recalculateTotals();
-    setStatusMessage(QString("Loaded Journal Voucher #%1 in Alteration Mode.").arg(m_editingVoucherNo), false);
+    setStatusMessage(QString("Loaded Voucher #%1 for editing").arg(m_editingVoucherNo), false);
     return true;
 }
 
-void JournalVoucherWidget::saveVoucher() {
+void CashVoucherWidget::saveVoucher() {
+    recalculateTotals();
+
     double totalDr = 0.0;
     double totalCr = 0.0;
     QVariantList rows;
 
     for (int r = 0; r < m_table->rowCount(); ++r) {
-        auto* typeCombo = qobject_cast<QComboBox*>(m_table->cellWidget(r, 0));
-        auto* searchWidget = qobject_cast<AccountSearchBox*>(m_table->cellWidget(r, 1));
-        auto* debitInput = qobject_cast<QLineEdit*>(m_table->cellWidget(r, 2));
-        auto* creditInput = qobject_cast<QLineEdit*>(m_table->cellWidget(r, 3));
-        auto* refInput = qobject_cast<QLineEdit*>(m_table->cellWidget(r, 4));
+        auto* combo = qobject_cast<QComboBox*>(m_table->cellWidget(r, 0));
+        auto* search = qobject_cast<AccountSearchBox*>(m_table->cellWidget(r, 1));
+        auto* drEdit = qobject_cast<QLineEdit*>(m_table->cellWidget(r, 2));
+        auto* crEdit = qobject_cast<QLineEdit*>(m_table->cellWidget(r, 3));
+        auto* refEdit = qobject_cast<QLineEdit*>(m_table->cellWidget(r, 4));
 
-        if (!typeCombo || !searchWidget) continue;
+        if (!combo || !search || !drEdit || !crEdit) continue;
 
-        QString drcr = typeCombo->currentText();
-        QString ledger = searchWidget->currentPartyName();
-        double dAmt = debitInput ? debitInput->text().toDouble() : 0.0;
-        double cAmt = creditInput ? creditInput->text().toDouble() : 0.0;
-        QString ref = refInput ? refInput->text().trimmed() : "";
+        QString drcr = combo->currentText();
+        QString party = search->text().trimmed();
+        double dAmt = drEdit->text().trimmed().toDouble();
+        double cAmt = crEdit->text().trimmed().toDouble();
+        QString ref = refEdit ? refEdit->text().trimmed() : "";
 
-        if (ledger.isEmpty()) {
-            if (dAmt > 0.0 || cAmt > 0.0) {
-                setStatusMessage(QString("Please select an Account/Ledger for row %1.").arg(r + 1), true);
-                focusCell(r, 1);
-                return;
-            }
-            continue;
-        }
-
-        if (drcr == "Dr") {
-            totalDr += dAmt;
-        } else {
-            totalCr += cAmt;
-        }
+        if (party.isEmpty()) continue;
 
         QVariantMap rowMap;
         rowMap["drcr"] = drcr;
-        rowMap["ledgerName"] = ledger;
+        rowMap["ledgerName"] = party;
         rowMap["debitAmt"] = dAmt;
         rowMap["creditAmt"] = cAmt;
         rowMap["refNo"] = ref;
         rows.append(rowMap);
+
+        if (drcr == "Dr") totalDr += dAmt;
+        else totalCr += cAmt;
     }
 
-    totalDr = FinancialMathService::instance().round2(totalDr);
-    totalCr = FinancialMathService::instance().round2(totalCr);
-
     if (rows.size() < 2) {
-        setStatusMessage("Please enter at least two transaction rows.", true);
+        setStatusMessage("Minimum 2 valid ledger accounts required.", true);
+        CustomMessageBox::critical(this, "Validation Error", "Please enter at least 2 accounts for double-entry posting.");
         return;
     }
 
-    if (std::abs(totalDr - totalCr) > 0.005) {
-        setStatusMessage(QString("Total Debit (%1) does not equal Total Credit (%2).").arg(
-            FinancialMathService::instance().formatInr(totalDr),
-            FinancialMathService::instance().formatInr(totalCr)
+    if (std::abs(totalDr - totalCr) >= 0.005) {
+        setStatusMessage(QString("Voucher is not balanced! Difference: %1").arg(
+            FinancialMathService::instance().formatInr(std::abs(totalDr - totalCr))
         ), true);
+        CustomMessageBox::critical(this, "Unbalanced Voucher",
+            QString("Debit total (%1) does not match Credit total (%2).")
+            .arg(FinancialMathService::instance().formatInr(totalDr), FinancialMathService::instance().formatInr(totalCr)));
         return;
     }
 
     if (totalDr <= 0.001) {
-        setStatusMessage("Journal Voucher amount must be greater than zero.", true);
+        setStatusMessage("Voucher amount must be greater than zero.", true);
         return;
     }
 
     QString vchNo = m_voucherNoInput->text().trimmed();
-    QString vchDate = m_dateEdit->date().toString("yyyy-MM-dd");
+    QString vchDate = m_dateEdit->isoDate();
     QString narr = m_narrationInput->text().trimmed();
+    QString vchType = (m_voucherMode == "Receipt") ? "Cash Receipt" : "Cash Payment";
 
     bool ok = m_vouchersModel.save_multi_row_voucher(
         m_editingVoucherId,
-        "Journal",
+        vchType,
         vchNo,
         vchDate,
         narr,
@@ -718,23 +784,23 @@ void JournalVoucherWidget::saveVoucher() {
 
     if (ok) {
         QString savedNo = vchNo;
-        CustomMessageBox::information(this, "Success", QString("Journal Voucher #%1 saved successfully!").arg(savedNo));
+        CustomMessageBox::information(this, "Success", QString("%1 #%2 saved successfully!").arg(vchType, savedNo));
         emit voucherSaved(savedNo);
         resetForm();
     } else {
-        setStatusMessage("Failed to save Journal Voucher in database.", true);
+        setStatusMessage("Failed to save cash voucher in database.", true);
     }
 }
 
-void JournalVoucherWidget::deleteVoucher() {
+void CashVoucherWidget::deleteVoucher() {
     if (m_editingVoucherId <= 0) return;
 
     if (CustomMessageBox::question(this, "Confirm Deletion",
-            QString("Are you sure you want to permanently delete Journal Voucher #%1?").arg(m_editingVoucherNo))) {
+            QString("Are you sure you want to permanently delete Cash Voucher #%1?").arg(m_editingVoucherNo))) {
         bool ok = m_vouchersModel.delete_voucher(m_editingVoucherId);
         if (ok) {
             QString deletedNo = m_editingVoucherNo;
-            CustomMessageBox::information(this, "Deleted", QString("Journal Voucher #%1 deleted.").arg(deletedNo));
+            CustomMessageBox::information(this, "Deleted", QString("Cash Voucher #%1 deleted.").arg(deletedNo));
             emit voucherDeleted(deletedNo);
             resetForm();
         } else {
@@ -743,24 +809,28 @@ void JournalVoucherWidget::deleteVoucher() {
     }
 }
 
-void JournalVoucherWidget::setStatusMessage(const QString& message, bool isError) {
+void CashVoucherWidget::setStatusMessage(const QString& message, bool isError) {
     if (m_statusLabel) {
         m_statusLabel->setText(message);
-        m_statusLabel->setStyleSheet(isError ? "color: #DC2626; font-weight: 700; border: none; background: transparent;" : "color: #16A34A; font-weight: 700; border: none; background: transparent;");
+        m_statusLabel->setStyleSheet(isError ? "color: #DC2626; font-weight: 700; border: none; background: transparent;" : "color: #16A34A; font-weight: 700; border: none; background: transparent;" );
     }
 }
 
-void JournalVoucherWidget::focusFirstRow() {
-    if (m_table->rowCount() > 0) {
-        focusCell(0, 1);
-    }
-}
-
-void JournalVoucherWidget::showEvent(QShowEvent* event) {
+void CashVoucherWidget::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
 }
 
-void JournalVoucherWidget::keyPressEvent(QKeyEvent* event) {
+void CashVoucherWidget::keyPressEvent(QKeyEvent* event) {
+    if (event->key() == Qt::Key_F3) {
+        setVoucherMode("Payment");
+        event->accept();
+        return;
+    }
+    if (event->key() == Qt::Key_F4) {
+        setVoucherMode("Receipt");
+        event->accept();
+        return;
+    }
     if (event->key() == Qt::Key_S && (event->modifiers() & Qt::ControlModifier)) {
         saveVoucher();
         event->accept();
@@ -784,7 +854,7 @@ void JournalVoucherWidget::keyPressEvent(QKeyEvent* event) {
     QWidget::keyPressEvent(event);
 }
 
-bool JournalVoucherWidget::eventFilter(QObject* watched, QEvent* event) {
+bool CashVoucherWidget::eventFilter(QObject* watched, QEvent* event) {
     if (event->type() == QEvent::KeyPress) {
         auto* keyEvent = static_cast<QKeyEvent*>(event);
         int key = keyEvent->key();
@@ -801,6 +871,16 @@ bool JournalVoucherWidget::eventFilter(QObject* watched, QEvent* event) {
 
         if (key == Qt::Key_D && (keyEvent->modifiers() & Qt::ControlModifier)) {
             deleteVoucher();
+            return true;
+        }
+
+        if (key == Qt::Key_F3) {
+            setVoucherMode("Payment");
+            return true;
+        }
+
+        if (key == Qt::Key_F4) {
+            setVoucherMode("Receipt");
             return true;
         }
 
@@ -996,7 +1076,7 @@ bool JournalVoucherWidget::eventFilter(QObject* watched, QEvent* event) {
                     return true;
                 }
             }
-            // 4. Column 4: Ref / Narration
+            // 4. Column 4: Cash Memo / Ref No
             else if (targetCol == 4) {
                 auto* edit = qobject_cast<QLineEdit*>(watched);
                 if (key == Qt::Key_Return || key == Qt::Key_Enter || key == Qt::Key_Tab) {
@@ -1058,3 +1138,5 @@ bool JournalVoucherWidget::eventFilter(QObject* watched, QEvent* event) {
     }
     return QWidget::eventFilter(watched, event);
 }
+
+} // namespace MahadevERP

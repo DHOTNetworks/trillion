@@ -338,8 +338,59 @@ void TdsVoucherWidget::setupUi() {
 
     rootLayout->addLayout(footerRow);
 
+    // Keyboard-First Traversal Chain on Enter
+    if (m_partySearch) {
+        connect(m_partySearch, &AccountSearchBox::returnPressed, this, [this]() {
+            if (m_panEdit) { m_panEdit->setFocus(); m_panEdit->selectAll(); }
+        });
+    }
+    if (m_panEdit) {
+        connect(m_panEdit, &QLineEdit::returnPressed, this, [this]() {
+            if (m_expLedgerEdit) { m_expLedgerEdit->setFocus(); m_expLedgerEdit->selectAll(); }
+        });
+    }
+    if (m_expLedgerEdit) {
+        connect(m_expLedgerEdit, &AccountSearchBox::returnPressed, this, [this]() {
+            if (m_tdsLedgerEdit) { m_tdsLedgerEdit->setFocus(); m_tdsLedgerEdit->selectAll(); }
+        });
+    }
+    if (m_tdsLedgerEdit) {
+        connect(m_tdsLedgerEdit, &AccountSearchBox::returnPressed, this, [this]() {
+            if (m_incomeAmountEdit) { m_incomeAmountEdit->setFocus(); m_incomeAmountEdit->selectAll(); }
+        });
+    }
+    if (m_incomeAmountEdit) {
+        connect(m_incomeAmountEdit, &QLineEdit::returnPressed, this, [this]() {
+            if (m_previousAmountEdit) { m_previousAmountEdit->setFocus(); m_previousAmountEdit->selectAll(); }
+        });
+    }
+    if (m_previousAmountEdit) {
+        connect(m_previousAmountEdit, &QLineEdit::returnPressed, this, [this]() {
+            if (m_tdsRateEdit) { m_tdsRateEdit->setFocus(); m_tdsRateEdit->selectAll(); }
+        });
+    }
+    if (m_tdsRateEdit) {
+        connect(m_tdsRateEdit, &QLineEdit::returnPressed, this, [this]() {
+            if (m_surchargeRateEdit) { m_surchargeRateEdit->setFocus(); m_surchargeRateEdit->selectAll(); }
+        });
+    }
+    if (m_surchargeRateEdit) {
+        connect(m_surchargeRateEdit, &QLineEdit::returnPressed, this, [this]() {
+            if (m_cessRateEdit) { m_cessRateEdit->setFocus(); m_cessRateEdit->selectAll(); }
+        });
+    }
+    if (m_cessRateEdit) {
+        connect(m_cessRateEdit, &QLineEdit::returnPressed, this, [this]() {
+            if (m_narrationEdit) { m_narrationEdit->setFocus(); m_narrationEdit->selectAll(); }
+        });
+    }
+    if (m_narrationEdit) {
+        connect(m_narrationEdit, &QLineEdit::returnPressed, this, [this]() {
+            if (m_saveBtn) { m_saveBtn->setFocus(); }
+        });
+    }
+
     connect(new QShortcut(QKeySequence(Qt::Key_Escape), this), &QShortcut::activated, this, &TdsVoucherWidget::backRequested);
-    connect(new QShortcut(QKeySequence(Qt::Key_F2), this), &QShortcut::activated, this, &TdsVoucherWidget::openDateDialog);
 }
 
 void TdsVoucherWidget::resetForm() {

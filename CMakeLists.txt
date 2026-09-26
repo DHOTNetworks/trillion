@@ -368,6 +368,14 @@ set(SOURCES
     src/widgets/depreciation_chart_widget.cpp
     src/widgets/joint_reports_dialog.h
     src/widgets/joint_reports_dialog.cpp
+    src/models/cash_bank_flow_controller.h
+    src/models/cash_bank_flow_controller.cpp
+    src/widgets/cash_bank_flow_widget.h
+    src/widgets/cash_bank_flow_widget.cpp
+    src/widgets/cash_voucher_widget.h
+    src/widgets/cash_voucher_widget.cpp
+    src/widgets/cashbook_options_dialog.h
+    src/widgets/cashbook_options_dialog.cpp
     src/widgets/main_window.h
     src/widgets/main_window.cpp
 )
@@ -534,6 +542,8 @@ set(TEST_SOURCES
     src/models/trial_balance_controller.cpp
     src/models/capital_accounts_controller.h
     src/models/capital_accounts_controller.cpp
+    src/models/cash_bank_flow_controller.h
+    src/models/cash_bank_flow_controller.cpp
 )
 
 add_executable(LogicBoardTestSuite ${TEST_SOURCES})

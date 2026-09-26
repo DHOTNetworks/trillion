@@ -349,6 +349,7 @@ void DayBookWidget::onRowDoubleClicked(int row, int /*column*/) {
     if (vType.contains("SALE") || tType == "SL") targetView = 14;
     else if (vType.contains("PURCHASE") || tType == "PU") targetView = 15;
     else if (vType.contains("JOURNAL") || tType == "JRNL" || tType == "JV") targetView = 17;
+    else if (tType == "PYMT" || tType == "RCPT" || vType == "CASH PAYMENT" || vType == "CASH RECEIPT") targetView = 60;
     else if (vType.contains("PAYMENT") || vType.contains("RECEIPT") || tType == "CHPT" || tType == "CHRT") targetView = 16;
     else if (vType.contains("J-FORM") || tType == "JFRM") targetView = 18;
     else if (vType.contains("I-FORM") || tType == "IFRM") targetView = 19;

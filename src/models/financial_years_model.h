@@ -20,5 +20,5 @@ public:
     Q_INVOKABLE QVariantMap validate_voucher_date(const QString& input, const QString& referenceDate = "") const;
 
 private:
-    mutable QString m_workingDate;
+    static QString s_workingDate;
 };

@@ -442,11 +442,6 @@ void DebitCreditNoteWidget::keyPressEvent(QKeyEvent* event) {
         event->accept();
         return;
     }
-    if (event->key() == Qt::Key_F2) {
-        openDateDialog();
-        event->accept();
-        return;
-    }
     if (event->key() == Qt::Key_F4) {
         onAddItemRow();
         event->accept();
