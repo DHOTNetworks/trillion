@@ -54,7 +54,8 @@ DashboardWidget::DashboardWidget(DashboardController* dashCtrl,
         else if (lastMenu == "stock_master") m_selectedMenuIndex = 1;
         else if (lastMenu == "add_voucher") m_selectedMenuIndex = 2;
         else if (lastMenu == "other_voucher" || lastMenu == "tds_tcs_hub" || lastMenu == "tds_options" || lastMenu == "tcs_options") m_selectedMenuIndex = 3;
-        else if (lastMenu == "reports_register") m_selectedMenuIndex = 4;
+        else if (lastMenu == "reports_register" || lastMenu == "cash_book_hub" || lastMenu == "stock_register_hub") m_selectedMenuIndex = 4;
+        else if (lastMenu == "final_accounts" || lastMenu == "final_reports_hub" || lastMenu == "trading_reports_hub" || lastMenu == "trial_balance_options_hub" || lastMenu == "depreciation_options_hub") m_selectedMenuIndex = 5;
         updateSelection(m_selectedMenuIndex);
     });
 
@@ -388,7 +389,8 @@ QWidget* DashboardWidget::createMiddleSection() {
     addCard(1, "2", "2. Stock Master", "Raw Paddy, Rice & By-Product Inventory", "Alt+4", "#DCFCE7", "#16A34A", "#F0FDF4", "#16A34A");
     addCard(2, "3", "3. Add Vouchers", "Sales Invoices, Paddy Slips, Journal & Milling", "F2", "#FEF3C7", "#D97706", "#FEF3C7", "#D97706");
     addCard(3, "4", "4. Other Vouchers", "J-Form Mandi Procurement & TDS Vouchers", "Alt+5", "#F3E8FF", "#7C3AED", "#F3E8FF", "#7C3AED");
-    addCard(4, "5", "5. Reports & Statements", "Milling Statement, Stock Register, Party Ledger & Invoices", "Alt+7", "#DCFCE7", "#059669", "#ECFDF5", "#059669");
+    addCard(4, "5", "5. Books & Registers", "Day Book, Cash & Bank Book, Sales, Purchase & Stock", "Alt+7", "#DCFCE7", "#059669", "#ECFDF5", "#059669");
+    addCard(5, "6", "6. Final Accounts & Financials", "Balance Sheet, P&L, Trial Bal, GST & Mandi Returns", "Alt+8", "#E0E7FF", "#4F46E5", "#EEF2FF", "#4F46E5");
 
     layout->addLayout(menuSection);
     layout->addStretch(1);
@@ -496,6 +498,7 @@ void DashboardWidget::triggerMenuIndex(int index, int initialSubmenuIndex) {
     else if (index == 2) openAddVoucherMenu(initialSubmenuIndex);
     else if (index == 3) openOtherVoucherMenu(initialSubmenuIndex);
     else if (index == 4) openReportsMenu(initialSubmenuIndex);
+    else if (index == 5) openFinalAccountsMenu(initialSubmenuIndex);
 }
 
 void DashboardWidget::openLedgerMenu(int initialIndex) {
@@ -526,6 +529,12 @@ void DashboardWidget::openReportsMenu(int initialIndex) {
     m_selectedMenuIndex = 4;
     updateSelection(4);
     MahadevERP::MenuTreeManager::instance().executeMenu("reports_register", this, initialIndex);
+}
+
+void DashboardWidget::openFinalAccountsMenu(int initialIndex) {
+    m_selectedMenuIndex = 5;
+    updateSelection(5);
+    MahadevERP::MenuTreeManager::instance().executeMenu("final_accounts", this, initialIndex);
 }
 
 void DashboardWidget::refreshStats() {
@@ -604,8 +613,9 @@ void DashboardWidget::showEvent(QShowEvent* event) {
     if (lastMenu == "ledger_master") m_selectedMenuIndex = 0;
     else if (lastMenu == "stock_master") m_selectedMenuIndex = 1;
     else if (lastMenu == "add_voucher") m_selectedMenuIndex = 2;
-    else if (lastMenu == "other_voucher") m_selectedMenuIndex = 3;
-    else if (lastMenu == "reports_register") m_selectedMenuIndex = 4;
+    else if (lastMenu == "other_voucher" || lastMenu == "tds_tcs_hub" || lastMenu == "tds_options" || lastMenu == "tcs_options") m_selectedMenuIndex = 3;
+    else if (lastMenu == "reports_register" || lastMenu == "cash_book_hub" || lastMenu == "stock_register_hub") m_selectedMenuIndex = 4;
+    else if (lastMenu == "final_accounts" || lastMenu == "final_reports_hub" || lastMenu == "trading_reports_hub" || lastMenu == "trial_balance_options_hub" || lastMenu == "depreciation_options_hub") m_selectedMenuIndex = 5;
 
     updateSelection(m_selectedMenuIndex);
     focusMenu();
@@ -649,6 +659,10 @@ void DashboardWidget::keyPressEvent(QKeyEvent* event) {
         return;
     } else if (event->key() == Qt::Key_5) {
         triggerMenuIndex(4);
+        event->accept();
+        return;
+    } else if (event->key() == Qt::Key_6) {
+        triggerMenuIndex(5);
         event->accept();
         return;
     } else if (event->key() == Qt::Key_F2) {

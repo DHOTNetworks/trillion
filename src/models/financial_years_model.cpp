@@ -90,6 +90,10 @@ QString FinancialYearsModel::get_working_date() const {
     return s_workingDate;
 }
 
+void FinancialYearsModel::setWorkingDate(const QString& dateStr) {
+    s_workingDate = dateStr;
+}
+
 void FinancialYearsModel::set_working_date(const QString& dateStr) {
     QString parsed = parse_date_pattern(dateStr);
     if (!parsed.isEmpty()) {

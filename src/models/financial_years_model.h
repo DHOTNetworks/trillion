@@ -15,6 +15,7 @@ public:
 
     Q_INVOKABLE QString get_working_date() const;
     Q_INVOKABLE void set_working_date(const QString& dateStr);
+    static void setWorkingDate(const QString& dateStr);
 
     Q_INVOKABLE QString parse_date_pattern(const QString& input, const QString& referenceDate = "") const;
     Q_INVOKABLE QVariantMap validate_voucher_date(const QString& input, const QString& referenceDate = "") const;

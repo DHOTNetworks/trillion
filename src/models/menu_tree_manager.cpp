@@ -189,23 +189,34 @@ void MenuTreeManager::setupDefaultMenus()
     };
     registerMenu(otherVoucherMenu);
 
-    // 5. REPORTS & REGISTERS MENU
-    MenuNode reportsMenu("reports_register", "REPORTS & REGISTERS MENU", "#059669", "");
+    // 5. BOOKS & REGISTERS MENU
+    MenuNode reportsMenu("reports_register", "BOOKS & REGISTERS MENU", "#059669", "");
     reportsMenu.items = {
         MenuItem("1. Day Book (Daily Audit & Transaction Register)", "Alt+D", Qt::Key_1, MenuActionType::OpenView, 33),
         MenuItem("2. Cash Book & Flow Statements (Cash, Bank, Joint)", "Alt+C / C", Qt::Key_2, MenuActionType::OpenSubmenu, -1, "cash_book_hub"),
-        MenuItem("3. GST Compliance Dashboard (GSTR-1, 2A Match, 3B)", "Alt+G", Qt::Key_3, MenuActionType::OpenView, 34),
-        MenuItem("4. Mandi Form M & Statutory Returns (HSAMB)", "Alt+M", Qt::Key_4, MenuActionType::OpenView, 20),
-        MenuItem("5. Sales Register & Summary", "", Qt::Key_5, MenuActionType::OpenView, 3),
-        MenuItem("6. Purchase Register & Summary", "", Qt::Key_6, MenuActionType::OpenView, 4),
-        MenuItem("7. Stock Register (View Options)", "S", Qt::Key_7, MenuActionType::OpenSubmenu, -1, "stock_register_hub"),
-        MenuItem("8. Milling Production & Out-turn Statement", "Alt+M", Qt::Key_8, MenuActionType::OpenView, 35),
-        MenuItem("9. Final Reports (Balance Sheet, P&L, Trading, Trial Bal)", "F / F7", Qt::Key_9, MenuActionType::OpenSubmenu, -1, "final_reports_hub"),
-        MenuItem("10. Profit & Loss Statement (Trading & P&L)", "F6", 0, MenuActionType::OpenView, 30),
-        MenuItem("11. Closing Stock Valuation & Year-End Audit", "Alt+C", 0, MenuActionType::OpenView, 36),
-        MenuItem("12. Interest Calculation & Register (Aank / Rokka)", "Alt+A", 0, MenuActionType::OpenView, 8)
+        MenuItem("3. Bank Statement Parser & Auto-Reconciliation", "Ctrl+B", Qt::Key_3, MenuActionType::OpenView, 26),
+        MenuItem("4. Sales Register & Summary", "", Qt::Key_4, MenuActionType::OpenView, 3),
+        MenuItem("5. Purchase Register & Summary", "", Qt::Key_5, MenuActionType::OpenView, 4),
+        MenuItem("6. Stock Register (View Options)", "S", Qt::Key_6, MenuActionType::OpenSubmenu, -1, "stock_register_hub"),
+        MenuItem("7. Transport Dispatch & Gate Pass Register", "Alt+T", Qt::Key_7, MenuActionType::OpenView, 27),
+        MenuItem("8. Milling Production & Out-turn Statement", "Alt+M", Qt::Key_8, MenuActionType::OpenView, 35)
     };
     registerMenu(reportsMenu);
+
+    // 6. FINAL ACCOUNTS & FINANCIALS MENU
+    MenuNode finalAccountsMenu("final_accounts", "FINAL ACCOUNTS & FINANCIALS MENU", "#4F46E5", "");
+    finalAccountsMenu.items = {
+        MenuItem("1. Balance Sheet (Liabilities & Assets)", "B / Ctrl+Alt+B", Qt::Key_1, MenuActionType::OpenView, 29),
+        MenuItem("2. Profit & Loss Statement (Trading & P&L)", "P / Ctrl+Alt+P", Qt::Key_2, MenuActionType::OpenView, 30),
+        MenuItem("3. Trial Balance Sheet (Group & Ledger Summaries)", "A / F7", Qt::Key_3, MenuActionType::OpenSubmenu, -1, "trial_balance_options_hub"),
+        MenuItem("4. GST Compliance Dashboard (GSTR-1, 2A Match, 3B)", "Alt+G", Qt::Key_4, MenuActionType::OpenView, 34),
+        MenuItem("5. Mandi Form M & Statutory Returns (HSAMB)", "Alt+M", Qt::Key_5, MenuActionType::OpenView, 20),
+        MenuItem("6. Interest Calculation Engine (Bulk & Party-wise)", "Alt+A", Qt::Key_6, MenuActionType::OpenView, 25),
+        MenuItem("7. Capital Accounts Summary", "C", Qt::Key_7, MenuActionType::OpenView, 40),
+        MenuItem("8. Depreciation Chart & Schedule", "E", Qt::Key_8, MenuActionType::OpenSubmenu, -1, "depreciation_options_hub"),
+        MenuItem("9. Closing Stock Valuation & Year-End Audit", "Alt+C", Qt::Key_9, MenuActionType::OpenView, 36)
+    };
+    registerMenu(finalAccountsMenu);
 
     // 5b. CASH BOOK & FLOW STATEMENTS HUB
     MenuNode cashBookHub("cash_book_hub", "CASH BOOK & FLOW STATEMENTS", "#2563EB", "reports_register");
@@ -301,7 +312,7 @@ void MenuTreeManager::setupDefaultMenus()
     registerMenu(stockProfit);
 
     // 13. FINAL REPORTS HUB MENU
-    MenuNode finalReportsHub("final_reports_hub", "FINAL REPORTS (ALT+F2: SET PERIOD)", "#059669", "reports_register");
+    MenuNode finalReportsHub("final_reports_hub", "FINAL REPORTS (ALT+F2: SET PERIOD)", "#4F46E5", "final_accounts");
     finalReportsHub.items = {
         MenuItem("[B] Balance Sheet", "B", Qt::Key_B, MenuActionType::OpenView, 29),
         MenuItem("[C] Capital A/cs", "C", Qt::Key_C, MenuActionType::OpenView, 40),

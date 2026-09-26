@@ -1,6 +1,7 @@
 #include "main_window.h"
 #include "accounting_period_dialog.h"
 #include "../engine/fiscal_year_helper.h"
+#include "../models/financial_years_model.h"
 #include "../services/app_keyboard_controller.h"
 #include <QTimer>
 #include <QShortcut>
@@ -748,55 +749,63 @@ void MainWindow::openAccountingPeriodDialog() {
     QString fIso, tIso, fyLabel;
     bool applied = AccountingPeriodDialog::selectAndApplyGlobalPeriod(this, &fIso, &tIso, &fyLabel);
     if (applied) {
+        FinancialYearsModel::setWorkingDate("");
+
         if (m_dashCtrl) {
             m_dashCtrl->refresh_stats(fIso, tIso, fyLabel);
         }
 
-        if (m_dashboardWidget) {
+        int vIdx = currentViewIndex();
+        QDate fDate = QDate::fromString(fIso, "yyyy-MM-dd");
+        QDate tDate = QDate::fromString(tIso, "yyyy-MM-dd");
+
+        if (vIdx == 0 && m_dashboardWidget) {
             m_dashboardWidget->refreshStats();
-        }
-
-        if (m_ledgerWidget) {
-            m_ledgerWidget->onTotalsChanged();
-        }
-
-        if (m_balanceSheetWidget) {
-            m_balanceSheetWidget->refreshData(tIso);
-        }
-
-        if (m_profitLossWidget) {
-            m_profitLossWidget->refreshData(fIso, tIso);
-        }
-
-        if (m_salesRegisterWidget) {
-            m_salesRegisterWidget->loadData(QDate::fromString(fIso, "yyyy-MM-dd"), QDate::fromString(tIso, "yyyy-MM-dd"));
-        }
-
-        if (m_purchaseRegisterWidget) {
-            m_purchaseRegisterWidget->loadData(QDate::fromString(fIso, "yyyy-MM-dd"), QDate::fromString(tIso, "yyyy-MM-dd"));
-        }
-
-        if (m_stockDetailWidget) {
+        } else if (vIdx == 1 && m_paddyProcurementWidget) {
+            m_paddyProcurementWidget->loadArrivals(fDate, tDate);
+        } else if (vIdx == 3 && m_salesRegisterWidget) {
+            m_salesRegisterWidget->loadData(fDate, tDate);
+        } else if ((vIdx == 4 || vIdx == 21) && m_purchaseRegisterWidget) {
+            m_purchaseRegisterWidget->loadData(fDate, tDate);
+        } else if (vIdx == 8 && m_ledgerWidget) {
+            if (!m_ledgerWidget->currentParty().isEmpty()) {
+                m_ledgerWidget->loadParty(m_ledgerWidget->currentParty(), fIso, tIso);
+            } else {
+                m_ledgerWidget->resetSearch();
+            }
+        } else if (vIdx == 13 && m_stockDetailWidget) {
             m_stockDetailWidget->reloadData(fIso, tIso);
-        }
-
-        if (m_paddyProcurementWidget) {
-            m_paddyProcurementWidget->loadArrivals(QDate::fromString(fIso, "yyyy-MM-dd"), QDate::fromString(tIso, "yyyy-MM-dd"));
-        }
-
-        if (m_trialBalanceWidget) {
+        } else if (vIdx == 27 && m_transportDispatchWidget) {
+            m_transportDispatchWidget->loadData(fDate, tDate);
+        } else if (vIdx == 29 && m_balanceSheetWidget) {
+            m_balanceSheetWidget->refreshData(tIso);
+        } else if (vIdx == 30 && m_profitLossWidget) {
+            m_profitLossWidget->refreshData(fIso, tIso);
+        } else if (vIdx == 33 && m_dayBookWidget) {
+            m_dayBookWidget->loadDayBookData(fDate, tDate);
+        } else if (vIdx == 34 && m_gstrReportsWidget) {
+            m_gstrReportsWidget->loadReturns(fDate, tDate);
+        } else if (vIdx == 35 && m_millingStatementWidget) {
+            m_millingStatementWidget->loadMillingData(fDate, tDate);
+        } else if (vIdx == 36 && m_customClosingStockWidget) {
+            m_customClosingStockWidget->reloadData();
+        } else if (vIdx == 39 && m_trialBalanceWidget) {
             m_trialBalanceWidget->reloadData();
-        }
-
-        if (m_capitalAccountsWidget) {
+        } else if (vIdx == 40 && m_capitalAccountsWidget) {
             m_capitalAccountsWidget->reloadData();
-        }
-
-        if (m_depreciationChartWidget) {
+        } else if (vIdx == 41 && m_depreciationChartWidget) {
             m_depreciationChartWidget->reloadData();
-        }
-
-        if (m_cashBankFlowWidget) {
+        } else if (vIdx == 50 && m_tdsVouchersListWidget) {
+            m_tdsVouchersListWidget->reloadData();
+        } else if (vIdx == 52 && m_taxChallanRegisterWidget) {
+            m_taxChallanRegisterWidget->reloadData();
+        } else if (vIdx == 54 && m_tcsReceiptListWidget) {
+            m_tcsReceiptListWidget->reloadData();
+        } else if (vIdx == 56 && m_advancePayment194QListWidget) {
+            m_advancePayment194QListWidget->reloadData();
+        } else if (vIdx == 57 && m_form16AListWidget) {
+            m_form16AListWidget->reloadData();
+        } else if ((vIdx == 61 || vIdx == 62 || vIdx == 63) && m_cashBankFlowWidget) {
             m_cashBankFlowWidget->setDateRange(fIso, tIso);
         }
     }

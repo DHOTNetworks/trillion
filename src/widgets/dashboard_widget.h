@@ -46,6 +46,7 @@ public slots:
     void openAddVoucherMenu(int initialIndex = 0);
     void openOtherVoucherMenu(int initialIndex = 0);
     void openReportsMenu(int initialIndex = 0);
+    void openFinalAccountsMenu(int initialIndex = 0);
     void onSyncClicked();
 
 protected:
