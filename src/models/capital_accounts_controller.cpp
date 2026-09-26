@@ -2,6 +2,7 @@
 #include "../database_manager.h"
 #include "../engine/fiscal_year_helper.h"
 #include "../engine/profit_loss_calculator.h"
+#include "account_classifier.h"
 #include "../services/financial_math_service.h"
 #include <cmath>
 #include <algorithm>
@@ -38,12 +39,16 @@ void CapitalAccountsController::calculate() {
     QString fromIso = m_fromDate.isValid() ? m_fromDate.toString("yyyy-MM-dd") : "2025-04-01";
     QString toIso = m_toDate.isValid() ? m_toDate.toString("yyyy-MM-dd") : "2026-03-31";
 
-    // 1. Fetch all ledgers strictly in Capital A/c group (Strict Group Classification, not party name)
-    QVariantList capRows = db.executeQuery(
-        "SELECT id, name, group_name, opening_balance, COALESCE(balance_type, 'Dr') AS dr_cr FROM parties "
-        "WHERE (TRIM(group_name) = 'Capital A/c' OR TRIM(group_name) = 'Capital Account' OR TRIM(group_name) LIKE 'Capital%' OR TRIM(group_name) LIKE '%Partner%') "
-        "ORDER BY name ASC;"
-    );
+    // 1. Fetch all ledgers strictly belonging to Capital A/c hierarchy (code 1)
+    // Mathematical guarantee: ANY group whose code1st, code2nd, code3rd, or code4th == 1
+    QString hierarchyClause = AccountClassifier::generateHierarchySqlClause({StandardGroupCode::Capital}, "g");
+    QString sql = QString(
+        "SELECT p.id, p.name, p.group_name, p.opening_balance, COALESCE(p.balance_type, 'Dr') AS dr_cr FROM parties p "
+        "LEFT JOIN account_groups g ON (p.group_id = g.id OR (p.group_code > 0 AND p.group_code = g.code1st) OR p.group_name = g.name) "
+        "WHERE %1 "
+        "ORDER BY p.name ASC;"
+    ).arg(hierarchyClause);
+    QVariantList capRows = db.executeQuery(sql);
 
     // 2. Compute Net Profit from P&L Engine
     ProfitLossData pnl = ProfitLossCalculator::calculate(fromIso, toIso);

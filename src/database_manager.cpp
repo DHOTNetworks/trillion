@@ -249,6 +249,8 @@ void DatabaseManager::ensureTablesExist() {
         "alias TEXT,"
         "prefix TEXT,"
         "group_name TEXT,"
+        "group_code INTEGER DEFAULT 8,"
+        "group_id INTEGER,"
         "party_type TEXT,"
         "special_type TEXT,"
         "opening_balance REAL DEFAULT 0.0,"
@@ -1216,7 +1218,12 @@ void DatabaseManager::ensureTablesExist() {
         "nature TEXT NOT NULL DEFAULT 'Assets',"
         "description TEXT,"
         "extract_in_balance_sheet INTEGER DEFAULT 1,"
-        "is_system INTEGER DEFAULT 0"
+        "is_system INTEGER DEFAULT 0,"
+        "code1st INTEGER DEFAULT 0,"
+        "code2nd INTEGER DEFAULT 0,"
+        "code3rd INTEGER DEFAULT 0,"
+        "code4th INTEGER DEFAULT 0,"
+        "standard_root INTEGER DEFAULT 0"
         ");"
     );
 
@@ -1388,6 +1395,111 @@ void DatabaseManager::ensureTablesExist() {
     addColumnIfNotExists("parties", "set_title_case", "INTEGER DEFAULT 1");
     addColumnIfNotExists("parties", "ledger_open_from", "TEXT");
     addColumnIfNotExists("parties", "books_start_from", "TEXT DEFAULT '01-04-2023'");
+
+    // Ensure deterministic hierarchy columns exist for account_groups and parties
+    addColumnIfNotExists("account_groups", "code1st", "INTEGER DEFAULT 0");
+    addColumnIfNotExists("account_groups", "code2nd", "INTEGER DEFAULT 0");
+    addColumnIfNotExists("account_groups", "code3rd", "INTEGER DEFAULT 0");
+    addColumnIfNotExists("account_groups", "code4th", "INTEGER DEFAULT 0");
+    addColumnIfNotExists("account_groups", "standard_root", "INTEGER DEFAULT 0");
+
+    addColumnIfNotExists("parties", "group_code", "INTEGER DEFAULT 8");
+    addColumnIfNotExists("parties", "group_id", "INTEGER");
+
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_account_groups_code1st ON account_groups(code1st);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_account_groups_hierarchy ON account_groups(code1st, code2nd, code3rd, code4th);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_parties_group_code ON parties(group_code);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_parties_group_id ON parties(group_id);");
+
+    // 1. Backfill legacy group codes from description if code1st = 0
+    executeNonQuery(
+        "UPDATE account_groups "
+        "SET code1st = CAST(SUBSTR(description, 20) AS INTEGER) "
+        "WHERE (code1st IS NULL OR code1st = 0) AND description LIKE 'Legacy Group Code #%';"
+    );
+
+    // 2. Synchronize standard group codes and parent hierarchy
+    struct MasterGroupInfo {
+        int code1;
+        int code2;
+        int code3;
+        int code4;
+        const char* name;
+        const char* nature;
+    };
+    static const MasterGroupInfo stdGroups[] = {
+        {1, 0, 0, 0, "Capital A/c", "Liabilities"},
+        {2, 0, 0, 0, "Current Assets", "Assets"},
+        {3, 2, 0, 0, "Bank(s) A/c", "Assets"},
+        {4, 2, 0, 0, "Cash-In-Hand", "Assets"},
+        {6, 2, 0, 0, "Loan & Advances (Assets)", "Assets"},
+        {7, 2, 0, 0, "Stock-In-Hand", "Assets"},
+        {8, 2, 0, 0, "Sundry Debtors", "Assets"},
+        {9, 0, 0, 0, "Current Liabilities", "Liabilities"},
+        {10, 9, 0, 0, "Duties & Taxes", "Liabilities"},
+        {11, 9, 0, 0, "Sundry Creditors", "Liabilities"},
+        {12, 9, 0, 0, "Provisions", "Liabilities"},
+        {13, 9, 0, 0, "Loans (Liability)", "Liabilities"},
+        {14, 0, 0, 0, "Fixed Assets", "Assets"},
+        {15, 0, 0, 0, "Profit & Loss", "Liabilities"},
+        {16, 15, 0, 0, "Income A/c", "Income"},
+        {17, 15, 0, 0, "Expenditure A/c", "Expense"},
+        {18, 0, 0, 0, "Trading Items Stock A/c", "Assets"},
+        {19, 18, 0, 0, "Purchase A/c", "Expense"},
+        {20, 18, 0, 0, "Sale A/c", "Income"},
+        {21, 0, 0, 0, "Commission Basis Parties A/c", "Liabilities"},
+        {22, 0, 0, 0, "Manufacturing Group", "Expense"},
+        {23, 22, 0, 0, "Manufacturing Exp.", "Expense"},
+        {24, 18, 0, 0, "Trading Exp.", "Expense"},
+        {25, 0, 0, 0, "Suspense A/c", "Liabilities"},
+        {26, 2, 0, 0, "Deposit (Assets)", "Assets"},
+        {27, 0, 0, 0, "Branches / Divisions", "Liabilities"},
+        {28, 13, 9, 0, "Secured Loans", "Liabilities"},
+        {29, 13, 9, 0, "Unsecured Loans", "Liabilities"},
+        {30, 2, 0, 0, "Security A/c", "Assets"},
+        {31, 11, 9, 0, "Local Mandi Creditors", "Liabilities"},
+        {32, 8, 2, 0, "Zimidara Debtors", "Assets"},
+        {33, 11, 9, 0, "Zimidara Creditors", "Liabilities"},
+        {34, 8, 2, 0, "Mandi Debtors", "Assets"},
+        {35, 9, 0, 0, "Employees", "Liabilities"},
+        {36, 11, 9, 0, "Mandi Creditors", "Liabilities"},
+        {37, 8, 2, 0, "Mandi Trader/s", "Assets"},
+        {38, 8, 2, 0, "Rice Bran Debitors", "Assets"},
+        {39, 8, 2, 0, "Rice Basmati Debitors", "Assets"},
+        {40, 9, 0, 0, "Payable", "Liabilities"},
+        {41, 11, 9, 0, "Machinery Parts Creditors", "Liabilities"},
+        {42, 20, 18, 0, "Sale Return", "Income"},
+        {43, 11, 9, 0, "Rice Basmati Creditors", "Liabilities"},
+        {44, 17, 15, 0, "Thekedar A/c", "Expense"},
+        {45, 9, 0, 0, "Salary PF", "Liabilities"},
+        {46, 8, 2, 0, "Broker", "Assets"},
+        {47, 11, 9, 0, "Rice Bran Creditors", "Liabilities"}
+    };
+
+    for (const auto& sg : stdGroups) {
+        QVariant v = executeScalar("SELECT id FROM account_groups WHERE name = ? OR code1st = ? LIMIT 1;", {sg.name, sg.code1});
+        if (v.isValid() && !v.isNull()) {
+            executeNonQuery(
+                "UPDATE account_groups SET code1st = ?, code2nd = ?, code3rd = ?, code4th = ?, nature = ? WHERE id = ?;",
+                {sg.code1, sg.code2, sg.code3, sg.code4, sg.nature, v}
+            );
+        } else {
+            executeNonQuery(
+                "INSERT INTO account_groups (name, parent_group_name, nature, code1st, code2nd, code3rd, code4th, is_system, extract_in_balance_sheet) "
+                "VALUES (?, 'Primary', ?, ?, ?, ?, ?, 1, 1);",
+                {sg.name, sg.nature, sg.code1, sg.code2, sg.code3, sg.code4}
+            );
+        }
+    }
+
+    // 3. Backfill parties foreign keys group_id and group_code
+    executeNonQuery(
+        "UPDATE parties "
+        "SET group_id = (SELECT id FROM account_groups WHERE account_groups.name = parties.group_name LIMIT 1), "
+        "    group_code = (SELECT code1st FROM account_groups WHERE account_groups.name = parties.group_name LIMIT 1) "
+        "WHERE (group_id IS NULL OR group_code IS NULL OR group_code = 0) "
+        "  AND EXISTS (SELECT 1 FROM account_groups WHERE account_groups.name = parties.group_name);"
+    );
 
     addColumnIfNotExists("jform_vouchers", "vehicle_no", "TEXT");
     addColumnIfNotExists("jform_vouchers", "driver_name", "TEXT");

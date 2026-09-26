@@ -29,6 +29,7 @@
 #include "../src/models/tds_model.h"
 #include "../src/models/stock_items_model.h"
 #include "../src/models/account_groups_model.h"
+#include "../src/models/account_classifier.h"
 #include "../src/services/canara_bank_statement_parser.h"
 #include "../src/services/bank_statement_excel_parser.h"
 #include "../src/models/bank_statement_controller.h"
@@ -1561,22 +1562,38 @@ void LogicBoardTestSuite::testFinalReportsAndDepreciationSubsystem() {
     tbCtrl.setMode(MahadevERP::TrialBalanceMode::ShowOpeningBal);
     QVERIFY(tbCtrl.rows().size() >= 0);
 
-    // 3. Capital Accounts Controller Verification
+    // 3. Mathematical Hierarchy Engine Verification (AccountClassifier)
+    QVERIFY(AccountClassifier::isDescendantOf(8, 2, 0, 0, StandardGroupCode::CurrentAssets));
+    QVERIFY(AccountClassifier::isDescendantOf(39, 8, 2, 0, StandardGroupCode::SundryDebtors));
+    QVERIFY(AccountClassifier::isDescendantOf(39, 8, 2, 0, StandardGroupCode::CurrentAssets));
+    QVERIFY(!AccountClassifier::isDescendantOf(39, 8, 2, 0, StandardGroupCode::Capital));
+    QVERIFY(AccountClassifier::isDescendantOf(1, 0, 0, 0, StandardGroupCode::Capital));
+    QVERIFY(AccountClassifier::isDescendantOf(3, 2, 0, 0, StandardGroupCode::BankAccounts));
+    QVERIFY(AccountClassifier::isDescendantOf(28, 13, 9, 0, StandardGroupCode::SecuredLoansCC));
+    QVERIFY(AccountClassifier::isDescendantOf(4, 2, 0, 0, StandardGroupCode::CashInHand));
+
+    // Verify SQL clause generation
+    QString sqlClause = AccountClassifier::generateHierarchySqlClause({StandardGroupCode::BankAccounts, StandardGroupCode::SecuredLoansCC}, "g");
+    QVERIFY(sqlClause.contains("g.code1st IN (3, 28)"));
+    QVERIFY(sqlClause.contains("g.code2nd IN (3, 28)"));
+
+    // 4. Capital Accounts Controller Verification
     DatabaseManager::instance().executeNonQuery(
-        "INSERT OR IGNORE INTO parties (name, group_name, opening_balance, balance_type) "
-        "VALUES ('Capital Ventures Pvt.Ltd. [Delhi]', 'Rice Basmati Debitors', 0.0, 'Dr');"
+        "INSERT OR IGNORE INTO parties (name, group_name, group_code, opening_balance, balance_type) "
+        "VALUES ('Capital Ventures Pvt.Ltd. [Delhi]', 'Rice Basmati Debitors', 39, 0.0, 'Dr');"
     );
 
     MahadevERP::CapitalAccountsController capCtrl;
     capCtrl.setDateRange(QDate(2025, 4, 1), QDate(2026, 3, 31));
     const auto& capItems = capCtrl.items();
     for (const auto& row : capItems) {
+        // Mathematical proof: No party under Rice Basmati Debitors (code 39) can ever leak into Capital Accounts (code 1)
         QVERIFY(row.partnerName != "Capital Ventures Pvt.Ltd. [Delhi]");
         double expectedClosing = row.opCapital + row.additions + row.interest + row.profitShare - row.drawings;
         QCOMPARE(std::abs(row.closingCapital - expectedClosing) < 0.01, true);
     }
 
-    qDebug() << "[TEST] Final Reports and Depreciation Subsystems verified successfully!";
+    qDebug() << "[TEST] Final Reports, Deterministic Hierarchy and Depreciation Subsystems verified successfully!";
 }
 
 void LogicBoardTestSuite::testCashBankFlowAndCashVouchers() {

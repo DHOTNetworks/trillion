@@ -3,6 +3,7 @@
 #include "../database_manager.h"
 #include "accounting_engine.h"
 #include "fiscal_year_helper.h"
+#include "../models/account_classifier.h"
 #include <cmath>
 #include <algorithm>
 #include <QDate>
@@ -82,10 +83,14 @@ BalanceSheetData BalanceSheetCalculator::calculate(const QString& requestedAsOnD
     data.totalProcurement = purcRow.isValid() ? purcRow.toDouble() : 0.0;
 
     // 6. Direct Expenses up to asOnDate
+    QString directExpClause = AccountClassifier::generateHierarchySqlClause(
+        {StandardGroupCode::ManufacturingExp, StandardGroupCode::TradingExp, StandardGroupCode::ManufacturingRoot}, "g"
+    );
     QVariant dirExpRow = DatabaseManager::instance().executeScalar(
         "SELECT SUM(t.amount) FROM transactions t "
         "JOIN parties p ON t.party_id = p.id OR t.party_name = p.name "
-        "WHERE p.group_name LIKE '%Direct Expense%' "
+        "LEFT JOIN account_groups g ON (p.group_id = g.id OR (p.group_code > 0 AND p.group_code = g.code1st) OR p.group_name = g.name) "
+        "WHERE (" + directExpClause + " OR p.group_name LIKE '%Direct Expense%') "
         "AND t.dr_cr = 'Dr' AND t.voucher_date >= ? AND t.voucher_date <= ?;",
         {fy.startDate, data.asOnDate}
     );
@@ -97,19 +102,23 @@ BalanceSheetData BalanceSheetCalculator::calculate(const QString& requestedAsOnD
     data.grossProfit = totalTradingCr - totalTradingDr;
 
     // 7. Indirect Incomes & Indirect Expenses
+    QString indirectIncClause = AccountClassifier::generateHierarchySqlClause({StandardGroupCode::Income}, "g");
     QVariant indIncRow = DatabaseManager::instance().executeScalar(
         "SELECT SUM(t.amount) FROM transactions t "
         "JOIN parties p ON t.party_id = p.id OR t.party_name = p.name "
-        "WHERE p.group_name LIKE '%Indirect Income%' "
+        "LEFT JOIN account_groups g ON (p.group_id = g.id OR (p.group_code > 0 AND p.group_code = g.code1st) OR p.group_name = g.name) "
+        "WHERE (" + indirectIncClause + " OR p.group_name LIKE '%Indirect Income%') "
         "AND t.dr_cr = 'Cr' AND t.voucher_date >= ? AND t.voucher_date <= ?;",
         {fy.startDate, data.asOnDate}
     );
     data.indirectIncomes = indIncRow.isValid() ? indIncRow.toDouble() : 0.0;
 
+    QString indirectExpClause = AccountClassifier::generateHierarchySqlClause({StandardGroupCode::Expenditure}, "g");
     QVariant indExpRow = DatabaseManager::instance().executeScalar(
         "SELECT SUM(t.amount) FROM transactions t "
         "JOIN parties p ON t.party_id = p.id OR t.party_name = p.name "
-        "WHERE p.group_name LIKE '%Indirect Expense%' "
+        "LEFT JOIN account_groups g ON (p.group_id = g.id OR (p.group_code > 0 AND p.group_code = g.code1st) OR p.group_name = g.name) "
+        "WHERE (" + indirectExpClause + " OR p.group_name LIKE '%Indirect Expense%') "
         "AND t.dr_cr = 'Dr' AND t.voucher_date >= ? AND t.voucher_date <= ?;",
         {fy.startDate, data.asOnDate}
     );

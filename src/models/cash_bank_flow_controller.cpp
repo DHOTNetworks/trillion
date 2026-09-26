@@ -2,6 +2,7 @@
 #include "../database_manager.h"
 #include "../engine/accounting_engine.h"
 #include "../engine/fiscal_year_helper.h"
+#include "account_classifier.h"
 #include <QDate>
 #include <QRegularExpression>
 #include <cmath>
@@ -42,27 +43,15 @@ QString CashBankFlowController::statementTitle() const {
 bool CashBankFlowController::isCashLedger(const QString& name, const QString& groupName) const {
     QString n = name.trimmed().toLower();
     QString g = groupName.trimmed().toLower();
+    if (g == "cash-in-hand" || g == "cash in hand" || g == "cash") return true;
     if (n == "cash" || n == "cash a/c" || n == "cash in hand" || n == "cash-in-hand" || n == "petty cash") return true;
-    if (g.contains("cash")) return true;
     return false;
 }
 
 bool CashBankFlowController::isBankLedger(const QString& name, const QString& groupName) const {
-    QString n = name.trimmed().toLower();
-    QString g = groupName.trimmed().toLower();
     if (isCashLedger(name, groupName)) return false;
-    if (g.contains("bank") || g.contains("secured loan") || g.contains("deposit (assets)") || g.contains("unsecured loan")) {
-        if (n.contains("bank") || n.contains("c/c") || n.contains("c/a") || n.contains("cc ") || n.contains(" cc") || n.contains("whr") || n.contains("loan") || n.contains("fd ")) {
-            return true;
-        }
-    }
-    if (n.contains("bank") || n.contains("canara") || n.contains("yes bank") || n.contains("hdfc") || n.contains("icici") || n.contains("pnb") || n.contains("sbi") || n.contains("indusind") || n.contains("kotak")) {
-        // Exclude pure expense accounts like "Bank Charges" or "Interest Bank A/c"
-        if (n.contains("bank charges") || n.contains("interest bank") || n.contains("interest yes bank") || n.contains("bank comm") || n.contains("bank interest")) {
-            return false;
-        }
-        return true;
-    }
+    QString g = groupName.trimmed().toLower();
+    if (g == "bank(s) a/c" || g == "bank accounts" || g == "bank account" || g == "secured loans") return true;
     return false;
 }
 
@@ -80,8 +69,14 @@ void CashBankFlowController::recalculate() {
 
     auto& db = DatabaseManager::instance();
 
-    // 1. Fetch all parties and identify Cash / Bank accounts
-    QVariantList partyList = db.executeQuery("SELECT id, name, group_name, opening_balance, balance_type FROM parties ORDER BY name ASC;");
+    // 1. Fetch all parties and identify Cash / Bank accounts deterministically via 4-tier lineage
+    QVariantList partyList = db.executeQuery(
+        "SELECT p.id, p.name, p.group_name, p.group_code, p.opening_balance, p.balance_type, "
+        "       COALESCE(g.code1st, 0) AS c1, COALESCE(g.code2nd, 0) AS c2, COALESCE(g.code3rd, 0) AS c3, COALESCE(g.code4th, 0) AS c4 "
+        "FROM parties p "
+        "LEFT JOIN account_groups g ON (p.group_id = g.id OR (p.group_code > 0 AND p.group_code = g.code1st) OR p.group_name = g.name) "
+        "ORDER BY p.name ASC;"
+    );
     std::map<QString, int> partyNameToId;
     std::map<QString, QString> partyNameToGroup;
     std::map<QString, double> partyOpBalance;
@@ -103,9 +98,19 @@ void CashBankFlowController::recalculate() {
         partyOpBalance[pName] = opBal;
         partyOpType[pName] = opT;
 
-        if (isCashLedger(pName, gName)) {
+        int c1 = p.value("c1").toInt();
+        int c2 = p.value("c2").toInt();
+        int c3 = p.value("c3").toInt();
+        int c4 = p.value("c4").toInt();
+
+        bool isCash = AccountClassifier::isDescendantOf(c1, c2, c3, c4, StandardGroupCode::CashInHand) || isCashLedger(pName, gName);
+        bool isBank = !isCash && (AccountClassifier::isDescendantOf(c1, c2, c3, c4, StandardGroupCode::BankAccounts) ||
+                                  AccountClassifier::isDescendantOf(c1, c2, c3, c4, StandardGroupCode::SecuredLoansCC) ||
+                                  isBankLedger(pName, gName));
+
+        if (isCash) {
             cashAccountNames.insert(pName);
-        } else if (isBankLedger(pName, gName)) {
+        } else if (isBank) {
             bankAccountNames.insert(pName);
         }
     }

@@ -116,6 +116,8 @@ set(SOURCES
     src/models/paddy_arrivals_model.cpp
     src/models/account_groups_model.h
     src/models/account_groups_model.cpp
+    src/models/account_classifier.h
+    src/models/account_classifier.cpp
     src/models/sales_model.h
     src/models/sales_model.cpp
     src/models/purchase_model.h
@@ -485,6 +487,8 @@ set(TEST_SOURCES
     src/models/milling_model.cpp
     src/models/account_groups_model.h
     src/models/account_groups_model.cpp
+    src/models/account_classifier.h
+    src/models/account_classifier.cpp
     src/models/ledger_statement_model.h
     src/models/ledger_statement_model.cpp
     src/models/purchase_register_model.h

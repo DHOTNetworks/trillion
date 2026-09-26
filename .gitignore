@@ -21,6 +21,7 @@ Thumbs.db
 # Build artifacts
 build/
 build-*/
+build_release/
 dist/
 *.o
 *.obj

@@ -1,5 +1,6 @@
 #include "bahi_khata_migrator.h"
 #include "../database_manager.h"
+#include "../models/account_classifier.h"
 #include <QCoreApplication>
 #include <QFileInfo>
 #include <QDir>
@@ -1004,44 +1005,40 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
     updateProgress(22, QString("Migrating %1 Account Groups...").arg(groupRows.size()));
     db.executeNonQuery("DELETE FROM account_groups;");
     std::map<int, std::string> groupCodeMap;
+    std::map<int, qint64> groupCodeToIdMap;
 
     for (const auto& g : groupRows) {
         std::string gName = cleanText(getField(g, "GroupName"));
         if (gName.empty()) continue;
         int code1 = parseIntVal(getField(g, "Code1st"));
+        int code2 = parseIntVal(getField(g, "Code2nd"));
+        int code3 = parseIntVal(getField(g, "Code3rd"));
+        int code4 = parseIntVal(getField(g, "Code4th"));
         int extractBs = parseIntVal(getField(g, "ExtractInBalanceSheet", "1"), 1);
 
-        std::string nature = "Assets";
-        std::string gLower = toLowerStr(gName);
-        if (gLower.find("debtor") != std::string::npos || gLower.find("bank") != std::string::npos ||
-            gLower.find("cash") != std::string::npos || gLower.find("asset") != std::string::npos ||
-            gLower.find("receivable") != std::string::npos || gLower.find("deposit") != std::string::npos) {
+        QString nature = AccountClassifier::getNatureForGroup(code1, code2, code3, code4);
+        // Fallback for custom groups if needed
+        if (nature.isEmpty()) {
             nature = "Assets";
-        } else if (gLower.find("creditor") != std::string::npos || gLower.find("loan") != std::string::npos ||
-                   gLower.find("liability") != std::string::npos || gLower.find("payable") != std::string::npos ||
-                   gLower.find("capital") != std::string::npos || gLower.find("duty") != std::string::npos ||
-                   gLower.find("tax") != std::string::npos || gLower.find("gst") != std::string::npos) {
-            nature = "Liabilities";
-        } else if (gLower.find("sale") != std::string::npos || gLower.find("revenue") != std::string::npos ||
-                   gLower.find("income") != std::string::npos || gLower.find("direct income") != std::string::npos) {
-            nature = "Income";
-        } else if (gLower.find("purchase") != std::string::npos || gLower.find("expense") != std::string::npos ||
-                   gLower.find("hamali") != std::string::npos || gLower.find("freight") != std::string::npos ||
-                   gLower.find("labour") != std::string::npos || gLower.find("exp") != std::string::npos) {
-            nature = "Expense";
         }
 
         db.executeNonQuery(
-            "INSERT INTO account_groups (name, parent_group_name, nature, description, extract_in_balance_sheet, is_system) "
-            "VALUES (?, 'Primary / Root Group', ?, ?, ?, 0);",
+            "INSERT INTO account_groups (name, parent_group_name, nature, description, extract_in_balance_sheet, is_system, code1st, code2nd, code3rd, code4th) "
+            "VALUES (?, 'Primary / Root Group', ?, ?, ?, 0, ?, ?, ?, ?);",
             {
                 QString::fromStdString(gName),
-                QString::fromStdString(nature),
+                nature,
                 QString("Legacy Group Code #%1").arg(code1),
-                extractBs
+                extractBs,
+                code1,
+                code2,
+                code3,
+                code4
             }
         );
+        qint64 gid = db.lastInsertedId();
         groupCodeMap[code1] = gName;
+        groupCodeToIdMap[code1] = gid;
     }
 
     // =========================================================
@@ -1246,21 +1243,24 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
         std::string cjtStr = toLowerStr(getField(l, "CalculateInJointTrading"));
         int calcDirectExpense = (cjtStr == "1" || cjtStr == "true" || cjtStr == "yes") ? 1 : 0;
         int useCreditLimit = (creditLimit > 0.0) ? 1 : 0;
+        qint64 targetGroupId = groupCodeToIdMap.count(gCode) ? groupCodeToIdMap[gCode] : 0;
 
         db.executeNonQuery(
             "INSERT INTO parties ("
-            "name, alias, prefix, group_name, party_type, special_type, "
+            "name, alias, prefix, group_name, group_code, group_id, party_type, special_type, "
             "opening_balance, balance_type, mailing_name, address, city, district, state, state_code, pincode, route, "
             "mobile, whatsapp, phone, email, contact_person, pan, aadhaar, tan, gstin, gst_party_type, "
             "bank_name, bank_account, ifsc_code, credit_limit, credit_days, interest_rate, commission_rate, commission_on, "
             "apply_tcs, tcs_exempt, party_station, use_routes, shop_no, tin, urn, stock_not_calc, use_credit_limit, "
             "show_date_totals, calc_direct_expense, set_title_case, books_start_from, legacy_id) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 30, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?);",
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 30, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?);",
             {
                 QString::fromStdString(lName),
                 QString::fromStdString(alias),
                 QString::fromStdString(prefix),
                 QString::fromStdString(groupName),
+                gCode,
+                targetGroupId,
                 QString::fromStdString(partyType),
                 QString::fromStdString(specialType),
                 opBal,
