@@ -311,7 +311,18 @@ StockValuationReport StockValuationEngine::getEffectiveClosingStock(const QStrin
     if (hasAuditedClosingStock(asOnDateIso)) {
         return getAuditedClosingStock(asOnDateIso);
     }
-    return calculateLivePhysicalStock(asOnDateIso);
+    // In statutory double-entry accounting (Bahi-Khata), if no closing stock snapshot
+    // has been audited/recorded in custom_closing_stocks, effective closing stock is 0.00
+    StockValuationReport rep;
+    QString targetDate = FiscalYearHelper::normalizeToIso(asOnDateIso);
+    if (targetDate.isEmpty()) targetDate = QDate::currentDate().toString("yyyy-MM-dd");
+    FiscalYearInfo fy = FiscalYearHelper::getFiscalYearForDate(targetDate);
+    rep.asOnDate = targetDate;
+    rep.financialYear = fy.name;
+    rep.isAuditedSnapshot = false;
+    rep.totalValuation = 0.0;
+    rep.totalValuationFmt = "₹0.00";
+    return rep;
 }
 
 bool StockValuationEngine::saveAuditedClosingStock(const QString& closingDateIso, const QVector<StockValuationItem>& items, QString& errorOut) {

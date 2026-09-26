@@ -56,6 +56,7 @@ DashboardWidget::DashboardWidget(DashboardController* dashCtrl,
         else if (lastMenu == "other_voucher" || lastMenu == "tds_tcs_hub" || lastMenu == "tds_options" || lastMenu == "tcs_options") m_selectedMenuIndex = 3;
         else if (lastMenu == "reports_register" || lastMenu == "cash_book_hub" || lastMenu == "stock_register_hub") m_selectedMenuIndex = 4;
         else if (lastMenu == "final_accounts" || lastMenu == "final_reports_hub" || lastMenu == "trading_reports_hub" || lastMenu == "trial_balance_options_hub" || lastMenu == "depreciation_options_hub") m_selectedMenuIndex = 5;
+        else m_selectedMenuIndex = 0;
         updateSelection(m_selectedMenuIndex);
     });
 
@@ -616,6 +617,7 @@ void DashboardWidget::showEvent(QShowEvent* event) {
     else if (lastMenu == "other_voucher" || lastMenu == "tds_tcs_hub" || lastMenu == "tds_options" || lastMenu == "tcs_options") m_selectedMenuIndex = 3;
     else if (lastMenu == "reports_register" || lastMenu == "cash_book_hub" || lastMenu == "stock_register_hub") m_selectedMenuIndex = 4;
     else if (lastMenu == "final_accounts" || lastMenu == "final_reports_hub" || lastMenu == "trading_reports_hub" || lastMenu == "trial_balance_options_hub" || lastMenu == "depreciation_options_hub") m_selectedMenuIndex = 5;
+    else m_selectedMenuIndex = 0;
 
     updateSelection(m_selectedMenuIndex);
     focusMenu();

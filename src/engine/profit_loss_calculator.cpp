@@ -79,6 +79,18 @@ ProfitLossData ProfitLossCalculator::calculate(const QString& requestedFromDate,
         {data.fromDate, data.toDate}
     );
     data.totalSalesRevenue = salesRow.isValid() ? salesRow.toDouble() : 0.0;
+    if (data.totalSalesRevenue <= 0.01) {
+        QVariant transSales = DatabaseManager::instance().executeScalar(
+            "SELECT SUM(t.amount) FROM transactions t "
+            "JOIN parties p ON t.party_id = p.id OR t.party_name = p.name "
+            "WHERE (p.group_name LIKE '%Sale%' OR p.group_name LIKE '%Trading Items%') "
+            "AND t.dr_cr = 'Cr' AND t.voucher_date >= ? AND t.voucher_date <= ?;",
+            {data.fromDate, data.toDate}
+        );
+        if (transSales.isValid() && transSales.toDouble() > 0.01) {
+            data.totalSalesRevenue = transSales.toDouble();
+        }
+    }
 
     // 5. Procurement Cost up to toDate
     QVariant purcRow = DatabaseManager::instance().executeScalar(
@@ -87,16 +99,24 @@ ProfitLossData ProfitLossCalculator::calculate(const QString& requestedFromDate,
         {data.fromDate, data.toDate}
     );
     data.totalProcurement = purcRow.isValid() ? purcRow.toDouble() : 0.0;
+    if (data.totalProcurement <= 0.01) {
+        QVariant transPurc = DatabaseManager::instance().executeScalar(
+            "SELECT SUM(t.amount) FROM transactions t "
+            "JOIN parties p ON t.party_id = p.id OR t.party_name = p.name "
+            "WHERE (p.group_name LIKE '%Purchase%' OR p.group_name LIKE '%Trading Items%') "
+            "AND t.dr_cr = 'Dr' AND t.voucher_date >= ? AND t.voucher_date <= ?;",
+            {data.fromDate, data.toDate}
+        );
+        if (transPurc.isValid() && transPurc.toDouble() > 0.01) {
+            data.totalProcurement = transPurc.toDouble();
+        }
+    }
 
     // 6. Direct Expenses up to toDate
-    QString directExpClause = AccountClassifier::generateHierarchySqlClause(
-        {StandardGroupCode::ManufacturingExp, StandardGroupCode::TradingExp, StandardGroupCode::ManufacturingRoot}, "g"
-    );
     QVariant dirExpRow = DatabaseManager::instance().executeScalar(
         "SELECT SUM(t.amount) FROM transactions t "
         "JOIN parties p ON t.party_id = p.id OR t.party_name = p.name "
-        "LEFT JOIN account_groups g ON (p.group_id = g.id OR (p.group_code > 0 AND p.group_code = g.code1st) OR p.group_name = g.name) "
-        "WHERE (" + directExpClause + " OR p.group_name LIKE '%Direct Expense%') "
+        "WHERE (p.calc_direct_expense = 1 OR p.group_name LIKE '%Direct Expense%' OR p.group_name LIKE '%Trading Exp%' OR p.group_name LIKE '%Manufacturing%') "
         "AND t.dr_cr = 'Dr' AND t.voucher_date >= ? AND t.voucher_date <= ?;",
         {data.fromDate, data.toDate}
     );
@@ -116,23 +136,20 @@ ProfitLossData ProfitLossCalculator::calculate(const QString& requestedFromDate,
     }
 
     // 8. Indirect Incomes & Indirect Expenses
-    QString indirectIncClause = AccountClassifier::generateHierarchySqlClause({StandardGroupCode::Income}, "g");
     QVariant indIncRow = DatabaseManager::instance().executeScalar(
         "SELECT SUM(t.amount) FROM transactions t "
         "JOIN parties p ON t.party_id = p.id OR t.party_name = p.name "
-        "LEFT JOIN account_groups g ON (p.group_id = g.id OR (p.group_code > 0 AND p.group_code = g.code1st) OR p.group_name = g.name) "
-        "WHERE (" + indirectIncClause + " OR p.group_name LIKE '%Indirect Income%') "
+        "WHERE (p.group_name LIKE '%Income%' OR p.group_name LIKE '%Indirect Income%') "
         "AND t.dr_cr = 'Cr' AND t.voucher_date >= ? AND t.voucher_date <= ?;",
         {data.fromDate, data.toDate}
     );
     data.indirectIncomes = indIncRow.isValid() ? indIncRow.toDouble() : 0.0;
 
-    QString indirectExpClause = AccountClassifier::generateHierarchySqlClause({StandardGroupCode::Expenditure}, "g");
     QVariant indExpRow = DatabaseManager::instance().executeScalar(
         "SELECT SUM(t.amount) FROM transactions t "
         "JOIN parties p ON t.party_id = p.id OR t.party_name = p.name "
-        "LEFT JOIN account_groups g ON (p.group_id = g.id OR (p.group_code > 0 AND p.group_code = g.code1st) OR p.group_name = g.name) "
-        "WHERE (" + indirectExpClause + " OR p.group_name LIKE '%Indirect Expense%') "
+        "WHERE (p.calc_direct_expense = 0 OR p.calc_direct_expense IS NULL) "
+        "AND (p.group_name LIKE '%Expenditure%' OR p.group_name LIKE '%Indirect Expense%') "
         "AND t.dr_cr = 'Dr' AND t.voucher_date >= ? AND t.voucher_date <= ?;",
         {data.fromDate, data.toDate}
     );
@@ -183,13 +200,10 @@ ProfitLossData ProfitLossCalculator::calculate(const QString& requestedFromDate,
         }
     }
 
-    // Load Parties & Groups with 4-tier lineage
+    // Load Parties
     QVariantList parties = DatabaseManager::instance().executeQuery(
-        "SELECT p.id, p.name, p.group_name, p.opening_balance, p.balance_type, "
-        "       COALESCE(g.code1st, 0) AS c1, COALESCE(g.code2nd, 0) AS c2, COALESCE(g.code3rd, 0) AS c3, COALESCE(g.code4th, 0) AS c4 "
-        "FROM parties p "
-        "LEFT JOIN account_groups g ON (p.group_id = g.id OR (p.group_code > 0 AND p.group_code = g.code1st) OR p.group_name = g.name) "
-        "ORDER BY p.group_name, p.name;"
+        "SELECT id, name, group_name, opening_balance, balance_type, calc_direct_expense "
+        "FROM parties ORDER BY group_name, name;"
     );
 
     QMap<QString, QVector<ProfitLossItem>> directExpByGroup;
@@ -205,10 +219,7 @@ ProfitLossData ProfitLossCalculator::calculate(const QString& requestedFromDate,
         QString grp = p.value("group_name").toString();
         if (grp.isEmpty()) grp = "General Accounts";
 
-        int c1 = p.value("c1").toInt();
-        int c2 = p.value("c2").toInt();
-        int c3 = p.value("c3").toInt();
-        int c4 = p.value("c4").toInt();
+        int calcDirect = p.value("calc_direct_expense").toInt();
 
         double dr = 0.0, cr = 0.0;
         if (sumByPartyId.contains(pId)) {
@@ -229,22 +240,11 @@ ProfitLossData ProfitLossCalculator::calculate(const QString& requestedFromDate,
 
         QString gLower = grp.toLower();
 
-        bool isDirectExp = AccountClassifier::isDescendantOf(c1, c2, c3, c4, StandardGroupCode::ManufacturingExp) ||
-                           AccountClassifier::isDescendantOf(c1, c2, c3, c4, StandardGroupCode::TradingExp) ||
-                           AccountClassifier::isDescendantOf(c1, c2, c3, c4, StandardGroupCode::ManufacturingRoot) ||
-                           gLower.contains("direct expense");
-
-        bool isIndirectExp = !isDirectExp && (AccountClassifier::isDescendantOf(c1, c2, c3, c4, StandardGroupCode::Expenditure) ||
-                                              gLower.contains("indirect expense") || gLower.contains("expenditure"));
-
-        bool isIndirectInc = AccountClassifier::isDescendantOf(c1, c2, c3, c4, StandardGroupCode::Income) ||
-                             gLower.contains("indirect income") || gLower.contains("income a/c");
-
-        bool isSales = AccountClassifier::isDescendantOf(c1, c2, c3, c4, StandardGroupCode::Sale) ||
-                       gLower.contains("sale");
-
-        bool isPurch = AccountClassifier::isDescendantOf(c1, c2, c3, c4, StandardGroupCode::Purchase) ||
-                       gLower.contains("purchase");
+        bool isDirectExp = (calcDirect == 1) || gLower.contains("direct expense") || gLower.contains("trading exp") || gLower.contains("manufacturing");
+        bool isIndirectExp = !isDirectExp && (gLower.contains("indirect expense") || gLower.contains("expenditure"));
+        bool isIndirectInc = gLower.contains("indirect income") || gLower.contains("income");
+        bool isSales = gLower.contains("sale");
+        bool isPurch = gLower.contains("purchase");
 
         if (isDirectExp) {
             double amt = (dr > 0.0) ? dr : (netBal > 0 ? netBal : 0.0);

@@ -121,9 +121,7 @@ MainWindow::MainWindow(const MainWindowDependencies& deps, QWidget* parent)
     connect(m_firmSelectorWidget, &FirmSelectorWidget::firmOpened, this, [this](const QString& firmId, const QString& firmName) {
         Q_UNUSED(firmId);
         Q_UNUSED(firmName);
-        if (m_dashboardWidget) {
-            m_dashboardWidget->refreshStats();
-        }
+        MahadevERP::MenuTreeManager::instance().resetLastTriggeredMenu();
         navigateToView(0);
     });
     connect(m_firmSelectorWidget, &FirmSelectorWidget::backRequested, this, [this]() {

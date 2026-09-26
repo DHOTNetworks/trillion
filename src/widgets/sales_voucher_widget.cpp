@@ -38,41 +38,42 @@ SalesVoucherWidget::~SalesVoucherWidget() {
 void SalesVoucherWidget::setupUi() {
     setAttribute(Qt::WA_StyledBackground, true);
     setStyleSheet(
-        "SalesVoucherWidget { background-color: #F8FAFC; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', 'Noto Sans', 'Liberation Sans', Arial, sans-serif; }"
+        "SalesVoucherWidget { background-color: #FFF3EA; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', 'Noto Sans', 'Liberation Sans', Arial, sans-serif; }"
         "QLabel { border: none; background: transparent; color: #1E293B; font-size: 11px; font-weight: 700; }"
-        "QLineEdit { background-color: #FFFFFF; color: #0F172A; border: 1px solid #CBD5E1; border-radius: 6px; padding: 2px 6px; font-size: 11.5px; font-weight: 700; }"
+        "QLineEdit { background-color: #FFFFFF; color: #0F172A; border: 1px solid #CBD5E1; border-radius: 5px; padding: 2px 6px; font-size: 11.5px; font-weight: 700; }"
         "QLineEdit:focus { border: 1.5px solid #2563EB; background-color: #EFF6FF; }"
-        "QComboBox { background-color: #FFFFFF; color: #0F172A; border: 1px solid #CBD5E1; border-radius: 6px; padding: 2px 6px; font-size: 11.5px; font-weight: 700; }"
+        "QComboBox { background-color: #FFFFFF; color: #0F172A; border: 1px solid #CBD5E1; border-radius: 5px; padding: 2px 6px; font-size: 11.5px; font-weight: 700; }"
         "QComboBox:focus { border: 1.5px solid #2563EB; background-color: #EFF6FF; }"
         "QRadioButton { font-size: 11px; font-weight: 700; color: #1E293B; spacing: 5px; background: transparent; }"
         "QRadioButton:hover { color: #0F172A; }"
         "QRadioButton::indicator { width: 14px; height: 14px; border-radius: 7px; border: 1.5px solid #94A3B8; background-color: #FFFFFF; }"
         "QRadioButton::indicator:hover { border-color: #2563EB; background-color: #EFF6FF; }"
-        "QRadioButton::indicator:checked { border: 4.5px solid #2563EB; background-color: #FFFFFF; }"
+        "QRadioButton::indicator:checked { width: 14px; height: 14px; border-radius: 7px; border: 4.5px solid #2563EB; background-color: #FFFFFF; }"
         "QRadioButton::indicator:checked:hover { border-color: #1D4ED8; }"
         "QCheckBox { font-size: 11px; font-weight: 700; color: #334155; spacing: 4px; background: transparent; }"
         "QCheckBox::indicator { width: 13px; height: 13px; background: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 3px; }"
-        "QGroupBox { font-size: 10.5px; font-weight: 800; color: #1E293B; border: 1px solid #CBD5E1; border-radius: 6px; margin-top: 6px; padding: 2px 8px 3px 8px; background-color: #F8FAFC; }"
-        "QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top left; padding: 0 4px; left: 8px; color: #2563EB; font-weight: 800; }"
-        "QPushButton { background-color: #F1F5F9; border: 1px solid #CBD5E1; border-radius: 6px; font-size: 11px; font-weight: 700; color: #475569; padding: 3px 10px; }"
+        "QGroupBox { font-size: 10.5px; font-weight: 800; color: #1E293B; border: 1px solid #E2D5C8; border-radius: 6px; margin-top: 12px; padding: 6px 8px 4px 8px; background-color: #FFF3EA; }"
+        "QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top left; padding: 0 4px; left: 8px; top: 0px; color: #2563EB; font-weight: 800; background-color: #FFF3EA; }"
+        "QPushButton { background-color: #F1F5F9; border: 1px solid #CBD5E1; border-radius: 5px; font-size: 11px; font-weight: 700; color: #475569; padding: 3px 10px; }"
         "QPushButton:hover { background-color: #E2E8F0; }"
         "QPushButton:focus { border: 1.5px solid #2563EB; background-color: #EFF6FF; }"
     );
 
     QVBoxLayout* rootLayout = new QVBoxLayout(this);
-    rootLayout->setContentsMargins(10, 6, 10, 6);
-    rootLayout->setSpacing(4);
+    rootLayout->setContentsMargins(8, 4, 8, 4);
+    rootLayout->setSpacing(2);
 
     // ========================================================================
     // 1. TOP HEADER BAR: Modern Badge + No. + Title + Date & Day
     // ========================================================================
     QHBoxLayout* topHeaderLayout = new QHBoxLayout();
-    topHeaderLayout->setSpacing(8);
+    topHeaderLayout->setContentsMargins(0, 0, 0, 0);
+    topHeaderLayout->setSpacing(6);
 
     m_saleBadge = new QLabel("Sale", this);
     m_saleBadge->setAlignment(Qt::AlignCenter);
-    m_saleBadge->setFixedHeight(24);
-    m_saleBadge->setStyleSheet("background-color: #EFF6FF; color: #2563EB; font-weight: 900; font-size: 12px; padding: 2px 10px; border: 1px solid #BFDBFE; border-radius: 6px;");
+    m_saleBadge->setFixedHeight(22);
+    m_saleBadge->setStyleSheet("background-color: #EFF6FF; color: #2563EB; font-weight: 900; font-size: 12px; padding: 1px 10px; border: 1px solid #BFDBFE; border-radius: 5px;");
     topHeaderLayout->addWidget(m_saleBadge);
 
     m_voucherNoDisplay = new QLabel("No. 1", this);
@@ -83,7 +84,7 @@ void SalesVoucherWidget::setupUi() {
 
     m_titleHeaderLabel = new QLabel("F8 : Sale Voucher", this);
     m_titleHeaderLabel->setAlignment(Qt::AlignCenter);
-    m_titleHeaderLabel->setStyleSheet("font-size: 15px; font-weight: 900; color: #0F172A; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', 'Noto Sans', 'Liberation Sans', Arial, sans-serif;");
+    m_titleHeaderLabel->setStyleSheet("font-size: 15px; font-weight: 900; color: #DC2626; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', 'Noto Sans', 'Liberation Sans', Arial, sans-serif;");
     topHeaderLayout->addWidget(m_titleHeaderLabel);
 
     topHeaderLayout->addStretch(1);
@@ -94,15 +95,15 @@ void SalesVoucherWidget::setupUi() {
     dateBox->setAlignment(Qt::AlignRight);
 
     m_invoiceDateEdit = new AccountingDateEdit(this);
-    m_invoiceDateEdit->setFixedHeight(24);
+    m_invoiceDateEdit->setFixedHeight(22);
     m_invoiceDateEdit->setFixedWidth(105);
-    m_invoiceDateEdit->setStyleSheet("QLineEdit { background-color: #FFFFFF; color: #0F172A; font-size: 12px; font-weight: 800; border: 1px solid #CBD5E1; border-radius: 6px; }");
+    m_invoiceDateEdit->setStyleSheet("QLineEdit { background-color: #FFFFFF; color: #0F172A; font-size: 12px; font-weight: 800; border: 1px solid #CBD5E1; border-radius: 5px; }");
     connect(m_invoiceDateEdit, &AccountingDateEdit::dateChanged, this, &SalesVoucherWidget::onDateChanged);
     dateBox->addWidget(m_invoiceDateEdit);
 
     m_dayOfWeekLabel = new QLabel(this);
     m_dayOfWeekLabel->setAlignment(Qt::AlignRight);
-    m_dayOfWeekLabel->setStyleSheet("font-size: 11px; font-weight: 700; color: #0284C7;");
+    m_dayOfWeekLabel->setStyleSheet("font-size: 10.5px; font-weight: 700; color: #0284C7;");
     dateBox->addWidget(m_dayOfWeekLabel);
     topHeaderLayout->addLayout(dateBox);
 
@@ -110,13 +111,15 @@ void SalesVoucherWidget::setupUi() {
 
     // Sub-Header Shortcut / Help Line + Rev.Charge
     QHBoxLayout* subBarLayout = new QHBoxLayout();
-    subBarLayout->setSpacing(10);
+    subBarLayout->setContentsMargins(0, 0, 0, 0);
+    subBarLayout->setSpacing(16);
 
     m_revChargeCheck = new QCheckBox("Rev.Charge By Recipient", this);
+    m_revChargeCheck->setStyleSheet("font-size: 11px; font-weight: 700; color: #334155; spacing: 6px; background: transparent; padding-right: 8px;");
     subBarLayout->addWidget(m_revChargeCheck);
 
-    m_helpHintLabel = new QLabel("Change Date - F8 : Change Sale Mode - Shift+F8: Sale Settings - Alt+L:Show Ledger - Ctrl+F1: Set Image)", this);
-    m_helpHintLabel->setStyleSheet("color: #4A1500; font-size: 10.5px; font-weight: 700;");
+    m_helpHintLabel = new QLabel("(Change Date - F8 : Change Sale Mode - Shift+F8: Sale Settings - Alt+L:Show Ledger - Ctrl+F1: Set Image)", this);
+    m_helpHintLabel->setStyleSheet("color: #4A1500; font-size: 10.5px; font-weight: 700; padding-left: 4px;");
     subBarLayout->addWidget(m_helpHintLabel);
 
     subBarLayout->addStretch(1);
@@ -126,7 +129,8 @@ void SalesVoucherWidget::setupUi() {
     // 2. META ROW 1: Market Type, Inv.No, Due Days, Sale Status, Tax Status, Market Fee Status
     // ========================================================================
     QHBoxLayout* row1 = new QHBoxLayout();
-    row1->setSpacing(8);
+    row1->setContentsMargins(0, 0, 0, 0);
+    row1->setSpacing(6);
 
     // Market Type Dropdown
     m_marketTypeCombo = new QComboBox(this);
@@ -163,7 +167,7 @@ void SalesVoucherWidget::setupUi() {
     // Sale Status (Mandi Only)
     m_saleStatusGroupBox = new QGroupBox("Sale Status (Alt+S)", this);
     QHBoxLayout* saleStatLayout = new QHBoxLayout(m_saleStatusGroupBox);
-    saleStatLayout->setContentsMargins(4, 2, 4, 2);
+    saleStatLayout->setContentsMargins(6, 4, 6, 4);
     saleStatLayout->setSpacing(6);
 
     m_saleButtonGroup = new QButtonGroup(this);
@@ -188,7 +192,7 @@ void SalesVoucherWidget::setupUi() {
     // Market Fee Status (Mandi Only)
     m_marketFeeStatusGroupBox = new QGroupBox("Market Fee Status (Alt+F)", this);
     QHBoxLayout* feeStatLayout = new QHBoxLayout(m_marketFeeStatusGroupBox);
-    feeStatLayout->setContentsMargins(6, 2, 6, 2);
+    feeStatLayout->setContentsMargins(6, 4, 6, 4);
     feeStatLayout->setSpacing(8);
 
     m_feeButtonGroup = new QButtonGroup(this);
@@ -209,7 +213,7 @@ void SalesVoucherWidget::setupUi() {
     // Tax Status (Always visible, aligned to right side corner)
     m_taxStatusGroupBox = new QGroupBox("Tax Status : (Alt+R / Alt+T)", this);
     QHBoxLayout* taxStatLayout = new QHBoxLayout(m_taxStatusGroupBox);
-    taxStatLayout->setContentsMargins(8, 2, 8, 2);
+    taxStatLayout->setContentsMargins(8, 4, 8, 4);
     taxStatLayout->setSpacing(10);
 
     m_taxButtonGroup = new QButtonGroup(this);
@@ -312,26 +316,26 @@ void SalesVoucherWidget::setupUi() {
     m_tableWidget->setSelectionBehavior(QAbstractItemView::SelectItems);
     m_tableWidget->setSelectionMode(QAbstractItemView::SingleSelection);
     m_tableWidget->setShowGrid(true);
-    m_tableWidget->setMinimumHeight(120);
-    m_tableWidget->setMaximumHeight(220);
+    m_tableWidget->setMinimumHeight(140);
+    m_tableWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     m_tableWidget->setStyleSheet(
         "QTableWidget {"
         "  background-color: #FFFFFF;"
-        "  gridline-color: #F1F5F9;"
+        "  gridline-color: #F1E5DB;"
         "  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', 'Noto Sans', 'Liberation Sans', Arial, sans-serif;"
         "  font-size: 11.5px;"
         "  color: #0F172A;"
-        "  border: 1px solid #E2E8F0;"
-        "  border-radius: 8px;"
+        "  border: 1px solid #E2D5C8;"
+        "  border-radius: 6px;"
         "}"
         "QHeaderView::section {"
-        "  background-color: #F1F5F9;"
+        "  background-color: #FEECE0;"
         "  color: #334155;"
         "  font-weight: 800;"
         "  font-size: 11px;"
-        "  padding: 4px 6px;"
+        "  padding: 3px 6px;"
         "  border: none;"
-        "  border-bottom: 2px solid #CBD5E1;"
+        "  border-bottom: 2px solid #E2D5C8;"
         "}"
         "QTableWidget::item:selected {"
         "  background-color: #EFF6FF;"
@@ -348,14 +352,14 @@ void SalesVoucherWidget::setupUi() {
     connect(m_itemDelegate, &ItemSearchDelegate::movePrevRequested, this, &SalesVoucherWidget::retreatCell);
 
     connect(m_tableWidget, &QTableWidget::cellChanged, this, &SalesVoucherWidget::onTableCellChanged);
-    rootLayout->addWidget(m_tableWidget);
+    rootLayout->addWidget(m_tableWidget, 1);
 
     // Table Total Summary Row
     QFrame* totalSummaryBar = new QFrame(this);
-    totalSummaryBar->setFixedHeight(28);
-    totalSummaryBar->setStyleSheet("background: #F8FAFC; border-top: 1px solid #E2E8F0; border-bottom: 1px solid #E2E8F0; border-radius: 4px;");
+    totalSummaryBar->setFixedHeight(26);
+    totalSummaryBar->setStyleSheet("background: #FDEEE4; border-top: 1px solid #E2D5C8; border-bottom: 1px solid #E2D5C8; border-radius: 4px;");
     QHBoxLayout* sumLayout = new QHBoxLayout(totalSummaryBar);
-    sumLayout->setContentsMargins(6, 2, 6, 2);
+    sumLayout->setContentsMargins(6, 1, 6, 1);
     sumLayout->setSpacing(0);
 
     sumLayout->addStretch(1);

@@ -310,8 +310,20 @@ void BalanceSheetWidget::populateTrees() {
     for (const auto& g : d.assetsGroups) {
         assetItemCount += g.children.isEmpty() ? 1 : g.children.size();
     }
-    m_liabilitiesTree->setHeaderLabels({QString("Liabilities (%1)").arg(liabItemCount), "Amount"});
-    m_assetsTree->setHeaderLabels({QString("Assets (%1)").arg(assetItemCount), "Amount"});
+    if (!d.isBalanced && std::abs(d.difference) > 0.01) {
+        if (d.difference > 0) {
+            QString diffStr = AccountingEngine::formatIndianCurrency(d.difference, false);
+            m_liabilitiesTree->setHeaderLabels({QString("%1\nLiabilities (%2)").arg(diffStr).arg(liabItemCount), "Amount"});
+            m_assetsTree->setHeaderLabels({QString("Assets (%1)").arg(assetItemCount), "Amount"});
+        } else {
+            QString diffStr = AccountingEngine::formatIndianCurrency(std::abs(d.difference), false);
+            m_liabilitiesTree->setHeaderLabels({QString("Liabilities (%1)").arg(liabItemCount), "Amount"});
+            m_assetsTree->setHeaderLabels({QString("%1\nAssets (%2)").arg(diffStr).arg(assetItemCount), "Amount"});
+        }
+    } else {
+        m_liabilitiesTree->setHeaderLabels({QString("Liabilities (%1)").arg(liabItemCount), "Amount"});
+        m_assetsTree->setHeaderLabels({QString("Assets (%1)").arg(assetItemCount), "Amount"});
+    }
 
     QFont groupFont;
     groupFont.setBold(true);

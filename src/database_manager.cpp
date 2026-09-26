@@ -192,6 +192,8 @@ QVariant DatabaseManager::executeScalar(const QString& sql, const QVariantList& 
 }
 
 void DatabaseManager::ensureTablesExist() {
+    executeNonQuery("BEGIN TRANSACTION;");
+
     // -1. Application Key-Value Settings
     executeNonQuery(
         "CREATE TABLE IF NOT EXISTS app_settings ("
@@ -1476,30 +1478,36 @@ void DatabaseManager::ensureTablesExist() {
         {47, 11, 9, 0, "Rice Bran Creditors", "Liabilities"}
     };
 
-    for (const auto& sg : stdGroups) {
-        QVariant v = executeScalar("SELECT id FROM account_groups WHERE name = ? OR code1st = ? LIMIT 1;", {sg.name, sg.code1});
-        if (v.isValid() && !v.isNull()) {
-            executeNonQuery(
-                "UPDATE account_groups SET code1st = ?, code2nd = ?, code3rd = ?, code4th = ?, nature = ? WHERE id = ?;",
-                {sg.code1, sg.code2, sg.code3, sg.code4, sg.nature, v}
-            );
-        } else {
-            executeNonQuery(
-                "INSERT INTO account_groups (name, parent_group_name, nature, code1st, code2nd, code3rd, code4th, is_system, extract_in_balance_sheet) "
-                "VALUES (?, 'Primary', ?, ?, ?, ?, ?, 1, 1);",
-                {sg.name, sg.nature, sg.code1, sg.code2, sg.code3, sg.code4}
-            );
+    QVariant stdGroupCount = executeScalar("SELECT COUNT(*) FROM account_groups WHERE code1st > 0;");
+    if (!stdGroupCount.isValid() || stdGroupCount.toInt() < 40) {
+        for (const auto& sg : stdGroups) {
+            QVariant v = executeScalar("SELECT id FROM account_groups WHERE name = ? OR code1st = ? LIMIT 1;", {sg.name, sg.code1});
+            if (v.isValid() && !v.isNull()) {
+                executeNonQuery(
+                    "UPDATE account_groups SET code1st = ?, code2nd = ?, code3rd = ?, code4th = ?, nature = ? WHERE id = ?;",
+                    {sg.code1, sg.code2, sg.code3, sg.code4, sg.nature, v}
+                );
+            } else {
+                executeNonQuery(
+                    "INSERT INTO account_groups (name, parent_group_name, nature, code1st, code2nd, code3rd, code4th, is_system, extract_in_balance_sheet) "
+                    "VALUES (?, 'Primary', ?, ?, ?, ?, ?, 1, 1);",
+                    {sg.name, sg.nature, sg.code1, sg.code2, sg.code3, sg.code4}
+                );
+            }
         }
     }
 
-    // 3. Backfill parties foreign keys group_id and group_code
-    executeNonQuery(
-        "UPDATE parties "
-        "SET group_id = (SELECT id FROM account_groups WHERE account_groups.name = parties.group_name LIMIT 1), "
-        "    group_code = (SELECT code1st FROM account_groups WHERE account_groups.name = parties.group_name LIMIT 1) "
-        "WHERE (group_id IS NULL OR group_code IS NULL OR group_code = 0) "
-        "  AND EXISTS (SELECT 1 FROM account_groups WHERE account_groups.name = parties.group_name);"
-    );
+    // 3. Backfill parties foreign keys group_id and group_code (only if unlinked parties exist)
+    QVariant unlinkedParties = executeScalar("SELECT 1 FROM parties WHERE group_id IS NULL OR group_code IS NULL OR group_code = 0 LIMIT 1;");
+    if (unlinkedParties.isValid() && !unlinkedParties.isNull()) {
+        executeNonQuery(
+            "UPDATE parties "
+            "SET group_id = (SELECT id FROM account_groups WHERE account_groups.name = parties.group_name LIMIT 1), "
+            "    group_code = (SELECT code1st FROM account_groups WHERE account_groups.name = parties.group_name LIMIT 1) "
+            "WHERE (group_id IS NULL OR group_code IS NULL OR group_code = 0) "
+            "  AND EXISTS (SELECT 1 FROM account_groups WHERE account_groups.name = parties.group_name);"
+        );
+    }
 
     addColumnIfNotExists("jform_vouchers", "vehicle_no", "TEXT");
     addColumnIfNotExists("jform_vouchers", "driver_name", "TEXT");
@@ -1598,6 +1606,8 @@ void DatabaseManager::ensureTablesExist() {
     ensureLedgerExists("Penalty on Tax A/c", "Indirect Expenses", "Expense");
     ensureLedgerExists("Discount Allowed A/c", "Indirect Expenses", "Expense");
     ensureLedgerExists("Interest Received A/c", "Indirect Incomes", "Income");
+
+    executeNonQuery("COMMIT;");
 }
 
 QString DatabaseManager::getSetting(const QString& key, const QString& defaultVal) {

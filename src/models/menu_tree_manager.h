@@ -80,6 +80,7 @@ public:
     // Returns the menu ID that triggered the most recent view transition
     QString lastTriggeredMenuId() const { return m_lastTriggeredMenuId; }
     int lastTriggeredSubmenuIndex() const { return m_lastTriggeredSubmenuIndex; }
+    void resetLastTriggeredMenu() { m_lastTriggeredMenuId.clear(); m_lastTriggeredSubmenuIndex = 0; }
 
 signals:
     void openViewRequested(int viewIndex);
