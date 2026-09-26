@@ -1562,10 +1562,16 @@ void LogicBoardTestSuite::testFinalReportsAndDepreciationSubsystem() {
     QVERIFY(tbCtrl.rows().size() >= 0);
 
     // 3. Capital Accounts Controller Verification
+    DatabaseManager::instance().executeNonQuery(
+        "INSERT OR IGNORE INTO parties (name, group_name, opening_balance, balance_type) "
+        "VALUES ('Capital Ventures Pvt.Ltd. [Delhi]', 'Rice Basmati Debitors', 0.0, 'Dr');"
+    );
+
     MahadevERP::CapitalAccountsController capCtrl;
     capCtrl.setDateRange(QDate(2025, 4, 1), QDate(2026, 3, 31));
     const auto& capItems = capCtrl.items();
     for (const auto& row : capItems) {
+        QVERIFY(row.partnerName != "Capital Ventures Pvt.Ltd. [Delhi]");
         double expectedClosing = row.opCapital + row.additions + row.interest + row.profitShare - row.drawings;
         QCOMPARE(std::abs(row.closingCapital - expectedClosing) < 0.01, true);
     }

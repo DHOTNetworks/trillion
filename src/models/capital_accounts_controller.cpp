@@ -38,10 +38,11 @@ void CapitalAccountsController::calculate() {
     QString fromIso = m_fromDate.isValid() ? m_fromDate.toString("yyyy-MM-dd") : "2025-04-01";
     QString toIso = m_toDate.isValid() ? m_toDate.toString("yyyy-MM-dd") : "2026-03-31";
 
-    // 1. Fetch all ledgers in Capital A/c group
+    // 1. Fetch all ledgers strictly in Capital A/c group (Strict Group Classification, not party name)
     QVariantList capRows = db.executeQuery(
         "SELECT id, name, group_name, opening_balance, COALESCE(balance_type, 'Dr') AS dr_cr FROM parties "
-        "WHERE group_name LIKE '%Capital%' OR name LIKE '%Capital%' ORDER BY name ASC;"
+        "WHERE (TRIM(group_name) = 'Capital A/c' OR TRIM(group_name) = 'Capital Account' OR TRIM(group_name) LIKE 'Capital%' OR TRIM(group_name) LIKE '%Partner%') "
+        "ORDER BY name ASC;"
     );
 
     // 2. Compute Net Profit from P&L Engine
