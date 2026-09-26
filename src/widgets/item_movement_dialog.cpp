@@ -331,7 +331,7 @@ void ItemMovementDialog::loadMovements(const QString& itemName, const QDate& fro
         int row = targetTable->rowCount();
         targetTable->insertRow(row);
 
-        auto createItem = [](const QString& text, int align = Qt::AlignLeft | Qt::AlignVCenter, bool bold = false) {
+        auto createItem = [](const QString& text, Qt::Alignment align = Qt::AlignLeft | Qt::AlignVCenter, bool bold = false) {
             QTableWidgetItem* item = new QTableWidgetItem(text);
             item->setTextAlignment(align);
             item->setForeground(QBrush(QColor("#0F172A")));
