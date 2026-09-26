@@ -120,7 +120,10 @@ void MenuTreeManager::resumeMenuStack(QWidget* parent)
                     m_lastTriggeredMenuId = currentId;
                     m_lastTriggeredSubmenuIndex = selectedIdx;
                     int targetView = item.targetViewIndex;
-                    emit openViewRequested(targetView);
+                    m_activeStack.clear();
+                    QMetaObject::invokeMethod(this, [this, targetView]() {
+                        emit openViewRequested(targetView);
+                    }, Qt::QueuedConnection);
                     return;
                 } else if (item.actionType == MenuActionType::ExecuteCustom) {
                     if (item.callback) {

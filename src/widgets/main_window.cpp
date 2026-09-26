@@ -382,12 +382,9 @@ MainWindow::MainWindow(const MainWindowDependencies& deps, QWidget* parent)
     connect(m_cashVoucherWidget, &MahadevERP::CashVoucherWidget::voucherSaved, this, &MainWindow::onCashVoucherSaved);
     m_stackedWidget->addWidget(m_cashVoucherWidget);
 
-    // Global Shortcuts for Accounting Period (Alt+F2 and F2)
+    // Global Shortcut for Accounting Period (Alt+F2)
     QShortcut* altF2Shortcut = new QShortcut(QKeySequence(Qt::ALT | Qt::Key_F2), this);
     connect(altF2Shortcut, &QShortcut::activated, this, &MainWindow::openAccountingPeriodDialog);
-
-    QShortcut* f2Shortcut = new QShortcut(QKeySequence(Qt::Key_F2), this);
-    connect(f2Shortcut, &QShortcut::activated, this, &MainWindow::openAccountingPeriodDialog);
 
     // Unified Application-Wide Keyboard Navigation Controller
     m_keyboardCtrl = new AppKeyboardController(this, this);

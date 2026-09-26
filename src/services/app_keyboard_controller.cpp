@@ -9,6 +9,10 @@
 #include "../widgets/journal_voucher_widget.h"
 #include "../widgets/cash_voucher_widget.h"
 #include "../widgets/tds_voucher_widget.h"
+#include "../widgets/jform_voucher_widget.h"
+#include "../widgets/iform_voucher_widget.h"
+#include "../widgets/milling_voucher_widget.h"
+#include "../widgets/debit_credit_note_widget.h"
 #include <QTimer>
 #include <QLineEdit>
 #include <QTextEdit>
@@ -267,10 +271,45 @@ bool AppKeyboardController::handleKeyPress(QKeyEvent* event) {
 
     int vIdx = currentViewIndex();
 
-    // 3. Accounting Period Modal (<kbd>Alt+F2</kbd> or <kbd>F2</kbd>)
-    if ((mods.testFlag(Qt::AltModifier) && key == Qt::Key_F2) || key == Qt::Key_F2) {
+    // 3. Accounting Period Modal (<kbd>Alt+F2</kbd>) vs Voucher Date Dialog (<kbd>F2</kbd>)
+    if (mods.testFlag(Qt::AltModifier) && key == Qt::Key_F2) {
         openPeriodModal();
         return true;
+    } else if (key == Qt::Key_F2) {
+        if (vIdx == 60 && m_mainWindow && m_mainWindow->cashVoucherWidget()) {
+            m_mainWindow->cashVoucherWidget()->openDateDialog(false);
+            return true;
+        } else if (vIdx == 16 && m_mainWindow && m_mainWindow->chequeVoucherWidget()) {
+            m_mainWindow->chequeVoucherWidget()->openDateDialog(false);
+            return true;
+        } else if (vIdx == 17 && m_mainWindow && m_mainWindow->journalVoucherWidget()) {
+            m_mainWindow->journalVoucherWidget()->openDateDialog(false);
+            return true;
+        } else if (vIdx == 18 && m_mainWindow && m_mainWindow->jformVoucherWidget()) {
+            m_mainWindow->jformVoucherWidget()->openDateDialog(false);
+            return true;
+        } else if (vIdx == 19 && m_mainWindow && m_mainWindow->iformVoucherWidget()) {
+            m_mainWindow->iformVoucherWidget()->openDateDialog(false);
+            return true;
+        } else if (vIdx == 31 && m_mainWindow && m_mainWindow->millingVoucherWidget()) {
+            m_mainWindow->millingVoucherWidget()->openDateDialog(false);
+            return true;
+        } else if (vIdx == 28 && m_mainWindow && m_mainWindow->debitCreditNoteWidget()) {
+            m_mainWindow->debitCreditNoteWidget()->openDateDialog();
+            return true;
+        } else if (vIdx == 24 && m_mainWindow && m_mainWindow->tdsVoucherWidget()) {
+            m_mainWindow->tdsVoucherWidget()->openDateDialog();
+            return true;
+        } else if (vIdx == 14 && m_mainWindow && m_mainWindow->salesVoucherWidget()) {
+            m_mainWindow->salesVoucherWidget()->openDateDialog(false);
+            return true;
+        } else if (vIdx == 15 && m_mainWindow && m_mainWindow->purchaseVoucherWidget()) {
+            m_mainWindow->purchaseVoucherWidget()->openDateDialog(false);
+            return true;
+        } else {
+            openPeriodModal();
+            return true;
+        }
     }
 
     // Save Shortcut (<kbd>Ctrl+S</kbd>) across all voucher entry forms
