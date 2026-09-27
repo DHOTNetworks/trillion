@@ -50,8 +50,9 @@ void TrialBalanceController::calculate() {
     m_totals = TrialBalanceTotals();
 
     DatabaseManager& db = DatabaseManager::instance();
-    QString fromIso = m_fromDate.isValid() ? m_fromDate.toString("yyyy-MM-dd") : "2025-04-01";
-    QString toIso = m_toDate.isValid() ? m_toDate.toString("yyyy-MM-dd") : "2026-03-31";
+    FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
+    QString fromIso = m_fromDate.isValid() ? m_fromDate.toString("yyyy-MM-dd") : activeFy.startDate;
+    QString toIso = m_toDate.isValid() ? m_toDate.toString("yyyy-MM-dd") : activeFy.endDate;
 
     // 1. Fetch all ledgers
     QVariantList partyRows = db.executeQuery(

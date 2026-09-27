@@ -36,8 +36,9 @@ void CapitalAccountsController::calculate() {
     m_totals = CapitalAccountTotals();
 
     DatabaseManager& db = DatabaseManager::instance();
-    QString fromIso = m_fromDate.isValid() ? m_fromDate.toString("yyyy-MM-dd") : "2025-04-01";
-    QString toIso = m_toDate.isValid() ? m_toDate.toString("yyyy-MM-dd") : "2026-03-31";
+    FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
+    QString fromIso = m_fromDate.isValid() ? m_fromDate.toString("yyyy-MM-dd") : activeFy.startDate;
+    QString toIso = m_toDate.isValid() ? m_toDate.toString("yyyy-MM-dd") : activeFy.endDate;
 
     // 1. Fetch all ledgers strictly belonging to Capital A/c hierarchy (code 1)
     // Mathematical guarantee: ANY group whose code1st, code2nd, code3rd, or code4th == 1

@@ -980,7 +980,8 @@ QVariantMap PartiesModel::get_party_statement(const QString& partyName) {
 
         double netOp = priorDr - priorCr;
         if (std::abs(netOp) > 0.001) {
-            auto [opIso, opFmt] = parseDates(!activeFromDate.isEmpty() ? activeFromDate : "2024-04-01");
+            QString defFrom = FiscalYearHelper::getActiveFiscalYear().startDate;
+            auto [opIso, opFmt] = parseDates(!activeFromDate.isEmpty() ? activeFromDate : defFrom);
             QVariantMap opItem;
             opItem["isSelected"] = false;
             opItem["vIso"] = opIso;

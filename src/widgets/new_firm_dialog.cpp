@@ -152,7 +152,10 @@ void NewFirmDialog::setupUi() {
     grid1->addWidget(m_businessEdit, 3, 0);
 
     grid1->addWidget(makeFieldLabel("Books Beginning Date"), 2, 1);
-    m_booksFromEdit = makeLineEdit("YYYY-MM-DD", "2026-04-01");
+    QDate cur = QDate::currentDate();
+    int fyStartYear = (cur.month() >= 4) ? cur.year() : cur.year() - 1;
+    QString defaultBooksFrom = QString("%1-04-01").arg(fyStartYear);
+    m_booksFromEdit = makeLineEdit("YYYY-MM-DD", defaultBooksFrom);
     grid1->addWidget(m_booksFromEdit, 3, 1);
 
     formLayout->addLayout(grid1);

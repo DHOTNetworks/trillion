@@ -22,8 +22,9 @@ QVector<DepreciationAssetItem> DepreciationCalculator::calculateSchedule(const Q
     QVector<DepreciationAssetItem> results;
     DatabaseManager& db = DatabaseManager::instance();
 
-    QString fromIso = fromDate.isValid() ? fromDate.toString("yyyy-MM-dd") : "2025-04-01";
-    QString toIso = toDate.isValid() ? toDate.toString("yyyy-MM-dd") : "2026-03-31";
+    FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
+    QString fromIso = fromDate.isValid() ? fromDate.toString("yyyy-MM-dd") : activeFy.startDate;
+    QString toIso = toDate.isValid() ? toDate.toString("yyyy-MM-dd") : activeFy.endDate;
 
     // Income Tax Act Sec 32 cutoff date for 180 days: Oct 3 (or 180 days before March 31)
     QDate sDate = QDate::fromString(fromIso, "yyyy-MM-dd");
@@ -159,8 +160,9 @@ DepreciationSummaryTotals DepreciationCalculator::calculateTotals(const QVector<
 }
 
 bool DepreciationCalculator::hasExistingDepreciationPostings(const QDate& fromDate, const QDate& toDate) {
-    QString fromIso = fromDate.isValid() ? fromDate.toString("yyyy-MM-dd") : "2025-04-01";
-    QString toIso = toDate.isValid() ? toDate.toString("yyyy-MM-dd") : "2026-03-31";
+    FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
+    QString fromIso = fromDate.isValid() ? fromDate.toString("yyyy-MM-dd") : activeFy.startDate;
+    QString toIso = toDate.isValid() ? toDate.toString("yyyy-MM-dd") : activeFy.endDate;
 
     QVariant cnt = DatabaseManager::instance().executeScalar(
         "SELECT COUNT(*) FROM transactions WHERE voucher_no LIKE 'DEP-%' AND voucher_date >= ? AND voucher_date <= ?;",
@@ -183,10 +185,13 @@ bool DepreciationCalculator::postDepreciationToBooks(const QVector<DepreciationA
     QVariant exists = db.executeScalar("SELECT id FROM parties WHERE name = ?;", {depLedger});
     int depLedgerId = exists.isValid() ? exists.toInt() : 0;
     if (depLedgerId == 0) {
+        QVariantList cRows = db.executeQuery("SELECT city, state FROM company_info LIMIT 1;");
+        QString cCity = !cRows.isEmpty() ? cRows.first().toMap().value("city").toString() : "";
+        QString cState = !cRows.isEmpty() ? cRows.first().toMap().value("state").toString() : "";
         bool ok = db.executeNonQuery(
             "INSERT INTO parties (name, group_name, opening_balance, dr_cr, address, city, state, gstin, pan) "
-            "VALUES (?, 'Indirect Expenses', 0.0, 'Dr', 'Auto Created', 'HQ', 'Haryana', '', '');",
-            {depLedger}
+            "VALUES (?, 'Indirect Expenses', 0.0, 'Dr', 'Auto Created', ?, ?, '', '');",
+            {depLedger, cCity, cState}
         );
         if (!ok) {
             outError = "Failed to create Depreciation ledger.";
@@ -196,7 +201,7 @@ bool DepreciationCalculator::postDepreciationToBooks(const QVector<DepreciationA
     }
 
     // 2. Generate unique voucher number
-    int vYear = voucherDate.isValid() ? voucherDate.year() : 2026;
+    int vYear = voucherDate.isValid() ? voucherDate.year() : QDate::currentDate().year();
     QString vchNo = QString("DEP-%1-%2").arg(vYear).arg(vYear + 1);
 
     if (!db.beginTransaction()) {
@@ -237,8 +242,9 @@ bool DepreciationCalculator::postDepreciationToBooks(const QVector<DepreciationA
 
 bool DepreciationCalculator::deleteDepreciationFromBooks(const QDate& fromDate, const QDate& toDate, QString& outError) {
     DatabaseManager& db = DatabaseManager::instance();
-    QString fromIso = fromDate.isValid() ? fromDate.toString("yyyy-MM-dd") : "2025-04-01";
-    QString toIso = toDate.isValid() ? toDate.toString("yyyy-MM-dd") : "2026-03-31";
+    FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
+    QString fromIso = fromDate.isValid() ? fromDate.toString("yyyy-MM-dd") : activeFy.startDate;
+    QString toIso = toDate.isValid() ? toDate.toString("yyyy-MM-dd") : activeFy.endDate;
 
     bool ok = db.executeNonQuery(
         "DELETE FROM transactions WHERE (voucher_no LIKE 'DEP-%' OR narration LIKE '%Depreciation%') "

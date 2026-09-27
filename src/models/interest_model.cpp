@@ -72,20 +72,15 @@ QVariantMap InterestModel::get_interest_data(
     QString activeFyName = AccountingEngine::getActiveFyLabel();
 
     if (fDate.isEmpty() && tDate.isEmpty()) {
-        QVariantList fyActiveRows = DatabaseManager::instance().executeQuery(
-            "SELECT year_name, start_date, end_date FROM financial_years WHERE is_active = 1 LIMIT 1;"
-        );
-        if (!fyActiveRows.isEmpty()) {
-            QVariantMap act = fyActiveRows.first().toMap();
-            activeFyName = act.value("year_name").toString();
-            fDate = act.value("start_date").toString();
-            tDate = act.value("end_date").toString();
-        } else {
-            fDate = "2025-04-01";
-            tDate = "2026-03-31";
+        FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
+        if (activeFy.isValid()) {
+            activeFyName = activeFy.name;
+            fDate = activeFy.startDate;
+            tDate = activeFy.endDate;
         }
     } else if (tDate.isEmpty()) {
-        tDate = "2026-03-31";
+        FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
+        tDate = activeFy.isValid() ? activeFy.endDate : QDate::currentDate().toString("yyyy-MM-dd");
     }
 
     // Convert fDate & tDate to ISO (yyyy-MM-dd)

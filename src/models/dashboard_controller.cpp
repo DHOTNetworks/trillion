@@ -1,6 +1,7 @@
 #include "dashboard_controller.h"
 #include "../database_manager.h"
 #include "../engine/accounting_engine.h"
+#include "../engine/fiscal_year_helper.h"
 
 DashboardController::DashboardController(QObject* parent) : QObject(parent) {
     refresh_stats();
@@ -22,16 +23,11 @@ void DashboardController::refresh_stats(const QString& fromDate, const QString& 
     }
 
     if (fy.isEmpty() && fDate.isEmpty()) {
-        QVariantList rows = DatabaseManager::instance().executeQuery("SELECT year_name, start_date, end_date FROM financial_years WHERE is_active = 1 LIMIT 1;");
-        if (!rows.isEmpty()) {
-            QVariantMap r = rows.first().toMap();
-            fy = r.value("year_name").toString();
-            fDate = r.value("start_date").toString();
-            tDate = r.value("end_date").toString();
-        } else {
-            fy = "FY 2026-27";
-            fDate = "2026-04-01";
-            tDate = "2027-03-31";
+        FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
+        if (activeFy.isValid()) {
+            fy = activeFy.name;
+            fDate = activeFy.startDate;
+            tDate = activeFy.endDate;
         }
     }
 
