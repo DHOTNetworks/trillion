@@ -74,12 +74,7 @@ BalanceSheetData BalanceSheetCalculator::calculate(const QString& requestedAsOnD
     data.indirectIncomes = pl.indirectIncomes;
     data.indirectExpenses = pl.indirectExpenses;
 
-    if (!StockValuationEngine::hasAuditedClosingStock(data.asOnDate) && (data.financialYear == "FY 2026-27" || data.asOnDate >= "2026-04-01")) {
-        // Bahi-Khata provisional multi-year nominal standard for FY 26-27
-        data.netProfit = -252069910.18;
-    } else {
-        data.netProfit = (pl.grossProfit + pl.indirectIncomes) - (pl.grossLoss + pl.indirectExpenses);
-    }
+    data.netProfit = (pl.grossProfit + pl.indirectIncomes) - (pl.grossLoss + pl.indirectExpenses);
 
     // 8. HIGH-PERFORMANCE BATCH ROLLUP OF PARTY BALANCES
     // Query ALL transaction sums in ONE SINGLE SQL call

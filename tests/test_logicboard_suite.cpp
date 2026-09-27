@@ -165,6 +165,18 @@ void LogicBoardTestSuite::testBahiKhataMdbStationAndLedgerMigration() {
     qDebug() << "[TEST MIGRATION 018] Distinct Stations Count:" << stations018.size() << "Sample:" << stations018.mid(0, 10);
     QVERIFY(stations018.size() > 5);
 
+    // Validate Data.018 (Sushil Trading Company) Balance Sheet
+    BalanceSheetData bs018_2526 = BalanceSheetCalculator::calculate("2026-03-31");
+    qDebug() << "[TEST BS 018 FY 25-26] Liabilities:" << bs018_2526.totalLiabilitiesFmt << "Assets:" << bs018_2526.totalAssetsFmt << "Diff:" << bs018_2526.difference << "NetProfit:" << bs018_2526.netProfit;
+    QVERIFY(bs018_2526.totalLiabilities > 0.0);
+    QVERIFY(bs018_2526.totalAssets > 0.0);
+
+    BalanceSheetData bs018_2627 = BalanceSheetCalculator::calculate("2027-03-31");
+    qDebug() << "[TEST BS 018 FY 26-27] Liabilities:" << bs018_2627.totalLiabilitiesFmt << "Assets:" << bs018_2627.totalAssetsFmt << "Diff:" << bs018_2627.difference << "NetLoss:" << bs018_2627.netProfit;
+    QVERIFY(bs018_2627.totalLiabilities > 0.0);
+    QVERIFY(bs018_2627.totalAssets > 0.0);
+    QVERIFY(bs018_2627.netProfit < 0.0); // Net loss on assets side
+
     // 3. Migrate Data.004 (Mandi Firm: Sushil Kr Pradeep Kr) into sushil_kr_pardeep_kr_data_004.db
     QString db004Path = "data/sushil_kr_pardeep_kr_data_004.db";
     if (QFile::exists("../data")) db004Path = "../data/sushil_kr_pardeep_kr_data_004.db";
