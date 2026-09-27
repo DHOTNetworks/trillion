@@ -6,6 +6,8 @@
 #include <QDateEdit>
 #include <QPushButton>
 #include <QLabel>
+#include <QFrame>
+#include "item_search_delegate.h"
 #include "../models/milling_batch_controller.h"
 #include "../models/milling_model.h"
 #include "../services/print_export_controller.h"
@@ -36,6 +38,12 @@ private slots:
     void onRemoveConsumedRow();
     void onAddProducedRow();
     void onRemoveProducedRow();
+    void onConsumedItemConfigured(int row, const QVariantMap& itemData);
+    void onProducedItemConfigured(int row, const QVariantMap& itemData);
+    void advanceConsumedCell();
+    void retreatConsumedCell();
+    void advanceProducedCell();
+    void retreatProducedCell();
 
 private:
     void setupUi();
@@ -45,6 +53,10 @@ private:
     PrintExportController* m_printExportCtrl = nullptr;
 
     int m_editingBatchId = 0;
+
+    // Delegates
+    ItemSearchDelegate* m_consumedItemDelegate = nullptr;
+    ItemSearchDelegate* m_producedItemDelegate = nullptr;
 
     // Header Meta
     QLineEdit* m_batchNoEdit = nullptr;

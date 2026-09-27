@@ -14,7 +14,6 @@ BalanceSheetController::BalanceSheetController(PrintExportController* printExpor
     : QObject(parent)
     , m_printExportCtrl(printExportCtrl)
 {
-    reload();
 }
 
 void BalanceSheetController::reload(const QString& requestedAsOnDate) {

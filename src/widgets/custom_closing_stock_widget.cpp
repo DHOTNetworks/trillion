@@ -18,13 +18,15 @@ CustomClosingStockWidget::CustomClosingStockWidget(PrintExportController* printC
     setupUi();
     applyCustomStyles();
 
-    FiscalYearInfo fy = FiscalYearHelper::getActiveFiscalYear();
-    if (fy.isValid()) {
-        m_dateEdit->setDate(QDate::fromString(fy.endDate, "yyyy-MM-dd"));
-    } else {
-        m_dateEdit->setDate(QDate::currentDate());
+    {
+        QSignalBlocker b(m_dateEdit);
+        FiscalYearInfo fy = FiscalYearHelper::getActiveFiscalYear();
+        if (fy.isValid()) {
+            m_dateEdit->setDate(QDate::fromString(fy.endDate, "yyyy-MM-dd"));
+        } else {
+            m_dateEdit->setDate(QDate::currentDate());
+        }
     }
-    reloadData();
 }
 
 void CustomClosingStockWidget::keyPressEvent(QKeyEvent* event) {

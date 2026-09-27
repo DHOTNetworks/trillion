@@ -23,7 +23,6 @@ StockDetailWidget::StockDetailWidget(StockRegisterController* controller, PrintE
     , m_printExportCtrl(printExportCtrl)
 {
     setupUi();
-    populateItemDropdown();
 
     FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
     QDate sDate = QDate::fromString(activeFy.startDate, "yyyy-MM-dd");
@@ -31,14 +30,16 @@ StockDetailWidget::StockDetailWidget(StockRegisterController* controller, PrintE
     if (!sDate.isValid()) sDate = QDate(QDate::currentDate().month() < 4 ? QDate::currentDate().year() - 1 : QDate::currentDate().year(), 4, 1);
     if (!eDate.isValid()) eDate = QDate::currentDate();
 
+    m_fromDateEdit->blockSignals(true);
+    m_toDateEdit->blockSignals(true);
     m_fromDateEdit->setDate(sDate);
     m_toDateEdit->setDate(eDate);
+    m_fromDateEdit->blockSignals(false);
+    m_toDateEdit->blockSignals(false);
 
     if (m_controller) {
         connect(m_controller, &StockRegisterController::totalsChanged, this, &StockDetailWidget::updateSummaryMetrics);
     }
-
-    reloadData(sDate.toString("yyyy-MM-dd"), eDate.toString("yyyy-MM-dd"));
 }
 
 void StockDetailWidget::setupUi() {

@@ -14,7 +14,6 @@ TcsReceiptListWidget::TcsReceiptListWidget(TcsReceiptVoucherController *controll
     , m_controller(controller)
 {
     setupUi();
-    reloadData();
 }
 
 void TcsReceiptListWidget::setupUi()

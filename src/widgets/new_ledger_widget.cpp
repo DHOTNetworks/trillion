@@ -15,7 +15,6 @@ NewLedgerWidget::NewLedgerWidget(QWidget* parent)
     : QWidget(parent)
 {
     setupUi();
-    populateDropdowns();
 }
 
 static QString inputStyle() {

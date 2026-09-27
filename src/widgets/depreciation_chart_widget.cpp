@@ -25,13 +25,14 @@ DepreciationChartWidget::DepreciationChartWidget(PrintExportController* printExp
     , m_printExportCtrl(printExportCtrl)
 {
     setupUi();
-    populateLedgerCombo();
 
-    FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
-    m_fromDateEdit->setDate(QDate::fromString(activeFy.startDate, "yyyy-MM-dd"));
-    m_toDateEdit->setDate(QDate::fromString(activeFy.endDate, "yyyy-MM-dd"));
-
-    reloadData();
+    {
+        QSignalBlocker b1(m_fromDateEdit);
+        QSignalBlocker b2(m_toDateEdit);
+        FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
+        m_fromDateEdit->setDate(QDate::fromString(activeFy.startDate, "yyyy-MM-dd"));
+        m_toDateEdit->setDate(QDate::fromString(activeFy.endDate, "yyyy-MM-dd"));
+    }
 }
 
 void DepreciationChartWidget::setupUi() {
@@ -286,6 +287,9 @@ void DepreciationChartWidget::populateLedgerCombo() {
 }
 
 void DepreciationChartWidget::reloadData() {
+    if (m_depLedgerCombo->count() == 0) {
+        populateLedgerCombo();
+    }
     m_items = m_calculator.calculateSchedule(m_fromDateEdit->date(), m_toDateEdit->date(), m_isDetailed);
     populateTable();
     updateSummaryMetrics();

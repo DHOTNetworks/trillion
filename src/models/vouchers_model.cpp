@@ -12,7 +12,6 @@ VouchersModel::VouchersModel(QObject* parent)
         parent
     )
 {
-    reload_data();
 }
 
 void VouchersModel::reload_data() {

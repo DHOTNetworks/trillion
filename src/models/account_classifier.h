@@ -61,4 +61,12 @@ public:
 
     // Determine balance sheet nature ("Assets", "Liabilities", "Income", "Expense") deterministically
     static QString getNatureForGroup(int code1, int code2, int code3, int code4);
+
+    // Multi-tier Lineage & Financial Classification
+    static bool isNominal(int c1, int c2, int c3, int c4);
+    static bool isTrading(int c1, int c2, int c3, int c4);
+    static bool isProfitAndLoss(int c1, int c2, int c3, int c4);
+    static bool isDirectExpense(int c1, int c2, int c3, int c4, int calcDirectExpense = 0);
+    static bool isBalanceSheetRealPersonal(int c1, int c2, int c3, int c4, int extractInBs = 1);
+    static StandardGroupCode getRootGroup(int c1, int c2, int c3, int c4);
 };

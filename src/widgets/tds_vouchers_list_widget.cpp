@@ -14,7 +14,6 @@ TdsVouchersListWidget::TdsVouchersListWidget(TdsVoucherController *controller, Q
     , m_controller(controller)
 {
     setupUi();
-    reloadData();
 }
 
 void TdsVouchersListWidget::setupUi()

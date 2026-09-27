@@ -32,7 +32,6 @@ PurchaseRegisterWidget::PurchaseRegisterWidget(PurchaseRegisterController* contr
     m_toDateEdit->setDate(eDate);
     m_fromDateEdit->blockSignals(false);
     m_toDateEdit->blockSignals(false);
-    loadData(sDate, eDate);
 }
 
 void PurchaseRegisterWidget::setupUi() {

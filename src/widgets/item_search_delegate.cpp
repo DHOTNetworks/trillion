@@ -274,11 +274,11 @@ ItemSearchDelegate::ItemSearchDelegate(QObject* parent)
 QWidget* ItemSearchDelegate::createEditor(QWidget* parent, const QStyleOptionViewItem& option, const QModelIndex& index) const {
     Q_UNUSED(option);
 
-    bool isItemCol = (index.column() == 0 || index.column() == 1);
+    bool isItemCol = (index.column() == 0);
     if (const QAbstractItemModel* m = index.model()) {
         QString h = m->headerData(index.column(), Qt::Horizontal, Qt::DisplayRole).toString().toLower();
         if (!h.isEmpty()) {
-            isItemCol = (h.contains("item") || h.contains("description") || h.contains("commodity"));
+            isItemCol = (h.contains("item") || h.contains("description") || h.contains("commodity") || h.contains("variety") || h.contains("paddy") || h.contains("output") || h.contains("product") || h.contains("particular"));
         }
     }
 
@@ -314,7 +314,7 @@ QWidget* ItemSearchDelegate::createEditor(QWidget* parent, const QStyleOptionVie
         "  padding: 2px 6px;"
         "}"
     );
-    if (index.column() >= 3 && index.column() <= 8) {
+    if (index.column() >= 1) {
         editor->setAlignment(Qt::AlignRight);
     }
     return editor;

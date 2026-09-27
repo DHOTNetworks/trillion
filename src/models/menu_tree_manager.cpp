@@ -120,7 +120,8 @@ void MenuTreeManager::resumeMenuStack(QWidget* parent)
                     m_lastTriggeredMenuId = currentId;
                     m_lastTriggeredSubmenuIndex = selectedIdx;
                     int targetView = item.targetViewIndex;
-                    m_activeStack.clear();
+                    // Preserve m_activeStack so that when user presses Esc / Back from the target view,
+                    // the menu stack can unwind back to this menu dialog.
                     QMetaObject::invokeMethod(this, [this, targetView]() {
                         emit openViewRequested(targetView);
                     }, Qt::QueuedConnection);

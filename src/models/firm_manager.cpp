@@ -292,15 +292,30 @@ QVariantList FirmManager::scan_folder_for_firms(const QString& folderPath) {
     bool isAppData = (targetCanonical == appDataCanonical) || (!dbFiles.isEmpty() && mdbFiles.isEmpty());
 
     if (isAppData) {
+        QVariantList regFirms = get_registered_firms();
+        QMap<QString, QVariantMap> regMap;
+        for (const auto& rf : regFirms) {
+            QVariantMap m = rf.toMap();
+            regMap[m.value("id").toString()] = m;
+            regMap[m.value("db_name").toString()] = m;
+        }
+
         for (const QString& dbName : dbFiles) {
             if (dbName == "test.db" || dbName == "mahadev_rice.db") continue; // skip legacy/mock templates
             if (dbName.endsWith("-wal") || dbName.endsWith("-shm")) continue;
-            if (dbName.startsWith("test_unit_suite")) continue;
+            if (dbName.startsWith("test_unit_suite") || dbName.startsWith("test_migration_")) continue;
 
             QString fullPath = dir.filePath(dbName);
             if (QFileInfo(fullPath).size() == 0) continue;
             QString slug = dbName;
             slug.remove(".db");
+
+            if (regMap.contains(slug) || regMap.contains(dbName)) {
+                QVariantMap firm = regMap.value(slug, regMap.value(dbName));
+                firm["isActive"] = (firm.value("id").toString() == m_activeFirmId);
+                results.append(firm);
+                continue;
+            }
 
             QVariantMap firm;
             firm["id"] = slug;
@@ -312,7 +327,7 @@ QVariantList FirmManager::scan_folder_for_firms(const QString& folderPath) {
             firm["is_imported"] = true;
             firm["isActive"] = (slug == m_activeFirmId);
 
-            // Read statutory and firm details directly from SQLite
+            // Read statutory and firm details directly from SQLite for new database
             sqlite3* db = nullptr;
             if (sqlite3_open_v2(fullPath.toUtf8().constData(), &db, SQLITE_OPEN_READONLY, nullptr) == SQLITE_OK) {
                 sqlite3_stmt* stmt = nullptr;

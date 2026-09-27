@@ -27,11 +27,13 @@ CapitalAccountsWidget::CapitalAccountsWidget(CapitalAccountsController* controll
 
     connect(m_controller, &CapitalAccountsController::dataChanged, this, &CapitalAccountsWidget::populateTable);
 
-    FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
-    m_fromDateEdit->setDate(QDate::fromString(activeFy.startDate, "yyyy-MM-dd"));
-    m_toDateEdit->setDate(QDate::fromString(activeFy.endDate, "yyyy-MM-dd"));
-
-    reloadData();
+    {
+        QSignalBlocker b1(m_fromDateEdit);
+        QSignalBlocker b2(m_toDateEdit);
+        FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
+        m_fromDateEdit->setDate(QDate::fromString(activeFy.startDate, "yyyy-MM-dd"));
+        m_toDateEdit->setDate(QDate::fromString(activeFy.endDate, "yyyy-MM-dd"));
+    }
 }
 
 void CapitalAccountsWidget::setupUi() {

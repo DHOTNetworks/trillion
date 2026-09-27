@@ -12,7 +12,6 @@ MillingModel::MillingModel(QObject* parent)
         parent
     )
 {
-    reload_data();
 }
 
 void MillingModel::auto_repair_milling_batches() {

@@ -14,7 +14,6 @@ AdvancePayment194QListWidget::AdvancePayment194QListWidget(QWidget *parent)
     : QWidget(parent)
 {
     setupUi();
-    reloadData();
 }
 
 void AdvancePayment194QListWidget::setupUi()
@@ -171,10 +170,10 @@ void AdvancePayment194QListWidget::reloadData()
     DatabaseManager &db = DatabaseManager::instance();
     m_currentVouchers = db.executeQuery(
         "SELECT a.id, a.voucher_no, a.voucher_date, p.name as supplier_name, b.name as bank_name, "
-        "a.gross_advance, a.tds_rate, a.tds_amount, a.net_payment "
+        "a.gross_advance_amount, a.tds_rate, a.tds_amount, a.net_payment_amount "
         "FROM advance_payments_194q a "
         "LEFT JOIN parties p ON a.supplier_id = p.id "
-        "LEFT JOIN parties b ON a.bank_id = b.id "
+        "LEFT JOIN parties b ON a.bank_ledger_id = b.id "
         "ORDER BY a.voucher_no DESC;"
     );
     populateTable();
@@ -205,9 +204,9 @@ void AdvancePayment194QListWidget::populateTable()
 
     for (int i = 0; i < filtered.size(); ++i) {
         QVariantMap m = filtered[i].toMap();
-        double gross = m.value("gross_advance").toDouble();
+        double gross = m.value("gross_advance_amount").toDouble();
         double tax = m.value("tds_amount").toDouble();
-        double net = m.value("net_payment").toDouble();
+        double net = m.value("net_payment_amount").toDouble();
         totalGross += gross;
         totalTax += tax;
         totalNet += net;

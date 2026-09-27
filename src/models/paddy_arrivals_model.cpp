@@ -9,7 +9,6 @@ PaddyArrivalsModel::PaddyArrivalsModel(QObject* parent)
         parent
     )
 {
-    reload_data();
 }
 
 void PaddyArrivalsModel::reload_data() {

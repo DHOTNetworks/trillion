@@ -121,10 +121,13 @@ MainWindow::MainWindow(const MainWindowDependencies& deps, QWidget* parent)
     connect(m_firmSelectorWidget, &FirmSelectorWidget::firmOpened, this, [this](const QString& firmId, const QString& firmName) {
         Q_UNUSED(firmId);
         Q_UNUSED(firmName);
+        MahadevERP::MenuTreeManager::instance().clearNavigationStack();
         MahadevERP::MenuTreeManager::instance().resetLastTriggeredMenu();
         navigateToView(0);
     });
     connect(m_firmSelectorWidget, &FirmSelectorWidget::backRequested, this, [this]() {
+        MahadevERP::MenuTreeManager::instance().clearNavigationStack();
+        MahadevERP::MenuTreeManager::instance().resetLastTriggeredMenu();
         navigateToView(0);
     });
     m_stackedWidget->addWidget(m_firmSelectorWidget);
@@ -583,7 +586,7 @@ MainWindow::MainWindow(const MainWindowDependencies& deps, QWidget* parent)
         if (m_depreciationChartWidget) m_depreciationChartWidget->setDetailedMode(true);
     });
 
-    // Explicitly start application on Firm Selector View (View 22)
+    // Start application on Firm Selector View (View 22) as initial screen
     navigateToView(22);
 }
 

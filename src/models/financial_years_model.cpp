@@ -12,7 +12,6 @@ FinancialYearsModel::FinancialYearsModel(QObject* parent)
         parent
     )
 {
-    reload_data();
 }
 
 void FinancialYearsModel::reload_data() {

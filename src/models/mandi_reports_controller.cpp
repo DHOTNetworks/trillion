@@ -151,9 +151,9 @@ QVariantMap MandiReportsController::get_farmer_dheri_statement(int zimidarId, co
 
     // 2. Payments / Vouchers made to farmer (Debits from Farmer)
     QString payQuery =
-        "SELECT voucher_no, voucher_date, voucher_type, drcr, amount, narration "
-        "FROM vouchers "
-        "WHERE ledger_id = ? ";
+        "SELECT voucher_no, voucher_date, voucher_type, trans_type as drcr, amount, narration "
+        "FROM transactions "
+        "WHERE party_id = ? ";
     QVariantList payParams = {zimidarId};
     if (!fromDate.isEmpty() && !toDate.isEmpty()) {
         payQuery += "AND voucher_date >= ? AND voucher_date <= ? ";

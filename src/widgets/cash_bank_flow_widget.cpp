@@ -24,7 +24,6 @@ CashBankFlowWidget::CashBankFlowWidget(PrintExportController* printExportCtrl, Q
 {
     setupUi();
     connect(&m_controller, &CashBankFlowController::dataChanged, this, &CashBankFlowWidget::updateTableData);
-    refreshData();
 }
 
 void CashBankFlowWidget::setupUi() {

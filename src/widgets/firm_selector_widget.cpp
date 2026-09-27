@@ -21,7 +21,6 @@ FirmSelectorWidget::FirmSelectorWidget(FirmManager* firmMgr,
     m_currentFolder = m_appDataFolder;
 
     setupUi();
-    refreshFirms();
 }
 
 bool FirmSelectorWidget::isViewingAppData() const {

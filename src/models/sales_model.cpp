@@ -12,7 +12,6 @@ SalesModel::SalesModel(QObject* parent)
         parent
     )
 {
-    reload_data();
 }
 
 void SalesModel::reload_data() {

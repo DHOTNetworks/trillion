@@ -19,7 +19,6 @@ MandiReportsWidget::MandiReportsWidget(PrintExportController* printExportCtrl, Q
     setAutoFillBackground(true);
     setupUi();
     applyCustomStyles();
-    refreshAllTabs();
 }
 
 MandiReportsWidget::~MandiReportsWidget() = default;

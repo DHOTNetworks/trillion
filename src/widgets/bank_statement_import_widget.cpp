@@ -101,7 +101,6 @@ void BankStatementImportWidget::setupUi() {
     m_bankLedgerCombo = new QComboBox(filterCard);
     m_bankLedgerCombo->setEditable(true);
     m_bankLedgerCombo->setMinimumWidth(220);
-    populateBankLedgers();
     row1->addWidget(m_bankLedgerCombo);
 
     filterLayout->addLayout(row1);

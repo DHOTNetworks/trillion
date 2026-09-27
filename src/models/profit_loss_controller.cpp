@@ -14,7 +14,6 @@ ProfitLossController::ProfitLossController(PrintExportController* printExportCtr
     : QObject(parent)
     , m_printExportCtrl(printExportCtrl)
 {
-    reload();
 }
 
 void ProfitLossController::reload(const QString& requestedFromDate, const QString& requestedToDate) {

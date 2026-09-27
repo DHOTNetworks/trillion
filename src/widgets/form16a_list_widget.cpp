@@ -15,7 +15,6 @@ Form16AListWidget::Form16AListWidget(QWidget *parent)
     : QWidget(parent)
 {
     setupUi();
-    reloadData();
 }
 
 void Form16AListWidget::setupUi()
@@ -171,9 +170,9 @@ void Form16AListWidget::reloadData()
     DatabaseManager &db = DatabaseManager::instance();
     m_currentCerts = db.executeQuery(
         "SELECT f.id, f.certificate_no, p.name as customer_name, f.quarter, f.receipt_date, "
-        "f.total_amount_credited, f.total_tds_deducted, f.is_verified "
+        "f.gross_amount as total_amount_credited, f.tds_amount as total_tds_deducted, f.matched_with_26as as is_verified "
         "FROM received_forms_16a f "
-        "LEFT JOIN parties p ON f.customer_id = p.id "
+        "LEFT JOIN parties p ON f.party_id = p.id "
         "ORDER BY f.id DESC;"
     );
     populateTable();

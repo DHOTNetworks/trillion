@@ -108,16 +108,18 @@ int AccountClassifier::getStandardGroupParent(int code) {
 }
 
 QString AccountClassifier::getNatureForGroup(int code1, int code2, int code3, int code4) {
-    // Check Assets: 2 (Current Assets), 14 (Fixed Assets), 26 (Deposit Assets), 30 (Security Assets), 3, 4, 6, 7, 8
-    if (isDescendantOf(code1, code2, code3, code4, 2) ||
-        isDescendantOf(code1, code2, code3, code4, 14) ||
-        isDescendantOf(code1, code2, code3, code4, 26) ||
-        isDescendantOf(code1, code2, code3, code4, 30)) {
-        return "Assets";
+    if (isTrading(code1, code2, code3, code4)) {
+        if (isDescendantOf(code1, code2, code3, code4, 20)) return "Income";
+        return "Expense";
     }
 
-    // Check Liabilities: 1 (Capital), 9 (Current Liabilities), 10, 11, 12, 13, 28, 29, 31, 33, 35
-    if (isDescendantOf(code1, code2, code3, code4, 1) ||
+    if (isProfitAndLoss(code1, code2, code3, code4)) {
+        if (isDescendantOf(code1, code2, code3, code4, 16)) return "Income";
+        return "Expense";
+    }
+
+    if (code1 == -1 ||
+        isDescendantOf(code1, code2, code3, code4, 1) ||
         isDescendantOf(code1, code2, code3, code4, 9) ||
         isDescendantOf(code1, code2, code3, code4, 13) ||
         isDescendantOf(code1, code2, code3, code4, 28) ||
@@ -125,21 +127,47 @@ QString AccountClassifier::getNatureForGroup(int code1, int code2, int code3, in
         return "Liabilities";
     }
 
-    // Check Income: 16 (Income A/c), 20 (Sale A/c)
-    if (isDescendantOf(code1, code2, code3, code4, 16) ||
-        isDescendantOf(code1, code2, code3, code4, 20)) {
-        return "Income";
-    }
-
-    // Check Expense: 17 (Expenditure), 19 (Purchase), 22, 23 (Mfg Exp), 24 (Trading Exp)
-    if (isDescendantOf(code1, code2, code3, code4, 17) ||
-        isDescendantOf(code1, code2, code3, code4, 18) ||
-        isDescendantOf(code1, code2, code3, code4, 19) ||
-        isDescendantOf(code1, code2, code3, code4, 22) ||
-        isDescendantOf(code1, code2, code3, code4, 23) ||
-        isDescendantOf(code1, code2, code3, code4, 24)) {
-        return "Expense";
-    }
-
     return "Assets";
+}
+
+bool AccountClassifier::isNominal(int c1, int c2, int c3, int c4) {
+    return isTrading(c1, c2, c3, c4) || isProfitAndLoss(c1, c2, c3, c4);
+}
+
+bool AccountClassifier::isTrading(int c1, int c2, int c3, int c4) {
+    return isDescendantOf(c1, c2, c3, c4, 18) || // TradingStockRoot
+           isDescendantOf(c1, c2, c3, c4, 19) || // Purchase
+           isDescendantOf(c1, c2, c3, c4, 20) || // Sale
+           isDescendantOf(c1, c2, c3, c4, 22) || // ManufacturingRoot
+           isDescendantOf(c1, c2, c3, c4, 23) || // ManufacturingExp
+           isDescendantOf(c1, c2, c3, c4, 24);   // TradingExp
+}
+
+bool AccountClassifier::isProfitAndLoss(int c1, int c2, int c3, int c4) {
+    return isDescendantOf(c1, c2, c3, c4, 15) || // ProfitAndLoss
+           isDescendantOf(c1, c2, c3, c4, 16) || // Income
+           isDescendantOf(c1, c2, c3, c4, 17);   // Expenditure
+}
+
+bool AccountClassifier::isDirectExpense(int c1, int c2, int c3, int c4, int calcDirectExpense) {
+    if (calcDirectExpense == 1) return true;
+    return isDescendantOf(c1, c2, c3, c4, 22) ||
+           isDescendantOf(c1, c2, c3, c4, 23) ||
+           isDescendantOf(c1, c2, c3, c4, 24);
+}
+
+bool AccountClassifier::isBalanceSheetRealPersonal(int c1, int c2, int c3, int c4, int extractInBs) {
+    if (extractInBs == 0) return false;
+    return !isNominal(c1, c2, c3, c4);
+}
+
+StandardGroupCode AccountClassifier::getRootGroup(int c1, int c2, int c3, int c4) {
+    int codes[4] = {c1, c2, c3, c4};
+    for (int i = 3; i >= 0; --i) {
+        int c = codes[i];
+        if (c > 0 && c <= 35) {
+            return static_cast<StandardGroupCode>(c);
+        }
+    }
+    return StandardGroupCode::Primary;
 }

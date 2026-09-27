@@ -12,7 +12,6 @@ PartiesModel::PartiesModel(QObject* parent)
         parent
     )
 {
-    reload_data();
 }
 
 void PartiesModel::reload_data() {

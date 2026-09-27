@@ -27,9 +27,12 @@ TransportDispatchWidget::TransportDispatchWidget(TransportDispatchController* co
     QDate eDate = QDate::fromString(activeFy.endDate, "yyyy-MM-dd");
     if (!sDate.isValid()) sDate = QDate(QDate::currentDate().month() < 4 ? QDate::currentDate().year() - 1 : QDate::currentDate().year(), 4, 1);
     if (!eDate.isValid()) eDate = QDate::currentDate();
+    m_fromDateEdit->blockSignals(true);
+    m_toDateEdit->blockSignals(true);
     m_fromDateEdit->setDate(sDate);
     m_toDateEdit->setDate(eDate);
-    loadData(sDate, eDate);
+    m_fromDateEdit->blockSignals(false);
+    m_toDateEdit->blockSignals(false);
 }
 
 void TransportDispatchWidget::setupUi() {

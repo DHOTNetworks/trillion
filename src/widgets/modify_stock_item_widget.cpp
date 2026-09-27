@@ -74,10 +74,6 @@ ModifyStockItemWidget::ModifyStockItemWidget(StockMasterController* controller, 
     , m_stockModel(stockModel)
 {
     setupUi();
-    refreshStockGroups();
-    refreshUnits();
-    refreshLedgers();
-    resetForm();
 }
 
 void ModifyStockItemWidget::setupSearchableCombo(QComboBox* combo, const QStringList& items) {
@@ -476,6 +472,10 @@ void ModifyStockItemWidget::onCreateStockGroup() {
 }
 
 void ModifyStockItemWidget::resetForm() {
+    refreshItemsList();
+    refreshStockGroups();
+    refreshUnits();
+    refreshLedgers();
     m_currentItemId = -1;
     m_nameEdit->clear();
     m_codeEdit->clear();

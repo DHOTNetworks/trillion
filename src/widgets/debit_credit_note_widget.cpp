@@ -30,21 +30,26 @@ DebitCreditNoteWidget::DebitCreditNoteWidget(DebitCreditNoteController* controll
 
 void DebitCreditNoteWidget::setupUi() {
     setAttribute(Qt::WA_StyledBackground, true);
-    setStyleSheet("DebitCreditNoteWidget { background-color: #F8FAFC; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif; }");
+    setStyleSheet(
+        "DebitCreditNoteWidget { background-color: #FFF3EA; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif; }"
+        "QLabel { border: none; background: transparent; color: #1E293B; font-size: 11px; font-weight: 700; }"
+        "QLineEdit { background-color: #FFFFFF; color: #0F172A; border: 1px solid #CBD5E1; border-radius: 5px; padding: 2px 6px; font-size: 11.5px; font-weight: 700; }"
+        "QLineEdit:focus { border: 1.5px solid #0284C7; background-color: #F0F9FF; color: #0F172A; }"
+    );
 
     auto* rootLayout = new QVBoxLayout(this);
-    rootLayout->setContentsMargins(16, 14, 16, 14);
-    rootLayout->setSpacing(10);
+    rootLayout->setContentsMargins(10, 6, 10, 6);
+    rootLayout->setSpacing(6);
 
     // ========================================================================
     // TIER 1: STICKY HEADER BAR CARD
     // ========================================================================
     auto* headerCard = new QFrame(this);
-    headerCard->setFixedHeight(54);
-    headerCard->setStyleSheet("QFrame { background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; }");
+    headerCard->setFixedHeight(50);
+    headerCard->setStyleSheet("QFrame { background-color: #FFF8F3; border: 1px solid #E2D5C8; border-radius: 6px; }");
     auto* headerLayout = new QHBoxLayout(headerCard);
-    headerLayout->setContentsMargins(14, 6, 14, 6);
-    headerLayout->setSpacing(12);
+    headerLayout->setContentsMargins(12, 4, 12, 4);
+    headerLayout->setSpacing(10);
 
     auto* titleCol = new QVBoxLayout();
     titleCol->setSpacing(1);

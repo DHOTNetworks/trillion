@@ -34,18 +34,6 @@ DashboardWidget::DashboardWidget(DashboardController* dashCtrl,
     , m_migrator(migrator)
 {
     setupUi();
-    if (m_dashCtrl) {
-        connect(m_dashCtrl, &DashboardController::statsChanged, this, [this]() {
-            if (m_paddyStockLabel) m_paddyStockLabel->setText(m_dashCtrl->paddyStock());
-            if (m_riceStockLabel) m_riceStockLabel->setText(m_dashCtrl->riceStock());
-            if (m_totalSalesLabel) m_totalSalesLabel->setText(m_dashCtrl->totalSales());
-        });
-    }
-    if (m_firmMgr) {
-        connect(m_firmMgr, &FirmManager::firmSwitched, this, [this](const QString&, const QString&) {
-            refreshStats();
-        });
-    }
 
     connect(&MahadevERP::MenuTreeManager::instance(), &MahadevERP::MenuTreeManager::openViewRequested, this, [this](int viewIndex) {
         Q_UNUSED(viewIndex);
@@ -59,14 +47,20 @@ DashboardWidget::DashboardWidget(DashboardController* dashCtrl,
         else m_selectedMenuIndex = 0;
         updateSelection(m_selectedMenuIndex);
     });
-
-    refreshStats();
 }
 
 void DashboardWidget::setControllers(DashboardController* dashCtrl, FirmManager* firmMgr, BahiKhataMigrator* migrator) {
+    if (m_dashCtrl) {
+        disconnect(m_dashCtrl, nullptr, this, nullptr);
+    }
+    if (m_firmMgr) {
+        disconnect(m_firmMgr, nullptr, this, nullptr);
+    }
+
     m_dashCtrl = dashCtrl;
     m_firmMgr = firmMgr;
     if (migrator) m_migrator = migrator;
+
     if (m_dashCtrl) {
         connect(m_dashCtrl, &DashboardController::statsChanged, this, [this]() {
             if (m_paddyStockLabel) m_paddyStockLabel->setText(m_dashCtrl->paddyStock());

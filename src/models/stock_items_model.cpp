@@ -11,8 +11,6 @@ StockItemsModel::StockItemsModel(QObject* parent)
         parent
     )
 {
-    initActivePeriod();
-    reload_data();
 }
 
 void StockItemsModel::initActivePeriod() {
@@ -25,6 +23,7 @@ void StockItemsModel::initActivePeriod() {
 }
 
 void StockItemsModel::reload_data() {
+    initActivePeriod();
     beginResetModel();
     m_data = DatabaseManager::instance().executeQuery("SELECT * FROM stock_items ORDER BY name COLLATE NOCASE ASC;");
     endResetModel();
@@ -33,6 +32,9 @@ void StockItemsModel::reload_data() {
 }
 
 QStringList StockItemsModel::get_items_list(const QString& filterType) const {
+    if (m_data.isEmpty()) {
+        const_cast<StockItemsModel*>(this)->reload_data();
+    }
     QString f = filterType.trimmed().toLower();
     QStringList primaryList;
     QStringList secondaryList;

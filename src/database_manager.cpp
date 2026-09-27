@@ -1331,14 +1331,24 @@ void DatabaseManager::ensureTablesExist() {
         ");"
     );
 
-    auto addColumnIfNotExists = [this](const QString& table, const QString& column, const QString& type) {
-        QVariantList cols = executeQuery(QString("PRAGMA table_info(%1);").arg(table));
-        for (const auto& c : cols) {
-            if (c.toMap().value("name").toString().compare(column, Qt::CaseInsensitive) == 0) {
-                return;
+    QMap<QString, QSet<QString>> tableColsCache;
+    auto getCols = [this, &tableColsCache](const QString& table) -> const QSet<QString>& {
+        if (!tableColsCache.contains(table)) {
+            QSet<QString> cols;
+            QVariantList list = executeQuery(QString("PRAGMA table_info(%1);").arg(table));
+            for (const auto& c : list) {
+                cols.insert(c.toMap().value("name").toString().toLower());
             }
+            tableColsCache[table] = cols;
         }
-        executeNonQuery(QString("ALTER TABLE %1 ADD COLUMN %2 %3;").arg(table, column, type));
+        return tableColsCache[table];
+    };
+
+    auto addColumnIfNotExists = [this, &getCols, &tableColsCache](const QString& table, const QString& column, const QString& type) {
+        if (!getCols(table).contains(column.toLower())) {
+            executeNonQuery(QString("ALTER TABLE %1 ADD COLUMN %2 %3;").arg(table, column, type));
+            tableColsCache[table].insert(column.toLower());
+        }
     };
 
     // Ensure columns exist on existing databases
@@ -1351,12 +1361,16 @@ void DatabaseManager::ensureTablesExist() {
     addColumnIfNotExists("sales_invoices", "tcs_rate", "REAL DEFAULT 0.0");
     addColumnIfNotExists("sales_invoices", "place_of_supply", "TEXT");
     addColumnIfNotExists("sales_invoice_items", "grade", "TEXT DEFAULT ''");
-    executeNonQuery(
-        "UPDATE sales_invoice_items "
-        "SET grade = (SELECT grade FROM sales_invoices WHERE sales_invoices.id = sales_invoice_items.invoice_id) "
-        "WHERE (grade IS NULL OR grade = '') "
-        "  AND EXISTS (SELECT 1 FROM sales_invoices WHERE sales_invoices.id = sales_invoice_items.invoice_id AND sales_invoices.grade != '');"
-    );
+    
+    QVariant unlinkedSalesGrades = executeScalar("SELECT 1 FROM sales_invoice_items WHERE (grade IS NULL OR grade = '') AND invoice_id IN (SELECT id FROM sales_invoices WHERE grade != '') LIMIT 1;");
+    if (unlinkedSalesGrades.isValid() && !unlinkedSalesGrades.isNull()) {
+        executeNonQuery(
+            "UPDATE sales_invoice_items "
+            "SET grade = (SELECT grade FROM sales_invoices WHERE sales_invoices.id = sales_invoice_items.invoice_id) "
+            "WHERE (grade IS NULL OR grade = '') "
+            "  AND EXISTS (SELECT 1 FROM sales_invoices WHERE sales_invoices.id = sales_invoice_items.invoice_id AND sales_invoices.grade != '');"
+        );
+    }
 
     addColumnIfNotExists("purchase_invoices", "market_type", "TEXT DEFAULT 'Market Type (With Stock)'");
     addColumnIfNotExists("purchase_invoices", "due_days", "INTEGER DEFAULT 0");
@@ -1367,12 +1381,16 @@ void DatabaseManager::ensureTablesExist() {
     addColumnIfNotExists("purchase_invoices", "tcs_rate", "REAL DEFAULT 0.0");
     addColumnIfNotExists("purchase_invoices", "place_of_supply", "TEXT");
     addColumnIfNotExists("purchase_invoice_items", "grade", "TEXT DEFAULT ''");
-    executeNonQuery(
-        "UPDATE purchase_invoice_items "
-        "SET grade = (SELECT grade FROM purchase_invoices WHERE purchase_invoices.id = purchase_invoice_items.invoice_id) "
-        "WHERE (grade IS NULL OR grade = '') "
-        "  AND EXISTS (SELECT 1 FROM purchase_invoices WHERE purchase_invoices.id = purchase_invoice_items.invoice_id AND purchase_invoices.grade != '');"
-    );
+
+    QVariant unlinkedPurchGrades = executeScalar("SELECT 1 FROM purchase_invoice_items WHERE (grade IS NULL OR grade = '') AND invoice_id IN (SELECT id FROM purchase_invoices WHERE grade != '') LIMIT 1;");
+    if (unlinkedPurchGrades.isValid() && !unlinkedPurchGrades.isNull()) {
+        executeNonQuery(
+            "UPDATE purchase_invoice_items "
+            "SET grade = (SELECT grade FROM purchase_invoices WHERE purchase_invoices.id = purchase_invoice_items.invoice_id) "
+            "WHERE (grade IS NULL OR grade = '') "
+            "  AND EXISTS (SELECT 1 FROM purchase_invoices WHERE purchase_invoices.id = purchase_invoice_items.invoice_id AND purchase_invoices.grade != '');"
+        );
+    }
 
     addColumnIfNotExists("vouchers", "due_days", "INTEGER DEFAULT 0");
     addColumnIfNotExists("vouchers", "market_type", "TEXT");
@@ -1412,13 +1430,21 @@ void DatabaseManager::ensureTablesExist() {
     executeNonQuery("CREATE INDEX IF NOT EXISTS idx_account_groups_hierarchy ON account_groups(code1st, code2nd, code3rd, code4th);");
     executeNonQuery("CREATE INDEX IF NOT EXISTS idx_parties_group_code ON parties(group_code);");
     executeNonQuery("CREATE INDEX IF NOT EXISTS idx_parties_group_id ON parties(group_id);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_stock_trans_date_item ON stock_transactions(voucher_date, item_name, trans_type);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_stock_trans_item_code ON stock_transactions(item_code, voucher_date);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_sales_invoices_date ON sales_invoices(invoice_date);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_purchase_invoices_date ON purchase_invoices(invoice_date);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_custom_closing_stocks_date ON custom_closing_stocks(closing_date, item_code);");
 
     // 1. Backfill legacy group codes from description if code1st = 0
-    executeNonQuery(
-        "UPDATE account_groups "
-        "SET code1st = CAST(SUBSTR(description, 20) AS INTEGER) "
-        "WHERE (code1st IS NULL OR code1st = 0) AND description LIKE 'Legacy Group Code #%';"
-    );
+    QVariant needGroupBackfill = executeScalar("SELECT 1 FROM account_groups WHERE (code1st IS NULL OR code1st = 0) AND description LIKE 'Legacy Group Code #%' LIMIT 1;");
+    if (needGroupBackfill.isValid() && !needGroupBackfill.isNull()) {
+        executeNonQuery(
+            "UPDATE account_groups "
+            "SET code1st = CAST(SUBSTR(description, 20) AS INTEGER) "
+            "WHERE (code1st IS NULL OR code1st = 0) AND description LIKE 'Legacy Group Code #%';"
+        );
+    }
 
     // 2. Synchronize standard group codes and parent hierarchy
     struct MasterGroupInfo {

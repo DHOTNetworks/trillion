@@ -12,7 +12,6 @@ PurchaseModel::PurchaseModel(QObject* parent)
         parent
     )
 {
-    reload_data();
 }
 
 void PurchaseModel::reload_data() {

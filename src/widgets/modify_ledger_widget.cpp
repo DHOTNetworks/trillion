@@ -18,7 +18,6 @@ ModifyLedgerWidget::ModifyLedgerWidget(QWidget* parent)
     : QWidget(parent)
 {
     setupUi();
-    populateDropdowns();
 
     // Global focus shortcuts for search
     auto* altS = new QShortcut(QKeySequence("Alt+S"), this);

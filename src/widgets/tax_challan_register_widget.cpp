@@ -15,7 +15,6 @@ TaxChallanRegisterWidget::TaxChallanRegisterWidget(TaxChallanController *control
     , m_taxType(initialType)
 {
     setupUi();
-    reloadData();
 }
 
 void TaxChallanRegisterWidget::setTaxType(const QString &type)

@@ -8,7 +8,6 @@ AccountGroupsModel::AccountGroupsModel(QObject* parent)
         parent
     )
 {
-    reload_data();
 }
 
 void AccountGroupsModel::reload_data() {
@@ -20,6 +19,9 @@ void AccountGroupsModel::reload_data() {
 }
 
 QVariantList AccountGroupsModel::get_groups_list() const {
+    if (m_data.isEmpty()) {
+        const_cast<AccountGroupsModel*>(this)->reload_data();
+    }
     return m_data;
 }
 

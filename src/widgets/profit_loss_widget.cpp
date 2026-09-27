@@ -22,8 +22,6 @@ ProfitLossWidget::ProfitLossWidget(ProfitLossController* controller,
 
     connect(m_controller, &ProfitLossController::dataChanged, this, &ProfitLossWidget::populateTrees);
     connect(m_controller, &ProfitLossController::totalsChanged, this, &ProfitLossWidget::populateTrees);
-
-    refreshData();
 }
 
 void ProfitLossWidget::setupUi() {

@@ -5,6 +5,7 @@
 #include <QFile>
 #include <QStandardPaths>
 #include <QDateTime>
+#include <QElapsedTimer>
 #include <QDebug>
 #include <iostream>
 
@@ -49,6 +50,8 @@
 #include "widgets/main_window.h"
 
 int main(int argc, char* argv[]) {
+    QElapsedTimer startupTimer;
+    startupTimer.start();
     std::cout << "[INIT] Starting Mahadev Rice Mill ERP native executable..." << std::endl << std::flush;
 
     QApplication app(argc, argv);
@@ -62,9 +65,11 @@ int main(int argc, char* argv[]) {
     defaultAppFont.setFamilies({"Segoe UI", "Calibri", "Arial"});
     defaultAppFont.setPointSize(10);
 #elif defined(Q_OS_MACOS)
+    QFont::insertSubstitution("Segoe UI", "Helvetica Neue");
     defaultAppFont.setFamilies({"Helvetica Neue", "Arial"});
     defaultAppFont.setPointSize(12);
 #else
+    QFont::insertSubstitution("Segoe UI", "Noto Sans");
     defaultAppFont.setFamilies({"Noto Sans", "Liberation Sans", "DejaVu Sans", "Arial"});
     defaultAppFont.setPointSize(10);
 #endif
@@ -76,7 +81,13 @@ int main(int argc, char* argv[]) {
         "QDialog, QMessageBox, QInputDialog {"
         "  background-color: #FFFFFF;"
         "  color: #0F172A;"
-        "  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', 'Noto Sans', 'Liberation Sans', Arial, sans-serif;"
+#if defined(Q_OS_MACOS)
+        "  font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;"
+#elif defined(Q_OS_WIN)
+        "  font-family: 'Segoe UI', Calibri, Arial, sans-serif;"
+#else
+        "  font-family: 'Noto Sans', 'Liberation Sans', Arial, sans-serif;"
+#endif
         "}"
         "QDialog QLabel, QMessageBox QLabel, QInputDialog QLabel {"
         "  color: #0F172A;"
@@ -121,6 +132,8 @@ int main(int argc, char* argv[]) {
         "}"
     );
 
+    std::cout << "[PERF-TIMER] QApplication created: " << startupTimer.elapsed() << " ms" << std::endl;
+
     QString appDir = QCoreApplication::applicationDirPath();
     QString cwd = QDir::currentPath();
 
@@ -157,7 +170,11 @@ int main(int argc, char* argv[]) {
     }
 
     // Initialize Multi-Firm Manager
+    QElapsedTimer fmTimer;
+    fmTimer.start();
     FirmManager firmManager;
+    std::cout << "[PERF-TIMER] FirmManager initialized: " << fmTimer.elapsed() << " ms (Total: " << startupTimer.elapsed() << " ms)" << std::endl;
+
     QString resolvedDbPath = "";
     QString activeFirmId = firmManager.currentFirmId();
 
@@ -204,7 +221,10 @@ int main(int argc, char* argv[]) {
 
     if (!resolvedDbPath.isEmpty()) {
         std::cout << "[INFO] Active SQLite database at: " << resolvedDbPath.toStdString() << std::endl << std::flush;
+        QElapsedTimer dbTimer;
+        dbTimer.start();
         bool dbOk = DatabaseManager::instance().initDatabase(resolvedDbPath);
+        std::cout << "[PERF-TIMER] DatabaseManager initDatabase: " << dbTimer.elapsed() << " ms (Total: " << startupTimer.elapsed() << " ms)" << std::endl;
         if (!dbOk) {
             std::cerr << "[ERROR] Failed to initialize SQLite database at: " << resolvedDbPath.toStdString() << std::endl << std::flush;
         }
@@ -213,6 +233,8 @@ int main(int argc, char* argv[]) {
     }
 
     // Instantiate C++ Models matching Python backend
+    QElapsedTimer modelsTimer;
+    modelsTimer.start();
     DashboardController dashboardCtrl;
     PaddyArrivalsModel paddyModel;
     MillingModel millingModel;
@@ -248,6 +270,7 @@ int main(int argc, char* argv[]) {
     BankStatementController bankStatementCtrl;
     TransportDispatchController transportDispatchCtrl;
     DebitCreditNoteController debitCreditNoteCtrl;
+    std::cout << "[PERF-TIMER] Models instantiated: " << modelsTimer.elapsed() << " ms (Total: " << startupTimer.elapsed() << " ms)" << std::endl;
 
     for (int i = 1; i < argc; ++i) {
         if (QString(argv[i]) == "--render-preview") {
@@ -264,22 +287,6 @@ int main(int argc, char* argv[]) {
     QObject::connect(&firmManager, &FirmManager::firmSwitched, [&](const QString& firmId, const QString& firmName) {
         std::cout << "[INFO] Firm switched to: " << firmName.toStdString() << " (" << firmId.toStdString() << ")" << std::endl;
         dashboardCtrl.refresh_stats();
-        paddyModel.reload_data();
-        millingModel.reload_data();
-        salesModel.reload_data();
-        purchaseModel.reload_data();
-        vouchersModel.reload_data();
-        partiesModel.reload_data();
-        groupsModel.reload_data();
-        stockItemsModel.reload_data();
-        financialYearsModel.reload_data();
-        ledgerStatementCtrl.refresh();
-        purchaseRegisterCtrl.reload();
-        salesRegisterCtrl.reload();
-        stockRegisterCtrl.reload();
-        millingStatementCtrl.reload();
-        transportDispatchCtrl.reload();
-        debitCreditNoteCtrl.reload();
     });
 
     for (int i = 1; i < argc; ++i) {
@@ -353,10 +360,14 @@ int main(int argc, char* argv[]) {
     deps.debitCreditNoteCtrl = &debitCreditNoteCtrl;
 
     std::cout << "[SUCCESS] Launching Pure Native QtWidgets MainWindow..." << std::endl << std::flush;
+    QElapsedTimer mwTimer;
+    mwTimer.start();
     MainWindow mainWindow(deps);
+    std::cout << "[PERF-TIMER] MainWindow constructed: " << mwTimer.elapsed() << " ms (Total: " << startupTimer.elapsed() << " ms)" << std::endl;
     mainWindow.show();
     mainWindow.raise();
     mainWindow.activateWindow();
+    std::cout << "[PERF] Application startup completed in: " << startupTimer.elapsed() << " ms" << std::endl << std::flush;
 
     return app.exec();
 }

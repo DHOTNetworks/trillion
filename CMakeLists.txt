@@ -629,4 +629,53 @@ if(APPLE)
 endif()
 add_test(NAME EnginesTestSuite COMMAND EnginesTestSuite)
 
+# Financial Engine Verification CLI
+set(CLI_SOURCES
+    src/tools/financial_engine_cli.cpp
+    src/database_manager.h
+    src/database_manager.cpp
+    src/engine/bahi_khata_migrator.h
+    src/engine/bahi_khata_migrator.cpp
+    src/engine/balance_sheet_calculator.h
+    src/engine/balance_sheet_calculator.cpp
+    src/engine/profit_loss_calculator.h
+    src/engine/profit_loss_calculator.cpp
+    src/engine/stock_valuation_engine.h
+    src/engine/stock_valuation_engine.cpp
+    src/engine/fiscal_year_helper.h
+    src/engine/fiscal_year_helper.cpp
+    src/engine/accounting_engine.h
+    src/services/accounting_date_service.h
+    src/services/accounting_date_service.cpp
+    src/models/account_classifier.h
+    src/models/account_classifier.cpp
+)
+
+add_executable(FinancialEngineCLI ${CLI_SOURCES})
+target_include_directories(FinancialEngineCLI PRIVATE
+    src
+    src/engine
+    src/models
+    src/services
+    third_party/sqlite
+    third_party/libmdb
+    third_party/miniz
+    third_party/libxls/include
+)
+target_compile_definitions(FinancialEngineCLI PRIVATE HAS_LIBMDB=1)
+target_link_libraries(FinancialEngineCLI PRIVATE
+    sqlite3_embedded
+    libmdb_embedded
+    miniz_embedded
+    libxls_embedded
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Sql
+    Qt6::Widgets
+)
+if(APPLE)
+    target_link_libraries(FinancialEngineCLI PRIVATE iconv)
+endif()
+
+
 

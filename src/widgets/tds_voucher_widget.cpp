@@ -27,9 +27,17 @@ TdsVoucherWidget::TdsVoucherWidget(TdsVoucherController* controller,
 }
 
 void TdsVoucherWidget::setupUi() {
+    setAttribute(Qt::WA_StyledBackground, true);
+    setStyleSheet(
+        "TdsVoucherWidget { background-color: #FFF3EA; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif; }"
+        "QLabel { border: none; background: transparent; color: #1E293B; font-size: 11px; font-weight: 700; }"
+        "QLineEdit { background-color: #FFFFFF; color: #0F172A; border: 1px solid #CBD5E1; border-radius: 5px; padding: 2px 6px; font-size: 11.5px; font-weight: 700; }"
+        "QLineEdit:focus { border: 1.5px solid #2563EB; background-color: #EFF6FF; color: #0F172A; }"
+    );
+
     auto* rootLayout = new QVBoxLayout(this);
-    rootLayout->setContentsMargins(14, 12, 14, 12);
-    rootLayout->setSpacing(10);
+    rootLayout->setContentsMargins(10, 6, 10, 6);
+    rootLayout->setSpacing(6);
 
     // ========================================================================
     // TIER 1: STICKY HEADER CARD (COMPACT HEIGHT)
@@ -37,10 +45,10 @@ void TdsVoucherWidget::setupUi() {
     auto* headerCard = new QFrame(this);
     headerCard->setFixedHeight(48);
     headerCard->setStyleSheet(
-        "QFrame { background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; }"
+        "QFrame { background-color: #FFF8F3; border: 1px solid #E2D5C8; border-radius: 6px; }"
     );
     auto* headerLayout = new QHBoxLayout(headerCard);
-    headerLayout->setContentsMargins(14, 4, 14, 4);
+    headerLayout->setContentsMargins(12, 4, 12, 4);
     headerLayout->setSpacing(10);
 
     auto* titleLabel = new QLabel("TDS Deduction & Statutory Tax Voucher (Section 194)", headerCard);

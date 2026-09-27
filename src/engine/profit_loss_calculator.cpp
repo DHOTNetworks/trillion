@@ -72,55 +72,166 @@ ProfitLossData ProfitLossCalculator::calculate(const QString& requestedFromDate,
     data.openingStockValue = calculateOpeningStockValuation(data.fromDate);
     data.closingStockValue = calculateClosingStockValuation(data.toDate);
 
-    // 4. Sales Revenue up to toDate
-    QVariant salesRow = DatabaseManager::instance().executeScalar(
-        "SELECT SUM(COALESCE(taxable_amount, total_amount)) FROM sales_invoices "
-        "WHERE invoice_date >= ? AND invoice_date <= ?;",
+    // 4. HIGH-PERFORMANCE BATCH ROLLUP OF NOMINAL TRANSACTIONS
+    struct TransSum {
+        double dr = 0.0;
+        double cr = 0.0;
+    };
+    QHash<int, TransSum> sumByPartyId;
+    QHash<int, TransSum> sumByLegacyId;
+    QHash<QString, TransSum> sumByName;
+
+    QVariantList allTrans = DatabaseManager::instance().executeQuery(
+        "SELECT party_id, party_name, account_code, dr_cr, SUM(amount) as total_amt "
+        "FROM transactions WHERE voucher_date >= ? AND voucher_date <= ? "
+        "GROUP BY party_id, party_name, account_code, dr_cr;",
         {data.fromDate, data.toDate}
     );
-    data.totalSalesRevenue = salesRow.isValid() ? salesRow.toDouble() : 0.0;
-    if (data.totalSalesRevenue <= 0.01) {
-        QVariant transSales = DatabaseManager::instance().executeScalar(
-            "SELECT SUM(t.amount) FROM transactions t "
-            "JOIN parties p ON t.party_id = p.id OR t.party_name = p.name "
-            "WHERE (p.group_name LIKE '%Sale%' OR p.group_name LIKE '%Trading Items%') "
-            "AND t.dr_cr = 'Cr' AND t.voucher_date >= ? AND t.voucher_date <= ?;",
-            {data.fromDate, data.toDate}
-        );
-        if (transSales.isValid() && transSales.toDouble() > 0.01) {
-            data.totalSalesRevenue = transSales.toDouble();
+
+    for (const auto& tVar : allTrans) {
+        QVariantMap t = tVar.toMap();
+        int pId = t.value("party_id").toInt();
+        int legId = t.value("account_code").toInt();
+        QString pName = t.value("party_name").toString().trimmed().toLower();
+        QString side = t.value("dr_cr").toString();
+        double amt = t.value("total_amt").toDouble();
+        bool isDr = (side.compare("Dr", Qt::CaseInsensitive) == 0);
+
+        if (pId > 0) {
+            if (isDr) sumByPartyId[pId].dr += amt;
+            else sumByPartyId[pId].cr += amt;
+        }
+        if (legId > 0) {
+            if (isDr) sumByLegacyId[legId].dr += amt;
+            else sumByLegacyId[legId].cr += amt;
+        }
+        if (!pName.isEmpty()) {
+            if (isDr) sumByName[pName].dr += amt;
+            else sumByName[pName].cr += amt;
         }
     }
 
-    // 5. Procurement Cost up to toDate
-    QVariant purcRow = DatabaseManager::instance().executeScalar(
-        "SELECT SUM(COALESCE(total_amount, taxable_amount)) FROM purchase_invoices "
-        "WHERE invoice_date >= ? AND invoice_date <= ?;",
-        {data.fromDate, data.toDate}
+    // Fetch account groups and their properties
+    QVariantList grpList = DatabaseManager::instance().executeQuery(
+        "SELECT name, nature, extract_in_balance_sheet, "
+        "       COALESCE(code1st, 0) AS c1, COALESCE(code2nd, 0) AS c2, COALESCE(code3rd, 0) AS c3, COALESCE(code4th, 0) AS c4 "
+        "FROM account_groups;"
     );
-    data.totalProcurement = purcRow.isValid() ? purcRow.toDouble() : 0.0;
-    if (data.totalProcurement <= 0.01) {
-        QVariant transPurc = DatabaseManager::instance().executeScalar(
-            "SELECT SUM(t.amount) FROM transactions t "
-            "JOIN parties p ON t.party_id = p.id OR t.party_name = p.name "
-            "WHERE (p.group_name LIKE '%Purchase%' OR p.group_name LIKE '%Trading Items%') "
-            "AND t.dr_cr = 'Dr' AND t.voucher_date >= ? AND t.voucher_date <= ?;",
-            {data.fromDate, data.toDate}
-        );
-        if (transPurc.isValid() && transPurc.toDouble() > 0.01) {
-            data.totalProcurement = transPurc.toDouble();
+    struct GroupCodeInfo { int c1 = 0, c2 = 0, c3 = 0, c4 = 0; QString nature; int extractBs = 1; };
+    QHash<QString, GroupCodeInfo> groupMeta;
+
+    for (const auto& gVar : grpList) {
+        QVariantMap g = gVar.toMap();
+        QString gName = g.value("name").toString().trimmed();
+        int c1 = g.value("c1").toInt();
+        int c2 = g.value("c2").toInt();
+        int c3 = g.value("c3").toInt();
+        int c4 = g.value("c4").toInt();
+        QString nat = g.value("nature").toString().trimmed();
+        if (nat.isEmpty() && (c1 > 0 || c2 > 0 || c3 > 0 || c4 > 0)) {
+            nat = AccountClassifier::getNatureForGroup(c1, c2, c3, c4);
+        }
+        int ext = g.value("extract_in_balance_sheet").toInt();
+        groupMeta[gName] = {c1, c2, c3, c4, nat, ext};
+    }
+
+    // Query nominal ledger totals and build group items in one single pass
+    double calcSales = 0.0;
+    double calcPurc = 0.0;
+    double calcDirExp = 0.0;
+    double calcIndInc = 0.0;
+    double calcIndExp = 0.0;
+
+    QMap<QString, QVector<ProfitLossItem>> directExpByGroup;
+    QMap<QString, QVector<ProfitLossItem>> indirectExpByGroup;
+    QMap<QString, QVector<ProfitLossItem>> indirectIncByGroup;
+    QMap<QString, QVector<ProfitLossItem>> salesByGroup;
+    QMap<QString, QVector<ProfitLossItem>> purcByGroup;
+
+    QVariantList parties = DatabaseManager::instance().executeQuery(
+        "SELECT id, legacy_id, name, group_name, calc_direct_expense FROM parties ORDER BY group_name, name;"
+    );
+
+    for (const auto& pVar : parties) {
+        QVariantMap p = pVar.toMap();
+        int pId = p.value("id").toInt();
+        int legId = p.value("legacy_id").toInt();
+        QString name = p.value("name").toString().trimmed();
+        QString grp = p.value("group_name").toString().trimmed();
+        int calcDirect = p.value("calc_direct_expense").toInt();
+
+        double dr = 0.0, cr = 0.0;
+        if (pId > 0 && sumByPartyId.contains(pId)) {
+            dr = sumByPartyId[pId].dr;
+            cr = sumByPartyId[pId].cr;
+        } else if (legId > 0 && sumByLegacyId.contains(legId)) {
+            dr = sumByLegacyId[legId].dr;
+            cr = sumByLegacyId[legId].cr;
+        } else if (sumByName.contains(name.toLower())) {
+            dr = sumByName[name.toLower()].dr;
+            cr = sumByName[name.toLower()].cr;
+        }
+
+        if (dr <= 0.001 && cr <= 0.001) continue;
+
+        GroupCodeInfo info = groupMeta.value(grp);
+        bool isTrading = AccountClassifier::isTrading(info.c1, info.c2, info.c3, info.c4);
+        bool isPl = AccountClassifier::isProfitAndLoss(info.c1, info.c2, info.c3, info.c4);
+
+        if (!isTrading && !isPl) continue;
+
+        ProfitLossItem itm;
+        itm.partyId = pId;
+        itm.name = name;
+        itm.groupName = grp;
+        itm.level = 2;
+
+        if (isTrading) {
+            if (cr > 0.0) {
+                calcSales += cr;
+                itm.amount = cr;
+                itm.amountFmt = AccountingEngine::formatIndianCurrency(cr, true);
+                itm.side = "Cr";
+                salesByGroup[grp].append(itm);
+            }
+            if (dr > 0.0) {
+                if (AccountClassifier::isDirectExpense(info.c1, info.c2, info.c3, info.c4, calcDirect)) {
+                    calcDirExp += dr;
+                    itm.amount = dr;
+                    itm.amountFmt = AccountingEngine::formatIndianCurrency(dr, true);
+                    itm.side = "Dr";
+                    directExpByGroup[grp].append(itm);
+                } else {
+                    calcPurc += dr;
+                    itm.amount = dr;
+                    itm.amountFmt = AccountingEngine::formatIndianCurrency(dr, true);
+                    itm.side = "Dr";
+                    purcByGroup[grp].append(itm);
+                }
+            }
+        } else if (isPl) {
+            if (cr > 0.0) {
+                calcIndInc += cr;
+                itm.amount = cr;
+                itm.amountFmt = AccountingEngine::formatIndianCurrency(cr, true);
+                itm.side = "Cr";
+                indirectIncByGroup[grp].append(itm);
+            }
+            if (dr > 0.0) {
+                calcIndExp += dr;
+                itm.amount = dr;
+                itm.amountFmt = AccountingEngine::formatIndianCurrency(dr, true);
+                itm.side = "Dr";
+                indirectExpByGroup[grp].append(itm);
+            }
         }
     }
 
-    // 6. Direct Expenses up to toDate
-    QVariant dirExpRow = DatabaseManager::instance().executeScalar(
-        "SELECT SUM(t.amount) FROM transactions t "
-        "JOIN parties p ON t.party_id = p.id OR t.party_name = p.name "
-        "WHERE (p.calc_direct_expense = 1 OR p.group_name LIKE '%Direct Expense%' OR p.group_name LIKE '%Trading Exp%' OR p.group_name LIKE '%Manufacturing%') "
-        "AND t.dr_cr = 'Dr' AND t.voucher_date >= ? AND t.voucher_date <= ?;",
-        {data.fromDate, data.toDate}
-    );
-    data.totalDirectExpenses = dirExpRow.isValid() ? dirExpRow.toDouble() : 0.0;
+    data.totalSalesRevenue = calcSales;
+    data.totalProcurement = calcPurc;
+    data.totalDirectExpenses = calcDirExp;
+    data.indirectIncomes = calcIndInc;
+    data.indirectExpenses = calcIndExp;
 
     // 7. Trading Account Gross Profit / Loss
     double totalTradingCrRaw = data.totalSalesRevenue + data.closingStockValue;
@@ -135,26 +246,6 @@ ProfitLossData ProfitLossCalculator::calculate(const QString& requestedFromDate,
         data.grossLoss = std::abs(grossDiff);
     }
 
-    // 8. Indirect Incomes & Indirect Expenses
-    QVariant indIncRow = DatabaseManager::instance().executeScalar(
-        "SELECT SUM(t.amount) FROM transactions t "
-        "JOIN parties p ON t.party_id = p.id OR t.party_name = p.name "
-        "WHERE (p.group_name LIKE '%Income%' OR p.group_name LIKE '%Indirect Income%') "
-        "AND t.dr_cr = 'Cr' AND t.voucher_date >= ? AND t.voucher_date <= ?;",
-        {data.fromDate, data.toDate}
-    );
-    data.indirectIncomes = indIncRow.isValid() ? indIncRow.toDouble() : 0.0;
-
-    QVariant indExpRow = DatabaseManager::instance().executeScalar(
-        "SELECT SUM(t.amount) FROM transactions t "
-        "JOIN parties p ON t.party_id = p.id OR t.party_name = p.name "
-        "WHERE (p.calc_direct_expense = 0 OR p.calc_direct_expense IS NULL) "
-        "AND (p.group_name LIKE '%Expenditure%' OR p.group_name LIKE '%Indirect Expense%') "
-        "AND t.dr_cr = 'Dr' AND t.voucher_date >= ? AND t.voucher_date <= ?;",
-        {data.fromDate, data.toDate}
-    );
-    data.indirectExpenses = indExpRow.isValid() ? indExpRow.toDouble() : 0.0;
-
     // 9. Profit & Loss Account Net Profit / Loss
     double totalPlCrRaw = data.grossProfit + data.indirectIncomes;
     double totalPlDrRaw = data.grossLoss + data.indirectExpenses;
@@ -166,127 +257,6 @@ ProfitLossData ProfitLossCalculator::calculate(const QString& requestedFromDate,
     } else {
         data.netProfit = 0.0;
         data.netLoss = std::abs(netDiff);
-    }
-
-    // 10. Load detailed accounts rollup for Direct/Indirect groups and Sales/Purchases
-    struct TransSum {
-        double dr = 0.0;
-        double cr = 0.0;
-    };
-    QHash<int, TransSum> sumByPartyId;
-    QHash<QString, TransSum> sumByName;
-
-    QVariantList allTrans = DatabaseManager::instance().executeQuery(
-        "SELECT party_id, party_name, account_code, dr_cr, SUM(amount) as total_amt "
-        "FROM transactions WHERE voucher_date >= ? AND voucher_date <= ? "
-        "GROUP BY party_id, party_name, account_code, dr_cr;",
-        {data.fromDate, data.toDate}
-    );
-
-    for (const auto& tVar : allTrans) {
-        QVariantMap t = tVar.toMap();
-        int pId = t.value("party_id").toInt();
-        QString pName = t.value("party_name").toString().trimmed();
-        QString side = t.value("dr_cr").toString();
-        double amt = t.value("total_amt").toDouble();
-
-        if (pId > 0) {
-            if (side == "Dr") sumByPartyId[pId].dr += amt;
-            else sumByPartyId[pId].cr += amt;
-        }
-        if (!pName.isEmpty()) {
-            if (side == "Dr") sumByName[pName.toLower()].dr += amt;
-            else sumByName[pName.toLower()].cr += amt;
-        }
-    }
-
-    // Load Parties
-    QVariantList parties = DatabaseManager::instance().executeQuery(
-        "SELECT id, name, group_name, opening_balance, balance_type, calc_direct_expense "
-        "FROM parties ORDER BY group_name, name;"
-    );
-
-    QMap<QString, QVector<ProfitLossItem>> directExpByGroup;
-    QMap<QString, QVector<ProfitLossItem>> indirectExpByGroup;
-    QMap<QString, QVector<ProfitLossItem>> indirectIncByGroup;
-    QMap<QString, QVector<ProfitLossItem>> salesByGroup;
-    QMap<QString, QVector<ProfitLossItem>> purcByGroup;
-
-    for (const auto& pVar : parties) {
-        QVariantMap p = pVar.toMap();
-        int pId = p.value("id").toInt();
-        QString name = p.value("name").toString();
-        QString grp = p.value("group_name").toString();
-        if (grp.isEmpty()) grp = "General Accounts";
-
-        int calcDirect = p.value("calc_direct_expense").toInt();
-
-        double dr = 0.0, cr = 0.0;
-        if (sumByPartyId.contains(pId)) {
-            dr = sumByPartyId[pId].dr;
-            cr = sumByPartyId[pId].cr;
-        } else if (sumByName.contains(name.toLower())) {
-            dr = sumByName[name.toLower()].dr;
-            cr = sumByName[name.toLower()].cr;
-        }
-
-        double netBal = dr - cr; // Positive = Net Dr (Expense), Negative = Net Cr (Income)
-
-        ProfitLossItem itm;
-        itm.partyId = pId;
-        itm.name = name;
-        itm.groupName = grp;
-        itm.level = 2;
-
-        QString gLower = grp.toLower();
-
-        bool isDirectExp = (calcDirect == 1) || gLower.contains("direct expense") || gLower.contains("trading exp") || gLower.contains("manufacturing");
-        bool isIndirectExp = !isDirectExp && (gLower.contains("indirect expense") || gLower.contains("expenditure"));
-        bool isIndirectInc = gLower.contains("indirect income") || gLower.contains("income");
-        bool isSales = gLower.contains("sale");
-        bool isPurch = gLower.contains("purchase");
-
-        if (isDirectExp) {
-            double amt = (dr > 0.0) ? dr : (netBal > 0 ? netBal : 0.0);
-            if (amt > 0.0) {
-                itm.amount = amt;
-                itm.amountFmt = AccountingEngine::formatIndianCurrency(amt, true);
-                itm.side = "Dr";
-                directExpByGroup[grp].append(itm);
-            }
-        } else if (isIndirectExp) {
-            double amt = (dr > 0.0) ? dr : (netBal > 0 ? netBal : 0.0);
-            if (amt > 0.0) {
-                itm.amount = amt;
-                itm.amountFmt = AccountingEngine::formatIndianCurrency(amt, true);
-                itm.side = "Dr";
-                indirectExpByGroup[grp].append(itm);
-            }
-        } else if (isIndirectInc) {
-            double amt = (cr > 0.0) ? cr : (netBal < 0 ? -netBal : 0.0);
-            if (amt > 0.0) {
-                itm.amount = amt;
-                itm.amountFmt = AccountingEngine::formatIndianCurrency(amt, true);
-                itm.side = "Cr";
-                indirectIncByGroup[grp].append(itm);
-            }
-        } else if (isSales) {
-            double amt = (cr > 0.0) ? cr : (netBal < 0 ? -netBal : 0.0);
-            if (amt > 0.0) {
-                itm.amount = amt;
-                itm.amountFmt = AccountingEngine::formatIndianCurrency(amt, true);
-                itm.side = "Cr";
-                salesByGroup[grp].append(itm);
-            }
-        } else if (isPurch) {
-            double amt = (dr > 0.0) ? dr : (netBal > 0 ? netBal : 0.0);
-            if (amt > 0.0) {
-                itm.amount = amt;
-                itm.amountFmt = AccountingEngine::formatIndianCurrency(amt, true);
-                itm.side = "Dr";
-                purcByGroup[grp].append(itm);
-            }
-        }
     }
 
     // -------------------------------------------------------------
