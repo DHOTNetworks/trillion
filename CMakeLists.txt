@@ -378,6 +378,22 @@ set(SOURCES
     src/widgets/cash_voucher_widget.cpp
     src/widgets/cashbook_options_dialog.h
     src/widgets/cashbook_options_dialog.cpp
+    src/engine/tds_fvu_exporter.h
+    src/engine/tds_fvu_exporter.cpp
+    src/engine/gstr9_engine.h
+    src/engine/gstr9_engine.cpp
+    src/models/bardana_controller.h
+    src/models/bardana_controller.cpp
+    src/models/gate_register_controller.h
+    src/models/gate_register_controller.cpp
+    src/models/sauda_controller.h
+    src/models/sauda_controller.cpp
+    src/widgets/bardana_widget.h
+    src/widgets/bardana_widget.cpp
+    src/widgets/gate_register_widget.h
+    src/widgets/gate_register_widget.cpp
+    src/widgets/sauda_contract_widget.h
+    src/widgets/sauda_contract_widget.cpp
     src/widgets/main_window.h
     src/widgets/main_window.cpp
 )
@@ -548,6 +564,12 @@ set(TEST_SOURCES
     src/models/capital_accounts_controller.cpp
     src/models/cash_bank_flow_controller.h
     src/models/cash_bank_flow_controller.cpp
+    src/models/bardana_controller.h
+    src/models/bardana_controller.cpp
+    src/models/gate_register_controller.h
+    src/models/gate_register_controller.cpp
+    src/models/sauda_controller.h
+    src/models/sauda_controller.cpp
 )
 
 add_executable(LogicBoardTestSuite ${TEST_SOURCES})
@@ -597,6 +619,12 @@ set(ENGINE_TEST_SOURCES
     src/engine/gstr2_reconciler.cpp
     src/engine/gstr3b_engine.h
     src/engine/gstr3b_engine.cpp
+    src/engine/gstr9_engine.h
+    src/engine/gstr9_engine.cpp
+    src/engine/tds_fvu_exporter.h
+    src/engine/tds_fvu_exporter.cpp
+    src/models/account_classifier.h
+    src/models/account_classifier.cpp
     src/database_manager.h
     src/database_manager.cpp
 )

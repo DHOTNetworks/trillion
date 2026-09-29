@@ -244,10 +244,6 @@ QVariantMap FinancialYearsModel::validate_voucher_date(const QString& input, con
 
     if (fyStart.isValid() && fyEnd.isValid()) {
         if (d < fyStart || d > fyEnd) {
-            if (matchedFy.isValid()) {
-                res["valid"] = true;
-                return res;
-            }
             res["valid"] = false;
             res["error"] = QString("Date %1 is outside the active Period (%2: %3 to %4).\nPlease enter a date within this period or switch the Financial Year in FY Selector (Alt+F).")
                                 .arg(d.toString("dd-MM-yyyy"), fyName, fyStart.toString("dd-MM-yyyy"), fyEnd.toString("dd-MM-yyyy"));

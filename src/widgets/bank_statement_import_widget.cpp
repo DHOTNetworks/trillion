@@ -11,6 +11,7 @@
 #include <QFileDialog>
 
 #include "../database_manager.h"
+#include "../models/account_classifier.h"
 #include <QSqlQuery>
 
 namespace MahadevERP {
@@ -273,9 +274,13 @@ void BankStatementImportWidget::showEvent(QShowEvent* event) {
 void BankStatementImportWidget::populateBankLedgers() {
     QString current = m_bankLedgerCombo->currentText();
     m_bankLedgerCombo->clear();
-    QVariantList rows = DatabaseManager::instance().executeQuery(
-        "SELECT name FROM parties WHERE group_name LIKE '%Bank%' OR group_name LIKE '%Cash%' OR name LIKE '%Bank%' OR name LIKE '%Cash%' ORDER BY name ASC;"
-    );
+    QString sql = QString(
+        "SELECT DISTINCT p.name FROM parties p %1 "
+        "WHERE %2 OR p.party_type IN ('Bank', 'Cash') "
+        "ORDER BY p.name ASC;"
+    ).arg(AccountClassifier::partiesJoinClause("p", "g"),
+         AccountClassifier::generateHierarchySqlClause(AccountClassifier::getBankAndCashGroupCodes(), "g"));
+    QVariantList rows = DatabaseManager::instance().executeQuery(sql);
     for (const QVariant& rowVar : rows) {
         QString name = rowVar.toMap().value("name").toString();
         if (!name.isEmpty()) {

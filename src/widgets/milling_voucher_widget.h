@@ -3,7 +3,6 @@
 #include <QWidget>
 #include <QTableWidget>
 #include <QLineEdit>
-#include <QDateEdit>
 #include <QPushButton>
 #include <QLabel>
 #include <QFrame>

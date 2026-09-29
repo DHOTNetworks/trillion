@@ -1,4 +1,5 @@
 #include "cash_bank_flow_widget.h"
+#include "voucher_date_dialog.h"
 #include "accounting_period_dialog.h"
 #include "custom_dialogs.h"
 #include "../engine/accounting_engine.h"
@@ -131,40 +132,32 @@ void CashBankFlowWidget::setupUi() {
     filterLayout->setContentsMargins(16, 0, 16, 0);
     filterLayout->setSpacing(12);
 
-    auto* fromLabel = new QLabel("From:", filterCard);
+    auto* fromLabel = new QLabel("From Date:", filterCard);
     fromLabel->setStyleSheet("color: #475569; font-size: 11.5px; font-weight: 700;");
     filterLayout->addWidget(fromLabel);
 
-    m_fromDateEdit = new AccountingDateEdit(filterCard);
-    m_fromDateEdit->setFixedSize(110, 30);
-    m_fromDateEdit->setStyleSheet(
-        "QLineEdit { background-color: #FFFFFF; color: #0F172A; border: 1.5px solid #CBD5E1; "
-        "border-radius: 6px; padding: 2px 6px; font-weight: 700; font-size: 12px; }"
-        "QLineEdit:focus { border: 2px solid #2563EB; background-color: #FFFFF0; }"
-    );
-    connect(m_fromDateEdit, &AccountingDateEdit::dateChanged, this, &CashBankFlowWidget::onDateChanged);
+    m_fromDateEdit = new AccountingDateDisplay(filterCard);
+    m_fromDateEdit->setFixedWidth(115);
+    connect(m_fromDateEdit, &AccountingDateDisplay::dateChanged, this, &CashBankFlowWidget::onDateChanged);
+    connect(m_fromDateEdit, &AccountingDateDisplay::clicked, this, &CashBankFlowWidget::onAccountingPeriod);
     filterLayout->addWidget(m_fromDateEdit);
 
-    auto* toLabel = new QLabel("To:", filterCard);
+    auto* toLabel = new QLabel("To Date:", filterCard);
     toLabel->setStyleSheet("color: #475569; font-size: 11.5px; font-weight: 700;");
     filterLayout->addWidget(toLabel);
 
-    m_toDateEdit = new AccountingDateEdit(filterCard);
-    m_toDateEdit->setFixedSize(110, 30);
-    m_toDateEdit->setStyleSheet(
-        "QLineEdit { background-color: #FFFFFF; color: #0F172A; border: 1.5px solid #CBD5E1; "
-        "border-radius: 6px; padding: 2px 6px; font-weight: 700; font-size: 12px; }"
-        "QLineEdit:focus { border: 2px solid #2563EB; background-color: #FFFFF0; }"
-    );
-    connect(m_toDateEdit, &AccountingDateEdit::dateChanged, this, &CashBankFlowWidget::onDateChanged);
+    m_toDateEdit = new AccountingDateDisplay(filterCard);
+    m_toDateEdit->setFixedWidth(115);
+    connect(m_toDateEdit, &AccountingDateDisplay::dateChanged, this, &CashBankFlowWidget::onDateChanged);
+    connect(m_toDateEdit, &AccountingDateDisplay::clicked, this, &CashBankFlowWidget::onAccountingPeriod);
     filterLayout->addWidget(m_toDateEdit);
 
     m_periodBtn = new QPushButton("Period (F2)", filterCard);
-    m_periodBtn->setFixedHeight(30);
+    m_periodBtn->setFixedHeight(34);
     m_periodBtn->setCursor(Qt::PointingHandCursor);
     m_periodBtn->setStyleSheet(
-        "QPushButton { background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 6px; padding: 0px 10px; font-weight: 700; color: #334155; font-size: 11px; }"
-        "QPushButton:hover { background-color: #F1F5F9; }"
+        "QPushButton { background-color: #EFF6FF; color: #1D4ED8; border: 1px solid #BFDBFE; border-radius: 6px; padding: 4px 10px; font-weight: 700; font-size: 11.5px; }"
+        "QPushButton:hover { background-color: #DBEAFE; color: #1E40AF; }"
     );
     connect(m_periodBtn, &QPushButton::clicked, this, &CashBankFlowWidget::onAccountingPeriod);
     filterLayout->addWidget(m_periodBtn);
@@ -288,9 +281,13 @@ void CashBankFlowWidget::setupUi() {
     mainLayout->addLayout(footerContainer);
 
     // Initialize Dates from Fiscal Year
-    FiscalYearInfo fy = FiscalYearHelper::getActiveFiscalYear();
-    m_fromDateEdit->setDate(QDate::fromString(fy.startDate, "yyyy-MM-dd"));
-    m_toDateEdit->setDate(QDate::fromString(fy.endDate, "yyyy-MM-dd"));
+    {
+        const QSignalBlocker b1(m_fromDateEdit);
+        const QSignalBlocker b2(m_toDateEdit);
+        FiscalYearInfo fy = FiscalYearHelper::getActiveFiscalYear();
+        m_fromDateEdit->setDate(QDate::fromString(fy.startDate, "yyyy-MM-dd"));
+        m_toDateEdit->setDate(QDate::fromString(fy.endDate, "yyyy-MM-dd"));
+    }
 }
 
 void CashBankFlowWidget::setStatementMode(FlowStatementType mode) {
@@ -358,12 +355,11 @@ void CashBankFlowWidget::onSearchTextChanged(const QString& text) {
 }
 
 void CashBankFlowWidget::onAccountingPeriod() {
-    QString fIso, tIso, fyLabel;
-    bool applied = AccountingPeriodDialog::selectAndApplyGlobalPeriod(this, &fIso, &tIso, &fyLabel);
-    if (applied) {
-        if (m_fromDateEdit) m_fromDateEdit->setDate(QDate::fromString(fIso, "yyyy-MM-dd"));
-        if (m_toDateEdit) m_toDateEdit->setDate(QDate::fromString(tIso, "yyyy-MM-dd"));
-        if (m_fyBadge) m_fyBadge->setText(fyLabel);
+    QDate f = m_fromDateEdit->date();
+    QDate t = m_toDateEdit->date();
+    if (VoucherDateDialog::selectDateRange(this, &f, &t, f, t)) {
+        m_fromDateEdit->setDate(f);
+        m_toDateEdit->setDate(t);
         refreshData();
     }
 }

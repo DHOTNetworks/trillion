@@ -1,4 +1,5 @@
 #include "tcs_receipt_voucher_controller.h"
+#include "account_classifier.h"
 #include "../database_manager.h"
 #include <QDate>
 #include <cmath>
@@ -216,7 +217,11 @@ void TcsReceiptVoucherController::ensureDefaultLedgers()
     DatabaseManager &db = DatabaseManager::instance();
 
     if (m_bankLedgerId <= 0) {
-        QVariant bId = db.executeScalar("SELECT id FROM parties WHERE group_name LIKE '%Bank%' OR party_type = 'Bank' LIMIT 1;");
+        QString sql = QString(
+            "SELECT p.id FROM parties p %1 WHERE %2 OR p.party_type = 'Bank' ORDER BY p.id ASC LIMIT 1;"
+        ).arg(AccountClassifier::partiesJoinClause("p", "g"),
+             AccountClassifier::generateHierarchySqlClause(AccountClassifier::getBankGroupCodes(), "g"));
+        QVariant bId = db.executeScalar(sql);
         if (bId.isValid() && !bId.isNull()) {
             m_bankLedgerId = bId.toInt();
             emit bankLedgerIdChanged();
@@ -224,19 +229,39 @@ void TcsReceiptVoucherController::ensureDefaultLedgers()
     }
 
     if (m_discountLedgerId <= 0) {
-        QVariant dId = db.executeScalar("SELECT id FROM parties WHERE name = 'Discount Allowed A/c' LIMIT 1;");
-        if (dId.isValid() && !dId.isNull()) {
-            m_discountLedgerId = dId.toInt();
-            emit discountLedgerIdChanged();
+        m_discountLedgerId = AccountClassifier::getStandardLedgerId(StandardLedgerCode::DiscountAllowed);
+        if (m_discountLedgerId <= 0) {
+            m_discountLedgerId = AccountClassifier::getStandardLedgerId(StandardLedgerCode::Discount);
         }
+        if (m_discountLedgerId <= 0) {
+            QVariant dId = db.executeScalar("SELECT id FROM parties WHERE name LIKE '%Discount%' LIMIT 1;");
+            if (dId.isValid() && !dId.isNull()) {
+                m_discountLedgerId = dId.toInt();
+            }
+        }
+        if (m_discountLedgerId <= 0) {
+            db.executeNonQuery("INSERT INTO parties (name, group_name, group_code, party_type, legacy_id) VALUES ('Discount Allowed A/c', 'Expenditure A/c', 17, 'Expense', 954);");
+            m_discountLedgerId = db.lastInsertedId();
+        }
+        emit discountLedgerIdChanged();
     }
 
     if (m_interestLedgerId <= 0) {
-        QVariant iId = db.executeScalar("SELECT id FROM parties WHERE name = 'Interest Received A/c' LIMIT 1;");
-        if (iId.isValid() && !iId.isNull()) {
-            m_interestLedgerId = iId.toInt();
-            emit interestLedgerIdChanged();
+        m_interestLedgerId = AccountClassifier::getStandardLedgerId(StandardLedgerCode::InterestReceived);
+        if (m_interestLedgerId <= 0) {
+            m_interestLedgerId = AccountClassifier::getStandardLedgerId(StandardLedgerCode::Interest);
         }
+        if (m_interestLedgerId <= 0) {
+            QVariant iId = db.executeScalar("SELECT id FROM parties WHERE name LIKE '%Interest%' LIMIT 1;");
+            if (iId.isValid() && !iId.isNull()) {
+                m_interestLedgerId = iId.toInt();
+            }
+        }
+        if (m_interestLedgerId <= 0) {
+            db.executeNonQuery("INSERT INTO parties (name, group_name, group_code, party_type, legacy_id) VALUES ('Interest Received A/c', 'Income A/c', 16, 'Income', 955);");
+            m_interestLedgerId = db.lastInsertedId();
+        }
+        emit interestLedgerIdChanged();
     }
 }
 

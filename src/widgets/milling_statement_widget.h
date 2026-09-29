@@ -6,7 +6,7 @@
 #include <QPushButton>
 #include <QLineEdit>
 #include <QComboBox>
-#include <QDateEdit>
+#include "accounting_date_edit.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QSplitter>
@@ -45,8 +45,8 @@ private:
     PrintExportController* m_printExportCtrl = nullptr;
 
     // Header & Filter
-    QDateEdit* m_fromDateEdit = nullptr;
-    QDateEdit* m_toDateEdit = nullptr;
+    AccountingDateDisplay* m_fromDateEdit = nullptr;
+    AccountingDateDisplay* m_toDateEdit = nullptr;
     QComboBox* m_varietyCombo = nullptr;
     QLineEdit* m_searchBox = nullptr;
     QPushButton* m_refreshBtn = nullptr;

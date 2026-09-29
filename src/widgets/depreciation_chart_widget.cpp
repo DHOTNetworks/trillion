@@ -1,8 +1,10 @@
 #include "depreciation_chart_widget.h"
+#include "voucher_date_dialog.h"
 #include "kbd_badge_button.h"
 #include "custom_dialogs.h"
 #include "../engine/fiscal_year_helper.h"
 #include "../database_manager.h"
+#include "../models/account_classifier.h"
 #include "../services/financial_math_service.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -101,18 +103,35 @@ void DepreciationChartWidget::setupUi() {
     filterLayout->setSpacing(10);
 
     filterLayout->addWidget(new QLabel("From Date:", filterCard));
-    m_fromDateEdit = new QDateEdit(filterCard);
-    m_fromDateEdit->setCalendarPopup(true);
-    m_fromDateEdit->setDisplayFormat("dd-MM-yyyy");
-    connect(m_fromDateEdit, &QDateEdit::dateChanged, this, &DepreciationChartWidget::onDateFilterChanged);
+    m_fromDateEdit = new AccountingDateDisplay(filterCard);
+    m_fromDateEdit->setFixedWidth(115);
+    connect(m_fromDateEdit, &AccountingDateDisplay::dateChanged, this, &DepreciationChartWidget::onDateFilterChanged);
     filterLayout->addWidget(m_fromDateEdit);
 
     filterLayout->addWidget(new QLabel("To Date:", filterCard));
-    m_toDateEdit = new QDateEdit(filterCard);
-    m_toDateEdit->setCalendarPopup(true);
-    m_toDateEdit->setDisplayFormat("dd-MM-yyyy");
-    connect(m_toDateEdit, &QDateEdit::dateChanged, this, &DepreciationChartWidget::onDateFilterChanged);
+    m_toDateEdit = new AccountingDateDisplay(filterCard);
+    m_toDateEdit->setFixedWidth(115);
+    connect(m_toDateEdit, &AccountingDateDisplay::dateChanged, this, &DepreciationChartWidget::onDateFilterChanged);
     filterLayout->addWidget(m_toDateEdit);
+
+    auto openPeriodDlg = [this]() {
+        QDate f = m_fromDateEdit->date();
+        QDate t = m_toDateEdit->date();
+        if (VoucherDateDialog::selectDateRange(this, &f, &t, f, t)) {
+            m_fromDateEdit->setDate(f);
+            m_toDateEdit->setDate(t);
+        }
+    };
+    connect(m_fromDateEdit, &AccountingDateDisplay::clicked, this, openPeriodDlg);
+    connect(m_toDateEdit, &AccountingDateDisplay::clicked, this, openPeriodDlg);
+
+    auto* periodBtn = new QPushButton("Period (F2)", filterCard);
+    periodBtn->setStyleSheet(
+        "QPushButton { background-color: #EFF6FF; color: #1D4ED8; border: 1px solid #BFDBFE; font-weight: 700; font-size: 11px; border-radius: 6px; padding: 4px 10px; }"
+        "QPushButton:hover { background-color: #DBEAFE; color: #1E40AF; }"
+    );
+    connect(periodBtn, &QPushButton::clicked, this, openPeriodDlg);
+    filterLayout->addWidget(periodBtn);
 
     filterLayout->addSpacing(10);
     filterLayout->addWidget(new QLabel("Depreciation Ledger:", filterCard));
@@ -270,15 +289,18 @@ void DepreciationChartWidget::focusTable() {
 
 void DepreciationChartWidget::populateLedgerCombo() {
     m_depLedgerCombo->clear();
-    QVariantList rows = DatabaseManager::instance().executeQuery(
-        "SELECT name FROM parties WHERE name LIKE '%Depreciation%' OR name LIKE '%Depriciation%' "
-        "OR group_name LIKE '%Indirect Expense%' ORDER BY name ASC;"
-    );
+    QString sql = QString(
+        "SELECT DISTINCT p.name FROM parties p %1 "
+        "WHERE %2 OR p.party_type = 'Expense' "
+        "ORDER BY p.name ASC;"
+    ).arg(AccountClassifier::partiesJoinClause("p", "g"),
+         AccountClassifier::generateHierarchySqlClause({StandardGroupCode::Expenditure, StandardGroupCode::ProfitAndLoss}, "g"));
+    QVariantList rows = DatabaseManager::instance().executeQuery(sql);
     bool hasDep = false;
     for (const auto& r : rows) {
         QString n = r.toMap().value("name").toString().trimmed();
         m_depLedgerCombo->addItem(n);
-        if (n.contains("Depreciation", Qt::CaseInsensitive)) hasDep = true;
+        if (n.compare("Depreciation A/c", Qt::CaseInsensitive) == 0 || n.compare("Depreciation", Qt::CaseInsensitive) == 0) hasDep = true;
     }
     if (!hasDep) {
         m_depLedgerCombo->insertItem(0, "Depreciation A/c");

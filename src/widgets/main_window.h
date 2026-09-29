@@ -55,6 +55,12 @@
 #include "cash_bank_flow_widget.h"
 #include "cash_voucher_widget.h"
 #include "joint_reports_dialog.h"
+#include "bardana_widget.h"
+#include "gate_register_widget.h"
+#include "sauda_contract_widget.h"
+#include "../models/bardana_controller.h"
+#include "../models/gate_register_controller.h"
+#include "../models/sauda_controller.h"
 #include "../models/trial_balance_controller.h"
 #include "../models/capital_accounts_controller.h"
 #include "../engine/depreciation_calculator.h"
@@ -151,6 +157,9 @@ public:
     MahadevERP::DepreciationChartWidget* depreciationChartWidget() const { return m_depreciationChartWidget; }
     MahadevERP::CashBankFlowWidget* cashBankFlowWidget() const { return m_cashBankFlowWidget; }
     MahadevERP::CashVoucherWidget* cashVoucherWidget() const { return m_cashVoucherWidget; }
+    BardanaWidget* bardanaWidget() const { return m_bardanaWidget; }
+    GateRegisterWidget* gateRegisterWidget() const { return m_gateRegisterWidget; }
+    SaudaContractWidget* saudaContractWidget() const { return m_saudaContractWidget; }
 
     QStackedWidget* stackedWidget() const { return m_stackedWidget; }
 
@@ -242,6 +251,13 @@ private:
     MahadevERP::DepreciationChartWidget* m_depreciationChartWidget = nullptr;
     MahadevERP::CashBankFlowWidget* m_cashBankFlowWidget = nullptr;
     MahadevERP::CashVoucherWidget* m_cashVoucherWidget = nullptr;
+    BardanaWidget* m_bardanaWidget = nullptr;
+    GateRegisterWidget* m_gateRegisterWidget = nullptr;
+    SaudaContractWidget* m_saudaContractWidget = nullptr;
+
+    BardanaController* m_bardanaCtrl = nullptr;
+    GateRegisterController* m_gateRegisterCtrl = nullptr;
+    SaudaController* m_saudaCtrl = nullptr;
 
     TaxChallanController* m_taxChallanCtrl = nullptr;
     TcsReceiptVoucherController* m_tcsReceiptVoucherCtrl = nullptr;
@@ -281,10 +297,12 @@ private:
     bool m_isNavigating = false;
 
     // Navigation Transfer State
+    QVariantMap m_pendingEditEntry;
     QString m_pendingEditInvoiceNo;
     QString m_pendingEditVoucherNo;
     int m_pendingEditVoucherId = 0;
     QString m_pendingEditVoucherDate;
+    QString m_pendingEditFinancialYear;
     QString m_targetChequeMode;
     QString m_targetStatementParty;
     QString m_lastViewedStatementFromDate;

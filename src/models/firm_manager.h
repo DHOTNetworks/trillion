@@ -34,6 +34,9 @@ public:
     Q_INVOKABLE QString choose_firm_folder(const QString& currentFolder = "");
     Q_INVOKABLE void refresh_registry();
 
+    static QString getFirmPeriod(const QString& dbPath);
+    static QString formatDateToDisplay(const QString& rawDate);
+
 signals:
     void firmSwitched(const QString& firmId, const QString& firmName);
     void activeFolderChanged();

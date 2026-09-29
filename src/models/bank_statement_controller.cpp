@@ -1,4 +1,5 @@
 #include "bank_statement_controller.h"
+#include "account_classifier.h"
 #include "../database_manager.h"
 #include "../engine/fiscal_year_helper.h"
 #include "../services/financial_math_service.h"
@@ -331,10 +332,13 @@ void BankStatementController::detectBankLedger() {
     }
 
     // Fallback search for matching bank account
-    QVariantList bankRows = DatabaseManager::instance().executeQuery(
-        "SELECT name FROM parties WHERE (group_name LIKE '%Bank%' OR group_name LIKE '%Secured Loans%') "
-        "ORDER BY id ASC LIMIT 1;"
-    );
+    QString sql = QString(
+        "SELECT p.name FROM parties p %1 "
+        "WHERE %2 OR p.party_type = 'Bank' "
+        "ORDER BY p.id ASC LIMIT 1;"
+    ).arg(AccountClassifier::partiesJoinClause("p", "g"),
+         AccountClassifier::generateHierarchySqlClause(AccountClassifier::getBankGroupCodes(), "g"));
+    QVariantList bankRows = DatabaseManager::instance().executeQuery(sql);
     if (!bankRows.isEmpty()) {
         m_bankLedgerName = bankRows.first().toMap().value("name").toString();
     } else {
@@ -1210,9 +1214,13 @@ QVariantMap BankStatementController::postSelectedVouchers() {
 
 QStringList BankStatementController::getAvailableBankLedgers() const {
     QStringList list;
-    QVariantList rows = DatabaseManager::instance().executeQuery(
-        "SELECT name FROM parties WHERE group_name LIKE '%Bank%' OR group_name LIKE '%Secured Loans%' ORDER BY name ASC;"
-    );
+    QString sql = QString(
+        "SELECT DISTINCT p.name FROM parties p %1 "
+        "WHERE %2 OR p.party_type = 'Bank' "
+        "ORDER BY p.name ASC;"
+    ).arg(AccountClassifier::partiesJoinClause("p", "g"),
+         AccountClassifier::generateHierarchySqlClause(AccountClassifier::getBankGroupCodes(), "g"));
+    QVariantList rows = DatabaseManager::instance().executeQuery(sql);
     for (const auto &r : rows) {
         list.append(r.toMap().value("name").toString());
     }

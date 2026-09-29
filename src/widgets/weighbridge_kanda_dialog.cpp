@@ -104,9 +104,7 @@ void WeighbridgeKandaDialog::setupUi() {
     dateTimeBox->setSpacing(4);
     dateTimeBox->setContentsMargins(0, 0, 0, 0);
 
-    m_dateEdit = new QDateEdit(QDate::currentDate(), card1);
-    m_dateEdit->setDisplayFormat("dd-MM-yyyy");
-    m_dateEdit->setCalendarPopup(true);
+    m_dateEdit = new AccountingDateEdit(QDate::currentDate(), card1);
     dateTimeBox->addWidget(m_dateEdit, 3);
 
     m_timeEdit = new QTimeEdit(QTime::currentTime(), card1);
@@ -127,7 +125,7 @@ void WeighbridgeKandaDialog::setupUi() {
 
     // Row 2: Item / Commodity
     grid1->addWidget(new QLabel("Item / Commodity *:", card1), 2, 0);
-    m_itemNameEdit = new QLineEdit(card1);
+    m_itemNameEdit = new ItemSearchEditor(card1);
     m_itemNameEdit->setPlaceholderText("Commodity / Rice Variety (e.g. Basmati)");
     grid1->addWidget(m_itemNameEdit, 2, 1, 1, 3);
 

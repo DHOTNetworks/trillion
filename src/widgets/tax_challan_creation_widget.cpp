@@ -195,7 +195,7 @@ QWidget *TaxChallanCreationWidget::createParamsCard()
     m_challanDateEdit = new QLineEdit(card);
     m_challanDateEdit->setReadOnly(true);
     dtRow->addWidget(m_challanDateEdit);
-    auto *btnDate = new QPushButton("📅", card);
+    auto *btnDate = new QPushButton("", card);
     btnDate->setFixedWidth(28);
     btnDate->setStyleSheet("QPushButton { background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 4px; }");
     connect(btnDate, &QPushButton::clicked, this, [this]() {
@@ -231,7 +231,7 @@ QWidget *TaxChallanCreationWidget::createParamsCard()
     m_periodFromEdit = new QLineEdit(card);
     m_periodFromEdit->setReadOnly(true);
     pfRow->addWidget(m_periodFromEdit);
-    auto *btnPf = new QPushButton("📅", card);
+    auto *btnPf = new QPushButton("", card);
     btnPf->setFixedWidth(28);
     btnPf->setStyleSheet("QPushButton { background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 4px; }");
     connect(btnPf, &QPushButton::clicked, this, [this]() {
@@ -255,7 +255,7 @@ QWidget *TaxChallanCreationWidget::createParamsCard()
     m_periodToEdit = new QLineEdit(card);
     m_periodToEdit->setReadOnly(true);
     ptRow->addWidget(m_periodToEdit);
-    auto *btnPt = new QPushButton("📅", card);
+    auto *btnPt = new QPushButton("", card);
     btnPt->setFixedWidth(28);
     btnPt->setStyleSheet("QPushButton { background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 4px; }");
     connect(btnPt, &QPushButton::clicked, this, [this]() {
@@ -410,7 +410,7 @@ QWidget *TaxChallanCreationWidget::createBankDetailsCard()
     m_chequeDateEdit = new QLineEdit(card);
     m_chequeDateEdit->setReadOnly(true);
     chqDateRow->addWidget(m_chequeDateEdit);
-    auto *btnChqDate = new QPushButton("📅", card);
+    auto *btnChqDate = new QPushButton("", card);
     btnChqDate->setFixedWidth(28);
     btnChqDate->setStyleSheet("QPushButton { background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 4px; }");
     connect(btnChqDate, &QPushButton::clicked, this, [this]() {

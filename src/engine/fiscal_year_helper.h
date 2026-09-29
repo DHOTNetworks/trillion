@@ -21,6 +21,8 @@ struct FiscalYearInfo {
 struct LedgerStatementEntry {
     int id = 0;
     bool isSelected = false;
+    int partyId = 0;
+    QString partyName;
     QString vIso;
     QString vDate;
     QString refNo;

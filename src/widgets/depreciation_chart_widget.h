@@ -2,7 +2,7 @@
 
 #include <QWidget>
 #include <QTableWidget>
-#include <QDateEdit>
+#include "accounting_date_edit.h"
 #include <QComboBox>
 #include <QPushButton>
 #include <QLabel>
@@ -61,8 +61,8 @@ private:
     QPushButton* m_modeToggleBtn = nullptr;
 
     // Tier 2 Filters
-    QDateEdit* m_fromDateEdit = nullptr;
-    QDateEdit* m_toDateEdit = nullptr;
+    AccountingDateDisplay* m_fromDateEdit = nullptr;
+    AccountingDateDisplay* m_toDateEdit = nullptr;
     QComboBox* m_depLedgerCombo = nullptr;
     QLabel* m_statusBadge = nullptr;
 

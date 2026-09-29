@@ -789,6 +789,7 @@ void JFormVoucherWidget::deleteVoucher() {
 }
 
 void JFormVoucherWidget::openDateDialog(bool isInitial) {
+    Q_UNUSED(isInitial);
     QString curDate = m_dateEdit ? m_dateEdit->date().toString("dd-MM-yyyy") : "";
     QString newDisp, newIso;
     if (VoucherDateDialog::getVoucherDate(this, curDate, &newDisp, &newIso)) {
@@ -796,16 +797,10 @@ void JFormVoucherWidget::openDateDialog(bool isInitial) {
             m_dateEdit->setDate(QDate::fromString(newIso, "yyyy-MM-dd"));
         }
         onDateChanged(QDate::fromString(newIso, "yyyy-MM-dd"));
-        if (m_farmerSearch) {
-            m_farmerSearch->setFocus();
-            m_farmerSearch->selectAll();
-        }
-    } else {
-        if (isInitial) {
-            emit backRequested();
-        } else if (m_farmerSearch) {
-            m_farmerSearch->setFocus();
-        }
+    }
+    if (m_farmerSearch) {
+        m_farmerSearch->setFocus();
+        m_farmerSearch->selectAll();
     }
 }
 

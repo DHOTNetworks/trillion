@@ -2,10 +2,10 @@
 
 #include <QWidget>
 #include <QTableWidget>
-#include <QDateEdit>
 #include <QPushButton>
 #include <QLabel>
 #include <QFrame>
+#include "accounting_date_edit.h"
 #include "../models/capital_accounts_controller.h"
 #include "../services/print_export_controller.h"
 
@@ -30,6 +30,7 @@ protected:
 
 private slots:
     void onDateFilterChanged();
+    void onPeriodClicked();
     void onTableDoubleClicked(int row, int col);
     void onExportCsv();
     void onExportPdf();
@@ -50,8 +51,8 @@ private:
     QLabel* m_subtitleLabel = nullptr;
 
     // Tier 2 Filter Bar
-    QDateEdit* m_fromDateEdit = nullptr;
-    QDateEdit* m_toDateEdit = nullptr;
+    AccountingDateDisplay* m_fromDateEdit = nullptr;
+    AccountingDateDisplay* m_toDateEdit = nullptr;
 
     // Tier 3 Table
     QTableWidget* m_table = nullptr;

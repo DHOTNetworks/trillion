@@ -183,15 +183,26 @@ void MenuTreeManager::setupDefaultMenus()
     MenuNode otherVoucherMenu("other_voucher", "OTHER VOUCHERS MENU", "#7C3AED", "");
     otherVoucherMenu.items = {
         MenuItem("1. J-Form Mandi Procurement Voucher", "F11", Qt::Key_1, MenuActionType::OpenView, 18),
-        MenuItem("2. I-Form Mandi Buyer Issue Voucher", "Alt+I", Qt::Key_2, MenuActionType::OpenView, 19),
-        MenuItem("3. Mandi Form M & Statutory Returns (HSAMB)", "Alt+M", Qt::Key_3, MenuActionType::OpenView, 20),
-        MenuItem("4. TDS / TCS Vouchers & Challans", "F12", Qt::Key_4, MenuActionType::OpenSubmenu, -1, "tds_tcs_hub"),
-        MenuItem("5. Bank Statement Auto-Import & Reconciliation", "Ctrl+B", Qt::Key_5, MenuActionType::OpenView, 26),
-        MenuItem("6. Transport Dispatch & Gate Pass Register", "Alt+T", Qt::Key_6, MenuActionType::OpenView, 27),
-        MenuItem("7. GST Debit Notes & Credit Notes", "Alt+D", Qt::Key_7, MenuActionType::OpenView, 28),
-        MenuItem("8. GSTR-2A Matching & ITC Reconciliation", "Alt+G", Qt::Key_8, MenuActionType::OpenView, 34)
+        MenuItem("2. Mandi & Trading Operations (Bardana, Gate, Sauda, I-Form, Form-M)", "M / Alt+M", Qt::Key_2, MenuActionType::OpenSubmenu, -1, "mandi_trading_hub"),
+        MenuItem("3. TDS / TCS Vouchers & Challans", "F12", Qt::Key_3, MenuActionType::OpenSubmenu, -1, "tds_tcs_hub"),
+        MenuItem("4. Bank Statement Auto-Import & Reconciliation", "Ctrl+B", Qt::Key_4, MenuActionType::OpenView, 26),
+        MenuItem("5. Transport Dispatch & Gate Pass Register", "Alt+T", Qt::Key_5, MenuActionType::OpenView, 27),
+        MenuItem("6. GST Debit Notes & Credit Notes", "Alt+D", Qt::Key_6, MenuActionType::OpenView, 28),
+        MenuItem("7. GSTR-2A Matching & ITC Reconciliation", "Alt+G", Qt::Key_7, MenuActionType::OpenView, 34)
     };
     registerMenu(otherVoucherMenu);
+
+    // 4b. MANDI, BARDANA & TRADING OPERATIONS HUB
+    MenuNode mandiTradingHub("mandi_trading_hub", "MANDI & TRADING OPERATIONS", "#7C3AED", "other_voucher");
+    mandiTradingHub.items = {
+        MenuItem("[B] Bardana (Gunny Bag) Packaging Ledger", "B", Qt::Key_B, MenuActionType::OpenView, 70),
+        MenuItem("[G] Gate Inward / Outward Register (Weighbridge)", "G", Qt::Key_G, MenuActionType::OpenView, 71),
+        MenuItem("[S] Sauda (Forward Contracts) & Dalali Settlement", "S", Qt::Key_S, MenuActionType::OpenView, 72),
+        MenuItem("[I] I-Form Mandi Buyer Issue Voucher", "I / Alt+I", Qt::Key_I, MenuActionType::OpenView, 19),
+        MenuItem("[M] Mandi Form M & Statutory Returns (HSAMB)", "M / Alt+M", Qt::Key_M, MenuActionType::OpenView, 20),
+        MenuItem("[Q] Quit / Back", "Esc / Q", Qt::Key_Q, MenuActionType::Back)
+    };
+    registerMenu(mandiTradingHub);
 
     // 5. BOOKS & REGISTERS MENU
     MenuNode reportsMenu("reports_register", "BOOKS & REGISTERS MENU", "#059669", "");

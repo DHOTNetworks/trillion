@@ -3,7 +3,7 @@
 #include <QWidget>
 #include <QTabWidget>
 #include <QTableWidget>
-#include <QDateEdit>
+#include "accounting_date_edit.h"
 #include <QLineEdit>
 #include <QLabel>
 #include <QPushButton>
@@ -43,8 +43,8 @@ private:
     void populateGstr2Tab(const Gstr2ReconciliationSummary& summary);
 
     QTabWidget* m_tabs = nullptr;
-    QDateEdit* m_fromDateEdit = nullptr;
-    QDateEdit* m_toDateEdit = nullptr;
+    AccountingDateDisplay* m_fromDateEdit = nullptr;
+    AccountingDateDisplay* m_toDateEdit = nullptr;
     QPushButton* m_refreshBtn = nullptr;
     QPushButton* m_backBtn = nullptr;
 

@@ -2,7 +2,7 @@
 
 #include <QWidget>
 #include <QTableWidget>
-#include <QDateEdit>
+#include "accounting_date_edit.h"
 #include <QComboBox>
 #include <QLineEdit>
 #include <QLabel>
@@ -41,8 +41,8 @@ private:
     void setupUi();
     void applyCustomStyles();
 
-    QDateEdit* m_fromDateEdit = nullptr;
-    QDateEdit* m_toDateEdit = nullptr;
+    AccountingDateDisplay* m_fromDateEdit = nullptr;
+    AccountingDateDisplay* m_toDateEdit = nullptr;
     QComboBox* m_typeFilterCombo = nullptr;
     QLineEdit* m_searchBox = nullptr;
     QPushButton* m_refreshBtn = nullptr;

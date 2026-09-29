@@ -66,6 +66,24 @@ StockValuationReport StockValuationEngine::getAuditedClosingStock(const QString&
             itm.weightQtl = r.value("weight_qtl").toDouble();
             itm.rate = r.value("rate").toDouble();
             itm.amount = r.value("amount").toDouble();
+
+            // Auto-resolve missing rate if amount exists
+            if (itm.rate <= 0.0 && itm.amount > 0.0) {
+                if (itm.weightQtl > 0.001) {
+                    itm.rate = itm.amount / itm.weightQtl;
+                } else if (itm.bags > 0) {
+                    itm.rate = itm.amount / itm.bags;
+                }
+            }
+            // Auto-resolve missing amount if rate exists
+            if (itm.amount <= 0.0 && itm.rate > 0.0) {
+                if (itm.weightQtl > 0.001) {
+                    itm.amount = std::round((itm.weightQtl * itm.rate) * 100.0) / 100.0;
+                } else if (itm.bags > 0) {
+                    itm.amount = std::round((itm.bags * itm.rate) * 100.0) / 100.0;
+                }
+            }
+
             itm.amountFmt = AccountingEngine::formatIndianCurrency(itm.amount, true);
             itm.isAudited = true;
 
@@ -128,6 +146,11 @@ StockValuationReport StockValuationEngine::calculateLivePhysicalStock(const QStr
         info.rate = c.value("rate").toDouble();
         info.amount = c.value("amount").toDouble();
 
+        if (info.rate <= 0.0 && info.amount > 0.0) {
+            if (info.weight > 0.001) info.rate = info.amount / info.weight;
+            else if (info.bags > 0) info.rate = info.amount / info.bags;
+        }
+
         if (itemId > 0) baseByItemId[itemId] = info;
         if (!iCode.isEmpty()) baseByCode[iCode] = info;
         if (!iName.isEmpty()) baseByName[iName] = info;
@@ -164,6 +187,50 @@ StockValuationReport StockValuationEngine::calculateLivePhysicalStock(const QStr
         tx.qty = t.value("weight_qtl").toDouble();
         tx.rate = t.value("rate").toDouble();
         allTx.append(tx);
+    }
+
+    // 3b. Batch query purchase invoice items for latest purchase rates
+    QVariantList purcList = DatabaseManager::instance().executeQuery(
+        "SELECT pii.item_id, pii.item_name, pii.rate_per_qtl, pi.invoice_date "
+        "FROM purchase_invoice_items pii "
+        "JOIN purchase_invoices pi ON pii.invoice_id = pi.id "
+        "WHERE pi.invoice_date <= ? AND pii.rate_per_qtl > 0 "
+        "ORDER BY pi.invoice_date ASC;",
+        {targetDate}
+    );
+    QHash<int, double> latestPurcRateByItemId;
+    QHash<QString, double> latestPurcRateByName;
+    for (const auto& pVar : purcList) {
+        QVariantMap p = pVar.toMap();
+        int pItemId = p.value("item_id").toInt();
+        QString pName = p.value("item_name").toString().trimmed().toLower();
+        double pRate = p.value("rate_per_qtl").toDouble();
+        if (pRate > 0.0) {
+            if (pItemId > 0) latestPurcRateByItemId[pItemId] = pRate;
+            if (!pName.isEmpty()) latestPurcRateByName[pName] = pRate;
+        }
+    }
+
+    // 3c. Batch query sales invoice items for latest sale rates fallback
+    QVariantList saleList = DatabaseManager::instance().executeQuery(
+        "SELECT sii.item_id, sii.item_name, sii.rate_per_qtl, si.invoice_date "
+        "FROM sales_invoice_items sii "
+        "JOIN sales_invoices si ON sii.invoice_id = si.id "
+        "WHERE si.invoice_date <= ? AND sii.rate_per_qtl > 0 "
+        "ORDER BY si.invoice_date ASC;",
+        {targetDate}
+    );
+    QHash<int, double> latestSaleRateByItemId;
+    QHash<QString, double> latestSaleRateByName;
+    for (const auto& sVar : saleList) {
+        QVariantMap s = sVar.toMap();
+        int sItemId = s.value("item_id").toInt();
+        QString sName = s.value("item_name").toString().trimmed().toLower();
+        double sRate = s.value("rate_per_qtl").toDouble();
+        if (sRate > 0.0) {
+            if (sItemId > 0) latestSaleRateByItemId[sItemId] = sRate;
+            if (!sName.isEmpty()) latestSaleRateByName[sName] = sRate;
+        }
     }
 
     // 4. Batch query milling voucher items
@@ -206,7 +273,7 @@ StockValuationReport StockValuationEngine::calculateLivePhysicalStock(const QStr
 
         double pRate = item.value("purchase_rate").toDouble();
         double sRate = item.value("sale_rate").toDouble();
-        double rate = (pRate > 0.0) ? pRate : ((sRate > 0.0) ? sRate : 3000.0);
+        double rate = (pRate > 0.0) ? pRate : ((sRate > 0.0) ? sRate : 0.0);
 
         bool hasBaseline = false;
         BaselineInfo bInfo;
@@ -233,6 +300,11 @@ StockValuationReport StockValuationEngine::calculateLivePhysicalStock(const QStr
         } else {
             initQty = item.value("opening_qty").toDouble();
             initBags = item.value("opening_bags").toInt();
+            double opVal = item.value("opening_value").toDouble();
+            if (rate <= 0.0 && opVal > 0.0) {
+                if (initQty > 0.001) rate = opVal / initQty;
+                else if (initBags > 0) rate = opVal / initBags;
+            }
         }
 
         double inQty = 0.0, outQty = 0.0;
@@ -279,8 +351,28 @@ StockValuationReport StockValuationEngine::calculateLivePhysicalStock(const QStr
             finalBags = static_cast<int>(std::round((finalQty * 100.0) / packingKg));
         }
 
+        // Live Rate Prioritization: Transaction Rate > Purchase Rate > Sale Rate > Baseline > Master
         if (latestTxRate > 0.0) {
             rate = latestTxRate;
+        } else if (itemId > 0 && latestPurcRateByItemId.contains(itemId)) {
+            rate = latestPurcRateByItemId[itemId];
+        } else if (!itemNameLower.isEmpty() && latestPurcRateByName.contains(itemNameLower)) {
+            rate = latestPurcRateByName[itemNameLower];
+        } else if (itemId > 0 && latestSaleRateByItemId.contains(itemId)) {
+            rate = latestSaleRateByItemId[itemId];
+        } else if (!itemNameLower.isEmpty() && latestSaleRateByName.contains(itemNameLower)) {
+            rate = latestSaleRateByName[itemNameLower];
+        }
+
+        if (rate <= 0.0) {
+            // Intelligent commodity fallback prices based on item name keywords
+            if (itemNameLower.contains("paddy")) rate = 3400.0;
+            else if (itemNameLower.contains("bran")) rate = 2200.0;
+            else if (itemNameLower.contains("nakku")) rate = 2100.0;
+            else if (itemNameLower.contains("phak") || itemNameLower.contains("husk")) rate = 800.0;
+            else if (itemNameLower.contains("rice")) rate = 6500.0;
+            else if (itemNameLower.contains("bardana") || itemNameLower.contains("bag")) rate = 22.0;
+            else rate = 1000.0;
         }
 
         if (finalQty > 0.001 || finalBags > 0) {
@@ -292,7 +384,13 @@ StockValuationReport StockValuationEngine::calculateLivePhysicalStock(const QStr
             itm.bags = std::max(0, finalBags);
             itm.weightQtl = finalQty;
             itm.rate = rate;
-            itm.amount = std::round((finalQty * rate) * 100.0) / 100.0;
+
+            if (finalQty > 0.001) {
+                itm.amount = std::round((finalQty * rate) * 100.0) / 100.0;
+            } else {
+                itm.amount = std::round((finalBags * rate) * 100.0) / 100.0;
+            }
+
             itm.amountFmt = AccountingEngine::formatIndianCurrency(itm.amount, true);
             itm.isAudited = false;
 

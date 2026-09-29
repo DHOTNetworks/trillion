@@ -3,7 +3,7 @@
 #include <QWidget>
 #include <QTableWidget>
 #include <QLineEdit>
-#include <QDateEdit>
+#include "accounting_date_edit.h"
 #include <QPushButton>
 #include <QLabel>
 #include "../models/transport_dispatch_controller.h"
@@ -42,8 +42,8 @@ private:
     TransportDispatchController* m_controller = nullptr;
     PrintExportController* m_printExportCtrl = nullptr;
 
-    QDateEdit* m_fromDateEdit = nullptr;
-    QDateEdit* m_toDateEdit = nullptr;
+    AccountingDateDisplay* m_fromDateEdit = nullptr;
+    AccountingDateDisplay* m_toDateEdit = nullptr;
     QLineEdit* m_searchEdit = nullptr;
 
     // Stat Cards

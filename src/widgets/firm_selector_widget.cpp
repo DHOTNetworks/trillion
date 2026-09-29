@@ -191,7 +191,7 @@ void FirmSelectorWidget::setupUi() {
     m_table->horizontalHeader()->setSectionResizeMode(6, QHeaderView::Fixed);
 
     m_table->setColumnWidth(0, 160);
-    m_table->setColumnWidth(2, 170);
+    m_table->setColumnWidth(2, 190);
     m_table->setColumnWidth(3, 140);
     m_table->setColumnWidth(4, 90);
     m_table->setColumnWidth(5, 130);
@@ -408,9 +408,24 @@ void FirmSelectorWidget::refreshFirms() {
         nameItem->setFont(nFont);
         m_table->setItem(i, 1, nameItem);
 
-        // Col 2: Period
-        QTableWidgetItem* periodItem = new QTableWidgetItem(map.value("period", "All Fiscal Years").toString());
-        periodItem->setForeground(QColor("#475569"));
+        // Col 2: Period (Starting and Ending Financial Year)
+        QString periodStr = map.value("period").toString().trimmed();
+        if (periodStr.isEmpty() || periodStr == "All Fiscal Years" || periodStr == "Active" || !periodStr.contains("to", Qt::CaseInsensitive)) {
+            QString dbPath = map.value("db_path").toString();
+            if (dbPath.isEmpty()) dbPath = "data/" + map.value("db_name").toString();
+            if (QFile::exists(dbPath)) {
+                periodStr = FirmManager::getFirmPeriod(dbPath);
+            }
+        }
+        if (periodStr.isEmpty()) {
+            periodStr = "-";
+        }
+        QTableWidgetItem* periodItem = new QTableWidgetItem(periodStr);
+        periodItem->setForeground(QColor("#0F172A"));
+        periodItem->setTextAlignment(Qt::AlignCenter);
+        QFont pFont = periodItem->font();
+        pFont.setBold(true);
+        periodItem->setFont(pFont);
         m_table->setItem(i, 2, periodItem);
 
         // Col 3: GSTIN

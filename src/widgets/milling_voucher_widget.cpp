@@ -94,7 +94,7 @@ void MillingVoucherWidget::setupUi() {
     m_batchDateEdit->setStyleSheet("background-color: #FFFFFF; color: #0F172A; font-size: 12px; font-weight: 800; border: 1px solid #CBD5E1; border-radius: 5px;");
     topHeaderLayout->addWidget(m_batchDateEdit);
 
-    auto* dateBtn = new QPushButton("📅", this);
+    auto* dateBtn = new QPushButton("", this);
     dateBtn->setFixedSize(24, 22);
     dateBtn->setStyleSheet("background-color: #EFF6FF; border: 1px solid #93C5FD; border-radius: 4px; font-size: 11px; color: #1D4ED8; padding: 0px;");
     connect(dateBtn, &QPushButton::clicked, this, [this]() { openDateDialog(false); });

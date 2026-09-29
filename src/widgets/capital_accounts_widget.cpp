@@ -1,4 +1,5 @@
 #include "capital_accounts_widget.h"
+#include "voucher_date_dialog.h"
 #include "kbd_badge_button.h"
 #include "custom_dialogs.h"
 #include "../engine/fiscal_year_helper.h"
@@ -86,26 +87,33 @@ void CapitalAccountsWidget::setupUi() {
     filterCard->setStyleSheet(
         "QFrame { background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; }"
         "QLabel { border: none; background: transparent; font-size: 11.5px; font-weight: 700; color: #475569; }"
-        "QDateEdit { background-color: #FFFFFF; color: #0F172A; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 4px 8px; font-weight: 700; font-size: 11.5px; }"
-        "QDateEdit:focus { border: 2px solid #2563EB; background-color: #FFFFF0; }"
+        "AccountingDateEdit, QDateEdit { background-color: #FFFFFF; color: #0F172A; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 4px 8px; font-weight: 700; font-size: 11.5px; }"
+        "AccountingDateEdit:focus, QDateEdit:focus { border: 2px solid #2563EB; background-color: #FFFFF0; }"
     );
     auto* filterLayout = new QHBoxLayout(filterCard);
     filterLayout->setContentsMargins(12, 6, 12, 6);
     filterLayout->setSpacing(10);
 
     filterLayout->addWidget(new QLabel("From Date:", filterCard));
-    m_fromDateEdit = new QDateEdit(filterCard);
-    m_fromDateEdit->setCalendarPopup(true);
-    m_fromDateEdit->setDisplayFormat("dd-MM-yyyy");
-    connect(m_fromDateEdit, &QDateEdit::dateChanged, this, &CapitalAccountsWidget::onDateFilterChanged);
+    m_fromDateEdit = new AccountingDateDisplay(filterCard);
+    m_fromDateEdit->setFixedWidth(115);
+    connect(m_fromDateEdit, &AccountingDateDisplay::dateChanged, this, &CapitalAccountsWidget::onDateFilterChanged);
+    connect(m_fromDateEdit, &AccountingDateDisplay::clicked, this, &CapitalAccountsWidget::onPeriodClicked);
     filterLayout->addWidget(m_fromDateEdit);
 
     filterLayout->addWidget(new QLabel("To Date:", filterCard));
-    m_toDateEdit = new QDateEdit(filterCard);
-    m_toDateEdit->setCalendarPopup(true);
-    m_toDateEdit->setDisplayFormat("dd-MM-yyyy");
-    connect(m_toDateEdit, &QDateEdit::dateChanged, this, &CapitalAccountsWidget::onDateFilterChanged);
+    m_toDateEdit = new AccountingDateDisplay(filterCard);
+    m_toDateEdit->setFixedWidth(115);
+    connect(m_toDateEdit, &AccountingDateDisplay::dateChanged, this, &CapitalAccountsWidget::onDateFilterChanged);
+    connect(m_toDateEdit, &AccountingDateDisplay::clicked, this, &CapitalAccountsWidget::onPeriodClicked);
     filterLayout->addWidget(m_toDateEdit);
+
+    auto* periodBtn = new QPushButton("Period (F2)", filterCard);
+    periodBtn->setFixedHeight(34);
+    periodBtn->setCursor(Qt::PointingHandCursor);
+    periodBtn->setStyleSheet("QPushButton { background-color: #EFF6FF; color: #1D4ED8; border: 1px solid #BFDBFE; border-radius: 6px; padding: 4px 10px; font-weight: 700; font-size: 11.5px; } QPushButton:hover { background-color: #DBEAFE; color: #1E40AF; }");
+    connect(periodBtn, &QPushButton::clicked, this, &CapitalAccountsWidget::onPeriodClicked);
+    filterLayout->addWidget(periodBtn);
 
     filterLayout->addStretch(1);
     mainLayout->addWidget(filterCard);
@@ -276,6 +284,16 @@ void CapitalAccountsWidget::onDateFilterChanged() {
     reloadData();
 }
 
+void CapitalAccountsWidget::onPeriodClicked() {
+    QDate f = m_fromDateEdit->date();
+    QDate t = m_toDateEdit->date();
+    if (VoucherDateDialog::selectDateRange(this, &f, &t, f, t)) {
+        m_fromDateEdit->setDate(f);
+        m_toDateEdit->setDate(t);
+        reloadData();
+    }
+}
+
 void CapitalAccountsWidget::onTableDoubleClicked(int row, int col) {
     Q_UNUSED(col);
     if (!m_controller) return;
@@ -339,6 +357,11 @@ void CapitalAccountsWidget::keyPressEvent(QKeyEvent* event) {
     if (event->key() == Qt::Key_Escape) {
         emit backRequested();
         event->accept();
+        return;
+    }
+    if (event->key() == Qt::Key_F2 || (event->modifiers() & Qt::AltModifier && event->key() == Qt::Key_F2)) {
+        event->accept();
+        onPeriodClicked();
         return;
     }
     QWidget::keyPressEvent(event);

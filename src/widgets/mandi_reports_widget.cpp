@@ -1,4 +1,5 @@
 #include "mandi_reports_widget.h"
+#include "voucher_date_dialog.h"
 #include "engine/accounting_engine.h"
 #include "engine/fiscal_year_helper.h"
 #include <QVBoxLayout>
@@ -89,16 +90,21 @@ void MandiReportsWidget::setupFormMTab() {
 
     auto* filterLayout = new QHBoxLayout();
     filterLayout->addWidget(new QLabel("From Date:", this));
-    m_formMFromDate = new QDateEdit(defStart, this);
-    m_formMFromDate->setCalendarPopup(true);
-    m_formMFromDate->setDisplayFormat("dd-MM-yyyy");
+    m_formMFromDate = new AccountingDateDisplay(defStart, this);
+    m_formMFromDate->setFixedWidth(115);
+    connect(m_formMFromDate, &AccountingDateDisplay::clicked, this, &MandiReportsWidget::onPeriodClicked);
     filterLayout->addWidget(m_formMFromDate);
 
     filterLayout->addWidget(new QLabel("To Date:", this));
-    m_formMToDate = new QDateEdit(defEnd, this);
-    m_formMToDate->setCalendarPopup(true);
-    m_formMToDate->setDisplayFormat("dd-MM-yyyy");
+    m_formMToDate = new AccountingDateDisplay(defEnd, this);
+    m_formMToDate->setFixedWidth(115);
+    connect(m_formMToDate, &AccountingDateDisplay::clicked, this, &MandiReportsWidget::onPeriodClicked);
     filterLayout->addWidget(m_formMToDate);
+
+    auto* periodBtn1 = new QPushButton("Period (F2)", this);
+    periodBtn1->setStyleSheet("QPushButton { background-color: #EFF6FF; color: #1D4ED8; border: 1px solid #BFDBFE; border-radius: 6px; padding: 4px 10px; font-weight: 700; font-size: 11.5px; } QPushButton:hover { background-color: #DBEAFE; color: #1E40AF; }");
+    connect(periodBtn1, &QPushButton::clicked, this, &MandiReportsWidget::onPeriodClicked);
+    filterLayout->addWidget(periodBtn1);
 
     auto* refreshBtn = new QPushButton("Generate Form M Return", this);
     refreshBtn->setObjectName("primaryButton");
@@ -172,16 +178,21 @@ void MandiReportsWidget::setupJFormRegisterTab() {
 
     auto* filterLayout = new QHBoxLayout();
     filterLayout->addWidget(new QLabel("From Date:", this));
-    m_jfFromDate = new QDateEdit(defStart, this);
-    m_jfFromDate->setCalendarPopup(true);
-    m_jfFromDate->setDisplayFormat("dd-MM-yyyy");
+    m_jfFromDate = new AccountingDateDisplay(defStart, this);
+    m_jfFromDate->setFixedWidth(115);
+    connect(m_jfFromDate, &AccountingDateDisplay::clicked, this, &MandiReportsWidget::onPeriodClicked);
     filterLayout->addWidget(m_jfFromDate);
 
     filterLayout->addWidget(new QLabel("To Date:", this));
-    m_jfToDate = new QDateEdit(defEnd, this);
-    m_jfToDate->setCalendarPopup(true);
-    m_jfToDate->setDisplayFormat("dd-MM-yyyy");
+    m_jfToDate = new AccountingDateDisplay(defEnd, this);
+    m_jfToDate->setFixedWidth(115);
+    connect(m_jfToDate, &AccountingDateDisplay::clicked, this, &MandiReportsWidget::onPeriodClicked);
     filterLayout->addWidget(m_jfToDate);
+
+    auto* periodBtn2 = new QPushButton("Period (F2)", this);
+    periodBtn2->setStyleSheet("QPushButton { background-color: #EFF6FF; color: #1D4ED8; border: 1px solid #BFDBFE; border-radius: 6px; padding: 4px 10px; font-weight: 700; font-size: 11.5px; } QPushButton:hover { background-color: #DBEAFE; color: #1E40AF; }");
+    connect(periodBtn2, &QPushButton::clicked, this, &MandiReportsWidget::onPeriodClicked);
+    filterLayout->addWidget(periodBtn2);
 
     auto* refreshBtn = new QPushButton("Filter Register", this);
     refreshBtn->setObjectName("primaryButton");
@@ -222,16 +233,21 @@ void MandiReportsWidget::setupIFormRegisterTab() {
 
     auto* filterLayout = new QHBoxLayout();
     filterLayout->addWidget(new QLabel("From Date:", this));
-    m_ifFromDate = new QDateEdit(defStart, this);
-    m_ifFromDate->setCalendarPopup(true);
-    m_ifFromDate->setDisplayFormat("dd-MM-yyyy");
+    m_ifFromDate = new AccountingDateDisplay(defStart, this);
+    m_ifFromDate->setFixedWidth(115);
+    connect(m_ifFromDate, &AccountingDateDisplay::clicked, this, &MandiReportsWidget::onPeriodClicked);
     filterLayout->addWidget(m_ifFromDate);
 
     filterLayout->addWidget(new QLabel("To Date:", this));
-    m_ifToDate = new QDateEdit(defEnd, this);
-    m_ifToDate->setCalendarPopup(true);
-    m_ifToDate->setDisplayFormat("dd-MM-yyyy");
+    m_ifToDate = new AccountingDateDisplay(defEnd, this);
+    m_ifToDate->setFixedWidth(115);
+    connect(m_ifToDate, &AccountingDateDisplay::clicked, this, &MandiReportsWidget::onPeriodClicked);
     filterLayout->addWidget(m_ifToDate);
+
+    auto* periodBtn3 = new QPushButton("Period (F2)", this);
+    periodBtn3->setStyleSheet("QPushButton { background-color: #EFF6FF; color: #1D4ED8; border: 1px solid #BFDBFE; border-radius: 6px; padding: 4px 10px; font-weight: 700; font-size: 11.5px; } QPushButton:hover { background-color: #DBEAFE; color: #1E40AF; }");
+    connect(periodBtn3, &QPushButton::clicked, this, &MandiReportsWidget::onPeriodClicked);
+    filterLayout->addWidget(periodBtn3);
 
     auto* refreshBtn = new QPushButton("Filter Register", this);
     refreshBtn->setObjectName("primaryButton");
@@ -338,16 +354,21 @@ void MandiReportsWidget::setupDamiRegisterTab() {
 
     auto* filterLayout = new QHBoxLayout();
     filterLayout->addWidget(new QLabel("From Date:", this));
-    m_damiFromDate = new QDateEdit(defStart, this);
-    m_damiFromDate->setCalendarPopup(true);
-    m_damiFromDate->setDisplayFormat("dd-MM-yyyy");
+    m_damiFromDate = new AccountingDateDisplay(defStart, this);
+    m_damiFromDate->setFixedWidth(115);
+    connect(m_damiFromDate, &AccountingDateDisplay::clicked, this, &MandiReportsWidget::onPeriodClicked);
     filterLayout->addWidget(m_damiFromDate);
 
     filterLayout->addWidget(new QLabel("To Date:", this));
-    m_damiToDate = new QDateEdit(defEnd, this);
-    m_damiToDate->setCalendarPopup(true);
-    m_damiToDate->setDisplayFormat("dd-MM-yyyy");
+    m_damiToDate = new AccountingDateDisplay(defEnd, this);
+    m_damiToDate->setFixedWidth(115);
+    connect(m_damiToDate, &AccountingDateDisplay::clicked, this, &MandiReportsWidget::onPeriodClicked);
     filterLayout->addWidget(m_damiToDate);
+
+    auto* periodBtn4 = new QPushButton("Period (F2)", this);
+    periodBtn4->setStyleSheet("QPushButton { background-color: #EFF6FF; color: #1D4ED8; border: 1px solid #BFDBFE; border-radius: 6px; padding: 4px 10px; font-weight: 700; font-size: 11.5px; } QPushButton:hover { background-color: #DBEAFE; color: #1E40AF; }");
+    connect(periodBtn4, &QPushButton::clicked, this, &MandiReportsWidget::onPeriodClicked);
+    filterLayout->addWidget(periodBtn4);
 
     auto* refreshBtn = new QPushButton("Refresh Dami Book", this);
     refreshBtn->setObjectName("primaryButton");
@@ -461,7 +482,7 @@ void MandiReportsWidget::applyCustomStyles() {
         "  font-weight: 600;"
         "  background: transparent;"
         "}"
-        "QLineEdit, QComboBox, QDateEdit {"
+        "QLineEdit, QComboBox, AccountingDateEdit, QDateEdit {"
         "  background-color: #FFFFFF;"
         "  color: #0F172A;"
         "  border: 1px solid #CBD5E1;"
@@ -470,7 +491,7 @@ void MandiReportsWidget::applyCustomStyles() {
         "  font-size: 12px;"
         "  font-weight: 600;"
         "}"
-        "QLineEdit:focus, QComboBox:focus, QDateEdit:focus {"
+        "QLineEdit:focus, QComboBox:focus, AccountingDateEdit:focus, QDateEdit:focus {"
         "  border: 1.5px solid #2563EB;"
         "  background-color: #EFF6FF;"
         "}"
@@ -790,9 +811,47 @@ void MandiReportsWidget::generateDamiRegister() {
     m_damiSummaryLabel->setText(QString("Total Commission / Dami Earned: ₹ %1").arg(QString::number(res.value("total_dami").toDouble(), 'f', 2)));
 }
 
+void MandiReportsWidget::onPeriodClicked() {
+    int curTab = m_tabWidget ? m_tabWidget->currentIndex() : 0;
+    AccountingDateDisplay* fromEdit = nullptr;
+    AccountingDateDisplay* toEdit = nullptr;
+    std::function<void()> refreshFunc = nullptr;
+
+    if (curTab == 0) {
+        fromEdit = m_formMFromDate;
+        toEdit = m_formMToDate;
+        refreshFunc = [this]() { generateFormM(); };
+    } else if (curTab == 1) {
+        fromEdit = m_jfFromDate;
+        toEdit = m_jfToDate;
+        refreshFunc = [this]() { generateJFormRegister(); };
+    } else if (curTab == 2) {
+        fromEdit = m_ifFromDate;
+        toEdit = m_ifToDate;
+        refreshFunc = [this]() { generateIFormRegister(); };
+    } else if (curTab == 4) {
+        fromEdit = m_damiFromDate;
+        toEdit = m_damiToDate;
+        refreshFunc = [this]() { generateDamiRegister(); };
+    }
+
+    if (fromEdit && toEdit) {
+        QDate f = fromEdit->date();
+        QDate t = toEdit->date();
+        if (VoucherDateDialog::selectDateRange(this, &f, &t, f, t)) {
+            fromEdit->setDate(f);
+            toEdit->setDate(t);
+            if (refreshFunc) refreshFunc();
+        }
+    }
+}
+
 void MandiReportsWidget::keyPressEvent(QKeyEvent* event) {
     if (event->key() == Qt::Key_Escape) {
         emit backRequested();
+        event->accept();
+    } else if (event->key() == Qt::Key_F2 || (event->modifiers() & Qt::AltModifier && event->key() == Qt::Key_F2)) {
+        onPeriodClicked();
         event->accept();
     } else {
         QWidget::keyPressEvent(event);
@@ -802,6 +861,10 @@ void MandiReportsWidget::keyPressEvent(QKeyEvent* event) {
 bool MandiReportsWidget::eventFilter(QObject* watched, QEvent* event) {
     if (event->type() == QEvent::KeyPress) {
         auto* keyEvent = static_cast<QKeyEvent*>(event);
+        if (keyEvent->key() == Qt::Key_F2 || (keyEvent->modifiers() & Qt::AltModifier && keyEvent->key() == Qt::Key_F2)) {
+            onPeriodClicked();
+            return true;
+        }
         if (keyEvent->key() == Qt::Key_Escape) {
             emit backRequested();
             return true;

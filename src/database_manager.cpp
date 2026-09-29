@@ -1,4 +1,6 @@
 #include "database_manager.h"
+#include "models/account_classifier.h"
+#include "engine/accounting_engine.h"
 #include <QDir>
 #include <QFileInfo>
 #include <QDebug>
@@ -59,6 +61,8 @@ void DatabaseManager::closeDatabase() {
         sqlite3_close(m_db);
         m_db = nullptr;
     }
+    AccountClassifier::invalidateCache();
+    AccountingEngine::clearActivePeriod();
 }
 
 bool DatabaseManager::switchDatabase(const QString& newDbPath) {
@@ -1229,28 +1233,53 @@ void DatabaseManager::ensureTablesExist() {
         ");"
     );
 
-    // Seed default account groups if table is empty
+    // Seed standard Bahi-Khata default account groups matching Data.001 exactly
     QVariant groupCount = executeScalar("SELECT COUNT(*) FROM account_groups;");
     if (!groupCount.isValid() || groupCount.toLongLong() == 0) {
-        struct DefGroup { const char* name; const char* parent; const char* nature; const char* desc; };
-        DefGroup defaults[] = {
-            {"Primary / Root Group", "Primary", "Assets", "Top-level primary root group"},
-            {"Sundry Debtors (Buyers)", "Current Assets", "Assets", "Trade debtors and rice buyers"},
-            {"Sundry Creditors (Farmers/Vendors)", "Current Liabilities", "Liabilities", "Farmer suppliers and mandi vendors"},
-            {"Bank Accounts", "Current Assets", "Assets", "Current and savings bank accounts"},
-            {"Cash-in-hand", "Current Assets", "Assets", "Physical cash balance and petty cash"},
-            {"Direct Expenses (Hamali/Freight)", "Direct Expenses", "Expense", "Mill labor, hamali, unloading, and transport charges"},
-            {"Rice Milling Sales Revenue", "Sales Accounts", "Income", "Revenue from head rice, broken rice, bran & husk sales"},
-            {"Paddy Procurement Purchases", "Purchase Accounts", "Expense", "Raw paddy arrivals purchase cost"},
-            {"Duties & Taxes (GST)", "Current Liabilities", "Liabilities", "CGST, SGST, IGST, and Mandi Tax liabilities"},
-            {"Loans & Liabilities", "Loans (Liability)", "Liabilities", "Bank term loans and working capital credit"},
-            {"Stock-in-Hand (Paddy & Rice)", "Current Assets", "Assets", "Raw paddy and finished rice inventory evaluation"}
+        struct BahiGroupSeed { int c1, c2, c3, c4; const char* name; const char* parent; const char* nature; int extractBs; };
+        static const BahiGroupSeed defaults[] = {
+            {0, 0, 0, 0, "Primary", "Primary", "Assets", 1},
+            {1, 0, 0, 0, "Capital A/c", "Primary", "Liabilities", 1},
+            {2, 0, 0, 0, "Current Assets", "Primary", "Assets", 1},
+            {3, 2, 0, 0, "Bank(s) A/c", "Current Assets", "Assets", 1},
+            {4, 2, 0, 0, "Cash-In-Hand", "Current Assets", "Assets", 1},
+            {6, 2, 0, 0, "Loan & Advances (Assets)", "Current Assets", "Assets", 1},
+            {7, 2, 0, 0, "Stock-In-Hand", "Current Assets", "Assets", 0},
+            {8, 2, 0, 0, "Sundry Debtors", "Current Assets", "Assets", 1},
+            {9, 0, 0, 0, "Current Liabilities", "Primary", "Liabilities", 1},
+            {10, 9, 0, 0, "Duties & Taxes", "Current Liabilities", "Liabilities", 1},
+            {11, 9, 0, 0, "Sundry Creditors", "Current Liabilities", "Liabilities", 1},
+            {12, 9, 0, 0, "Provisions", "Current Liabilities", "Liabilities", 1},
+            {13, 9, 0, 0, "Loans (Liability)", "Current Liabilities", "Liabilities", 1},
+            {14, 0, 0, 0, "Fixed Assets", "Primary", "Assets", 1},
+            {15, 0, 0, 0, "Profit & Loss", "Primary", "Liabilities", 1},
+            {16, 15, 0, 0, "Income A/c", "Profit & Loss", "Income", 1},
+            {17, 15, 0, 0, "Expenditure A/c", "Profit & Loss", "Expense", 1},
+            {18, 0, 0, 0, "Trading Items Stock A/c", "Primary", "Assets", 0},
+            {19, 18, 0, 0, "Purchase A/c", "Trading Items Stock A/c", "Expense", 0},
+            {20, 18, 0, 0, "Sale A/c", "Trading Items Stock A/c", "Income", 0},
+            {21, 0, 0, 0, "Commission Basis Parties A/c", "Primary", "Liabilities", 1},
+            {22, 0, 0, 0, "Manufacturing Group", "Primary", "Expense", 0},
+            {23, 22, 0, 0, "Manufacturing Exp.", "Manufacturing Group", "Expense", 0},
+            {24, 18, 0, 0, "Trading Exp.", "Trading Items Stock A/c", "Expense", 0},
+            {25, 0, 0, 0, "Suspense A/c", "Primary", "Liabilities", 1},
+            {26, 2, 0, 0, "Deposit (Assets)", "Current Assets", "Assets", 1},
+            {27, 0, 0, 0, "Branches / Divisions", "Primary", "Liabilities", 1},
+            {28, 13, 9, 0, "Secured Loans", "Loans (Liability)", "Liabilities", 1},
+            {29, 13, 9, 0, "Unsecured Loans", "Loans (Liability)", "Liabilities", 1},
+            {30, 2, 0, 0, "Security A/c", "Current Assets", "Assets", 1},
+            {31, 11, 9, 0, "Local Mandi Creditors", "Sundry Creditors", "Liabilities", 1},
+            {32, 8, 2, 0, "Zimidara Debtors", "Sundry Debtors", "Assets", 1},
+            {33, 11, 9, 0, "Zimidara Creditors", "Sundry Creditors", "Liabilities", 1},
+            {34, 8, 2, 0, "Mandi Debtors", "Sundry Debtors", "Assets", 1},
+            {35, 8, 2, 0, "Employees", "Sundry Debtors", "Assets", 1},
+            {-1, 0, 0, 0, "Isht Dev", "Primary", "Liabilities", 1}
         };
         for (const auto& g : defaults) {
             executeNonQuery(
-                "INSERT INTO account_groups (name, parent_group_name, nature, description, extract_in_balance_sheet, is_system) "
-                "VALUES (?, ?, ?, ?, 1, 1);",
-                {g.name, g.parent, g.nature, g.desc}
+                "INSERT INTO account_groups (name, parent_group_name, nature, description, extract_in_balance_sheet, is_system, code1st, code2nd, code3rd, code4th) "
+                "VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?);",
+                {g.name, g.parent, g.nature, QString("Standard Group #%1").arg(g.c1), g.extractBs, g.c1, g.c2, g.c3, g.c4}
             );
         }
     }
@@ -1330,6 +1359,142 @@ void DatabaseManager::ensureTablesExist() {
         "created_at TEXT"
         ");"
     );
+
+    // 14. Bardana (Gunny Bags & Packaging) Transactions
+    executeNonQuery(
+        "CREATE TABLE IF NOT EXISTS bardana_transactions ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "fy_id INTEGER,"
+        "financial_year TEXT DEFAULT 'FY 2025-26',"
+        "voucher_no TEXT NOT NULL,"
+        "voucher_date TEXT NOT NULL,"
+        "vch_type TEXT NOT NULL,"
+        "party_id INTEGER,"
+        "party_name TEXT NOT NULL,"
+        "bardana_type TEXT NOT NULL,"
+        "godown_name TEXT DEFAULT 'Main Godown',"
+        "dr_cr TEXT NOT NULL DEFAULT 'Dr',"
+        "qty INTEGER NOT NULL DEFAULT 0,"
+        "rate REAL DEFAULT 0.0,"
+        "amount REAL DEFAULT 0.0,"
+        "vehicle_no TEXT,"
+        "bill_no TEXT,"
+        "narration TEXT,"
+        "created_at DATETIME DEFAULT CURRENT_TIMESTAMP,"
+        "FOREIGN KEY (party_id) REFERENCES parties(id),"
+        "FOREIGN KEY (fy_id) REFERENCES financial_years(id)"
+        ");"
+    );
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_bardana_party ON bardana_transactions(party_name, voucher_date);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_bardana_type ON bardana_transactions(bardana_type, godown_name);");
+
+    // 15. Gate Inward / Outward Register
+    executeNonQuery(
+        "CREATE TABLE IF NOT EXISTS gate_register ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "fy_id INTEGER,"
+        "financial_year TEXT DEFAULT 'FY 2025-26',"
+        "gate_pass_no TEXT UNIQUE NOT NULL,"
+        "entry_date TEXT NOT NULL,"
+        "entry_time TEXT,"
+        "exit_time TEXT,"
+        "direction TEXT NOT NULL DEFAULT 'INWARD',"
+        "purpose TEXT DEFAULT 'Paddy Purchase',"
+        "vehicle_no TEXT NOT NULL,"
+        "driver_name TEXT,"
+        "driver_phone TEXT,"
+        "transporter_name TEXT,"
+        "party_id INTEGER,"
+        "party_name TEXT NOT NULL,"
+        "commodity TEXT DEFAULT 'Paddy',"
+        "bag_count INTEGER DEFAULT 0,"
+        "gross_weight_qtl REAL DEFAULT 0.0,"
+        "tare_weight_qtl REAL DEFAULT 0.0,"
+        "net_weight_qtl REAL DEFAULT 0.0,"
+        "status TEXT DEFAULT 'AT_GATE',"
+        "weighbridge_slip_no TEXT,"
+        "linked_voucher_no TEXT,"
+        "remarks TEXT,"
+        "created_at DATETIME DEFAULT CURRENT_TIMESTAMP,"
+        "FOREIGN KEY (party_id) REFERENCES parties(id),"
+        "FOREIGN KEY (fy_id) REFERENCES financial_years(id)"
+        ");"
+    );
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_gate_reg_date ON gate_register(entry_date, direction);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_gate_reg_vehicle ON gate_register(vehicle_no);");
+
+    // 16. Sauda (Forward Broker Contracts)
+    executeNonQuery(
+        "CREATE TABLE IF NOT EXISTS sauda_contracts ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "fy_id INTEGER,"
+        "financial_year TEXT DEFAULT 'FY 2025-26',"
+        "sauda_no TEXT UNIQUE NOT NULL,"
+        "sauda_date TEXT NOT NULL,"
+        "sauda_type TEXT NOT NULL DEFAULT 'SALE',"
+        "party_id INTEGER,"
+        "party_name TEXT NOT NULL,"
+        "broker_id INTEGER,"
+        "broker_name TEXT,"
+        "item_id INTEGER,"
+        "item_name TEXT NOT NULL,"
+        "grade TEXT,"
+        "contracted_bags INTEGER DEFAULT 0,"
+        "contracted_weight_qtl REAL NOT NULL DEFAULT 0.0,"
+        "rate_per_qtl REAL NOT NULL DEFAULT 0.0,"
+        "dalali_rate_per_qtl REAL DEFAULT 0.0,"
+        "dalali_pct REAL DEFAULT 0.0,"
+        "delivery_from TEXT,"
+        "delivery_to TEXT,"
+        "payment_terms TEXT,"
+        "condition_notes TEXT,"
+        "fulfilled_weight_qtl REAL DEFAULT 0.0,"
+        "fulfilled_bags INTEGER DEFAULT 0,"
+        "status TEXT DEFAULT 'PENDING',"
+        "created_at DATETIME DEFAULT CURRENT_TIMESTAMP,"
+        "FOREIGN KEY (party_id) REFERENCES parties(id),"
+        "FOREIGN KEY (broker_id) REFERENCES parties(id),"
+        "FOREIGN KEY (item_id) REFERENCES stock_items(id),"
+        "FOREIGN KEY (fy_id) REFERENCES financial_years(id)"
+        ");"
+    );
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_sauda_party ON sauda_contracts(party_name, status);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_sauda_broker ON sauda_contracts(broker_name, sauda_date);");
+
+    // 17. Dalali / Brokerage Settlements
+    executeNonQuery(
+        "CREATE TABLE IF NOT EXISTS dalali_settlements ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "fy_id INTEGER,"
+        "financial_year TEXT DEFAULT 'FY 2025-26',"
+        "settlement_no TEXT UNIQUE NOT NULL,"
+        "settlement_date TEXT NOT NULL,"
+        "broker_id INTEGER NOT NULL,"
+        "broker_name TEXT NOT NULL,"
+        "sauda_id INTEGER,"
+        "sauda_no TEXT,"
+        "voucher_type TEXT DEFAULT 'SALE',"
+        "voucher_no TEXT,"
+        "invoice_no TEXT,"
+        "party_name TEXT,"
+        "item_name TEXT,"
+        "weight_qtl REAL DEFAULT 0.0,"
+        "rate_per_qtl REAL DEFAULT 0.0,"
+        "dalali_rate REAL DEFAULT 0.0,"
+        "dalali_amount REAL NOT NULL DEFAULT 0.0,"
+        "tds_pct REAL DEFAULT 5.0,"
+        "tds_amount REAL DEFAULT 0.0,"
+        "net_dalali_payable REAL NOT NULL DEFAULT 0.0,"
+        "is_posted_to_jv INTEGER DEFAULT 0,"
+        "journal_voucher_no TEXT,"
+        "narration TEXT,"
+        "created_at DATETIME DEFAULT CURRENT_TIMESTAMP,"
+        "FOREIGN KEY (broker_id) REFERENCES parties(id),"
+        "FOREIGN KEY (sauda_id) REFERENCES sauda_contracts(id),"
+        "FOREIGN KEY (fy_id) REFERENCES financial_years(id)"
+        ");"
+    );
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_dalali_broker ON dalali_settlements(broker_name, settlement_date);");
 
     QMap<QString, QSet<QString>> tableColsCache;
     auto getCols = [this, &tableColsCache](const QString& table) -> const QSet<QString>& {
@@ -1613,27 +1778,100 @@ void DatabaseManager::ensureTablesExist() {
     addColumnIfNotExists("tds_vouchers", "challan_id", "INTEGER");
     addColumnIfNotExists("tds_vouchers", "is_deposited", "INTEGER DEFAULT 0");
 
-    // Ensure Default Tax & Adjustment Ledgers Exist in Parties
-    auto ensureLedgerExists = [this](const QString& name, const QString& group, const QString& type) {
-        QVariant v = executeScalar("SELECT id FROM parties WHERE name = ? LIMIT 1;", {name});
-        if (!v.isValid() || v.isNull()) {
-            executeNonQuery(
-                "INSERT INTO parties (name, group_name, party_type) VALUES (?, ?, ?);",
-                {name, group, type}
-            );
-        }
+    // Ensure Standard Bahi-Khata Default System Ledgers Matching Data.001
+    struct BahiDefLedger { int code, groupCode; const char* name; const char* balType; };
+    static const BahiDefLedger defaultBahiLedgers[] = {
+        {2, 15, "Profit & Loss", "Dr"},
+        {55, 10, "CST A/c", "Dr"},
+        {58, 10, "H.R.D.F. A/c", "Dr"},
+        {57, 10, "Market Fee A/c", "Dr"},
+        {63, 9, "Bonus A/c", "Dr"},
+        {67, 17, "Association Charges A/c", "Dr"},
+        {68, 17, "Gaushala Charges A/c", "Dr"},
+        {69, 16, "Commission A/c", "Dr"},
+        {71, 17, "Insurance Charges A/c", "Dr"},
+        {72, 17, "Jaffery A/c", "Dr"},
+        {74, 17, "Misc. Exp. a/c", "Dr"},
+        {75, 17, "Salary A/c", "Dr"},
+        {78, 17, "Labour A/c", "Dr"},
+        {79, 17, "Interest A/c", "Dr"},
+        {80, 17, "Other Exp. A/c", "Dr"},
+        {61, 10, "T.D.S. Payable (Dami/Commission)", "Cr"},
+        {54, 10, "VAT A/c", "Dr"},
+        {70, 15, "Discount A/c", "Dr"},
+        {44, 17, "Round +/- A/c", "Dr"},
+        {1, 4, "Cash", "Dr"},
+        {377, 25, "Suspense A/c", "Dr"},
+        {77, 17, "Freight Inward A/c", "Dr"},
+        {505, 18, "Bardan Export", "Dr"},
+        {209, 18, "Bardana A/c", "Dr"},
+        {882, 18, "Paddy Basmati A/c", "Dr"},
+        {501, 18, "Paddy Husk A/c", "Dr"},
+        {502, 18, "Rice Broken", "Dr"},
+        {503, 14, "Machinery A/c", "Dr"},
+        {533, 16, "Quality Qlaim A/c", "Dr"},
+        {542, 17, "Freight Export Rice A/c", "Dr"},
+        {544, 17, "Export Expenses", "Dr"},
+        {545, 17, "General Expenses", "Dr"},
+        {547, 17, "Provident Fund", "Dr"},
+        {548, 12, "Imprest A/c", "Dr"},
+        {571, 12, "Cheque Issued But Not Cleared", "Cr"},
+        {686, -1, " Sh. Ganesh Ji Maharaj", "Cr"},
+        {45, 18, "Paddy Parmal A/c", "Dr"},
+        {680, 18, "Rice A/c", "Dr"},
+        {500, 18, "Rice Bran A/c", "Dr"},
+        {522, 18, "Thread A/C", "Dr"},
+        {675, 9, "Freight Payable A/c", "Cr"},
+        {695, 12, "Provident Fund Payable A/c", "Cr"},
+        {697, 12, "Duties & Taxes Payable", "Cr"},
+        {582, 12, "Interest Payable A/c", "Cr"},
+        {910, 10, "T.D.S. Payable (Labour)", "Cr"},
+        {942, 18, "Rice Basmati", "Dr"},
+        {943, 10, "SGST A/c", "Dr"},
+        {945, 10, "IGST A/c", "Dr"},
+        {946, 10, "CESS A/c", "Dr"},
+        {947, 10, "Reverse Charge Payable A/c", "Dr"},
+        {56, 16, "Dami A/c", "Dr"},
+        {65, 7, "Maal Khata A/c", "Dr"},
+        {73, 17, "Brokerage A/c", "Dr"},
+        {504, 18, "Machinery Repair", "Dr"},
+        {543, 17, "Freight Outward A/C", "Dr"},
+        {546, 17, "Electricity Charges", "Dr"},
+        {76, 17, "Depriciation A/c", "Dr"},
+        {498, 10, "T.D.S. Payable (Interest)", "Cr"},
+        {944, 10, "CGST A/c", "Dr"},
+        {948, 10, "TCS Payable A/c", "Dr"},
+        {949, 2, "TCS Receivable A/c", "Dr"},
+        {66, 9, "Auction Charges A/c", "Dr"},
+        {950, 10, "TDS U/S 194-Q", "Dr"},
+        {951, 10, "TDS Payable A/c", "Cr"},
+        {952, 17, "Interest on Tax A/c", "Dr"},
+        {953, 17, "Penalty on Tax A/c", "Dr"},
+        {954, 17, "Discount Allowed A/c", "Dr"},
+        {955, 16, "Interest Received A/c", "Cr"}
     };
 
-    ensureLedgerExists("TDS Payable A/c", "Duties & Taxes (GST)", "Tax");
-    ensureLedgerExists("TCS Payable A/c", "Duties & Taxes (GST)", "Tax");
-    ensureLedgerExists("TDS u/s 194-Q Payable A/c", "Duties & Taxes (GST)", "Tax");
-    ensureLedgerExists("TDS Receivable A/c", "Current Assets", "Asset");
-    ensureLedgerExists("Interest on Tax A/c", "Indirect Expenses", "Expense");
-    ensureLedgerExists("Penalty on Tax A/c", "Indirect Expenses", "Expense");
-    ensureLedgerExists("Discount Allowed A/c", "Indirect Expenses", "Expense");
-    ensureLedgerExists("Interest Received A/c", "Indirect Incomes", "Income");
+    for (const auto& bl : defaultBahiLedgers) {
+        QVariant v = executeScalar("SELECT id FROM parties WHERE name = ? OR legacy_id = ? LIMIT 1;", {bl.name, bl.code});
+        if (!v.isValid() || v.isNull()) {
+            QVariant grp = executeScalar("SELECT id, name FROM account_groups WHERE code1st = ? LIMIT 1;", {bl.groupCode});
+            QString gName = AccountClassifier::getStandardGroupName(bl.groupCode);
+            qint64 gId = 0;
+            if (grp.isValid() && !grp.isNull()) {
+                gId = grp.toLongLong();
+            }
+            executeNonQuery(
+                "INSERT INTO parties (name, group_name, group_code, group_id, balance_type, legacy_id) "
+                "VALUES (?, ?, ?, ?, ?, ?);",
+                {bl.name, gName, bl.groupCode, gId, bl.balType, bl.code}
+            );
+        }
+    }
 
     executeNonQuery("COMMIT;");
+
+    // Automatically heal and catalog any custom or foreign groups
+    AccountClassifier::healAllGroups();
 }
 
 QString DatabaseManager::getSetting(const QString& key, const QString& defaultVal) {

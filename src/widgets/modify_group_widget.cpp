@@ -1,6 +1,8 @@
 #include "modify_group_widget.h"
+#include "account_search_box.h"
 #include "custom_dialogs.h"
 #include "kbd_badge_button.h"
+#include "../models/account_classifier.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGridLayout>
@@ -27,7 +29,7 @@ void ModifyGroupWidget::setupUi() {
     auto* titleCol = new QVBoxLayout();
     auto* titleLabel = new QLabel("Modify Existing Account Group", this);
     titleLabel->setStyleSheet("font-size: 18px; font-weight: bold; color: #0F172A;");
-    auto* subLabel = new QLabel("Select any existing accounting group to modify name, parent group, nature, or reporting configuration.", this);
+    auto* subLabel = new QLabel("Search and select any existing accounting group to modify name, parent group, nature, or reporting configuration.", this);
     subLabel->setStyleSheet("font-size: 11px; color: #64748B;");
     titleCol->addWidget(titleLabel);
     titleCol->addWidget(subLabel);
@@ -47,19 +49,28 @@ void ModifyGroupWidget::setupUi() {
     sep->setStyleSheet("color: #E2E8F0;");
     mainLayout->addWidget(sep);
 
-    // 2. Group Selector Bar
+    // 2. Group Search & Selector Bar
     auto* selectFrame = new QFrame(this);
-    selectFrame->setStyleSheet("QFrame { background-color: #EFF6FF; border: 1.5px solid #93C5FD; border-radius: 6px; } QLabel { color: #1E40AF; font-weight: bold; font-size: 11px; }");
+    selectFrame->setStyleSheet(
+        "QFrame { background-color: #EFF6FF; border: 1.5px solid #93C5FD; border-radius: 6px; }"
+        "QLabel { color: #1E40AF; font-weight: bold; font-size: 11px; border: none; background: transparent; }"
+    );
     auto* selectLayout = new QHBoxLayout(selectFrame);
-    selectLayout->setContentsMargins(10, 6, 10, 6);
+    selectLayout->setContentsMargins(12, 8, 12, 8);
     selectLayout->setSpacing(10);
-    selectLayout->addWidget(new QLabel("SELECT ACCOUNT GROUP TO MODIFY (Type / Search):", selectFrame));
 
-    m_selectGroupCombo = new QComboBox(selectFrame);
-    m_selectGroupCombo->setEditable(true);
-    m_selectGroupCombo->setStyleSheet("QComboBox { background-color: #FFFFFF; color: #0F172A; border: 1px solid #60A5FA; border-radius: 4px; padding: 4px 8px; font-size: 12px; font-weight: bold; } QComboBox:focus { border: 2px solid #2563EB; }");
-    connect(m_selectGroupCombo, &QComboBox::currentTextChanged, this, &ModifyGroupWidget::onGroupSelected);
-    selectLayout->addWidget(m_selectGroupCombo, 1);
+    auto* searchIconLbl = new QLabel("🔍 SELECT GROUP TO MODIFY :", selectFrame);
+    selectLayout->addWidget(searchIconLbl);
+
+    m_groupSearchBox = new AccountSearchBox(selectFrame);
+    m_groupSearchBox->setFixedHeight(32);
+    m_groupSearchBox->setPlaceholderText("Type group name, parent, code (e.g. Sundry Debtors, 8, Bank) (Alt+S)");
+    m_groupSearchBox->setSearchFunction([](const QString& query) -> QVariantList {
+        return AccountClassifier::searchGroups(query, 50);
+    });
+    connect(m_groupSearchBox, &AccountSearchBox::partySelected, this, &ModifyGroupWidget::onGroupSelected);
+    connect(m_groupSearchBox, &AccountSearchBox::partyDataSelected, this, &ModifyGroupWidget::onGroupDataSelected);
+    selectLayout->addWidget(m_groupSearchBox, 1);
     mainLayout->addWidget(selectFrame);
 
     // 3. Main Form Card
@@ -67,7 +78,7 @@ void ModifyGroupWidget::setupUi() {
     formCard->setStyleSheet(
         "QFrame { background-color: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 8px; }"
         "QLabel.CardHeader { font-size: 12px; font-weight: bold; color: #1E40AF; background-color: #F8FAFC; border-bottom: 1px solid #E2E8F0; border-top-left-radius: 7px; border-top-right-radius: 7px; padding: 8px 12px; }"
-        "QLabel { color: #334155; font-size: 12px; font-weight: 600; }"
+        "QLabel { color: #334155; font-size: 12px; font-weight: 600; border: none; background: transparent; }"
         "QLineEdit, QComboBox { background-color: #FFFFFF; color: #0F172A; border: 1.5px solid #CBD5E1; border-radius: 4px; padding: 6px 10px; font-size: 13px; }"
         "QLineEdit:focus, QComboBox:focus { border: 2px solid #2563EB; background-color: #F8FAFC; }"
     );
@@ -91,6 +102,7 @@ void ModifyGroupWidget::setupUi() {
 
     m_parentCombo = new QComboBox(formCard);
     m_parentCombo->setEditable(true);
+    connect(m_parentCombo, &QComboBox::currentTextChanged, this, &ModifyGroupWidget::onParentChanged);
     grid->addWidget(new QLabel("Parent Group *:"), 0, 2);
     grid->addWidget(m_parentCombo, 0, 3);
 
@@ -106,7 +118,7 @@ void ModifyGroupWidget::setupUi() {
 
     m_bsCheckBox = new QCheckBox("Extract in Financial Statements (Balance Sheet & Profit / Loss Statement)", formCard);
     m_bsCheckBox->setChecked(true);
-    m_bsCheckBox->setStyleSheet("QCheckBox { font-size: 12px; color: #1E293B; font-weight: 500; }");
+    m_bsCheckBox->setStyleSheet("QCheckBox { font-size: 12px; color: #1E293B; font-weight: 500; border: none; background: transparent; }");
     grid->addWidget(m_bsCheckBox, 2, 0, 1, 4);
 
     cardLayout->addLayout(grid);
@@ -136,6 +148,9 @@ void ModifyGroupWidget::setupUi() {
 
 void ModifyGroupWidget::resetForm() {
     m_currentGroupId = -1;
+    if (m_groupSearchBox) {
+        m_groupSearchBox->clear();
+    }
     m_groupNameEdit->clear();
     m_descEdit->clear();
     m_natureCombo->setCurrentIndex(0);
@@ -144,58 +159,97 @@ void ModifyGroupWidget::resetForm() {
 }
 
 void ModifyGroupWidget::refreshGroupsList() {
-    m_selectGroupCombo->blockSignals(true);
-    m_selectGroupCombo->clear();
+    m_parentCombo->blockSignals(true);
     m_parentCombo->clear();
     m_parentCombo->addItem("Primary");
 
-    if (m_groupsModel) {
-        QStringList allGroups = m_groupsModel->get_all_group_names();
-        m_selectGroupCombo->addItems(allGroups);
-
-        QStringList parents = m_groupsModel->get_parent_groups();
-        for (const QString& p : parents) {
-            if (p != "Primary" && !p.isEmpty()) {
-                m_parentCombo->addItem(p);
-            }
+    QStringList parents = AccountClassifier::getParentGroupNames();
+    for (const QString& p : parents) {
+        if (p != "Primary" && !p.isEmpty()) {
+            m_parentCombo->addItem(p);
         }
     }
-    m_selectGroupCombo->blockSignals(false);
+    m_parentCombo->blockSignals(false);
+}
 
-    if (m_selectGroupCombo->count() > 0) {
-        onGroupSelected(m_selectGroupCombo->currentText());
+void ModifyGroupWidget::loadGroupById(int groupId) {
+    if (groupId <= 0) return;
+    QVariantMap grp = AccountClassifier::getGroupDetailsById(groupId);
+    if (!grp.isEmpty()) {
+        onGroupDataSelected(grp);
+    }
+}
+
+void ModifyGroupWidget::loadGroupByName(const QString& name) {
+    QString cleanName = name.trimmed();
+    if (cleanName.isEmpty()) return;
+    QVariantMap grp = AccountClassifier::getGroupDetails(cleanName);
+    if (!grp.isEmpty()) {
+        onGroupDataSelected(grp);
     }
 }
 
 void ModifyGroupWidget::onGroupSelected(const QString& groupName) {
-    if (!m_groupsModel || groupName.trimmed().isEmpty()) return;
+    loadGroupByName(groupName);
+}
 
-    QVariantMap grp = m_groupsModel->get_group_by_name(groupName.trimmed());
-    if (grp.isEmpty()) return;
+void ModifyGroupWidget::onGroupDataSelected(const QVariantMap& groupData) {
+    if (groupData.isEmpty()) return;
 
-    m_currentGroupId = grp.value("id").toInt();
-    m_groupNameEdit->setText(grp.value("name").toString());
+    m_currentGroupId = groupData.value("id").toInt();
+    QString name = groupData.value("name").toString().trimmed();
+    m_groupNameEdit->setText(name);
+    if (m_groupSearchBox && m_groupSearchBox->text() != name) {
+        m_groupSearchBox->setParty(name, m_currentGroupId);
+    }
 
-    QString parent = grp.value("parentGroup").toString();
-    int pIdx = m_parentCombo->findText(parent);
+    QString parent = groupData.value("parent_group_name").toString().trimmed();
+    if (parent.isEmpty()) parent = groupData.value("parentGroup").toString().trimmed();
+    if (parent.isEmpty() || parent == "Primary / Root Group") parent = "Primary";
+
+    int pIdx = m_parentCombo->findText(parent, Qt::MatchFixedString);
     if (pIdx >= 0) m_parentCombo->setCurrentIndex(pIdx);
-    else m_parentCombo->setCurrentText(parent);
+    else m_parentCombo->setEditText(parent);
 
-    QString nature = grp.value("nature").toString();
-    int nIdx = m_natureCombo->findText(nature);
+    QString nature = groupData.value("nature").toString().trimmed();
+    int nIdx = m_natureCombo->findText(nature, Qt::MatchFixedString);
     if (nIdx >= 0) m_natureCombo->setCurrentIndex(nIdx);
 
-    m_descEdit->setText(grp.value("description").toString());
-    m_bsCheckBox->setChecked(grp.value("affectsBalanceSheet", true).toBool());
+    m_descEdit->setText(groupData.value("description").toString());
+
+    bool extractBs = true;
+    if (groupData.contains("extract_in_balance_sheet")) {
+        extractBs = (groupData.value("extract_in_balance_sheet").toInt() == 1);
+    } else if (groupData.contains("affectsBalanceSheet")) {
+        extractBs = groupData.value("affectsBalanceSheet").toBool();
+    }
+    m_bsCheckBox->setChecked(extractBs);
+}
+
+void ModifyGroupWidget::onParentChanged(const QString& parentName) {
+    QString p = parentName.trimmed();
+    if (p.isEmpty() || p == "Primary") return;
+
+    GroupHierarchyInfo pInfo = AccountClassifier::getGroupInfo(p);
+    if (!pInfo.nature.isEmpty()) {
+        int nIdx = m_natureCombo->findText(pInfo.nature, Qt::MatchFixedString);
+        if (nIdx >= 0) {
+            m_natureCombo->setCurrentIndex(nIdx);
+        }
+    }
 }
 
 void ModifyGroupWidget::focusSearch() {
-    m_selectGroupCombo->setFocus();
+    if (m_groupSearchBox) {
+        m_groupSearchBox->setFocus();
+        m_groupSearchBox->selectAll();
+    }
 }
 
 void ModifyGroupWidget::onUpdateClicked() {
     if (m_currentGroupId <= 0) {
-        CustomMessageBox::showWarning(this, "Select Group", "Please select a valid Account Group to modify.");
+        CustomMessageBox::showWarning(this, "Select Group", "Please select a valid Account Group to modify first.");
+        focusSearch();
         return;
     }
 
@@ -216,19 +270,18 @@ void ModifyGroupWidget::onUpdateClicked() {
         return;
     }
 
-    bool ok = false;
-    if (m_groupsModel) {
-        ok = m_groupsModel->update_group(m_currentGroupId, name, parentGroup, nature, desc, bs);
-    } else {
-        ok = true;
-    }
+    QString errMsg;
+    bool ok = AccountClassifier::createOrUpdateGroup(m_currentGroupId, name, parentGroup, nature, desc, bs, &errMsg);
 
     if (ok) {
+        if (m_groupsModel) {
+            m_groupsModel->reload_data();
+        }
         CustomMessageBox::showInformation(this, "Success", "Account Group updated successfully.");
         refreshGroupsList();
         emit savedSuccess();
     } else {
-        CustomMessageBox::showCritical(this, "Update Failed", "Failed to update Account Group.");
+        CustomMessageBox::showCritical(this, "Update Failed", !errMsg.isEmpty() ? errMsg : "Failed to update Account Group.");
     }
 }
 

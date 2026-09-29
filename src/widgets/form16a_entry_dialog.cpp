@@ -88,7 +88,7 @@ void Form16AEntryDialog::setupUi()
     m_dateEdit->setReadOnly(true);
     m_dateEdit->setText(QDate::currentDate().toString("dd-MM-yyyy"));
     dtRow->addWidget(m_dateEdit);
-    auto *btnDt = new QPushButton("📅", formWidget);
+    auto *btnDt = new QPushButton("", formWidget);
     btnDt->setFixedWidth(32);
     btnDt->setStyleSheet("background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 4px; font-size: 13px;");
     btnDt->setCursor(Qt::PointingHandCursor);

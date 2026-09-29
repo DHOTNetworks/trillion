@@ -3,7 +3,7 @@
 #include <QWidget>
 #include <QTableWidget>
 #include <QLineEdit>
-#include <QDateEdit>
+#include "accounting_date_edit.h"
 #include <QComboBox>
 #include <QPushButton>
 #include <QLabel>
@@ -59,8 +59,8 @@ private:
     QLabel* m_modeBadge = nullptr;
 
     // Tier 2 Filter Bar
-    QDateEdit* m_fromDateEdit = nullptr;
-    QDateEdit* m_toDateEdit = nullptr;
+    AccountingDateDisplay* m_fromDateEdit = nullptr;
+    AccountingDateDisplay* m_toDateEdit = nullptr;
     QComboBox* m_modeCombo = nullptr;
     QLineEdit* m_searchEdit = nullptr;
     QLabel* m_balanceStatusBadge = nullptr;

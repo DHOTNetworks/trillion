@@ -1,4 +1,5 @@
 #include "stock_items_model.h"
+#include "account_classifier.h"
 #include "../database_manager.h"
 #include "../engine/accounting_engine.h"
 #include "../engine/fiscal_year_helper.h"
@@ -109,14 +110,21 @@ QStringList StockItemsModel::get_goods_types() const {
 
 QStringList StockItemsModel::get_stock_groups() const {
     QStringList list;
-    QVariantList rows = DatabaseManager::instance().executeQuery(
+    QString partyStockSql = QString(
+        "SELECT DISTINCT p.name FROM parties p %1 WHERE %2"
+    ).arg(AccountClassifier::partiesJoinClause("p", "g"),
+         AccountClassifier::generateHierarchySqlClause(AccountClassifier::getTradingStockGroupCodes(), "g"));
+
+    QString sql = QString(
         "SELECT DISTINCT group_name FROM stock_groups WHERE group_name IS NOT NULL AND group_name != '' "
         "UNION "
         "SELECT DISTINCT trading_group FROM stock_items WHERE trading_group IS NOT NULL AND trading_group != '' "
         "UNION "
-        "SELECT DISTINCT name FROM parties WHERE group_name LIKE '%Trading%' OR group_name LIKE '%Stock%' "
+        "%1 "
         "ORDER BY 1 COLLATE NOCASE ASC;"
-    );
+    ).arg(partyStockSql);
+
+    QVariantList rows = DatabaseManager::instance().executeQuery(sql);
     for (const auto& r : rows) {
         QString g = r.toMap().value("group_name").toString().trimmed();
         if (g.isEmpty()) g = r.toMap().value("trading_group").toString().trimmed();

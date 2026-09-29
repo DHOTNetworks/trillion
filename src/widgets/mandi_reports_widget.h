@@ -7,7 +7,7 @@
 #include <QComboBox>
 #include <QLabel>
 #include <QPushButton>
-#include <QDateEdit>
+#include "accounting_date_edit.h"
 #include "../models/mandi_reports_controller.h"
 #include "../services/print_export_controller.h"
 
@@ -28,6 +28,7 @@ public slots:
     void generateIFormRegister();
     void generateFarmerStatement();
     void generateDamiRegister();
+    void onPeriodClicked();
 
 signals:
     void backRequested();
@@ -53,8 +54,8 @@ private:
     QTabWidget* m_tabWidget = nullptr;
 
     // Tab 1: Form M
-    QDateEdit* m_formMFromDate = nullptr;
-    QDateEdit* m_formMToDate = nullptr;
+    AccountingDateDisplay* m_formMFromDate = nullptr;
+    AccountingDateDisplay* m_formMToDate = nullptr;
     QTableWidget* m_formMTable = nullptr;
     QLabel* m_formMBagsSummary = nullptr;
     QLabel* m_formMWeightSummary = nullptr;
@@ -64,23 +65,21 @@ private:
     QLabel* m_formMTotLevySummary = nullptr;
 
     // Tab 2: J-Form Register
-    QDateEdit* m_jfFromDate = nullptr;
-    QDateEdit* m_jfToDate = nullptr;
+    AccountingDateDisplay* m_jfFromDate = nullptr;
+    AccountingDateDisplay* m_jfToDate = nullptr;
     QComboBox* m_jfFarmerCombo = nullptr;
     QTableWidget* m_jfTable = nullptr;
     QLabel* m_jfSummaryLabel = nullptr;
 
     // Tab 3: I-Form Register
-    QDateEdit* m_ifFromDate = nullptr;
-    QDateEdit* m_ifToDate = nullptr;
+    AccountingDateDisplay* m_ifFromDate = nullptr;
+    AccountingDateDisplay* m_ifToDate = nullptr;
     QComboBox* m_ifBuyerCombo = nullptr;
     QTableWidget* m_ifTable = nullptr;
     QLabel* m_ifSummaryLabel = nullptr;
 
     // Tab 4: Farmer Statement
     QComboBox* m_stmtFarmerCombo = nullptr;
-    QDateEdit* m_stmtFromDate = nullptr;
-    QDateEdit* m_stmtToDate = nullptr;
     QTableWidget* m_stmtDheriesTable = nullptr;
     QTableWidget* m_stmtPaymentsTable = nullptr;
     QLabel* m_stmtCreditsLabel = nullptr;
@@ -88,8 +87,8 @@ private:
     QLabel* m_stmtNetBalLabel = nullptr;
 
     // Tab 5: Dami Register
-    QDateEdit* m_damiFromDate = nullptr;
-    QDateEdit* m_damiToDate = nullptr;
+    AccountingDateDisplay* m_damiFromDate = nullptr;
+    AccountingDateDisplay* m_damiToDate = nullptr;
     QTableWidget* m_damiTable = nullptr;
     QLabel* m_damiSummaryLabel = nullptr;
 };

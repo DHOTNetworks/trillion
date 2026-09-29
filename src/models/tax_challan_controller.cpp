@@ -1,4 +1,5 @@
 #include "tax_challan_controller.h"
+#include "account_classifier.h"
 #include "../database_manager.h"
 #include <QDate>
 #include <QRegularExpression>
@@ -235,9 +236,11 @@ void TaxChallanController::ensureDefaultLedgers()
 
     // Default Bank Account: first Bank account found
     if (m_bankLedgerId <= 0) {
-        QVariant bId = db.executeScalar(
-            "SELECT id FROM parties WHERE group_name LIKE '%Bank%' OR party_type = 'Bank' LIMIT 1;"
-        );
+        QString sql = QString(
+            "SELECT p.id FROM parties p %1 WHERE %2 OR p.party_type = 'Bank' LIMIT 1;"
+        ).arg(AccountClassifier::partiesJoinClause("p", "g"),
+             AccountClassifier::generateHierarchySqlClause(AccountClassifier::getBankGroupCodes(), "g"));
+        QVariant bId = db.executeScalar(sql);
         if (bId.isValid() && !bId.isNull()) {
             m_bankLedgerId = bId.toInt();
             emit bankLedgerIdChanged();

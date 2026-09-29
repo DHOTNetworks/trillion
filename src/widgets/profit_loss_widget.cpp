@@ -78,28 +78,32 @@ void ProfitLossWidget::setupUi() {
     QHBoxLayout* btnBox = new QHBoxLayout();
     btnBox->setSpacing(4);
 
-    m_fromDateEdit = new AccountingDateEdit(subHeaderCard);
+    m_fromDateEdit = new AccountingDateDisplay(subHeaderCard);
     m_fromDateEdit->setFixedWidth(100);
+    m_fromDateEdit->setFixedHeight(28);
     m_fromDateEdit->setStyleSheet(
-        "QLineEdit { background: #FFFFFF; border: 1.5px solid #D97706; border-radius: 4px; "
-        "padding: 3px 6px; font-size: 12px; font-weight: 800; color: #78350F; } "
-        "QLineEdit:focus { border: 2px solid #B45309; background: #FFFBEB; }"
+        "QLabel { background: #FFFFFF; border: 1.5px solid #D97706; border-radius: 4px; "
+        "padding: 2px 4px; font-size: 11.5px; font-weight: 800; color: #78350F; } "
+        "QLabel:hover { border: 2px solid #B45309; background: #FFFBEB; }"
     );
-    connect(m_fromDateEdit, &AccountingDateEdit::dateChanged, this, &ProfitLossWidget::onDateFilterChanged);
+    connect(m_fromDateEdit, &AccountingDateDisplay::dateChanged, this, &ProfitLossWidget::onDateFilterChanged);
+    connect(m_fromDateEdit, &AccountingDateDisplay::clicked, this, &ProfitLossWidget::requestAccountingPeriodDialog);
     btnBox->addWidget(m_fromDateEdit);
 
     QLabel* toSep = new QLabel("to", subHeaderCard);
-    toSep->setStyleSheet("font-weight: bold; color: #78350F; background: transparent;");
+    toSep->setStyleSheet("font-weight: bold; color: #78350F; background: transparent; font-size: 11px;");
     btnBox->addWidget(toSep);
 
-    m_toDateEdit = new AccountingDateEdit(subHeaderCard);
+    m_toDateEdit = new AccountingDateDisplay(subHeaderCard);
     m_toDateEdit->setFixedWidth(100);
+    m_toDateEdit->setFixedHeight(28);
     m_toDateEdit->setStyleSheet(
-        "QLineEdit { background: #FFFFFF; border: 1.5px solid #D97706; border-radius: 4px; "
-        "padding: 3px 6px; font-size: 12px; font-weight: 800; color: #78350F; } "
-        "QLineEdit:focus { border: 2px solid #B45309; background: #FFFBEB; }"
+        "QLabel { background: #FFFFFF; border: 1.5px solid #D97706; border-radius: 4px; "
+        "padding: 2px 4px; font-size: 11.5px; font-weight: 800; color: #78350F; } "
+        "QLabel:hover { border: 2px solid #B45309; background: #FFFBEB; }"
     );
-    connect(m_toDateEdit, &AccountingDateEdit::dateChanged, this, &ProfitLossWidget::onDateFilterChanged);
+    connect(m_toDateEdit, &AccountingDateDisplay::dateChanged, this, &ProfitLossWidget::onDateFilterChanged);
+    connect(m_toDateEdit, &AccountingDateDisplay::clicked, this, &ProfitLossWidget::requestAccountingPeriodDialog);
     btnBox->addWidget(m_toDateEdit);
 
     m_periodBtn = new KbdBadgeButton("Period", "F2", QColor("#F8FAFC"), QColor("#F1F5F9"), QColor("#0F172A"), QColor("#CBD5E1"), subHeaderCard);

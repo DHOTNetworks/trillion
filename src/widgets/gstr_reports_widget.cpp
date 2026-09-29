@@ -1,4 +1,5 @@
 #include "gstr_reports_widget.h"
+#include "voucher_date_dialog.h"
 #include "kbd_badge_button.h"
 #include "../engine/accounting_engine.h"
 #include "../engine/fiscal_year_helper.h"
@@ -84,23 +85,40 @@ void GstrReportsWidget::setupUi() {
     fromLbl->setStyleSheet("font-size: 12px; font-weight: 700; color: #334155; border: none; background: transparent;");
     filterLayout->addWidget(fromLbl);
 
-    m_fromDateEdit = new QDateEdit(filterCard);
-    m_fromDateEdit->setCalendarPopup(true);
-    m_fromDateEdit->setDisplayFormat("dd-MM-yyyy");
+    m_fromDateEdit = new AccountingDateDisplay(filterCard);
     m_fromDateEdit->setFixedHeight(34);
-    m_fromDateEdit->setMinimumWidth(125);
+    m_fromDateEdit->setFixedWidth(115);
+    connect(m_fromDateEdit, &AccountingDateDisplay::dateChanged, this, &GstrReportsWidget::onRefreshClicked);
     filterLayout->addWidget(m_fromDateEdit);
 
     QLabel* toLbl = new QLabel("To Date:", filterCard);
     toLbl->setStyleSheet("font-size: 12px; font-weight: 700; color: #334155; border: none; background: transparent;");
     filterLayout->addWidget(toLbl);
 
-    m_toDateEdit = new QDateEdit(filterCard);
-    m_toDateEdit->setCalendarPopup(true);
-    m_toDateEdit->setDisplayFormat("dd-MM-yyyy");
+    m_toDateEdit = new AccountingDateDisplay(filterCard);
     m_toDateEdit->setFixedHeight(34);
-    m_toDateEdit->setMinimumWidth(125);
+    m_toDateEdit->setFixedWidth(115);
+    connect(m_toDateEdit, &AccountingDateDisplay::dateChanged, this, &GstrReportsWidget::onRefreshClicked);
     filterLayout->addWidget(m_toDateEdit);
+
+    auto openPeriodDlg = [this]() {
+        QDate f = m_fromDateEdit->date();
+        QDate t = m_toDateEdit->date();
+        if (VoucherDateDialog::selectDateRange(this, &f, &t, f, t)) {
+            m_fromDateEdit->setDate(f);
+            m_toDateEdit->setDate(t);
+        }
+    };
+    connect(m_fromDateEdit, &AccountingDateDisplay::clicked, this, openPeriodDlg);
+    connect(m_toDateEdit, &AccountingDateDisplay::clicked, this, openPeriodDlg);
+
+    auto* periodBtn = new QPushButton("Period (F2)", filterCard);
+    periodBtn->setStyleSheet(
+        "QPushButton { background-color: #EFF6FF; color: #1D4ED8; border: 1px solid #BFDBFE; font-weight: 700; font-size: 11px; border-radius: 6px; padding: 4px 10px; }"
+        "QPushButton:hover { background-color: #DBEAFE; color: #1E40AF; }"
+    );
+    connect(periodBtn, &QPushButton::clicked, this, openPeriodDlg);
+    filterLayout->addWidget(periodBtn);
 
     filterLayout->addStretch(1);
 
@@ -331,8 +349,12 @@ void GstrReportsWidget::setupUi() {
         sDate = QDate((QDate::currentDate().month() >= 4 ? QDate::currentDate().year() : QDate::currentDate().year() - 1), 4, 1);
     }
     if (!eDate.isValid()) eDate = QDate::currentDate();
-    m_fromDateEdit->setDate(sDate);
-    m_toDateEdit->setDate(eDate);
+    {
+        QSignalBlocker b1(m_fromDateEdit);
+        QSignalBlocker b2(m_toDateEdit);
+        m_fromDateEdit->setDate(sDate);
+        m_toDateEdit->setDate(eDate);
+    }
 }
 
 void GstrReportsWidget::applyCustomStyles() {
@@ -427,8 +449,14 @@ void GstrReportsWidget::applyCustomStyles() {
 }
 
 void GstrReportsWidget::loadReturns(const QDate& fromDate, const QDate& toDate) {
-    m_fromDateEdit->setDate(fromDate);
-    m_toDateEdit->setDate(toDate);
+    if (m_fromDateEdit && m_fromDateEdit->date() != fromDate) {
+        QSignalBlocker b(m_fromDateEdit);
+        m_fromDateEdit->setDate(fromDate);
+    }
+    if (m_toDateEdit && m_toDateEdit->date() != toDate) {
+        QSignalBlocker b(m_toDateEdit);
+        m_toDateEdit->setDate(toDate);
+    }
 
     QVariantList compRows = DatabaseManager::instance().executeQuery("SELECT company_name, gstin, state, state_code FROM company_info LIMIT 1;");
     QString legalName = "";

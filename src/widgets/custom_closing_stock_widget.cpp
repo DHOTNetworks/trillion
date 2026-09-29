@@ -1,4 +1,5 @@
 #include "custom_closing_stock_widget.h"
+#include "voucher_date_dialog.h"
 #include "../engine/accounting_engine.h"
 #include "../engine/fiscal_year_helper.h"
 #include <QFileDialog>
@@ -144,12 +145,16 @@ void CustomClosingStockWidget::setupUi() {
     lblDate->setStyleSheet("font-size: 12px; font-weight: 700; color: #334155; border: none; background: transparent;");
     filterLayout->addWidget(lblDate);
 
-    m_dateEdit = new QDateEdit(filterCard);
-    m_dateEdit->setCalendarPopup(true);
-    m_dateEdit->setDisplayFormat("dd-MM-yyyy");
+    m_dateEdit = new AccountingDateDisplay(filterCard);
     m_dateEdit->setFixedHeight(34);
-    m_dateEdit->setMinimumWidth(130);
-    connect(m_dateEdit, &QDateEdit::dateChanged, this, &CustomClosingStockWidget::onDateChanged);
+    m_dateEdit->setMinimumWidth(115);
+    connect(m_dateEdit, &AccountingDateDisplay::dateChanged, this, &CustomClosingStockWidget::onDateChanged);
+    connect(m_dateEdit, &AccountingDateDisplay::clicked, this, [this]() {
+        QDate sel = VoucherDateDialog::selectDate(this, m_dateEdit->date());
+        if (sel.isValid() && sel != m_dateEdit->date()) {
+            m_dateEdit->setDate(sel);
+        }
+    });
     filterLayout->addWidget(m_dateEdit);
 
     filterLayout->addSpacing(8);
@@ -252,7 +257,7 @@ void CustomClosingStockWidget::applyCustomStyles() {
         "  border: none;"
         "  border-right: 1px solid #334155;"
         "}"
-        "QDateEdit, QLineEdit {"
+        "AccountingDateEdit, QDateEdit, QLineEdit {"
         "  background-color: #FFFFFF;"
         "  color: #0F172A;"
         "  border: 1.5px solid #CBD5E1;"
@@ -261,7 +266,7 @@ void CustomClosingStockWidget::applyCustomStyles() {
         "  font-weight: 700;"
         "  font-size: 12px;"
         "}"
-        "QDateEdit:focus, QLineEdit:focus {"
+        "AccountingDateEdit:focus, QDateEdit:focus, QLineEdit:focus {"
         "  border: 2px solid #2563EB;"
         "  background-color: #FFFFF0;"
         "}"
@@ -299,7 +304,11 @@ void CustomClosingStockWidget::reloadData() {
     }
 
     QString dateIso = m_dateEdit->date().toString("yyyy-MM-dd");
-    m_currentReport = StockValuationEngine::getEffectiveClosingStock(dateIso);
+    if (StockValuationEngine::hasAuditedClosingStock(dateIso)) {
+        m_currentReport = StockValuationEngine::getAuditedClosingStock(dateIso);
+    } else {
+        m_currentReport = StockValuationEngine::calculateLivePhysicalStock(dateIso);
+    }
     populateTable(m_currentReport);
 }
 
@@ -426,16 +435,17 @@ void CustomClosingStockWidget::onTableItemChanged(QTableWidgetItem* item) {
 
     if (col == 3 || col == 4 || col == 5) {
         m_isUpdatingTable = true;
+        int bags = m_table->item(row, 3) ? m_table->item(row, 3)->text().toInt() : 0;
         double wt = m_table->item(row, 4) ? m_table->item(row, 4)->text().toDouble() : 0.0;
         double rate = m_table->item(row, 5) ? m_table->item(row, 5)->text().toDouble() : 0.0;
-        double amt = std::round((wt * rate) * 100.0) / 100.0;
+        double amt = std::round((wt > 0.001 ? wt * rate : bags * rate) * 100.0) / 100.0;
 
         if (m_table->item(row, 6)) {
             m_table->item(row, 6)->setText(AccountingEngine::formatIndianCurrency(amt, true));
         }
 
         if (row < m_currentReport.items.size()) {
-            m_currentReport.items[row].bags = m_table->item(row, 3) ? m_table->item(row, 3)->text().toInt() : 0;
+            m_currentReport.items[row].bags = bags;
             m_currentReport.items[row].weightQtl = wt;
             m_currentReport.items[row].rate = rate;
             m_currentReport.items[row].amount = amt;
@@ -458,7 +468,7 @@ void CustomClosingStockWidget::updateSummaryCards() {
         int bags = m_table->item(r, 3) ? m_table->item(r, 3)->text().toInt() : 0;
         double wt = m_table->item(r, 4) ? m_table->item(r, 4)->text().toDouble() : 0.0;
         double rate = m_table->item(r, 5) ? m_table->item(r, 5)->text().toDouble() : 0.0;
-        double amt = std::round((wt * rate) * 100.0) / 100.0;
+        double amt = std::round((wt > 0.001 ? wt * rate : bags * rate) * 100.0) / 100.0;
 
         totalBags += bags;
         totalWeight += wt;
@@ -485,7 +495,7 @@ void CustomClosingStockWidget::onSaveLockStockClicked() {
         item.bags = m_table->item(r, 3) ? m_table->item(r, 3)->text().toInt() : 0;
         item.weightQtl = m_table->item(r, 4) ? m_table->item(r, 4)->text().toDouble() : 0.0;
         item.rate = m_table->item(r, 5) ? m_table->item(r, 5)->text().toDouble() : 0.0;
-        item.amount = std::round((item.weightQtl * item.rate) * 100.0) / 100.0;
+        item.amount = std::round((item.weightQtl > 0.001 ? item.weightQtl * item.rate : item.bags * item.rate) * 100.0) / 100.0;
         item.amountFmt = AccountingEngine::formatIndianCurrency(item.amount, true);
         itemsToSave.append(item);
     }

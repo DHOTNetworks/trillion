@@ -1,5 +1,6 @@
 #include "modify_ledger_widget.h"
 #include "custom_dialogs.h"
+#include "../models/account_classifier.h"
 #include "../database_manager.h"
 #include "../engine/accounting_engine.h"
 #include <QKeyEvent>
@@ -259,17 +260,9 @@ void ModifyLedgerWidget::setupUi() {
 
     // Group Selection -> Parent Group Hint
     connect(m_groupCombo, &QComboBox::currentTextChanged, this, [this](const QString& gText) {
-        QString gt = gText.trimmed().toLower();
-        if (gt.contains("debtor") || gt.contains("buyer") || gt.contains("customer")) {
-            m_parentGroupLbl->setText("(Sundry Debtors)");
-        } else if (gt.contains("creditor") || gt.contains("supplier") || gt.contains("vendor")) {
-            m_parentGroupLbl->setText("(Sundry Creditors)");
-        } else if (gt.contains("bank")) {
-            m_parentGroupLbl->setText("(Bank Accounts)");
-        } else if (gt.contains("expense")) {
-            m_parentGroupLbl->setText("(Direct/Indirect Expenses)");
-        } else if (gt.contains("income")) {
-            m_parentGroupLbl->setText("(Direct/Indirect Incomes)");
+        QString parent = AccountClassifier::getParentGroupName(gText);
+        if (!parent.isEmpty()) {
+            m_parentGroupLbl->setText(QString("(%1)").arg(parent));
         } else {
             m_parentGroupLbl->setText(QString("(%1)").arg(gText.trimmed()));
         }
@@ -1179,8 +1172,8 @@ void ModifyLedgerWidget::executeUpdate() {
     int useCreditLimit = m_useCreditLimitCheck->isChecked() ? 1 : 0;
     int setTitleCase = m_setTitleCaseCheck->isChecked() ? 1 : 0;
 
-    QString partyType = (group.contains("Debtor") || group.contains("Buyer")) ? "Buyer" : "Vendor";
-    QString specialType = (partyType == "Buyer") ? "Rice Buyer" : "Paddy Seller";
+    QString partyType = AccountClassifier::classifyPartyTypeForGroup(group);
+    QString specialType = (partyType == "Buyer") ? "Rice Buyer" : ((partyType == "Vendor") ? "Paddy Seller" : partyType);
 
     QVariantMap data;
     data["name"] = name;

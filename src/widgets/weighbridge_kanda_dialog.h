@@ -3,11 +3,12 @@
 #include <QDialog>
 #include <QLineEdit>
 #include <QComboBox>
-#include <QDateEdit>
+#include "accounting_date_edit.h"
 #include <QTimeEdit>
 #include <QPushButton>
 #include <QLabel>
 #include "account_search_box.h"
+#include "item_search_delegate.h"
 #include "../models/transport_dispatch_controller.h"
 
 namespace MahadevERP {
@@ -39,11 +40,11 @@ private:
 
     // Fields
     QLineEdit* m_slipNoEdit = nullptr;
-    QDateEdit* m_dateEdit = nullptr;
+    AccountingDateEdit* m_dateEdit = nullptr;
     QTimeEdit* m_timeEdit = nullptr;
     QLineEdit* m_invoiceNoEdit = nullptr;
     AccountSearchBox* m_partyNameEdit = nullptr;
-    QLineEdit* m_itemNameEdit = nullptr;
+    ItemSearchEditor* m_itemNameEdit = nullptr;
     QLineEdit* m_gradeEdit = nullptr;
     QLineEdit* m_vehicleNoEdit = nullptr;
     QLineEdit* m_driverNameEdit = nullptr;
@@ -51,7 +52,7 @@ private:
     AccountSearchBox* m_transporterNameEdit = nullptr;
     QLineEdit* m_transporterGstinEdit = nullptr;
     QLineEdit* m_grNoEdit = nullptr;
-    QDateEdit* m_grDateEdit = nullptr;
+    AccountingDateEdit* m_grDateEdit = nullptr;
     QLineEdit* m_destinationEdit = nullptr;
     QLineEdit* m_distanceEdit = nullptr;
 

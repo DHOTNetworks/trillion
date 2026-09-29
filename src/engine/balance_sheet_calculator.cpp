@@ -298,12 +298,21 @@ BalanceSheetData BalanceSheetCalculator::calculate(const QString& requestedAsOnD
         if (!priorFy.startDate.isEmpty()) {
             ProfitLossData priorPl = ProfitLossCalculator::calculate(priorFy.startDate, priorFy.endDate);
             if (priorPl.netProfit > 0.001) {
-                // If prior year profit was not transferred to Capital, incorporate it
+                QString capPartiesSubquery = QString(
+                    "SELECT p.id FROM parties p %1 WHERE %2"
+                ).arg(AccountClassifier::partiesJoinClause("p", "g"),
+                     AccountClassifier::generateHierarchySqlClause(AccountClassifier::getCapitalGroupCodes(), "g"));
+
+                QString capLegacySubquery = QString(
+                    "SELECT p.legacy_id FROM parties p %1 WHERE %2"
+                ).arg(AccountClassifier::partiesJoinClause("p", "g"),
+                     AccountClassifier::generateHierarchySqlClause(AccountClassifier::getCapitalGroupCodes(), "g"));
+
                 QVariantList capTrans = DatabaseManager::instance().executeQuery(
-                    "SELECT SUM(amount) as amt FROM transactions WHERE voucher_date >= ? AND voucher_date <= ? "
-                    "AND (account_code IN (SELECT legacy_id FROM parties WHERE group_name LIKE '%Capital%') "
-                    "     OR party_id IN (SELECT id FROM parties WHERE group_name LIKE '%Capital%')) "
-                    "AND narration LIKE '%Profit%' AND dr_cr = 'Cr';",
+                    QString("SELECT SUM(amount) as amt FROM transactions WHERE voucher_date >= ? AND voucher_date <= ? "
+                            "AND (account_code IN (%1) OR party_id IN (%2)) "
+                            "AND narration LIKE '%Profit%' AND dr_cr = 'Cr';")
+                        .arg(capLegacySubquery, capPartiesSubquery),
                     {fy.startDate, data.asOnDate}
                 );
                 double capProfitTrans = 0.0;

@@ -1,4 +1,5 @@
 #include "ledger_statement_widget.h"
+#include "voucher_date_dialog.h"
 #include "engine/accounting_engine.h"
 #include "engine/fiscal_year_helper.h"
 #include "database_manager.h"
@@ -107,30 +108,35 @@ void LedgerStatementWidget::setupUi() {
     m_fyBadge->setStyleSheet("background-color: #F8FAFC; color: #334155; border: 1px solid #CBD5E1; border-radius: 6px; padding: 4px 12px; font-weight: bold; font-size: 11px;");
     filterLayout->addWidget(m_fyBadge);
 
-    QLabel* fromLabel = new QLabel("From:", filterCard);
+    QLabel* fromLabel = new QLabel("From Date:", filterCard);
     fromLabel->setStyleSheet("color: #475569; font-weight: bold; font-size: 11px; border: none; background: transparent;");
     filterLayout->addWidget(fromLabel);
 
-    m_fromDateEdit = new AccountingDateEdit(filterCard);
+    m_fromDateEdit = new AccountingDateDisplay(filterCard);
     m_fromDateEdit->setIsoDate(activeFy.startDate);
-    m_fromDateEdit->setFixedWidth(110);
+    m_fromDateEdit->setFixedWidth(115);
+    connect(m_fromDateEdit, &AccountingDateDisplay::clicked, this, &LedgerStatementWidget::onPeriodClicked);
     filterLayout->addWidget(m_fromDateEdit);
 
-    QLabel* toLabel = new QLabel("To:", filterCard);
+    QLabel* toLabel = new QLabel("To Date:", filterCard);
     toLabel->setStyleSheet("color: #475569; font-weight: bold; font-size: 11px; border: none; background: transparent;");
     filterLayout->addWidget(toLabel);
 
-    m_toDateEdit = new AccountingDateEdit(filterCard);
+    m_toDateEdit = new AccountingDateDisplay(filterCard);
     m_toDateEdit->setIsoDate(activeFy.endDate);
-    m_toDateEdit->setFixedWidth(110);
+    m_toDateEdit->setFixedWidth(115);
+    connect(m_toDateEdit, &AccountingDateDisplay::clicked, this, &LedgerStatementWidget::onPeriodClicked);
     filterLayout->addWidget(m_toDateEdit);
 
-    m_applyFilterBtn = new QPushButton("Filter Dates", filterCard);
-    m_applyFilterBtn->setFixedHeight(34);
-    m_applyFilterBtn->setCursor(Qt::PointingHandCursor);
-    m_applyFilterBtn->setStyleSheet("background-color: #2563EB; color: #FFFFFF; border-radius: 6px; padding: 4px 16px; font-weight: bold; font-size: 11px; border: none;");
-    connect(m_applyFilterBtn, &QPushButton::clicked, this, &LedgerStatementWidget::onDateFilterApplied);
-    filterLayout->addWidget(m_applyFilterBtn);
+    m_periodBtn = new QPushButton("Period (F2)", filterCard);
+    m_periodBtn->setFixedHeight(34);
+    m_periodBtn->setCursor(Qt::PointingHandCursor);
+    m_periodBtn->setStyleSheet(
+        "QPushButton { background-color: #EFF6FF; color: #1D4ED8; border: 1px solid #BFDBFE; font-weight: 700; font-size: 11.5px; border-radius: 6px; padding: 4px 14px; }"
+        "QPushButton:hover { background-color: #DBEAFE; color: #1E40AF; }"
+    );
+    connect(m_periodBtn, &QPushButton::clicked, this, &LedgerStatementWidget::onPeriodClicked);
+    filterLayout->addWidget(m_periodBtn);
 
     filterLayout->addStretch(1);
     mainLayout->addWidget(filterCard);
@@ -396,10 +402,8 @@ void LedgerStatementWidget::setupUi() {
     mainLayout->addWidget(m_viewTabs, 1);
 
     // Tab Order Chain
-    setTabOrder(m_searchBox, m_fromDateEdit);
-    setTabOrder(m_fromDateEdit, m_toDateEdit);
-    setTabOrder(m_toDateEdit, m_applyFilterBtn);
-    setTabOrder(m_applyFilterBtn, m_crTable);
+    setTabOrder(m_searchBox, m_periodBtn);
+    setTabOrder(m_periodBtn, m_crTable);
     setTabOrder(m_crTable, m_drTable);
 
     // Global Shortcuts
@@ -407,12 +411,13 @@ void LedgerStatementWidget::setupUi() {
     new QShortcut(QKeySequence("Alt+L"), this, SLOT(focusSearch()));
     new QShortcut(QKeySequence("Ctrl+F"), this, SLOT(focusSearch()));
     new QShortcut(QKeySequence("F3"), this, SLOT(focusSearch()));
+    new QShortcut(QKeySequence("F2"), this, SLOT(onPeriodClicked()));
     new QShortcut(QKeySequence("Ctrl+E"), this, SLOT(openSelectedVoucher()));
     new QShortcut(QKeySequence("Ctrl+P"), this, SLOT(printStatement()));
     new QShortcut(QKeySequence("Alt+P"), this, SLOT(exportPdf()));
     new QShortcut(QKeySequence("Alt+O"), this, SLOT(exportOdf()));
     new QShortcut(QKeySequence("Alt+E"), this, SLOT(exportExcel()));
-    new QShortcut(QKeySequence("Alt+F"), this, SLOT(onDateFilterApplied()));
+    new QShortcut(QKeySequence("Alt+F"), this, SLOT(onPeriodClicked()));
     new QShortcut(QKeySequence("Alt+A"), this, SLOT(toggleAankMode()));
     new QShortcut(QKeySequence("Alt+I"), this, SLOT(onPostInterestVoucherClicked()));
 }
@@ -752,6 +757,16 @@ void LedgerStatementWidget::onPartySelected(const QString& partyName) {
     loadParty(partyName, m_fromDateEdit->isoDate(), m_toDateEdit->isoDate());
 }
 
+void LedgerStatementWidget::onPeriodClicked() {
+    QDate f = m_fromDateEdit->date();
+    QDate t = m_toDateEdit->date();
+    if (VoucherDateDialog::selectDateRange(this, &f, &t, f, t)) {
+        m_fromDateEdit->setDate(f);
+        m_toDateEdit->setDate(t);
+        onDateFilterApplied();
+    }
+}
+
 void LedgerStatementWidget::onDateFilterApplied() {
     if (m_controller && !m_searchBox->currentPartyName().isEmpty()) {
         FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
@@ -970,8 +985,7 @@ void LedgerStatementWidget::keyPressEvent(QKeyEvent* event) {
         return;
     }
     if (event->key() == Qt::Key_F2) {
-        m_fromDateEdit->setFocus();
-        m_fromDateEdit->selectAll();
+        onPeriodClicked();
         event->accept();
         return;
     }

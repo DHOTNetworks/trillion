@@ -118,7 +118,7 @@ void DebitCreditNoteWidget::setupUi() {
     m_noteDateEdit->setMaximumWidth(110);
     dateBox->addWidget(m_noteDateEdit);
 
-    auto* dateBtn = new QPushButton("📅", leftCard);
+    auto* dateBtn = new QPushButton("", leftCard);
     dateBtn->setFixedSize(26, 26);
     dateBtn->setCursor(Qt::PointingHandCursor);
     dateBtn->setStyleSheet("background-color: #EFF6FF; border: 1px solid #93C5FD; border-radius: 4px; font-weight: bold; color: #1D4ED8;");

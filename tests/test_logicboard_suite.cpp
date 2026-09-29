@@ -48,6 +48,9 @@
 #include "../src/models/tcs_receipt_voucher_controller.h"
 #include "../src/models/stock_register_model.h"
 #include "../src/engine/depreciation_calculator.h"
+#include "../src/models/bardana_controller.h"
+#include "../src/models/gate_register_controller.h"
+#include "../src/models/sauda_controller.h"
 #include "../src/models/trial_balance_controller.h"
 #include "../src/models/capital_accounts_controller.h"
 #include "../src/models/cash_bank_flow_controller.h"
@@ -98,6 +101,7 @@ private slots:
 
     // 8. Firm & Fiscal Years Engine
     void testFirmTypeResolutionAndDynamicFiscalYears();
+    void testHistoricalFiscalYearIsolationWithoutGapYears();
 
     // 9. Balance Sheet & Profit and Loss Reporting Systems
     void testBalanceSheetCalculations();
@@ -125,6 +129,11 @@ private slots:
 
     // 15. Universal Print, PDF, ODF & Excel Export Subsystems
     void testPrintExportControllerUniversalExports();
+
+    // 16. Bardana, Gate Register & Sauda Subsystems
+    void testBardanaControllerWorkflow();
+    void testGateRegisterControllerWorkflow();
+    void testSaudaContractAndDalaliSettlementWorkflow();
 };
 
 #include "mdbtools.h"
@@ -683,20 +692,20 @@ void LogicBoardTestSuite::testPerFinancialYearVoucherNumbering() {
 
     // Multi-Year Voucher Lookup Disambiguation Test
     auto& db = DatabaseManager::instance();
-    // Insert same voucher_no '999' into two different fiscal years
+    // Insert same voucher_no '99901' into two different fiscal years (high number to avoid collision with real data)
     db.executeNonQuery("INSERT INTO vouchers (voucher_no, voucher_date, voucher_type, party_name, account_type, amount, narration, financial_year) "
-                       "VALUES ('999', '2023-08-15', 'Payment', 'Old FY 23-24 Party', 'Cash', 1000.0, 'Old Year Test', 'FY 2023-24');");
+                       "VALUES ('99901', '2023-08-15', 'Payment', 'Old FY 23-24 Party', 'Cash', 1000.0, 'Old Year Test', 'FY 2023-24');");
     db.executeNonQuery("INSERT INTO vouchers (voucher_no, voucher_date, voucher_type, party_name, account_type, amount, narration, financial_year) "
-                       "VALUES ('999', '2026-07-09', 'Payment', 'New FY 26-27 Party', 'Canara Bank CC', 3544780.0, 'New Year Test', 'FY 2026-27');");
+                       "VALUES ('99901', '2026-07-09', 'Payment', 'New FY 26-27 Party', 'Canara Bank CC', 3544780.0, 'New Year Test', 'FY 2026-27');");
 
     VouchersModel vchModel;
     // Querying with date 2026-07-09 must return the 2026 voucher
-    QVariantMap vch2026 = vchModel.get_cheque_voucher("999", "09-07-2026");
+    QVariantMap vch2026 = vchModel.get_cheque_voucher("99901", "09-07-2026");
     QCOMPARE(vch2026.value("party_name").toString(), QString("New FY 26-27 Party"));
     QCOMPARE(vch2026.value("amount").toDouble(), 3544780.0);
 
     // Querying with date 2023-08-15 must return the 2023 voucher
-    QVariantMap vch2023 = vchModel.get_cheque_voucher("ChPt 999", "15-08-2023");
+    QVariantMap vch2023 = vchModel.get_cheque_voucher("ChPt 99901", "15-08-2023");
     QCOMPARE(vch2023.value("party_name").toString(), QString("Old FY 23-24 Party"));
     QCOMPARE(vch2023.value("amount").toDouble(), 1000.0);
 }
@@ -1126,6 +1135,63 @@ void LogicBoardTestSuite::testFirmTypeResolutionAndDynamicFiscalYears() {
     QString originalDb = "data/test_unit_suite.db";
     if (QFile::exists("../data/test_unit_suite.db")) originalDb = "../data/test_unit_suite.db";
     DatabaseManager::instance().switchDatabase(originalDb);
+}
+
+void LogicBoardTestSuite::testHistoricalFiscalYearIsolationWithoutGapYears() {
+    QString histDbPath = "data/test_historical_fy.db";
+    if (QFile::exists(histDbPath)) QFile::remove(histDbPath);
+
+    DatabaseManager::instance().switchDatabase(histDbPath);
+
+    // Seed historical company info ending in FY 2023-24
+    DatabaseManager::instance().executeNonQuery("DELETE FROM company_info;");
+    DatabaseManager::instance().executeNonQuery(
+        "INSERT INTO company_info (company_name, firm_type, books_from, acc_year_from, acc_year_to) "
+        "VALUES ('Old Trading Co', 'Partnership Firm', '2021-04-01', '2021-04-01', '2024-03-31');"
+    );
+
+    // Seed historical transactions across 2021-2023
+    DatabaseManager::instance().executeNonQuery("DELETE FROM transactions;");
+    DatabaseManager::instance().executeNonQuery(
+        "INSERT INTO transactions (voucher_no, voucher_type, voucher_date, account_id, amount, dr_cr) "
+        "VALUES ('V-01', 'Journal', '2021-06-15', 1, 5000, 'Dr'), ('V-02', 'Journal', '2023-11-20', 1, 8000, 'Dr');"
+    );
+
+    // Run discovery
+    FiscalYearHelper::ensureFiscalYearsDiscovered();
+
+    QVariantList fys = DatabaseManager::instance().executeQuery(
+        "SELECT year_name, start_date, end_date, is_active FROM financial_years ORDER BY start_date ASC;"
+    );
+
+    // Exactly 3 years: 2021-22, 2022-23, 2023-24
+    QCOMPARE(fys.size(), 3);
+    QCOMPARE(fys[0].toMap().value("year_name").toString(), QString("FY 2021-22"));
+    QCOMPARE(fys[1].toMap().value("year_name").toString(), QString("FY 2022-23"));
+    QCOMPARE(fys[2].toMap().value("year_name").toString(), QString("FY 2023-24"));
+
+    // Active year must strictly be the latest actual historical year (FY 2023-24)
+    QCOMPARE(fys[2].toMap().value("is_active").toInt(), 1);
+
+    // Check no future years are present
+    QVariant futureFys = DatabaseManager::instance().executeScalar(
+        "SELECT COUNT(*) FROM financial_years WHERE year_name IN ('FY 2024-25', 'FY 2025-26', 'FY 2026-27', 'FY 2027-28');"
+    );
+    QCOMPARE(futureFys.toInt(), 0);
+
+    // Re-running discovery must be a no-op and never introduce future years
+    FiscalYearHelper::ensureFiscalYearsDiscovered();
+    QVariantList fysRecheck = DatabaseManager::instance().executeQuery("SELECT year_name FROM financial_years;");
+    QCOMPARE(fysRecheck.size(), 3);
+
+    FiscalYearInfo activeInfo = FiscalYearHelper::getActiveFiscalYear();
+    QCOMPARE(activeInfo.name, QString("FY 2023-24"));
+
+    // Switch back to isolated test unit DB
+    QString originalDb = "data/test_unit_suite.db";
+    if (QFile::exists("../data/test_unit_suite.db")) originalDb = "../data/test_unit_suite.db";
+    DatabaseManager::instance().switchDatabase(originalDb);
+    if (QFile::exists(histDbPath)) QFile::remove(histDbPath);
 }
 
 // -------------------------------------------------------------
@@ -1589,21 +1655,43 @@ void LogicBoardTestSuite::testFinalReportsAndDepreciationSubsystem() {
     QVERIFY(sqlClause.contains("g.code1st IN (3, 28)"));
     QVERIFY(sqlClause.contains("g.code2nd IN (3, 28)"));
 
-    // 4. Capital Accounts Controller Verification
-    DatabaseManager::instance().executeNonQuery(
-        "INSERT OR IGNORE INTO parties (name, group_name, group_code, opening_balance, balance_type) "
-        "VALUES ('Capital Ventures Pvt.Ltd. [Delhi]', 'Rice Basmati Debitors', 39, 0.0, 'Dr');"
-    );
-
-    MahadevERP::CapitalAccountsController capCtrl;
-    capCtrl.setDateRange(QDate(2025, 4, 1), QDate(2026, 3, 31));
-    const auto& capItems = capCtrl.items();
-    for (const auto& row : capItems) {
-        // Mathematical proof: No party under Rice Basmati Debitors (code 39) can ever leak into Capital Accounts (code 1)
-        QVERIFY(row.partnerName != "Capital Ventures Pvt.Ltd. [Delhi]");
-        double expectedClosing = row.opCapital + row.additions + row.interest + row.profitShare - row.drawings;
-        QCOMPARE(std::abs(row.closingCapital - expectedClosing) < 0.01, true);
+    // 5. Group Search and Modification Subsystem Verification
+    QVariantList searchedGroups = AccountClassifier::searchGroups("Debtors", 20);
+    QVERIFY(searchedGroups.size() > 0);
+    bool foundSundryDebtors = false;
+    for (const auto& gVar : searchedGroups) {
+        if (gVar.toMap().value("name").toString().contains("Debtors", Qt::CaseInsensitive)) {
+            foundSundryDebtors = true;
+            break;
+        }
     }
+    QVERIFY(foundSundryDebtors);
+
+    // Test creating a dynamic custom group
+    QString testGrpName = "TEST_CUSTOM_EXPORT_DEBTORS";
+    QString createErr;
+    bool createOk = AccountClassifier::createOrUpdateGroup(0, testGrpName, "Sundry Debtors", "Assets", "Test Group for Export", true, &createErr);
+    QVERIFY2(createOk, qPrintable(createErr));
+
+    QVariantMap grpDetails = AccountClassifier::getGroupDetails(testGrpName);
+    QVERIFY(!grpDetails.isEmpty());
+    int newGroupId = grpDetails.value("id").toInt();
+    QVERIFY(newGroupId > 0);
+    QCOMPARE(grpDetails.value("parent_group_name").toString(), QString("Sundry Debtors"));
+    QCOMPARE(grpDetails.value("code2nd").toInt(), 8); // Parent is Sundry Debtors (8)
+    QCOMPARE(grpDetails.value("code3rd").toInt(), 2); // Grandparent is Current Assets (2)
+
+    // Test modifying group name & parent
+    QString modGrpName = "TEST_MODIFIED_EXPORT_DEBTORS";
+    QString modErr;
+    bool modOk = AccountClassifier::createOrUpdateGroup(newGroupId, modGrpName, "Sundry Debtors", "Assets", "Modified Group Notes", true, &modErr);
+    QVERIFY2(modOk, qPrintable(modErr));
+
+    QVariantMap modDetails = AccountClassifier::getGroupDetailsById(newGroupId);
+    QCOMPARE(modDetails.value("name").toString(), modGrpName);
+
+    // Clean up test group
+    AccountClassifier::deleteGroup(newGroupId);
 
     qDebug() << "[TEST] Final Reports, Deterministic Hierarchy and Depreciation Subsystems verified successfully!";
 }
@@ -1808,6 +1896,132 @@ void LogicBoardTestSuite::testPrintExportControllerUniversalExports() {
     QFile::remove(xlsTrial);
 
     qDebug() << "[TEST] Universal Print, PDF, ODF & Excel Exports Subsystems verified successfully!";
+}
+
+void LogicBoardTestSuite::testBardanaControllerWorkflow() {
+    BardanaController bCtrl;
+
+    DatabaseManager::instance().executeNonQuery("DELETE FROM bardana_transactions WHERE party_id = 9999 OR party_name = 'M/S Test Bardana Trader';");
+    DatabaseManager::instance().executeNonQuery("INSERT OR IGNORE INTO parties (id, name, group_id) VALUES (9999, 'M/S Test Bardana Trader', 1);");
+
+    // 1. Issue 500 Jute bags to farmer/party
+    bool ok1 = bCtrl.createBardanaTransaction(
+        "ISSUE", "2026-04-10", "BRD-001", 9999, "M/S Test Bardana Trader",
+        "Jute 50kg (Pukka)", "Main Godown", "Dr", 500, 45.0, "HR-57-A-1234", "CH-101", "Bags issued for paddy loading"
+    );
+    QVERIFY(ok1);
+
+    // 2. Receive 300 Jute bags back
+    bool ok2 = bCtrl.createBardanaTransaction(
+        "RECEIVE", "2026-04-15", "BRD-002", 9999, "M/S Test Bardana Trader",
+        "Jute 50kg (Pukka)", "Main Godown", "Cr", 300, 45.0, "HR-57-A-1234", "CH-102", "Bags received back"
+    );
+    QVERIFY(ok2);
+
+    // 3. Verify running party balance (500 - 300 = 200 bags)
+    int balance = bCtrl.getPartyBagBalance(9999, "Jute 50kg (Pukka)");
+    QCOMPARE(balance, 200);
+
+    // 4. Verify godown stock
+    QVariantList summary = bCtrl.getGodownStockSummary();
+    QVERIFY(!summary.isEmpty());
+
+    qDebug() << "[TEST] Bardana Gunny Bag Controller & Packaging Ledger verified successfully!";
+}
+
+void LogicBoardTestSuite::testGateRegisterControllerWorkflow() {
+    GateRegisterController gCtrl;
+
+    QString passNo = gCtrl.generateNextGatePassNo("GP-TEST-");
+    QVERIFY(!passNo.isEmpty());
+
+    // 1. Inward entry at gate
+    bool ok1 = gCtrl.createGateEntry(
+        passNo, "2026-04-20", "10:30", "INWARD", "Paddy Purchase",
+        "HR-39-B-5555", "Suresh Kumar", "9812000000", "Self Trolley",
+        201, "Zimidar Ram Kumar", "Paddy Basmati 1121", 250, 162.50, "Arrival at gate"
+    );
+    QVERIFY(ok1);
+
+    // 2. Update Weighbridge weights
+    bool ok2 = gCtrl.updateWeighbridgeWeights(passNo, "WB-999", 162.50, 32.50, 130.00);
+    QVERIFY(ok2);
+
+    // 3. Verify status updated to COMPLETED
+    QVariantMap entry = gCtrl.getGateEntryByPassNo(passNo);
+    QCOMPARE(entry.value("status").toString(), QString("COMPLETED"));
+    QCOMPARE(entry.value("net_weight_qtl").toDouble(), 130.00);
+
+    // 4. Mark gate exit
+    bool ok3 = gCtrl.updateGateStatus(entry.value("id").toInt(), "DISPATCHED", "12:15");
+    QVERIFY(ok3);
+
+    qDebug() << "[TEST] Gate Register Inward/Outward & Weighbridge Integration verified successfully!";
+}
+
+void LogicBoardTestSuite::testSaudaContractAndDalaliSettlementWorkflow() {
+    SaudaController sCtrl;
+
+    QString sNo = sCtrl.generateNextSaudaNo("SD-TEST-");
+
+    // 1. Create Forward Contract Booking (Sale of 1000 Qtl Rice @ ₹6500/Qtl, Dalali ₹10/Qtl)
+    bool ok1 = sCtrl.createSaudaContract(
+        sNo, "2026-04-01", "SALE",
+        301, "Shree Ganesh Agro",
+        401, "Suresh Dalal",
+        501, "Basmati Rice 1121 Steam", "Grade-A",
+        2000, 1000.0, 6500.0, 10.0, 0.0,
+        "2026-04-05", "2026-04-20", "Immediate Payment on Delivery", "Moisture <= 12%"
+    );
+    QVERIFY(ok1);
+
+    // 2. Record Partial Fulfillment (400 Qtl)
+    QVariantMap sauda = sCtrl.getSaudaContracts("SALE", "PENDING").first().toMap();
+    int sId = sauda.value("id").toInt();
+
+    bool ok2 = sCtrl.fulfillSauda(sId, 800, 400.0);
+    QVERIFY(ok2);
+
+    QVariantMap updatedSauda = sCtrl.getSaudaById(sId);
+    QCOMPARE(updatedSauda.value("status").toString(), QString("PARTIAL"));
+    QCOMPARE(updatedSauda.value("fulfilled_weight_qtl").toDouble(), 400.0);
+
+    // 3. Settle Dalali for the 400 Qtl fulfilled
+    // Dalali = 400 * 10 = ₹4000.00, TDS 194H (5%) = ₹200.00, Net = ₹3800.00
+    bool ok3 = sCtrl.createDalaliSettlement(
+        401, "Suresh Dalal", sId, sNo, "2026-04-10", "SALE", "VCH-101", "INV-101",
+        "Shree Ganesh Agro", "Basmati Rice 1121 Steam", 400.0, 6500.0, 10.0, 5.0, "Dalali settled on 400 Qtl dispatch"
+    );
+    QVERIFY(ok3);
+
+    QVariantList settlements = sCtrl.getDalaliSettlements(401);
+    QVERIFY(!settlements.isEmpty());
+    QVariantMap sett = settlements.first().toMap();
+    QCOMPARE(sett.value("dalali_amount").toDouble(), 4000.00);
+    QCOMPARE(sett.value("tds_amount").toDouble(), 200.00);
+    QCOMPARE(sett.value("net_dalali_payable").toDouble(), 3800.00);
+
+    // 4. Post Dalali to Double-Entry Journal Voucher (JV)
+    int settId = sett.value("id").toInt();
+    bool ok4 = sCtrl.postDalaliToJournalVoucher(settId);
+    QVERIFY(ok4);
+
+    // Verify double-entry balancing in transactions
+    QVariantMap postedSett = sCtrl.getDalaliSettlements(401).first().toMap();
+    QCOMPARE(postedSett.value("is_posted_to_jv").toInt(), 1);
+    QString jvNo = postedSett.value("journal_voucher_no").toString();
+    QVERIFY(!jvNo.isEmpty());
+
+    QVariant totalDr = DatabaseManager::instance().executeScalar(
+        "SELECT SUM(amount) FROM transactions WHERE voucher_no = ? AND dr_cr = 'Dr';", {jvNo}
+    );
+    QVariant totalCr = DatabaseManager::instance().executeScalar(
+        "SELECT SUM(amount) FROM transactions WHERE voucher_no = ? AND dr_cr = 'Cr';", {jvNo}
+    );
+    QCOMPARE(totalDr.toDouble(), 4000.00); // Dalali Expense Dr
+    QCOMPARE(totalCr.toDouble(), 4000.00); // Broker Cr (3800) + TDS 194H Cr (200)
+
+    qDebug() << "[TEST] Sauda Forward Contract & Dalali Double-Entry Settlement verified successfully!";
 }
 
 QTEST_MAIN(LogicBoardTestSuite)

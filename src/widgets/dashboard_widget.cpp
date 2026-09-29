@@ -41,7 +41,7 @@ DashboardWidget::DashboardWidget(DashboardController* dashCtrl,
         if (lastMenu == "ledger_master") m_selectedMenuIndex = 0;
         else if (lastMenu == "stock_master") m_selectedMenuIndex = 1;
         else if (lastMenu == "add_voucher") m_selectedMenuIndex = 2;
-        else if (lastMenu == "other_voucher" || lastMenu == "tds_tcs_hub" || lastMenu == "tds_options" || lastMenu == "tcs_options") m_selectedMenuIndex = 3;
+        else if (lastMenu == "other_voucher" || lastMenu == "tds_tcs_hub" || lastMenu == "tds_options" || lastMenu == "tcs_options" || lastMenu == "mandi_trading_hub") m_selectedMenuIndex = 3;
         else if (lastMenu == "reports_register" || lastMenu == "cash_book_hub" || lastMenu == "stock_register_hub") m_selectedMenuIndex = 4;
         else if (lastMenu == "final_accounts" || lastMenu == "final_reports_hub" || lastMenu == "trading_reports_hub" || lastMenu == "trial_balance_options_hub" || lastMenu == "depreciation_options_hub") m_selectedMenuIndex = 5;
         else m_selectedMenuIndex = 0;

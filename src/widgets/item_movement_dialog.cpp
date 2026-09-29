@@ -1,4 +1,5 @@
 #include "item_movement_dialog.h"
+#include "voucher_date_dialog.h"
 #include "../engine/accounting_engine.h"
 #include "../engine/fiscal_year_helper.h"
 #include "../database_manager.h"
@@ -35,6 +36,11 @@ void ItemMovementDialog::keyPressEvent(QKeyEvent* event) {
     if (event->key() == Qt::Key_Escape) {
         event->accept();
         close();
+        return;
+    }
+    if (event->key() == Qt::Key_F2 || (event->modifiers() & Qt::AltModifier && event->key() == Qt::Key_F2)) {
+        event->accept();
+        onPeriodClicked();
         return;
     }
     if (event->key() == Qt::Key_F5) {
@@ -114,23 +120,31 @@ void ItemMovementDialog::setupUi() {
     lblFrom->setStyleSheet("font-size: 12px; font-weight: 700; color: #334155; border: none; background: transparent;");
     filterLayout->addWidget(lblFrom);
 
-    m_fromDateEdit = new QDateEdit(filterCard);
-    m_fromDateEdit->setCalendarPopup(true);
-    m_fromDateEdit->setDisplayFormat("dd-MM-yyyy");
+    m_fromDateEdit = new AccountingDateDisplay(filterCard);
     m_fromDateEdit->setFixedHeight(34);
-    m_fromDateEdit->setMinimumWidth(125);
+    m_fromDateEdit->setMinimumWidth(115);
+    connect(m_fromDateEdit, &AccountingDateDisplay::clicked, this, &ItemMovementDialog::onPeriodClicked);
     filterLayout->addWidget(m_fromDateEdit);
 
     QLabel* lblTo = new QLabel("To Date:", filterCard);
     lblTo->setStyleSheet("font-size: 12px; font-weight: 700; color: #334155; border: none; background: transparent;");
     filterLayout->addWidget(lblTo);
 
-    m_toDateEdit = new QDateEdit(filterCard);
-    m_toDateEdit->setCalendarPopup(true);
-    m_toDateEdit->setDisplayFormat("dd-MM-yyyy");
+    m_toDateEdit = new AccountingDateDisplay(filterCard);
     m_toDateEdit->setFixedHeight(34);
-    m_toDateEdit->setMinimumWidth(125);
+    m_toDateEdit->setMinimumWidth(115);
+    connect(m_toDateEdit, &AccountingDateDisplay::clicked, this, &ItemMovementDialog::onPeriodClicked);
     filterLayout->addWidget(m_toDateEdit);
+
+    m_btnPeriod = new QPushButton(" Period (F2)", filterCard);
+    m_btnPeriod->setFixedHeight(34);
+    m_btnPeriod->setCursor(Qt::PointingHandCursor);
+    m_btnPeriod->setStyleSheet(
+        "QPushButton { background-color: #EFF6FF; color: #1D4ED8; border: 1px solid #BFDBFE; border-radius: 6px; padding: 4px 10px; font-weight: 700; font-size: 11.5px; }"
+        "QPushButton:hover { background-color: #DBEAFE; color: #1E40AF; }"
+    );
+    connect(m_btnPeriod, &QPushButton::clicked, this, &ItemMovementDialog::onPeriodClicked);
+    filterLayout->addWidget(m_btnPeriod);
 
     filterLayout->addStretch(1);
 
@@ -259,7 +273,7 @@ void ItemMovementDialog::applyCustomStyles() {
         "  border: none;"
         "  border-right: 1px solid #334155;"
         "}"
-        "QDateEdit {"
+        "AccountingDateEdit, QDateEdit {"
         "  background-color: #FFFFFF;"
         "  color: #0F172A;"
         "  border: 1.5px solid #CBD5E1;"
@@ -268,7 +282,7 @@ void ItemMovementDialog::applyCustomStyles() {
         "  font-weight: 700;"
         "  font-size: 12px;"
         "}"
-        "QDateEdit:focus {"
+        "AccountingDateEdit:focus, QDateEdit:focus {"
         "  border: 2px solid #2563EB;"
         "  background-color: #FFFFF0;"
         "}"
@@ -367,6 +381,16 @@ void ItemMovementDialog::loadMovements(const QString& itemName, const QDate& fro
 
 void ItemMovementDialog::onRefreshClicked() {
     loadMovements(m_itemName, m_fromDateEdit->date(), m_toDateEdit->date());
+}
+
+void ItemMovementDialog::onPeriodClicked() {
+    QDate f = m_fromDateEdit->date();
+    QDate t = m_toDateEdit->date();
+    if (VoucherDateDialog::selectDateRange(this, &f, &t, f, t)) {
+        m_fromDateEdit->setDate(f);
+        m_toDateEdit->setDate(t);
+        onRefreshClicked();
+    }
 }
 
 void ItemMovementDialog::onInwardDoubleClicked(int row, int col) {

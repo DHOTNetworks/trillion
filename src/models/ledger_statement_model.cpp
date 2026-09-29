@@ -156,6 +156,10 @@ QVariantMap LedgerStatementSideModel::get(int row) const {
     const LedgerStatementEntry& e = m_entries.at(row);
     QVariantMap m;
     m["id"] = e.id;
+    m["partyId"] = e.partyId;
+    m["party_id"] = e.partyId;
+    m["partyName"] = e.partyName;
+    m["party_name"] = e.partyName;
     m["isSelected"] = e.isSelected;
     m["vIso"] = e.vIso;
     m["vDate"] = e.vDate;

@@ -56,6 +56,7 @@ public slots:
     void recalculateAankStatement();
     void onPostInterestVoucherClicked();
     void toggleAankMode();
+    void onPeriodClicked();
 
 protected:
     void keyPressEvent(QKeyEvent* event) override;
@@ -85,9 +86,9 @@ private:
     // Search & Filter
     AccountSearchBox* m_searchBox = nullptr;
     QLabel* m_fyBadge = nullptr;
-    AccountingDateEdit* m_fromDateEdit = nullptr;
-    AccountingDateEdit* m_toDateEdit = nullptr;
-    QPushButton* m_applyFilterBtn = nullptr;
+    AccountingDateDisplay* m_fromDateEdit = nullptr;
+    AccountingDateDisplay* m_toDateEdit = nullptr;
+    QPushButton* m_periodBtn = nullptr;
 
     // Tab Container
     QTabWidget* m_viewTabs = nullptr;

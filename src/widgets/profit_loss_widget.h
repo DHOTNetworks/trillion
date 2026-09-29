@@ -62,8 +62,8 @@ private:
     QLabel* m_titleLabel = nullptr;
     QLabel* m_firmLabel = nullptr;
     QLabel* m_fyBadge = nullptr;
-    AccountingDateEdit* m_fromDateEdit = nullptr;
-    AccountingDateEdit* m_toDateEdit = nullptr;
+    AccountingDateDisplay* m_fromDateEdit = nullptr;
+    AccountingDateDisplay* m_toDateEdit = nullptr;
     KbdBadgeButton* m_periodBtn = nullptr;
     KbdBadgeButton* m_expandBtn = nullptr;
     KbdBadgeButton* m_collapseBtn = nullptr;

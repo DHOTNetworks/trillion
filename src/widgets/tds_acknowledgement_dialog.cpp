@@ -99,7 +99,7 @@ void TdsAcknowledgementDialog::setupUi()
     m_filingDateEdit->setReadOnly(true);
     m_filingDateEdit->setText(QDate::currentDate().toString("dd-MM-yyyy"));
     dtRow->addWidget(m_filingDateEdit);
-    auto *btnDt = new QPushButton("📅", formCard);
+    auto *btnDt = new QPushButton("", formCard);
     btnDt->setFixedWidth(32);
     btnDt->setStyleSheet("background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 4px; font-size: 13px;");
     btnDt->setCursor(Qt::PointingHandCursor);

@@ -1,5 +1,6 @@
 #include "main_window.h"
 #include "accounting_period_dialog.h"
+#include "weighbridge_kanda_dialog.h"
 #include "../engine/fiscal_year_helper.h"
 #include "../models/financial_years_model.h"
 #include "../services/app_keyboard_controller.h"
@@ -385,6 +386,30 @@ MainWindow::MainWindow(const MainWindowDependencies& deps, QWidget* parent)
     connect(m_cashVoucherWidget, &MahadevERP::CashVoucherWidget::voucherSaved, this, &MainWindow::onCashVoucherSaved);
     m_stackedWidget->addWidget(m_cashVoucherWidget);
 
+    // Index 45: Bardana (Gunny Bag Management) Widget (View 70)
+    m_bardanaCtrl = new BardanaController(this);
+    m_bardanaWidget = new BardanaWidget(m_bardanaCtrl, m_printExportCtrl, this);
+    connect(m_bardanaWidget, &BardanaWidget::backRequested, this, &MainWindow::navigateBack);
+    m_stackedWidget->addWidget(m_bardanaWidget);
+
+    // Index 46: Gate Inward / Outward Register Widget (View 71)
+    m_gateRegisterCtrl = new GateRegisterController(this);
+    m_gateRegisterWidget = new GateRegisterWidget(m_gateRegisterCtrl, m_printExportCtrl, this);
+    connect(m_gateRegisterWidget, &GateRegisterWidget::backRequested, this, &MainWindow::navigateBack);
+    connect(m_gateRegisterWidget, &GateRegisterWidget::openWeighbridgeRequested, this, [this](const QString& passNo, const QString& vehNo, const QString& party) {
+        Q_UNUSED(passNo);
+        Q_UNUSED(vehNo);
+        Q_UNUSED(party);
+        MahadevERP::WeighbridgeKandaDialog::openKandaSlip(m_transportDispatchCtrl, 0, this);
+    });
+    m_stackedWidget->addWidget(m_gateRegisterWidget);
+
+    // Index 47: Sauda (Broker Contracts) & Dalali Widget (View 72)
+    m_saudaCtrl = new SaudaController(this);
+    m_saudaContractWidget = new SaudaContractWidget(m_saudaCtrl, m_printExportCtrl, this);
+    connect(m_saudaContractWidget, &SaudaContractWidget::backRequested, this, &MainWindow::navigateBack);
+    m_stackedWidget->addWidget(m_saudaContractWidget);
+
     // Global Shortcut for Accounting Period (Alt+F2)
     QShortcut* altF2Shortcut = new QShortcut(QKeySequence(Qt::ALT | Qt::Key_F2), this);
     connect(altF2Shortcut, &QShortcut::activated, this, &MainWindow::openAccountingPeriodDialog);
@@ -637,6 +662,9 @@ int MainWindow::currentViewIndex() const {
     if (cur == m_capitalAccountsWidget) return 40;
     if (cur == m_depreciationChartWidget) return 41;
     if (cur == m_cashVoucherWidget) return 60;
+    if (cur == m_bardanaWidget) return 70;
+    if (cur == m_gateRegisterWidget) return 71;
+    if (cur == m_saudaContractWidget) return 72;
     if (cur == m_cashBankFlowWidget) {
         if (m_cashBankFlowWidget->statementMode() == MahadevERP::FlowStatementType::CashFlow) return 61;
         if (m_cashBankFlowWidget->statementMode() == MahadevERP::FlowStatementType::BankFlow) return 62;
@@ -805,6 +833,12 @@ void MainWindow::openAccountingPeriodDialog() {
             m_form16AListWidget->reloadData();
         } else if ((vIdx == 61 || vIdx == 62 || vIdx == 63) && m_cashBankFlowWidget) {
             m_cashBankFlowWidget->setDateRange(fIso, tIso);
+        } else if (vIdx == 70 && m_bardanaWidget) {
+            m_bardanaWidget->refreshData();
+        } else if (vIdx == 71 && m_gateRegisterWidget) {
+            m_gateRegisterWidget->refreshData();
+        } else if (vIdx == 72 && m_saudaContractWidget) {
+            m_saudaContractWidget->refreshData();
         }
     }
 
@@ -827,17 +861,29 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
     }
     if (viewIndex == 0 || viewIndex == 22) {
         m_viewHistoryStack.clear();
+        m_targetStatementParty.clear();
+        m_lastViewedStatementFromDate.clear();
+        m_lastViewedStatementToDate.clear();
+        m_lastViewedStatementSide.clear();
+        m_lastViewedStatementIndex = 0;
+        if (m_ledgerWidget) {
+            m_ledgerWidget->resetSearch();
+        }
     }
 
     QString pendingInv = m_pendingEditInvoiceNo;
     QString pendingVNo = m_pendingEditVoucherNo;
     int pendingId = m_pendingEditVoucherId;
     QString pendingDate = m_pendingEditVoucherDate;
+    QVariantMap pendingEntry = m_pendingEditEntry;
+    QString pendingFY = m_pendingEditFinancialYear;
 
     m_pendingEditInvoiceNo.clear();
     m_pendingEditVoucherNo.clear();
     m_pendingEditVoucherId = 0;
     m_pendingEditVoucherDate.clear();
+    m_pendingEditEntry.clear();
+    m_pendingEditFinancialYear.clear();
 
     qDebug() << "[NAV] navigateToView viewIndex:" << viewIndex << "pushToHistory:" << pushToHistory << "stackSize:" << m_viewHistoryStack.size();
 
@@ -893,6 +939,10 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
         int rowIndex = m_lastViewedStatementIndex;
 
         m_targetStatementParty.clear();
+        m_lastViewedStatementFromDate.clear();
+        m_lastViewedStatementToDate.clear();
+        m_lastViewedStatementSide.clear();
+        m_lastViewedStatementIndex = 0;
 
         m_stackedWidget->setCurrentWidget(m_ledgerWidget);
         if (!party.isEmpty()) {
@@ -970,7 +1020,9 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
             if (mode == "RECEIPT") m_chequeVoucherWidget->setVoucherType("Receipt");
             else if (mode == "PAYMENT") m_chequeVoucherWidget->setVoucherType("Payment");
 
-            if (!pendingInv.isEmpty() || !pendingVNo.isEmpty() || pendingId > 0) {
+            if (!pendingEntry.isEmpty()) {
+                m_chequeVoucherWidget->loadVoucherForEditing(QVariant::fromValue(pendingEntry), pendingDate);
+            } else if (!pendingInv.isEmpty() || !pendingVNo.isEmpty() || pendingId > 0) {
                 QVariant target = !pendingInv.isEmpty() ? QVariant(pendingInv) : (!pendingVNo.isEmpty() ? QVariant(pendingVNo) : QVariant(pendingId));
                 m_chequeVoucherWidget->loadVoucherForEditing(target, pendingDate);
             } else {
@@ -981,7 +1033,9 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
     } else if (viewIndex == 17) {
         if (m_journalVoucherWidget) {
             m_stackedWidget->setCurrentWidget(m_journalVoucherWidget);
-            if (!pendingInv.isEmpty() || !pendingVNo.isEmpty() || pendingId > 0) {
+            if (!pendingEntry.isEmpty()) {
+                m_journalVoucherWidget->loadVoucherForEditing(QVariant::fromValue(pendingEntry), pendingDate);
+            } else if (!pendingInv.isEmpty() || !pendingVNo.isEmpty() || pendingId > 0) {
                 QVariant target = !pendingInv.isEmpty() ? QVariant(pendingInv) : (!pendingVNo.isEmpty() ? QVariant(pendingVNo) : QVariant(pendingId));
                 m_journalVoucherWidget->loadVoucherForEditing(target, pendingDate);
             } else {
@@ -1199,7 +1253,9 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
     } else if (viewIndex == 60) {
         if (m_cashVoucherWidget) {
             m_stackedWidget->setCurrentWidget(m_cashVoucherWidget);
-            if (!pendingInv.isEmpty() || !pendingVNo.isEmpty() || pendingId > 0) {
+            if (!pendingEntry.isEmpty()) {
+                m_cashVoucherWidget->loadVoucherForEditing(QVariant::fromValue(pendingEntry), pendingDate);
+            } else if (!pendingInv.isEmpty() || !pendingVNo.isEmpty() || pendingId > 0) {
                 QVariant target = !pendingInv.isEmpty() ? QVariant(pendingInv) : (!pendingVNo.isEmpty() ? QVariant(pendingVNo) : QVariant(pendingId));
                 m_cashVoucherWidget->loadVoucherForEditing(target, pendingDate);
             } else {
@@ -1235,6 +1291,24 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
             m_cashBankFlowWidget->setDateRange(activeFy.startDate, activeFy.endDate);
             m_cashBankFlowWidget->setFocus();
         }
+    } else if (viewIndex == 70) {
+        if (m_bardanaWidget) {
+            m_stackedWidget->setCurrentWidget(m_bardanaWidget);
+            m_bardanaWidget->refreshData();
+            m_bardanaWidget->setFocus();
+        }
+    } else if (viewIndex == 71) {
+        if (m_gateRegisterWidget) {
+            m_stackedWidget->setCurrentWidget(m_gateRegisterWidget);
+            m_gateRegisterWidget->refreshData();
+            m_gateRegisterWidget->setFocus();
+        }
+    } else if (viewIndex == 72) {
+        if (m_saudaContractWidget) {
+            m_stackedWidget->setCurrentWidget(m_saudaContractWidget);
+            m_saudaContractWidget->refreshData();
+            m_saudaContractWidget->setFocus();
+        }
     }
 
     m_isNavigating = false;
@@ -1267,6 +1341,7 @@ void MainWindow::navigateBack() {
     // 2. If MenuTreeManager has an active menu stack:
     if (MahadevERP::MenuTreeManager::instance().hasActiveStack()) {
         navigateToView(0, false);
+        qApp->processEvents();
         MahadevERP::MenuTreeManager::instance().resumeMenuStack(this);
         return;
     }
@@ -1288,6 +1363,14 @@ void MainWindow::openStatementForParty(const QString& partyName) {
 }
 
 void MainWindow::onLedgerBackRequested() {
+    m_targetStatementParty.clear();
+    m_lastViewedStatementFromDate.clear();
+    m_lastViewedStatementToDate.clear();
+    m_lastViewedStatementSide.clear();
+    m_lastViewedStatementIndex = 0;
+    if (m_ledgerWidget) {
+        m_ledgerWidget->resetSearch();
+    }
     navigateBack();
 }
 
@@ -1401,10 +1484,19 @@ void MainWindow::onProfitLossPartyStatementRequested(const QString& partyName, c
 }
 
 void MainWindow::onLedgerAlterVoucherRequested(int targetViewIndex, const QVariantMap& entry) {
+    if (m_ledgerWidget) {
+        m_targetStatementParty = m_ledgerWidget->currentParty();
+        m_lastViewedStatementFromDate = m_ledgerWidget->fromDate();
+        m_lastViewedStatementToDate = m_ledgerWidget->toDate();
+        m_lastViewedStatementSide = m_ledgerWidget->lastSide();
+        m_lastViewedStatementIndex = m_ledgerWidget->lastIndex();
+    }
+    m_pendingEditEntry = entry;  // Store FULL entry map for FY-scoped lookup
     m_pendingEditInvoiceNo = entry.value("invoiceNo", entry.value("voucherNo", "")).toString();
     m_pendingEditVoucherNo = entry.value("voucherNo", "").toString();
     m_pendingEditVoucherId = entry.value("id", 0).toInt();
-    m_pendingEditVoucherDate = entry.value("date", "").toString();
+    m_pendingEditVoucherDate = entry.value("vIso", entry.value("date", "")).toString();
+    m_pendingEditFinancialYear = entry.value("financialYear", entry.value("financial_year", "")).toString();
     if (entry.contains("type")) {
         m_targetChequeMode = entry.value("type").toString();
     }

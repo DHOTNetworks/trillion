@@ -119,18 +119,35 @@ void StockDetailWidget::setupUi() {
 
     // Date Range
     filterLayout->addWidget(new QLabel("From Date:", filterCard));
-    m_fromDateEdit = new QDateEdit(filterCard);
-    m_fromDateEdit->setDisplayFormat("dd-MM-yyyy");
-    m_fromDateEdit->setCalendarPopup(true);
-    connect(m_fromDateEdit, &QDateEdit::dateChanged, this, &StockDetailWidget::onDateFilterChanged);
+    m_fromDateEdit = new AccountingDateDisplay(filterCard);
+    m_fromDateEdit->setFixedWidth(115);
+    connect(m_fromDateEdit, &AccountingDateDisplay::dateChanged, this, &StockDetailWidget::onDateFilterChanged);
     filterLayout->addWidget(m_fromDateEdit);
 
     filterLayout->addWidget(new QLabel("To Date:", filterCard));
-    m_toDateEdit = new QDateEdit(filterCard);
-    m_toDateEdit->setDisplayFormat("dd-MM-yyyy");
-    m_toDateEdit->setCalendarPopup(true);
-    connect(m_toDateEdit, &QDateEdit::dateChanged, this, &StockDetailWidget::onDateFilterChanged);
+    m_toDateEdit = new AccountingDateDisplay(filterCard);
+    m_toDateEdit->setFixedWidth(115);
+    connect(m_toDateEdit, &AccountingDateDisplay::dateChanged, this, &StockDetailWidget::onDateFilterChanged);
     filterLayout->addWidget(m_toDateEdit);
+
+    auto openPeriodDlg = [this]() {
+        QDate f = m_fromDateEdit->date();
+        QDate t = m_toDateEdit->date();
+        if (VoucherDateDialog::selectDateRange(this, &f, &t, f, t)) {
+            m_fromDateEdit->setDate(f);
+            m_toDateEdit->setDate(t);
+        }
+    };
+    connect(m_fromDateEdit, &AccountingDateDisplay::clicked, this, openPeriodDlg);
+    connect(m_toDateEdit, &AccountingDateDisplay::clicked, this, openPeriodDlg);
+
+    auto* periodBtn = new QPushButton("Period (F2)", filterCard);
+    periodBtn->setStyleSheet(
+        "QPushButton { background-color: #EFF6FF; color: #1D4ED8; border: 1px solid #BFDBFE; font-weight: 700; font-size: 11px; border-radius: 6px; padding: 4px 10px; }"
+        "QPushButton:hover { background-color: #DBEAFE; color: #1E40AF; }"
+    );
+    connect(periodBtn, &QPushButton::clicked, this, openPeriodDlg);
+    filterLayout->addWidget(periodBtn);
 
     // Mode Selector
     filterLayout->addWidget(new QLabel("View Mode:", filterCard));

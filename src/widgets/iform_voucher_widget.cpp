@@ -821,6 +821,7 @@ void IFormVoucherWidget::deleteVoucher() {
 }
 
 void IFormVoucherWidget::openDateDialog(bool isInitial) {
+    Q_UNUSED(isInitial);
     QString curDate = m_dateEdit ? m_dateEdit->date().toString("dd-MM-yyyy") : "";
     QString newDisp, newIso;
     if (VoucherDateDialog::getVoucherDate(this, curDate, &newDisp, &newIso)) {
@@ -828,16 +829,10 @@ void IFormVoucherWidget::openDateDialog(bool isInitial) {
             m_dateEdit->setDate(QDate::fromString(newIso, "yyyy-MM-dd"));
         }
         onDateChanged(QDate::fromString(newIso, "yyyy-MM-dd"));
-        if (m_buyerSearch) {
-            m_buyerSearch->setFocus();
-            m_buyerSearch->selectAll();
-        }
-    } else {
-        if (isInitial) {
-            emit backRequested();
-        } else if (m_buyerSearch) {
-            m_buyerSearch->setFocus();
-        }
+    }
+    if (m_buyerSearch) {
+        m_buyerSearch->setFocus();
+        m_buyerSearch->selectAll();
     }
 }
 

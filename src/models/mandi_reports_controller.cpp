@@ -1,4 +1,5 @@
 #include "mandi_reports_controller.h"
+#include "account_classifier.h"
 #include "../database_manager.h"
 #include "../engine/accounting_engine.h"
 #include <QLocale>
@@ -244,20 +245,24 @@ QVariantMap MandiReportsController::get_dami_commission_register(const QString& 
 
 QVariantList MandiReportsController::get_zimidar_list() {
     auto& db = DatabaseManager::instance();
-    return db.executeQuery(
-        "SELECT p.id, p.name AS party_name, p.party_station AS station, p.mobile AS mobile_no, p.opening_balance AS current_balance, p.balance_type "
-        "FROM parties p "
-        "WHERE p.group_name LIKE '%Zimidar%' OR p.group_name LIKE '%Farmer%' OR p.party_type = 'Farmer' "
+    QString sql = QString(
+        "SELECT DISTINCT p.id, p.name AS party_name, p.party_station AS station, p.mobile AS mobile_no, p.opening_balance AS current_balance, p.balance_type "
+        "FROM parties p %1 "
+        "WHERE %2 OR p.party_type = 'Farmer' "
         "ORDER BY p.name ASC;"
-    );
+    ).arg(AccountClassifier::partiesJoinClause("p", "g"),
+         AccountClassifier::generateHierarchySqlClause({StandardGroupCode::ZimidaraDebtors, StandardGroupCode::ZimidaraCreditors}, "g"));
+    return db.executeQuery(sql);
 }
 
 QVariantList MandiReportsController::get_buyer_list() {
     auto& db = DatabaseManager::instance();
-    return db.executeQuery(
-        "SELECT p.id, p.name AS party_name, p.party_station AS station, p.gstin, p.opening_balance AS current_balance, p.balance_type "
-        "FROM parties p "
-        "WHERE p.group_name LIKE '%Sundry Debtors%' OR p.group_name LIKE '%Mandi Debtors%' OR p.group_name LIKE '%Debtors%' "
+    QString sql = QString(
+        "SELECT DISTINCT p.id, p.name AS party_name, p.party_station AS station, p.gstin, p.opening_balance AS current_balance, p.balance_type "
+        "FROM parties p %1 "
+        "WHERE %2 OR p.party_type = 'Buyer' "
         "ORDER BY p.name ASC;"
-    );
+    ).arg(AccountClassifier::partiesJoinClause("p", "g"),
+         AccountClassifier::generateHierarchySqlClause(AccountClassifier::getDebtorsGroupCodes(), "g"));
+    return db.executeQuery(sql);
 }

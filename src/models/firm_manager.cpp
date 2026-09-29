@@ -47,6 +47,80 @@ QString FirmManager::sanitizeSlug(const QString& name) {
     return slug;
 }
 
+QString FirmManager::formatDateToDisplay(const QString& rawDate) {
+    QString s = rawDate.trimmed();
+    if (s.isEmpty()) return "";
+    if (s.contains(" ")) {
+        s = s.section(" ", 0, 0).trimmed();
+    }
+    s.replace("/", "-");
+
+    // Try dd-MM-yyyy, yyyy-MM-dd, etc.
+    QDate d = QDate::fromString(s, "dd-MM-yyyy");
+    if (!d.isValid()) d = QDate::fromString(s, "yyyy-MM-dd");
+    if (!d.isValid()) d = QDate::fromString(s, "d-M-yyyy");
+    if (!d.isValid()) d = QDate::fromString(s, "yyyy-M-d");
+    if (!d.isValid()) d = QDate::fromString(s, "d-M-yy");
+    if (!d.isValid()) d = QDate::fromString(s, "dd-MM-yy");
+
+    if (d.isValid()) {
+        return d.toString("dd-MM-yyyy");
+    }
+    return s;
+}
+
+QString FirmManager::getFirmPeriod(const QString& dbPath) {
+    if (dbPath.isEmpty() || !QFile::exists(dbPath)) return "";
+    sqlite3* db = nullptr;
+    if (sqlite3_open_v2(dbPath.toUtf8().constData(), &db, SQLITE_OPEN_READONLY, nullptr) != SQLITE_OK) {
+        return "";
+    }
+
+    QString startStr, endStr;
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(db, "SELECT MIN(start_date), MAX(end_date) FROM financial_years WHERE is_active >= 0;", -1, &stmt, nullptr) == SQLITE_OK) {
+        if (sqlite3_step(stmt) == SQLITE_ROW) {
+            const char* s0 = (const char*)sqlite3_column_text(stmt, 0);
+            const char* s1 = (const char*)sqlite3_column_text(stmt, 1);
+            if (s0 && s1) {
+                startStr = QString::fromUtf8(s0).trimmed();
+                endStr = QString::fromUtf8(s1).trimmed();
+            }
+        }
+        sqlite3_finalize(stmt);
+    }
+
+    // Fallback to transactions / vouchers if financial_years table is empty or missing
+    if (startStr.isEmpty() || endStr.isEmpty()) {
+        if (sqlite3_prepare_v2(db, "SELECT MIN(voucher_date), MAX(voucher_date) FROM vouchers WHERE is_cancelled = 0;", -1, &stmt, nullptr) == SQLITE_OK) {
+            if (sqlite3_step(stmt) == SQLITE_ROW) {
+                const char* s0 = (const char*)sqlite3_column_text(stmt, 0);
+                const char* s1 = (const char*)sqlite3_column_text(stmt, 1);
+                if (s0 && s1) {
+                    startStr = QString::fromUtf8(s0).trimmed();
+                    endStr = QString::fromUtf8(s1).trimmed();
+                }
+            }
+            sqlite3_finalize(stmt);
+        }
+    }
+
+    sqlite3_close(db);
+
+    if (!startStr.isEmpty() && !endStr.isEmpty()) {
+        QDate sDate = QDate::fromString(startStr.left(10), "yyyy-MM-dd");
+        if (!sDate.isValid()) sDate = QDate::fromString(startStr.left(10), "dd-MM-yyyy");
+        QDate eDate = QDate::fromString(endStr.left(10), "yyyy-MM-dd");
+        if (!eDate.isValid()) eDate = QDate::fromString(endStr.left(10), "dd-MM-yyyy");
+
+        if (sDate.isValid() && eDate.isValid()) {
+            return sDate.toString("dd-MM-yyyy") + " to " + eDate.toString("dd-MM-yyyy");
+        }
+    }
+
+    return "";
+}
+
 void FirmManager::loadRegistry() {
     QFile regFile(registryFilePath());
     QVariantList registeredFirms;
@@ -147,18 +221,32 @@ void FirmManager::loadRegistry() {
                     firm.value("pan").toString(),
                     firm.value("name").toString()
                 );
+                firm["period"] = getFirmPeriod(fullPath);
                 registeredFirms.append(firm);
             }
         }
     }
 
-    // Refresh firm_type and statutory info for already registered firms
+    // Refresh firm_type, statutory info, and period for all registered firms
     for (auto& f : registeredFirms) {
         QVariantMap m = f.toMap();
         QString fPan = m.value("pan").toString();
         QString fName = m.value("name").toString();
         QString fType = m.value("firm_type").toString();
         m["firm_type"] = BahiKhataMigrator::resolveFirmTypeFromPan(fType, fPan, fName);
+
+        QString dbPath = m.value("db_path").toString();
+        if (dbPath.isEmpty()) dbPath = "data/" + m.value("db_name").toString();
+        if (!dbPath.startsWith("/") && !dbPath.startsWith("data/")) {
+            dbPath = "data/" + dbPath;
+        }
+
+        if (QFile::exists(dbPath) && QFileInfo(dbPath).size() > 0) {
+            QString period = getFirmPeriod(dbPath);
+            if (!period.isEmpty()) {
+                m["period"] = period;
+            }
+        }
         f = m;
     }
 
@@ -313,6 +401,13 @@ QVariantList FirmManager::scan_folder_for_firms(const QString& folderPath) {
             if (regMap.contains(slug) || regMap.contains(dbName)) {
                 QVariantMap firm = regMap.value(slug, regMap.value(dbName));
                 firm["isActive"] = (firm.value("id").toString() == m_activeFirmId);
+                QString p = firm.value("period").toString();
+                if (p.isEmpty() || p == "All Fiscal Years" || p == "Active" || !p.contains("to", Qt::CaseInsensitive)) {
+                    QString calculatedPeriod = getFirmPeriod(fullPath);
+                    if (!calculatedPeriod.isEmpty()) {
+                        firm["period"] = calculatedPeriod;
+                    }
+                }
                 results.append(firm);
                 continue;
             }
@@ -342,28 +437,19 @@ QVariantList FirmManager::scan_folder_for_firms(const QString& folderPath) {
                         const char* c_biz = (const char*)sqlite3_column_text(stmt, 6);
 
                         if (c_name && strlen(c_name) > 0) firm["name"] = QString::fromUtf8(c_name);
-                        if (c_gst) firm["gstin"] = QString::fromUtf8(c_gst);
-                        if (c_pan) firm["pan"] = QString::fromUtf8(c_pan);
-                        if (c_city) firm["city"] = QString::fromUtf8(c_city);
-                        if (c_state) firm["state"] = QString::fromUtf8(c_state);
-                        if (c_type) firm["firm_type"] = QString::fromUtf8(c_type);
-                        if (c_biz) firm["business"] = QString::fromUtf8(c_biz);
-                    }
-                    sqlite3_finalize(stmt);
-                }
-
-                if (sqlite3_prepare_v2(db, "SELECT MIN(start_date), MAX(end_date) FROM financial_years;", -1, &stmt, nullptr) == SQLITE_OK) {
-                    if (sqlite3_step(stmt) == SQLITE_ROW) {
-                        const char* s_date = (const char*)sqlite3_column_text(stmt, 0);
-                        const char* e_date = (const char*)sqlite3_column_text(stmt, 1);
-                        if (s_date && e_date) {
-                            firm["period"] = QString::fromUtf8(s_date) + " To " + QString::fromUtf8(e_date);
-                        }
+                        if (c_gst && strlen(c_gst) > 0) firm["gstin"] = QString::fromUtf8(c_gst);
+                        if (c_pan && strlen(c_pan) > 0) firm["pan"] = QString::fromUtf8(c_pan);
+                        if (c_city && strlen(c_city) > 0) firm["city"] = QString::fromUtf8(c_city);
+                        if (c_state && strlen(c_state) > 0) firm["state"] = QString::fromUtf8(c_state);
+                        if (c_type && strlen(c_type) > 0) firm["firm_type"] = QString::fromUtf8(c_type);
+                        if (c_biz && strlen(c_biz) > 0) firm["business"] = QString::fromUtf8(c_biz);
                     }
                     sqlite3_finalize(stmt);
                 }
                 sqlite3_close(db);
             }
+
+            firm["period"] = getFirmPeriod(fullPath);
 
             if (!firm.contains("name") || firm["name"].toString().isEmpty()) {
                 firm["name"] = slug.replace("_", " ").toUpper();
@@ -374,7 +460,6 @@ QVariantList FirmManager::scan_folder_for_firms(const QString& folderPath) {
                 firm.value("pan").toString(),
                 firm.value("name").toString()
             );
-            if (!firm.contains("period") || firm["period"].toString().isEmpty()) firm["period"] = "Active";
 
             results.append(firm);
         }
@@ -421,11 +506,15 @@ QVariantList FirmManager::scan_folder_for_firms(const QString& folderPath) {
         QString fyF = insp.value("fyFrom").toString();
         QString fyT = insp.value("fyTo").toString();
         if (!fyF.isEmpty() && !fyT.isEmpty()) {
-            QString s_fmt = fyF.left(8).trimmed().replace("/", "-");
-            QString e_fmt = fyT.left(8).trimmed().replace("/", "-");
-            firm["period"] = s_fmt + " To " + e_fmt;
+            QString s_fmt = formatDateToDisplay(fyF);
+            QString e_fmt = formatDateToDisplay(fyT);
+            if (!s_fmt.isEmpty() && !e_fmt.isEmpty()) {
+                firm["period"] = s_fmt + " to " + e_fmt;
+            } else {
+                firm["period"] = fyF + " to " + fyT;
+            }
         } else {
-            firm["period"] = "Active";
+            firm["period"] = "";
         }
 
         bool isImported = QFile::exists(firm["db_path"].toString());

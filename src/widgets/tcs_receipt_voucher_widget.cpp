@@ -139,7 +139,7 @@ QWidget *TcsReceiptVoucherWidget::createParamsCard()
     m_receiptDateEdit = new QLineEdit(card);
     m_receiptDateEdit->setReadOnly(true);
     dtRow->addWidget(m_receiptDateEdit);
-    auto *btnDate = new QPushButton("📅", card);
+    auto *btnDate = new QPushButton("", card);
     btnDate->setFixedWidth(28);
     btnDate->setStyleSheet("QPushButton { background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 4px; }");
     connect(btnDate, &QPushButton::clicked, this, [this]() {

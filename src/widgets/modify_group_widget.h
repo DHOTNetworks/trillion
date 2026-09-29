@@ -8,6 +8,7 @@
 #include <QLabel>
 #include "../models/account_groups_model.h"
 
+class AccountSearchBox;
 class KbdBadgeButton;
 
 namespace MahadevERP {
@@ -20,6 +21,8 @@ public:
 
     void resetForm();
     void focusSearch();
+    void loadGroupByName(const QString& name);
+    void loadGroupById(int groupId);
 
 signals:
     void backRequested();
@@ -27,6 +30,8 @@ signals:
 
 private slots:
     void onGroupSelected(const QString& groupName);
+    void onGroupDataSelected(const QVariantMap& groupData);
+    void onParentChanged(const QString& parentName);
     void onUpdateClicked();
     void refreshGroupsList();
 
@@ -36,7 +41,7 @@ private:
     AccountGroupsModel* m_groupsModel = nullptr;
     int m_currentGroupId = -1;
 
-    QComboBox* m_selectGroupCombo = nullptr;
+    AccountSearchBox* m_groupSearchBox = nullptr;
     QLineEdit* m_groupNameEdit = nullptr;
     QComboBox* m_parentCombo = nullptr;
     QComboBox* m_natureCombo = nullptr;

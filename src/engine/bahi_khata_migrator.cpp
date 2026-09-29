@@ -788,12 +788,22 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
     auto millingRows = readTableRows(mdb, "MillingVouchers");
     auto customRows = readTableRows(mdb, "CustomClosingStocks");
     auto tdsRows = readTableRows(mdb, "TDSDeductions");
+    auto bardanaRows = readTableRows(mdb, "BardanaTransactions");
+    auto gatePassRows = readTableRows(mdb, "GatePassVouchers");
+    auto gateRegRows = readTableRows(mdb, "GateRegister");
+    auto saudaVchRows = readTableRows(mdb, "SaudaVouchers");
+    auto saudaTxRows = readTableRows(mdb, "SaudaTransactions");
+    auto brokerageRows = readTableRows(mdb, "BrokerageVouchers");
 
     auto& db = DatabaseManager::instance();
     db.ensureTablesExist();
     db.executeNonQuery("PRAGMA foreign_keys = OFF;");
     db.beginTransaction();
 
+    db.executeNonQuery("DELETE FROM bardana_transactions;");
+    db.executeNonQuery("DELETE FROM gate_register;");
+    db.executeNonQuery("DELETE FROM sauda_contracts;");
+    db.executeNonQuery("DELETE FROM dalali_settlements;");
     db.executeNonQuery("DELETE FROM transport_dispatches;");
     db.executeNonQuery("DELETE FROM debit_credit_notes;");
     db.executeNonQuery("DELETE FROM transactions;");
@@ -958,13 +968,18 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
         }
     }
 
-    // Ensure all financial years from min(earliestYear, booksStartYear) up to max(latestYear, currentYear) exist
-    QDate cur = QDate::currentDate();
-    int currentFyStartYear = (cur.month() >= 4) ? cur.year() : (cur.year() - 1);
-    int startY = currentFyStartYear;
-    if (booksStartYear > 2000) startY = std::min(startY, booksStartYear);
-    if (earliestYear < 9999 && earliestYear > 2000) startY = std::min(startY, earliestYear);
-    int targetMaxYear = std::max(latestYear, currentFyStartYear);
+    // Ensure all financial years between startY and latestYear exist (never invent future years)
+    int startY = (earliestYear != 9999 && earliestYear > 1990) ? earliestYear : (booksStartYear > 1990 ? booksStartYear : 0);
+    int targetMaxYear = (latestYear > 1990) ? latestYear : 0;
+    if (startY == 0 || targetMaxYear == 0) {
+        QDate cur = QDate::currentDate();
+        int currentFyStartYear = (cur.month() >= 4) ? cur.year() : (cur.year() - 1);
+        startY = currentFyStartYear;
+        targetMaxYear = currentFyStartYear;
+    }
+    if (booksStartYear > 1990 && booksStartYear < startY) {
+        startY = booksStartYear;
+    }
 
     for (int y = startY; y <= targetMaxYear; ++y) {
         QString fyName = QString("FY %1-%2").arg(y).arg(QString::number((y + 1) % 100).rightJustified(2, '0'));
@@ -985,8 +1000,11 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
         }
     }
 
-    // Activate the latest operational FY
+    // Activate the latest operational FY from the imported database
     QString activeFy = latestFyName;
+    if (activeFy.isEmpty()) {
+        activeFy = QString("FY %1-%2").arg(targetMaxYear).arg(QString::number((targetMaxYear + 1) % 100).rightJustified(2, '0'));
+    }
     if (!activeFy.isEmpty()) {
         db.executeNonQuery("UPDATE financial_years SET is_active = 0;");
         db.executeNonQuery("UPDATE financial_years SET is_active = 1 WHERE year_name = ?;", {activeFy});
@@ -1006,6 +1024,30 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
     db.executeNonQuery("DELETE FROM account_groups;");
     std::map<int, std::string> groupCodeMap;
     std::map<int, qint64> groupCodeToIdMap;
+    std::map<int, std::vector<int>> groupLineageMap;
+
+    // First collect all group names and codes
+    for (const auto& g : groupRows) {
+        std::string gName = cleanText(getField(g, "GroupName"));
+        if (gName.empty()) continue;
+        int code1 = parseIntVal(getField(g, "Code1st"));
+        int code2 = parseIntVal(getField(g, "Code2nd"));
+        int code3 = parseIntVal(getField(g, "Code3rd"));
+        int code4 = parseIntVal(getField(g, "Code4th"));
+
+        // If custom group in older Bahi-Khata firm has code2 == 0, infer root ancestor
+        if (code2 == 0 && code1 > 35) {
+            StandardGroupCode root = AccountClassifier::inferRootCodeFromName(QString::fromStdString(gName));
+            int rootCode = static_cast<int>(root);
+            if (rootCode > 0) {
+                code2 = rootCode;
+                code3 = AccountClassifier::getStandardGroupParent(rootCode);
+            }
+        }
+
+        groupCodeMap[code1] = gName;
+        groupLineageMap[code1] = {code1, code2, code3, code4};
+    }
 
     for (const auto& g : groupRows) {
         std::string gName = cleanText(getField(g, "GroupName"));
@@ -1016,20 +1058,41 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
         int code4 = parseIntVal(getField(g, "Code4th"));
         int extractBs = parseIntVal(getField(g, "ExtractInBalanceSheet", "1"), 1);
 
+        // If custom group in older Bahi-Khata firm has code2 == 0, infer root ancestor
+        if (code2 == 0 && code1 > 35) {
+            StandardGroupCode root = AccountClassifier::inferRootCodeFromName(QString::fromStdString(gName));
+            int rootCode = static_cast<int>(root);
+            if (rootCode > 0) {
+                code2 = rootCode;
+                code3 = AccountClassifier::getStandardGroupParent(rootCode);
+            }
+        }
+
         QString nature = AccountClassifier::getNatureForGroup(code1, code2, code3, code4);
-        // Fallback for custom groups if needed
         if (nature.isEmpty()) {
             nature = "Assets";
         }
 
+        std::string parentName = "Primary";
+        if (code2 > 0 && groupCodeMap.count(code2)) {
+            parentName = groupCodeMap[code2];
+        } else if (code2 > 0) {
+            parentName = AccountClassifier::getStandardGroupName(code2).toStdString();
+            if (parentName.empty()) parentName = "Primary";
+        }
+
+        int isSys = (code1 >= -1 && code1 <= 35) ? 1 : 0;
+
         db.executeNonQuery(
             "INSERT INTO account_groups (name, parent_group_name, nature, description, extract_in_balance_sheet, is_system, code1st, code2nd, code3rd, code4th) "
-            "VALUES (?, 'Primary / Root Group', ?, ?, ?, 0, ?, ?, ?, ?);",
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
             {
                 QString::fromStdString(gName),
+                QString::fromStdString(parentName),
                 nature,
                 QString("Legacy Group Code #%1").arg(code1),
                 extractBs,
+                isSys,
                 code1,
                 code2,
                 code3,
@@ -1037,7 +1100,6 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
             }
         );
         qint64 gid = db.lastInsertedId();
-        groupCodeMap[code1] = gName;
         groupCodeToIdMap[code1] = gid;
     }
 
@@ -1222,12 +1284,16 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
 
         std::string partyType = cleanText(getField(l, "PartyType"));
         if (partyType.empty()) {
-            partyType = (groupName.find("Debtor") != std::string::npos) ? "Buyer" :
-                        ((groupName.find("Creditor") != std::string::npos) ? "Vendor" : "Merchant");
+            if (groupLineageMap.count(gCode)) {
+                const auto& lin = groupLineageMap[gCode];
+                partyType = AccountClassifier::classifyPartyType(lin[0], lin[1], lin[2], lin[3]).toStdString();
+            } else {
+                partyType = "General";
+            }
         }
         std::string specialType = cleanText(getField(l, "SpecialPartyType"));
         if (specialType.empty()) {
-            specialType = (partyType.find("Buyer") != std::string::npos) ? "Rice Buyer" : "Paddy Seller";
+            specialType = (partyType == "Buyer") ? "Rice Buyer" : ((partyType == "Vendor") ? "Paddy Seller" : partyType);
         }
 
         std::string shopNo = cleanText(getField(l, "ShopNo"));
@@ -1311,6 +1377,9 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
         ledgerCodeMap[legacyId] = lName;
         ledgerDetailMap[legacyId] = {partyDbId, lName, groupName, partyType, legacyId, gstin, address, city, state, phone};
     }
+
+    // Auto-heal any uncoded or missing groups from imported data
+    AccountClassifier::healAllGroups();
 
     // =========================================================
     // PASS 3: STOCK ITEMS & INVENTORY
@@ -3093,6 +3162,249 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
                 cAmt
             }
         );
+    }
+
+    // =========================================================
+    // PASS 5.6: BARDANA TRANSACTIONS (BardanaTransactions)
+    // =========================================================
+    int bardanaCount = 0;
+    if (!bardanaRows.empty()) {
+        updateProgress(96, QString("Migrating %1 Historical Bardana (Gunny Bag) Transactions...").arg(bardanaRows.size()));
+        for (const auto& br : bardanaRows) {
+            QString vDate = parseDateFormatted(QString::fromStdString(getField(br, "VoucherDate")));
+            if (vDate.isEmpty()) continue;
+
+            QString fyVal = computeFinancialYear(vDate);
+            int vchNum = parseIntVal(getField(br, "VoucherNumber"));
+            QString vchNoStr = vchNum > 0 ? QString("BD-%1").arg(vchNum) : QString::fromStdString(cleanText(getField(br, "InvoiceNo")));
+            if (vchNoStr.isEmpty()) vchNoStr = QString("BD-%1").arg(bardanaCount + 1);
+
+            QString vchType = QString::fromStdString(cleanText(getField(br, "VchType")));
+            if (vchType.isEmpty()) vchType = "ISSUE";
+
+            int acCode = parseIntVal(getField(br, "AccountCode"));
+            int partyId = 0;
+            QString partyName = "";
+            auto itP = ledgerDetailMap.find(acCode);
+            if (itP != ledgerDetailMap.end()) {
+                partyId = itP->second.id;
+                partyName = QString::fromStdString(itP->second.name);
+            }
+            if (partyName.isEmpty()) partyName = QString("Party #%1").arg(acCode);
+
+            QString bardanaType = QString::fromStdString(cleanText(getField(br, "BardanaType", "Jute 50kg (Pukka)")));
+            if (bardanaType.isEmpty()) bardanaType = "Jute 50kg (Pukka)";
+
+            QString godownName = QString::fromStdString(cleanText(getField(br, "GodownName", "Main Godown")));
+            if (godownName.isEmpty()) godownName = "Main Godown";
+
+            QString drCr = (vchType.toUpper().contains("ISSUE") || vchType.toUpper().contains("SALE")) ? "Dr" : "Cr";
+            int qty = parseIntVal(getField(br, "Qty"));
+            double rate = parseDoubleVal(getField(br, "Rate", "0.0"));
+            double amount = std::round((qty * rate) * 100.0) / 100.0;
+            QString vehNo = QString::fromStdString(cleanText(getField(br, "VehNo")));
+            QString billNo = QString::fromStdString(cleanText(getField(br, "InvoiceNo")));
+            QString narration = QString::fromStdString(cleanText(getField(br, "Narration")));
+
+            db.executeNonQuery(
+                "INSERT INTO bardana_transactions ("
+                "  financial_year, voucher_no, voucher_date, vch_type, party_id, party_name, "
+                "  bardana_type, godown_name, dr_cr, qty, rate, amount, vehicle_no, bill_no, narration"
+                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+                {
+                    fyVal, vchNoStr, vDate, vchType,
+                    (partyId > 0 ? QVariant(partyId) : QVariant()), partyName,
+                    bardanaType, godownName, drCr, qty, rate, amount, vehNo, billNo, narration
+                }
+            );
+            bardanaCount++;
+        }
+        std::cout << "[INFO] Migrated " << bardanaCount << " Bardana transactions!" << std::endl;
+    }
+
+    // =========================================================
+    // PASS 5.7: GATE PASS & GATE REGISTER (GatePassVouchers & GateRegister)
+    // =========================================================
+    int gatePassCount = 0;
+    if (!gatePassRows.empty() || !gateRegRows.empty()) {
+        updateProgress(97, QString("Migrating %1 Gate Pass Records & Gate Log...").arg(gatePassRows.size() + gateRegRows.size()));
+        for (const auto& gr : gatePassRows) {
+            QString gDate = parseDateFormatted(QString::fromStdString(getField(gr, "GatePassDate", getField(gr, "VoucherDate"))));
+            if (gDate.isEmpty()) continue;
+
+            QString fyVal = computeFinancialYear(gDate);
+            int gpNo = parseIntVal(getField(gr, "GatePassNo"));
+            QString passNoStr = gpNo > 0 ? QString("GP-%1").arg(gpNo, 5, 10, QChar('0')) : QString("GP-%1").arg(gatePassCount + 1, 5, 10, QChar('0'));
+
+            int pCode = parseIntVal(getField(gr, "PartyCode"));
+            int partyId = 0;
+            QString partyName = "";
+            auto itP = ledgerDetailMap.find(pCode);
+            if (itP != ledgerDetailMap.end()) {
+                partyId = itP->second.id;
+                partyName = QString::fromStdString(itP->second.name);
+            }
+            if (partyName.isEmpty()) partyName = "Consignee Party";
+
+            int iCode = parseIntVal(getField(gr, "ItemCode"));
+            QString commodity = "Paddy / Rice";
+            auto itI = itemCodeMap.find(iCode);
+            if (itI != itemCodeMap.end()) {
+                commodity = QString::fromStdString(itI->second.name);
+            }
+
+            int bags = parseIntVal(getField(gr, "Bags"));
+            double grossWt = parseDoubleVal(getField(gr, "TotalWeight", getField(gr, "Weight")));
+            double netWt = grossWt;
+            QString vehNo = QString::fromStdString(cleanText(getField(gr, "VehNo")));
+            QString driver = QString::fromStdString(cleanText(getField(gr, "DriverName")));
+            QString narr = QString::fromStdString(cleanText(getField(gr, "Narration")));
+
+            db.executeNonQuery(
+                "INSERT INTO gate_register ("
+                "  financial_year, gate_pass_no, entry_date, entry_time, direction, purpose, "
+                "  vehicle_no, driver_name, driver_phone, transporter_name, party_id, party_name, "
+                "  commodity, bag_count, gross_weight_qtl, tare_weight_qtl, net_weight_qtl, status, remarks"
+                ") VALUES (?, ?, ?, '10:00', 'OUTWARD', 'Dispatch Delivery', ?, ?, '', 'Self', ?, ?, ?, ?, ?, 0.0, ?, 'COMPLETED', ?);",
+                {
+                    fyVal, passNoStr, gDate, vehNo, driver,
+                    (partyId > 0 ? QVariant(partyId) : QVariant()), partyName,
+                    commodity, bags, grossWt, netWt, narr
+                }
+            );
+            gatePassCount++;
+        }
+        std::cout << "[INFO] Migrated " << gatePassCount << " Gate passes!" << std::endl;
+    }
+
+    // =========================================================
+    // PASS 5.8: SAUDA FORWARD CONTRACTS (SaudaVouchers & SaudaTransactions)
+    // =========================================================
+    int saudaCount = 0;
+    if (!saudaVchRows.empty()) {
+        updateProgress(98, QString("Migrating %1 Sauda Forward Contracts...").arg(saudaVchRows.size()));
+        for (const auto& sv : saudaVchRows) {
+            QString sDate = parseDateFormatted(QString::fromStdString(getField(sv, "VoucherDate")));
+            if (sDate.isEmpty()) continue;
+
+            QString fyVal = computeFinancialYear(sDate);
+            QString sNo = QString::fromStdString(cleanText(getField(sv, "SaudaNo")));
+            if (sNo.isEmpty()) {
+                int vNum = parseIntVal(getField(sv, "VoucherNumber"));
+                sNo = vNum > 0 ? QString("SD-%1").arg(vNum, 5, 10, QChar('0')) : QString("SD-%1").arg(saudaCount + 1, 5, 10, QChar('0'));
+            }
+
+            QString sType = QString::fromStdString(cleanText(getField(sv, "SaudaType"))).toUpper();
+            if (!sType.contains("BUY") && !sType.contains("PURCHASE")) sType = "SALE";
+            else sType = "BUY";
+
+            int pCode = parseIntVal(getField(sv, "AccountCode"));
+            int partyId = 0;
+            QString partyName = "";
+            auto itP = ledgerDetailMap.find(pCode);
+            if (itP != ledgerDetailMap.end()) {
+                partyId = itP->second.id;
+                partyName = QString::fromStdString(itP->second.name);
+            }
+            if (partyName.isEmpty()) partyName = "Party Trader";
+
+            QString broker = QString::fromStdString(cleanText(getField(sv, "Broker")));
+            QString itemName = QString::fromStdString(cleanText(getField(sv, "ItemName")));
+            if (itemName.isEmpty()) {
+                int iCode = parseIntVal(getField(sv, "ItemCode"));
+                auto itI = itemCodeMap.find(iCode);
+                if (itI != itemCodeMap.end()) itemName = QString::fromStdString(itI->second.name);
+                else itemName = "Basmati Rice 1121";
+            }
+
+            double weight = parseDoubleVal(getField(sv, "Weight"));
+            double rate = parseDoubleVal(getField(sv, "Rate"));
+            int bags = static_cast<int>(weight * 2.0);
+            QString condition = QString::fromStdString(cleanText(getField(sv, "Condition")));
+            QString dueDt = parseDateFormatted(QString::fromStdString(getField(sv, "DueDt")));
+            if (dueDt.isEmpty()) dueDt = sDate;
+
+            db.executeNonQuery(
+                "INSERT INTO sauda_contracts ("
+                "  financial_year, sauda_no, sauda_date, sauda_type, party_id, party_name, "
+                "  broker_id, broker_name, item_id, item_name, grade, contracted_bags, "
+                "  contracted_weight_qtl, rate_per_qtl, dalali_rate_per_qtl, dalali_pct, "
+                "  delivery_from, delivery_to, payment_terms, condition_notes, "
+                "  fulfilled_weight_qtl, fulfilled_bags, status"
+                ") VALUES (?, ?, ?, ?, ?, ?, NULL, ?, NULL, ?, 'Grade-A', ?, ?, ?, 10.0, 0.0, ?, ?, 'Standard', ?, ?, ?, 'FULFILLED');",
+                {
+                    fyVal, sNo, sDate, sType,
+                    (partyId > 0 ? QVariant(partyId) : QVariant()), partyName,
+                    broker, itemName, bags, weight, rate,
+                    sDate, dueDt, condition, weight, bags
+                }
+            );
+            saudaCount++;
+        }
+        std::cout << "[INFO] Migrated " << saudaCount << " Sauda contracts!" << std::endl;
+    }
+
+    // =========================================================
+    // PASS 5.9: BROKERAGE / DALALI SETTLEMENTS (BrokerageVouchers)
+    // =========================================================
+    int dalaliCount = 0;
+    if (!brokerageRows.empty()) {
+        updateProgress(99, QString("Migrating %1 Brokerage (Dalali) Settlements...").arg(brokerageRows.size()));
+        for (const auto& bv : brokerageRows) {
+            QString vDate = parseDateFormatted(QString::fromStdString(getField(bv, "VoucherDate")));
+            if (vDate.isEmpty()) continue;
+
+            QString fyVal = computeFinancialYear(vDate);
+            int vNum = parseIntVal(getField(bv, "VoucherNumber"));
+            QString settNo = QString("DAL-%1").arg(vNum > 0 ? vNum : (dalaliCount + 1), 5, 10, QChar('0'));
+
+            int crLedger = parseIntVal(getField(bv, "CrLedger"));
+            int brokerId = 0;
+            QString brokerName = "";
+            auto itBr = ledgerDetailMap.find(crLedger);
+            if (itBr != ledgerDetailMap.end()) {
+                brokerId = itBr->second.id;
+                brokerName = QString::fromStdString(itBr->second.name);
+            }
+            if (brokerName.isEmpty()) brokerName = "Dalal / Broker";
+
+            int pCode = parseIntVal(getField(bv, "PartyCode"));
+            QString partyName = "Party";
+            auto itP = ledgerDetailMap.find(pCode);
+            if (itP != ledgerDetailMap.end()) {
+                partyName = QString::fromStdString(itP->second.name);
+            }
+
+            QString invNo = QString::fromStdString(cleanText(getField(bv, "InvoiceNo")));
+            double itemWt = parseDoubleVal(getField(bv, "ItemWeight"));
+            double itemRate = parseDoubleVal(getField(bv, "ItemRate"));
+            double dRate = parseDoubleVal(getField(bv, "Rate"));
+            double dAmt = parseDoubleVal(getField(bv, "Amount"));
+            if (dAmt <= 0.0 && itemWt > 0.0 && dRate > 0.0) {
+                dAmt = std::round((itemWt * dRate) * 100.0) / 100.0;
+            }
+            double tdsAmt = std::round((dAmt * 0.05) * 100.0) / 100.0;
+            double netPayable = dAmt - tdsAmt;
+            QString narr = QString::fromStdString(cleanText(getField(bv, "Narration")));
+
+            db.executeNonQuery(
+                "INSERT INTO dalali_settlements ("
+                "  financial_year, settlement_no, settlement_date, broker_id, broker_name, "
+                "  sauda_id, sauda_no, voucher_type, voucher_no, invoice_no, party_name, "
+                "  item_name, weight_qtl, rate_per_qtl, dalali_rate, dalali_amount, "
+                "  tds_pct, tds_amount, net_dalali_payable, is_posted_to_jv, journal_voucher_no, narration"
+                ") VALUES (?, ?, ?, ?, ?, NULL, 'SD-MIGRATED', 'SALE', ?, ?, ?, 'Rice Basmati', ?, ?, ?, ?, 5.0, ?, ?, 1, ?, ?);",
+                {
+                    fyVal, settNo, vDate,
+                    (brokerId > 0 ? QVariant(brokerId) : QVariant()), brokerName,
+                    invNo, invNo, partyName,
+                    itemWt, itemRate, dRate, dAmt,
+                    tdsAmt, netPayable, QString("JV-DAL-%1").arg(vNum > 0 ? vNum : (dalaliCount + 1)), narr
+                }
+            );
+            dalaliCount++;
+        }
+        std::cout << "[INFO] Migrated " << dalaliCount << " Brokerage settlements!" << std::endl;
     }
 
     db.commit();

@@ -19,6 +19,12 @@ public:
         s_activeFyLabel = fyLabel;
     }
 
+    static void clearActivePeriod() {
+        s_activeFromDate.clear();
+        s_activeToDate.clear();
+        s_activeFyLabel.clear();
+    }
+
     static QString getActiveFromDate() { return s_activeFromDate; }
     static QString getActiveToDate() { return s_activeToDate; }
     static QString getActiveFyLabel() { return s_activeFyLabel; }

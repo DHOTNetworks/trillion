@@ -5,6 +5,8 @@
 #include "../src/engine/gst_tax_engine.h"
 #include "../src/engine/milling_yield_engine.h"
 #include "../src/engine/gstr2_reconciler.h"
+#include "../src/engine/tds_fvu_exporter.h"
+#include "../src/engine/gstr9_engine.h"
 
 using namespace MahadevERP;
 
@@ -17,6 +19,8 @@ private slots:
     void testGstTaxEnginePosAndTcs();
     void testMillingYieldEngine();
     void testGstr2Reconciliation4WayMatch();
+    void testTdsFvuExporter();
+    void testGstr9AnnualReturnEngine();
 };
 
 void TestEnginesSuite::testMandiCalculatorMath() {
@@ -163,6 +167,72 @@ void TestEnginesSuite::testGstr2Reconciliation4WayMatch() {
     QCOMPARE(summary.matchedCount, 1);
     QCOMPARE(summary.valueMismatchCount, 0);
     QCOMPARE(summary.notInPortalCount, 0);
+}
+
+void TestEnginesSuite::testTdsFvuExporter() {
+    TdsDeductorInfo ded;
+    ded.tan = "RTKM01234A";
+    ded.pan = "ABKFM5928Q";
+    ded.deductorName = "M/S MAHADEV RICE INDUSTRY";
+    ded.deductorType = "O";
+    ded.address1 = "Mandi Road";
+    ded.city = "Hansi";
+    ded.stateCode = "06";
+    ded.pinCode = "125033";
+    ded.email = "mahadev@example.com";
+    ded.phone = "9812000000";
+    ded.respPersonName = "Sushil Kumar";
+    ded.respPersonDesig = "Partner";
+    ded.respPersonPan = "ABKFM5928Q";
+
+    QList<TdsChallanEntry> challans;
+    TdsChallanEntry ch1;
+    ch1.challanRecordNo = 1;
+    ch1.bsrCode = "0210001";
+    ch1.challanDate = "2026-05-07";
+    ch1.challanNo = "00142";
+    ch1.minorHead = "200";
+    ch1.basicTax = 5000.00;
+    ch1.totalChallanAmt = 5000.00;
+    challans.append(ch1);
+
+    QList<TdsDeducteeEntry> deductees;
+    TdsDeducteeEntry dd1;
+    dd1.deducteeRecordNo = 1;
+    dd1.linkedChallanRecordNo = 1;
+    dd1.deducteeCode = "02";
+    dd1.pan = "AAAPA1234K";
+    dd1.deducteeName = "Ramesh Kumar Contractor";
+    dd1.sectionCode = "194C";
+    dd1.paymentDate = "2026-04-30";
+    dd1.amountPaid = 500000.00;
+    dd1.tdsRate = 1.0;
+    dd1.totalTaxDeposited = 5000.00;
+    dd1.dateOfDeduction = "2026-04-30";
+    deductees.append(dd1);
+
+    QString fvuText = TdsFvuExporter::generateForm26Q("FY 2026-27", "Q1", ded, challans, deductees);
+    QVERIFY(!fvuText.isEmpty());
+    QVERIFY(fvuText.contains("^FH^"));
+    QVERIFY(fvuText.contains("^BH^"));
+    QVERIFY(fvuText.contains("^CD^"));
+    QVERIFY(fvuText.contains("^DD^"));
+    QVERIFY(fvuText.contains("RTKM01234A"));
+    QVERIFY(fvuText.contains("26Q"));
+}
+
+void TestEnginesSuite::testGstr9AnnualReturnEngine() {
+    Gstr9AnnualSummary s = Gstr9Engine::computeAnnualReturn("FY 2025-26");
+    QCOMPARE(s.financialYear, "FY 2025-26");
+
+    QString json = Gstr9Engine::exportGstr9Json(s);
+    QVERIFY(!json.isEmpty());
+    QVERIFY(json.contains("table4_outward_taxable"));
+    QVERIFY(json.contains("table6_itc_availed"));
+
+    QString csv = Gstr9Engine::exportGstr9Csv(s);
+    QVERIFY(!csv.isEmpty());
+    QVERIFY(csv.contains("4A,Supplies to Registered Persons (B2B)"));
 }
 
 QTEST_MAIN(TestEnginesSuite)

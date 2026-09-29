@@ -79,14 +79,16 @@ void BalanceSheetWidget::setupUi() {
     QHBoxLayout* btnBox = new QHBoxLayout();
     btnBox->setSpacing(4);
 
-    m_asOnDateEdit = new AccountingDateEdit(subHeaderCard);
+    m_asOnDateEdit = new AccountingDateDisplay(subHeaderCard);
     m_asOnDateEdit->setFixedWidth(105);
+    m_asOnDateEdit->setFixedHeight(28);
     m_asOnDateEdit->setStyleSheet(
-        "QLineEdit { background: #FFFFFF; border: 1.5px solid #D97706; border-radius: 4px; "
-        "padding: 3px 6px; font-size: 12px; font-weight: 800; color: #78350F; } "
-        "QLineEdit:focus { border: 2px solid #B45309; background: #FFFBEB; }"
+        "QLabel { background: #FFFFFF; border: 1.5px solid #D97706; border-radius: 4px; "
+        "padding: 2px 4px; font-size: 11.5px; font-weight: 800; color: #78350F; } "
+        "QLabel:hover { border: 2px solid #B45309; background: #FFFBEB; }"
     );
-    connect(m_asOnDateEdit, &AccountingDateEdit::dateChanged, this, &BalanceSheetWidget::onDateFilterChanged);
+    connect(m_asOnDateEdit, &AccountingDateDisplay::dateChanged, this, &BalanceSheetWidget::onDateFilterChanged);
+    connect(m_asOnDateEdit, &AccountingDateDisplay::clicked, this, &BalanceSheetWidget::requestAccountingPeriodDialog);
     btnBox->addWidget(m_asOnDateEdit);
 
     m_periodBtn = new KbdBadgeButton("Period", "F2", QColor("#F8FAFC"), QColor("#F1F5F9"), QColor("#0F172A"), QColor("#CBD5E1"), subHeaderCard);

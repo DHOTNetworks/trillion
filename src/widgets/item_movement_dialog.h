@@ -4,11 +4,9 @@
 #include <QTableWidget>
 #include <QLabel>
 #include <QPushButton>
-#include <QDateEdit>
-#include <QVBoxLayout>
-#include <QHBoxLayout>
-#include <QSplitter>
 #include <QHeaderView>
+#include <QSplitter>
+#include "accounting_date_edit.h"
 #include "kbd_badge_button.h"
 #include "custom_dialogs.h"
 #include "../services/print_export_controller.h"
@@ -34,6 +32,7 @@ private slots:
     void onRefreshClicked();
     void onExportPdfClicked();
     void onExportCsvClicked();
+    void onPeriodClicked();
     void onInwardDoubleClicked(int row, int col);
     void onOutwardDoubleClicked(int row, int col);
 
@@ -46,8 +45,9 @@ private:
     QString m_itemName;
     PrintExportController* m_printCtrl = nullptr;
 
-    QDateEdit* m_fromDateEdit = nullptr;
-    QDateEdit* m_toDateEdit = nullptr;
+    AccountingDateDisplay* m_fromDateEdit = nullptr;
+    AccountingDateDisplay* m_toDateEdit = nullptr;
+    QPushButton* m_btnPeriod = nullptr;
     QLabel* m_itemTitleLabel = nullptr;
 
     QTableWidget* m_inwardTable = nullptr;

@@ -138,7 +138,7 @@ void AccountingPeriodDialog::setupUi() {
     QLabel* iconLabel = new QLabel(cardFrame);
     iconLabel->setFixedSize(40, 40);
     iconLabel->setAlignment(Qt::AlignCenter);
-    iconLabel->setText("📅");
+    iconLabel->setText("");
     iconLabel->setStyleSheet(
         "background-color: #ECFDF5; border: 1px solid #A7F3D0; border-radius: 10px; font-size: 20px;"
     );

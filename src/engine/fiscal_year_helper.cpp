@@ -32,44 +32,39 @@ void FiscalYearHelper::ensureFiscalYearsDiscovered() {
 
     // 2. Query existing financial years in database
     QVariantList existingRows = DatabaseManager::instance().executeQuery(
-        "SELECT id, year_name, start_date, end_date, is_active, is_locked FROM financial_years;"
+        "SELECT id, year_name, start_date, end_date, is_active, is_locked FROM financial_years ORDER BY start_date ASC;"
     );
 
-    // If financial years already populated and active year exists, return immediately (0ms)
-    bool hasActiveCheck = false;
-    for (const auto& rVar : existingRows) {
-        if (rVar.toMap().value("is_active").toBool()) {
-            hasActiveCheck = true;
-            break;
+    // If financial years already populated in database:
+    if (!existingRows.isEmpty()) {
+        bool hasActiveCheck = false;
+        for (const auto& rVar : existingRows) {
+            if (rVar.toMap().value("is_active").toBool()) {
+                hasActiveCheck = true;
+                break;
+            }
         }
-    }
-    if (!existingRows.isEmpty() && hasActiveCheck) {
+        // If active year already exists, we are done
+        if (hasActiveCheck) {
+            return;
+        }
+
+        // If financial_years has rows but none is marked active, activate the latest existing one
+        QVariantMap latestRow = existingRows.last().toMap();
+        QString latestName = latestRow.value("year_name").toString();
+        if (!latestName.isEmpty()) {
+            DatabaseManager::instance().executeNonQuery("UPDATE financial_years SET is_active = 0;");
+            DatabaseManager::instance().executeNonQuery(
+                "UPDATE financial_years SET is_active = 1 WHERE year_name = ?;",
+                {latestName}
+            );
+        }
         return;
     }
 
     QSet<QString> seenFys;
     int earliestYear = 9999;
     int latestYear = 0;
-    bool hasActive = false;
-
-    for (const auto& rVar : existingRows) {
-        QVariantMap r = rVar.toMap();
-        QString yName = r.value("year_name").toString().trimmed();
-        QString sDate = normalizeToIso(r.value("start_date").toString());
-        bool active = r.value("is_active").toBool();
-        if (active) hasActive = true;
-
-        if (!yName.isEmpty()) {
-            seenFys.insert(yName);
-        }
-        if (sDate.length() >= 4) {
-            int y = sDate.left(4).toInt();
-            if (y > 1990 && y < 2100) {
-                if (y < earliestYear) earliestYear = y;
-                if (y > latestYear) latestYear = y;
-            }
-        }
-    }
 
     // 3. Scan company_info for fiscal year and books_from dates
     QVariantList compRows = DatabaseManager::instance().executeQuery(
@@ -130,19 +125,21 @@ void FiscalYearHelper::ensureFiscalYearsDiscovered() {
         }
     }
 
-    // 5. Default boundary anchor based on current date
-    QDate today = QDate::currentDate();
-    int currentStartYear = (today.month() >= 4) ? today.year() : today.year() - 1;
-    if (earliestYear == 9999 || earliestYear > currentStartYear) {
+    // 5. If no dates were found in database at all (brand new empty database), default to current date's FY
+    if (earliestYear == 9999 && latestYear == 0) {
+        QDate today = QDate::currentDate();
+        int currentStartYear = (today.month() >= 4) ? today.year() : today.year() - 1;
         earliestYear = currentStartYear;
-    }
-    if (latestYear < currentStartYear) {
         latestYear = currentStartYear;
+    } else if (earliestYear == 9999) {
+        earliestYear = latestYear;
+    } else if (latestYear == 0) {
+        latestYear = earliestYear;
     }
 
-    // 6. Insert any missing financial years into financial_years table
+    // 6. Insert only the actual discovered financial years (never invent future years)
     for (int y = earliestYear; y <= latestYear; ++y) {
-        QString fyName = QString("FY %1-%2").arg(y).arg(QString::number(y + 1).right(2));
+        QString fyName = QString("FY %1-%2").arg(y).arg(QString::number((y + 1) % 100).rightJustified(2, '0'));
         if (!seenFys.contains(fyName)) {
             QString fromD = QString("%1-04-01").arg(y);
             QString toD = QString("%1-03-31").arg(y + 1);
@@ -155,15 +152,13 @@ void FiscalYearHelper::ensureFiscalYearsDiscovered() {
         }
     }
 
-    // 7. Ensure at least one active financial year exists
-    if (!hasActive) {
-        QString defaultActive = QString("FY %1-%2").arg(latestYear).arg(QString::number(latestYear + 1).right(2));
-        DatabaseManager::instance().executeNonQuery("UPDATE financial_years SET is_active = 0;");
-        DatabaseManager::instance().executeNonQuery(
-            "UPDATE financial_years SET is_active = 1 WHERE year_name = ?;",
-            {defaultActive}
-        );
-    }
+    // 7. Ensure at least one active financial year exists (the latest actual year)
+    QString defaultActive = QString("FY %1-%2").arg(latestYear).arg(QString::number((latestYear + 1) % 100).rightJustified(2, '0'));
+    DatabaseManager::instance().executeNonQuery("UPDATE financial_years SET is_active = 0;");
+    DatabaseManager::instance().executeNonQuery(
+        "UPDATE financial_years SET is_active = 1 WHERE year_name = ?;",
+        {defaultActive}
+    );
 }
 
 FiscalYearInfo FiscalYearHelper::getActiveFiscalYear() {
@@ -488,7 +483,7 @@ PartitionedLedgerData FiscalYearHelper::partitionPartyTransactions(
     QVariantList params;
     if (partyId > 0 || legacyCode > 0) {
         sql = "SELECT id, voucher_no, voucher_date, voucher_type, trans_type, opposing_account, dr_cr, amount, "
-              "invoice_no, narration, financial_year, broker_name, vehicle_no, gr_no, taxable_amount, tds_amount "
+              "invoice_no, narration, financial_year, broker_name, vehicle_no, gr_no, taxable_amount, tds_amount, party_id, party_name "
               "FROM transactions "
               "WHERE (party_id = ? OR (account_code > 0 AND account_code = ?)) "
               "AND voucher_date >= ? AND voucher_date <= ? "
@@ -496,7 +491,7 @@ PartitionedLedgerData FiscalYearHelper::partitionPartyTransactions(
         params = {partyId, legacyCode, result.effectiveFromDate, result.effectiveToDate};
     } else {
         sql = "SELECT id, voucher_no, voucher_date, voucher_type, trans_type, opposing_account, dr_cr, amount, "
-              "invoice_no, narration, financial_year, broker_name, vehicle_no, gr_no, taxable_amount, tds_amount "
+              "invoice_no, narration, financial_year, broker_name, vehicle_no, gr_no, taxable_amount, tds_amount, party_id, party_name "
               "FROM transactions "
               "WHERE party_name = ? COLLATE NOCASE "
               "AND voucher_date >= ? AND voucher_date <= ? "
@@ -508,6 +503,8 @@ PartitionedLedgerData FiscalYearHelper::partitionPartyTransactions(
     for (const auto& r : rows) {
         QVariantMap t = r.toMap();
         int vId = t.value("id").toInt();
+        int rPartyId = t.value("party_id").toInt();
+        QString rPartyName = t.value("party_name").toString().trimmed();
         QString vNo = t.value("voucher_no").toString();
         QString rawType = t.value("trans_type").toString();
         QString vType = t.value("voucher_type").toString();
@@ -556,6 +553,8 @@ PartitionedLedgerData FiscalYearHelper::partitionPartyTransactions(
         if ((rawType == "Purc" || vType == "Purchase") && tdsAmt > 0.0) {
             LedgerStatementEntry item;
             item.id = vId;
+            item.partyId = rPartyId;
+            item.partyName = rPartyName;
             item.isSelected = false;
             item.vIso = isoD;
             item.vDate = fmtD;
@@ -577,6 +576,8 @@ PartitionedLedgerData FiscalYearHelper::partitionPartyTransactions(
 
             LedgerStatementEntry tdsItem;
             tdsItem.id = vId;
+            tdsItem.partyId = rPartyId;
+            tdsItem.partyName = rPartyName;
             tdsItem.isSelected = false;
             tdsItem.vIso = isoD;
             tdsItem.vDate = fmtD;
@@ -595,6 +596,8 @@ PartitionedLedgerData FiscalYearHelper::partitionPartyTransactions(
         } else {
             LedgerStatementEntry entry;
             entry.id = vId;
+            entry.partyId = rPartyId;
+            entry.partyName = rPartyName;
             entry.isSelected = false;
             entry.vIso = isoD;
             entry.vDate = fmtD;

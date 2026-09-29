@@ -5,11 +5,11 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QLineEdit>
-#include <QDateEdit>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QFrame>
+#include "accounting_date_edit.h"
 #include "kbd_badge_button.h"
 #include "custom_dialogs.h"
 #include "accounting_period_dialog.h"
@@ -51,7 +51,7 @@ private:
     QWidget* createMetricCard(const QString& title, QLabel*& valueLabel, const QString& accentColor);
 
     PrintExportController* m_printCtrl = nullptr;
-    QDateEdit* m_dateEdit = nullptr;
+    AccountingDateDisplay* m_dateEdit = nullptr;
     QLineEdit* m_searchBox = nullptr;
     QLabel* m_statusBadge = nullptr;
     QPushButton* m_btnPeriod = nullptr;

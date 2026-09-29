@@ -994,6 +994,7 @@ void PurchaseVoucherWidget::onStockItemConfigured(int row, const QVariantMap& it
 }
 
 void PurchaseVoucherWidget::openDateDialog(bool isInitial) {
+    Q_UNUSED(isInitial);
     QString curDate = m_invoiceDateEdit ? m_invoiceDateEdit->formattedDate() : "";
     QString newDisp, newIso;
     if (VoucherDateDialog::getVoucherDate(this, curDate, &newDisp, &newIso)) {
@@ -1001,16 +1002,10 @@ void PurchaseVoucherWidget::openDateDialog(bool isInitial) {
             m_invoiceDateEdit->setIsoDate(newIso);
         }
         onDateChanged(QDate::fromString(newIso, "yyyy-MM-dd"));
-        if (m_partySearchWidget) {
-            m_partySearchWidget->setFocus();
-            m_partySearchWidget->selectAll();
-        }
-    } else {
-        if (isInitial) {
-            emit backRequested();
-        } else if (m_partySearchWidget) {
-            m_partySearchWidget->setFocus();
-        }
+    }
+    if (m_partySearchWidget) {
+        m_partySearchWidget->setFocus();
+        m_partySearchWidget->selectAll();
     }
 }
 

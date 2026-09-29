@@ -112,7 +112,7 @@ QWidget *AdvancePayment194QWidget::createFormCard()
     m_voucherDateEdit = new QLineEdit(card);
     m_voucherDateEdit->setReadOnly(true);
     dtRow->addWidget(m_voucherDateEdit);
-    auto *btnDt = new QPushButton("📅", card);
+    auto *btnDt = new QPushButton("", card);
     btnDt->setFixedWidth(28);
     btnDt->setStyleSheet("QPushButton { background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 4px; }");
     connect(btnDt, &QPushButton::clicked, this, [this]() {
@@ -200,7 +200,7 @@ QWidget *AdvancePayment194QWidget::createFormCard()
     m_chequeDateEdit = new QLineEdit(card);
     m_chequeDateEdit->setReadOnly(true);
     cqRow->addWidget(m_chequeDateEdit);
-    auto *btnCq = new QPushButton("📅", card);
+    auto *btnCq = new QPushButton("", card);
     btnCq->setFixedWidth(28);
     btnCq->setStyleSheet("QPushButton { background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 4px; }");
     connect(btnCq, &QPushButton::clicked, this, [this]() {

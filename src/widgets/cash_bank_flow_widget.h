@@ -62,8 +62,8 @@ private:
     QPushButton* m_backBtn = nullptr;
 
     // Filter Tier 2
-    AccountingDateEdit* m_fromDateEdit = nullptr;
-    AccountingDateEdit* m_toDateEdit = nullptr;
+    AccountingDateDisplay* m_fromDateEdit = nullptr;
+    AccountingDateDisplay* m_toDateEdit = nullptr;
     QLineEdit* m_searchBox = nullptr;
     QLabel* m_fyBadge = nullptr;
     QPushButton* m_periodBtn = nullptr;

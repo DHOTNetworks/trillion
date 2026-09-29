@@ -1,4 +1,5 @@
 #include "depreciation_calculator.h"
+#include "../models/account_classifier.h"
 #include "../database_manager.h"
 #include "fiscal_year_helper.h"
 #include <cmath>
@@ -32,14 +33,15 @@ QVector<DepreciationAssetItem> DepreciationCalculator::calculateSchedule(const Q
     QString cutoffIso = octCutoff.toString("yyyy-MM-dd");
 
     // 1. Fetch Fixed Assets ledgers
-    QVariantList assetRows = db.executeQuery(
-        "SELECT id, name, group_name, opening_balance, COALESCE(balance_type, 'Dr') AS dr_cr FROM parties "
-        "WHERE group_name LIKE '%Fixed Asset%' OR group_name LIKE '%Machinery%' "
-        "   OR group_name LIKE '%Plant%' OR group_name LIKE '%Building%' OR group_name LIKE '%Furniture%' "
-        "   OR name LIKE '%Machinery%' OR name LIKE '%Building%' OR name LIKE '%Vehicle%' "
-        "   OR name LIKE '%Furniture%' OR name LIKE '%Computer%' OR name LIKE '%Plant & Machinery%' "
-        "ORDER BY name ASC;"
-    );
+    QString sql = QString(
+        "SELECT DISTINCT p.id, p.name, p.group_name, p.opening_balance, COALESCE(p.balance_type, 'Dr') AS dr_cr "
+        "FROM parties p %1 "
+        "WHERE %2 OR p.party_type = 'Asset' "
+        "ORDER BY p.name ASC;"
+    ).arg(AccountClassifier::partiesJoinClause("p", "g"),
+         AccountClassifier::generateHierarchySqlClause(AccountClassifier::getFixedAssetsGroupCodes(), "g"));
+
+    QVariantList assetRows = db.executeQuery(sql);
 
     bool hasPostings = hasExistingDepreciationPostings(fromDate, toDate);
 

@@ -386,6 +386,7 @@ void ChequeVoucherWidget::onDateChanged(const QDate& date) {
 }
 
 void ChequeVoucherWidget::openDateDialog(bool isInitial) {
+    Q_UNUSED(isInitial);
     QString curIso = m_dateEdit ? m_dateEdit->isoDate() : QDate::currentDate().toString("yyyy-MM-dd");
     QString displayDate, isoDate;
     if (VoucherDateDialog::getVoucherDate(this, curIso, &displayDate, &isoDate)) {
@@ -393,15 +394,9 @@ void ChequeVoucherWidget::openDateDialog(bool isInitial) {
             m_dateEdit->setIsoDate(isoDate);
             updateDayOfWeek(m_dateEdit->date());
             updateFiscalYearAndVoucherNo();
-            focusFirstRow();
-        }
-    } else {
-        if (isInitial) {
-            emit backRequested();
-        } else {
-            focusFirstRow();
         }
     }
+    focusFirstRow();
 }
 
 void ChequeVoucherWidget::resetForm() {

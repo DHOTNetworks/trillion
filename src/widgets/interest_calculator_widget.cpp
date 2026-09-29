@@ -1,4 +1,5 @@
 #include "interest_calculator_widget.h"
+#include "voucher_date_dialog.h"
 #include "kbd_badge_button.h"
 #include "custom_dialogs.h"
 #include "../engine/fiscal_year_helper.h"
@@ -92,17 +93,26 @@ void InterestCalculatorWidget::setupUi() {
     FiscalYearInfo initFy = FiscalYearHelper::getActiveFiscalYear();
     QDate initSDate = QDate::fromString(initFy.startDate, "yyyy-MM-dd");
     if (!initSDate.isValid()) initSDate = QDate(QDate::currentDate().month() < 4 ? QDate::currentDate().year() - 1 : QDate::currentDate().year(), 4, 1);
-    m_fromDateEdit = new QDateEdit(initSDate, paramCard);
-    m_fromDateEdit->setDisplayFormat("dd-MM-yyyy");
-    m_fromDateEdit->setCalendarPopup(true);
+    m_fromDateEdit = new AccountingDateDisplay(initSDate, paramCard);
+    m_fromDateEdit->setFixedWidth(115);
     paramGrid->addWidget(new QLabel("From Date:", paramCard), 0, 4);
     paramGrid->addWidget(m_fromDateEdit, 0, 5);
 
-    m_toDateEdit = new QDateEdit(QDate::currentDate(), paramCard);
-    m_toDateEdit->setDisplayFormat("dd-MM-yyyy");
-    m_toDateEdit->setCalendarPopup(true);
+    m_toDateEdit = new AccountingDateDisplay(QDate::currentDate(), paramCard);
+    m_toDateEdit->setFixedWidth(115);
     paramGrid->addWidget(new QLabel("To Date:", paramCard), 0, 6);
     paramGrid->addWidget(m_toDateEdit, 0, 7);
+
+    auto openPeriodDlg = [this]() {
+        QDate f = m_fromDateEdit->date();
+        QDate t = m_toDateEdit->date();
+        if (VoucherDateDialog::selectDateRange(this, &f, &t, f, t)) {
+            m_fromDateEdit->setDate(f);
+            m_toDateEdit->setDate(t);
+        }
+    };
+    connect(m_fromDateEdit, &AccountingDateDisplay::clicked, this, openPeriodDlg);
+    connect(m_toDateEdit, &AccountingDateDisplay::clicked, this, openPeriodDlg);
 
     m_drRateEdit = new QLineEdit("12.00", paramCard);
     m_drRateEdit->setPlaceholderText("12.00");

@@ -1,6 +1,7 @@
 #include "new_group_widget.h"
 #include "custom_dialogs.h"
 #include "kbd_badge_button.h"
+#include "../models/account_classifier.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGridLayout>
@@ -52,7 +53,7 @@ void NewGroupWidget::setupUi() {
     formCard->setStyleSheet(
         "QFrame { background-color: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 8px; }"
         "QLabel.CardHeader { font-size: 12px; font-weight: bold; color: #1E40AF; background-color: #F8FAFC; border-bottom: 1px solid #E2E8F0; border-top-left-radius: 7px; border-top-right-radius: 7px; padding: 8px 12px; }"
-        "QLabel { color: #334155; font-size: 12px; font-weight: 600; }"
+        "QLabel { color: #334155; font-size: 12px; font-weight: 600; border: none; background: transparent; }"
         "QLineEdit, QComboBox { background-color: #FFFFFF; color: #0F172A; border: 1.5px solid #CBD5E1; border-radius: 4px; padding: 6px 10px; font-size: 13px; }"
         "QLineEdit:focus, QComboBox:focus { border: 2px solid #2563EB; background-color: #F8FAFC; }"
     );
@@ -76,6 +77,15 @@ void NewGroupWidget::setupUi() {
 
     m_parentCombo = new QComboBox(formCard);
     m_parentCombo->setEditable(true);
+    connect(m_parentCombo, &QComboBox::currentTextChanged, this, [this](const QString& parentName) {
+        QString p = parentName.trimmed();
+        if (p.isEmpty() || p == "Primary") return;
+        GroupHierarchyInfo pInfo = AccountClassifier::getGroupInfo(p);
+        if (!pInfo.nature.isEmpty()) {
+            int nIdx = m_natureCombo->findText(pInfo.nature, Qt::MatchFixedString);
+            if (nIdx >= 0) m_natureCombo->setCurrentIndex(nIdx);
+        }
+    });
     grid->addWidget(new QLabel("Parent Group *:"), 0, 2);
     grid->addWidget(m_parentCombo, 0, 3);
 
@@ -91,7 +101,7 @@ void NewGroupWidget::setupUi() {
 
     m_bsCheckBox = new QCheckBox("Extract in Financial Statements (Balance Sheet & Profit / Loss Statement)", formCard);
     m_bsCheckBox->setChecked(true);
-    m_bsCheckBox->setStyleSheet("QCheckBox { font-size: 12px; color: #1E293B; font-weight: 500; }");
+    m_bsCheckBox->setStyleSheet("QCheckBox { font-size: 12px; color: #1E293B; font-weight: 500; border: none; background: transparent; }");
     grid->addWidget(m_bsCheckBox, 2, 0, 1, 4);
 
     cardLayout->addLayout(grid);
@@ -130,16 +140,16 @@ void NewGroupWidget::resetForm() {
 }
 
 void NewGroupWidget::refreshParents() {
+    m_parentCombo->blockSignals(true);
     m_parentCombo->clear();
     m_parentCombo->addItem("Primary");
-    if (m_groupsModel) {
-        QStringList parents = m_groupsModel->get_parent_groups();
-        for (const QString& p : parents) {
-            if (p != "Primary" && !p.isEmpty()) {
-                m_parentCombo->addItem(p);
-            }
+    QStringList parents = AccountClassifier::getParentGroupNames();
+    for (const QString& p : parents) {
+        if (p != "Primary" && !p.isEmpty()) {
+            m_parentCombo->addItem(p);
         }
     }
+    m_parentCombo->blockSignals(false);
 }
 
 void NewGroupWidget::focusFirstField() {
@@ -164,19 +174,18 @@ void NewGroupWidget::onSaveClicked() {
         return;
     }
 
-    bool ok = false;
-    if (m_groupsModel) {
-        ok = m_groupsModel->add_group(name, parentGroup, nature, desc, bs);
-    } else {
-        ok = true;
-    }
+    QString errMsg;
+    bool ok = AccountClassifier::createOrUpdateGroup(0, name, parentGroup, nature, desc, bs, &errMsg);
 
     if (ok) {
+        if (m_groupsModel) {
+            m_groupsModel->reload_data();
+        }
         CustomMessageBox::showInformation(this, "Success", "Account Group '" + name + "' created successfully.");
         resetForm();
         emit savedSuccess();
     } else {
-        CustomMessageBox::showCritical(this, "Save Failed", "Failed to create Account Group. It may already exist.");
+        CustomMessageBox::showCritical(this, "Save Failed", !errMsg.isEmpty() ? errMsg : "Failed to create Account Group. It may already exist.");
     }
 }
 

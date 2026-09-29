@@ -1,4 +1,5 @@
 #include "parties_model.h"
+#include "account_classifier.h"
 #include "../database_manager.h"
 #include "../engine/accounting_engine.h"
 #include "../engine/fiscal_year_helper.h"
@@ -39,9 +40,13 @@ QStringList PartiesModel::get_party_list() const {
 }
 
 QStringList PartiesModel::get_bank_accounts_list() const {
-    QVariantList rows = DatabaseManager::instance().executeQuery(
-        "SELECT name FROM parties WHERE group_name LIKE '%Bank%' OR party_type = 'Bank' OR name LIKE '%Bank%' ORDER BY name COLLATE NOCASE ASC;"
-    );
+    QString sql = QString(
+        "SELECT DISTINCT p.name FROM parties p %1 "
+        "WHERE (%2 OR p.party_type = 'Bank') "
+        "ORDER BY p.name COLLATE NOCASE ASC;"
+    ).arg(AccountClassifier::partiesJoinClause("p", "g"),
+         AccountClassifier::generateHierarchySqlClause(AccountClassifier::getBankGroupCodes(), "g"));
+    QVariantList rows = DatabaseManager::instance().executeQuery(sql);
     QStringList list;
     for (const QVariant& r : rows) {
         QString n = r.toMap().value("name").toString().trimmed();
@@ -51,20 +56,7 @@ QStringList PartiesModel::get_bank_accounts_list() const {
 }
 
 QStringList PartiesModel::get_account_groups() const {
-    QVariantList rows = DatabaseManager::instance().executeQuery(
-        "SELECT name FROM account_groups "
-        "UNION "
-        "SELECT DISTINCT TRIM(group_name) AS name FROM parties WHERE group_name IS NOT NULL AND TRIM(group_name) != '' "
-        "ORDER BY name COLLATE NOCASE ASC;"
-    );
-    QStringList result;
-    for (const QVariant& r : rows) {
-        QString n = r.toMap().value("name").toString().trimmed();
-        if (!n.isEmpty() && !result.contains(n, Qt::CaseInsensitive)) {
-            result.append(n);
-        }
-    }
-    return result;
+    return AccountClassifier::getAllGroupNames();
 }
 
 QStringList PartiesModel::get_stations() const {
@@ -677,21 +669,37 @@ QString PartiesModel::get_financial_year_start() const {
 }
 
 bool PartiesModel::add_ledger_extended(const QVariantMap& data) {
+    QString gName = data.value("group_name", "Sundry Debtors").toString().trimmed();
+    if (gName.isEmpty()) gName = "Sundry Debtors";
+    qint64 gid = AccountClassifier::ensureGroupExists(gName);
+
+    QVariant gCodeVar = DatabaseManager::instance().executeScalar(
+        "SELECT code1st FROM account_groups WHERE name = ? LIMIT 1;", {gName}
+    );
+    int gCode = (gCodeVar.isValid() && !gCodeVar.isNull()) ? gCodeVar.toInt() : 8;
+
+    QString partyType = data.value("party_type").toString().trimmed();
+    if (partyType.isEmpty() || partyType == "General") {
+        partyType = AccountClassifier::classifyPartyTypeForGroup(gName);
+    }
+
     bool ok = DatabaseManager::instance().executeNonQuery(
         "INSERT INTO parties ("
-        "name, alias, prefix, group_name, party_type, special_type, "
+        "name, alias, prefix, group_name, group_code, group_id, party_type, special_type, "
         "opening_balance, balance_type, mailing_name, address, city, district, state, state_code, pincode, route, "
         "mobile, whatsapp, phone, email, contact_person, pan, aadhaar, tan, gstin, gst_party_type, "
         "bank_name, bank_account, ifsc_code, credit_limit, credit_days, interest_rate, commission_rate, commission_on, "
         "apply_tcs, tcs_exempt, party_station, use_routes, shop_no, tin, urn, stock_not_calc, use_credit_limit, "
         "show_date_totals, calc_direct_expense, set_title_case, ledger_open_from, books_start_from) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
         {
             data.value("name").toString().trimmed(),
             data.value("alias").toString().trimmed(),
             data.value("prefix", "M/s").toString().trimmed(),
-            data.value("group_name", "Sundry Debtors").toString().trimmed(),
-            data.value("party_type", "Buyer").toString().trimmed(),
+            gName,
+            gCode,
+            gid,
+            partyType,
             data.value("special_type").toString().trimmed(),
             data.value("opening_balance", 0.0).toDouble(),
             data.value("balance_type", "Dr").toString().trimmed(),
@@ -743,9 +751,24 @@ bool PartiesModel::add_ledger_extended(const QVariantMap& data) {
 
 bool PartiesModel::update_ledger_extended(int party_id, const QVariantMap& data) {
     if (party_id <= 0) return false;
+
+    QString gName = data.value("group_name", "Sundry Debtors").toString().trimmed();
+    if (gName.isEmpty()) gName = "Sundry Debtors";
+    qint64 gid = AccountClassifier::ensureGroupExists(gName);
+
+    QVariant gCodeVar = DatabaseManager::instance().executeScalar(
+        "SELECT code1st FROM account_groups WHERE name = ? LIMIT 1;", {gName}
+    );
+    int gCode = (gCodeVar.isValid() && !gCodeVar.isNull()) ? gCodeVar.toInt() : 8;
+
+    QString partyType = data.value("party_type").toString().trimmed();
+    if (partyType.isEmpty() || partyType == "General") {
+        partyType = AccountClassifier::classifyPartyTypeForGroup(gName);
+    }
+
     bool ok = DatabaseManager::instance().executeNonQuery(
         "UPDATE parties SET "
-        "name = ?, alias = ?, prefix = ?, group_name = ?, party_type = ?, special_type = ?, "
+        "name = ?, alias = ?, prefix = ?, group_name = ?, group_code = ?, group_id = ?, party_type = ?, special_type = ?, "
         "opening_balance = ?, balance_type = ?, mailing_name = ?, address = ?, city = ?, district = ?, state = ?, state_code = ?, pincode = ?, route = ?, "
         "mobile = ?, whatsapp = ?, phone = ?, email = ?, contact_person = ?, pan = ?, aadhaar = ?, tan = ?, gstin = ?, gst_party_type = ?, "
         "bank_name = ?, bank_account = ?, ifsc_code = ?, credit_limit = ?, credit_days = ?, interest_rate = ?, commission_rate = ?, commission_on = ?, "
@@ -756,8 +779,10 @@ bool PartiesModel::update_ledger_extended(int party_id, const QVariantMap& data)
             data.value("name").toString().trimmed(),
             data.value("alias").toString().trimmed(),
             data.value("prefix", "M/s").toString().trimmed(),
-            data.value("group_name", "Sundry Debtors").toString().trimmed(),
-            data.value("party_type", "Buyer").toString().trimmed(),
+            gName,
+            gCode,
+            gid,
+            partyType,
             data.value("special_type").toString().trimmed(),
             data.value("opening_balance", 0.0).toDouble(),
             data.value("balance_type", "Dr").toString().trimmed(),
