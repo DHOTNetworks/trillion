@@ -52,6 +52,12 @@ data/
 *.xlsx
 *.XLS
 *.XLSX
+*.csv
+*.html
+*.htm
+*.json
+*.ods
+*.odt
 aqtinstall.log
 debug_log.txt
 generated_cpp/
