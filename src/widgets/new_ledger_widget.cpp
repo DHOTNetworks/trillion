@@ -460,7 +460,7 @@ QWidget* NewLedgerWidget::createSlateSection() {
     auto* booksLbl = new QLabel("Books Start From (DD-MM-YYYY) :", card);
     booksLbl->setStyleSheet("color: #0F172A; font-size: 10px; font-weight: 700; border: none;");
     m_booksFromInput = new QLineEdit(card);
-    m_booksFromInput->setPlaceholderText("01-04-2023");
+    m_booksFromInput->setPlaceholderText("DD-MM-YYYY");
     m_booksFromInput->setStyleSheet(inputStyle());
     m_booksFromInput->setFixedHeight(26);
     booksBox->addWidget(booksLbl);

@@ -301,7 +301,7 @@ void DatabaseManager::ensureTablesExist() {
         "calc_direct_expense INTEGER DEFAULT 0,"
         "set_title_case INTEGER DEFAULT 1,"
         "ledger_open_from TEXT,"
-        "books_start_from TEXT DEFAULT '01-04-2023',"
+        "books_start_from TEXT,"
         "legacy_id INTEGER"
         ");"
     );
@@ -1579,7 +1579,7 @@ void DatabaseManager::ensureTablesExist() {
     addColumnIfNotExists("parties", "calc_direct_expense", "INTEGER DEFAULT 0");
     addColumnIfNotExists("parties", "set_title_case", "INTEGER DEFAULT 1");
     addColumnIfNotExists("parties", "ledger_open_from", "TEXT");
-    addColumnIfNotExists("parties", "books_start_from", "TEXT DEFAULT '01-04-2023'");
+    addColumnIfNotExists("parties", "books_start_from", "TEXT");
 
     // Ensure deterministic hierarchy columns exist for account_groups and parties
     addColumnIfNotExists("account_groups", "code1st", "INTEGER DEFAULT 0");

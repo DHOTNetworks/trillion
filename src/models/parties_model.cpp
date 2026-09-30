@@ -3,6 +3,7 @@
 #include "../database_manager.h"
 #include "../engine/accounting_engine.h"
 #include "../engine/fiscal_year_helper.h"
+#include "../engine/ledger_pipeline.h"
 #include <QDate>
 #include <algorithm>
 
@@ -19,6 +20,7 @@ void PartiesModel::reload_data() {
     beginResetModel();
     m_data = DatabaseManager::instance().executeQuery("SELECT * FROM parties ORDER BY name COLLATE NOCASE ASC;");
     endResetModel();
+    LedgerPipeline::instance().invalidateCache();
     emit dataChangedSignal();
     emit countChanged();
 }
@@ -127,41 +129,20 @@ QStringList PartiesModel::get_states() const {
 }
 
 QString PartiesModel::get_state_code_for_state(const QString& state) const {
-    QString s = state.trimmed().toLower();
-    if (s.contains("jammu") || s.contains("kashmir")) return "01";
-    if (s.contains("himachal")) return "02";
-    if (s.contains("punjab")) return "03";
-    if (s.contains("chandigarh")) return "04";
-    if (s.contains("uttarakhand") || s.contains("uttaranchal")) return "05";
-    if (s.contains("haryana")) return "06";
-    if (s.contains("delhi")) return "07";
-    if (s.contains("rajasthan")) return "08";
-    if (s.contains("uttar pradesh") || s == "up") return "09";
-    if (s.contains("bihar")) return "10";
-    if (s.contains("sikkim")) return "11";
-    if (s.contains("arunachal")) return "12";
-    if (s.contains("nagaland")) return "13";
-    if (s.contains("manipur")) return "14";
-    if (s.contains("mizoram")) return "15";
-    if (s.contains("tripura")) return "16";
-    if (s.contains("meghalaya")) return "17";
-    if (s.contains("assam")) return "18";
-    if (s.contains("bengal")) return "19";
-    if (s.contains("jharkhand")) return "20";
-    if (s.contains("odisha") || s.contains("orissa")) return "21";
-    if (s.contains("chhattisgarh")) return "22";
-    if (s.contains("madhya pradesh") || s == "mp") return "23";
-    if (s.contains("gujarat")) return "24";
-    if (s.contains("maharashtra")) return "27";
-    if (s.contains("karnataka")) return "29";
-    if (s.contains("goa")) return "30";
-    if (s.contains("kerala")) return "32";
-    if (s.contains("tamil nadu") || s.contains("tamilnadu")) return "33";
-    if (s.contains("puducherry") || s.contains("pondicherry")) return "34";
-    if (s.contains("telangana")) return "36";
-    if (s.contains("andhra")) return "37";
-    if (s.contains("ladakh")) return "38";
-    return "";
+    static const QHash<QString, QString> stateMap = {
+        {"jammu & kashmir", "01"}, {"jammu and kashmir", "01"}, {"himachal pradesh", "02"},
+        {"punjab", "03"}, {"chandigarh", "04"}, {"uttarakhand", "05"}, {"uttaranchal", "05"},
+        {"haryana", "06"}, {"delhi", "07"}, {"rajasthan", "08"}, {"uttar pradesh", "09"},
+        {"up", "09"}, {"bihar", "10"}, {"sikkim", "11"}, {"arunachal pradesh", "12"},
+        {"nagaland", "13"}, {"manipur", "14"}, {"mizoram", "15"}, {"tripura", "16"},
+        {"meghalaya", "17"}, {"assam", "18"}, {"west bengal", "19"}, {"jharkhand", "20"},
+        {"odisha", "21"}, {"orissa", "21"}, {"chhattisgarh", "22"}, {"madhya pradesh", "23"},
+        {"mp", "23"}, {"gujarat", "24"}, {"dadra & nagar haveli and daman & diu", "26"},
+        {"maharashtra", "27"}, {"karnataka", "29"}, {"goa", "30"}, {"lakshadweep", "31"},
+        {"kerala", "32"}, {"tamil nadu", "33"}, {"puducherry", "34"}, {"pondicherry", "34"},
+        {"telangana", "36"}, {"andhra pradesh", "37"}, {"ladakh", "38"}
+    };
+    return stateMap.value(state.trimmed().toLower(), "");
 }
 
 QString PartiesModel::get_state_for_gstin(const QString& gstin) const {
@@ -282,64 +263,29 @@ QStringList PartiesModel::get_routes() const {
     return result;
 }
 
+#include "../engine/ledger_pipeline.h"
+
 QString PartiesModel::get_party_live_balance_by_id(int partyId) const {
     if (partyId <= 0) return "0.00 Dr";
 
-    // 1. Opening balance
-    QVariantList pRows = DatabaseManager::instance().executeQuery(
-        "SELECT opening_balance, balance_type, name FROM parties WHERE id = ? LIMIT 1;",
-        {partyId}
-    );
-    if (pRows.isEmpty()) return "0.00 Dr";
-
-    QVariantMap p = pRows.first().toMap();
-    double netDr = 0.0;
-    double netCr = 0.0;
-    double op = p.value("opening_balance").toDouble();
-    QString bType = p.value("balance_type").toString();
-    QString pName = p.value("name").toString().trimmed();
-    if (bType == "Dr") netDr += op;
-    else netCr += op;
-
-    // 2. Sales Invoices (Dr) - match by customer_id or party name fallback
-    QVariant sVal = DatabaseManager::instance().executeScalar(
-        "SELECT SUM(total_amount) FROM sales_invoices WHERE customer_id = ? OR ((customer_id IS NULL OR customer_id = 0) AND LOWER(customer_name) = LOWER(?));",
-        {partyId, pName}
-    );
-    if (sVal.isValid() && !sVal.isNull()) netDr += sVal.toDouble();
-
-    // 3. Paddy Procurement (Dr)
-    QVariant paVal = DatabaseManager::instance().executeScalar(
-        "SELECT SUM(total_amount) FROM paddy_procurement WHERE farmer_id = ? OR ((farmer_id IS NULL OR farmer_id = 0) AND LOWER(farmer_name) = LOWER(?));",
-        {partyId, pName}
-    );
-    if (paVal.isValid() && !paVal.isNull()) netDr += paVal.toDouble();
-
-    // 4. Purchase Invoices (Cr)
-    QVariant purVal = DatabaseManager::instance().executeScalar(
-        "SELECT SUM(total_amount) FROM purchase_invoices WHERE supplier_id = ? OR ((supplier_id IS NULL OR supplier_id = 0) AND LOWER(supplier_name) = LOWER(?));",
-        {partyId, pName}
-    );
-    if (purVal.isValid() && !purVal.isNull()) netCr += purVal.toDouble();
-
-    // 5. Vouchers (Dr/Cr)
-    QVariant vDr = DatabaseManager::instance().executeScalar(
-        "SELECT SUM(amount) FROM vouchers WHERE voucher_type NOT IN ('Sales', 'Purchase') AND (party_id = ? OR ledger_id = ?);",
-        {partyId, partyId}
-    );
-    if (vDr.isValid() && !vDr.isNull()) netDr += vDr.toDouble();
-
-    double diff = netDr - netCr;
-    if (diff >= 0) {
-        return AccountingEngine::formatIndianCurrency(diff, false) + " Dr";
+    LedgerPeriodBalance bal = LedgerPipeline::instance().calculateSingleLedgerBalance(partyId, "");
+    if (bal.closingDr > 0.0001) {
+        return AccountingEngine::formatIndianCurrency(bal.closingDr, false) + " Dr";
+    } else if (bal.closingCr > 0.0001) {
+        return AccountingEngine::formatIndianCurrency(bal.closingCr, false) + " Cr";
     } else {
-        return AccountingEngine::formatIndianCurrency(std::abs(diff), false) + " Cr";
+        return "0.00 Dr";
     }
 }
 
 QString PartiesModel::get_ledger_live_balance(const QString& ledgerName) {
     if (ledgerName.trimmed().isEmpty()) return "0.00 Dr";
     QString cleanName = ledgerName.trimmed();
+
+    LedgerNode node = LedgerPipeline::instance().getLedgerByName(cleanName);
+    if (node.id > 0) {
+        return get_party_live_balance_by_id(node.id);
+    }
 
     QVariant pIdVal = DatabaseManager::instance().executeScalar(
         "SELECT id FROM parties WHERE LOWER(name) = LOWER(?) LIMIT 1;",
@@ -349,64 +295,7 @@ QString PartiesModel::get_ledger_live_balance(const QString& ledgerName) {
         return get_party_live_balance_by_id(pIdVal.toInt());
     }
 
-    // 1. Opening balance fallback
-    QVariantList pRows = DatabaseManager::instance().executeQuery(
-        "SELECT opening_balance, balance_type FROM parties WHERE LOWER(name) = LOWER(?) OR LOWER(name) LIKE ? LIMIT 1;",
-        {cleanName, "%" + cleanName.toLower() + "%"}
-    );
-
-    double netDr = 0.0;
-    double netCr = 0.0;
-
-    if (!pRows.isEmpty()) {
-        QVariantMap p = pRows.first().toMap();
-        double op = p.value("opening_balance").toDouble();
-        QString bType = p.value("balance_type").toString();
-        if (bType == "Dr") netDr += op;
-        else netCr += op;
-    }
-
-    // 2. Sales Invoices (Dr)
-    QVariant sVal = DatabaseManager::instance().executeScalar(
-        "SELECT SUM(total_amount) FROM sales_invoices WHERE LOWER(customer_name) = LOWER(?) OR LOWER(customer_name) LIKE ?;",
-        {cleanName, "%" + cleanName.toLower() + "%"}
-    );
-    if (sVal.isValid()) netDr += sVal.toDouble();
-
-    // 3. Paddy Procurement (Dr)
-    QVariant paVal = DatabaseManager::instance().executeScalar(
-        "SELECT SUM(total_amount) FROM paddy_procurement WHERE LOWER(farmer_name) = LOWER(?) OR LOWER(farmer_name) LIKE ?;",
-        {cleanName, "%" + cleanName.toLower() + "%"}
-    );
-    if (paVal.isValid()) netDr += paVal.toDouble();
-
-    // 4. Purchase Invoices (Cr)
-    QVariant purVal = DatabaseManager::instance().executeScalar(
-        "SELECT SUM(total_amount) FROM purchase_invoices WHERE LOWER(supplier_name) = LOWER(?) OR LOWER(supplier_name) LIKE ?;",
-        {cleanName, "%" + cleanName.toLower() + "%"}
-    );
-    if (purVal.isValid()) netCr += purVal.toDouble();
-
-    // 5. Vouchers
-    QVariantList vRows = DatabaseManager::instance().executeQuery(
-        "SELECT voucher_type, party_name, account_type, amount FROM vouchers WHERE voucher_type NOT IN ('Sales', 'Purchase');"
-    );
-    for (const QVariant& vr : vRows) {
-        QVariantMap row = vr.toMap();
-        QString drP = row.value("party_name").toString().trimmed().toLower();
-        QString crP = row.value("account_type").toString().trimmed().toLower();
-        double vAmt = row.value("amount").toDouble();
-
-        if (!drP.isEmpty() && (drP == cleanName.toLower() || drP.contains(cleanName.toLower()))) netDr += vAmt;
-        if (!crP.isEmpty() && (crP == cleanName.toLower() || crP.contains(cleanName.toLower()))) netCr += vAmt;
-    }
-
-    double diff = netDr - netCr;
-    if (diff >= 0) {
-        return AccountingEngine::formatIndianCurrency(diff, false) + " Dr";
-    } else {
-        return AccountingEngine::formatIndianCurrency(std::abs(diff), false) + " Cr";
-    }
+    return "0.00 Dr";
 }
 
 QVariantMap PartiesModel::get_party_by_id(int partyId) const {
@@ -658,14 +547,13 @@ QVariantMap PartiesModel::get_total_opening_balance_summary(int excludePartyId, 
 }
 
 QString PartiesModel::get_financial_year_start() const {
-    QVariant fyStart = DatabaseManager::instance().executeScalar(
-        "SELECT start_date FROM financial_years WHERE is_active = 1 LIMIT 1;"
-    );
-    if (fyStart.isValid() && !fyStart.toString().trimmed().isEmpty()) {
-        QDate d = QDate::fromString(fyStart.toString().trimmed(), "yyyy-MM-dd");
-        if (d.isValid()) return d.toString("dd-MM-yyyy");
+    FiscalYearInfo fy = FiscalYearHelper::getActiveFiscalYear();
+    if (fy.isValid() && !fy.startDate.isEmpty()) {
+        return FiscalYearHelper::formatDisplayDate(fy.startDate);
     }
-    return "01-04-2023";
+    QDate cur = QDate::currentDate();
+    int currentFyStartYear = (cur.month() >= 4) ? cur.year() : (cur.year() - 1);
+    return QString("01-04-%1").arg(currentFyStartYear);
 }
 
 bool PartiesModel::add_ledger_extended(const QVariantMap& data) {
@@ -742,7 +630,7 @@ bool PartiesModel::add_ledger_extended(const QVariantMap& data) {
             data.value("calc_direct_expense", 0).toInt(),
             data.value("set_title_case", 1).toInt(),
             data.value("ledger_open_from").toString().trimmed(),
-            data.value("books_start_from", "01-04-2023").toString().trimmed()
+            data.value("books_start_from", get_financial_year_start()).toString().trimmed()
         }
     );
     if (ok) reload_data();
@@ -825,7 +713,7 @@ bool PartiesModel::update_ledger_extended(int party_id, const QVariantMap& data)
             data.value("calc_direct_expense", 0).toInt(),
             data.value("set_title_case", 1).toInt(),
             data.value("ledger_open_from").toString().trimmed(),
-            data.value("books_start_from", "01-04-2023").toString().trimmed(),
+            data.value("books_start_from", get_financial_year_start()).toString().trimmed(),
             party_id
         }
     );

@@ -834,7 +834,7 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
     // =========================================================
     updateProgress(12, "Migrating Company Info...");
     int booksStartYear = 0;
-    QString globalBooksFrom = "01-04-2023";
+    QString globalBooksFrom = "";
     if (!compRows.empty()) {
         const auto& c = compRows.back();
         QString compName = QString::fromStdString(getField(c, "CompanyName"));
@@ -1169,7 +1169,7 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
             std::replace(booksStartFrom.begin(), booksStartFrom.end(), '/', '-');
         }
         if (booksStartFrom.empty()) {
-            booksStartFrom = !globalBooksFrom.isEmpty() ? globalBooksFrom.toStdString() : "01-04-2023";
+            booksStartFrom = globalBooksFrom.toStdString();
         }
 
         std::string mailingName = rawMailing;

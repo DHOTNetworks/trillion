@@ -195,6 +195,18 @@ set(SOURCES
     src/models/transport_dispatch_controller.cpp
     src/models/debit_credit_note_controller.h
     src/models/debit_credit_note_controller.cpp
+    src/engine/data_preprocessor.h
+    src/engine/data_preprocessor.cpp
+    src/services/master_data_provider.h
+    src/services/master_data_provider.cpp
+    src/engine/group_hierarchy_pipeline.h
+    src/engine/group_hierarchy_pipeline.cpp
+    src/engine/ledger_pipeline.h
+    src/engine/ledger_pipeline.cpp
+    src/engine/stock_pipeline.h
+    src/engine/stock_pipeline.cpp
+    src/engine/voucher_pipeline.h
+    src/engine/voucher_pipeline.cpp
     src/engine/bahi_khata_migrator.h
     src/engine/bahi_khata_migrator.cpp
     src/widgets/kbd_badge_button.h
@@ -550,6 +562,18 @@ set(TEST_SOURCES
     src/printing/balance_sheet_printer.cpp
     src/printing/profit_loss_printer.h
     src/printing/profit_loss_printer.cpp
+    src/engine/data_preprocessor.h
+    src/engine/data_preprocessor.cpp
+    src/services/master_data_provider.h
+    src/services/master_data_provider.cpp
+    src/engine/group_hierarchy_pipeline.h
+    src/engine/group_hierarchy_pipeline.cpp
+    src/engine/ledger_pipeline.h
+    src/engine/ledger_pipeline.cpp
+    src/engine/stock_pipeline.h
+    src/engine/stock_pipeline.cpp
+    src/engine/voucher_pipeline.h
+    src/engine/voucher_pipeline.cpp
     src/engine/bahi_khata_migrator.h
     src/engine/bahi_khata_migrator.cpp
     src/models/iform_model.h
@@ -677,6 +701,18 @@ set(CLI_SOURCES
     src/services/accounting_date_service.cpp
     src/models/account_classifier.h
     src/models/account_classifier.cpp
+    src/engine/data_preprocessor.h
+    src/engine/data_preprocessor.cpp
+    src/services/master_data_provider.h
+    src/services/master_data_provider.cpp
+    src/engine/group_hierarchy_pipeline.h
+    src/engine/group_hierarchy_pipeline.cpp
+    src/engine/ledger_pipeline.h
+    src/engine/ledger_pipeline.cpp
+    src/engine/stock_pipeline.h
+    src/engine/stock_pipeline.cpp
+    src/engine/voucher_pipeline.h
+    src/engine/voucher_pipeline.cpp
 )
 
 add_executable(FinancialEngineCLI ${CLI_SOURCES})

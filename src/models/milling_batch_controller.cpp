@@ -2,6 +2,7 @@
 #include "milling_model.h"
 #include "stock_items_model.h"
 #include "financial_years_model.h"
+#include "../engine/stock_pipeline.h"
 #include "../services/accounting_date_service.h"
 #include "../services/financial_math_service.h"
 #include <cmath>
@@ -468,27 +469,28 @@ bool MillingBatchController::saveVoucher() {
 
     for (int j = 0; j < m_producedModel.count(); ++j) {
         auto pr = m_producedModel.getRow(j);
-        QString name = pr.value("itemName").toString().toLower();
         int b = pr.value("bags").toInt();
         double w = pr.value("weight").toDouble();
         double a = pr.value("amount").toDouble();
         double y = pr.value("yieldPct").toDouble();
 
-        if (name.contains("bran")) {
-            branItem = pr.value("itemName").toString();
+        QString rawItemName = pr.value("itemName").toString().trimmed();
+        StockItemRecord itmRec = StockPipeline::instance().getItemByName(rawItemName);
+        if (itmRec.legacyCode == 500 || itmRec.itemType.compare("Bran", Qt::CaseInsensitive) == 0) {
+            branItem = rawItemName;
             branBags = b; branWeight = w; branCost = a;
-        } else if (name.contains("husk") || name.contains("phak")) {
-            huskItem = pr.value("itemName").toString();
+        } else if (itmRec.legacyCode == 501 || itmRec.itemType.compare("Husk", Qt::CaseInsensitive) == 0) {
+            huskItem = rawItemName;
             huskBags = b; huskWeight = w; huskCost = a;
-        } else if (name.contains("nakku") || name.contains("broken")) {
-            nakkuItem = pr.value("itemName").toString();
+        } else if (itmRec.legacyCode == 502 || itmRec.itemType.compare("Broken", Qt::CaseInsensitive) == 0) {
+            nakkuItem = rawItemName;
             nakkuBags = b; nakkuWeight = w; nakkuCost = a;
         } else if (riceWeight == 0.0) {
-            riceItem = pr.value("itemName").toString();
+            riceItem = rawItemName;
             riceBags = b; riceWeight = w; riceCost = a;
             outturnPct = y > 0 ? y : (paddyWeight > 0 ? (w / paddyWeight * 100.0) : 0.0);
         } else {
-            otherItem = pr.value("itemName").toString();
+            otherItem = rawItemName;
             otherBags += b; otherWeight += w; otherCost += a;
         }
     }

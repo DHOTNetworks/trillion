@@ -16,6 +16,7 @@ struct BalanceSheetItem {
     bool isCalculated = false; // Net Profit, Closing Stock, etc.
     int partyId = 0;
     int level = 0; // 0 = Major Group, 1 = Subgroup, 2 = Ledger/Party
+    bool extractInBalanceSheet = true;
     QVector<BalanceSheetItem> children;
 };
 

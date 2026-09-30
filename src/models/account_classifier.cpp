@@ -549,69 +549,11 @@ int AccountClassifier::getStandardLedgerId(int legacyCode) {
 }
 
 StandardGroupCode AccountClassifier::inferRootCodeFromName(const QString& groupName) {
-    QString n = groupName.trimmed().toLower();
-    if (n.isEmpty()) return StandardGroupCode::Primary;
-
-    // 1. Bank & Cash
-    if (n.contains("bank") || n.contains("c/c") || n.contains("od account") || n.contains("overdraft")) return StandardGroupCode::BankAccounts;
-    if (n.contains("cash")) return StandardGroupCode::CashInHand;
-
-    // 2. Debtors / Buyers / Farmers
-    if (n.contains("zimidar") || n.contains("kisan") || n.contains("farmer") || n.contains("grower")) return StandardGroupCode::ZimidaraDebtors;
-    if (n.contains("mandi debtor")) return StandardGroupCode::MandiDebtors;
-    if (n.contains("debtor") || n.contains("debitor") || n.contains("buyer") || n.contains("customer") || n.contains("receivable")) return StandardGroupCode::SundryDebtors;
-
-    // 3. Creditors / Suppliers / Mandi Creditors
-    if (n.contains("local mandi") || n.contains("kacha arhtia") || n.contains("pucca arhtia") || n.contains("mandi creditor") || n.contains("mandi trader")) return StandardGroupCode::LocalMandiCreditors;
-    if (n.contains("creditor") || n.contains("supplier") || n.contains("vendor") || n.contains("payable") || n.contains("seller")) return StandardGroupCode::SundryCreditors;
-
-    // 4. Duties & Taxes
-    if (n.contains("tax") || n.contains("gst") || n.contains("duty") || n.contains("duties") || 
-        n.contains("tds") || n.contains("tcs") || n.contains("vat") || n.contains("cess") ||
-        n.contains("market fee") || n.contains("hrdf") || n.contains("rdfs") || n.contains("kalyan")) {
-        return StandardGroupCode::DutiesTaxes;
+    if (groupName.trimmed().isEmpty()) return StandardGroupCode::Primary;
+    GroupHierarchyInfo info = getGroupInfo(groupName.trimmed());
+    if (info.code1 > 0) {
+        return static_cast<StandardGroupCode>(info.code1);
     }
-
-    // 5. Fixed Assets
-    if (n.contains("fixed asset") || n.contains("machinery") || n.contains("building") || 
-        n.contains("furniture") || n.contains("vehicle") || n.contains("computer") || 
-        n.contains("plant") || n.contains("equipment") || n.contains("land") || n.contains("godown")) {
-        return StandardGroupCode::FixedAssets;
-    }
-
-    // 6. Capital & Loans
-    if (n.contains("capital") || n.contains("drawing") || n.contains("partner") || n.contains("shareholder") || n.contains("proprietor")) {
-        return StandardGroupCode::Capital;
-    }
-    if (n.contains("secured loan")) return StandardGroupCode::SecuredLoansCC;
-    if (n.contains("unsecured loan")) return StandardGroupCode::UnsecuredLoans;
-    if (n.contains("loan") || n.contains("borrowing")) return StandardGroupCode::LoansLiability;
-
-    // 7. Trading & Stock
-    if (n.contains("stock") || n.contains("inventory") || n.contains("bardana") || n.contains("packaging")) return StandardGroupCode::StockInHand;
-    if (n.contains("purchase") || n.contains("procurement")) return StandardGroupCode::Purchase;
-    if (n.contains("sale") || n.contains("revenue") || n.contains("billing")) return StandardGroupCode::Sale;
-    if (n.contains("thekedar") || n.contains("manufacturing")) return StandardGroupCode::ManufacturingExp;
-    if (n.contains("trading exp")) return StandardGroupCode::TradingExp;
-
-    // 8. Nominal (Income / Expense)
-    if (n.contains("expense") || n.contains("exp.") || n.contains("salary") || n.contains("wage") || 
-        n.contains("rent") || n.contains("depreciation") || n.contains("depriciation") || 
-        n.contains("discount allowed") || n.contains("interest paid") || n.contains("freight") || 
-        n.contains("labour") || n.contains("electricity") || n.contains("repair") || n.contains("audit") || n.contains("broker")) {
-        return StandardGroupCode::Expenditure;
-    }
-    if (n.contains("income") || n.contains("interest received") || n.contains("commission received") || 
-        n.contains("discount received") || n.contains("brokerage")) {
-        return StandardGroupCode::Income;
-    }
-    if (n.contains("employee") || n.contains("staff")) return StandardGroupCode::Employees;
-    if (n.contains("family")) return StandardGroupCode::LoanAdvancesAssets;
-    if (n.contains("suspense")) return StandardGroupCode::Suspense;
-    if (n.contains("branch") || n.contains("division")) return StandardGroupCode::BranchesDivisions;
-    if (n.contains("deposit")) return StandardGroupCode::DepositAssets;
-    if (n.contains("provision")) return StandardGroupCode::Provisions;
-
     return StandardGroupCode::Primary;
 }
 

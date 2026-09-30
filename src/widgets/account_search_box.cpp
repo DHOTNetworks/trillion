@@ -7,6 +7,8 @@
 #include <QScreen>
 #include <QScrollBar>
 
+#include "../engine/ledger_pipeline.h"
+
 AccountSearchBox::AccountSearchBox(QWidget* parent)
     : QLineEdit(parent)
 {
@@ -29,18 +31,9 @@ AccountSearchBox::AccountSearchBox(QWidget* parent)
         "}"
     );
 
-    // Default search function against DatabaseManager parties table
+    // Default search function against LedgerPipeline
     m_searchFn = [](const QString& query) -> QVariantList {
-        if (query.isEmpty()) {
-            return DatabaseManager::instance().executeQuery(
-                "SELECT id, name, gstin, city, opening_balance as balance FROM parties ORDER BY name COLLATE NOCASE ASC LIMIT 50;"
-            );
-        } else {
-            return DatabaseManager::instance().executeQuery(
-                "SELECT id, name, gstin, city, opening_balance as balance FROM parties WHERE name LIKE ? OR city LIKE ? ORDER BY name COLLATE NOCASE ASC LIMIT 50;",
-                {"%" + query + "%", "%" + query + "%"}
-            );
-        }
+        return LedgerPipeline::instance().searchLedgers(query, "", 50);
     };
 
     // Create Popup with ToolTip window type to prevent focus oscillation

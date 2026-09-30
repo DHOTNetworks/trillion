@@ -77,18 +77,20 @@ ProfitLossData ProfitLossCalculator::calculate(const QString& requestedFromDate,
         double dr = 0.0;
         double cr = 0.0;
     };
-    QHash<int, TransSum> sumByPartyId;
-    QHash<int, TransSum> sumByLegacyId;
-    QHash<QString, TransSum> sumByName;
 
-    QVariantList allTrans = DatabaseManager::instance().executeQuery(
+    // A. Trading Period Transactions (fromDate to toDate)
+    QHash<int, TransSum> sumTradingByPartyId;
+    QHash<int, TransSum> sumTradingByLegacyId;
+    QHash<QString, TransSum> sumTradingByName;
+
+    QVariantList tradingTrans = DatabaseManager::instance().executeQuery(
         "SELECT party_id, party_name, account_code, dr_cr, SUM(amount) as total_amt "
         "FROM transactions WHERE voucher_date >= ? AND voucher_date <= ? "
         "GROUP BY party_id, party_name, account_code, dr_cr;",
         {data.fromDate, data.toDate}
     );
 
-    for (const auto& tVar : allTrans) {
+    for (const auto& tVar : tradingTrans) {
         QVariantMap t = tVar.toMap();
         int pId = t.value("party_id").toInt();
         int legId = t.value("account_code").toInt();
@@ -98,16 +100,51 @@ ProfitLossData ProfitLossCalculator::calculate(const QString& requestedFromDate,
         bool isDr = (side.compare("Dr", Qt::CaseInsensitive) == 0);
 
         if (pId > 0) {
-            if (isDr) sumByPartyId[pId].dr += amt;
-            else sumByPartyId[pId].cr += amt;
+            if (isDr) sumTradingByPartyId[pId].dr += amt;
+            else sumTradingByPartyId[pId].cr += amt;
         }
         if (legId > 0) {
-            if (isDr) sumByLegacyId[legId].dr += amt;
-            else sumByLegacyId[legId].cr += amt;
+            if (isDr) sumTradingByLegacyId[legId].dr += amt;
+            else sumTradingByLegacyId[legId].cr += amt;
         }
         if (!pName.isEmpty()) {
-            if (isDr) sumByName[pName].dr += amt;
-            else sumByName[pName].cr += amt;
+            if (isDr) sumTradingByName[pName].dr += amt;
+            else sumTradingByName[pName].cr += amt;
+        }
+    }
+
+    // B. Cumulative Transactions up to toDate (for multi-year nominal P&L ledgers)
+    QHash<int, TransSum> sumCumulativeByPartyId;
+    QHash<int, TransSum> sumCumulativeByLegacyId;
+    QHash<QString, TransSum> sumCumulativeByName;
+
+    QVariantList cumulativeTrans = DatabaseManager::instance().executeQuery(
+        "SELECT party_id, party_name, account_code, dr_cr, SUM(amount) as total_amt "
+        "FROM transactions WHERE voucher_date <= ? "
+        "GROUP BY party_id, party_name, account_code, dr_cr;",
+        {data.toDate}
+    );
+
+    for (const auto& tVar : cumulativeTrans) {
+        QVariantMap t = tVar.toMap();
+        int pId = t.value("party_id").toInt();
+        int legId = t.value("account_code").toInt();
+        QString pName = t.value("party_name").toString().trimmed().toLower();
+        QString side = t.value("dr_cr").toString();
+        double amt = t.value("total_amt").toDouble();
+        bool isDr = (side.compare("Dr", Qt::CaseInsensitive) == 0);
+
+        if (pId > 0) {
+            if (isDr) sumCumulativeByPartyId[pId].dr += amt;
+            else sumCumulativeByPartyId[pId].cr += amt;
+        }
+        if (legId > 0) {
+            if (isDr) sumCumulativeByLegacyId[legId].dr += amt;
+            else sumCumulativeByLegacyId[legId].cr += amt;
+        }
+        if (!pName.isEmpty()) {
+            if (isDr) sumCumulativeByName[pName].dr += amt;
+            else sumCumulativeByName[pName].cr += amt;
         }
     }
 
@@ -160,25 +197,25 @@ ProfitLossData ProfitLossCalculator::calculate(const QString& requestedFromDate,
         QString grp = p.value("group_name").toString().trimmed();
         int calcDirect = p.value("calc_direct_expense").toInt();
 
-        double dr = 0.0, cr = 0.0;
-        if (pId > 0 && sumByPartyId.contains(pId)) {
-            dr = sumByPartyId[pId].dr;
-            cr = sumByPartyId[pId].cr;
-        } else if (legId > 0 && sumByLegacyId.contains(legId)) {
-            dr = sumByLegacyId[legId].dr;
-            cr = sumByLegacyId[legId].cr;
-        } else if (sumByName.contains(name.toLower())) {
-            dr = sumByName[name.toLower()].dr;
-            cr = sumByName[name.toLower()].cr;
-        }
-
-        if (dr <= 0.001 && cr <= 0.001) continue;
-
         GroupCodeInfo info = groupMeta.value(grp);
         bool isTrading = AccountClassifier::isTrading(info.c1, info.c2, info.c3, info.c4);
-        bool isPl = AccountClassifier::isProfitAndLoss(info.c1, info.c2, info.c3, info.c4);
+        bool isPl = AccountClassifier::isProfitAndLoss(info.c1, info.c2, info.c3, info.c4) ||
+                    info.nature == "Expense" || info.nature == "Income";
 
         if (!isTrading && !isPl) continue;
+
+        // Retrieve trading period amounts
+        double tDr = 0.0, tCr = 0.0;
+        if (pId > 0 && sumTradingByPartyId.contains(pId)) {
+            tDr = sumTradingByPartyId[pId].dr;
+            tCr = sumTradingByPartyId[pId].cr;
+        } else if (legId > 0 && sumTradingByLegacyId.contains(legId)) {
+            tDr = sumTradingByLegacyId[legId].dr;
+            tCr = sumTradingByLegacyId[legId].cr;
+        } else if (sumTradingByName.contains(name.toLower())) {
+            tDr = sumTradingByName[name.toLower()].dr;
+            tCr = sumTradingByName[name.toLower()].cr;
+        }
 
         ProfitLossItem itm;
         itm.partyId = pId;
@@ -187,42 +224,72 @@ ProfitLossData ProfitLossCalculator::calculate(const QString& requestedFromDate,
         itm.level = 2;
 
         if (isTrading) {
-            if (cr > 0.0) {
-                calcSales += cr;
-                itm.amount = cr;
-                itm.amountFmt = AccountingEngine::formatIndianCurrency(cr, true);
+            if (tCr > 0.0) {
+                calcSales += tCr;
+                itm.amount = tCr;
+                itm.amountFmt = AccountingEngine::formatIndianCurrency(tCr, true);
                 itm.side = "Cr";
                 salesByGroup[grp].append(itm);
             }
-            if (dr > 0.0) {
+            if (tDr > 0.0) {
                 if (AccountClassifier::isDirectExpense(info.c1, info.c2, info.c3, info.c4, calcDirect)) {
-                    calcDirExp += dr;
-                    itm.amount = dr;
-                    itm.amountFmt = AccountingEngine::formatIndianCurrency(dr, true);
+                    calcDirExp += tDr;
+                    itm.amount = tDr;
+                    itm.amountFmt = AccountingEngine::formatIndianCurrency(tDr, true);
                     itm.side = "Dr";
                     directExpByGroup[grp].append(itm);
                 } else {
-                    calcPurc += dr;
-                    itm.amount = dr;
-                    itm.amountFmt = AccountingEngine::formatIndianCurrency(dr, true);
+                    calcPurc += tDr;
+                    itm.amount = tDr;
+                    itm.amountFmt = AccountingEngine::formatIndianCurrency(tDr, true);
                     itm.side = "Dr";
                     purcByGroup[grp].append(itm);
                 }
             }
         } else if (isPl) {
-            if (cr > 0.0) {
-                calcIndInc += cr;
-                itm.amount = cr;
-                itm.amountFmt = AccountingEngine::formatIndianCurrency(cr, true);
-                itm.side = "Cr";
-                indirectIncByGroup[grp].append(itm);
-            }
-            if (dr > 0.0) {
-                calcIndExp += dr;
-                itm.amount = dr;
-                itm.amountFmt = AccountingEngine::formatIndianCurrency(dr, true);
-                itm.side = "Dr";
-                indirectExpByGroup[grp].append(itm);
+            if (AccountClassifier::isDirectExpense(info.c1, info.c2, info.c3, info.c4, calcDirect)) {
+                // Direct expense tagged under nominal group: use trading period transactions
+                double netDr = tDr - tCr;
+                if (netDr > 0.001) {
+                    calcDirExp += netDr;
+                    itm.amount = netDr;
+                    itm.amountFmt = AccountingEngine::formatIndianCurrency(netDr, true);
+                    itm.side = "Dr";
+                    directExpByGroup[grp].append(itm);
+                }
+            } else {
+                // Cumulative nominal balance up to toDate
+                double cDr = 0.0, cCr = 0.0;
+                if (pId > 0 && sumCumulativeByPartyId.contains(pId)) {
+                    cDr = sumCumulativeByPartyId[pId].dr;
+                    cCr = sumCumulativeByPartyId[pId].cr;
+                } else if (legId > 0 && sumCumulativeByLegacyId.contains(legId)) {
+                    cDr = sumCumulativeByLegacyId[legId].dr;
+                    cCr = sumCumulativeByLegacyId[legId].cr;
+                } else if (sumCumulativeByName.contains(name.toLower())) {
+                    cDr = sumCumulativeByName[name.toLower()].dr;
+                    cCr = sumCumulativeByName[name.toLower()].cr;
+                }
+
+                if (AccountClassifier::isDescendantOf(info.c1, info.c2, info.c3, info.c4, 16) || info.nature == "Income") {
+                    double netCr = cCr - cDr;
+                    if (netCr > 0.001) {
+                        calcIndInc += netCr;
+                        itm.amount = netCr;
+                        itm.amountFmt = AccountingEngine::formatIndianCurrency(netCr, true);
+                        itm.side = "Cr";
+                        indirectIncByGroup[grp].append(itm);
+                    }
+                } else {
+                    double netDr = cDr - cCr;
+                    if (netDr > 0.001) {
+                        calcIndExp += netDr;
+                        itm.amount = netDr;
+                        itm.amountFmt = AccountingEngine::formatIndianCurrency(netDr, true);
+                        itm.side = "Dr";
+                        indirectExpByGroup[grp].append(itm);
+                    }
+                }
             }
         }
     }
@@ -338,10 +405,19 @@ ProfitLossData ProfitLossCalculator::calculate(const QString& requestedFromDate,
         data.tradingDrGroups.append(dGrp);
     }
 
+    double grossPct = 0.0;
+    if (data.totalSalesRevenue > 0.0) {
+        grossPct = ((data.grossProfit > 0.0) ? data.grossProfit : data.grossLoss) / data.totalSalesRevenue * 100.0;
+    }
+    double netPct = 0.0;
+    if (data.totalSalesRevenue > 0.0) {
+        netPct = ((data.netProfit > 0.0) ? data.netProfit : data.netLoss) / data.totalSalesRevenue * 100.0;
+    }
+
     // 4. Gross Profit c/d (if Gross Profit > 0)
     if (data.grossProfit > 0.0) {
         ProfitLossItem gpItem;
-        gpItem.name = "Gross Profit c/d (Transferred to P&L A/c)";
+        gpItem.name = QString("Gross Profit c/d (Transferred to P&L A/c) (%1%)").arg(QString::number(grossPct, 'f', 3));
         gpItem.groupName = "Trading Dr";
         gpItem.amount = data.grossProfit;
         gpItem.amountFmt = AccountingEngine::formatIndianCurrency(data.grossProfit, true);
@@ -403,7 +479,7 @@ ProfitLossData ProfitLossCalculator::calculate(const QString& requestedFromDate,
     // 3. Gross Loss c/d (if Gross Loss > 0)
     if (data.grossLoss > 0.0) {
         ProfitLossItem glItem;
-        glItem.name = "Gross Loss c/d (Transferred to P&L A/c)";
+        glItem.name = QString("Gross Loss c/d (Transferred to P&L A/c) (%1%)").arg(QString::number(grossPct, 'f', 3));
         glItem.groupName = "Trading Cr";
         glItem.amount = data.grossLoss;
         glItem.amountFmt = AccountingEngine::formatIndianCurrency(data.grossLoss, true);
@@ -427,7 +503,7 @@ ProfitLossData ProfitLossCalculator::calculate(const QString& requestedFromDate,
     // 1. Gross Loss b/d (if any)
     if (data.grossLoss > 0.0) {
         ProfitLossItem glBd;
-        glBd.name = "Gross Loss b/d";
+        glBd.name = QString("Gross Loss b/d (%1%)").arg(QString::number(grossPct, 'f', 3));
         glBd.groupName = "P&L Dr";
         glBd.amount = data.grossLoss;
         glBd.amountFmt = AccountingEngine::formatIndianCurrency(data.grossLoss, true);
@@ -469,7 +545,7 @@ ProfitLossData ProfitLossCalculator::calculate(const QString& requestedFromDate,
     // 3. Net Profit (if Net Profit > 0)
     if (data.netProfit > 0.0) {
         ProfitLossItem npItem;
-        npItem.name = "Net Profit (Transferred to Capital Account)";
+        npItem.name = QString("Net Profit (Transferred to Capital Account) (%1%)").arg(QString::number(netPct, 'f', 3));
         npItem.groupName = "P&L Dr";
         npItem.amount = data.netProfit;
         npItem.amountFmt = AccountingEngine::formatIndianCurrency(data.netProfit, true);
@@ -485,7 +561,7 @@ ProfitLossData ProfitLossCalculator::calculate(const QString& requestedFromDate,
     // 1. Gross Profit b/d (if any)
     if (data.grossProfit > 0.0) {
         ProfitLossItem gpBd;
-        gpBd.name = "Gross Profit b/d";
+        gpBd.name = QString("Gross Profit b/d (%1%)").arg(QString::number(grossPct, 'f', 3));
         gpBd.groupName = "P&L Cr";
         gpBd.amount = data.grossProfit;
         gpBd.amountFmt = AccountingEngine::formatIndianCurrency(data.grossProfit, true);
@@ -527,7 +603,7 @@ ProfitLossData ProfitLossCalculator::calculate(const QString& requestedFromDate,
     // 3. Net Loss (if Net Loss > 0)
     if (data.netLoss > 0.0) {
         ProfitLossItem nlItem;
-        nlItem.name = "Net Loss (Deducted from Capital Account)";
+        nlItem.name = QString("Net Loss (Deducted from Capital Account) (%1%)").arg(QString::number(netPct, 'f', 3));
         nlItem.groupName = "P&L Cr";
         nlItem.amount = data.netLoss;
         nlItem.amountFmt = AccountingEngine::formatIndianCurrency(data.netLoss, true);

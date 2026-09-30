@@ -365,14 +365,13 @@ StockValuationReport StockValuationEngine::calculateLivePhysicalStock(const QStr
         }
 
         if (rate <= 0.0) {
-            // Intelligent commodity fallback prices based on item name keywords
-            if (itemNameLower.contains("paddy")) rate = 3400.0;
-            else if (itemNameLower.contains("bran")) rate = 2200.0;
-            else if (itemNameLower.contains("nakku")) rate = 2100.0;
-            else if (itemNameLower.contains("phak") || itemNameLower.contains("husk")) rate = 800.0;
-            else if (itemNameLower.contains("rice")) rate = 6500.0;
-            else if (itemNameLower.contains("bardana") || itemNameLower.contains("bag")) rate = 22.0;
-            else rate = 1000.0;
+            double opR = item.value("opening_rate").toDouble();
+            double pR = item.value("purchase_rate").toDouble();
+            double sR = item.value("sale_rate").toDouble();
+            if (opR > 0.0) rate = opR;
+            else if (pR > 0.0) rate = pR;
+            else if (sR > 0.0) rate = sR;
+            else rate = 0.0;
         }
 
         if (finalQty > 0.001 || finalBags > 0) {

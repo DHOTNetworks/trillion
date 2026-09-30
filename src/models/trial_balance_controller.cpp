@@ -1,6 +1,7 @@
 #include "trial_balance_controller.h"
 #include "../database_manager.h"
 #include "../engine/fiscal_year_helper.h"
+#include "../engine/ledger_pipeline.h"
 #include "../services/financial_math_service.h"
 #include <cmath>
 #include <algorithm>
@@ -49,49 +50,11 @@ void TrialBalanceController::calculate() {
     m_allRows.clear();
     m_totals = TrialBalanceTotals();
 
-    DatabaseManager& db = DatabaseManager::instance();
     FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
     QString fromIso = m_fromDate.isValid() ? m_fromDate.toString("yyyy-MM-dd") : activeFy.startDate;
     QString toIso = m_toDate.isValid() ? m_toDate.toString("yyyy-MM-dd") : activeFy.endDate;
 
-    // 1. Fetch all ledgers
-    QVariantList partyRows = db.executeQuery(
-        "SELECT id, name, group_name, opening_balance, COALESCE(balance_type, 'Dr') AS dr_cr FROM parties ORDER BY group_name ASC, name ASC;"
-    );
-
-    // 2. Fetch all prior transactions (before fromIso)
-    QVariantList priorTx = db.executeQuery(
-        "SELECT party_id, party_name, dr_cr, SUM(amount) as total_amt FROM transactions "
-        "WHERE voucher_date < ? GROUP BY party_id, party_name, dr_cr;",
-        {fromIso}
-    );
-    QMap<QString, double> priorDrMap;
-    QMap<QString, double> priorCrMap;
-    for (const auto& v : priorTx) {
-        QVariantMap m = v.toMap();
-        QString key = m.value("party_name").toString().trimmed().toLower();
-        QString drcr = m.value("dr_cr").toString().trimmed();
-        double amt = m.value("total_amt").toDouble();
-        if (drcr.compare("Dr", Qt::CaseInsensitive) == 0) priorDrMap[key] += amt;
-        else priorCrMap[key] += amt;
-    }
-
-    // 3. Fetch period transactions (fromIso to toIso)
-    QVariantList periodTx = db.executeQuery(
-        "SELECT party_id, party_name, dr_cr, SUM(amount) as total_amt FROM transactions "
-        "WHERE voucher_date >= ? AND voucher_date <= ? GROUP BY party_id, party_name, dr_cr;",
-        {fromIso, toIso}
-    );
-    QMap<QString, double> periodDrMap;
-    QMap<QString, double> periodCrMap;
-    for (const auto& v : periodTx) {
-        QVariantMap m = v.toMap();
-        QString key = m.value("party_name").toString().trimmed().toLower();
-        QString drcr = m.value("dr_cr").toString().trimmed();
-        double amt = m.value("total_amt").toDouble();
-        if (drcr.compare("Dr", Qt::CaseInsensitive) == 0) periodDrMap[key] += amt;
-        else periodCrMap[key] += amt;
-    }
+    QVector<::LedgerPeriodBalance> balances = ::LedgerPipeline::instance().calculateBalancesForPeriod(fromIso, toIso);
 
     struct RawLedgerInfo {
         int id;
@@ -108,35 +71,17 @@ void TrialBalanceController::calculate() {
     QVector<RawLedgerInfo> rawLedgers;
     QMap<QString, QVector<RawLedgerInfo>> groupMap;
 
-    for (const auto& v : partyRows) {
-        QVariantMap m = v.toMap();
+    for (const auto& b : balances) {
         RawLedgerInfo l;
-        l.id = m.value("id").toInt();
-        l.name = m.value("name").toString().trimmed();
-        l.group = m.value("group_name").toString().trimmed();
-        if (l.group.isEmpty()) l.group = "General";
-
-        QString key = l.name.toLower();
-
-        // Calculate Opening Net
-        double initialOp = m.value("opening_balance").toDouble();
-        QString initialDrCr = m.value("dr_cr").toString().trimmed();
-        double netOp = (initialDrCr.compare("Dr", Qt::CaseInsensitive) == 0 ? initialOp : -initialOp);
-        netOp += (priorDrMap.value(key, 0.0) - priorCrMap.value(key, 0.0));
-
-        if (netOp >= 0.0) {
-            l.opDr = netOp;
-            l.opCr = 0.0;
-        } else {
-            l.opDr = 0.0;
-            l.opCr = -netOp;
-        }
-
-        l.periodDr = periodDrMap.value(key, 0.0);
-        l.periodCr = periodCrMap.value(key, 0.0);
+        l.id = b.accountId;
+        l.name = b.accountName;
+        l.group = b.groupName.isEmpty() ? "General" : b.groupName;
+        l.opDr = b.openingDr;
+        l.opCr = b.openingCr;
+        l.periodDr = b.periodDr;
+        l.periodCr = b.periodCr;
 
         if (m_mode == TrialBalanceMode::WithoutOpBal) {
-            // Pure period movement
             double netPeriod = l.periodDr - l.periodCr;
             if (netPeriod >= 0.0) {
                 l.closeDr = netPeriod;
@@ -146,14 +91,8 @@ void TrialBalanceController::calculate() {
                 l.closeCr = -netPeriod;
             }
         } else {
-            double netClose = (l.opDr - l.opCr) + (l.periodDr - l.periodCr);
-            if (netClose >= 0.0) {
-                l.closeDr = netClose;
-                l.closeCr = 0.0;
-            } else {
-                l.closeDr = 0.0;
-                l.closeCr = -netClose;
-            }
+            l.closeDr = b.closingDr;
+            l.closeCr = b.closingCr;
         }
 
         // Only include if has activity or opening balance

@@ -322,7 +322,8 @@ int main(int argc, char* argv[]) {
             return 0;
         }
         if (arg == "--test-custom-period") {
-            dashboardCtrl.refresh_stats("2025-04-01", "2027-03-31", "Custom Period");
+            FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
+            dashboardCtrl.refresh_stats(activeFy.startDate, activeFy.endDate, activeFy.name);
             std::cout << "[CUSTOM-PERIOD] Paddy Stock: " << dashboardCtrl.paddyStock().toStdString() << std::endl;
             std::cout << "[CUSTOM-PERIOD] Rice Stock: " << dashboardCtrl.riceStock().toStdString() << std::endl;
             std::cout << "[CUSTOM-PERIOD] Total Revenue: " << dashboardCtrl.totalSales().toStdString() << std::endl;

@@ -2,6 +2,7 @@
 #include "../database_manager.h"
 #include "../engine/accounting_engine.h"
 #include "../engine/fiscal_year_helper.h"
+#include "../engine/stock_pipeline.h"
 #include <QDate>
 #include <QRegularExpression>
 
@@ -150,14 +151,13 @@ bool MillingModel::add_milling_voucher(
         totalProducedWeight += wt;
         totalProducedAmount += amt;
 
-        QString lowName = name.toLower();
-        if (lowName.contains("bran") && !lowName.contains("brand")) {
+        StockItemRecord itmRec = StockPipeline::instance().getItemByName(name);
+        if (itmRec.legacyCode == 500 || itmRec.itemType.compare("Bran", Qt::CaseInsensitive) == 0) {
             totalBranWeight += wt;
-        } else if (lowName.contains("broken") || lowName.contains("nakku") || lowName.contains("tibar") ||
-                   lowName.contains("dubar") || lowName.contains("mogra") || lowName.contains("kinki")) {
-            totalBrokenWeight += wt;
-        } else if (lowName.contains("husk") || lowName.contains("phak") || lowName.contains("bhusa")) {
+        } else if (itmRec.legacyCode == 501 || itmRec.itemType.compare("Husk", Qt::CaseInsensitive) == 0) {
             totalHuskWeight += wt;
+        } else if (itmRec.legacyCode == 502 || itmRec.itemType.compare("Broken", Qt::CaseInsensitive) == 0) {
+            totalBrokenWeight += wt;
         } else {
             totalHeadRiceWeight += wt;
             totalHeadRiceBags += bags;

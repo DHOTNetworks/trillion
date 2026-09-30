@@ -3,6 +3,8 @@
 #include "../models/account_classifier.h"
 #include "../database_manager.h"
 #include "../engine/accounting_engine.h"
+#include "../engine/ledger_pipeline.h"
+#include "../engine/fiscal_year_helper.h"
 #include <QKeyEvent>
 #include <QMessageBox>
 #include <QDoubleValidator>
@@ -510,7 +512,7 @@ QWidget* ModifyLedgerWidget::createSlateSection() {
     auto* booksLbl = new QLabel("Books Start From (DD-MM-YYYY) :", card);
     booksLbl->setStyleSheet("color: #0F172A; font-size: 10px; font-weight: 700; border: none;");
     m_booksFromInput = new QLineEdit(card);
-    m_booksFromInput->setPlaceholderText("01-04-2023");
+    m_booksFromInput->setPlaceholderText("DD-MM-YYYY");
     m_booksFromInput->setStyleSheet(inputStyle());
     m_booksFromInput->setFixedHeight(26);
     booksBox->addWidget(booksLbl);
@@ -930,6 +932,7 @@ void ModifyLedgerWidget::loadParty(int partyId) {
     setComboText(m_groupCombo, p.value("group_name").toString());
 
     // Books Start From Date
+    FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
     QString booksFrom = p.value("books_start_from").toString().trimmed();
     if (booksFrom.isEmpty()) {
         QString rawMailing = p.value("mailing_name").toString().trimmed();
@@ -937,20 +940,43 @@ void ModifyLedgerWidget::loadParty(int partyId) {
         if (dateReg.match(rawMailing).hasMatch()) {
             booksFrom = rawMailing;
             booksFrom.replace('/', '-');
+        } else if (activeFy.isValid() && !activeFy.startDate.isEmpty()) {
+            booksFrom = FiscalYearHelper::formatDisplayDate(activeFy.startDate);
         } else {
             booksFrom = m_partiesModel.get_financial_year_start();
         }
     }
     m_booksFromInput->setText(booksFrom);
 
-    // Opening balance & type
-    QString bType = p.value("balance_type").toString();
+    // Opening balance & type dynamically resolved for active fiscal year
+    double opAmt = p.value("opening_balance").toDouble();
+    QString bType = p.value("balance_type").toString().trimmed();
     if (bType.isEmpty()) bType = "Dr";
+
+    if (activeFy.isValid() && !activeFy.startDate.isEmpty()) {
+        QVector<LedgerPeriodBalance> balances = LedgerPipeline::instance().calculateBalancesForPeriod(activeFy.startDate, activeFy.endDate);
+        for (const auto& b : balances) {
+            if (b.accountId == partyId) {
+                double netPrior = b.openingDr - b.openingCr;
+                if (std::abs(netPrior) > 0.0001) {
+                    if (netPrior >= 0.0) {
+                        opAmt = netPrior;
+                        bType = "Dr";
+                    } else {
+                        opAmt = -netPrior;
+                        bType = "Cr";
+                    }
+                }
+                break;
+            }
+        }
+    }
+
     int bIdx = m_balTypeCombo->findText(bType);
     if (bIdx >= 0) m_balTypeCombo->setCurrentIndex(bIdx);
     else m_balTypeCombo->setEditText(bType);
 
-    m_opBalInput->setText(QString::number(p.value("opening_balance").toDouble(), 'f', 2));
+    m_opBalInput->setText(QString::number(opAmt, 'f', 2));
     m_openFromInput->setText(p.value("ledger_open_from").toString());
 
     // Statutory, GST & Contact

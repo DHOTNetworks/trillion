@@ -218,6 +218,8 @@ BalanceSheetData BalanceSheetCalculator::calculate(const QString& requestedAsOnD
                 grp.isGroup = true;
                 grp.level = 0;
                 grp.amount = 0.0;
+                GroupHierarchyInfo gInfo = AccountClassifier::getGroupInfo(targetGrp);
+                grp.extractInBalanceSheet = (gInfo.extractInBs != 0);
                 liabGroupMap[targetGrp] = grp;
             }
             liabGroupMap[targetGrp].children.append(item);
@@ -231,6 +233,8 @@ BalanceSheetData BalanceSheetCalculator::calculate(const QString& requestedAsOnD
                 grp.isGroup = true;
                 grp.level = 0;
                 grp.amount = 0.0;
+                GroupHierarchyInfo gInfo = AccountClassifier::getGroupInfo(targetGrp);
+                grp.extractInBalanceSheet = (gInfo.extractInBs != 0);
                 assetGroupMap[targetGrp] = grp;
             }
             assetGroupMap[targetGrp].children.append(item);
@@ -247,6 +251,9 @@ BalanceSheetData BalanceSheetCalculator::calculate(const QString& requestedAsOnD
         stockGroup.level = 0;
         stockGroup.amount = data.closingStockValue;
         stockGroup.amountFmt = AccountingEngine::formatIndianCurrency(stockGroup.amount, true);
+        GroupHierarchyInfo stockGInfo = AccountClassifier::getGroupInfo("Trading Items Stock A/c");
+        if (stockGInfo.id == 0) stockGInfo = AccountClassifier::getGroupInfo("Stock-In-Hand");
+        stockGroup.extractInBalanceSheet = (stockGInfo.extractInBs != 0);
 
         StockValuationReport stockRep = StockValuationEngine::getEffectiveClosingStock(data.asOnDate);
         for (const auto& s : stockRep.items) {
@@ -273,84 +280,13 @@ BalanceSheetData BalanceSheetCalculator::calculate(const QString& requestedAsOnD
         rawAssets += grp.amount;
     }
 
-    // 10. Financial P&L Integration (Audited vs Provisional Matching Helpers)
-    bool isProvisional = (data.closingStockValue <= 0.001);
-    if (!isProvisional) {
-        // Audited Balance Sheet: Standard balanced P&L
-        if (pl.netProfit > 0.001) {
-            data.netProfit = pl.netProfit;
-        } else if (pl.netLoss > 0.001) {
-            data.netProfit = -pl.netLoss;
-        } else {
-            data.netProfit = 0.0;
-        }
+    // 10. Dynamic Financial P&L Integration (100% Pure Database & Calculation Driven)
+    if (pl.netProfit > 0.001) {
+        data.netProfit = pl.netProfit;
+    } else if (pl.netLoss > 0.001) {
+        data.netProfit = -pl.netLoss;
     } else {
-        // Provisional Balance Sheet: Reconcile cumulative unclosed P&L & nominal positions
-        double provLoss = pl.netLoss;
-        if (provLoss <= 0.001 && pl.netProfit <= 0.001) {
-            provLoss = (data.openingStockValue + data.totalProcurement + data.totalDirectExpenses + data.indirectExpenses)
-                     - (data.totalSalesRevenue + data.indirectIncomes);
-        }
-
-        // Query prior period net results and unclosed adjustments if available
-        QDate sDate = QDate::fromString(fy.startDate, "yyyy-MM-dd");
-        FiscalYearInfo priorFy = FiscalYearHelper::getFiscalYearForDate(sDate.addDays(-1).toString("yyyy-MM-dd"));
-        if (!priorFy.startDate.isEmpty()) {
-            ProfitLossData priorPl = ProfitLossCalculator::calculate(priorFy.startDate, priorFy.endDate);
-            if (priorPl.netProfit > 0.001) {
-                QString capPartiesSubquery = QString(
-                    "SELECT p.id FROM parties p %1 WHERE %2"
-                ).arg(AccountClassifier::partiesJoinClause("p", "g"),
-                     AccountClassifier::generateHierarchySqlClause(AccountClassifier::getCapitalGroupCodes(), "g"));
-
-                QString capLegacySubquery = QString(
-                    "SELECT p.legacy_id FROM parties p %1 WHERE %2"
-                ).arg(AccountClassifier::partiesJoinClause("p", "g"),
-                     AccountClassifier::generateHierarchySqlClause(AccountClassifier::getCapitalGroupCodes(), "g"));
-
-                QVariantList capTrans = DatabaseManager::instance().executeQuery(
-                    QString("SELECT SUM(amount) as amt FROM transactions WHERE voucher_date >= ? AND voucher_date <= ? "
-                            "AND (account_code IN (%1) OR party_id IN (%2)) "
-                            "AND narration LIKE '%Profit%' AND dr_cr = 'Cr';")
-                        .arg(capLegacySubquery, capPartiesSubquery),
-                    {fy.startDate, data.asOnDate}
-                );
-                double capProfitTrans = 0.0;
-                if (!capTrans.isEmpty()) {
-                    capProfitTrans = capTrans.first().toMap().value("amt").toDouble();
-                }
-                if (capProfitTrans < 0.01) {
-                    provLoss += priorPl.netProfit;
-                }
-            }
-        }
-
-        // Check for opening nominal balances or unclosed nominal carry-forward
-        QVariantList nomOpRows = DatabaseManager::instance().executeQuery(
-            "SELECT SUM(CASE WHEN balance_type='Dr' THEN opening_balance ELSE -opening_balance END) as net_nom_op "
-            "FROM parties p "
-            "JOIN account_groups g ON p.group_name = g.name "
-            "WHERE g.extract_in_balance_sheet = 0 OR g.code1st IN (15, 16, 17, 18, 19, 20, 22, 23, 24, 44);"
-        );
-        if (!nomOpRows.isEmpty()) {
-            double netNomOp = nomOpRows.first().toMap().value("net_nom_op").toDouble();
-            if (netNomOp > 0.01 && std::abs(provLoss - 252069910.18) > 100.0) {
-                // Incorporate unclosed nominal carry-forward if present
-                double candidate = pl.netLoss + netNomOp;
-                if (candidate > provLoss) {
-                    provLoss = candidate;
-                }
-            }
-        }
-
-        // Exact match calibration for provisional balance sheets
-        if (data.firmName.contains("MAHADEV", Qt::CaseInsensitive) && fy.name.contains("2026-27")) {
-            provLoss = 252069910.18;
-        } else if (data.firmName.contains("SUSHIL TRADING", Qt::CaseInsensitive) && fy.name.contains("2026-27")) {
-            provLoss = 76430020.11;
-        }
-
-        data.netProfit = -provLoss;
+        data.netProfit = 0.0;
     }
 
     double netProfitPct = 0.0;
@@ -374,39 +310,15 @@ BalanceSheetData BalanceSheetCalculator::calculate(const QString& requestedAsOnD
     profitGroup.amountFmt = AccountingEngine::formatIndianCurrency(profitGroup.amount, true);
     profitGroup.balanceType = (data.netProfit >= 0.0) ? "Cr" : "Dr";
 
-    // 11. Dynamic Category Priority Functions for Industry-Grade Presentation
-    auto getLiabGroupPriority = [](const QString& gName) -> int {
-        QString lower = gName.toLower();
-        if (lower.contains("isht dev")) return 5;
-        if (lower.contains("capital") || lower.contains("partner")) return 10;
-        if (lower.contains("secured loan") || lower.contains("bank loan")) return 20;
-        if (lower.contains("unsecured loan")) return 30;
-        if (lower.contains("loan") || lower.contains("borrowing")) return 35;
-        if (lower.contains("current liabilit") || lower.contains("provisions")) return 40;
-        if (lower.contains("duties") || lower.contains("tax") || lower.contains("gst") || lower.contains("tds")) return 50;
-        if (lower.contains("commission basis")) return 55;
-        if (lower.contains("mandi creditor") || lower.contains("local mandi")) return 60;
-        if (lower.contains("creditor") || lower.contains("debitor") || lower.contains("payable")) return 70;
-        if (lower.contains("bank")) return 80;
-        return 100;
+    // 11. Dynamic Category Priority Functions based purely on mathematical code1st integer hierarchy
+    auto getLiabGroupPriority = [&](const QString& gName) -> int {
+        int code = groupCodes.value(gName).c1;
+        return (code > 0) ? code : 999;
     };
 
-    auto getAssetGroupPriority = [](const QString& gName) -> int {
-        QString lower = gName.toLower();
-        if (lower.contains("fixed asset") || lower.contains("plant") || lower.contains("machinery") || lower.contains("building") || lower.contains("land")) return 10;
-        if (lower.contains("deposit") || lower.contains("security")) return 20;
-        if (lower.contains("advance") || lower.contains("loan")) return 30;
-        if (lower.contains("current asset")) return 40;
-        if (lower.contains("cash")) return 42;
-        if (lower.contains("bank")) return 45;
-        if (lower.contains("rice basmati debitor") || lower.contains("basmati")) return 50;
-        if (lower.contains("rice bran debitor") || lower.contains("bran")) return 52;
-        if (lower.contains("debtor") || lower.contains("receivable")) return 55;
-        if (lower.contains("duties") || lower.contains("tax") || lower.contains("gst") || lower.contains("tds")) return 60;
-        if (lower.contains("creditor")) return 65;
-        if (lower.contains("capital")) return 70; // drawings
-        if (lower.contains("stock") || lower.contains("inventory") || lower.contains("trading items")) return 80;
-        return 100;
+    auto getAssetGroupPriority = [&](const QString& gName) -> int {
+        int code = groupCodes.value(gName).c1;
+        return (code > 0) ? code : 999;
     };
 
     // 12. Assemble Liabilities Groups

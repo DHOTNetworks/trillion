@@ -107,16 +107,16 @@ void ItemSearchEditor::positionPopup() {
     m_popupFrame->setGeometry(globalPos.x(), globalPos.y(), popupWidth, popupHeight);
 }
 
+#include "../engine/stock_pipeline.h"
+
 void ItemSearchEditor::updateResults() {
     QString q = text();
-    QStringList allItems = m_stockModel.get_items_list();
+    QVariantList items = StockPipeline::instance().searchItems(q, 50);
 
     m_listWidget->clear();
-    for (const QString& itemName : allItems) {
-        if (!q.isEmpty() && !itemName.contains(q, Qt::CaseInsensitive)) {
-            continue;
-        }
-        QVariantMap itemData = m_stockModel.get_item_by_name(itemName);
+    for (const QVariant& itemVar : items) {
+        QVariantMap itemData = itemVar.toMap();
+        QString itemName = itemData.value("name").toString();
         double sRate = itemData.value("sale_rate").toDouble();
         double pRate = itemData.value("purchase_rate").toDouble();
         double gst = itemData.value("gst_rate").toDouble();
