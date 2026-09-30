@@ -2077,13 +2077,13 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
         );
 
         // Line Items from StockTransactions
-        int itemId = 1;
-        std::string itemName = (vType == "Sales") ? "Rice Basmati(Non Branded)" : "Paddy Basmati";
-        std::string hsnCode = "1006";
+        int itemId = 0;
+        std::string itemName = "";
+        std::string hsnCode = "";
         int bagCount = 0;
-        double weightQtl = (partyAmount > 0.0) ? (partyAmount / 6500.0) : 0.0;
-        double ratePerQtl = 6500.0;
-        double gstPct = 5.0;
+        double weightQtl = 0.0;
+        double ratePerQtl = 0.0;
+        double gstPct = 0.0;
         double cgstAmt = cgstTax, sgstAmt = sgstTax, igstAmt = igstTax;
         double taxableAmt = partyAmount;
 

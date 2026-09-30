@@ -948,29 +948,10 @@ void ModifyLedgerWidget::loadParty(int partyId) {
     }
     m_booksFromInput->setText(booksFrom);
 
-    // Opening balance & type dynamically resolved for active fiscal year
+    // Master Opening balance & type
     double opAmt = p.value("opening_balance").toDouble();
     QString bType = p.value("balance_type").toString().trimmed();
     if (bType.isEmpty()) bType = "Dr";
-
-    if (activeFy.isValid() && !activeFy.startDate.isEmpty()) {
-        QVector<LedgerPeriodBalance> balances = LedgerPipeline::instance().calculateBalancesForPeriod(activeFy.startDate, activeFy.endDate);
-        for (const auto& b : balances) {
-            if (b.accountId == partyId) {
-                double netPrior = b.openingDr - b.openingCr;
-                if (std::abs(netPrior) > 0.0001) {
-                    if (netPrior >= 0.0) {
-                        opAmt = netPrior;
-                        bType = "Dr";
-                    } else {
-                        opAmt = -netPrior;
-                        bType = "Cr";
-                    }
-                }
-                break;
-            }
-        }
-    }
 
     int bIdx = m_balTypeCombo->findText(bType);
     if (bIdx >= 0) m_balTypeCombo->setCurrentIndex(bIdx);

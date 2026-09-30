@@ -223,31 +223,14 @@ QVariantList GroupHierarchyPipeline::getGroupsSummaryList() {
     return list;
 }
 
+#include "../models/account_classifier.h"
+
 bool GroupHierarchyPipeline::saveGroup(int id, const QString& name, const QString& parentName,
                                        const QString& nature, int extractInBs, bool isSystem, QString* outError) {
-    QString trimmedName = name.trimmed();
-    if (trimmedName.isEmpty()) {
-        if (outError) *outError = "Group name cannot be empty.";
-        return false;
-    }
-
-    bool success = false;
-    if (id > 0) {
-        success = DatabaseManager::instance().executeNonQuery(
-            "UPDATE account_groups SET name = ?, parent_group_name = ?, nature = ?, extract_in_balance_sheet = ?, is_system = ? WHERE id = ?;",
-            { trimmedName, parentName.trimmed(), nature.trimmed(), extractInBs, isSystem ? 1 : 0, id }
-        );
-    } else {
-        success = DatabaseManager::instance().executeNonQuery(
-            "INSERT INTO account_groups (name, parent_group_name, nature, extract_in_balance_sheet, is_system) VALUES (?, ?, ?, ?, ?);",
-            { trimmedName, parentName.trimmed(), nature.trimmed(), extractInBs, isSystem ? 1 : 0 }
-        );
-    }
-
+    Q_UNUSED(isSystem);
+    bool success = AccountClassifier::createOrUpdateGroup(id, name, parentName, nature, "", extractInBs != 0, outError);
     if (success) {
         invalidateCache();
-    } else if (outError) {
-        *outError = "Database error while saving account group.";
     }
     return success;
 }

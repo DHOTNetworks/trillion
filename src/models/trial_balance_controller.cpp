@@ -2,6 +2,7 @@
 #include "../database_manager.h"
 #include "../engine/fiscal_year_helper.h"
 #include "../engine/ledger_pipeline.h"
+#include "../engine/group_hierarchy_pipeline.h"
 #include "../services/financial_math_service.h"
 #include <cmath>
 #include <algorithm>
@@ -102,18 +103,29 @@ void TrialBalanceController::calculate() {
         }
     }
 
+    // Sort groups deterministically by GroupHierarchyPipeline code1st / depth
+    QStringList orderedGroupNames = groupMap.keys();
+    std::sort(orderedGroupNames.begin(), orderedGroupNames.end(), [](const QString& a, const QString& b) {
+        AccountGroupNode ga = GroupHierarchyPipeline::instance().getGroupByName(a);
+        AccountGroupNode gb = GroupHierarchyPipeline::instance().getGroupByName(b);
+        int ca = ga.id > 0 ? ga.code1 : 999;
+        int cb = gb.id > 0 ? gb.code1 : 999;
+        if (ca != cb) return ca < cb;
+        return a.compare(b, Qt::CaseInsensitive) < 0;
+    });
+
     // Process rows based on mode:
     if (m_mode == TrialBalanceMode::NormalView) {
         // Group totals only
-        for (auto it = groupMap.begin(); it != groupMap.end(); ++it) {
-            QString gName = it.key();
+        for (const QString& gName : orderedGroupNames) {
             TrialBalanceRow r;
             r.accountName = gName;
             r.groupName = gName;
             r.isGroupHeader = true;
             r.depth = 0;
 
-            for (const auto& l : it.value()) {
+            const auto& ledgers = groupMap.value(gName);
+            for (const auto& l : ledgers) {
                 r.opDebit += l.opDr;
                 r.opCredit += l.opCr;
                 r.periodDebit += l.periodDr;
@@ -170,15 +182,15 @@ void TrialBalanceController::calculate() {
         }
     } else if (m_mode == TrialBalanceMode::FlatGrouped || m_mode == TrialBalanceMode::NormalDetailed) {
         // Group Header followed by accounts
-        for (auto it = groupMap.begin(); it != groupMap.end(); ++it) {
-            QString gName = it.key();
+        for (const QString& gName : orderedGroupNames) {
             TrialBalanceRow gRow;
             gRow.accountName = gName;
             gRow.groupName = gName;
             gRow.isGroupHeader = true;
             gRow.depth = 0;
 
-            for (const auto& l : it.value()) {
+            const auto& ledgers = groupMap.value(gName);
+            for (const auto& l : ledgers) {
                 gRow.opDebit += l.opDr;
                 gRow.opCredit += l.opCr;
                 gRow.periodDebit += l.periodDr;
@@ -200,7 +212,7 @@ void TrialBalanceController::calculate() {
             m_totals.totalCloseDebit += gRow.closeDebit;
             m_totals.totalCloseCredit += gRow.closeCredit;
 
-            for (const auto& l : it.value()) {
+            for (const auto& l : ledgers) {
                 TrialBalanceRow r;
                 r.ledgerId = l.id;
                 r.accountName = l.name;

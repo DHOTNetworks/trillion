@@ -1,5 +1,6 @@
 #include "ledger_pipeline.h"
 #include "../database_manager.h"
+#include "../models/account_classifier.h"
 #include "data_preprocessor.h"
 #include <QMutexLocker>
 #include <cmath>
@@ -303,6 +304,89 @@ QStringList LedgerPipeline::getLedgerNames(const QString& filterGroup) {
     return names;
 }
 
+QVariantList LedgerPipeline::searchLedgers(const QString& query, int filterGroupId, int limit) {
+    QMutexLocker locker(&m_mutex);
+    ensureLoaded();
+
+    QString q = query.trimmed().toLower();
+    QVariantList results;
+    QVector<int> validGroupIds;
+    if (filterGroupId > 0) {
+        validGroupIds = GroupHierarchyPipeline::instance().getSubtreeGroupIds(filterGroupId);
+        validGroupIds.append(filterGroupId);
+    }
+
+    for (const auto& node : m_byId) {
+        if (filterGroupId > 0 && !validGroupIds.contains(node.groupId)) {
+            continue;
+        }
+        if (!q.isEmpty()) {
+            bool matches = node.name.toLower().contains(q) ||
+                            node.city.toLower().contains(q) ||
+                            node.station.toLower().contains(q) ||
+                            node.mobile.contains(q) ||
+                            node.gstin.toLower().contains(q);
+            if (!matches) continue;
+        }
+
+        QVariantMap m;
+        m["id"] = node.id;
+        m["legacy_id"] = node.legacyId;
+        m["name"] = node.name;
+        m["group_id"] = node.groupId;
+        m["group_name"] = node.groupName;
+        m["city"] = node.city;
+        m["station"] = node.station;
+        m["mobile"] = node.mobile;
+        m["gstin"] = node.gstin;
+        m["pan"] = node.pan;
+        m["opening_balance"] = node.openingBalance;
+        m["balance_type"] = node.openingBalanceType;
+        m["credit_limit"] = node.creditLimit;
+        m["credit_days"] = node.creditDays;
+        results.append(m);
+
+        if (limit > 0 && results.size() >= limit) break;
+    }
+    return results;
+}
+
+QVariantList LedgerPipeline::searchLedgersByRootCode(const QString& query, int rootCode, int limit) {
+    AccountGroupNode grp = GroupHierarchyPipeline::instance().getGroupByCode(rootCode);
+    if (grp.id > 0) {
+        return searchLedgers(query, grp.id, limit);
+    }
+    return searchLedgers(query, 0, limit);
+}
+
+QStringList LedgerPipeline::getLedgerNames(int filterGroupId) {
+    QMutexLocker locker(&m_mutex);
+    ensureLoaded();
+
+    QStringList names;
+    QVector<int> validGroupIds;
+    if (filterGroupId > 0) {
+        validGroupIds = GroupHierarchyPipeline::instance().getSubtreeGroupIds(filterGroupId);
+        validGroupIds.append(filterGroupId);
+    }
+
+    for (const auto& node : m_byId) {
+        if (filterGroupId <= 0 || validGroupIds.contains(node.groupId)) {
+            names << node.name;
+        }
+    }
+    names.sort(Qt::CaseInsensitive);
+    return names;
+}
+
+QStringList LedgerPipeline::getLedgerNamesByRootCode(int rootCode) {
+    AccountGroupNode grp = GroupHierarchyPipeline::instance().getGroupByCode(rootCode);
+    if (grp.id > 0) {
+        return getLedgerNames(grp.id);
+    }
+    return getLedgerNames(0);
+}
+
 bool LedgerPipeline::saveLedger(const LedgerNode& node, QString* outError) {
     QString trimmedName = node.name.trimmed();
     if (trimmedName.isEmpty()) {
@@ -310,25 +394,53 @@ bool LedgerPipeline::saveLedger(const LedgerNode& node, QString* outError) {
         return false;
     }
 
+    QString gName = node.groupName.trimmed();
+    qint64 gid = node.groupId;
+    int gCode = 0;
+
+    if (gid > 0) {
+        GroupHierarchyInfo gInfo = AccountClassifier::getGroupInfoById(gid);
+        if (gInfo.id > 0) {
+            if (gName.isEmpty()) gName = gInfo.name;
+            gCode = gInfo.code1;
+        }
+    } else if (!gName.isEmpty()) {
+        GroupHierarchyInfo gInfo = AccountClassifier::getGroupInfo(gName);
+        if (gInfo.id > 0) {
+            gid = gInfo.id;
+            gCode = gInfo.code1;
+        } else {
+            gid = AccountClassifier::ensureGroupExists(gName);
+            GroupHierarchyInfo gInfo2 = AccountClassifier::getGroupInfoById(gid);
+            gCode = gInfo2.code1;
+        }
+    }
+
+    if (gCode == 0) {
+        gCode = 8; // Sundry Debtors default
+    }
+
+    QString partyType = AccountClassifier::classifyPartyTypeForGroup(gName);
+
     bool success = false;
     if (node.id > 0) {
         success = DatabaseManager::instance().executeNonQuery(
-            "UPDATE parties SET name = ?, print_name = ?, alias = ?, group_id = ?, group_name = ?, "
+            "UPDATE parties SET name = ?, mailing_name = ?, alias = ?, group_id = ?, group_name = ?, group_code = ?, party_type = ?, "
             "opening_balance = ?, balance_type = ?, gstin = ?, pan = ?, mobile = ?, "
             "party_station = ?, city = ?, state = ?, state_code = ?, bank_name = ?, bank_account = ?, ifsc_code = ?, "
             "credit_limit = ?, credit_days = ?, interest_rate = ?, apply_tcs = ? WHERE id = ?;",
-            { trimmedName, node.printName, node.alias, node.groupId, node.groupName,
+            { trimmedName, node.printName, node.alias, gid, gName, gCode, partyType,
               node.openingBalance, node.openingBalanceType, node.gstin, node.pan, node.mobile,
               node.station, node.city, node.state, node.stateCode, node.bankName, node.bankAccount, node.ifscCode,
               node.creditLimit, node.creditDays, node.interestRate, node.isTcsApplicable ? 1 : 0, node.id }
         );
     } else {
         success = DatabaseManager::instance().executeNonQuery(
-            "INSERT INTO parties (name, print_name, alias, group_id, group_name, opening_balance, balance_type, "
+            "INSERT INTO parties (name, mailing_name, alias, group_id, group_name, group_code, party_type, opening_balance, balance_type, "
             "gstin, pan, mobile, party_station, city, state, state_code, bank_name, bank_account, ifsc_code, "
             "credit_limit, credit_days, interest_rate, apply_tcs) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-            { trimmedName, node.printName, node.alias, node.groupId, node.groupName,
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+            { trimmedName, node.printName, node.alias, gid, gName, gCode, partyType,
               node.openingBalance, node.openingBalanceType, node.gstin, node.pan, node.mobile,
               node.station, node.city, node.state, node.stateCode, node.bankName, node.bankAccount, node.ifscCode,
               node.creditLimit, node.creditDays, node.interestRate, node.isTcsApplicable ? 1 : 0 }

@@ -136,11 +136,12 @@ bool SaudaController::createDalaliSettlement(
     double tdsAmount = std::round((dalaliAmount * (tdsPct / 100.0)) * 100.0) / 100.0;
     double netDalali = dalaliAmount - tdsAmount;
 
-    QVariant bId;
-    if (brokerId > 0) {
-        QVariant chk = DatabaseManager::instance().executeScalar("SELECT id FROM parties WHERE id = ? LIMIT 1;", {brokerId});
-        if (chk.isValid() && !chk.isNull()) bId = brokerId;
+    int finalBrokerId = brokerId > 0 ? brokerId : 1;
+    if (brokerId <= 0 && !brokerName.isEmpty()) {
+        QVariant chk = DatabaseManager::instance().executeScalar("SELECT id FROM parties WHERE name = ? LIMIT 1;", {brokerName});
+        if (chk.isValid() && !chk.isNull()) finalBrokerId = chk.toInt();
     }
+
     QVariant sId;
     if (saudaId > 0) {
         QVariant chk = DatabaseManager::instance().executeScalar("SELECT id FROM sauda_contracts WHERE id = ? LIMIT 1;", {saudaId});
@@ -155,7 +156,7 @@ bool SaudaController::createDalaliSettlement(
         "  tds_pct, tds_amount, net_dalali_payable, is_posted_to_jv, narration"
         ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?);",
         {
-            fyLabel, settNo, settlementDate, bId, brokerName,
+            fyLabel, settNo, settlementDate, finalBrokerId, brokerName,
             sId, saudaNo, voucherType, voucherNo, invoiceNo, partyName,
             itemName, weightQtl, ratePerQtl, dalaliRate, dalaliAmount,
             tdsPct, tdsAmount, netDalali, narration

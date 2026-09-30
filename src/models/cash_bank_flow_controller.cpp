@@ -2,6 +2,7 @@
 #include "../database_manager.h"
 #include "../engine/accounting_engine.h"
 #include "../engine/fiscal_year_helper.h"
+#include "../engine/group_hierarchy_pipeline.h"
 #include "account_classifier.h"
 #include <QDate>
 #include <QRegularExpression>
@@ -41,17 +42,21 @@ QString CashBankFlowController::statementTitle() const {
 }
 
 bool CashBankFlowController::isCashLedger(const QString& name, const QString& groupName) const {
-    QString n = name.trimmed().toLower();
-    QString g = groupName.trimmed().toLower();
-    if (g == "cash-in-hand" || g == "cash in hand" || g == "cash") return true;
-    if (n == "cash" || n == "cash a/c" || n == "cash in hand" || n == "cash-in-hand" || n == "petty cash") return true;
+    Q_UNUSED(name);
+    AccountGroupNode g = GroupHierarchyPipeline::instance().getGroupByName(groupName);
+    if (g.id > 0) {
+        return AccountClassifier::isDescendantOf(g.code1, g.code2, g.code3, g.code4, StandardGroupCode::CashInHand);
+    }
     return false;
 }
 
 bool CashBankFlowController::isBankLedger(const QString& name, const QString& groupName) const {
-    if (isCashLedger(name, groupName)) return false;
-    QString g = groupName.trimmed().toLower();
-    if (g == "bank(s) a/c" || g == "bank accounts" || g == "bank account" || g == "secured loans") return true;
+    Q_UNUSED(name);
+    AccountGroupNode g = GroupHierarchyPipeline::instance().getGroupByName(groupName);
+    if (g.id > 0) {
+        return AccountClassifier::isDescendantOf(g.code1, g.code2, g.code3, g.code4, StandardGroupCode::BankAccounts) ||
+               AccountClassifier::isDescendantOf(g.code1, g.code2, g.code3, g.code4, StandardGroupCode::SecuredLoansCC);
+    }
     return false;
 }
 
@@ -103,10 +108,9 @@ void CashBankFlowController::recalculate() {
         int c3 = p.value("c3").toInt();
         int c4 = p.value("c4").toInt();
 
-        bool isCash = AccountClassifier::isDescendantOf(c1, c2, c3, c4, StandardGroupCode::CashInHand) || isCashLedger(pName, gName);
+        bool isCash = AccountClassifier::isDescendantOf(c1, c2, c3, c4, StandardGroupCode::CashInHand);
         bool isBank = !isCash && (AccountClassifier::isDescendantOf(c1, c2, c3, c4, StandardGroupCode::BankAccounts) ||
-                                  AccountClassifier::isDescendantOf(c1, c2, c3, c4, StandardGroupCode::SecuredLoansCC) ||
-                                  isBankLedger(pName, gName));
+                                  AccountClassifier::isDescendantOf(c1, c2, c3, c4, StandardGroupCode::SecuredLoansCC));
 
         if (isCash) {
             cashAccountNames.insert(pName);

@@ -99,7 +99,11 @@ public:
 
     // Search & Feeding API for UI components (AccountSearchBox, etc.)
     QVariantList searchLedgers(const QString& query, const QString& filterGroup = "", int limit = 50);
+    QVariantList searchLedgers(const QString& query, int filterGroupId, int limit = 50);
+    QVariantList searchLedgersByRootCode(const QString& query, int rootCode, int limit = 50);
     QStringList getLedgerNames(const QString& filterGroup = "");
+    QStringList getLedgerNames(int filterGroupId);
+    QStringList getLedgerNamesByRootCode(int rootCode);
 
     bool saveLedger(const LedgerNode& node, QString* outError = nullptr);
     bool deleteLedger(int ledgerId, QString* outError = nullptr);

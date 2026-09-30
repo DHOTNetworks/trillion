@@ -491,10 +491,15 @@ QVariantList PartiesModel::search_parties(const QString& query) const {
 }
 
 bool PartiesModel::add_party(const QString& name, const QString& ptype, const QString& phone, const QString& place, const QString& gstin, double op_bal, const QString& bal_type) {
+    QString gName = (ptype.compare("Vendor", Qt::CaseInsensitive) == 0) ? "Sundry Creditors" : "Sundry Debtors";
+    qint64 gid = AccountClassifier::ensureGroupExists(gName);
+    GroupHierarchyInfo gInfo = AccountClassifier::getGroupInfoById(gid);
+    int gCode = (gInfo.code1 > 0) ? gInfo.code1 : 8;
+
     bool ok = DatabaseManager::instance().executeNonQuery(
-        "INSERT INTO parties (name, party_type, phone, city, gstin, opening_balance, balance_type) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?);",
-        {name, ptype, phone, place, gstin, op_bal, bal_type}
+        "INSERT INTO parties (name, party_type, group_name, group_code, group_id, phone, city, gstin, opening_balance, balance_type) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+        {name, ptype, gName, gCode, gid, phone, place, gstin, op_bal, bal_type}
     );
     if (ok) reload_data();
     return ok;
@@ -732,15 +737,26 @@ bool PartiesModel::add_ledger_full(
     const QString& aadhaar, double credit_limit, int credit_days,
     const QString& bank_name, const QString& bank_account, const QString& ifsc_code
 ) {
+    QString gName = group_name.trimmed();
+    if (gName.isEmpty()) gName = "Sundry Debtors";
+    qint64 gid = AccountClassifier::ensureGroupExists(gName);
+    GroupHierarchyInfo gInfo = AccountClassifier::getGroupInfoById(gid);
+    int gCode = (gInfo.code1 > 0) ? gInfo.code1 : 8;
+
+    QString pType = party_type.trimmed();
+    if (pType.isEmpty() || pType == "General") {
+        pType = AccountClassifier::classifyPartyTypeForGroup(gName);
+    }
+
     bool ok = DatabaseManager::instance().executeNonQuery(
         "INSERT INTO parties ("
-        "name, alias, prefix, group_name, party_type, special_type, "
+        "name, alias, prefix, group_name, group_code, group_id, party_type, special_type, "
         "opening_balance, balance_type, mailing_name, address, city, district, state, "
         "pincode, phone, mobile, whatsapp, email, contact_person, gstin, pan, "
         "aadhaar, credit_limit, credit_days, bank_name, bank_account, ifsc_code"
-        ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+        ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
         {
-            name, alias, prefix, group_name, party_type, special_type,
+            name, alias, prefix, gName, gCode, gid, pType, special_type,
             opening_balance, balance_type, mailing_name, address, city, district, state,
             pincode, phone, mobile, whatsapp, email, contact_person, gstin, pan,
             aadhaar, credit_limit, credit_days, bank_name, bank_account, ifsc_code
@@ -761,14 +777,27 @@ bool PartiesModel::update_ledger_full(
     const QString& aadhaar, double credit_limit, int credit_days,
     const QString& bank_name, const QString& bank_account, const QString& ifsc_code
 ) {
+    if (party_id <= 0) return false;
+
+    QString gName = group_name.trimmed();
+    if (gName.isEmpty()) gName = "Sundry Debtors";
+    qint64 gid = AccountClassifier::ensureGroupExists(gName);
+    GroupHierarchyInfo gInfo = AccountClassifier::getGroupInfoById(gid);
+    int gCode = (gInfo.code1 > 0) ? gInfo.code1 : 8;
+
+    QString pType = party_type.trimmed();
+    if (pType.isEmpty() || pType == "General") {
+        pType = AccountClassifier::classifyPartyTypeForGroup(gName);
+    }
+
     bool ok = DatabaseManager::instance().executeNonQuery(
-        "UPDATE parties SET name = ?, alias = ?, prefix = ?, group_name = ?, party_type = ?, special_type = ?, "
+        "UPDATE parties SET name = ?, alias = ?, prefix = ?, group_name = ?, group_code = ?, group_id = ?, party_type = ?, special_type = ?, "
         "opening_balance = ?, balance_type = ?, mailing_name = ?, address = ?, city = ?, district = ?, state = ?, "
         "pincode = ?, phone = ?, mobile = ?, whatsapp = ?, email = ?, contact_person = ?, gstin = ?, pan = ?, "
         "aadhaar = ?, credit_limit = ?, credit_days = ?, bank_name = ?, bank_account = ?, ifsc_code = ? "
         "WHERE id = ?;",
         {
-            name, alias, prefix, group_name, party_type, special_type,
+            name, alias, prefix, gName, gCode, gid, pType, special_type,
             opening_balance, balance_type, mailing_name, address, city, district, state,
             pincode, phone, mobile, whatsapp, email, contact_person, gstin, pan,
             aadhaar, credit_limit, credit_days, bank_name, bank_account, ifsc_code, party_id

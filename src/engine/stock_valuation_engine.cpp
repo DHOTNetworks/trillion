@@ -435,7 +435,13 @@ bool StockValuationEngine::saveAuditedClosingStock(const QString& closingDateIso
         "SELECT id FROM financial_years WHERE year_name = ?;",
         {fyName}
     );
-    int fyId = fyIdVar.isValid() ? fyIdVar.toInt() : 1;
+    if (!fyIdVar.isValid() || fyIdVar.isNull()) {
+        fyIdVar = DatabaseManager::instance().executeScalar("SELECT id FROM financial_years WHERE ? >= start_date AND ? <= end_date LIMIT 1;", {targetDate, targetDate});
+    }
+    if (!fyIdVar.isValid() || fyIdVar.isNull()) {
+        fyIdVar = DatabaseManager::instance().executeScalar("SELECT id FROM financial_years LIMIT 1;");
+    }
+    QVariant fyIdParam = (fyIdVar.isValid() && !fyIdVar.isNull()) ? fyIdVar : QVariant();
 
     auto& db = DatabaseManager::instance();
     db.beginTransaction();
@@ -461,7 +467,7 @@ bool StockValuationEngine::saveAuditedClosingStock(const QString& closingDateIso
             "INSERT INTO custom_closing_stocks (fy_id, financial_year, closing_date, item_id, item_code, item_name, bags, weight_qtl, rate, amount) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
             {
-                (fyId > 0 ? QVariant(fyId) : QVariant()),
+                fyIdParam,
                 fyName,
                 targetDate,
                 (itm.itemId > 0 ? QVariant(itm.itemId) : QVariant()),

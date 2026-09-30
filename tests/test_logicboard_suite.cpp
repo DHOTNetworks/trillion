@@ -37,6 +37,8 @@
 #include "../src/models/debit_credit_note_controller.h"
 #include "../src/models/firm_manager.h"
 #include "../src/engine/bahi_khata_migrator.h"
+#include "../src/engine/group_hierarchy_pipeline.h"
+#include "../src/engine/ledger_pipeline.h"
 #include "../src/database_manager.h"
 #include "../src/engine/fiscal_year_helper.h"
 #include "../src/engine/balance_sheet_calculator.h"
@@ -134,6 +136,9 @@ private slots:
     void testBardanaControllerWorkflow();
     void testGateRegisterControllerWorkflow();
     void testSaudaContractAndDalaliSettlementWorkflow();
+
+    // 17. 4-Code Structure Enforcement for New Groups & Ledgers
+    void testNewGroupAndLedgerFourCodeStructure();
 };
 
 #include "mdbtools.h"
@@ -2022,6 +2027,90 @@ void LogicBoardTestSuite::testSaudaContractAndDalaliSettlementWorkflow() {
     QCOMPARE(totalCr.toDouble(), 4000.00); // Broker Cr (3800) + TDS 194H Cr (200)
 
     qDebug() << "[TEST] Sauda Forward Contract & Dalali Double-Entry Settlement verified successfully!";
+}
+
+void LogicBoardTestSuite::testNewGroupAndLedgerFourCodeStructure() {
+    // 1. Test Creating a Custom Group under Sundry Debtors (code 8)
+    QString errMsg;
+    QString customGroupName = "North Zone Rice Debtors";
+    bool okGroup1 = AccountClassifier::createOrUpdateGroup(0, customGroupName, "Sundry Debtors", "Assets", "Test Group", true, &errMsg);
+    QVERIFY2(okGroup1, qPrintable(errMsg));
+
+    GroupHierarchyInfo g1 = AccountClassifier::getGroupInfo(customGroupName);
+    QVERIFY(g1.id > 0);
+    QVERIFY(g1.code1 >= 100);
+    QCOMPARE(g1.code2, 8); // Parent Sundry Debtors
+    QCOMPARE(g1.code3, 2); // Grandparent Current Assets
+    QCOMPARE(g1.code4, 0);
+    QCOMPARE(g1.nature, QString("Assets"));
+
+    // 2. Test Creating a Nested Sub-Group under the Custom Group
+    QString subGroupName = "Ludhiana Rice Mill Buyers";
+    bool okGroup2 = GroupHierarchyPipeline::instance().saveGroup(0, subGroupName, customGroupName, "Assets", 1, false, &errMsg);
+    QVERIFY2(okGroup2, qPrintable(errMsg));
+
+    GroupHierarchyInfo g2 = AccountClassifier::getGroupInfo(subGroupName);
+    QVERIFY(g2.id > 0);
+    QVERIFY(g2.code1 > g1.code1);
+    QCOMPARE(g2.code2, g1.code1); // Parent is North Zone Rice Debtors
+    QCOMPARE(g2.code3, 8);        // Grandparent is Sundry Debtors
+    QCOMPARE(g2.code4, 2);        // Great-grandparent is Current Assets
+
+    // 3. Test Mathematical Ancestor Hierarchy Check (0 string matching)
+    QVERIFY(AccountClassifier::isDescendantOf(g2.code1, g2.code2, g2.code3, g2.code4, StandardGroupCode::SundryDebtors));
+    QVERIFY(AccountClassifier::isDescendantOf(g2.code1, g2.code2, g2.code3, g2.code4, StandardGroupCode::CurrentAssets));
+    QVERIFY(!AccountClassifier::isDescendantOf(g2.code1, g2.code2, g2.code3, g2.code4, StandardGroupCode::SundryCreditors));
+
+    // 4. Test Creating a New Ledger under the Sub-Group via PartiesModel
+    PartiesModel partiesModel;
+    QVariantMap ledgerData;
+    QString ledgerName = "Ludhiana Basmati Mills Ltd";
+    ledgerData["name"] = ledgerName;
+    ledgerData["group_name"] = subGroupName;
+    ledgerData["opening_balance"] = 150000.00;
+    ledgerData["balance_type"] = "Dr";
+    ledgerData["city"] = "Ludhiana";
+
+    bool okLedger = partiesModel.add_ledger_extended(ledgerData);
+    QVERIFY(okLedger);
+
+    // Verify database record has correct integer group_id, group_code, and party_type
+    QVariantList pRows = DatabaseManager::instance().executeQuery(
+        "SELECT id, group_name, group_id, group_code, party_type, opening_balance FROM parties WHERE name = ? LIMIT 1;",
+        {ledgerName}
+    );
+    QVERIFY(!pRows.isEmpty());
+    QVariantMap pMap = pRows.first().toMap();
+    QCOMPARE(pMap.value("group_name").toString(), subGroupName);
+    QCOMPARE(pMap.value("group_id").toLongLong(), g2.id);
+    QCOMPARE(pMap.value("group_code").toInt(), g2.code1);
+    QCOMPARE(pMap.value("party_type").toString(), QString("Buyer"));
+
+    // 5. Test Creating a Ledger via LedgerPipeline
+    LedgerNode pipelineNode;
+    QString pipeLedgerName = "Khanna Agro Exports";
+    pipelineNode.name = pipeLedgerName;
+    pipelineNode.groupId = g2.id;
+    pipelineNode.groupName = subGroupName;
+    pipelineNode.openingBalance = 250000.00;
+    pipelineNode.openingBalanceType = "Dr";
+    pipelineNode.city = "Khanna";
+
+    bool okPipeLedger = LedgerPipeline::instance().saveLedger(pipelineNode, &errMsg);
+    QVERIFY2(okPipeLedger, qPrintable(errMsg));
+
+    QVariantList pipeRows = DatabaseManager::instance().executeQuery(
+        "SELECT id, group_name, group_id, group_code, party_type, opening_balance FROM parties WHERE name = ? LIMIT 1;",
+        {pipeLedgerName}
+    );
+    QVERIFY(!pipeRows.isEmpty());
+    QVariantMap pipeMap = pipeRows.first().toMap();
+    QCOMPARE(pipeMap.value("group_name").toString(), subGroupName);
+    QCOMPARE(pipeMap.value("group_id").toLongLong(), g2.id);
+    QCOMPARE(pipeMap.value("group_code").toInt(), g2.code1);
+    QCOMPARE(pipeMap.value("party_type").toString(), QString("Buyer"));
+
+    qDebug() << "[TEST] 4-code structure hierarchy and ledger generation verified successfully!";
 }
 
 QTEST_MAIN(LogicBoardTestSuite)
