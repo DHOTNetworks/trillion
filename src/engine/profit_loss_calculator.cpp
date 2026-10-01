@@ -209,12 +209,12 @@ ProfitLossData ProfitLossCalculator::calculate(const QString& requestedFromDate,
         if (pId > 0 && sumTradingByPartyId.contains(pId)) {
             tDr = sumTradingByPartyId[pId].dr;
             tCr = sumTradingByPartyId[pId].cr;
-        } else if (legId > 0 && sumTradingByLegacyId.contains(legId)) {
-            tDr = sumTradingByLegacyId[legId].dr;
-            tCr = sumTradingByLegacyId[legId].cr;
         } else if (sumTradingByName.contains(name.toLower())) {
             tDr = sumTradingByName[name.toLower()].dr;
             tCr = sumTradingByName[name.toLower()].cr;
+        } else if (legId > 0 && sumTradingByLegacyId.contains(legId)) {
+            tDr = sumTradingByLegacyId[legId].dr;
+            tCr = sumTradingByLegacyId[legId].cr;
         }
 
         ProfitLossItem itm;
@@ -263,12 +263,12 @@ ProfitLossData ProfitLossCalculator::calculate(const QString& requestedFromDate,
                 if (pId > 0 && sumCumulativeByPartyId.contains(pId)) {
                     cDr = sumCumulativeByPartyId[pId].dr;
                     cCr = sumCumulativeByPartyId[pId].cr;
-                } else if (legId > 0 && sumCumulativeByLegacyId.contains(legId)) {
-                    cDr = sumCumulativeByLegacyId[legId].dr;
-                    cCr = sumCumulativeByLegacyId[legId].cr;
                 } else if (sumCumulativeByName.contains(name.toLower())) {
                     cDr = sumCumulativeByName[name.toLower()].dr;
                     cCr = sumCumulativeByName[name.toLower()].cr;
+                } else if (legId > 0 && sumCumulativeByLegacyId.contains(legId)) {
+                    cDr = sumCumulativeByLegacyId[legId].dr;
+                    cCr = sumCumulativeByLegacyId[legId].cr;
                 }
 
                 if (AccountClassifier::isDescendantOf(info.c1, info.c2, info.c3, info.c4, 16) || info.nature == "Income") {

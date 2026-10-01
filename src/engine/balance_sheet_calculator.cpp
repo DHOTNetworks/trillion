@@ -180,14 +180,14 @@ BalanceSheetData BalanceSheetCalculator::calculate(const QString& requestedAsOnD
         if (pId > 0 && sumByPartyId.contains(pId)) {
             transDr = sumByPartyId[pId].dr;
             transCr = sumByPartyId[pId].cr;
-        } else if (legId > 0 && sumByLegacyId.contains(legId)) {
-            transDr = sumByLegacyId[legId].dr;
-            transCr = sumByLegacyId[legId].cr;
         } else {
             QString pLower = pName.toLower();
             if (sumByName.contains(pLower)) {
                 transDr = sumByName[pLower].dr;
                 transCr = sumByName[pLower].cr;
+            } else if (legId > 0 && sumByLegacyId.contains(legId)) {
+                transDr = sumByLegacyId[legId].dr;
+                transCr = sumByLegacyId[legId].cr;
             }
         }
 

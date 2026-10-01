@@ -149,6 +149,100 @@ static QString computeFy(const QString& isoDate) {
     }
 }
 
+struct BusyGroupMeta {
+    int code1st = 0;
+    int code2nd = 0;
+    QString nature = "Assets";
+    int extractBs = 1;
+};
+
+static BusyGroupMeta mapBusyGroup(int code, const std::string& name, int parentCode, const std::map<int, std::string>& groupNameMap, const std::map<int, std::map<std::string, std::string>>& busyMasterMap) {
+    QString qName = QString::fromStdString(name).trimmed().toLower();
+
+    // Standard Busy MasterType=1 Account Groups
+    switch (code) {
+        case 101: return {1, 0, "Liabilities", 1};  // Capital Account
+        case 102: return {2, 0, "Assets", 1};       // Current Assets
+        case 103: return {9, 0, "Liabilities", 1};  // Current Liabilities
+        case 104: return {14, 0, "Assets", 1};      // Fixed Assets
+        case 105: return {2, 0, "Assets", 1};       // Investments
+        case 106: return {13, 0, "Liabilities", 1}; // Loans (Liability)
+        case 107: return {17, 15, "Expense", 0};    // Pre-Operative Expenses
+        case 108: return {15, 0, "Liabilities", 1}; // Profit & Loss
+        case 109: return {18, 0, "Expense", 0};     // Revenue Accounts
+        case 110: return {25, 0, "Liabilities", 1}; // Suspense Account
+        case 111: return {4, 2, "Assets", 1};       // Cash-in-hand
+        case 112: return {3, 2, "Assets", 1};       // Bank Accounts
+        case 113: return {26, 2, "Assets", 1};      // Securities & Deposits (Asset)
+        case 114: return {6, 2, "Assets", 1};       // Loans & Advances (Asset)
+        case 115: return {7, 2, "Assets", 0};       // Stock-in-hand
+        case 116: return {8, 2, "Assets", 1};       // Sundry Debtors
+        case 117: return {11, 9, "Liabilities", 1}; // Sundry Creditors
+        case 118: return {10, 9, "Liabilities", 1}; // Duties & Taxes
+        case 119: return {12, 9, "Liabilities", 1}; // Provisions/Expenses Payable
+        case 120: return {28, 13, "Liabilities", 1};// Secured Loans
+        case 121: return {29, 13, "Liabilities", 1};// Unsecured Loans
+        case 122: return {19, 18, "Expense", 0};    // Purchase
+        case 123: return {20, 18, "Income", 0};     // Sale
+        case 124: return {23, 22, "Expense", 0};    // Expenses (Direct/Mfg.)
+        case 125: return {17, 15, "Expense", 0};    // Expenses (Indirect/Admn.)
+        case 126: return {16, 15, "Income", 0};     // Income (Direct/Opr.)
+        case 127: return {16, 15, "Income", 0};     // Income (Indirect)
+        case 128: return {28, 13, "Liabilities", 1};// Bank O/D Account
+        case 129: return {1, 0, "Liabilities", 1};  // Reserves & Surplus
+    }
+
+    // Name-based classification matching
+    if (qName.contains("sale") || qName.contains("selling") || qName.contains("revenue")) {
+        return {20, 18, "Income", 0};
+    }
+    if (qName.contains("purchas") || qName.contains("procurement")) {
+        return {19, 18, "Expense", 0};
+    }
+    if (qName.contains("direct exp") || qName.contains("mfg") || qName.contains("manufacturing") || qName.contains("freight inward") || qName.contains("labour")) {
+        return {23, 22, "Expense", 0};
+    }
+    if (qName.contains("indirect exp") || qName.contains("expens") || qName.contains("expenditure") || qName.contains("administrative") || qName.contains("office")) {
+        return {17, 15, "Expense", 0};
+    }
+    if (qName.contains("indirect inc") || qName.contains("income") || qName.contains("interest received") || qName.contains("discount received")) {
+        return {16, 15, "Income", 0};
+    }
+    if (qName.contains("debtor") || qName.contains("customer") || qName.contains("receivable")) {
+        return {8, 2, "Assets", 1};
+    }
+    if (qName.contains("creditor") || qName.contains("supplier") || qName.contains("vendor") || qName.contains("payable")) {
+        return {11, 9, "Liabilities", 1};
+    }
+    if (qName.contains("bank") || qName.contains("saving") || qName.contains("current ac")) {
+        return {3, 2, "Assets", 1};
+    }
+    if (qName.contains("cash")) {
+        return {4, 2, "Assets", 1};
+    }
+    if (qName.contains("tax") || qName.contains("gst") || qName.contains("duty") || qName.contains("duties") || qName.contains("tds") || qName.contains("tcs")) {
+        return {10, 9, "Liabilities", 1};
+    }
+    if (qName.contains("capital") || qName.contains("partner") || qName.contains("proprietor")) {
+        return {1, 0, "Liabilities", 1};
+    }
+    if (qName.contains("loan") || qName.contains("borrowing")) {
+        return {13, 9, "Liabilities", 1};
+    }
+    if (qName.contains("fixed asset") || qName.contains("machinery") || qName.contains("building") || qName.contains("vehicle") || qName.contains("computer")) {
+        return {14, 0, "Assets", 1};
+    }
+
+    // Inherit from parent group if available
+    if (parentCode > 0 && busyMasterMap.count(parentCode)) {
+        std::string pName = groupNameMap.count(parentCode) ? groupNameMap.at(parentCode) : "";
+        int grandParent = parseInt(getVal(busyMasterMap.at(parentCode), "ParentGrp"));
+        return mapBusyGroup(parentCode, pName, grandParent, groupNameMap, busyMasterMap);
+    }
+
+    return {0, 0, "Assets", 1};
+}
+
 #if HAS_LIBMDB
 static std::vector<std::map<std::string, std::string>> readTable(MdbHandle* mdb, const char* tableName) {
     std::vector<std::map<std::string, std::string>> result;
@@ -506,11 +600,12 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
             std::string name = kv.second;
             int parentCode = parseInt(getVal(busyMasterMap[code], "ParentGrp"));
             std::string parentName = groupNameMap.count(parentCode) ? groupNameMap[parentCode] : "Primary";
+            BusyGroupMeta meta = mapBusyGroup(code, name, parentCode, groupNameMap, busyMasterMap);
 
             db.executeNonQuery(
-                "INSERT OR REPLACE INTO account_groups (id, name, parent_group_name, nature, is_system) "
-                "VALUES (?, ?, ?, ?, ?);",
-                {code, QString::fromStdString(name), QString::fromStdString(parentName), "Assets", parentCode == 0 ? 1 : 0}
+                "INSERT OR REPLACE INTO account_groups (id, name, parent_group_name, nature, extract_in_balance_sheet, code1st, code2nd, is_system) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?);",
+                {code, QString::fromStdString(name), QString::fromStdString(parentName), meta.nature, meta.extractBs, meta.code1st, meta.code2nd, parentCode == 0 ? 1 : 0}
             );
             stats.totalGroups++;
         }
@@ -547,7 +642,17 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
             QString alias = QString::fromStdString(cleanStr(getVal(r, "Alias")));
             QString printName = QString::fromStdString(cleanStr(getVal(r, "PrintName", name.toStdString())));
             int parentCode = parseInt(getVal(r, "ParentGrp"));
-            QString groupName = QString::fromStdString(groupNameMap.count(parentCode) ? groupNameMap[parentCode] : "Sundry Debtors");
+            std::string pGroupName = groupNameMap.count(parentCode) ? groupNameMap[parentCode] : "Sundry Debtors";
+            QString groupName = QString::fromStdString(pGroupName);
+            BusyGroupMeta grpMeta = mapBusyGroup(parentCode, pGroupName, 0, groupNameMap, busyMasterMap);
+
+            QString partyType = "General";
+            if (grpMeta.code1st == 8) partyType = "Buyer";
+            else if (grpMeta.code1st == 11) partyType = "Vendor";
+            else if (grpMeta.code1st == 3) partyType = "Bank";
+            else if (grpMeta.code1st == 4) partyType = "Cash";
+            else if (grpMeta.code1st == 10) partyType = "Duties/Taxes";
+            else if (grpMeta.code1st == 19 || grpMeta.code1st == 20 || grpMeta.code1st == 23 || grpMeta.code1st == 17 || grpMeta.code1st == 16) partyType = "Nominal";
 
             QString address = "";
             QString city = "";
@@ -601,11 +706,11 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
             double crLimit = parseDouble(getVal(r, "D7"), 0.0);
 
             db.executeNonQuery(
-                "INSERT OR REPLACE INTO parties (id, legacy_id, name, alias, mailing_name, group_name, group_id, "
+                "INSERT OR REPLACE INTO parties (id, legacy_id, name, alias, mailing_name, group_name, group_id, group_code, party_type, calc_direct_expense, "
                 "address, city, state, state_code, pincode, gstin, pan, mobile, email, "
                 "bank_name, bank_account, ifsc_code, opening_balance, balance_type, credit_days, credit_limit) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-                {code, code, name, alias, printName, groupName, parentCode,
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+                {code, code, name, alias, printName, groupName, parentCode, grpMeta.code1st, partyType, (grpMeta.code1st == 23 ? 1 : 0),
                  address, city, state, stateCode, pincode, gstin, pan, mobile, email,
                  bankName, bankAc, ifsc, opBal, balType, static_cast<int>(crDays), crLimit}
             );
@@ -690,18 +795,21 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
             QString partyName = QString::fromStdString(busyMasterMap.count(partyCode) ? cleanStr(getVal(busyMasterMap[partyCode], "Name")) : "General Account");
 
             QString typeStr = "Journal";
-            if (vType == 1) typeStr = "Sales";
-            else if (vType == 2) typeStr = "Purchase";
-            else if (vType == 3) typeStr = "Payment";
-            else if (vType == 4) typeStr = "Receipt";
-            else if (vType == 6) typeStr = "Contra";
-            else if (vType == 7) typeStr = "Debit Note";
-            else if (vType == 8) typeStr = "Credit Note";
+            QString rawType = "Jrnl";
+            if (vType == 1) { typeStr = "Sales"; rawType = "Sale"; }
+            else if (vType == 2) { typeStr = "Purchase"; rawType = "Purc"; }
+            else if (vType == 3) { typeStr = "Payment"; rawType = "Pymt"; }
+            else if (vType == 4) { typeStr = "Receipt"; rawType = "Rcpt"; }
+            else if (vType == 6) { typeStr = "Contra"; rawType = "Contra"; }
+            else if (vType == 7) { typeStr = "Debit Note"; rawType = "DbNt"; }
+            else if (vType == 8) { typeStr = "Credit Note"; rawType = "CrNt"; }
+
+            QString vFy = computeFy(vDate);
 
             db.executeNonQuery(
-                "INSERT OR REPLACE INTO vouchers (id, voucher_no, voucher_type, voucher_date, amount, narration) "
-                "VALUES (?, ?, ?, ?, ?, ?);",
-                {vCode, vNo, typeStr, vDate, totalAmt, narration}
+                "INSERT OR REPLACE INTO vouchers (id, voucher_no, voucher_type, voucher_date, amount, narration, financial_year) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?);",
+                {vCode, vNo, typeStr, vDate, totalAmt, narration, vFy}
             );
             stats.totalGlVouchers++;
 
@@ -722,9 +830,9 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
 
                 db.executeNonQuery(
                     "INSERT OR REPLACE INTO sales_invoices (id, invoice_no, voucher_no, invoice_date, customer_id, customer_name, "
-                    "item_name, bag_count, weight_qtl, rate_per_qtl, taxable_amount, total_amount, narration) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-                    {vCode, vNo, vNo, vDate, partyCode, partyName, itemName, static_cast<int>(bags), weight, rate, taxAmt, totalAmt, narration}
+                    "item_name, bag_count, weight_qtl, rate_per_qtl, taxable_amount, total_amount, narration, financial_year) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+                    {vCode, vNo, vNo, vDate, partyCode, partyName, itemName, static_cast<int>(bags), weight, rate, taxAmt, totalAmt, narration, vFy}
                 );
                 stats.totalSalesInvoices++;
             } else if (vType == 2) {
@@ -744,15 +852,16 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
 
                 db.executeNonQuery(
                     "INSERT OR REPLACE INTO purchase_invoices (id, invoice_no, voucher_no, invoice_date, supplier_id, supplier_name, "
-                    "item_name, bag_count, weight_qtl, rate_per_qtl, taxable_amount, total_amount, narration) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-                    {vCode, vNo, vNo, vDate, partyCode, partyName, itemName, static_cast<int>(bags), weight, rate, taxAmt, totalAmt, narration}
+                    "item_name, bag_count, weight_qtl, rate_per_qtl, taxable_amount, total_amount, narration, financial_year) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+                    {vCode, vNo, vNo, vDate, partyCode, partyName, itemName, static_cast<int>(bags), weight, rate, taxAmt, totalAmt, narration, vFy}
                 );
                 stats.totalPurchaseInvoices++;
             }
 
             // Insert Double-Entry Ledger Splits from Tran2
-            if (t2Map.count(vCode)) {
+            if (t2Map.count(vCode) && !t2Map[vCode].empty()) {
+                int rIdx = 1;
                 for (const auto& tr : t2Map[vCode]) {
                     int accCode = parseInt(getVal(tr, "MasterCode1"));
                     QString accName = QString::fromStdString(busyMasterMap.count(accCode) ? cleanStr(getVal(busyMasterMap[accCode], "Name")) : "General Ledger");
@@ -761,15 +870,80 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
                     double d2 = parseDouble(getVal(tr, "D2"));
                     QString drCr = (recType == 1 || d1 > 0.001) ? "Dr" : "Cr";
                     double amt = (drCr == "Dr") ? (d1 > 0.001 ? d1 : d2) : (d2 > 0.001 ? d2 : d1);
+                    QString lineNar = QString::fromStdString(cleanStr(getVal(tr, "ShortNar")));
+                    if (lineNar.isEmpty()) lineNar = narration;
 
                     db.executeNonQuery(
-                        "INSERT INTO transactions (voucher_no, voucher_type, voucher_date, party_id, party_name, dr_cr, amount, narration) "
-                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?);",
-                        {vNo, typeStr, vDate, accCode, accName, drCr, amt, narration}
+                        "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_type, trans_type, voucher_date, account_code, party_id, party_name, opposing_account, dr_cr, amount, narration, row_no) "
+                        "VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+                        {vFy, vNo, typeStr, rawType, vDate, accCode, accCode, accName, partyName, drCr, amt, lineNar, rIdx++}
                     );
                     stats.totalGlTransactions++;
                     if (drCr == "Dr") stats.totalDebitSum += amt;
                     else stats.totalCreditSum += amt;
+                }
+            } else if (totalAmt > 0.0001) {
+                // Synthesize complete double-entry transaction splits if Tran2 is empty
+                if (vType == 1) {
+                    // Sales: Debit Customer, Credit Sale A/c
+                    db.executeNonQuery(
+                        "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_type, trans_type, voucher_date, account_code, party_id, party_name, opposing_account, dr_cr, amount, invoice_no, narration, taxable_amount, row_no) "
+                        "VALUES (1, ?, ?, 'Sales', 'Sale', ?, ?, ?, ?, 'Sale A/c', 'Dr', ?, ?, ?, ?, 1);",
+                        {vFy, vNo, vDate, partyCode, partyCode, partyName, totalAmt, vNo, narration, totalAmt}
+                    );
+                    db.executeNonQuery(
+                        "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_type, trans_type, voucher_date, account_code, party_id, party_name, opposing_account, dr_cr, amount, invoice_no, narration, taxable_amount, row_no) "
+                        "VALUES (1, ?, ?, 'Sales', 'Sale', ?, 4, 4, 'Sales', ?, 'Cr', ?, ?, ?, ?, 2);",
+                        {vFy, vNo, vDate, partyName, totalAmt, vNo, narration, totalAmt}
+                    );
+                    stats.totalGlTransactions += 2;
+                    stats.totalDebitSum += totalAmt;
+                    stats.totalCreditSum += totalAmt;
+                } else if (vType == 2) {
+                    // Purchase: Debit Purchase A/c, Credit Supplier
+                    db.executeNonQuery(
+                        "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_type, trans_type, voucher_date, account_code, party_id, party_name, opposing_account, dr_cr, amount, invoice_no, narration, taxable_amount, row_no) "
+                        "VALUES (1, ?, ?, 'Purchase', 'Purc', ?, 5, 5, 'Purchase', ?, 'Dr', ?, ?, ?, ?, 1);",
+                        {vFy, vNo, vDate, partyName, totalAmt, vNo, narration, totalAmt}
+                    );
+                    db.executeNonQuery(
+                        "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_type, trans_type, voucher_date, account_code, party_id, party_name, opposing_account, dr_cr, amount, invoice_no, narration, taxable_amount, row_no) "
+                        "VALUES (1, ?, ?, 'Purchase', 'Purc', ?, ?, ?, ?, 'Purchase A/c', 'Cr', ?, ?, ?, ?, 2);",
+                        {vFy, vNo, vDate, partyCode, partyCode, partyName, totalAmt, vNo, narration, totalAmt}
+                    );
+                    stats.totalGlTransactions += 2;
+                    stats.totalDebitSum += totalAmt;
+                    stats.totalCreditSum += totalAmt;
+                } else if (vType == 3) {
+                    // Payment: Debit Party, Credit Cash
+                    db.executeNonQuery(
+                        "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_type, trans_type, voucher_date, account_code, party_id, party_name, opposing_account, dr_cr, amount, invoice_no, narration, row_no) "
+                        "VALUES (1, ?, ?, 'Payment', 'Pymt', ?, ?, ?, ?, 'Cash', 'Dr', ?, ?, ?, 1);",
+                        {vFy, vNo, vDate, partyCode, partyCode, partyName, totalAmt, vNo, narration}
+                    );
+                    db.executeNonQuery(
+                        "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_type, trans_type, voucher_date, account_code, party_id, party_name, opposing_account, dr_cr, amount, invoice_no, narration, row_no) "
+                        "VALUES (1, ?, ?, 'Payment', 'Pymt', ?, 1, 1, 'Cash', ?, 'Cr', ?, ?, ?, 2);",
+                        {vFy, vNo, vDate, partyName, totalAmt, vNo, narration}
+                    );
+                    stats.totalGlTransactions += 2;
+                    stats.totalDebitSum += totalAmt;
+                    stats.totalCreditSum += totalAmt;
+                } else if (vType == 4) {
+                    // Receipt: Debit Cash, Credit Party
+                    db.executeNonQuery(
+                        "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_type, trans_type, voucher_date, account_code, party_id, party_name, opposing_account, dr_cr, amount, invoice_no, narration, row_no) "
+                        "VALUES (1, ?, ?, 'Receipt', 'Rcpt', ?, 1, 1, 'Cash', ?, 'Dr', ?, ?, ?, 1);",
+                        {vFy, vNo, vDate, partyName, totalAmt, vNo, narration}
+                    );
+                    db.executeNonQuery(
+                        "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_type, trans_type, voucher_date, account_code, party_id, party_name, opposing_account, dr_cr, amount, invoice_no, narration, row_no) "
+                        "VALUES (1, ?, ?, 'Receipt', 'Rcpt', ?, ?, ?, ?, 'Cash', 'Cr', ?, ?, ?, 2);",
+                        {vFy, vNo, vDate, partyCode, partyCode, partyName, totalAmt, vNo, narration}
+                    );
+                    stats.totalGlTransactions += 2;
+                    stats.totalDebitSum += totalAmt;
+                    stats.totalCreditSum += totalAmt;
                 }
             }
         }

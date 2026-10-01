@@ -306,6 +306,89 @@ bool SalesModel::add_sales_invoice_full(
         return false;
     }
 
+    // 4. Guaranteed Double-Entry Ledger Posting into transactions:
+    // Delete existing transaction splits if any for idempotency
+    DatabaseManager::instance().executeNonQuery(
+        "DELETE FROM transactions WHERE (voucher_no = ? OR invoice_no = ?) AND voucher_type IN ('Sales', 'Sale');",
+        {vchNo, invNo}
+    );
+
+    QString effectiveSaleLedger = itemSaleLedger.isEmpty() ? "Sale A/c" : itemSaleLedger;
+    // Leg 1: Debit Customer for total_amount
+    DatabaseManager::instance().executeNonQuery(
+        "INSERT INTO transactions ("
+        "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
+        "account_code, party_id, party_name, opposing_account, dr_cr, amount, "
+        "invoice_no, narration, taxable_amount, row_no"
+        ") VALUES (?, ?, ?, ?, 'Sales', 'Sale', ?, ?, ?, ?, 'Dr', ?, ?, ?, ?, 1);",
+        {
+            fyId, fyLabel, vchNo, dt,
+            customerId, customerId, party_ledger, effectiveSaleLedger, total_amount,
+            invNo, vchNarr, taxable_amount
+        }
+    );
+
+    int rNo = 2;
+    // Leg 2: Credit Sales Account for taxable_amount
+    DatabaseManager::instance().executeNonQuery(
+        "INSERT INTO transactions ("
+        "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
+        "party_name, opposing_account, dr_cr, amount, "
+        "invoice_no, narration, taxable_amount, row_no"
+        ") VALUES (?, ?, ?, ?, 'Sales', 'Sale', ?, ?, 'Cr', ?, ?, ?, ?, ?);",
+        {
+            fyId, fyLabel, vchNo, dt,
+            effectiveSaleLedger, party_ledger, taxable_amount,
+            invNo, vchNarr, taxable_amount, rNo++
+        }
+    );
+
+    // Leg 3: Credit CGST Output if > 0
+    if (cgst_amount > 0.001) {
+        DatabaseManager::instance().executeNonQuery(
+            "INSERT INTO transactions ("
+            "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
+            "party_name, opposing_account, dr_cr, amount, "
+            "invoice_no, narration, row_no"
+            ") VALUES (?, ?, ?, ?, 'Sales', 'Sale', 'CGST Output', ?, 'Cr', ?, ?, ?, ?);",
+            {fyId, fyLabel, vchNo, dt, party_ledger, cgst_amount, invNo, vchNarr, rNo++}
+        );
+    }
+    // Leg 4: Credit SGST Output if > 0
+    if (sgst_amount > 0.001) {
+        DatabaseManager::instance().executeNonQuery(
+            "INSERT INTO transactions ("
+            "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
+            "party_name, opposing_account, dr_cr, amount, "
+            "invoice_no, narration, row_no"
+            ") VALUES (?, ?, ?, ?, 'Sales', 'Sale', 'SGST Output', ?, 'Cr', ?, ?, ?, ?);",
+            {fyId, fyLabel, vchNo, dt, party_ledger, sgst_amount, invNo, vchNarr, rNo++}
+        );
+    }
+    // Leg 5: Credit IGST Output if > 0
+    if (igst_amount > 0.001) {
+        DatabaseManager::instance().executeNonQuery(
+            "INSERT INTO transactions ("
+            "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
+            "party_name, opposing_account, dr_cr, amount, "
+            "invoice_no, narration, row_no"
+            ") VALUES (?, ?, ?, ?, 'Sales', 'Sale', 'IGST Output', ?, 'Cr', ?, ?, ?, ?);",
+            {fyId, fyLabel, vchNo, dt, party_ledger, igst_amount, invNo, vchNarr, rNo++}
+        );
+    }
+    // Leg 6: Round Off if != 0
+    if (std::abs(round_off) > 0.001) {
+        QString roDrCr = (round_off > 0) ? "Cr" : "Dr";
+        DatabaseManager::instance().executeNonQuery(
+            "INSERT INTO transactions ("
+            "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
+            "party_name, opposing_account, dr_cr, amount, "
+            "invoice_no, narration, row_no"
+            ") VALUES (?, ?, ?, ?, 'Sales', 'Sale', 'Round Off', ?, ?, ?, ?, ?, ?);",
+            {fyId, fyLabel, vchNo, dt, party_ledger, roDrCr, std::abs(round_off), invNo, vchNarr, rNo++}
+        );
+    }
+
     // Commit Transaction (ACID Durability Guarantee)
     DatabaseManager::instance().commit();
     reload_data();
@@ -992,6 +1075,97 @@ bool SalesModel::update_sales_invoice_full(
         );
     }
 
+    // Delete and re-insert transactions double-entry splits
+    DatabaseManager::instance().executeNonQuery(
+        "DELETE FROM transactions WHERE (voucher_no = ? OR invoice_no = ?) AND voucher_type IN ('Sales', 'Sale');",
+        {voucher_no, invoice_no}
+    );
+
+    QString itemSaleLedger = "";
+    QVariantList itemMeta = DatabaseManager::instance().executeQuery(
+        "SELECT sale_ledger, sale_ledger_id FROM stock_items WHERE id = ? LIMIT 1;",
+        {itemId}
+    );
+    if (!itemMeta.isEmpty()) {
+        itemSaleLedger = itemMeta.first().toMap().value("sale_ledger").toString().trimmed();
+    }
+    QString effectiveSaleLedger = itemSaleLedger.isEmpty() ? "Sale A/c" : itemSaleLedger;
+
+    // Leg 1: Debit Customer for total_amount
+    DatabaseManager::instance().executeNonQuery(
+        "INSERT INTO transactions ("
+        "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
+        "account_code, party_id, party_name, opposing_account, dr_cr, amount, "
+        "invoice_no, narration, taxable_amount, row_no"
+        ") VALUES (?, ?, ?, ?, 'Sales', 'Sale', ?, ?, ?, ?, 'Dr', ?, ?, ?, ?, 1);",
+        {
+            fyId, fyLabel, voucher_no, dt,
+            customerId, customerId, party_ledger, effectiveSaleLedger, total_amount,
+            invoice_no, vchNarr, taxable_amount
+        }
+    );
+
+    int tRowNo = 2;
+    // Leg 2: Credit Sales Account for taxable_amount
+    DatabaseManager::instance().executeNonQuery(
+        "INSERT INTO transactions ("
+        "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
+        "party_name, opposing_account, dr_cr, amount, "
+        "invoice_no, narration, taxable_amount, row_no"
+        ") VALUES (?, ?, ?, ?, 'Sales', 'Sale', ?, ?, 'Cr', ?, ?, ?, ?, ?);",
+        {
+            fyId, fyLabel, voucher_no, dt,
+            effectiveSaleLedger, party_ledger, taxable_amount,
+            invoice_no, vchNarr, taxable_amount, tRowNo++
+        }
+    );
+
+    // Leg 3: Credit CGST Output if > 0
+    if (cgst_amount > 0.001) {
+        DatabaseManager::instance().executeNonQuery(
+            "INSERT INTO transactions ("
+            "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
+            "party_name, opposing_account, dr_cr, amount, "
+            "invoice_no, narration, row_no"
+            ") VALUES (?, ?, ?, ?, 'Sales', 'Sale', 'CGST Output', ?, 'Cr', ?, ?, ?, ?);",
+            {fyId, fyLabel, voucher_no, dt, party_ledger, cgst_amount, invoice_no, vchNarr, tRowNo++}
+        );
+    }
+    // Leg 4: Credit SGST Output if > 0
+    if (sgst_amount > 0.001) {
+        DatabaseManager::instance().executeNonQuery(
+            "INSERT INTO transactions ("
+            "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
+            "party_name, opposing_account, dr_cr, amount, "
+            "invoice_no, narration, row_no"
+            ") VALUES (?, ?, ?, ?, 'Sales', 'Sale', 'SGST Output', ?, 'Cr', ?, ?, ?, ?);",
+            {fyId, fyLabel, voucher_no, dt, party_ledger, sgst_amount, invoice_no, vchNarr, tRowNo++}
+        );
+    }
+    // Leg 5: Credit IGST Output if > 0
+    if (igst_amount > 0.001) {
+        DatabaseManager::instance().executeNonQuery(
+            "INSERT INTO transactions ("
+            "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
+            "party_name, opposing_account, dr_cr, amount, "
+            "invoice_no, narration, row_no"
+            ") VALUES (?, ?, ?, ?, 'Sales', 'Sale', 'IGST Output', ?, 'Cr', ?, ?, ?, ?);",
+            {fyId, fyLabel, voucher_no, dt, party_ledger, igst_amount, invoice_no, vchNarr, tRowNo++}
+        );
+    }
+    // Leg 6: Round Off if != 0
+    if (std::abs(round_off) > 0.001) {
+        QString roDrCr = (round_off > 0) ? "Cr" : "Dr";
+        DatabaseManager::instance().executeNonQuery(
+            "INSERT INTO transactions ("
+            "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
+            "party_name, opposing_account, dr_cr, amount, "
+            "invoice_no, narration, row_no"
+            ") VALUES (?, ?, ?, ?, 'Sales', 'Sale', 'Round Off', ?, ?, ?, ?, ?, ?);",
+            {fyId, fyLabel, voucher_no, dt, party_ledger, roDrCr, std::abs(round_off), invoice_no, vchNarr, tRowNo++}
+        );
+    }
+
     DatabaseManager::instance().commit();
     reload_data();
     return true;
@@ -1024,11 +1198,13 @@ bool SalesModel::delete_sales_invoice(int invoice_id, const QString& invoice_no)
         DatabaseManager::instance().executeNonQuery("DELETE FROM sales_invoices WHERE invoice_no = ?;", {invNo});
         DatabaseManager::instance().executeNonQuery("DELETE FROM vouchers WHERE instrument_no = ? AND (voucher_type IN ('Sales', 'Sale') OR legacy_type IN ('Sale', 'Sales'));", {invNo});
         DatabaseManager::instance().executeNonQuery("DELETE FROM stock_transactions WHERE bill_no = ? AND trans_type IN ('Sale', 'Sales', 'S');", {invNo});
+        DatabaseManager::instance().executeNonQuery("DELETE FROM transactions WHERE (invoice_no = ? OR voucher_no = ?) AND voucher_type IN ('Sales', 'Sale');", {invNo, invNo});
     }
 
     if (!vNo.isEmpty()) {
         DatabaseManager::instance().executeNonQuery("DELETE FROM vouchers WHERE voucher_no = ? AND (voucher_type IN ('Sales', 'Sale') OR legacy_type IN ('Sale', 'Sales'));", {vNo});
         DatabaseManager::instance().executeNonQuery("DELETE FROM stock_transactions WHERE voucher_no = ? AND trans_type IN ('Sale', 'Sales', 'S');", {vNo});
+        DatabaseManager::instance().executeNonQuery("DELETE FROM transactions WHERE voucher_no = ? AND voucher_type IN ('Sales', 'Sale');", {vNo});
     }
 
     DatabaseManager::instance().commit();

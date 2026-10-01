@@ -6,17 +6,25 @@
 #include <iostream>
 #include "../database_manager.h"
 #include "../engine/bahi_khata_migrator.h"
+#include "../engine/busy_data_migrator.h"
+#include "../engine/tally_data_migrator.h"
 #include "../engine/balance_sheet_calculator.h"
 #include "../engine/profit_loss_calculator.h"
 #include "../engine/stock_valuation_engine.h"
 #include "../engine/fiscal_year_helper.h"
 #include "../engine/accounting_engine.h"
+#include "mdbtools.h"
+
+using namespace MahadevERP;
 
 void printUsage() {
     std::cout << "Financial Engine Inspection & Verification CLI\n"
               << "Usage:\n"
               << "  ./FinancialEngineCLI --migrate <mdb_path> <sqlite_db_path>\n"
+              << "  ./FinancialEngineCLI --migrate-busy <busy_folder_or_file> <sqlite_db_path>\n"
+              << "  ./FinancialEngineCLI --migrate-tally <tally_folder_or_file> <sqlite_db_path>\n"
               << "  ./FinancialEngineCLI --inspect <sqlite_db_path> [--fy <YYYY-YY> | --as-on <YYYY-MM-DD>]\n"
+              << "  ./FinancialEngineCLI --inspect-busy <busy_folder_or_file>\n"
               << "  ./FinancialEngineCLI --all\n"
               << std::endl;
 }
@@ -146,6 +154,70 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    if (args.contains("--migrate-busy")) {
+        int idx = args.indexOf("--migrate-busy");
+        if (idx + 2 >= args.size()) {
+            std::cerr << "Error: --migrate-busy requires <busy_folder_or_file> <sqlite_db_path>\n";
+            return 1;
+        }
+        QString busyPath = args[idx + 1];
+        QString dbPath = args[idx + 2];
+
+        std::cout << "Starting Busy migration from: " << busyPath.toStdString() << " -> " << dbPath.toStdString() << "\n";
+        DatabaseManager::instance().closeDatabase();
+        if (QFile::exists(dbPath)) {
+            QFile::remove(dbPath);
+        }
+        if (!DatabaseManager::instance().initDatabase(dbPath)) {
+            std::cerr << "Failed to create/init SQLite database at " << dbPath.toStdString() << "\n";
+            return 1;
+        }
+
+        BusyDataMigrator migrator;
+        bool ok = migrator.migrate_busy_data(busyPath);
+
+        if (ok) {
+            std::cout << "Busy Migration SUCCESSFUL!\n";
+            inspectDatabase(dbPath, "", "");
+            return 0;
+        } else {
+            std::cerr << "Busy Migration FAILED.\n";
+            return 1;
+        }
+    }
+
+    if (args.contains("--migrate-tally")) {
+        int idx = args.indexOf("--migrate-tally");
+        if (idx + 2 >= args.size()) {
+            std::cerr << "Error: --migrate-tally requires <tally_folder_or_file> <sqlite_db_path>\n";
+            return 1;
+        }
+        QString tallyPath = args[idx + 1];
+        QString dbPath = args[idx + 2];
+
+        std::cout << "Starting Tally migration from: " << tallyPath.toStdString() << " -> " << dbPath.toStdString() << "\n";
+        DatabaseManager::instance().closeDatabase();
+        if (QFile::exists(dbPath)) {
+            QFile::remove(dbPath);
+        }
+        if (!DatabaseManager::instance().initDatabase(dbPath)) {
+            std::cerr << "Failed to create/init SQLite database at " << dbPath.toStdString() << "\n";
+            return 1;
+        }
+
+        TallyDataMigrator migrator;
+        bool ok = migrator.migrate_tally_data(tallyPath);
+
+        if (ok) {
+            std::cout << "Tally Migration SUCCESSFUL!\n";
+            inspectDatabase(dbPath, "", "");
+            return 0;
+        } else {
+            std::cerr << "Tally Migration FAILED.\n";
+            return 1;
+        }
+    }
+
     if (args.contains("--inspect")) {
         int idx = args.indexOf("--inspect");
         if (idx + 1 >= args.size()) {
@@ -167,17 +239,31 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
-    if (args.contains("--all")) {
-        QStringList dbs = {
-            "data/sushil_trading_company_data_018.db",
-            "data/mahadev_rice_industry_data_004.db",
-            "data/sushil_kr_pardeep_kr_data_004.db"
-        };
-        for (const auto& db : dbs) {
-            if (QFile::exists(db)) {
-                inspectDatabase(db, "", "");
-            }
+    if (args.contains("--inspect-busy")) {
+        int idx = args.indexOf("--inspect-busy");
+        if (idx + 1 >= args.size()) {
+            std::cerr << "Error: --inspect-busy requires <busy_folder_or_file>\n";
+            return 1;
         }
+        QString busyPath = args[idx + 1];
+        BusyDataMigrator migrator;
+        QVariantMap insp = migrator.inspect_busy_data(busyPath);
+        std::cout << "======================================================================\n";
+        std::cout << "INSPECTING BUSY SOURCE: " << busyPath.toStdString() << "\n";
+        std::cout << "======================================================================\n";
+        std::cout << "  Company Name:       " << insp.value("companyName").toString().toStdString() << "\n";
+        std::cout << "  GSTIN:              " << insp.value("gstin").toString().toStdString() << "\n";
+        std::cout << "  Financial Year:     " << insp.value("financialYear").toString().toStdString() << "\n";
+        std::cout << "  Account Groups:     " << insp.value("groupsCount").toInt() << "\n";
+        std::cout << "  Accounts/Parties:   " << insp.value("accountsCount").toInt() << "\n";
+        std::cout << "  Stock Items:        " << insp.value("itemsCount").toInt() << "\n";
+        std::cout << "  Stock Units:        " << insp.value("unitsCount").toInt() << "\n";
+        std::cout << "  Vouchers:           " << insp.value("totalVouchersCount").toInt() << "\n";
+        std::cout << "  GL Transactions:    " << insp.value("glTransactionsCount").toInt() << "\n";
+        std::cout << "  Total Debit:        " << AccountingEngine::formatIndianCurrency(insp.value("debitSum").toDouble(), true).toStdString() << "\n";
+        std::cout << "  Total Credit:       " << AccountingEngine::formatIndianCurrency(insp.value("creditSum").toDouble(), true).toStdString() << "\n";
+        std::cout << "  GL Discrepancy:     " << AccountingEngine::formatIndianCurrency(insp.value("glDiscrepancy").toDouble(), true).toStdString() << "\n";
+        std::cout << "  Status:             " << (insp.value("isBalanced").toBool() ? "BALANCED" : "DISCREPANCY DETECTED") << "\n";
         return 0;
     }
 

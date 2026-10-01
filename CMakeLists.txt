@@ -712,6 +712,10 @@ set(CLI_SOURCES
     src/database_manager.cpp
     src/engine/bahi_khata_migrator.h
     src/engine/bahi_khata_migrator.cpp
+    src/engine/busy_data_migrator.h
+    src/engine/busy_data_migrator.cpp
+    src/engine/tally_data_migrator.h
+    src/engine/tally_data_migrator.cpp
     src/engine/balance_sheet_calculator.h
     src/engine/balance_sheet_calculator.cpp
     src/engine/profit_loss_calculator.h
