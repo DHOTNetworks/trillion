@@ -5,9 +5,9 @@
 #include <QPushButton>
 #include <QSlider>
 #include <QButtonGroup>
-#include <QRadioButton>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
+#include <QMap>
 
 class ScaleSettingsDialog : public QDialog {
     Q_OBJECT
@@ -18,25 +18,31 @@ public:
 
 private slots:
     void onSliderValueChanged(int value);
-    void onPresetButtonClicked(int id);
+    void onPresetButtonClicked(int percent);
     void onAutoDetectClicked();
     void onResetClicked();
+    void onStepDownClicked();
+    void onStepUpClicked();
     void onApplyAndSaveClicked();
     void onCancelClicked();
 
 private:
     void setupUi();
-    void updateSliderDisplay(int percent);
+    void updateScaleDisplay(int percent);
+    void updatePresetButtonStyles();
 
     int m_initialPercent = 100;
     int m_selectedPercent = 100;
 
-    QLabel* m_currentPercentLabel = nullptr;
+    QLabel* m_currentPercentBadge = nullptr;
     QLabel* m_previewSampleLabel = nullptr;
     QSlider* m_scaleSlider = nullptr;
-    QButtonGroup* m_presetGroup = nullptr;
+    QPushButton* m_minusBtn = nullptr;
+    QPushButton* m_plusBtn = nullptr;
+    QMap<int, QPushButton*> m_presetButtons;
+
     QPushButton* m_autoDetectBtn = nullptr;
-    QPushButton* m_saveBtn = nullptr;
-    QPushButton* m_cancelBtn = nullptr;
     QPushButton* m_resetBtn = nullptr;
+    QPushButton* m_cancelBtn = nullptr;
+    QPushButton* m_saveBtn = nullptr;
 };
