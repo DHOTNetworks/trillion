@@ -8,6 +8,7 @@
 #include "../src/engine/gstr3b_engine.h"
 #include "../src/engine/tds_fvu_exporter.h"
 #include "../src/engine/gstr9_engine.h"
+#include "../src/engine/busy_data_migrator.h"
 #include "../src/database_manager.h"
 
 using namespace MahadevERP;
@@ -25,6 +26,7 @@ private slots:
     void testGstr3BEngineCalculationAndExcelExport();
     void testTdsFvuExporter();
     void testGstr9AnnualReturnEngine();
+    void testBusyDataMigratorInspectionAndMigration();
 };
 
 void TestEnginesSuite::initTestCase() {
@@ -296,5 +298,68 @@ void TestEnginesSuite::testGstr9AnnualReturnEngine() {
     QVERIFY(csv.contains("4A,Supplies to Registered Persons (B2B)"));
 }
 
+void TestEnginesSuite::testBusyDataMigratorInspectionAndMigration() {
+    BusyDataMigrator migrator;
+
+    // Test directory inspection of busy-data
+    QVariantMap inspDir = migrator.inspect_busy_data("busy-data");
+    QVERIFY(inspDir.value("valid").toBool());
+    QCOMPARE(inspDir.value("sourceType").toString(), "Busy");
+    QCOMPARE(inspDir.value("companyName").toString(), "Mahadev Busy Test");
+    QVERIFY(inspDir.value("accountsCount").toInt() >= 50);
+    QVERIFY(inspDir.value("groupsCount").toInt() >= 20);
+    QVERIFY(inspDir.value("itemsCount").toInt() >= 2);
+    QVERIFY(inspDir.value("unitsCount").toInt() >= 4);
+    QVERIFY(inspDir.value("isBalanced").toBool());
+    QVERIFY(inspDir.value("glDiscrepancy").toDouble() < 0.01);
+
+    // Test direct .bds file inspection
+    QVariantMap inspFile = migrator.inspect_busy_data("busy-data/DATA/db12026.bds");
+    QVERIFY(inspFile.value("valid").toBool());
+    QCOMPARE(inspFile.value("sourceType").toString(), "Busy");
+
+    // Test full migration into test database environment
+    // Use an isolated temporary SQLite DB for migration verification
+    QString testDbPath = "build/test_busy_migration.db";
+    if (QFile::exists(testDbPath)) {
+        QFile::remove(testDbPath);
+    }
+
+    // Initialize isolated SQLite database
+    DatabaseManager::instance().initDatabase(testDbPath);
+
+    bool migrationSuccess = migrator.migrate_busy_data("busy-data");
+    QVERIFY(migrationSuccess);
+
+    // Verify imported masters and transactions in SQLite
+    // 1. Verify Master Accounts and Groups imported
+    int accCount = DatabaseManager::instance().executeScalar("SELECT COUNT(*) FROM parties;").toInt();
+    QVERIFY(accCount >= 50);
+
+    int grpCount = DatabaseManager::instance().executeScalar("SELECT COUNT(*) FROM account_groups;").toInt();
+    QVERIFY(grpCount >= 20);
+
+    // 2. Verify Stock Items imported
+    int itmCount = DatabaseManager::instance().executeScalar("SELECT COUNT(*) FROM stock_items;").toInt();
+    QVERIFY(itmCount >= 2);
+
+    int unitCount = DatabaseManager::instance().executeScalar("SELECT COUNT(*) FROM stock_units;").toInt();
+    QVERIFY(unitCount >= 4);
+
+    // 3. Verify Double-Entry GL Invariance in target SQLite database: SUM(Dr) == SUM(Cr)
+    QVariantList glRows = DatabaseManager::instance().executeQuery("SELECT SUM(CASE WHEN dr_cr='Dr' THEN amount ELSE 0 END) as tot_dr, SUM(CASE WHEN dr_cr='Cr' THEN amount ELSE 0 END) as tot_cr FROM transactions;");
+    double totalDr = 0.0;
+    double totalCr = 0.0;
+    if (!glRows.isEmpty()) {
+        totalDr = glRows.first().toMap().value("tot_dr").toDouble();
+        totalCr = glRows.first().toMap().value("tot_cr").toDouble();
+    }
+    QVERIFY(std::abs(totalDr - totalCr) < 0.01);
+
+    // Restore standard test database
+    DatabaseManager::instance().initDatabase("data/mahadev_rice_industry_data_002.db");
+}
+
 QTEST_MAIN(TestEnginesSuite)
 #include "test_engines.moc"
+

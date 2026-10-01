@@ -7,6 +7,7 @@
 #include <QStackedWidget>
 #include <QGridLayout>
 #include "../engine/bahi_khata_migrator.h"
+#include "../engine/busy_data_migrator.h"
 #include "../models/firm_manager.h"
 
 class MdbMigrationDialog : public QDialog {
@@ -35,15 +36,17 @@ private slots:
 private:
     void setupUi();
     void inspectFile();
-    QWidget* createStatCard(const QString& title, QLabel** outValLabel, const QString& bgColor, const QString& borderColor, const QString& numColor, const QString& labelColor);
+    QWidget* createStatCard(const QString& title, QLabel** outValLabel, QLabel** outTitleLabel, const QString& bgColor, const QString& borderColor, const QString& numColor, const QString& labelColor);
 
     BahiKhataMigrator* m_migrator = nullptr;
+    MahadevERP::BusyDataMigrator* m_busyMigrator = nullptr;
     FirmManager* m_firmMgr = nullptr;
     QString m_filePath;
     QString m_firmName;
     QString m_firmId;
 
     bool m_hasCompleted = false;
+    bool m_isBusy = false;
     QVariantMap m_inspectionData;
 
     // Header & file selection
@@ -55,9 +58,13 @@ private:
     QStackedWidget* m_previewStack = nullptr;
     QLabel* m_emptyPlaceholderLabel = nullptr;
     QLabel* m_stockTxLabel = nullptr;
+    QLabel* m_stockTxTitleLabel = nullptr;
     QLabel* m_millingLabel = nullptr;
+    QLabel* m_millingTitleLabel = nullptr;
     QLabel* m_stockItemsLabel = nullptr;
+    QLabel* m_stockItemsTitleLabel = nullptr;
     QLabel* m_ledgersLabel = nullptr;
+    QLabel* m_ledgersTitleLabel = nullptr;
     QLabel* m_successMessageLabel = nullptr;
 
     // Progress Section
@@ -70,4 +77,5 @@ private:
     QPushButton* m_startBtn = nullptr;
     QPushButton* m_closeBtn = nullptr;
 };
+
 

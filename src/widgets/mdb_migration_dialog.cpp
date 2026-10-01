@@ -22,6 +22,7 @@ MdbMigrationDialog::MdbMigrationDialog(BahiKhataMigrator* migrator,
     , m_firmName(firmName)
     , m_firmId(firmId)
 {
+    m_busyMigrator = new MahadevERP::BusyDataMigrator(this);
     setWindowTitle("Database Migration & Sync");
     setModal(true);
     setFixedSize(620, 540);
@@ -31,7 +32,7 @@ MdbMigrationDialog::MdbMigrationDialog(BahiKhataMigrator* migrator,
     }
 }
 
-QWidget* MdbMigrationDialog::createStatCard(const QString& title, QLabel** outValLabel, const QString& bgColor, const QString& borderColor, const QString& numColor, const QString& labelColor) {
+QWidget* MdbMigrationDialog::createStatCard(const QString& title, QLabel** outValLabel, QLabel** outTitleLabel, const QString& bgColor, const QString& borderColor, const QString& numColor, const QString& labelColor) {
     QFrame* card = new QFrame(this);
     card->setStyleSheet(QString(
         "QFrame { background-color: %1; border: 1px solid %2; border-radius: 8px; }"
@@ -53,6 +54,7 @@ QWidget* MdbMigrationDialog::createStatCard(const QString& title, QLabel** outVa
     layout->addWidget(titleLabel);
 
     if (outValLabel) *outValLabel = valLabel;
+    if (outTitleLabel) *outTitleLabel = titleLabel;
     return card;
 }
 
@@ -179,10 +181,10 @@ void MdbMigrationDialog::setupUi() {
     grid->setHorizontalSpacing(16);
     grid->setVerticalSpacing(12);
 
-    grid->addWidget(createStatCard("Stock Transactions", &m_stockTxLabel, "#F0FDF4", "#BBF7D0", "#166534", "#15803D"), 0, 0);
-    grid->addWidget(createStatCard("Milling Vouchers", &m_millingLabel, "#EFF6FF", "#BFDBFE", "#1E40AF", "#1D4ED8"), 0, 1);
-    grid->addWidget(createStatCard("Stock Items", &m_stockItemsLabel, "#FAF5FF", "#E9D5FF", "#6B21A8", "#7E22CE"), 1, 0);
-    grid->addWidget(createStatCard("Master Ledgers", &m_ledgersLabel, "#FFFBEB", "#FDE68A", "#92400E", "#B45309"), 1, 1);
+    grid->addWidget(createStatCard("Stock Transactions", &m_stockTxLabel, &m_stockTxTitleLabel, "#F0FDF4", "#BBF7D0", "#166534", "#15803D"), 0, 0);
+    grid->addWidget(createStatCard("Milling Vouchers", &m_millingLabel, &m_millingTitleLabel, "#EFF6FF", "#BFDBFE", "#1E40AF", "#1D4ED8"), 0, 1);
+    grid->addWidget(createStatCard("Stock Items", &m_stockItemsLabel, &m_stockItemsTitleLabel, "#FAF5FF", "#E9D5FF", "#6B21A8", "#7E22CE"), 1, 0);
+    grid->addWidget(createStatCard("Master Ledgers", &m_ledgersLabel, &m_ledgersTitleLabel, "#FFFBEB", "#FDE68A", "#92400E", "#B45309"), 1, 1);
     m_previewStack->addWidget(statsPage);
 
     // Page 2: Success Message View
@@ -282,6 +284,10 @@ void MdbMigrationDialog::setupUi() {
         connect(m_migrator, &BahiKhataMigrator::migrationProgress, this, &MdbMigrationDialog::onMigrationProgress);
         connect(m_migrator, &BahiKhataMigrator::migrationFinished, this, &MdbMigrationDialog::onMigrationFinished);
     }
+    if (m_busyMigrator) {
+        connect(m_busyMigrator, &MahadevERP::BusyDataMigrator::migrationProgress, this, &MdbMigrationDialog::onMigrationProgress);
+        connect(m_busyMigrator, &MahadevERP::BusyDataMigrator::migrationFinished, this, &MdbMigrationDialog::onMigrationFinished);
+    }
 }
 
 void MdbMigrationDialog::onBrowseClicked() {
@@ -289,7 +295,7 @@ void MdbMigrationDialog::onBrowseClicked() {
     if (!m_filePath.isEmpty()) {
         startDir = QFileInfo(m_filePath).absolutePath();
     }
-    QString picked = QFileDialog::getOpenFileName(this, "Select Bahi-Khata Database File", startDir, "Bahi-Khata Databases (Data.* *.0* *.mdb *.accdb);;All Files (*.*)");
+    QString picked = QFileDialog::getOpenFileName(this, "Select Accounting Database File", startDir, "All Supported Accounting Databases (Data.* *.bds *.0* *.mdb *.accdb DISK1.DB);;Busy Databases (*.bds DISK1.DB);;Bahi-Khata Databases (Data.* *.0* *.mdb *.accdb);;All Files (*.*)");
     if (!picked.isEmpty()) {
         m_filePath = picked;
         m_fileLabel->setText(m_filePath);
@@ -299,32 +305,71 @@ void MdbMigrationDialog::onBrowseClicked() {
 }
 
 void MdbMigrationDialog::inspectFile() {
-    if (!m_migrator || m_filePath.isEmpty()) {
+    if (m_filePath.isEmpty()) {
         m_previewStack->setCurrentIndex(0);
         m_startBtn->setVisible(false);
         return;
     }
 
-    m_inspectionData = m_migrator->inspect_mdb_file(m_filePath);
+    // First try Busy Data Migrator
+    m_isBusy = false;
+    if (m_busyMigrator) {
+        m_inspectionData = m_busyMigrator->inspect_busy_data(m_filePath);
+        if (m_inspectionData.value("valid", false).toBool()) {
+            m_isBusy = true;
+        }
+    }
+
+    if (!m_isBusy && m_migrator) {
+        m_inspectionData = m_migrator->inspect_mdb_file(m_filePath);
+    }
+
     bool valid = m_inspectionData.value("valid", false).toBool();
 
     if (valid) {
-        int txCount = m_inspectionData.value("stockTxCount", 0).toInt();
-        int millingCount = m_inspectionData.value("millingCount", 0).toInt();
-        int itmCount = m_inspectionData.value("stockItemsCount", 0).toInt();
-        int ledgersCount = m_inspectionData.value("ledgersCount", 0).toInt();
+        if (m_isBusy) {
+            int vchCount = m_inspectionData.value("totalVouchersCount", 0).toInt();
+            int glTxCount = m_inspectionData.value("glTransactionsCount", 0).toInt();
+            int itemsCount = m_inspectionData.value("itemsCount", 0).toInt();
+            int accountsCount = m_inspectionData.value("accountsCount", 0).toInt();
 
-        if (m_stockTxLabel) m_stockTxLabel->setText(QString::number(txCount));
-        if (m_millingLabel) m_millingLabel->setText(QString::number(millingCount));
-        if (m_stockItemsLabel) m_stockItemsLabel->setText(QString::number(itmCount));
-        if (m_ledgersLabel) m_ledgersLabel->setText(QString::number(ledgersCount));
+            if (m_stockTxTitleLabel) m_stockTxTitleLabel->setText("Vouchers & Invoices");
+            if (m_millingTitleLabel) m_millingTitleLabel->setText("GL Transactions");
+            if (m_stockItemsTitleLabel) m_stockItemsTitleLabel->setText("Stock Items");
+            if (m_ledgersTitleLabel) m_ledgersTitleLabel->setText("Master Accounts");
+
+            if (m_stockTxLabel) m_stockTxLabel->setText(QString::number(vchCount));
+            if (m_millingLabel) m_millingLabel->setText(QString::number(glTxCount));
+            if (m_stockItemsLabel) m_stockItemsLabel->setText(QString::number(itemsCount));
+            if (m_ledgersLabel) m_ledgersLabel->setText(QString::number(accountsCount));
+
+            QString comp = m_inspectionData.value("companyName").toString();
+            if (m_firmName.isEmpty() && !comp.isEmpty()) {
+                m_firmName = comp;
+            }
+        } else {
+            int txCount = m_inspectionData.value("stockTxCount", 0).toInt();
+            int millingCount = m_inspectionData.value("millingCount", 0).toInt();
+            int itmCount = m_inspectionData.value("stockItemsCount", 0).toInt();
+            int ledgersCount = m_inspectionData.value("ledgersCount", 0).toInt();
+
+            if (m_stockTxTitleLabel) m_stockTxTitleLabel->setText("Stock Transactions");
+            if (m_millingTitleLabel) m_millingTitleLabel->setText("Milling Vouchers");
+            if (m_stockItemsTitleLabel) m_stockItemsTitleLabel->setText("Stock Items");
+            if (m_ledgersTitleLabel) m_ledgersTitleLabel->setText("Master Ledgers");
+
+            if (m_stockTxLabel) m_stockTxLabel->setText(QString::number(txCount));
+            if (m_millingLabel) m_millingLabel->setText(QString::number(millingCount));
+            if (m_stockItemsLabel) m_stockItemsLabel->setText(QString::number(itmCount));
+            if (m_ledgersLabel) m_ledgersLabel->setText(QString::number(ledgersCount));
+        }
 
         m_previewStack->setCurrentIndex(1);
         m_startBtn->setVisible(true);
         m_startBtn->setEnabled(true);
     } else {
         QString err = m_inspectionData.value("error").toString();
-        m_emptyPlaceholderLabel->setText(err.isEmpty() ? "Unable to open Jet database file. Ensure it is a valid .mdb / Data.*** file." : err);
+        m_emptyPlaceholderLabel->setText(err.isEmpty() ? "Unable to open Jet database file. Ensure it is a valid Busy (.bds) or Bahi-Khata (.mdb) database." : err);
         m_emptyPlaceholderLabel->setStyleSheet("font-size: 13px; font-weight: 700; color: #DC2626; border: none; background: transparent;");
         m_previewStack->setCurrentIndex(0);
         m_startBtn->setVisible(false);
@@ -332,7 +377,7 @@ void MdbMigrationDialog::inspectFile() {
 }
 
 void MdbMigrationDialog::onStartMigrationClicked() {
-    if (!m_migrator || m_filePath.isEmpty()) return;
+    if (m_filePath.isEmpty()) return;
 
     m_startBtn->setEnabled(false);
     m_closeBtn->setEnabled(false);
@@ -348,7 +393,12 @@ void MdbMigrationDialog::onStartMigrationClicked() {
     }
 
     QTimer::singleShot(50, this, [this]() {
-        bool ok = m_migrator->migrate_mdb_file(m_filePath);
+        bool ok = false;
+        if (m_isBusy && m_busyMigrator) {
+            ok = m_busyMigrator->migrate_busy_data(m_filePath);
+        } else if (m_migrator) {
+            ok = m_migrator->migrate_mdb_file(m_filePath);
+        }
         if (!ok) {
             onMigrationFinished(false, "Migration failed during data processing.");
         }

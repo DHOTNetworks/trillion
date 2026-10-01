@@ -210,6 +210,8 @@ set(SOURCES
     src/engine/voucher_pipeline.cpp
     src/engine/bahi_khata_migrator.h
     src/engine/bahi_khata_migrator.cpp
+    src/engine/busy_data_migrator.h
+    src/engine/busy_data_migrator.cpp
     src/widgets/kbd_badge_button.h
     src/widgets/kbd_badge_button.cpp
     src/widgets/accounting_date_edit.h
@@ -586,6 +588,8 @@ set(TEST_SOURCES
     src/engine/voucher_pipeline.cpp
     src/engine/bahi_khata_migrator.h
     src/engine/bahi_khata_migrator.cpp
+    src/engine/busy_data_migrator.h
+    src/engine/busy_data_migrator.cpp
     src/models/iform_model.h
     src/models/iform_model.cpp
     src/models/mandi_reports_controller.h
@@ -659,6 +663,10 @@ set(ENGINE_TEST_SOURCES
     src/engine/gstr9_engine.cpp
     src/engine/tds_fvu_exporter.h
     src/engine/tds_fvu_exporter.cpp
+    src/engine/bahi_khata_migrator.h
+    src/engine/bahi_khata_migrator.cpp
+    src/engine/busy_data_migrator.h
+    src/engine/busy_data_migrator.cpp
     src/models/account_classifier.h
     src/models/account_classifier.cpp
     src/database_manager.h
