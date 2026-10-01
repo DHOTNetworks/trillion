@@ -1,6 +1,8 @@
 #include "dashboard_widget.h"
 #include "accounting_period_dialog.h"
 #include "mdb_migration_dialog.h"
+#include "scale_settings_dialog.h"
+#include "../services/scale_manager.h"
 #include "../engine/accounting_engine.h"
 #include "../database_manager.h"
 #include "../models/menu_tree_manager.h"
@@ -179,6 +181,20 @@ void DashboardWidget::setupUi() {
     );
     connect(m_periodBtn, &QPushButton::clicked, this, &DashboardWidget::requestAccountingPeriodDialog);
     btnBox->addWidget(m_periodBtn);
+
+    // Display Scale / Zoom Button
+    m_scaleBtn = new QPushButton(this);
+    m_scaleBtn->setFixedHeight(36);
+    m_scaleBtn->setFocusPolicy(Qt::NoFocus);
+    m_scaleBtn->setCursor(Qt::PointingHandCursor);
+    m_scaleBtn->setStyleSheet(
+        "QPushButton { background-color: #F8FAFC; border: 1.5px solid #64748B; border-radius: 6px; padding: 0px 14px; font-weight: 700; color: #334155; font-size: 12px; }"
+        "QPushButton:hover { background-color: #E2E8F0; border-color: #475569; color: #0F172A; }"
+    );
+    connect(m_scaleBtn, &QPushButton::clicked, this, &DashboardWidget::openScaleDialog);
+    connect(&ScaleManager::instance(), &ScaleManager::scaleChanged, this, &DashboardWidget::updateScaleButtonText);
+    updateScaleButtonText(ScaleManager::instance().currentScaleFactor(), ScaleManager::instance().currentScalePercent());
+    btnBox->addWidget(m_scaleBtn);
 
     // New Paddy Slip Button (with F2 badge)
     m_newPaddyBtn = new QPushButton("New Paddy Slip  [F2]", this);
@@ -591,6 +607,18 @@ void DashboardWidget::updatePeriodBadge() {
     }
     if (m_fyBadgeLabel) {
         m_fyBadgeLabel->setText(periodText + " (Active)");
+    }
+}
+
+void DashboardWidget::openScaleDialog() {
+    ScaleSettingsDialog dlg(this);
+    dlg.exec();
+}
+
+void DashboardWidget::updateScaleButtonText(double factor, int percent) {
+    Q_UNUSED(factor);
+    if (m_scaleBtn) {
+        m_scaleBtn->setText(QString("🖥️ Scale: %1%").arg(percent));
     }
 }
 

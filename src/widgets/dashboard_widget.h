@@ -48,6 +48,7 @@ public slots:
     void openReportsMenu(int initialIndex = 0);
     void openFinalAccountsMenu(int initialIndex = 0);
     void onSyncClicked();
+    void openScaleDialog();
 
 protected:
     void showEvent(QShowEvent* event) override;
@@ -57,6 +58,7 @@ protected:
 private slots:
     void triggerMenuIndex(int index, int initialSubmenuIndex = 0);
     void updatePeriodBadge();
+    void updateScaleButtonText(double factor, int percent);
 
 private:
     void setupUi();
@@ -85,6 +87,7 @@ private:
     QPushButton* m_openFirmBtn = nullptr;
     QPushButton* m_syncBtn = nullptr;
     QPushButton* m_periodBtn = nullptr;
+    QPushButton* m_scaleBtn = nullptr;
     QPushButton* m_newPaddyBtn = nullptr;
     QPushButton* m_newInvoiceBtn = nullptr;
 

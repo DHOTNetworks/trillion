@@ -47,6 +47,7 @@
 #include "models/debit_credit_note_controller.h"
 #include "models/global_key_filter.h"
 #include "engine/bahi_khata_migrator.h"
+#include "services/scale_manager.h"
 #include "widgets/main_window.h"
 
 int main(int argc, char* argv[]) {
@@ -359,6 +360,9 @@ int main(int argc, char* argv[]) {
     deps.bankStatementCtrl = &bankStatementCtrl;
     deps.transportDispatchCtrl = &transportDispatchCtrl;
     deps.debitCreditNoteCtrl = &debitCreditNoteCtrl;
+
+    // Initialize Dynamic In-App UI Scale Manager (Screen Auto-Detection & Persistent DB Setting)
+    ScaleManager::instance().init();
 
     std::cout << "[SUCCESS] Launching Pure Native QtWidgets MainWindow..." << std::endl << std::flush;
     QElapsedTimer mwTimer;

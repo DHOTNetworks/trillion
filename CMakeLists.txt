@@ -406,6 +406,10 @@ set(SOURCES
     src/widgets/gate_register_widget.cpp
     src/widgets/sauda_contract_widget.h
     src/widgets/sauda_contract_widget.cpp
+    src/services/scale_manager.h
+    src/services/scale_manager.cpp
+    src/widgets/scale_settings_dialog.h
+    src/widgets/scale_settings_dialog.cpp
     src/widgets/main_window.h
     src/widgets/main_window.cpp
 )
@@ -594,6 +598,8 @@ set(TEST_SOURCES
     src/models/gate_register_controller.cpp
     src/models/sauda_controller.h
     src/models/sauda_controller.cpp
+    src/services/scale_manager.h
+    src/services/scale_manager.cpp
 )
 
 add_executable(LogicBoardTestSuite ${TEST_SOURCES})
