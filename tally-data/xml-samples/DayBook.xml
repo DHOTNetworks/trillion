@@ -1,0 +1,70 @@
+<ENVELOPE>
+  <HEADER>
+    <TALLYREQUEST>Import Data</TALLYREQUEST>
+  </HEADER>
+  <BODY>
+    <IMPORTDATA>
+      <REQUESTDESC>
+        <REPORTNAME>Vouchers</REPORTNAME>
+      </REQUESTDESC>
+      <REQUESTDATA>
+        <TALLYMESSAGE xmlns:UDF="TallyUDF">
+          <VOUCHER VCHTYPE="Sales" ACTION="Create" OBJVIEW="Invoice Voucher View">
+            <DATE>20240220</DATE>
+            <VOUCHERTYPENAME>Sales</VOUCHERTYPENAME>
+            <VOUCHERNUMBER>INV-2024-001</VOUCHERNUMBER>
+            <PARTYLEDGERNAME>National Traders</PARTYLEDGERNAME>
+            <NARRATION>Sales of Stationery Goods</NARRATION>
+            <ALLLEDGERENTRIES.LIST>
+              <LEDGERNAME>National Traders</LEDGERNAME>
+              <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+              <AMOUNT>-1858.50</AMOUNT>
+            </ALLLEDGERENTRIES.LIST>
+            <ALLLEDGERENTRIES.LIST>
+              <LEDGERNAME>Sales Account</LEDGERNAME>
+              <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
+              <AMOUNT>1575.00</AMOUNT>
+            </ALLLEDGERENTRIES.LIST>
+            <ALLLEDGERENTRIES.LIST>
+              <LEDGERNAME>Tax - CGST @ 9 %</LEDGERNAME>
+              <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
+              <AMOUNT>141.75</AMOUNT>
+            </ALLLEDGERENTRIES.LIST>
+            <ALLLEDGERENTRIES.LIST>
+              <LEDGERNAME>Tax - SGST @ 9 %</LEDGERNAME>
+              <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
+              <AMOUNT>141.75</AMOUNT>
+            </ALLLEDGERENTRIES.LIST>
+            <ALLINVENTORYENTRIES.LIST>
+              <STOCKITEMNAME>Ball Pen</STOCKITEMNAME>
+              <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
+              <RATE>315.00/Nos</RATE>
+              <AMOUNT>1575.00</AMOUNT>
+              <ACTUALQTY>5 Nos</ACTUALQTY>
+              <BILLEDQTY>5 Nos</BILLEDQTY>
+            </ALLINVENTORYENTRIES.LIST>
+          </VOUCHER>
+        </TALLYMESSAGE>
+        <TALLYMESSAGE xmlns:UDF="TallyUDF">
+          <VOUCHER VCHTYPE="Receipt" ACTION="Create" OBJVIEW="Accounting Voucher View">
+            <DATE>20240221</DATE>
+            <VOUCHERTYPENAME>Receipt</VOUCHERTYPENAME>
+            <VOUCHERNUMBER>REC-2024-015</VOUCHERNUMBER>
+            <PARTYLEDGERNAME>National Traders</PARTYLEDGERNAME>
+            <NARRATION>Payment received via NEFT</NARRATION>
+            <ALLLEDGERENTRIES.LIST>
+              <LEDGERNAME>HDFC Bank</LEDGERNAME>
+              <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+              <AMOUNT>-15200.00</AMOUNT>
+            </ALLLEDGERENTRIES.LIST>
+            <ALLLEDGERENTRIES.LIST>
+              <LEDGERNAME>National Traders</LEDGERNAME>
+              <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
+              <AMOUNT>15200.00</AMOUNT>
+            </ALLLEDGERENTRIES.LIST>
+          </VOUCHER>
+        </TALLYMESSAGE>
+      </REQUESTDATA>
+    </IMPORTDATA>
+  </BODY>
+</ENVELOPE>

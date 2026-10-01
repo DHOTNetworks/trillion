@@ -212,6 +212,8 @@ set(SOURCES
     src/engine/bahi_khata_migrator.cpp
     src/engine/busy_data_migrator.h
     src/engine/busy_data_migrator.cpp
+    src/engine/tally_data_migrator.h
+    src/engine/tally_data_migrator.cpp
     src/widgets/kbd_badge_button.h
     src/widgets/kbd_badge_button.cpp
     src/widgets/accounting_date_edit.h
@@ -667,6 +669,8 @@ set(ENGINE_TEST_SOURCES
     src/engine/bahi_khata_migrator.cpp
     src/engine/busy_data_migrator.h
     src/engine/busy_data_migrator.cpp
+    src/engine/tally_data_migrator.h
+    src/engine/tally_data_migrator.cpp
     src/models/account_classifier.h
     src/models/account_classifier.cpp
     src/database_manager.h

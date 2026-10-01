@@ -1,0 +1,202 @@
+# Tally Migrator
+
+**Move your books from Tally into ERPNext, safely and without re-keying anything.**
+
+Tally Migrator is a Frappe/ERPNext app. You export your data from Tally as a file,
+upload it through a guided wizard, and the app creates the matching records in
+ERPNext for you: your customers, suppliers, items, accounts, and their opening
+balances. It checks everything before it writes, shows you exactly what happened,
+and you can undo a whole migration if you need to.
+
+It works from an **uploaded Tally export file**, not a live connection, so it works
+even when your ERPNext is hosted in the cloud and your Tally is on an office PC.
+
+> **Full documentation:** the [complete user guide](docs/tally-migrator-documentation.md)
+> walks through every step, explains every screen, card, term, warning and error,
+> covers the edge cases, and includes a troubleshooting section and glossary.
+
+**▶ [Watch the walkthrough on YouTube](https://youtu.be/GxL9xwnOD-k)**
+
+[![Watch the Tally Migrator walkthrough on YouTube](https://img.youtube.com/vi/GxL9xwnOD-k/maxresdefault.jpg)](https://youtu.be/GxL9xwnOD-k)
+
+---
+
+## What it brings over
+
+| From Tally | Into ERPNext |
+|---|---|
+| Customers and suppliers | Customers / Suppliers, with **all** their addresses and phone numbers, bank details, and GST registration |
+| Customer / supplier groups | Customer Groups / Supplier Groups |
+| Stock items | Items, with their units, HSN codes, and GST tax rates |
+| Units of measure | UOMs, including the GST unit codes (UQC) needed for returns |
+| Price levels (Retail, Wholesale, MRP) | Price Lists, Item Prices, and discount Pricing Rules |
+| Bills of Materials | BOMs (multiple per item, with co-products, by-products, and scrap) |
+| Batch-tracked stock | Batches, with manufacturing and expiry dates |
+| Chart of accounts and cost centres | Accounts and Cost Centers |
+| Warehouses / godowns | Warehouses (including parent/child groups) |
+| Opening balances | Opening journal entry, party opening invoices, and opening stock |
+| Foreign-currency balances | True multi-currency openings (e.g. a customer who owes you $8,500 comes in as $8,500 at Tally's exchange rate, not converted to a frozen rupee figure) |
+
+After a run, the app produces a **reconciliation report** that puts Tally's opening
+trial balance next to what landed in ERPNext, so you can confirm the books match.
+
+---
+
+## Current Limitations
+
+Tally Migrator focuses on migrating masters and opening balances, not historical
+transactions such as Sales Invoices, Purchase Invoices, Payments, or Journal Entries.
+GST-specific fields require the India Compliance app. The app is currently built and
+tested for Indian users on ERPNext v16 and Tally Prime. Features such as TDS/TCS and
+HR/Payroll are not yet supported.
+Foreign-currency advances and custom fields (UDFs) are also left out. Anything that is
+skipped is recorded in the Migration Log, so nothing disappears silently.
+
+---
+
+## Before you start
+
+You need:
+
+- A **Frappe bench with ERPNext installed**. Developed and tested on **version 16**.
+- The **India Compliance** app, *if* you want GST details brought over (HSN codes,
+  tax rates, GST unit codes, GST registration type). It is optional: without it the
+  core records still import, and anything GST-specific is skipped with a note in the
+  log so nothing disappears silently.
+- Your data exported from Tally as a **Masters XML** file (see below).
+
+### Exporting your data from Tally
+
+In Tally, go to **Gateway of Tally → Export → Masters → Configure**, set the
+following, then choose **Export**:
+
+| Setting | Value |
+|---|---|
+| Type of master | **All Masters** |
+| Include dependent masters | **Yes** |
+| Export closing balance as opening balance | **Yes** |
+| File Format | **XML (Data Interchange)** |
+
+"Export closing balance as opening balance" is what turns last year's closing
+figures into this year's opening balances in ERPNext, so don't skip it. Tally
+writes a `Master.xml` file (to the folder shown in the export screen) - that's the
+file you upload in step 1.
+
+**Large export?** A Masters XML compresses ~90%, so if your file is too big to
+upload (the browser upload is capped, commonly around 25 MB), you have two
+options in step 1:
+
+- **Zip it first** and upload the `.zip` - the app unpacks the XML automatically.
+- **Import from a Google Drive link** - share the file in Drive as "Anyone with
+  the link", then in the upload dialog choose **Link** and paste the link; the app
+  downloads it server-side. A zipped XML on Drive works too.
+
+The uncompressed file is held to a **1 GB** limit by default (the same ceiling for a
+zip's contents and a Drive download). An administrator can raise it with the
+`tally_migrator_max_upload_mb` site-config setting, in megabytes.
+
+---
+
+## Installation
+
+From inside your bench:
+
+```bash
+# 1. Download the app into your bench
+bench get-app https://github.com/frappe/tally_migrator
+
+# 2. Install it on your site (the site must already have ERPNext)
+bench --site your-site-name install-app tally_migrator
+```
+
+Installing creates a **Tally Migration Manager** role. Give this role (or System
+Manager) to anyone who should be allowed to run a migration.
+
+---
+
+## How to use it
+
+Open the **Tally Migrator** page from the ERPNext desk (search "Tally Migrator" in
+the awesomebar). The wizard walks you through a few guided steps:
+
+1. **Upload** - drop in your Tally export file (`.xml`, or a `.zip` of it). For a
+   file too large to upload, use the dialog's **Link** option to paste a public
+   Google Drive link instead. The app reads it and tells you what it found.
+
+   ![Step 1 - Upload](docs/images/wizard-1-upload.png)
+2. **Configure** - pick the ERPNext company the data should go into, choose how to
+   handle the chart of accounts, and set the opening-balance date.
+
+   ![Step 2 - Configure](docs/images/wizard-2-configure.png)
+3. **Check** - the app validates everything *before* writing: missing states,
+   invalid GSTINs, broken account links, and so on. You can fix many issues right
+   here, in place, without touching Tally.
+
+   ![Step 3 - Check](docs/images/wizard-3-check.png)
+4. **Preview** - see a summary of exactly what will be created. (This step appears
+   when your file includes a chart of accounts or opening balances.)
+
+   ![Step 4 - Preview](docs/images/wizard-4-preview.png)
+5. **Migrate** - the app imports the records and opens a **Migration Log**.
+
+   ![Step 5 - Migrate](docs/images/wizard-5-migrate.png)
+
+The Migration Log is your record of the run. It shows what was created (grouped by
+type, with clickable links to each record), what was skipped and why, and the
+reconciliation report. If a large migration is still running, it keeps going in the
+background; reload the log to see its latest progress. If a run stops early (for
+example the server restarts), the log says so and you can simply run it again -
+records already imported are kept.
+
+### If something goes wrong
+
+- **You can run it again.** The migration is safe to repeat: records that already
+  exist are skipped, never duplicated or overwritten. So if a run is interrupted,
+  just run it again and it picks up where it left off.
+- **You can undo it.** Each Migration Log has a **Revert** action that deletes the
+  records that run created (after you confirm). Reverts run in the background so
+  even a large rollback doesn't tie up your screen.
+
+---
+
+## Good to know
+
+- **Your existing records are safe.** Anything that already exists in ERPNext is
+  skipped, never duplicated or overwritten, and nothing is deleted (except by the
+  Revert action above). The app does make a few small changes that it always notes
+  in the log: it sets the currency on a foreign-currency customer or supplier, and
+  it may switch on the GST or stock settings needed to import GST details and
+  batch-tracked items.
+- **Dropped data is always reported.** If the app can't bring something across, it
+  says so in the log rather than skipping it quietly.
+- **Your Tally file is never modified.** Any fixes you make in the Check step are
+  applied to the imported data only; the original export is left untouched.
+
+---
+
+## For developers
+
+This is a standard Frappe app. The source side (`tally/`) reads and maps the XML;
+the target side (`erpnext/importers/`) creates the ERPNext documents; `migration/`
+orchestrates a run and writes the log.
+
+Tests come in two tiers:
+
+```bash
+# Pure tests - no Frappe needed, run anywhere
+python3 -m unittest discover -s tally_migrator/tests -p 'test_*.py'
+
+# Full suite - runs on a real site (covers the importers and opening balances)
+bench --site your-site-name run-tests --app tally_migrator
+```
+
+A few conventions worth knowing before you change core behaviour: keep every run
+**idempotent** (safe to re-run), **surface dropped data as a warning** rather than a
+silent skip, and add a **new importer subclass** for a new entity instead of editing
+existing ones.
+
+---
+
+## License
+
+GNU General Public License v3.0 (GPLv3). Copyright (c) Frappe Technologies Pvt. Ltd. and contributors. See [LICENSE](LICENSE).

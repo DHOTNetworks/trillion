@@ -88,31 +88,18 @@ void DashboardWidget::onSyncClicked() {
             fullPath = m_firmMgr->activeFolder() + "/" + src;
         }
     }
-    if (fullPath.isEmpty() || !QFile::exists(fullPath)) {
-        QString defaultFirmDir = m_firmMgr ? m_firmMgr->get_app_data_folder() : QDir::current().filePath("data");
-        QDir firmDir(defaultFirmDir);
-        if (firmDir.exists()) {
-            for (const auto& f : firmDir.entryInfoList({"Data.*", "data.*", "DATA.*", "*.mdb", "*.accdb", "*.0*"}, QDir::Files)) {
-                if (f.fileName().endsWith(".ldb", Qt::CaseInsensitive) || f.fileName().endsWith(".bak", Qt::CaseInsensitive)) continue;
-                fullPath = f.absoluteFilePath();
-                break;
-            }
-        }
-        if (fullPath.isEmpty() || !QFile::exists(fullPath)) {
-            fullPath = QFileDialog::getOpenFileName(this, "Select Bahi-Khata Data File to Sync", defaultFirmDir, "Bahi-Khata Databases (Data.* *.0* *.mdb *.accdb);;All Files (*.*)");
-        }
+    if (!fullPath.isEmpty() && !QFile::exists(fullPath)) {
+        fullPath = "";
     }
 
-    if (!fullPath.isEmpty() && QFile::exists(fullPath)) {
-        QString firmName = m_firmMgr->currentFirmName();
-        QString firmId = m_firmMgr->currentFirmId();
-        MdbMigrationDialog dlg(m_migrator, m_firmMgr, fullPath, firmName, firmId, this);
-        connect(&dlg, &MdbMigrationDialog::migrationCompleted, this, [this](const QString&, const QString&) {
-            refreshStats();
-        });
-        dlg.exec();
+    QString firmName = m_firmMgr->currentFirmName();
+    QString firmId = m_firmMgr->currentFirmId();
+    MdbMigrationDialog dlg(m_migrator, m_firmMgr, fullPath, firmName, firmId, this);
+    connect(&dlg, &MdbMigrationDialog::migrationCompleted, this, [this](const QString&, const QString&) {
         refreshStats();
-    }
+    });
+    dlg.exec();
+    refreshStats();
 }
 
 void DashboardWidget::setupUi() {
@@ -161,7 +148,7 @@ void DashboardWidget::setupUi() {
     btnBox->addWidget(m_openFirmBtn);
 
     // Sync Bahi-Khata / Busy Data Button
-    m_syncBtn = new QPushButton("📥 Sync Data", this);
+    m_syncBtn = new QPushButton("Sync Data", this);
     m_syncBtn->setFixedHeight(36);
     m_syncBtn->setFocusPolicy(Qt::NoFocus);
     m_syncBtn->setCursor(Qt::PointingHandCursor);
@@ -584,7 +571,7 @@ void DashboardWidget::updatePeriodBadge() {
     QString periodText = QString("%1 To %2 (%3)").arg(s_fmt, e_fmt, fy.name);
 
     if (m_periodBtn) {
-        m_periodBtn->setText("📅 Period: " + periodText);
+        m_periodBtn->setText("Period: " + periodText);
     }
     if (m_fyBadgeLabel) {
         m_fyBadgeLabel->setText(periodText + " (Active)");
@@ -599,7 +586,7 @@ void DashboardWidget::openScaleDialog() {
 void DashboardWidget::updateScaleButtonText(double factor, int percent) {
     Q_UNUSED(factor);
     if (m_scaleBtn) {
-        m_scaleBtn->setText(QString("🖥️ Scale: %1%").arg(percent));
+        m_scaleBtn->setText(QString("Scale: %1%").arg(percent));
     }
 }
 

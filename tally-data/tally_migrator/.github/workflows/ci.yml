@@ -1,0 +1,161 @@
+name: CI
+
+# Runs the FULL test suite on a real Frappe + ERPNext site. The pure tests run
+# under a bare interpreter, but the four frappe-dependent suites (test_importer,
+# test_file_source, test_critical_fixes, test_summary) can only run here - they
+# exercise the importers, the streaming parser, the IDOR guard, the opening-balance
+# idempotency and the per-company opening lock. See tally_migrator/tests/conftest.py.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: bench run-tests
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+
+    # Pin the Frappe/ERPNext line the app targets. Bump both together when you
+    # move the production site to a new major version. Matches the development /
+    # deployment environment (frappe 16.x, erpnext 16.x) - verified with
+    # `bench version`, not assumed.
+    env:
+      FRAPPE_BRANCH: version-16
+      ERPNEXT_BRANCH: version-16
+      # India Compliance ships by default on the India Frappe Cloud sites where
+      # these migrations run, so CI installs it too - otherwise the GST path (a
+      # core production behaviour) would go untested. Keep this on the same line
+      # as Frappe/ERPNext when bumping the major version.
+      INDIA_COMPLIANCE_BRANCH: version-16
+
+    services:
+      mariadb:
+        # Frappe v16 dropped support for MariaDB 10.6; use the 11.x LTS line.
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s --health-timeout=5s --health-retries=15
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s --health-timeout=5s --health-retries=10
+
+    steps:
+      - name: Check out the app
+        uses: actions/checkout@v4
+        with:
+          path: tally_migrator
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          # Frappe version-16 sets requires-python ">=3.14,<3.15" and uses PEP 695
+          # `type X = ...` aliases (3.12+), so an older Python fails to even compile
+          # frappe at install time. Keep this in step with the FRAPPE_BRANCH above.
+          python-version: "3.14"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          # Frappe version-16 declares engines.node ">=24" in package.json, so
+          # `yarn install` aborts on anything older ("engine node incompatible").
+          # Keep this in step with the FRAPPE_BRANCH above.
+          node-version: "24"
+
+      - name: System dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcups2-dev mariadb-client
+          sudo npm install -g yarn
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ hashFiles('tally_migrator/pyproject.toml') }}
+          restore-keys: pip-${{ runner.os }}-
+
+      - name: Verify MariaDB and set charset
+        run: |
+          mysql --host 127.0.0.1 --port 3306 -u root -proot -e "SET GLOBAL character_set_server = 'utf8mb4';"
+          mysql --host 127.0.0.1 --port 3306 -u root -proot -e "SET GLOBAL collation_server = 'utf8mb4_unicode_ci';"
+
+      - name: Install frappe-bench
+        run: pip install frappe-bench
+
+      - name: Initialise bench
+        run: |
+          bench init --skip-redis-config-generation \
+            --frappe-branch "$FRAPPE_BRANCH" \
+            --python "$(which python)" \
+            frappe-bench
+
+      - name: Point bench at the CI services
+        working-directory: frappe-bench
+        run: |
+          bench set-config -g db_host 127.0.0.1
+          bench set-config -g redis_cache "redis://127.0.0.1:6379"
+          bench set-config -g redis_queue "redis://127.0.0.1:6379"
+          bench set-config -g redis_socketio "redis://127.0.0.1:6379"
+
+      - name: Fetch ERPNext
+        working-directory: frappe-bench
+        run: bench get-app erpnext --branch "$ERPNEXT_BRANCH"
+
+      - name: Fetch India Compliance
+        working-directory: frappe-bench
+        # Full repo URL required: bench's short-name resolver only checks the
+        # frappe/erpnext GitHub orgs, and India Compliance lives under resilient-tech.
+        run: bench get-app https://github.com/resilient-tech/india-compliance --branch "$INDIA_COMPLIANCE_BRANCH"
+
+      - name: Create the test site
+        working-directory: frappe-bench
+        run: |
+          bench new-site test_site \
+            --db-root-password root \
+            --admin-password admin \
+            --no-mariadb-socket
+          bench --site test_site install-app erpnext
+
+      - name: Install apps and complete the ERPNext setup wizard
+        working-directory: frappe-bench
+        # install-app erpnext installs the app but does NOT run the setup wizard, so
+        # a fresh site lacks the default masters the integration tests rely on
+        # (Customer Group "Commercial", Territory "All Territories", the root
+        # Item/Supplier groups, base UOMs). The bootstrap below runs the same
+        # setup_complete the wizard would.
+        #
+        # Both apps are installed first: `bench execute` resolves a dotted path only
+        # for apps INSTALLED on the site (not merely importable), so the app under
+        # test must be installed before its bootstrap can be called. India Compliance
+        # is installed before the company is created so its GST setup attaches to it -
+        # mirroring the India Frappe Cloud production config.
+        run: |
+          bench get-app tally_migrator "${GITHUB_WORKSPACE}/tally_migrator"
+          bench --site test_site install-app tally_migrator
+          bench --site test_site install-app india_compliance
+          bench --site test_site execute tally_migrator.tests.bootstrap.complete_erpnext_setup
+
+      - name: Report the versions under test
+        working-directory: frappe-bench
+        run: bench version
+
+      - name: Run the full test suite
+        working-directory: frappe-bench
+        run: |
+          bench --site test_site set-config allow_tests true
+          bench --site test_site run-tests --app tally_migrator

@@ -91,7 +91,7 @@ void FirmSelectorWidget::setupUi() {
     folderLayout->setContentsMargins(16, 0, 16, 0);
     folderLayout->setSpacing(12);
 
-    m_folderDirLabel = new QLabel("📁 App Data Directory:", m_folderBarFrame);
+    m_folderDirLabel = new QLabel("App Data Directory:", m_folderBarFrame);
     m_folderDirLabel->setStyleSheet("color: #334155; font-size: 12px; font-weight: 700; border: none; background: transparent;");
     folderLayout->addWidget(m_folderDirLabel);
 
@@ -126,7 +126,7 @@ void FirmSelectorWidget::setupUi() {
     connect(m_appDataBtn, &QPushButton::clicked, this, &FirmSelectorWidget::resetToAppData);
     folderLayout->addWidget(m_appDataBtn);
 
-    m_importMdbBtn = new QPushButton("📥 Import External MDB (F4)", m_folderBarFrame);
+    m_importMdbBtn = new QPushButton("Import External MDB (F4)", m_folderBarFrame);
     m_importMdbBtn->setFixedHeight(34);
     m_importMdbBtn->setCursor(Qt::PointingHandCursor);
     m_importMdbBtn->setStyleSheet(
@@ -146,7 +146,7 @@ void FirmSelectorWidget::setupUi() {
     connect(m_browseBtn, &QPushButton::clicked, this, &FirmSelectorWidget::pickFolder);
     folderLayout->addWidget(m_browseBtn);
 
-    m_rescanBtn = new QPushButton("🔄 Rescan (F5)", m_folderBarFrame);
+    m_rescanBtn = new QPushButton("Rescan (F5)", m_folderBarFrame);
     m_rescanBtn->setFixedHeight(34);
     m_rescanBtn->setCursor(Qt::PointingHandCursor);
     m_rescanBtn->setStyleSheet(
@@ -249,7 +249,7 @@ void FirmSelectorWidget::setupUi() {
     emptyLayout->setSpacing(14);
     emptyLayout->setAlignment(Qt::AlignCenter);
 
-    QLabel* emptyIcon = new QLabel("🏢", m_emptyStateWidget);
+    QLabel* emptyIcon = new QLabel("", m_emptyStateWidget);
     emptyIcon->setStyleSheet("font-size: 48px; border: none; background: transparent;");
     emptyIcon->setAlignment(Qt::AlignCenter);
     emptyLayout->addWidget(emptyIcon);
@@ -273,7 +273,7 @@ void FirmSelectorWidget::setupUi() {
     connect(createBtn, &QPushButton::clicked, this, &FirmSelectorWidget::openNewFirmDialog);
     emptyBtnRow->addWidget(createBtn);
 
-    m_emptyStateBtn = new QPushButton("📥 Import External Data", m_emptyStateWidget);
+    m_emptyStateBtn = new QPushButton("Import External Data", m_emptyStateWidget);
     m_emptyStateBtn->setFixedSize(190, 38);
     m_emptyStateBtn->setCursor(Qt::PointingHandCursor);
     m_emptyStateBtn->setStyleSheet(
@@ -333,7 +333,7 @@ void FirmSelectorWidget::updateHeaderAndFolderStyles() {
     bool appData = isViewingAppData();
     if (appData) {
         m_subtitleLabel->setText("App Working Directory • Managing native SQLite company databases in data/");
-        m_folderDirLabel->setText("📁 App Data Directory:");
+        m_folderDirLabel->setText("App Data Directory:");
         m_folderDirLabel->setStyleSheet("color: #334155; font-size: 12px; font-weight: 700; border: none; background: transparent;");
         m_folderBarFrame->setStyleSheet("background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px;");
         m_appDataBtn->setVisible(false);
@@ -342,7 +342,7 @@ void FirmSelectorWidget::updateHeaderAndFolderStyles() {
         m_table->horizontalHeaderItem(0)->setText("Database File");
     } else {
         m_subtitleLabel->setText("External Database Import • Select a firm to import into the app's working directory");
-        m_folderDirLabel->setText("📁 External Data Folder:");
+        m_folderDirLabel->setText("External Data Folder:");
         m_folderDirLabel->setStyleSheet("color: #B45309; font-size: 12px; font-weight: 700; border: none; background: transparent;");
         m_folderBarFrame->setStyleSheet("background-color: #FFFFFF; border: 1px solid #FDE68A; border-radius: 8px;");
         m_appDataBtn->setVisible(true);

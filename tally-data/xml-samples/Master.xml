@@ -1,0 +1,131 @@
+<ENVELOPE>
+  <HEADER>
+    <TALLYREQUEST>Import Data</TALLYREQUEST>
+  </HEADER>
+  <BODY>
+    <IMPORTDATA>
+      <REQUESTDESC>
+        <REPORTNAME>All Masters</REPORTNAME>
+      </REQUESTDESC>
+      <REQUESTDATA>
+        <TALLYMESSAGE xmlns:UDF="TallyUDF">
+          <UNIT NAME="Nos" RESERVEDNAME="">
+            <NAME>Nos</NAME>
+            <ISSIMPLEUNIT>Yes</ISSIMPLEUNIT>
+            <ORIGINALNAME>Numbers</ORIGINALNAME>
+            <UQC>NOS-NUMBERS</UQC>
+            <DECIMALPLACES>0</DECIMALPLACES>
+          </UNIT>
+        </TALLYMESSAGE>
+        <TALLYMESSAGE xmlns:UDF="TallyUDF">
+          <UNIT NAME="QTL" RESERVEDNAME="">
+            <NAME>QTL</NAME>
+            <ISSIMPLEUNIT>Yes</ISSIMPLEUNIT>
+            <ORIGINALNAME>Quintals</ORIGINALNAME>
+            <UQC>QTL-QUINTALS</UQC>
+            <DECIMALPLACES>2</DECIMALPLACES>
+          </UNIT>
+        </TALLYMESSAGE>
+        <TALLYMESSAGE xmlns:UDF="TallyUDF">
+          <GROUP NAME="Sundry Debtors" RESERVEDNAME="Sundry Debtors">
+            <NAME>Sundry Debtors</NAME>
+            <PARENT>Current Assets</PARENT>
+            <ISADDABLE>Yes</ISADDABLE>
+          </GROUP>
+        </TALLYMESSAGE>
+        <TALLYMESSAGE xmlns:UDF="TallyUDF">
+          <GROUP NAME="Sundry Creditors" RESERVEDNAME="Sundry Creditors">
+            <NAME>Sundry Creditors</NAME>
+            <PARENT>Current Liabilities</PARENT>
+            <ISADDABLE>Yes</ISADDABLE>
+          </GROUP>
+        </TALLYMESSAGE>
+        <TALLYMESSAGE xmlns:UDF="TallyUDF">
+          <LEDGER NAME="National Traders" RESERVEDNAME="">
+            <NAME>National Traders</NAME>
+            <PARENT>Sundry Debtors</PARENT>
+            <OPENINGBALANCE>-15200.00</OPENINGBALANCE>
+            <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+            <PARTYGSTIN>27AABCU1234F1Z5</PARTYGSTIN>
+            <INCOMETAXNUMBER>AABCU1234F</INCOMETAXNUMBER>
+            <PARTYSTATE>Maharashtra</PARTYSTATE>
+            <COUNTRYNAME>India</COUNTRYNAME>
+            <PINCODE>400001</PINCODE>
+            <ADDRESS.LIST>
+              <ADDRESS>Shop 12, Market Yard</ADDRESS>
+              <ADDRESS>Mumbai</ADDRESS>
+            </ADDRESS.LIST>
+          </LEDGER>
+        </TALLYMESSAGE>
+        <TALLYMESSAGE xmlns:UDF="TallyUDF">
+          <LEDGER NAME="Titan Corporation" RESERVEDNAME="">
+            <NAME>Titan Corporation</NAME>
+            <PARENT>Sundry Creditors</PARENT>
+            <OPENINGBALANCE>15000.00</OPENINGBALANCE>
+            <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
+            <PARTYGSTIN>07AACDE5678L1X3</PARTYGSTIN>
+            <INCOMETAXNUMBER>AACDE5678L</INCOMETAXNUMBER>
+            <PARTYSTATE>Delhi</PARTYSTATE>
+            <COUNTRYNAME>India</COUNTRYNAME>
+            <PINCODE>110001</PINCODE>
+          </LEDGER>
+        </TALLYMESSAGE>
+        <TALLYMESSAGE xmlns:UDF="TallyUDF">
+          <LEDGER NAME="HDFC Bank" RESERVEDNAME="">
+            <NAME>HDFC Bank</NAME>
+            <PARENT>Bank Accounts</PARENT>
+            <OPENINGBALANCE>-250000.00</OPENINGBALANCE>
+            <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+            <BANKDETAILS.LIST>
+              <ACCOUNTNUMBER>50200012345678</ACCOUNTNUMBER>
+              <IFSCODE>HDFC0000123</IFSCODE>
+              <BRANCHNAME>Main Branch</BRANCHNAME>
+            </BANKDETAILS.LIST>
+          </LEDGER>
+        </TALLYMESSAGE>
+        <TALLYMESSAGE xmlns:UDF="TallyUDF">
+          <LEDGER NAME="Sales Account" RESERVEDNAME="">
+            <NAME>Sales Account</NAME>
+            <PARENT>Sales Accounts</PARENT>
+            <OPENINGBALANCE>0.00</OPENINGBALANCE>
+            <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
+          </LEDGER>
+        </TALLYMESSAGE>
+        <TALLYMESSAGE xmlns:UDF="TallyUDF">
+          <STOCKITEM NAME="Ball Pen" RESERVEDNAME="">
+            <NAME>Ball Pen</NAME>
+            <PARENT>Stationery</PARENT>
+            <BASEUNITS>Nos</BASEUNITS>
+            <OPENINGBALANCE>100 Nos</OPENINGBALANCE>
+            <OPENINGVALUE>-1000.00</OPENINGVALUE>
+            <OPENINGRATE>10.00/Nos</OPENINGRATE>
+            <HSNCODE>96081019</HSNCODE>
+            <GSTRATEDETAILS.LIST>
+              <GSTRATE>12</GSTRATE>
+              <CGSTRATE>6</CGSTRATE>
+              <SGSTRATE>6</SGSTRATE>
+              <IGSTRATE>12</IGSTRATE>
+            </GSTRATEDETAILS.LIST>
+          </STOCKITEM>
+        </TALLYMESSAGE>
+        <TALLYMESSAGE xmlns:UDF="TallyUDF">
+          <STOCKITEM NAME="Paddy Sona Masoori" RESERVEDNAME="">
+            <NAME>Paddy Sona Masoori</NAME>
+            <PARENT>Raw Materials</PARENT>
+            <BASEUNITS>QTL</BASEUNITS>
+            <OPENINGBALANCE>500.00 QTL</OPENINGBALANCE>
+            <OPENINGVALUE>-1100000.00</OPENINGVALUE>
+            <OPENINGRATE>2200.00/QTL</OPENINGRATE>
+            <HSNCODE>100610</HSNCODE>
+            <GSTRATEDETAILS.LIST>
+              <GSTRATE>5</GSTRATE>
+              <CGSTRATE>2.5</CGSTRATE>
+              <SGSTRATE>2.5</SGSTRATE>
+              <IGSTRATE>5</IGSTRATE>
+            </GSTRATEDETAILS.LIST>
+          </STOCKITEM>
+        </TALLYMESSAGE>
+      </REQUESTDATA>
+    </IMPORTDATA>
+  </BODY>
+</ENVELOPE>

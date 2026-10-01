@@ -7,6 +7,8 @@
 #include <QKeyEvent>
 #include <QTimer>
 #include <QFileDialog>
+#include <QButtonGroup>
+#include <QRadioButton>
 #include <QGraphicsDropShadowEffect>
 
 MdbMigrationDialog::MdbMigrationDialog(BahiKhataMigrator* migrator,
@@ -23,9 +25,11 @@ MdbMigrationDialog::MdbMigrationDialog(BahiKhataMigrator* migrator,
     , m_firmId(firmId)
 {
     m_busyMigrator = new MahadevERP::BusyDataMigrator(this);
-    setWindowTitle("Database Migration & Sync");
+    m_tallyMigrator = new MahadevERP::TallyDataMigrator(this);
+
+    setWindowTitle("Universal Accounting Migration & Sync");
     setModal(true);
-    setFixedSize(620, 540);
+    setFixedSize(650, 590);
     setupUi();
     if (!m_filePath.isEmpty()) {
         inspectFile();
@@ -63,14 +67,17 @@ void MdbMigrationDialog::setupUi() {
     setStyleSheet(
         "MdbMigrationDialog { background-color: #FFFFFF; border: 1.5px solid #E2E8F0; border-radius: 16px; }"
         "QLabel { border: none; background: transparent; }"
+        "QRadioButton { font-size: 12px; font-weight: 600; color: #334155; spacing: 6px; }"
+        "QRadioButton::indicator { width: 15px; height: 15px; border-radius: 8px; border: 1.5px solid #94A3B8; background-color: #FFFFFF; }"
+        "QRadioButton::indicator:checked { border-color: #2563EB; background-color: #2563EB; }"
     );
 
     QVBoxLayout* root = new QVBoxLayout(this);
-    root->setContentsMargins(20, 20, 20, 20);
-    root->setSpacing(14);
+    root->setContentsMargins(20, 18, 20, 18);
+    root->setSpacing(12);
 
     // ========================================================================
-    // 1. Header (Matching MdbMigrationModal.qml lines 55-83)
+    // 1. Header
     // ========================================================================
     QHBoxLayout* header = new QHBoxLayout();
     header->setSpacing(12);
@@ -78,7 +85,7 @@ void MdbMigrationDialog::setupUi() {
     QFrame* iconFrame = new QFrame(this);
     iconFrame->setFixedSize(40, 40);
     iconFrame->setStyleSheet("background-color: #EFF6FF; border: 1px solid #BFDBFE; border-radius: 10px;");
-    QLabel* iconLabel = new QLabel("📥", iconFrame);
+    QLabel* iconLabel = new QLabel("", iconFrame);
     iconLabel->setAlignment(Qt::AlignCenter);
     iconLabel->setStyleSheet("font-size: 20px; border: none; background: transparent;");
     iconLabel->setGeometry(0, 0, 40, 40);
@@ -86,12 +93,12 @@ void MdbMigrationDialog::setupUi() {
 
     QVBoxLayout* titleBox = new QVBoxLayout();
     titleBox->setSpacing(2);
-    QLabel* tagLabel = new QLabel("DATABASE MIGRATION & SYNC", this);
+    QLabel* tagLabel = new QLabel("UNIVERSAL DATA MIGRATION & SYNC", this);
     tagLabel->setStyleSheet("font-size: 11px; font-weight: 800; color: #2563EB; letter-spacing: 1.0px;");
     titleBox->addWidget(tagLabel);
 
-    QLabel* titleLabel = new QLabel("In-App Database Importer (Data.* / .mdb)", this);
-    titleLabel->setStyleSheet("font-size: 17px; font-weight: 800; color: #0F172A;");
+    QLabel* titleLabel = new QLabel("Bahi-Khata • Busy Accounting • Tally Prime Importer", this);
+    titleLabel->setStyleSheet("font-size: 16px; font-weight: 800; color: #0F172A;");
     titleBox->addWidget(titleLabel);
     header->addLayout(titleBox);
 
@@ -109,34 +116,63 @@ void MdbMigrationDialog::setupUi() {
 
     root->addLayout(header);
 
-    // Divider
-    QFrame* div1 = new QFrame(this);
-    div1->setFixedHeight(1);
-    div1->setStyleSheet("background-color: #E2E8F0; border: none;");
-    root->addWidget(div1);
+    // ========================================================================
+    // 2. Source Type Radio Selector
+    // ========================================================================
+    QFrame* radioFrame = new QFrame(this);
+    radioFrame->setStyleSheet("QFrame { background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; }");
+    QHBoxLayout* radioLayout = new QHBoxLayout(radioFrame);
+    radioLayout->setContentsMargins(12, 6, 12, 6);
+    radioLayout->setSpacing(14);
+
+    QLabel* modeLabel = new QLabel("Source Format:", radioFrame);
+    modeLabel->setStyleSheet("font-size: 12px; font-weight: 700; color: #475569;");
+    radioLayout->addWidget(modeLabel);
+
+    m_formatButtonGroup = new QButtonGroup(this);
+    m_radioAuto = new QRadioButton("Auto-Detect", radioFrame);
+    m_radioBahiKhata = new QRadioButton("Bahi-Khata", radioFrame);
+    m_radioBusy = new QRadioButton("Busy .bds", radioFrame);
+    m_radioTally = new QRadioButton("Tally XML/Excel", radioFrame);
+
+    m_radioAuto->setChecked(true);
+
+    m_formatButtonGroup->addButton(m_radioAuto, static_cast<int>(MigrationSourceType::AutoDetect));
+    m_formatButtonGroup->addButton(m_radioBahiKhata, static_cast<int>(MigrationSourceType::BahiKhata));
+    m_formatButtonGroup->addButton(m_radioBusy, static_cast<int>(MigrationSourceType::Busy));
+    m_formatButtonGroup->addButton(m_radioTally, static_cast<int>(MigrationSourceType::Tally));
+
+    radioLayout->addWidget(m_radioAuto);
+    radioLayout->addWidget(m_radioBahiKhata);
+    radioLayout->addWidget(m_radioBusy);
+    radioLayout->addWidget(m_radioTally);
+    radioLayout->addStretch(1);
+
+    connect(m_formatButtonGroup, &QButtonGroup::idClicked, this, &MdbMigrationDialog::onFormatRadioToggled);
+    root->addWidget(radioFrame);
 
     // ========================================================================
-    // 2. File Selection Section (Matching MdbMigrationModal.qml lines 88-125)
+    // 3. File Selection Section
     // ========================================================================
     QFrame* fileSectionFrame = new QFrame(this);
-    fileSectionFrame->setFixedHeight(60);
-    fileSectionFrame->setStyleSheet("QFrame { background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 10px; }");
+    fileSectionFrame->setFixedHeight(54);
+    fileSectionFrame->setStyleSheet("QFrame { background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 8px; }");
     QHBoxLayout* fileLayout = new QHBoxLayout(fileSectionFrame);
-    fileLayout->setContentsMargins(12, 10, 12, 10);
+    fileLayout->setContentsMargins(12, 8, 12, 8);
     fileLayout->setSpacing(10);
 
     m_fileLabel = new QLabel(this);
-    m_fileLabel->setStyleSheet("font-size: 13px; color: #0F172A; font-family: 'Consolas', 'Menlo', 'Monaco', 'DejaVu Sans Mono', 'Liberation Mono', 'Courier New', monospace; border: none; background: transparent;");
+    m_fileLabel->setStyleSheet("font-size: 12px; color: #0F172A; font-family: 'Consolas', 'Menlo', 'Monaco', 'DejaVu Sans Mono', 'Liberation Mono', 'Courier New', monospace; border: none; background: transparent;");
     if (!m_filePath.isEmpty()) {
         m_fileLabel->setText(m_filePath);
     } else {
-        m_fileLabel->setText("No file selected (Click browse to select Data.*** or .mdb)");
-        m_fileLabel->setStyleSheet("font-size: 13px; color: #94A3B8; border: none; background: transparent;");
+        m_fileLabel->setText("No file selected (Click browse to select Bahi-Khata, Busy or Tally file)");
+        m_fileLabel->setStyleSheet("font-size: 12px; color: #94A3B8; border: none; background: transparent;");
     }
     fileLayout->addWidget(m_fileLabel, 1);
 
-    m_browseBtn = new QPushButton("Browse File...", fileSectionFrame);
-    m_browseBtn->setFixedSize(120, 34);
+    m_browseBtn = new QPushButton("Browse File / Folder...", fileSectionFrame);
+    m_browseBtn->setFixedSize(160, 32);
     m_browseBtn->setCursor(Qt::PointingHandCursor);
     m_browseBtn->setStyleSheet(
         "QPushButton { background-color: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 6px; padding: 0px 12px; font-weight: 700; color: #0F172A; font-size: 12px; }"
@@ -148,26 +184,26 @@ void MdbMigrationDialog::setupUi() {
     root->addWidget(fileSectionFrame);
 
     // ========================================================================
-    // 3. Preview & Inspection Card (Matching MdbMigrationModal.qml lines 128-238)
+    // 4. Preview & Inspection Card
     // ========================================================================
     QFrame* previewCard = new QFrame(this);
     previewCard->setStyleSheet("QFrame { background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 10px; }");
     QVBoxLayout* previewCardLayout = new QVBoxLayout(previewCard);
-    previewCardLayout->setContentsMargins(14, 12, 14, 12);
-    previewCardLayout->setSpacing(10);
+    previewCardLayout->setContentsMargins(14, 10, 14, 10);
+    previewCardLayout->setSpacing(8);
 
-    QLabel* detectedInfoTitle = new QLabel("📊 Detected Database Information", previewCard);
-    detectedInfoTitle->setStyleSheet("font-size: 13px; font-weight: 700; color: #334155; border: none; background: transparent;");
-    previewCardLayout->addWidget(detectedInfoTitle);
+    m_detectedInfoTitle = new QLabel("Detected Database Information", previewCard);
+    m_detectedInfoTitle->setStyleSheet("font-size: 13px; font-weight: 700; color: #334155; border: none; background: transparent;");
+    previewCardLayout->addWidget(m_detectedInfoTitle);
 
     m_previewStack = new QStackedWidget(previewCard);
 
     // Page 0: Empty / Placeholder / Error View
     QWidget* emptyPage = new QWidget(m_previewStack);
     QVBoxLayout* emptyLayout = new QVBoxLayout(emptyPage);
-    emptyLayout->setContentsMargins(0, 20, 0, 20);
+    emptyLayout->setContentsMargins(0, 16, 0, 16);
     emptyLayout->setAlignment(Qt::AlignCenter);
-    m_emptyPlaceholderLabel = new QLabel("Select a Bahi-Khata database file (e.g. Data.***, *.mdb) to inspect and migrate", emptyPage);
+    m_emptyPlaceholderLabel = new QLabel("Select an accounting file (e.g. Data.*, *.bds, Master.xml, DayBook.xml) to inspect and migrate", emptyPage);
     m_emptyPlaceholderLabel->setWordWrap(true);
     m_emptyPlaceholderLabel->setAlignment(Qt::AlignCenter);
     m_emptyPlaceholderLabel->setStyleSheet("font-size: 13px; color: #64748B; border: none; background: transparent;");
@@ -178,25 +214,25 @@ void MdbMigrationDialog::setupUi() {
     QWidget* statsPage = new QWidget(m_previewStack);
     QGridLayout* grid = new QGridLayout(statsPage);
     grid->setContentsMargins(0, 0, 0, 0);
-    grid->setHorizontalSpacing(16);
-    grid->setVerticalSpacing(12);
+    grid->setHorizontalSpacing(14);
+    grid->setVerticalSpacing(10);
 
-    grid->addWidget(createStatCard("Stock Transactions", &m_stockTxLabel, &m_stockTxTitleLabel, "#F0FDF4", "#BBF7D0", "#166534", "#15803D"), 0, 0);
-    grid->addWidget(createStatCard("Milling Vouchers", &m_millingLabel, &m_millingTitleLabel, "#EFF6FF", "#BFDBFE", "#1E40AF", "#1D4ED8"), 0, 1);
+    grid->addWidget(createStatCard("Vouchers & Transactions", &m_stockTxLabel, &m_stockTxTitleLabel, "#F0FDF4", "#BBF7D0", "#166534", "#15803D"), 0, 0);
+    grid->addWidget(createStatCard("GL Transactions", &m_millingLabel, &m_millingTitleLabel, "#EFF6FF", "#BFDBFE", "#1E40AF", "#1D4ED8"), 0, 1);
     grid->addWidget(createStatCard("Stock Items", &m_stockItemsLabel, &m_stockItemsTitleLabel, "#FAF5FF", "#E9D5FF", "#6B21A8", "#7E22CE"), 1, 0);
-    grid->addWidget(createStatCard("Master Ledgers", &m_ledgersLabel, &m_ledgersTitleLabel, "#FFFBEB", "#FDE68A", "#92400E", "#B45309"), 1, 1);
+    grid->addWidget(createStatCard("Master Accounts / Ledgers", &m_ledgersLabel, &m_ledgersTitleLabel, "#FFFBEB", "#FDE68A", "#92400E", "#B45309"), 1, 1);
     m_previewStack->addWidget(statsPage);
 
     // Page 2: Success Message View
     QWidget* successPage = new QWidget(m_previewStack);
     QVBoxLayout* successLayout = new QVBoxLayout(successPage);
-    successLayout->setContentsMargins(0, 20, 0, 20);
-    successLayout->setSpacing(10);
+    successLayout->setContentsMargins(0, 16, 0, 16);
+    successLayout->setSpacing(8);
     successLayout->setAlignment(Qt::AlignCenter);
 
     QLabel* celebrationLabel = new QLabel("🎉", successPage);
     celebrationLabel->setAlignment(Qt::AlignCenter);
-    celebrationLabel->setStyleSheet("font-size: 36px; border: none; background: transparent;");
+    celebrationLabel->setStyleSheet("font-size: 32px; border: none; background: transparent;");
     successLayout->addWidget(celebrationLabel);
 
     m_successMessageLabel = new QLabel("Migration completed successfully!", successPage);
@@ -210,15 +246,15 @@ void MdbMigrationDialog::setupUi() {
     root->addWidget(previewCard, 1);
 
     // ========================================================================
-    // 4. Progress Section (Matching MdbMigrationModal.qml lines 240-258)
+    // 5. Progress Section
     // ========================================================================
     m_progressContainer = new QWidget(this);
     QVBoxLayout* progLayout = new QVBoxLayout(m_progressContainer);
     progLayout->setContentsMargins(0, 0, 0, 0);
-    progLayout->setSpacing(6);
+    progLayout->setSpacing(4);
 
     QHBoxLayout* progHeader = new QHBoxLayout();
-    m_statusLabel = new QLabel("Migrating transactions...", m_progressContainer);
+    m_statusLabel = new QLabel("Migrating database...", m_progressContainer);
     m_statusLabel->setStyleSheet("font-size: 12px; font-weight: 700; color: #2563EB; border: none; background: transparent;");
     progHeader->addWidget(m_statusLabel);
 
@@ -230,7 +266,7 @@ void MdbMigrationDialog::setupUi() {
     progLayout->addLayout(progHeader);
 
     m_progressBar = new QProgressBar(m_progressContainer);
-    m_progressBar->setFixedHeight(14);
+    m_progressBar->setFixedHeight(12);
     m_progressBar->setRange(0, 100);
     m_progressBar->setValue(0);
     m_progressBar->setTextVisible(false);
@@ -238,11 +274,11 @@ void MdbMigrationDialog::setupUi() {
         "QProgressBar {"
         "  background-color: #F1F5F9;"
         "  border: 1px solid #CBD5E1;"
-        "  border-radius: 7px;"
+        "  border-radius: 6px;"
         "}"
         "QProgressBar::chunk {"
         "  background-color: #2563EB;"
-        "  border-radius: 6px;"
+        "  border-radius: 5px;"
         "}"
     );
     progLayout->addWidget(m_progressBar);
@@ -250,7 +286,7 @@ void MdbMigrationDialog::setupUi() {
     root->addWidget(m_progressContainer);
 
     // ========================================================================
-    // 5. Footer Action Buttons (Matching MdbMigrationModal.qml lines 260-290)
+    // 6. Footer Action Buttons
     // ========================================================================
     QHBoxLayout* footer = new QHBoxLayout();
     footer->setSpacing(12);
@@ -268,7 +304,7 @@ void MdbMigrationDialog::setupUi() {
     footer->addStretch(1);
 
     m_startBtn = new QPushButton("Start In-App Migration", this);
-    m_startBtn->setFixedSize(180, 36);
+    m_startBtn->setFixedSize(190, 36);
     m_startBtn->setCursor(Qt::PointingHandCursor);
     m_startBtn->setStyleSheet(
         "QPushButton { background-color: #2563EB; border: none; border-radius: 6px; padding: 0px 18px; font-weight: 700; color: #FFFFFF; font-size: 12px; }"
@@ -288,6 +324,17 @@ void MdbMigrationDialog::setupUi() {
         connect(m_busyMigrator, &MahadevERP::BusyDataMigrator::migrationProgress, this, &MdbMigrationDialog::onMigrationProgress);
         connect(m_busyMigrator, &MahadevERP::BusyDataMigrator::migrationFinished, this, &MdbMigrationDialog::onMigrationFinished);
     }
+    if (m_tallyMigrator) {
+        connect(m_tallyMigrator, &MahadevERP::TallyDataMigrator::migrationProgress, this, &MdbMigrationDialog::onMigrationProgress);
+        connect(m_tallyMigrator, &MahadevERP::TallyDataMigrator::migrationFinished, this, &MdbMigrationDialog::onMigrationFinished);
+    }
+}
+
+void MdbMigrationDialog::onFormatRadioToggled(int id) {
+    m_selectedSourceType = static_cast<MigrationSourceType>(id);
+    if (!m_filePath.isEmpty()) {
+        inspectFile();
+    }
 }
 
 void MdbMigrationDialog::onBrowseClicked() {
@@ -295,11 +342,20 @@ void MdbMigrationDialog::onBrowseClicked() {
     if (!m_filePath.isEmpty()) {
         startDir = QFileInfo(m_filePath).absolutePath();
     }
-    QString picked = QFileDialog::getOpenFileName(this, "Select Accounting Database File", startDir, "All Supported Accounting Databases (Data.* *.bds *.0* *.mdb *.accdb DISK1.DB);;Busy Databases (*.bds DISK1.DB);;Bahi-Khata Databases (Data.* *.0* *.mdb *.accdb);;All Files (*.*)");
+    QString filter = "All Supported Accounting Files (*.xml Master.xml DayBook.xml Data.* *.bds *.0* *.mdb *.accdb DISK1.DB *.xlsx);;"
+                     "Tally Prime XML (*.xml Master.xml DayBook.xml);;"
+                     "Busy Databases (*.bds DISK1.DB);;"
+                     "Bahi-Khata Databases (Data.* *.0* *.mdb *.accdb);;"
+                     "All Files (*.*)";
+    QString picked = QFileDialog::getOpenFileName(this, "Select Accounting Database File", startDir, filter);
+    if (picked.isEmpty()) {
+        picked = QFileDialog::getExistingDirectory(this, "Select Busy or Tally Directory", startDir);
+    }
+
     if (!picked.isEmpty()) {
         m_filePath = picked;
         m_fileLabel->setText(m_filePath);
-        m_fileLabel->setStyleSheet("font-size: 13px; color: #0F172A; font-family: 'Consolas', 'Menlo', 'Monaco', 'DejaVu Sans Mono', 'Liberation Mono', 'Courier New', monospace; border: none; background: transparent;");
+        m_fileLabel->setStyleSheet("font-size: 12px; color: #0F172A; font-family: 'Consolas', 'Menlo', 'Monaco', 'DejaVu Sans Mono', 'Liberation Mono', 'Courier New', monospace; border: none; background: transparent;");
         inspectFile();
     }
 }
@@ -311,23 +367,67 @@ void MdbMigrationDialog::inspectFile() {
         return;
     }
 
-    // First try Busy Data Migrator
-    m_isBusy = false;
-    if (m_busyMigrator) {
-        m_inspectionData = m_busyMigrator->inspect_busy_data(m_filePath);
-        if (m_inspectionData.value("valid", false).toBool()) {
-            m_isBusy = true;
-        }
-    }
+    m_inspectionData.clear();
+    MigrationSourceType effectiveType = m_selectedSourceType;
 
-    if (!m_isBusy && m_migrator) {
+    if (effectiveType == MigrationSourceType::AutoDetect) {
+        // Smart Probe: Tally -> Busy -> BahiKhata
+        if (m_tallyMigrator) {
+            QVariantMap res = m_tallyMigrator->inspect_tally_data(m_filePath);
+            if (res.value("valid", false).toBool()) {
+                effectiveType = MigrationSourceType::Tally;
+                m_inspectionData = res;
+            }
+        }
+        if (effectiveType == MigrationSourceType::AutoDetect && m_busyMigrator) {
+            QVariantMap res = m_busyMigrator->inspect_busy_data(m_filePath);
+            if (res.value("valid", false).toBool()) {
+                effectiveType = MigrationSourceType::Busy;
+                m_inspectionData = res;
+            }
+        }
+        if (effectiveType == MigrationSourceType::AutoDetect && m_migrator) {
+            QVariantMap res = m_migrator->inspect_mdb_file(m_filePath);
+            if (res.value("valid", false).toBool()) {
+                effectiveType = MigrationSourceType::BahiKhata;
+                m_inspectionData = res;
+            }
+        }
+    } else if (effectiveType == MigrationSourceType::Tally && m_tallyMigrator) {
+        m_inspectionData = m_tallyMigrator->inspect_tally_data(m_filePath);
+    } else if (effectiveType == MigrationSourceType::Busy && m_busyMigrator) {
+        m_inspectionData = m_busyMigrator->inspect_busy_data(m_filePath);
+    } else if (effectiveType == MigrationSourceType::BahiKhata && m_migrator) {
         m_inspectionData = m_migrator->inspect_mdb_file(m_filePath);
     }
 
+    m_detectedSourceType = effectiveType;
     bool valid = m_inspectionData.value("valid", false).toBool();
 
     if (valid) {
-        if (m_isBusy) {
+        if (m_detectedSourceType == MigrationSourceType::Tally) {
+            if (m_detectedInfoTitle) m_detectedInfoTitle->setText("Detected Tally Prime Database Information");
+            int vchCount = m_inspectionData.value("totalVouchersCount", 0).toInt();
+            int glTxCount = m_inspectionData.value("glTransactionsCount", 0).toInt();
+            int itemsCount = m_inspectionData.value("itemsCount", 0).toInt();
+            int accountsCount = m_inspectionData.value("accountsCount", 0).toInt();
+
+            if (m_stockTxTitleLabel) m_stockTxTitleLabel->setText("Vouchers & Invoices");
+            if (m_millingTitleLabel) m_millingTitleLabel->setText("GL Ledger Splits");
+            if (m_stockItemsTitleLabel) m_stockItemsTitleLabel->setText("Stock Items");
+            if (m_ledgersTitleLabel) m_ledgersTitleLabel->setText("Master Ledgers");
+
+            if (m_stockTxLabel) m_stockTxLabel->setText(QString::number(vchCount));
+            if (m_millingLabel) m_millingLabel->setText(QString::number(glTxCount));
+            if (m_stockItemsLabel) m_stockItemsLabel->setText(QString::number(itemsCount));
+            if (m_ledgersLabel) m_ledgersLabel->setText(QString::number(accountsCount));
+
+            QString comp = m_inspectionData.value("companyName").toString();
+            if (m_firmName.isEmpty() && !comp.isEmpty()) {
+                m_firmName = comp;
+            }
+        } else if (m_detectedSourceType == MigrationSourceType::Busy) {
+            if (m_detectedInfoTitle) m_detectedInfoTitle->setText("Detected Busy Accounting Database Information");
             int vchCount = m_inspectionData.value("totalVouchersCount", 0).toInt();
             int glTxCount = m_inspectionData.value("glTransactionsCount", 0).toInt();
             int itemsCount = m_inspectionData.value("itemsCount", 0).toInt();
@@ -348,6 +448,7 @@ void MdbMigrationDialog::inspectFile() {
                 m_firmName = comp;
             }
         } else {
+            if (m_detectedInfoTitle) m_detectedInfoTitle->setText("Detected Bahi-Khata Database Information");
             int txCount = m_inspectionData.value("stockTxCount", 0).toInt();
             int millingCount = m_inspectionData.value("millingCount", 0).toInt();
             int itmCount = m_inspectionData.value("stockItemsCount", 0).toInt();
@@ -369,7 +470,7 @@ void MdbMigrationDialog::inspectFile() {
         m_startBtn->setEnabled(true);
     } else {
         QString err = m_inspectionData.value("error").toString();
-        m_emptyPlaceholderLabel->setText(err.isEmpty() ? "Unable to open Jet database file. Ensure it is a valid Busy (.bds) or Bahi-Khata (.mdb) database." : err);
+        m_emptyPlaceholderLabel->setText(err.isEmpty() ? "Unable to open database file. Ensure it is a valid Tally (XML), Busy (.bds) or Bahi-Khata (.mdb) database." : err);
         m_emptyPlaceholderLabel->setStyleSheet("font-size: 13px; font-weight: 700; color: #DC2626; border: none; background: transparent;");
         m_previewStack->setCurrentIndex(0);
         m_startBtn->setVisible(false);
@@ -394,7 +495,9 @@ void MdbMigrationDialog::onStartMigrationClicked() {
 
     QTimer::singleShot(50, this, [this]() {
         bool ok = false;
-        if (m_isBusy && m_busyMigrator) {
+        if (m_detectedSourceType == MigrationSourceType::Tally && m_tallyMigrator) {
+            ok = m_tallyMigrator->migrate_tally_data(m_filePath);
+        } else if (m_detectedSourceType == MigrationSourceType::Busy && m_busyMigrator) {
             ok = m_busyMigrator->migrate_busy_data(m_filePath);
         } else if (m_migrator) {
             ok = m_migrator->migrate_mdb_file(m_filePath);
@@ -460,4 +563,3 @@ void MdbMigrationDialog::keyPressEvent(QKeyEvent* event) {
     }
     QDialog::keyPressEvent(event);
 }
-

@@ -4,11 +4,21 @@
 #include <QLabel>
 #include <QProgressBar>
 #include <QPushButton>
+#include <QRadioButton>
+#include <QButtonGroup>
 #include <QStackedWidget>
 #include <QGridLayout>
 #include "../engine/bahi_khata_migrator.h"
 #include "../engine/busy_data_migrator.h"
+#include "../engine/tally_data_migrator.h"
 #include "../models/firm_manager.h"
+
+enum class MigrationSourceType {
+    AutoDetect,
+    BahiKhata,
+    Busy,
+    Tally
+};
 
 class MdbMigrationDialog : public QDialog {
     Q_OBJECT
@@ -29,6 +39,7 @@ protected:
 
 private slots:
     void onBrowseClicked();
+    void onFormatRadioToggled(int id);
     void onStartMigrationClicked();
     void onMigrationProgress(int percent, const QString& currentStep);
     void onMigrationFinished(bool success, const QString& summaryMessage);
@@ -40,13 +51,15 @@ private:
 
     BahiKhataMigrator* m_migrator = nullptr;
     MahadevERP::BusyDataMigrator* m_busyMigrator = nullptr;
+    MahadevERP::TallyDataMigrator* m_tallyMigrator = nullptr;
     FirmManager* m_firmMgr = nullptr;
     QString m_filePath;
     QString m_firmName;
     QString m_firmId;
 
     bool m_hasCompleted = false;
-    bool m_isBusy = false;
+    MigrationSourceType m_selectedSourceType = MigrationSourceType::AutoDetect;
+    MigrationSourceType m_detectedSourceType = MigrationSourceType::BahiKhata;
     QVariantMap m_inspectionData;
 
     // Header & file selection
@@ -54,8 +67,16 @@ private:
     QLabel* m_fileLabel = nullptr;
     QPushButton* m_browseBtn = nullptr;
 
+    // Source Format Radio Group
+    QButtonGroup* m_formatButtonGroup = nullptr;
+    QRadioButton* m_radioAuto = nullptr;
+    QRadioButton* m_radioBahiKhata = nullptr;
+    QRadioButton* m_radioBusy = nullptr;
+    QRadioButton* m_radioTally = nullptr;
+
     // Preview Stack (Empty/Error, Stats Grid, Success)
     QStackedWidget* m_previewStack = nullptr;
+    QLabel* m_detectedInfoTitle = nullptr;
     QLabel* m_emptyPlaceholderLabel = nullptr;
     QLabel* m_stockTxLabel = nullptr;
     QLabel* m_stockTxTitleLabel = nullptr;
@@ -77,5 +98,3 @@ private:
     QPushButton* m_startBtn = nullptr;
     QPushButton* m_closeBtn = nullptr;
 };
-
-
