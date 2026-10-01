@@ -2056,6 +2056,9 @@ void LogicBoardTestSuite::testSaudaContractAndDalaliSettlementWorkflow() {
 }
 
 void LogicBoardTestSuite::testNewGroupAndLedgerFourCodeStructure() {
+    DatabaseManager::instance().executeNonQuery("DELETE FROM parties WHERE group_name IN ('North Zone Rice Debtors', 'Ludhiana Rice Mill Buyers') OR name = 'Shree Krishna Agro Ludhiana';");
+    DatabaseManager::instance().executeNonQuery("DELETE FROM account_groups WHERE name IN ('North Zone Rice Debtors', 'Ludhiana Rice Mill Buyers');");
+
     // 1. Test Creating a Custom Group under Sundry Debtors (code 8)
     QString errMsg;
     QString customGroupName = "North Zone Rice Debtors";
