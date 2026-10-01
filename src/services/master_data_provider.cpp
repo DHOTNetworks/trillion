@@ -347,7 +347,31 @@ double MasterDataProvider::getStandardTaxRate(const QString& hsnCode) {
     if (val.isValid() && val.toDouble() >= 0.0) {
         return val.toDouble();
     }
-    return 5.0;
+    return 0.0;
+}
+
+double MasterDataProvider::getItemGstRate(const QString& itemName, int itemId) {
+    if (itemId > 0) {
+        QVariant val = DatabaseManager::instance().executeScalar("SELECT gst_rate FROM stock_items WHERE id = ? LIMIT 1;", { itemId });
+        if (val.isValid() && !val.isNull()) return val.toDouble();
+    }
+    if (!itemName.trimmed().isEmpty()) {
+        QVariant val = DatabaseManager::instance().executeScalar("SELECT gst_rate FROM stock_items WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) LIMIT 1;", { itemName.trimmed() });
+        if (val.isValid() && !val.isNull()) return val.toDouble();
+    }
+    return 0.0;
+}
+
+QString MasterDataProvider::getItemHsnCode(const QString& itemName, int itemId) {
+    if (itemId > 0) {
+        QVariant val = DatabaseManager::instance().executeScalar("SELECT hsn_code FROM stock_items WHERE id = ? LIMIT 1;", { itemId });
+        if (val.isValid() && !val.toString().trimmed().isEmpty()) return val.toString().trimmed();
+    }
+    if (!itemName.trimmed().isEmpty()) {
+        QVariant val = DatabaseManager::instance().executeScalar("SELECT hsn_code FROM stock_items WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) LIMIT 1;", { itemName.trimmed() });
+        if (val.isValid() && !val.toString().trimmed().isEmpty()) return val.toString().trimmed();
+    }
+    return "1006";
 }
 
 double MasterDataProvider::getTcsRate(bool hasPan) {

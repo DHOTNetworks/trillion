@@ -127,8 +127,24 @@ public:
     // Ingest official GST Portal JSON (GSTR-2B / GSTR-2A format)
     static QList<Gstr2PortalRecord> parseGstr2BJson(const QByteArray& jsonData, const QString& returnPeriod = "");
 
-    // Load purchase registers from MahadevAc database
+    // Ingest official GST Portal Excel (GSTR-2B .xlsx format)
+    static QList<Gstr2PortalRecord> parseGstr2BExcel(const QString& filePath, const QString& returnPeriod = "");
+
+    // Auto-detect format (.json or .xlsx) and parse records
+    static QList<Gstr2PortalRecord> loadPortalRecordsFromFile(const QString& filePath, const QString& returnPeriod = "");
+
+    // Load purchase registers from MahadevAc database for specific date range
     static QList<Gstr2BookRecord> loadBookPurchasesFromDb(const QDate& fromDate, const QDate& toDate);
+
+    // Load purchase registers targeted for reconciliation (selected period + specific portal-referenced suppliers)
+    static QList<Gstr2BookRecord> loadBookPurchasesForReconciliation(
+        const QDate& fromDate,
+        const QDate& toDate,
+        const QList<Gstr2PortalRecord>& portalRecords
+    );
+
+    // Load purchase registers dynamically for a return period (e.g. "042026") with lookback window
+    static QList<Gstr2BookRecord> loadBookPurchasesForPeriod(const QString& returnPeriod, int lookbackMonths = 6);
 
     // Save reconciliation tag back into database
     static bool saveReconciliationStatus(int voucherId, MatchStatus status, const QString& remarks);

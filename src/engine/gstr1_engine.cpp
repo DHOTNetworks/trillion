@@ -36,14 +36,15 @@ Gstr1ReturnPayload Gstr1Engine::generateFromDatabase(
         "  COALESCE(s.place_of_supply, '') AS place_of_supply, "
         "  s.total_amount, "
         "  COALESCE(s.gst_amount, s.cgst_amount + s.sgst_amount + s.igst_amount, 0.0) AS tax_amount, "
-        "  COALESCE(si.item_name, s.item_name, 'Rice Commodity') AS item_name, "
-        "  COALESCE(s.hsn_code, '1006') AS hsn_code, "
+        "  COALESCE(si.item_name, s.item_name, stk.name, 'Rice Commodity') AS item_name, "
+        "  COALESCE(stk.hsn_code, s.hsn_code, '1006') AS hsn_code, "
         "  COALESCE(si.weight_qtl, s.weight_qtl, 0.0) AS quantity, "
         "  COALESCE(si.rate_per_qtl, s.rate_per_qtl, 0.0) AS rate, "
-        "  COALESCE(si.gst_pct, s.gst_pct, 5.0) AS tax_rate, "
+        "  COALESCE(si.gst_pct, stk.gst_rate, s.gst_pct, 0.0) AS tax_rate, "
         "  COALESCE(si.taxable_amount, s.taxable_amount, s.total_amount) AS amount "
         "FROM sales_invoices s "
         "LEFT JOIN sales_invoice_items si ON s.id = si.invoice_id "
+        "LEFT JOIN stock_items stk ON (si.item_id = stk.id OR (si.item_id IS NULL AND s.item_id = stk.id) OR stk.name = s.item_name OR stk.name = si.item_name) "
         "WHERE s.invoice_date >= '%1' AND s.invoice_date <= '%2' "
         "ORDER BY s.invoice_date ASC, s.id ASC;"
     ).arg(fromStr, toStr);
@@ -93,7 +94,6 @@ Gstr1ReturnPayload Gstr1Engine::generateFromDatabase(
         double qty = r.value("quantity").toDouble();
         double itemAmt = r.value("amount").toDouble();
         double taxRate = r.value("tax_rate").toDouble();
-        if (taxRate <= 0.0) taxRate = 5.0;
 
         bool isIntra = (invMap[invNo].pos == stateCode);
         double igst = isIntra ? 0.0 : round2(itemAmt * (taxRate / 100.0));
@@ -137,7 +137,6 @@ Gstr1ReturnPayload Gstr1Engine::generateFromDatabase(
             for (const auto& item : ti.items) {
                 Gstr1B2BItem bi;
                 bi.rate = item.value("tax_rate").toDouble();
-                if (bi.rate <= 0.0) bi.rate = 5.0;
                 bi.taxableValue = item.value("amount").toDouble();
                 if (isIntra) {
                     bi.cgst = round2(bi.taxableValue * (bi.rate / 200.0));
@@ -162,7 +161,6 @@ Gstr1ReturnPayload Gstr1Engine::generateFromDatabase(
                     b2cl.invoiceValue = ti.totalVal;
                     b2cl.pos = ti.pos;
                     b2cl.rate = item.value("tax_rate").toDouble();
-                    if (b2cl.rate <= 0.0) b2cl.rate = 5.0;
                     b2cl.taxableValue = item.value("amount").toDouble();
                     b2cl.igst = round2(b2cl.taxableValue * (b2cl.rate / 100.0));
                     payload.b2cl.append(b2cl);
@@ -171,7 +169,6 @@ Gstr1ReturnPayload Gstr1Engine::generateFromDatabase(
                 // Table 7: B2CS (Small Invoices aggregated by POS + Rate)
                 for (const auto& item : ti.items) {
                     double r = item.value("tax_rate").toDouble();
-                    if (r <= 0.0) r = 5.0;
                     QString key = QString("%1_%2").arg(ti.pos).arg(r);
                     if (!b2csAgg.contains(key)) {
                         Gstr1B2CSSummary cs;

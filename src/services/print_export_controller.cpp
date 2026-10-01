@@ -455,10 +455,23 @@ QString PrintExportController::exportTableToCsv(const QStringList& headers, cons
 // 2.1 Sales Invoice
 QString PrintExportController::renderSalesInvoiceSingleHtml(const QString& invoiceNo, const QString& copySubtitle) {
     auto firm = getFirmProfile();
+    QString q = invoiceNo.trimmed();
 
     QVariantList invRows = DatabaseManager::instance().executeQuery(
-        "SELECT * FROM sales_invoices WHERE invoice_no = ? OR id = ? LIMIT 1;",
-        {invoiceNo.trimmed(), invoiceNo.trimmed()}
+        "SELECT * FROM sales_invoices "
+        "WHERE invoice_no = ? "
+        "   OR voucher_no = ? "
+        "   OR id = ? "
+        "   OR invoice_no LIKE '%/' || ? "
+        "   OR invoice_no LIKE '%-' || ? "
+        "ORDER BY "
+        "   CASE WHEN invoice_no = ? THEN 1 "
+        "        WHEN voucher_no = ? THEN 2 "
+        "        WHEN id = ? THEN 3 "
+        "        ELSE 4 END, "
+        "   invoice_date DESC, id DESC "
+        "LIMIT 1;",
+        {q, q, q, q, q, q, q, q}
     );
     if (invRows.isEmpty()) {
         return "<h2>Invoice not found: " + invoiceNo + "</h2>";
@@ -467,15 +480,80 @@ QString PrintExportController::renderSalesInvoiceSingleHtml(const QString& invoi
     QVariantMap inv = invRows.first().toMap();
     int invId = inv.value("id").toInt();
     QString invNum = inv.value("invoice_no").toString();
+    if (invNum.isEmpty()) invNum = inv.value("voucher_no").toString();
+    QString vNum = inv.value("voucher_no").toString();
     QString invDate = formatDisplayDate(inv.value("invoice_date").toString());
     QString custName = inv.value("customer_name").toString();
     int custId = inv.value("customer_id").toInt();
     QString vehNo = inv.value("vehicle_no").toString();
+    QString ewayNo = inv.value("eway_bill_no").toString();
+    QString grNo = inv.value("gr_no").toString();
+
+    QVariantMap party = getPartyProfile(custId, custName);
+    QString custGstin = inv.value("gstin").toString().trimmed();
+    if (custGstin.isEmpty()) custGstin = inv.value("customer_gstin").toString().trimmed();
+    if (custGstin.isEmpty()) custGstin = party.value("gstin").toString().trimmed();
+
+    QString custAddress = party.value("address").toString().trimmed();
+    QString custCity = party.value("city").toString().trimmed();
+    QString custState = party.value("state").toString().trimmed();
+    QString custPhone = party.value("phone").toString().trimmed();
+
+    QString custDetailsHtml = "<b>" + (custName.isEmpty() ? "Cash Sale" : custName) + "</b><br>";
+    if (!custAddress.isEmpty()) custDetailsHtml += custAddress + "<br>";
+    if (!custCity.isEmpty() || !custState.isEmpty()) {
+        QStringList loc;
+        if (!custCity.isEmpty()) loc << custCity;
+        if (!custState.isEmpty()) loc << custState;
+        custDetailsHtml += loc.join(", ") + "<br>";
+    }
+    if (!custGstin.isEmpty()) {
+        custDetailsHtml += "<b>GSTIN:</b> " + custGstin;
+    } else {
+        custDetailsHtml += "<b>GSTIN:</b> Unregistered / Consumer";
+    }
+    if (!party.value("pan").toString().isEmpty()) {
+        custDetailsHtml += " &nbsp;|&nbsp; <b>PAN:</b> " + party.value("pan").toString();
+    }
+    if (!custPhone.isEmpty()) {
+        custDetailsHtml += " &nbsp;|&nbsp; <b>Ph:</b> " + custPhone;
+    }
+
+    QString invoiceDetailsHtml = "<b>Invoice No:</b> " + invNum + "<br>";
+    if (!vNum.isEmpty() && vNum != invNum) {
+        invoiceDetailsHtml += "<b>Voucher No:</b> " + vNum + "<br>";
+    }
+    invoiceDetailsHtml += "<b>Date:</b> " + invDate + "<br>";
+    if (!vehNo.isEmpty()) {
+        invoiceDetailsHtml += "<b>Vehicle No:</b> " + vehNo + "<br>";
+    }
+    if (!ewayNo.isEmpty()) {
+        invoiceDetailsHtml += "<b>E-Way Bill:</b> " + ewayNo + "<br>";
+    }
+    if (!grNo.isEmpty()) {
+        invoiceDetailsHtml += "<b>GR No:</b> " + grNo + "<br>";
+    }
 
     QVariantList items = DatabaseManager::instance().executeQuery(
         "SELECT * FROM sales_invoice_items WHERE invoice_id = ? ORDER BY id ASC;",
         {invId}
     );
+
+    if (items.isEmpty()) {
+        QString itemName = inv.value("item_name").toString().trimmed();
+        if (itemName.isEmpty()) itemName = inv.value("commodity").toString().trimmed();
+        if (itemName.isEmpty()) itemName = "Rice / Paddy";
+
+        QVariantMap fallbackItem;
+        fallbackItem["item_name"] = itemName;
+        fallbackItem["hsn_code"] = inv.value("hsn_code", "1006").toString();
+        fallbackItem["bag_count"] = inv.value("bag_count", 0);
+        fallbackItem["weight_qtl"] = inv.value("weight_qtl", 0.0);
+        fallbackItem["rate_per_qtl"] = inv.value("rate_per_qtl", 0.0);
+        fallbackItem["taxable_amount"] = inv.value("taxable_amount", 0.0);
+        fallbackItem["gst_amount"] = inv.value("gst_amount", 0.0);
+        items.append(fallbackItem);
+    }
 
     QString itemRowsHtml = "";
     int rowIdx = 1;
@@ -520,6 +598,9 @@ QString PrintExportController::renderSalesInvoiceSingleHtml(const QString& invoi
     }
 
     double grandTotal = inv.value("total_amount").toDouble();
+    if (grandTotal <= 0.0 && totalTaxable > 0.0) {
+        grandTotal = totalTaxable + totalGst;
+    }
 
     QString html = QString(
         "<!DOCTYPE html><html><head><style>"
@@ -537,8 +618,8 @@ QString PrintExportController::renderSalesInvoiceSingleHtml(const QString& invoi
         "</div>"
         "<table>"
         "  <tr>"
-        "    <td width='50%' valign='top'><b>Billed To:</b><br><font size='3'><b>%7</b></font><br>GSTIN: %8</td>"
-        "    <td width='50%' valign='top'><b>Invoice No:</b> %9<br><b>Date:</b> %10<br><b>Vehicle No:</b> %11</td>"
+        "    <td width='50%' valign='top'><b>Billed To:</b><br>%7</td>"
+        "    <td width='50%' valign='top'>%8</td>"
         "  </tr>"
         "</table>"
         "<table>"
@@ -552,20 +633,20 @@ QString PrintExportController::renderSalesInvoiceSingleHtml(const QString& invoi
         "    <th width='10%'>Taxable ₹</th>"
         "    <th width='10%'>Total ₹</th>"
         "  </tr>"
-        "  %12"
+        "  %9"
         "  <tr style='font-weight: bold; background-color: #f8fafc;'>"
         "    <td colspan='3' align='right'>TOTAL:</td>"
-        "    <td align='center'>%13</td>"
-        "    <td align='right'>%14</td>"
+        "    <td align='center'>%10</td>"
+        "    <td align='right'>%11</td>"
         "    <td></td>"
-        "    <td align='right'>%15</td>"
-        "    <td align='right'>%16</td>"
+        "    <td align='right'>%12</td>"
+        "    <td align='right'>%13</td>"
         "  </tr>"
         "</table>"
         "<table>"
         "  <tr>"
-        "    <td width='65%'><b>Amount in Words:</b><br>%17</td>"
-        "    <td width='35%' align='right'><b>GRAND TOTAL: <font size='3'>%16</font></b></td>"
+        "    <td width='65%'><b>Amount in Words:</b><br>%14</td>"
+        "    <td width='35%' align='right'><b>GRAND TOTAL: <font size='3'>%13</font></b></td>"
         "  </tr>"
         "</table>"
         "<table style='margin-top: 15px; border: none;'>"
@@ -582,11 +663,8 @@ QString PrintExportController::renderSalesInvoiceSingleHtml(const QString& invoi
     .arg(firm.value("gstin").toString())
     .arg(firm.value("state").toString())
     .arg(copySubtitle)
-    .arg(custName)
-    .arg(inv.value("customer_gstin").toString())
-    .arg(invNum)
-    .arg(invDate)
-    .arg(vehNo.isEmpty() ? "N/A" : vehNo)
+    .arg(custDetailsHtml)
+    .arg(invoiceDetailsHtml)
     .arg(itemRowsHtml)
     .arg(totalBags)
     .arg(QString::number(totalWeight, 'f', 2))
@@ -652,10 +730,23 @@ bool PrintExportController::print_sales_invoice_all_copies(const QString& invoic
 // 2.2 Purchase Invoice
 QString PrintExportController::renderPurchaseInvoiceHtml(const QString& invoiceNo) {
     auto firm = getFirmProfile();
+    QString q = invoiceNo.trimmed();
 
     QVariantList purcRows = DatabaseManager::instance().executeQuery(
-        "SELECT * FROM purchase_invoices WHERE invoice_no = ? OR voucher_no = ? OR id = ? LIMIT 1;",
-        {invoiceNo.trimmed(), invoiceNo.trimmed(), invoiceNo.trimmed()}
+        "SELECT * FROM purchase_invoices "
+        "WHERE invoice_no = ? "
+        "   OR voucher_no = ? "
+        "   OR id = ? "
+        "   OR invoice_no LIKE '%/' || ? "
+        "   OR invoice_no LIKE '%-' || ? "
+        "ORDER BY "
+        "   CASE WHEN invoice_no = ? THEN 1 "
+        "        WHEN voucher_no = ? THEN 2 "
+        "        WHEN id = ? THEN 3 "
+        "        ELSE 4 END, "
+        "   invoice_date DESC, id DESC "
+        "LIMIT 1;",
+        {q, q, q, q, q, q, q, q}
     );
     if (purcRows.isEmpty()) {
         return "<h2>Purchase voucher not found: " + invoiceNo + "</h2>";
@@ -665,20 +756,79 @@ QString PrintExportController::renderPurchaseInvoiceHtml(const QString& invoiceN
     int pId = p.value("id").toInt();
     QString vNum = p.value("voucher_no").toString();
     QString invNum = p.value("invoice_no").toString();
+    if (invNum.isEmpty()) invNum = vNum;
     QString invDate = formatDisplayDate(p.value("invoice_date").toString());
     QString suppName = p.value("supplier_name").toString();
-    double totalBill = p.value("total_amount").toDouble();
+    int suppId = p.value("supplier_id").toInt();
+    QString vehNo = p.value("vehicle_no").toString();
+    QString ewayNo = p.value("eway_bill_no").toString();
+    QString grNo = p.value("gr_no").toString();
+
+    QVariantMap party = getPartyProfile(suppId, suppName);
+    QString suppGstin = p.value("gstin").toString().trimmed();
+    if (suppGstin.isEmpty()) suppGstin = p.value("supplier_gstin").toString().trimmed();
+    if (suppGstin.isEmpty()) suppGstin = party.value("gstin").toString().trimmed();
+
+    QString suppAddress = party.value("address").toString().trimmed();
+    QString suppCity = party.value("city").toString().trimmed();
+    QString suppState = party.value("state").toString().trimmed();
+    QString suppPhone = party.value("phone").toString().trimmed();
+
+    QString suppDetailsHtml = "<b>" + (suppName.isEmpty() ? "Supplier" : suppName) + "</b><br>";
+    if (!suppAddress.isEmpty()) suppDetailsHtml += suppAddress + "<br>";
+    if (!suppCity.isEmpty() || !suppState.isEmpty()) {
+        QStringList loc;
+        if (!suppCity.isEmpty()) loc << suppCity;
+        if (!suppState.isEmpty()) loc << suppState;
+        suppDetailsHtml += loc.join(", ") + "<br>";
+    }
+    if (!suppGstin.isEmpty()) {
+        suppDetailsHtml += "<b>GSTIN:</b> " + suppGstin;
+    } else {
+        suppDetailsHtml += "<b>GSTIN:</b> Unregistered";
+    }
+    if (!party.value("pan").toString().isEmpty()) {
+        suppDetailsHtml += " &nbsp;|&nbsp; <b>PAN:</b> " + party.value("pan").toString();
+    }
+    if (!suppPhone.isEmpty()) {
+        suppDetailsHtml += " &nbsp;|&nbsp; <b>Ph:</b> " + suppPhone;
+    }
+
+    QString voucherDetailsHtml = "";
+    if (!vNum.isEmpty()) voucherDetailsHtml += "<b>Voucher No:</b> " + vNum + "<br>";
+    if (!invNum.isEmpty() && invNum != vNum) voucherDetailsHtml += "<b>Bill / Inv No:</b> " + invNum + "<br>";
+    voucherDetailsHtml += "<b>Date:</b> " + invDate + "<br>";
+    if (!vehNo.isEmpty()) voucherDetailsHtml += "<b>Vehicle No:</b> " + vehNo + "<br>";
+    if (!ewayNo.isEmpty()) voucherDetailsHtml += "<b>E-Way Bill:</b> " + ewayNo + "<br>";
+    if (!grNo.isEmpty()) voucherDetailsHtml += "<b>GR No:</b> " + grNo + "<br>";
 
     QVariantList items = DatabaseManager::instance().executeQuery(
         "SELECT * FROM purchase_invoice_items WHERE invoice_id = ? ORDER BY id ASC;",
         {pId}
     );
 
+    if (items.isEmpty()) {
+        QString itemName = p.value("item_name").toString().trimmed();
+        if (itemName.isEmpty()) itemName = p.value("commodity").toString().trimmed();
+        if (itemName.isEmpty()) itemName = "Paddy / Rice";
+
+        QVariantMap fallbackItem;
+        fallbackItem["item_name"] = itemName;
+        fallbackItem["hsn_code"] = p.value("hsn_code", "1006").toString();
+        fallbackItem["bag_count"] = p.value("bag_count", 0);
+        fallbackItem["weight_qtl"] = p.value("weight_qtl", 0.0);
+        fallbackItem["rate_per_qtl"] = p.value("rate_per_qtl", 0.0);
+        fallbackItem["taxable_amount"] = p.value("taxable_amount", 0.0);
+        fallbackItem["gst_amount"] = p.value("gst_amount", 0.0);
+        items.append(fallbackItem);
+    }
+
     QString itemRowsHtml = "";
     int rowIdx = 1;
     long long totalBags = 0;
     double totalWeight = 0.0;
     double totalTaxable = 0.0;
+    double totalGst = 0.0;
 
     for (const auto& var : items) {
         QVariantMap it = var.toMap();
@@ -691,6 +841,7 @@ QString PrintExportController::renderPurchaseInvoiceHtml(const QString& invoiceN
         totalBags += bags;
         totalWeight += wt;
         totalTaxable += taxAmt;
+        totalGst += gstVal;
 
         itemRowsHtml += QString(
             "<tr>"
@@ -714,6 +865,11 @@ QString PrintExportController::renderPurchaseInvoiceHtml(const QString& invoiceN
         .arg(formatINR(taxAmt + gstVal));
     }
 
+    double totalBill = p.value("total_amount").toDouble();
+    if (totalBill <= 0.0 && totalTaxable > 0.0) {
+        totalBill = totalTaxable + totalGst;
+    }
+
     QString html = QString(
         "<!DOCTYPE html><html><head><style>"
         "body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 8pt; color: #000; margin: 0; padding: 10px; }"
@@ -729,8 +885,8 @@ QString PrintExportController::renderPurchaseInvoiceHtml(const QString& invoiceN
         "</div>"
         "<table>"
         "  <tr>"
-        "    <td width='50%' valign='top'><b>Supplier:</b><br><font size='3'><b>%4</b></font><br>GSTIN: %5</td>"
-        "    <td width='50%' valign='top'><b>Voucher No:</b> %6<br><b>Bill No:</b> %7<br><b>Date:</b> %8</td>"
+        "    <td width='50%' valign='top'><b>Supplier:</b><br>%4</td>"
+        "    <td width='50%' valign='top'>%5</td>"
         "  </tr>"
         "</table>"
         "<table>"
@@ -744,20 +900,20 @@ QString PrintExportController::renderPurchaseInvoiceHtml(const QString& invoiceN
         "    <th width='10%'>Taxable ₹</th>"
         "    <th width='10%'>Total ₹</th>"
         "  </tr>"
-        "  %9"
+        "  %6"
         "  <tr style='font-weight: bold; background-color: #f8fafc;'>"
         "    <td colspan='3' align='right'>TOTAL:</td>"
-        "    <td align='center'>%10</td>"
-        "    <td align='right'>%11</td>"
+        "    <td align='center'>%7</td>"
+        "    <td align='right'>%8</td>"
         "    <td></td>"
-        "    <td align='right'>%12</td>"
-        "    <td align='right'>%13</td>"
+        "    <td align='right'>%9</td>"
+        "    <td align='right'>%10</td>"
         "  </tr>"
         "</table>"
         "<table>"
         "  <tr>"
-        "    <td width='65%'><b>Amount in Words:</b><br>%14</td>"
-        "    <td width='35%' align='right'><b>TOTAL BILL: <font size='3'>%13</font></b></td>"
+        "    <td width='65%'><b>Amount in Words:</b><br>%11</td>"
+        "    <td width='35%' align='right'><b>TOTAL BILL: <font size='3'>%10</font></b></td>"
         "  </tr>"
         "</table>"
         "</body></html>"
@@ -765,11 +921,8 @@ QString PrintExportController::renderPurchaseInvoiceHtml(const QString& invoiceN
     .arg(firm.value("firm_name").toString())
     .arg(firm.value("address").toString())
     .arg(firm.value("phone").toString())
-    .arg(suppName)
-    .arg(p.value("supplier_gstin").toString())
-    .arg(vNum)
-    .arg(invNum)
-    .arg(invDate)
+    .arg(suppDetailsHtml)
+    .arg(voucherDetailsHtml)
     .arg(itemRowsHtml)
     .arg(totalBags)
     .arg(QString::number(totalWeight, 'f', 2))

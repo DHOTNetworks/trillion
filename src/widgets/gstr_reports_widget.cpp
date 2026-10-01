@@ -1,4 +1,5 @@
 #include "gstr_reports_widget.h"
+#include "accounting_period_dialog.h"
 #include "voucher_date_dialog.h"
 #include "kbd_badge_button.h"
 #include "gst_portal_sync_dialog.h"
@@ -13,6 +14,7 @@
 #include <QGroupBox>
 #include <QFormLayout>
 #include <QFrame>
+#include <QScrollArea>
 
 namespace MahadevERP {
 
@@ -108,6 +110,7 @@ void GstrReportsWidget::setupUi() {
         if (VoucherDateDialog::selectDateRange(this, &f, &t, f, t)) {
             m_fromDateEdit->setDate(f);
             m_toDateEdit->setDate(t);
+            loadReturns(f, t);
         }
     };
     connect(m_fromDateEdit, &AccountingDateDisplay::clicked, this, openPeriodDlg);
@@ -115,7 +118,7 @@ void GstrReportsWidget::setupUi() {
 
     auto* periodBtn = new QPushButton("Period (F2)", filterCard);
     periodBtn->setStyleSheet(
-        "QPushButton { background-color: #EFF6FF; color: #1D4ED8; border: 1px solid #BFDBFE; font-weight: 700; font-size: 11px; border-radius: 6px; padding: 4px 10px; }"
+        "QPushButton { background-color: #EFF6FF; color: #1D4ED8; border: 1px solid #BFDBFE; font-weight: 700; font-size: 11px; border-radius: 6px; padding: 4px 10px; cursor: pointer; }"
         "QPushButton:hover { background-color: #DBEAFE; color: #1E40AF; }"
     );
     connect(periodBtn, &QPushButton::clicked, this, openPeriodDlg);
@@ -142,10 +145,26 @@ void GstrReportsWidget::setupUi() {
     filterLayout->addWidget(gstinBadge);
 
     FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
-    QLabel* fyBadge = new QLabel(activeFy.name + " (Active)", filterCard);
-    fyBadge->setAlignment(Qt::AlignCenter);
+    auto* fyBadge = new QPushButton(activeFy.name + " (Active)", filterCard);
     fyBadge->setFixedHeight(34);
-    fyBadge->setStyleSheet("background-color: #F0FDF4; color: #16A34A; border: 1.5px solid #86EFAC; border-radius: 6px; padding: 0px 14px; font-weight: 800; font-size: 12px;");
+    fyBadge->setStyleSheet(
+        "QPushButton { background-color: #F0FDF4; color: #16A34A; border: 1.5px solid #86EFAC; border-radius: 6px; padding: 0px 14px; font-weight: 800; font-size: 12px; cursor: pointer; }"
+        "QPushButton:hover { background-color: #DCFCE7; border-color: #4ADE80; }"
+    );
+    connect(fyBadge, &QPushButton::clicked, this, [this, fyBadge]() {
+        QDate f = m_fromDateEdit->date();
+        QDate t = m_toDateEdit->date();
+        QString fIso = f.toString("yyyy-MM-dd");
+        QString tIso = t.toString("yyyy-MM-dd");
+        QString fyLabel;
+        if (AccountingPeriodDialog::selectAndApplyGlobalPeriod(this, &fIso, &tIso, &fyLabel)) {
+            m_fromDateEdit->setDate(QDate::fromString(fIso, "yyyy-MM-dd"));
+            m_toDateEdit->setDate(QDate::fromString(tIso, "yyyy-MM-dd"));
+            FiscalYearInfo newFy = FiscalYearHelper::getActiveFiscalYear();
+            fyBadge->setText(newFy.name + " (Active)");
+            loadReturns(m_fromDateEdit->date(), m_toDateEdit->date());
+        }
+    });
     filterLayout->addWidget(fyBadge);
 
     mainLayout->addWidget(filterCard);
@@ -284,66 +303,141 @@ void GstrReportsWidget::setupUi() {
     m_tabs->addTab(gstr2Widget, "  GSTR-2A / 2B (ITC Matcher)  ");
 
     // ---------- TAB 3: GSTR-3B TAX COMPUTATION SUMMARY ----------
-    auto* gstr3bWidget = new QWidget(m_tabs);
+    auto* gstr3bScroll = new QScrollArea(m_tabs);
+    gstr3bScroll->setWidgetResizable(true);
+    gstr3bScroll->setFrameShape(QFrame::NoFrame);
+    gstr3bScroll->setStyleSheet("background-color: transparent;");
+
+    auto* gstr3bWidget = new QWidget();
     auto* gstr3bLayout = new QVBoxLayout(gstr3bWidget);
-    gstr3bLayout->setContentsMargins(14, 14, 14, 14);
-    gstr3bLayout->setSpacing(14);
+    gstr3bLayout->setContentsMargins(10, 10, 10, 14);
+    gstr3bLayout->setSpacing(12);
 
-    // Section 1: Outward Supplies Table 3.1
-    auto* groupOutward = new QGroupBox("Table 3.1: Details of Outward Supplies & RCM Liabilities", gstr3bWidget);
-    auto* formOutward = new QFormLayout(groupOutward);
-    formOutward->setContentsMargins(16, 16, 16, 16);
-    formOutward->setSpacing(10);
-    formOutward->setLabelAlignment(Qt::AlignLeft);
+    // GSTR-3B Actions Bar
+    QFrame* gstr3bActionBar = new QFrame(gstr3bWidget);
+    gstr3bActionBar->setFixedHeight(50);
+    gstr3bActionBar->setStyleSheet("background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px;");
+    QHBoxLayout* gstr3bActionLayout = new QHBoxLayout(gstr3bActionBar);
+    gstr3bActionLayout->setContentsMargins(14, 6, 14, 6);
+    gstr3bActionLayout->setSpacing(12);
 
-    m_gstr3bTaxableLabel = new QLabel("₹0.00", groupOutward);
-    m_gstr3bTaxableLabel->setStyleSheet("font-size: 13px; font-weight: 700; color: #0F172A;");
-    m_gstr3bIgstLabel = new QLabel("₹0.00", groupOutward);
-    m_gstr3bIgstLabel->setStyleSheet("font-size: 13px; font-weight: 700; color: #2563EB;");
-    m_gstr3bCgstLabel = new QLabel("₹0.00", groupOutward);
-    m_gstr3bCgstLabel->setStyleSheet("font-size: 13px; font-weight: 700; color: #0D9488;");
-    m_gstr3bSgstLabel = new QLabel("₹0.00", groupOutward);
-    m_gstr3bSgstLabel->setStyleSheet("font-size: 13px; font-weight: 700; color: #0D9488;");
+    m_gstr3bBanner = new QLabel("Form GSTR-3B: Monthly Summary Return & Tax Computation", gstr3bActionBar);
+    m_gstr3bBanner->setStyleSheet("font-weight: 800; color: #0F172A; font-size: 13px; font-family: 'Segoe UI', -apple-system, sans-serif; border: none; background: transparent;");
+    gstr3bActionLayout->addWidget(m_gstr3bBanner);
 
-    formOutward->addRow("<b>Total Taxable Value (Outward Supplies):</b>", m_gstr3bTaxableLabel);
-    formOutward->addRow("<b>Integrated Tax (IGST) Liability:</b>", m_gstr3bIgstLabel);
-    formOutward->addRow("<b>Central Tax (CGST) Liability:</b>", m_gstr3bCgstLabel);
-    formOutward->addRow("<b>State / UT Tax (SGST) Liability:</b>", m_gstr3bSgstLabel);
-    gstr3bLayout->addWidget(groupOutward);
+    gstr3bActionLayout->addStretch(1);
 
-    // Section 2: Eligible ITC Table 4
-    auto* groupItc = new QGroupBox("Table 4: Eligible Input Tax Credit (ITC Available from Purchases)", gstr3bWidget);
-    auto* formItc = new QFormLayout(groupItc);
-    formItc->setContentsMargins(16, 16, 16, 16);
-    formItc->setSpacing(10);
-    formItc->setLabelAlignment(Qt::AlignLeft);
+    m_gstr3bNetPayableBanner = new QLabel("Net Cash Tax Payable: ₹0.00", gstr3bActionBar);
+    m_gstr3bNetPayableBanner->setStyleSheet("background-color: #FEF2F2; color: #DC2626; border: 1px solid #FCA5A5; border-radius: 6px; padding: 4px 12px; font-weight: 800; font-size: 12px;");
+    gstr3bActionLayout->addWidget(m_gstr3bNetPayableBanner);
 
-    m_gstr3bItcIgstLabel = new QLabel("₹0.00", groupItc);
-    m_gstr3bItcIgstLabel->setStyleSheet("font-size: 13px; font-weight: 700; color: #2563EB;");
-    m_gstr3bItcCgstLabel = new QLabel("₹0.00", groupItc);
-    m_gstr3bItcCgstLabel->setStyleSheet("font-size: 13px; font-weight: 700; color: #0D9488;");
-    m_gstr3bItcSgstLabel = new QLabel("₹0.00", groupItc);
-    m_gstr3bItcSgstLabel->setStyleSheet("font-size: 13px; font-weight: 700; color: #0D9488;");
+    m_exportGstr3BBtn = new KbdBadgeButton("Export GSTR-3B Excel (Bahi-Khata)", "Alt+X", QColor("#16A34A"), QColor("#15803D"), QColor("#FFFFFF"), QColor("#16A34A"), gstr3bActionBar);
+    connect(m_exportGstr3BBtn, &QPushButton::clicked, this, &GstrReportsWidget::onExportGstr3BExcelClicked);
+    gstr3bActionLayout->addWidget(m_exportGstr3BBtn);
 
-    formItc->addRow("<b>Eligible ITC - Integrated Tax (IGST):</b>", m_gstr3bItcIgstLabel);
-    formItc->addRow("<b>Eligible ITC - Central Tax (CGST):</b>", m_gstr3bItcCgstLabel);
-    formItc->addRow("<b>Eligible ITC - State Tax (SGST):</b>", m_gstr3bItcSgstLabel);
-    gstr3bLayout->addWidget(groupItc);
+    gstr3bLayout->addWidget(gstr3bActionBar);
 
-    // Section 3: Net Cash Payable Card
-    auto* groupPayable = new QGroupBox("Table 6.1: Net Tax Payable in Cash (Liability - Available ITC)", gstr3bWidget);
-    auto* formPayable = new QFormLayout(groupPayable);
-    formPayable->setContentsMargins(16, 16, 16, 16);
-    formPayable->setSpacing(10);
-    formPayable->setLabelAlignment(Qt::AlignLeft);
+    auto styleTable = [](QTableWidget* table, int rowHeight = 28) {
+        table->setSelectionBehavior(QAbstractItemView::SelectRows);
+        table->setSelectionMode(QAbstractItemView::SingleSelection);
+        table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+        table->setAlternatingRowColors(true);
+        table->verticalHeader()->setVisible(false);
+        table->verticalHeader()->setDefaultSectionSize(rowHeight);
+        table->setShowGrid(true);
+        table->setStyleSheet(
+            "QTableWidget { background-color: #FFFFFF; alternate-background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 6px; gridline-color: #E2E8F0; font-size: 11.5px; color: #0F172A; }"
+            "QHeaderView::section { background-color: #1E293B; color: #FFFFFF; font-weight: 800; font-size: 11.5px; padding: 6px 8px; border: none; border-right: 1px solid #334155; }"
+        );
+    };
 
-    m_gstr3bNetPayableLabel = new QLabel("₹0.00", groupPayable);
-    m_gstr3bNetPayableLabel->setStyleSheet("font-size: 17px; font-weight: 800; color: #DC2626;");
-    formPayable->addRow("<b>Total Net Cash Tax Payable:</b>", m_gstr3bNetPayableLabel);
-    gstr3bLayout->addWidget(groupPayable);
+    // --- 1. Table 3.1: Details of Outward Supplies & RCM Liabilities ---
+    auto* card31 = new QFrame(gstr3bWidget);
+    card31->setStyleSheet("background-color: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 8px;");
+    auto* lay31 = new QVBoxLayout(card31);
+    lay31->setContentsMargins(12, 10, 12, 10);
+    lay31->setSpacing(6);
+    auto* lbl31 = new QLabel("Table 3.1: Details of Outward Supplies and Inward Supplies Liable to Reverse Charge", card31);
+    lbl31->setStyleSheet("font-size: 12.5px; font-weight: 800; color: #1D4ED8; border: none; background: transparent;");
+    lay31->addWidget(lbl31);
 
-    gstr3bLayout->addStretch(1);
-    m_tabs->addTab(gstr3bWidget, "  GSTR-3B (Monthly Summary)  ");
+    m_gstr3bTable31 = new QTableWidget(6, 6, card31);
+    m_gstr3bTable31->setHorizontalHeaderLabels({
+        "Nature of Supplies", "Total Taxable Value (₹)", "Integrated Tax (₹)", "Central Tax (₹)", "State/UT Tax (₹)", "Cess (₹)"
+    });
+    m_gstr3bTable31->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+    for (int c = 1; c < 6; ++c) m_gstr3bTable31->horizontalHeader()->setSectionResizeMode(c, QHeaderView::ResizeToContents);
+    m_gstr3bTable31->setFixedHeight(200);
+    styleTable(m_gstr3bTable31);
+    lay31->addWidget(m_gstr3bTable31);
+    gstr3bLayout->addWidget(card31);
+
+    // --- 2. Table 4: Eligible Input Tax Credit ---
+    auto* card4 = new QFrame(gstr3bWidget);
+    card4->setStyleSheet("background-color: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 8px;");
+    auto* lay4 = new QVBoxLayout(card4);
+    lay4->setContentsMargins(12, 10, 12, 10);
+    lay4->setSpacing(6);
+    auto* lbl4 = new QLabel("Table 4: Eligible Input Tax Credit (ITC Available from Purchases)", card4);
+    lbl4->setStyleSheet("font-size: 12.5px; font-weight: 800; color: #0D9488; border: none; background: transparent;");
+    lay4->addWidget(lbl4);
+
+    m_gstr3bTable4 = new QTableWidget(4, 5, card4);
+    m_gstr3bTable4->setHorizontalHeaderLabels({
+        "Details", "Integrated Tax (₹)", "Central Tax (₹)", "State/UT Tax (₹)", "Cess (₹)"
+    });
+    m_gstr3bTable4->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+    for (int c = 1; c < 5; ++c) m_gstr3bTable4->horizontalHeader()->setSectionResizeMode(c, QHeaderView::ResizeToContents);
+    m_gstr3bTable4->setFixedHeight(148);
+    styleTable(m_gstr3bTable4);
+    lay4->addWidget(m_gstr3bTable4);
+    gstr3bLayout->addWidget(card4);
+
+    // --- 3. Table 5: Values of Exempt, Nil-Rated and Non-GST Inward Supplies ---
+    auto* card5 = new QFrame(gstr3bWidget);
+    card5->setStyleSheet("background-color: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 8px;");
+    auto* lay5 = new QVBoxLayout(card5);
+    lay5->setContentsMargins(12, 10, 12, 10);
+    lay5->setSpacing(6);
+    auto* lbl5 = new QLabel("Table 5: Values of Exempt, Nil-Rated and Non-GST Inward Supplies", card5);
+    lbl5->setStyleSheet("font-size: 12.5px; font-weight: 800; color: #16A34A; border: none; background: transparent;");
+    lay5->addWidget(lbl5);
+
+    m_gstr3bTable5 = new QTableWidget(2, 3, card5);
+    m_gstr3bTable5->setHorizontalHeaderLabels({
+        "Nature of Supplies", "Inter-State Supplies (₹)", "Intra-State Supplies (₹)"
+    });
+    m_gstr3bTable5->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+    m_gstr3bTable5->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+    m_gstr3bTable5->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+    m_gstr3bTable5->setFixedHeight(92);
+    styleTable(m_gstr3bTable5);
+    lay5->addWidget(m_gstr3bTable5);
+    gstr3bLayout->addWidget(card5);
+
+    // --- 4. Table 6.1: Payment of Tax (Cash Payable) ---
+    auto* card61 = new QFrame(gstr3bWidget);
+    card61->setStyleSheet("background-color: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 8px;");
+    auto* lay61 = new QVBoxLayout(card61);
+    lay61->setContentsMargins(12, 10, 12, 10);
+    lay61->setSpacing(6);
+    auto* lbl61 = new QLabel("Table 6.1: Payment of Tax (Net Cash Liability - After ITC Offset)", card61);
+    lbl61->setStyleSheet("font-size: 12.5px; font-weight: 800; color: #DC2626; border: none; background: transparent;");
+    lay61->addWidget(lbl61);
+
+    m_gstr3bTable61 = new QTableWidget(4, 5, card61);
+    m_gstr3bTable61->setHorizontalHeaderLabels({
+        "Description", "Total Tax Payable (₹)", "Paid Through ITC (₹)", "Tax Paid in Cash (₹)", "Interest / Late Fee (₹)"
+    });
+    m_gstr3bTable61->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+    for (int c = 1; c < 5; ++c) m_gstr3bTable61->horizontalHeader()->setSectionResizeMode(c, QHeaderView::ResizeToContents);
+    m_gstr3bTable61->setFixedHeight(148);
+    styleTable(m_gstr3bTable61);
+    lay61->addWidget(m_gstr3bTable61);
+    gstr3bLayout->addWidget(card61);
+
+    gstr3bScroll->setWidget(gstr3bWidget);
+    m_tabs->addTab(gstr3bScroll, "  GSTR-3B (Monthly Summary)  ");
 
     mainLayout->addWidget(m_tabs, 1);
 
@@ -485,8 +579,16 @@ void GstrReportsWidget::loadReturns(const QDate& fromDate, const QDate& toDate) 
     Gstr3BReturnSummary summary3b = Gstr3BEngine::generateFromDatabase(gstin, legalName, stateCode, fromDate, toDate);
     populateGstr3BTab(summary3b);
 
-    // 3. Auto-populate GSTR-2A tab with purchase records
-    onImportGstr2AJsonClicked();
+    // 3. GSTR-2B ITC Matching: Strict filtering to selected date range and user-loaded portal statement
+    QList<Gstr2BookRecord> books;
+    if (!m_loadedPortalRecords.isEmpty()) {
+        books = Gstr2Reconciler::loadBookPurchasesForReconciliation(fromDate, toDate, m_loadedPortalRecords);
+    } else {
+        books = Gstr2Reconciler::loadBookPurchasesFromDb(fromDate, toDate);
+    }
+
+    Gstr2ReconciliationSummary summary = Gstr2Reconciler::reconcile(books, m_loadedPortalRecords, 1.0, 30);
+    populateGstr2Tab(summary);
 }
 
 void GstrReportsWidget::populateGstr1Tab(const Gstr1ReturnPayload& payload) {
@@ -548,16 +650,182 @@ void GstrReportsWidget::populateGstr1Tab(const Gstr1ReturnPayload& payload) {
 }
 
 void GstrReportsWidget::populateGstr3BTab(const Gstr3BReturnSummary& s) {
-    m_gstr3bTaxableLabel->setText(AccountingEngine::formatIndianCurrency(s.table31.txValA));
-    m_gstr3bIgstLabel->setText(AccountingEngine::formatIndianCurrency(s.table31.iAmtA));
-    m_gstr3bCgstLabel->setText(AccountingEngine::formatIndianCurrency(s.table31.cAmtA));
-    m_gstr3bSgstLabel->setText(AccountingEngine::formatIndianCurrency(s.table31.sAmtA));
+    m_currentGstr3BSummary = s;
+    if (m_gstr3bNetPayableBanner) {
+        m_gstr3bNetPayableBanner->setText(QString("Net Cash Tax Payable: %1").arg(AccountingEngine::formatIndianCurrency(s.netPayableTotal)));
+    }
 
-    m_gstr3bItcIgstLabel->setText(AccountingEngine::formatIndianCurrency(s.table4.netIgst));
-    m_gstr3bItcCgstLabel->setText(AccountingEngine::formatIndianCurrency(s.table4.netCgst));
-    m_gstr3bItcSgstLabel->setText(AccountingEngine::formatIndianCurrency(s.table4.netSgst));
+    auto createNumItem = [](double val, bool bold = false, const QColor& color = QColor("#0F172A"), const QColor& bg = QColor()) -> QTableWidgetItem* {
+        QString txt = (std::abs(val) > 0.001) ? AccountingEngine::formatCurrency(val) : "₹0.00";
+        auto* it = new QTableWidgetItem(txt);
+        it->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        if (bold) {
+            QFont f = it->font();
+            f.setBold(true);
+            it->setFont(f);
+        }
+        it->setForeground(color);
+        if (bg.isValid()) {
+            it->setBackground(bg);
+        }
+        return it;
+    };
 
-    m_gstr3bNetPayableLabel->setText(AccountingEngine::formatIndianCurrency(s.netPayableTotal));
+    auto createLabelItem = [](const QString& txt, bool bold = false, const QColor& color = QColor("#0F172A"), const QColor& bg = QColor()) -> QTableWidgetItem* {
+        auto* it = new QTableWidgetItem(txt);
+        it->setTextAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+        if (bold) {
+            QFont f = it->font();
+            f.setBold(true);
+            it->setFont(f);
+        }
+        it->setForeground(color);
+        if (bg.isValid()) {
+            it->setBackground(bg);
+        }
+        return it;
+    };
+
+    // --- Populate Table 3.1 ---
+    if (m_gstr3bTable31) {
+        // Row 0: 3.1(a) Outward Taxable
+        m_gstr3bTable31->setItem(0, 0, createLabelItem("(a) Outward taxable supplies (other than zero rated, nil rated and exempted)"));
+        m_gstr3bTable31->setItem(0, 1, createNumItem(s.table31.txValA));
+        m_gstr3bTable31->setItem(0, 2, createNumItem(s.table31.iAmtA));
+        m_gstr3bTable31->setItem(0, 3, createNumItem(s.table31.cAmtA));
+        m_gstr3bTable31->setItem(0, 4, createNumItem(s.table31.sAmtA));
+        m_gstr3bTable31->setItem(0, 5, createNumItem(s.table31.csAmtA));
+
+        // Row 1: 3.1(b) Zero rated
+        m_gstr3bTable31->setItem(1, 0, createLabelItem("(b) Outward taxable supplies (zero rated)"));
+        m_gstr3bTable31->setItem(1, 1, createNumItem(s.table31.txValB));
+        m_gstr3bTable31->setItem(1, 2, createNumItem(s.table31.iAmtB));
+        m_gstr3bTable31->setItem(1, 3, createNumItem(0.0));
+        m_gstr3bTable31->setItem(1, 4, createNumItem(0.0));
+        m_gstr3bTable31->setItem(1, 5, createNumItem(s.table31.csAmtB));
+
+        // Row 2: 3.1(c) Other outward supplies (Nil rated, exempted)
+        m_gstr3bTable31->setItem(2, 0, createLabelItem("(c) Other outward supplies (Nil rated, exempted)"));
+        m_gstr3bTable31->setItem(2, 1, createNumItem(s.table31.txValC, false, QColor("#16A34A")));
+        m_gstr3bTable31->setItem(2, 2, createNumItem(0.0));
+        m_gstr3bTable31->setItem(2, 3, createNumItem(0.0));
+        m_gstr3bTable31->setItem(2, 4, createNumItem(0.0));
+        m_gstr3bTable31->setItem(2, 5, createNumItem(0.0));
+
+        // Row 3: 3.1(d) Inward supplies liable to reverse charge
+        m_gstr3bTable31->setItem(3, 0, createLabelItem("(d) Inward supplies (liable to reverse charge)"));
+        m_gstr3bTable31->setItem(3, 1, createNumItem(s.table31.txValD));
+        m_gstr3bTable31->setItem(3, 2, createNumItem(s.table31.iAmtD));
+        m_gstr3bTable31->setItem(3, 3, createNumItem(s.table31.cAmtD));
+        m_gstr3bTable31->setItem(3, 4, createNumItem(s.table31.sAmtD));
+        m_gstr3bTable31->setItem(3, 5, createNumItem(s.table31.csAmtD));
+
+        // Row 4: 3.1(e) Non-GST outward supplies
+        m_gstr3bTable31->setItem(4, 0, createLabelItem("(e) Non-GST outward supplies"));
+        m_gstr3bTable31->setItem(4, 1, createNumItem(s.table31.txValE));
+        m_gstr3bTable31->setItem(4, 2, createNumItem(0.0));
+        m_gstr3bTable31->setItem(4, 3, createNumItem(0.0));
+        m_gstr3bTable31->setItem(4, 4, createNumItem(0.0));
+        m_gstr3bTable31->setItem(4, 5, createNumItem(0.0));
+
+        // Row 5: Total Table 3.1
+        double tot31Taxable = s.table31.txValA + s.table31.txValB + s.table31.txValC + s.table31.txValD + s.table31.txValE;
+        double tot31Igst = s.table31.iAmtA + s.table31.iAmtB + s.table31.iAmtD;
+        double tot31Cgst = s.table31.cAmtA + s.table31.cAmtD;
+        double tot31Sgst = s.table31.sAmtA + s.table31.sAmtD;
+        double tot31Cess = s.table31.csAmtA + s.table31.csAmtB + s.table31.csAmtD;
+        QColor totBg("#F1F5F9");
+        QColor totFg("#1E3A8A");
+        m_gstr3bTable31->setItem(5, 0, createLabelItem("TOTAL OUTWARD & RCM (3.1)", true, totFg, totBg));
+        m_gstr3bTable31->setItem(5, 1, createNumItem(tot31Taxable, true, totFg, totBg));
+        m_gstr3bTable31->setItem(5, 2, createNumItem(tot31Igst, true, totFg, totBg));
+        m_gstr3bTable31->setItem(5, 3, createNumItem(tot31Cgst, true, totFg, totBg));
+        m_gstr3bTable31->setItem(5, 4, createNumItem(tot31Sgst, true, totFg, totBg));
+        m_gstr3bTable31->setItem(5, 5, createNumItem(tot31Cess, true, totFg, totBg));
+    }
+
+    // --- Populate Table 4 (Eligible ITC) ---
+    if (m_gstr3bTable4) {
+        // Row 0: 4(A)(5) All other ITC
+        m_gstr3bTable4->setItem(0, 0, createLabelItem("(A)(5) All other ITC (Inward supplies from registered persons)"));
+        m_gstr3bTable4->setItem(0, 1, createNumItem(s.table4.iAmtA5));
+        m_gstr3bTable4->setItem(0, 2, createNumItem(s.table4.cAmtA5));
+        m_gstr3bTable4->setItem(0, 3, createNumItem(s.table4.sAmtA5));
+        m_gstr3bTable4->setItem(0, 4, createNumItem(s.table4.csAmtA5));
+
+        // Row 1: 4(B) ITC Reversed
+        double revIgst = s.table4.iAmtB1 + s.table4.iAmtB2;
+        double revCgst = s.table4.cAmtB1 + s.table4.cAmtB2;
+        double revSgst = s.table4.sAmtB1 + s.table4.sAmtB2;
+        m_gstr3bTable4->setItem(1, 0, createLabelItem("(B) ITC Reversed (Rule 42, 43 / Other reversals)"));
+        m_gstr3bTable4->setItem(1, 1, createNumItem(revIgst));
+        m_gstr3bTable4->setItem(1, 2, createNumItem(revCgst));
+        m_gstr3bTable4->setItem(1, 3, createNumItem(revSgst));
+        m_gstr3bTable4->setItem(1, 4, createNumItem(0.0));
+
+        // Row 2: 4(C) Net ITC Available
+        QColor itcBg("#F0FDF4");
+        QColor itcFg("#15803D");
+        m_gstr3bTable4->setItem(2, 0, createLabelItem("(C) NET ITC AVAILABLE (A) - (B)", true, itcFg, itcBg));
+        m_gstr3bTable4->setItem(2, 1, createNumItem(s.table4.netIgst, true, itcFg, itcBg));
+        m_gstr3bTable4->setItem(2, 2, createNumItem(s.table4.netCgst, true, itcFg, itcBg));
+        m_gstr3bTable4->setItem(2, 3, createNumItem(s.table4.netSgst, true, itcFg, itcBg));
+        m_gstr3bTable4->setItem(2, 4, createNumItem(s.table4.netCess, true, itcFg, itcBg));
+
+        // Row 3: 4(D) Ineligible ITC
+        double inelIgst = s.table4.iAmtD1 + s.table4.iAmtD2;
+        double inelCgst = s.table4.cAmtD1 + s.table4.cAmtD2;
+        double inelSgst = s.table4.sAmtD1 + s.table4.sAmtD2;
+        m_gstr3bTable4->setItem(3, 0, createLabelItem("(D) Ineligible ITC (Section 17(5) / Others)"));
+        m_gstr3bTable4->setItem(3, 1, createNumItem(inelIgst));
+        m_gstr3bTable4->setItem(3, 2, createNumItem(inelCgst));
+        m_gstr3bTable4->setItem(3, 3, createNumItem(inelSgst));
+        m_gstr3bTable4->setItem(3, 4, createNumItem(0.0));
+    }
+
+    // --- Populate Table 5 (Exempt Inward) ---
+    if (m_gstr3bTable5) {
+        m_gstr3bTable5->setItem(0, 0, createLabelItem("From supplier under composition scheme, exempt and nil rated supply"));
+        m_gstr3bTable5->setItem(0, 1, createNumItem(s.table5.interExempt));
+        m_gstr3bTable5->setItem(0, 2, createNumItem(s.table5.intraExempt, false, QColor("#16A34A")));
+
+        m_gstr3bTable5->setItem(1, 0, createLabelItem("Non-GST supply"));
+        m_gstr3bTable5->setItem(1, 1, createNumItem(s.table5.interNonGst));
+        m_gstr3bTable5->setItem(1, 2, createNumItem(s.table5.intraNonGst));
+    }
+
+    // --- Populate Table 6.1 (Tax Payment / Cash Liability) ---
+    if (m_gstr3bTable61) {
+        m_gstr3bTable61->setItem(0, 0, createLabelItem("Integrated Tax (IGST)"));
+        m_gstr3bTable61->setItem(0, 1, createNumItem(s.table61.taxPayableIgst));
+        m_gstr3bTable61->setItem(0, 2, createNumItem(s.table61.itcPaidIgst));
+        m_gstr3bTable61->setItem(0, 3, createNumItem(s.table61.cashPaidIgst, true, QColor("#DC2626")));
+        m_gstr3bTable61->setItem(0, 4, createNumItem(s.table61.interestPaidIgst));
+
+        m_gstr3bTable61->setItem(1, 0, createLabelItem("Central Tax (CGST)"));
+        m_gstr3bTable61->setItem(1, 1, createNumItem(s.table61.taxPayableCgst));
+        m_gstr3bTable61->setItem(1, 2, createNumItem(s.table61.itcPaidCgst));
+        m_gstr3bTable61->setItem(1, 3, createNumItem(s.table61.cashPaidCgst, true, QColor("#DC2626")));
+        m_gstr3bTable61->setItem(1, 4, createNumItem(s.table61.interestPaidCgst + s.table61.lateFeePaidCgst));
+
+        m_gstr3bTable61->setItem(2, 0, createLabelItem("State / UT Tax (SGST)"));
+        m_gstr3bTable61->setItem(2, 1, createNumItem(s.table61.taxPayableSgst));
+        m_gstr3bTable61->setItem(2, 2, createNumItem(s.table61.itcPaidSgst));
+        m_gstr3bTable61->setItem(2, 3, createNumItem(s.table61.cashPaidSgst, true, QColor("#DC2626")));
+        m_gstr3bTable61->setItem(2, 4, createNumItem(s.table61.interestPaidSgst + s.table61.lateFeePaidSgst));
+
+        double totPayable = s.table61.taxPayableIgst + s.table61.taxPayableCgst + s.table61.taxPayableSgst;
+        double totItcOffset = s.table61.itcPaidIgst + s.table61.itcPaidCgst + s.table61.itcPaidSgst;
+        double totCashPaid = s.table61.cashPaidIgst + s.table61.cashPaidCgst + s.table61.cashPaidSgst;
+        double totInterestLate = s.table61.interestPaidIgst + s.table61.interestPaidCgst + s.table61.interestPaidSgst + s.table61.lateFeePaidCgst + s.table61.lateFeePaidSgst;
+        QColor payBg("#FEF2F2");
+        QColor payFg("#B91C1C");
+        m_gstr3bTable61->setItem(3, 0, createLabelItem("TOTAL TAX CASH LIABILITY", true, payFg, payBg));
+        m_gstr3bTable61->setItem(3, 1, createNumItem(totPayable, true, payFg, payBg));
+        m_gstr3bTable61->setItem(3, 2, createNumItem(totItcOffset, true, payFg, payBg));
+        m_gstr3bTable61->setItem(3, 3, createNumItem(totCashPaid, true, payFg, payBg));
+        m_gstr3bTable61->setItem(3, 4, createNumItem(totInterestLate, true, payFg, payBg));
+    }
 }
 
 void GstrReportsWidget::populateGstr2Tab(const Gstr2ReconciliationSummary& s) {
@@ -580,10 +848,16 @@ void GstrReportsWidget::populateGstr2Tab(const Gstr2ReconciliationSummary& s) {
         }
         m_gstr2Table->setItem(row, 0, statusItem);
 
-        m_gstr2Table->setItem(row, 1, new QTableWidgetItem(it.portalGstin));
-        m_gstr2Table->setItem(row, 2, new QTableWidgetItem(it.portalSupplierName));
-        m_gstr2Table->setItem(row, 3, new QTableWidgetItem(it.bookInvNo.isEmpty() ? it.portalInvNo : it.bookInvNo));
-        m_gstr2Table->setItem(row, 4, new QTableWidgetItem(it.bookInvDate.isValid() ? it.bookInvDate.toString("dd-MM-yyyy") : it.portalInvDate.toString("dd-MM-yyyy")));
+        QString gstin = !it.portalGstin.isEmpty() ? it.portalGstin : it.bookGstin;
+        QString name = !it.portalSupplierName.isEmpty() ? it.portalSupplierName : it.bookSupplierName;
+        QString invNo = !it.bookInvNo.isEmpty() ? it.bookInvNo : it.portalInvNo;
+        QString invDate = it.bookInvDate.isValid() ? it.bookInvDate.toString("dd-MM-yyyy")
+                                                   : (it.portalInvDate.isValid() ? it.portalInvDate.toString("dd-MM-yyyy") : "-");
+
+        m_gstr2Table->setItem(row, 1, new QTableWidgetItem(gstin));
+        m_gstr2Table->setItem(row, 2, new QTableWidgetItem(name));
+        m_gstr2Table->setItem(row, 3, new QTableWidgetItem(invNo));
+        m_gstr2Table->setItem(row, 4, new QTableWidgetItem(invDate));
 
         auto* bTaxItem = new QTableWidgetItem(AccountingEngine::formatCurrency(it.bookTaxable));
         bTaxItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
@@ -628,75 +902,55 @@ void GstrReportsWidget::onExportGstr1JsonClicked() {
     }
 }
 
+void GstrReportsWidget::onExportGstr3BExcelClicked() {
+    QString defName = QString("GSTR-3B_%1_%2.xls").arg(m_currentGstr3BSummary.gstin, m_currentGstr3BSummary.returnPeriod);
+    QString savePath = QFileDialog::getSaveFileName(this, "Save Form GSTR-3B Excel Return", defName, "Excel Files (*.xls *.xlsx)");
+    if (savePath.isEmpty()) return;
+
+    bool ok = Gstr3BEngine::exportToExcelTemplate(m_currentGstr3BSummary, savePath);
+    if (ok) {
+        QMessageBox::information(this, "Export Success", QString("Form GSTR-3B (Bahi-Khata / Excel Return) successfully exported to:\n%1").arg(savePath));
+    } else {
+        QMessageBox::warning(this, "Export Failed", "Could not locate the standard GSTR-3B Excel template or write the export file.");
+    }
+}
+
 void GstrReportsWidget::onImportGstr2AJsonClicked() {
-    QString fromStr = m_fromDateEdit->date().toString("yyyy-MM-dd");
-    QString toStr = m_toDateEdit->date().toString("yyyy-MM-dd");
+    // Prompt user to select downloaded GSTR-2B JSON or Excel file from any directory
+    QString filePath = QFileDialog::getOpenFileName(this, "Select GSTR-2B Portal JSON or Excel File", "", "GST Returns (*.json *.xlsx *.xls *.zip);;JSON Files (*.json);;Excel Files (*.xlsx *.xls);;All Files (*.*)");
+    if (filePath.isEmpty()) return;
 
-    // Read real inward supplies from purchase_invoices / vouchers
-    QString purcSql = QString(
-        "SELECT "
-        "  p.id, p.invoice_no, p.invoice_date, "
-        "  COALESCE(p.supplier_name, 'Supplier') AS supplier_name, "
-        "  COALESCE(p.gstin, '') AS gstin, "
-        "  COALESCE(p.taxable_amount, p.total_amount) AS taxable_amount, "
-        "  COALESCE(p.gst_amount, p.cgst_amount + p.sgst_amount + p.igst_amount, 0.0) AS tax_amount, "
-        "  p.total_amount "
-        "FROM purchase_invoices p "
-        "WHERE p.invoice_date >= '%1' AND p.invoice_date <= '%2' "
-        "ORDER BY p.invoice_date ASC, p.id ASC;"
-    ).arg(fromStr, toStr);
-
-    QVariantList rows = DatabaseManager::instance().executeQuery(purcSql);
-    QList<Gstr2BookRecord> books;
-    for (const auto& var : rows) {
-        QVariantMap r = var.toMap();
-        Gstr2BookRecord b;
-        b.voucherId = r.value("id").toInt();
-        b.invoiceNo = r.value("invoice_no").toString();
-        b.invoiceDate = QDate::fromString(r.value("invoice_date").toString(), "yyyy-MM-dd");
-        if (!b.invoiceDate.isValid()) b.invoiceDate = QDate::fromString(r.value("invoice_date").toString(), Qt::ISODate);
-        b.supplierGstin = r.value("gstin").toString().trimmed();
-        b.supplierName = r.value("supplier_name").toString();
-        b.totalValue = r.value("total_amount").toDouble();
-        b.taxAmount = r.value("tax_amount").toDouble();
-        b.taxableValue = r.value("taxable_amount").toDouble();
-        books.append(b);
-    }
-
-    // Prompt user to select downloaded GSTR-2B JSON file
-    QList<Gstr2PortalRecord> portal;
-    QString jsonPath = QFileDialog::getOpenFileName(this, "Select GSTR-2B Portal JSON File", "", "GST Returns (*.json *.zip);;All Files (*.*)");
-    if (!jsonPath.isEmpty()) {
-        QFile file(jsonPath);
-        if (file.open(QIODevice::ReadOnly)) {
-            QByteArray data = file.readAll();
-            file.close();
-            portal = Gstr2Reconciler::parseGstr2BJson(data);
-        }
-    }
-
-    // If no portal file selected, generate simulated portal records from books for preview
+    QString retPeriod = QString("%1%2").arg(m_fromDateEdit->date().month(), 2, 10, QChar('0')).arg(m_fromDateEdit->date().year());
+    QList<Gstr2PortalRecord> portal = Gstr2Reconciler::loadPortalRecordsFromFile(filePath, retPeriod);
     if (portal.isEmpty()) {
-        for (const auto& b : books) {
-            Gstr2PortalRecord p;
-            p.supplierGstin = b.supplierGstin;
-            p.supplierName = b.supplierName;
-            p.invoiceNo = b.invoiceNo;
-            p.invoiceDate = b.invoiceDate;
-            p.taxableValue = b.taxableValue;
-            p.taxAmount = b.taxAmount;
-            p.totalValue = b.totalValue;
-            portal.append(p);
+        QMessageBox::warning(this, "Parse Failed", "Could not find valid B2B inward supply records in the selected file.");
+        return;
+    }
+
+    m_loadedPortalRecords = portal;
+
+    // If the portal file has a detected return period (e.g. "042026"), synchronize the active dates to that period
+    if (!portal.first().returnPeriod.isEmpty() && portal.first().returnPeriod.length() == 6) {
+        int m = portal.first().returnPeriod.left(2).toInt();
+        int y = portal.first().returnPeriod.mid(2).toInt();
+        if (m >= 1 && m <= 12 && y >= 2000) {
+            QDate pStart(y, m, 1);
+            QDate pEnd(y, m, pStart.daysInMonth());
+            m_fromDateEdit->setDate(pStart);
+            m_toDateEdit->setDate(pEnd);
         }
     }
 
-    Gstr2ReconciliationSummary summary = Gstr2Reconciler::reconcile(books, portal, 1.0);
-    populateGstr2Tab(summary);
+    loadReturns(m_fromDateEdit->date(), m_toDateEdit->date());
+    m_tabs->setCurrentIndex(1); // Switch to GSTR-2 tab
 }
 
 void GstrReportsWidget::onAutoDownloadGstr2Clicked() {
     auto* dlg = new GstPortalSyncDialog(m_fromDateEdit->date(), this);
-    connect(dlg, &GstPortalSyncDialog::reconciliationCompleted, this, &GstrReportsWidget::populateGstr2Tab);
+    connect(dlg, &GstPortalSyncDialog::reconciliationCompleted, this, [this](const Gstr2ReconciliationSummary& s) {
+        populateGstr2Tab(s);
+        m_tabs->setCurrentIndex(1);
+    });
     dlg->exec();
 }
 
@@ -704,11 +958,23 @@ void GstrReportsWidget::keyPressEvent(QKeyEvent* event) {
     if (event->key() == Qt::Key_Escape) {
         emit backRequested();
         event->accept();
+    } else if (event->key() == Qt::Key_F2) {
+        QDate f = m_fromDateEdit->date();
+        QDate t = m_toDateEdit->date();
+        if (VoucherDateDialog::selectDateRange(this, &f, &t, f, t)) {
+            m_fromDateEdit->setDate(f);
+            m_toDateEdit->setDate(t);
+            loadReturns(f, t);
+        }
+        event->accept();
     } else if (event->key() == Qt::Key_F5) {
         onRefreshClicked();
         event->accept();
     } else if (event->modifiers() & Qt::AltModifier && event->key() == Qt::Key_E) {
         onExportGstr1JsonClicked();
+        event->accept();
+    } else if (event->modifiers() & Qt::AltModifier && event->key() == Qt::Key_X) {
+        onExportGstr3BExcelClicked();
         event->accept();
     } else if (event->modifiers() & Qt::AltModifier && event->key() == Qt::Key_R) {
         onImportGstr2AJsonClicked();

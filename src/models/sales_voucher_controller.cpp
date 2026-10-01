@@ -1,6 +1,7 @@
 #include "sales_voucher_controller.h"
 #include "services/accounting_date_service.h"
 #include "services/financial_math_service.h"
+#include "../services/master_data_provider.h"
 #include "sales_model.h"
 #include "parties_model.h"
 #include "financial_years_model.h"
@@ -263,8 +264,14 @@ void SalesLineItemsModel::loadFromVariantList(const QVariantList &list)
         }
         item.amount = amount;
 
-        double gstPct = map.value("gst_pct").toDouble();
-        if (gstPct <= 0.0001) gstPct = map.value("gstPct").toDouble();
+        double gstPct = map.value("gst_pct", -1.0).toDouble();
+        if (gstPct < 0.0) gstPct = map.value("gstPct", -1.0).toDouble();
+        if (gstPct < 0.0) gstPct = map.value("gst_rate", -1.0).toDouble();
+        if (gstPct < 0.0 && !item.itemName.isEmpty()) {
+            gstPct = MasterDataProvider::instance().getItemGstRate(item.itemName);
+        } else if (gstPct < 0.0) {
+            gstPct = 0.0;
+        }
         item.gstPct = gstPct;
 
         item.isStock = true;
@@ -397,7 +404,7 @@ void SalesVoucherController::resetForm(const QString &workingDate)
     m_salesAccount.clear();
     emit salesAccountChanged();
 
-    m_gstRate = 5.0;
+    m_gstRate = 0.0;
     emit gstRateChanged();
 
     m_isInterstate = false;
@@ -522,7 +529,14 @@ bool SalesVoucherController::loadInvoiceForEditing(const QVariant &invNoOrId, co
     setDueDays(inv.value("due_days", 30).toInt());
     setFreightCharges(inv.value("freight_charges", 0.0).toDouble());
     setTcsRate(inv.value("tcs_rate", 0.0).toDouble());
-    setGstRate(inv.value("gst_pct", 5.0).toDouble());
+
+    double gstRate = inv.value("gst_pct", -1.0).toDouble();
+    if (gstRate < 0.0 && !inv.value("item_name").toString().isEmpty()) {
+        gstRate = MasterDataProvider::instance().getItemGstRate(inv.value("item_name").toString());
+    } else if (gstRate < 0.0) {
+        gstRate = 0.0;
+    }
+    setGstRate(gstRate);
 
     setDami(inv.value("dami", 0.0).toDouble());
     setLabour(inv.value("labour", 0.0).toDouble());

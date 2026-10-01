@@ -5,8 +5,10 @@
 #include "../src/engine/gst_tax_engine.h"
 #include "../src/engine/milling_yield_engine.h"
 #include "../src/engine/gstr2_reconciler.h"
+#include "../src/engine/gstr3b_engine.h"
 #include "../src/engine/tds_fvu_exporter.h"
 #include "../src/engine/gstr9_engine.h"
+#include "../src/database_manager.h"
 
 using namespace MahadevERP;
 
@@ -14,14 +16,20 @@ class TestEnginesSuite : public QObject {
     Q_OBJECT
 
 private slots:
+    void initTestCase();
     void testMandiCalculatorMath();
     void testAankInterestEngineMath();
     void testGstTaxEnginePosAndTcs();
     void testMillingYieldEngine();
     void testGstr2Reconciliation4WayMatch();
+    void testGstr3BEngineCalculationAndExcelExport();
     void testTdsFvuExporter();
     void testGstr9AnnualReturnEngine();
 };
+
+void TestEnginesSuite::initTestCase() {
+    DatabaseManager::instance().initDatabase("data/mahadev_rice_industry_data_002.db");
+}
 
 void TestEnginesSuite::testMandiCalculatorMath() {
     MandiConfig cfg;
@@ -167,6 +175,59 @@ void TestEnginesSuite::testGstr2Reconciliation4WayMatch() {
     QCOMPARE(summary.matchedCount, 1);
     QCOMPARE(summary.valueMismatchCount, 0);
     QCOMPARE(summary.notInPortalCount, 0);
+
+    // Test with real Mahadev GSTR-2B JSON file
+    QFile f("gst-data/returns_R2B_06ABKFM5928Q1ZG_042026.json");
+    if (f.open(QIODevice::ReadOnly)) {
+        QByteArray jsonBytes = f.readAll();
+        f.close();
+        QList<Gstr2PortalRecord> portalRecords = Gstr2Reconciler::parseGstr2BJson(jsonBytes, "042026");
+        QCOMPARE(portalRecords.size(), 4);
+
+        // Verify period-aware book purchases loader for targeted portal reconciliation
+        QList<Gstr2BookRecord> bookPurchases = Gstr2Reconciler::loadBookPurchasesForReconciliation(QDate(2026, 4, 1), QDate(2026, 4, 30), portalRecords);
+        Gstr2ReconciliationSummary realSummary = Gstr2Reconciler::reconcile(bookPurchases, portalRecords, 1.0, 30);
+
+        // Classic Battery Shoppe 2 invoices matched
+        QVERIFY(realSummary.matchedCount >= 2);
+        // Netplus and Canara Bank not in books
+        QCOMPARE(realSummary.notInBooksCount, 2);
+    }
+}
+
+void TestEnginesSuite::testGstr3BEngineCalculationAndExcelExport() {
+    // Generate GSTR-3B for Mahadev Rice Industry for April 2026
+    Gstr3BReturnSummary summary = Gstr3BEngine::generateFromDatabase(
+        "06ABKFM5928Q1ZG",
+        "MAHADEV RICE INDUSTRY",
+        "06",
+        QDate(2026, 4, 1),
+        QDate(2026, 4, 30)
+    );
+
+    // Verify exact match with official Government GSTR-3B PDF (GSTR3B_06ABKFM5928Q1ZG_042026.pdf)
+    // Table 3.1(c) Other outward supplies (Nil rated, exempted) = ₹10,18,86,696.00
+    QCOMPARE(summary.table31.txValC, 101886696.00);
+    QCOMPARE(summary.table31.txValA, 0.00);
+    QCOMPARE(summary.table31.iAmtA, 0.00);
+    QCOMPARE(summary.table31.cAmtA, 0.00);
+    QCOMPARE(summary.table31.sAmtA, 0.00);
+
+    // Table 5 Values of exempt inward supplies (Intra-State) = ₹15,93,85,347.00
+    QCOMPARE(summary.table5.intraExempt, 159385347.00);
+    QCOMPARE(summary.table5.interExempt, 0.00);
+
+    // Table 4 Eligible ITC = ₹0.00 (all purchases exempt)
+    QCOMPARE(summary.table4.netIgst, 0.00);
+    QCOMPARE(summary.table4.netCgst, 0.00);
+    QCOMPARE(summary.table4.netSgst, 0.00);
+    QCOMPARE(summary.netPayableTotal, 0.00);
+
+    // Test exporting to Excel template
+    QString exportPath = "build/test_gstr3b_042026.xls";
+    bool exported = Gstr3BEngine::exportToExcelTemplate(summary, exportPath, "gst-data/GSTR-3B.xls");
+    QVERIFY(exported);
+    QVERIFY(QFile::exists(exportPath));
 }
 
 void TestEnginesSuite::testTdsFvuExporter() {

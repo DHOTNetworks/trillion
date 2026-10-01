@@ -2,6 +2,7 @@
 #include "../database_manager.h"
 #include "../services/financial_math_service.h"
 #include "../services/accounting_date_service.h"
+#include "../services/master_data_provider.h"
 #include <QDebug>
 #include <QDate>
 #include <QTime>
@@ -475,9 +476,11 @@ QVariantMap DebitCreditNoteController::fetchOriginalInvoice(const QString &invTy
             res["partyGstin"] = map.value("gstin").toString();
             res["stateCode"] = map.value("state_code").toString();
             res["isInterstate"] = map.value("is_interstate").toInt() == 1;
-            res["gstPct"] = map.value("gst_pct", 5.0).toDouble();
             res["itemName"] = map.value("item_name").toString();
             res["hsnCode"] = map.value("hsn_code").toString();
+            double gstRate = map.value("gst_pct", -1.0).toDouble();
+            if (gstRate < 0.0) gstRate = MasterDataProvider::instance().getItemGstRate(res["itemName"].toString());
+            res["gstPct"] = gstRate;
             res["bagCount"] = map.value("bag_count").toInt();
             res["weightQtl"] = map.value("weight_qtl").toDouble();
             res["rate"] = map.value("rate_per_qtl").toDouble();
@@ -503,7 +506,9 @@ QVariantMap DebitCreditNoteController::fetchOriginalInvoice(const QString &invTy
                     line["weightQtl"] = itMap.value("weight_qtl").toDouble();
                     line["rate"] = itMap.value("rate_per_qtl").toDouble();
                     line["taxableAmount"] = itMap.value("taxable_amount").toDouble();
-                    line["gstPct"] = itMap.value("gst_pct", 5.0).toDouble();
+                    double lineGst = itMap.value("gst_pct", -1.0).toDouble();
+                    if (lineGst < 0.0) lineGst = MasterDataProvider::instance().getItemGstRate(line["itemName"].toString());
+                    line["gstPct"] = lineGst;
                     line["totalAmount"] = itMap.value("total_amount").toDouble();
                     itemsList.append(line);
                 }
@@ -541,9 +546,11 @@ QVariantMap DebitCreditNoteController::fetchOriginalInvoice(const QString &invTy
             res["partyGstin"] = map.value("gstin").toString();
             res["stateCode"] = map.value("state_code").toString();
             res["isInterstate"] = map.value("is_interstate").toInt() == 1;
-            res["gstPct"] = map.value("gst_pct", 5.0).toDouble();
             res["itemName"] = map.value("item_name").toString();
             res["hsnCode"] = map.value("hsn_code").toString();
+            double gstRate = map.value("gst_pct", -1.0).toDouble();
+            if (gstRate < 0.0) gstRate = MasterDataProvider::instance().getItemGstRate(res["itemName"].toString());
+            res["gstPct"] = gstRate;
             res["bagCount"] = map.value("bag_count").toInt();
             res["weightQtl"] = map.value("weight_qtl").toDouble();
             res["rate"] = map.value("rate_per_qtl").toDouble();
@@ -569,7 +576,9 @@ QVariantMap DebitCreditNoteController::fetchOriginalInvoice(const QString &invTy
                     line["weightQtl"] = itMap.value("weight_qtl").toDouble();
                     line["rate"] = itMap.value("rate_per_qtl").toDouble();
                     line["taxableAmount"] = itMap.value("taxable_amount").toDouble();
-                    line["gstPct"] = itMap.value("gst_pct", 5.0).toDouble();
+                    double lineGst = itMap.value("gst_pct", -1.0).toDouble();
+                    if (lineGst < 0.0) lineGst = MasterDataProvider::instance().getItemGstRate(line["itemName"].toString());
+                    line["gstPct"] = lineGst;
                     line["totalAmount"] = itMap.value("total_amount").toDouble();
                     itemsList.append(line);
                 }

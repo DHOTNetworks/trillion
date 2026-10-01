@@ -150,16 +150,20 @@ void GstPortalSyncDialog::setStatus(const QString& msg, bool isError) {
 
 void GstPortalSyncDialog::onRequestOtpClicked() {
     QString gstin = m_gstinEdit->text().trimmed().toUpper();
+    QString username = m_usernameEdit->text().trimmed();
     if (gstin.length() != 15) {
         QMessageBox::warning(this, "Invalid GSTIN", "Please enter a valid 15-character GSTIN.");
         return;
     }
+    if (username.isEmpty()) {
+        username = gstin;
+    }
 
     m_progressBar->setVisible(true);
-    setStatus("Connecting to GST Portal & requesting OTP...");
+    setStatus("Connecting to GST Portal & requesting OTP via GSP Gateway...");
     m_requestOtpBtn->setEnabled(false);
 
-    m_portalService->requestOtp(gstin, [this](bool success, const QString& msg) {
+    m_portalService->requestOtp(gstin, username, [this](bool success, const QString& msg) {
         m_progressBar->setVisible(false);
         m_requestOtpBtn->setEnabled(true);
         if (success) {
@@ -168,13 +172,26 @@ void GstPortalSyncDialog::onRequestOtpClicked() {
             QMessageBox::information(this, "OTP Sent", msg + "\nPlease enter the OTP to proceed.");
         } else {
             setStatus("❌ " + msg, true);
-            QMessageBox::warning(this, "OTP Request Failed", msg);
+            QMessageBox msgBox(this);
+            msgBox.setIcon(QMessageBox::Information);
+            msgBox.setWindowTitle("GST Portal Authentication");
+            msgBox.setText(QString("<b>GST API Response:</b> %1<br><br>"
+                                   "If your GST Portal session or API access is not active, you can also import your downloaded GSTR-2B JSON file directly.").arg(msg));
+            msgBox.setInformativeText("Would you like to select your downloaded GSTR-2B JSON file now?");
+            msgBox.setStandardButtons(QMessageBox::Open | QMessageBox::Cancel);
+            msgBox.setDefaultButton(QMessageBox::Open);
+            msgBox.button(QMessageBox::Open)->setText("📂 Select 2B JSON File");
+            
+            if (msgBox.exec() == QMessageBox::Open) {
+                onBrowseLocalJsonClicked();
+            }
         }
     });
 }
 
 void GstPortalSyncDialog::onDownloadAndMatchClicked() {
     QString gstin = m_gstinEdit->text().trimmed().toUpper();
+    QString username = m_usernameEdit->text().trimmed();
     QString otp = m_otpEdit->text().trimmed();
     QString retPeriod = getSelectedReturnPeriod();
 
@@ -182,20 +199,22 @@ void GstPortalSyncDialog::onDownloadAndMatchClicked() {
         QMessageBox::warning(this, "Invalid GSTIN", "Please enter a valid 15-character GSTIN.");
         return;
     }
+    if (username.isEmpty()) {
+        username = gstin;
+    }
 
     m_progressBar->setVisible(true);
     m_downloadMatchBtn->setEnabled(false);
-    setStatus("Authenticating with GSTN and downloading GSTR-2B...");
+    setStatus("Connecting to GSTN and downloading GSTR-2B...");
 
-    // If OTP is provided, authenticate first
-    auto runDownload = [this, gstin, retPeriod](const QString& token) {
-        m_portalService->downloadGstr2B(gstin, retPeriod, token, [this, retPeriod](bool success, const QByteArray& payload, const QString& error) {
+    auto runDownload = [this, gstin, retPeriod]() {
+        m_portalService->downloadGstr2B(gstin, retPeriod, [this, retPeriod](bool success, const QByteArray& payload, const QString& error) {
             m_progressBar->setVisible(false);
             m_downloadMatchBtn->setEnabled(true);
 
             QByteArray finalPayload = payload;
             if (!success || finalPayload.isEmpty()) {
-                // If API endpoint is in simulation/sandbox mode, try checking local cache
+                // If API endpoint returns error or is offline, check local cache
                 QString cachedFile = QString("data/gstr2b/GSTR2B_%1.json").arg(retPeriod);
                 QFile f(cachedFile);
                 if (f.open(QIODevice::ReadOnly)) {
@@ -218,13 +237,7 @@ void GstPortalSyncDialog::onDownloadAndMatchClicked() {
 
             // Parse Invoices & Reconcile
             QList<Gstr2PortalRecord> portal = Gstr2Reconciler::parseGstr2BJson(finalPayload, retPeriod);
-            
-            int month = m_monthCombo->currentIndex() + 1;
-            int year = m_yearCombo->currentText().toInt();
-            QDate fromDate(year, month, 1);
-            QDate toDate(year, month, fromDate.daysInMonth());
-
-            QList<Gstr2BookRecord> books = Gstr2Reconciler::loadBookPurchasesFromDb(fromDate, toDate);
+            QList<Gstr2BookRecord> books = Gstr2Reconciler::loadBookPurchasesForPeriod(retPeriod);
             Gstr2ReconciliationSummary summary = Gstr2Reconciler::reconcile(books, portal, 1.0, 30);
 
             emit reconciliationCompleted(summary);
@@ -233,10 +246,10 @@ void GstPortalSyncDialog::onDownloadAndMatchClicked() {
     };
 
     if (!otp.isEmpty() && m_authToken.isEmpty()) {
-        m_portalService->authenticateWithOtp(gstin, otp, [this, runDownload](bool success, const QString& token, const QString& msg) {
+        m_portalService->authenticateWithOtp(gstin, username, otp, [this, runDownload](bool success, const QString& token, const QString& msg) {
             if (success) {
                 m_authToken = token;
-                runDownload(m_authToken);
+                runDownload();
             } else {
                 m_progressBar->setVisible(false);
                 m_downloadMatchBtn->setEnabled(true);
@@ -245,32 +258,22 @@ void GstPortalSyncDialog::onDownloadAndMatchClicked() {
             }
         });
     } else {
-        runDownload(m_authToken);
+        runDownload();
     }
 }
 
 void GstPortalSyncDialog::onBrowseLocalJsonClicked() {
-    QString jsonPath = QFileDialog::getOpenFileName(this, "Select GSTR-2B JSON File", "", "GST Returns (*.json *.zip);;All Files (*.*)");
+    QString jsonPath = QFileDialog::getOpenFileName(this, "Select GSTR-2B JSON or Excel File", "gst-data", "GST Returns (*.json *.xlsx *.xls *.zip);;JSON Files (*.json);;Excel Files (*.xlsx *.xls);;All Files (*.*)");
     if (jsonPath.isEmpty()) return;
 
-    QFile file(jsonPath);
-    if (!file.open(QIODevice::ReadOnly)) {
-        QMessageBox::warning(this, "File Error", "Could not open selected file.");
+    QString retPeriod = getSelectedReturnPeriod();
+    QList<Gstr2PortalRecord> portal = Gstr2Reconciler::loadPortalRecordsFromFile(jsonPath, retPeriod);
+    if (portal.isEmpty()) {
+        QMessageBox::warning(this, "File Error", "Could not parse valid inward supply records from selected file.");
         return;
     }
 
-    QByteArray data = file.readAll();
-    file.close();
-
-    QString retPeriod = getSelectedReturnPeriod();
-    QList<Gstr2PortalRecord> portal = Gstr2Reconciler::parseGstr2BJson(data, retPeriod);
-
-    int month = m_monthCombo->currentIndex() + 1;
-    int year = m_yearCombo->currentText().toInt();
-    QDate fromDate(year, month, 1);
-    QDate toDate(year, month, fromDate.daysInMonth());
-
-    QList<Gstr2BookRecord> books = Gstr2Reconciler::loadBookPurchasesFromDb(fromDate, toDate);
+    QList<Gstr2BookRecord> books = Gstr2Reconciler::loadBookPurchasesForPeriod(retPeriod);
     Gstr2ReconciliationSummary summary = Gstr2Reconciler::reconcile(books, portal, 1.0, 30);
 
     emit reconciliationCompleted(summary);

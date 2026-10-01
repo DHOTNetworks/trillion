@@ -35,6 +35,7 @@ private slots:
     void onExportGstr1JsonClicked();
     void onImportGstr2AJsonClicked();
     void onAutoDownloadGstr2Clicked();
+    void onExportGstr3BExcelClicked();
 
 private:
     void setupUi();
@@ -67,17 +68,19 @@ private:
     QPushButton* m_autoDownloadGstr2Btn = nullptr;
 
     // GSTR-3B Widgets
-    QLabel* m_gstr3bTaxableLabel = nullptr;
-    QLabel* m_gstr3bIgstLabel = nullptr;
-    QLabel* m_gstr3bCgstLabel = nullptr;
-    QLabel* m_gstr3bSgstLabel = nullptr;
-    QLabel* m_gstr3bItcIgstLabel = nullptr;
-    QLabel* m_gstr3bItcCgstLabel = nullptr;
-    QLabel* m_gstr3bItcSgstLabel = nullptr;
-    QLabel* m_gstr3bNetPayableLabel = nullptr;
+    QLabel* m_gstr3bBanner = nullptr;
+    QLabel* m_gstr3bNetPayableBanner = nullptr;
+    QTableWidget* m_gstr3bTable31 = nullptr;
+    QTableWidget* m_gstr3bTable4 = nullptr;
+    QTableWidget* m_gstr3bTable5 = nullptr;
+    QTableWidget* m_gstr3bTable61 = nullptr;
+    QPushButton* m_exportGstr3BBtn = nullptr;
 
     PrintExportController* m_printExportCtrl = nullptr;
     Gstr1ReturnPayload m_currentGstr1Payload;
+    Gstr3BReturnSummary m_currentGstr3BSummary;
+    QList<Gstr2PortalRecord> m_loadedPortalRecords;
+    QString m_loadedPortalPeriod;
 };
 
 } // namespace MahadevERP
