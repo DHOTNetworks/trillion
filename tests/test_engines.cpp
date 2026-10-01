@@ -320,7 +320,7 @@ void TestEnginesSuite::testBusyDataMigratorInspectionAndMigration() {
 
     // Test full migration into test database environment
     // Use an isolated temporary SQLite DB for migration verification
-    QString testDbPath = "build/test_busy_migration.db";
+    QString testDbPath = "build/mahadev_busy_test_isolated.db";
     if (QFile::exists(testDbPath)) {
         QFile::remove(testDbPath);
     }
@@ -332,21 +332,25 @@ void TestEnginesSuite::testBusyDataMigratorInspectionAndMigration() {
     QVERIFY(migrationSuccess);
 
     // Verify imported masters and transactions in SQLite
-    // 1. Verify Master Accounts and Groups imported
+    // 1. Verify Company Identity
+    QString importedComp = DatabaseManager::instance().executeScalar("SELECT company_name FROM company_info WHERE id=1;").toString();
+    QCOMPARE(importedComp, "Mahadev Busy Test");
+
+    // 2. Verify Master Accounts and Groups imported
     int accCount = DatabaseManager::instance().executeScalar("SELECT COUNT(*) FROM parties;").toInt();
     QVERIFY(accCount >= 50);
 
     int grpCount = DatabaseManager::instance().executeScalar("SELECT COUNT(*) FROM account_groups;").toInt();
     QVERIFY(grpCount >= 20);
 
-    // 2. Verify Stock Items imported
+    // 3. Verify Stock Items imported
     int itmCount = DatabaseManager::instance().executeScalar("SELECT COUNT(*) FROM stock_items;").toInt();
     QVERIFY(itmCount >= 2);
 
     int unitCount = DatabaseManager::instance().executeScalar("SELECT COUNT(*) FROM stock_units;").toInt();
     QVERIFY(unitCount >= 4);
 
-    // 3. Verify Double-Entry GL Invariance in target SQLite database: SUM(Dr) == SUM(Cr)
+    // 4. Verify Double-Entry GL Invariance in target SQLite database: SUM(Dr) == SUM(Cr)
     QVariantList glRows = DatabaseManager::instance().executeQuery("SELECT SUM(CASE WHEN dr_cr='Dr' THEN amount ELSE 0 END) as tot_dr, SUM(CASE WHEN dr_cr='Cr' THEN amount ELSE 0 END) as tot_cr FROM transactions;");
     double totalDr = 0.0;
     double totalCr = 0.0;
@@ -357,7 +361,7 @@ void TestEnginesSuite::testBusyDataMigratorInspectionAndMigration() {
     QVERIFY(std::abs(totalDr - totalCr) < 0.01);
 
     // Restore standard test database
-    DatabaseManager::instance().initDatabase("data/mahadev_rice_industry_data_002.db");
+    DatabaseManager::instance().switchDatabase("data/mahadev_rice_industry_data_002.db");
 }
 
 QTEST_MAIN(TestEnginesSuite)

@@ -1,6 +1,7 @@
 #include "firm_manager.h"
 #include "../database_manager.h"
 #include "../engine/bahi_khata_migrator.h"
+#include "../engine/busy_data_migrator.h"
 #include <sqlite3.h>
 
 #include <QDir>
@@ -614,8 +615,15 @@ bool FirmManager::prepare_firm_for_import(const QString& mdbFilePath, const QStr
     QFileInfo fi(mdbFilePath);
     if (!fi.exists()) return false;
 
-    BahiKhataMigrator migrator;
-    QVariantMap insp = migrator.inspect_mdb_file(mdbFilePath);
+    // Check if Busy dataset first
+    MahadevERP::BusyDataMigrator busyMig;
+    QVariantMap insp = busyMig.inspect_busy_data(mdbFilePath);
+    bool isBusy = insp.value("valid", false).toBool();
+
+    if (!isBusy) {
+        BahiKhataMigrator migrator;
+        insp = migrator.inspect_mdb_file(mdbFilePath);
+    }
 
     QString firmName = customFirmName;
     if (firmName.isEmpty()) {
@@ -630,7 +638,7 @@ bool FirmManager::prepare_firm_for_import(const QString& mdbFilePath, const QStr
         QString fileStem = fi.fileName().toLower().replace(".", "_");
         QString compSlug = sanitizeSlug(firmName);
         slug = compSlug;
-        if (!fileStem.isEmpty() && !slug.endsWith(fileStem)) {
+        if (!fileStem.isEmpty() && !slug.endsWith(fileStem) && !isBusy) {
             slug += "_" + fileStem;
         }
     }
@@ -652,10 +660,10 @@ bool FirmManager::prepare_firm_for_import(const QString& mdbFilePath, const QStr
     firm["folder"] = fi.absolutePath();
     firm["full_path"] = fi.absoluteFilePath();
     firm["gstin"] = insp.value("gstin").toString();
-    firm["city"] = insp.value("station").toString();
+    firm["city"] = isBusy ? insp.value("city").toString() : insp.value("station").toString();
     firm["state"] = insp.value("state").toString();
-    firm["firm_type"] = insp.value("firmType").toString();
-    firm["business"] = insp.value("business").toString();
+    firm["firm_type"] = isBusy ? "Busy Accounting" : insp.value("firmType").toString();
+    firm["business"] = isBusy ? "Rice Trading & Processing" : insp.value("business").toString();
     firm["is_imported"] = true;
 
     QVariantList firms = get_registered_firms();
