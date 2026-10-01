@@ -142,30 +142,33 @@ void DashboardWidget::setupUi() {
 
     topHeaderLayout->addStretch(1);
 
-    // Header Buttons
+    // Header Action Buttons
     QHBoxLayout* btnBox = new QHBoxLayout();
-    btnBox->setSpacing(8);
+    btnBox->setSpacing(10);
+    btnBox->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
 
     // Open Firm Button (Alt+F1)
-    m_openFirmBtn = new QPushButton("Open Firm  [Alt+F1]", this);
+    m_openFirmBtn = new QPushButton("🏢 Open Firm  [Alt+F1]", this);
     m_openFirmBtn->setFixedHeight(36);
     m_openFirmBtn->setFocusPolicy(Qt::NoFocus);
     m_openFirmBtn->setCursor(Qt::PointingHandCursor);
     m_openFirmBtn->setStyleSheet(
-        "QPushButton { background-color: #FFFFFF; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 0px 14px; font-weight: 700; color: #334155; font-size: 12px; }"
-        "QPushButton:hover { background-color: #F1F5F9; border-color: #94A3B8; }"
+        "QPushButton { background-color: #FFFFFF; border: 1.5px solid #CBD5E1; border-radius: 8px; padding: 0px 14px; font-weight: 700; color: #334155; font-size: 12px; }"
+        "QPushButton:hover { background-color: #F8FAFC; border-color: #94A3B8; color: #0F172A; }"
+        "QPushButton:pressed { background-color: #E2E8F0; }"
     );
     connect(m_openFirmBtn, &QPushButton::clicked, this, [this]() { emit openViewRequested(22); });
     btnBox->addWidget(m_openFirmBtn);
 
-    // Sync Bahi-Khata Data Button
-    m_syncBtn = new QPushButton("Sync Data", this);
+    // Sync Bahi-Khata / Busy Data Button
+    m_syncBtn = new QPushButton("📥 Sync Data", this);
     m_syncBtn->setFixedHeight(36);
     m_syncBtn->setFocusPolicy(Qt::NoFocus);
     m_syncBtn->setCursor(Qt::PointingHandCursor);
     m_syncBtn->setStyleSheet(
-        "QPushButton { background-color: #EFF6FF; border: 1.5px solid #3B82F6; border-radius: 6px; padding: 0px 14px; font-weight: 700; color: #1D4ED8; font-size: 12px; }"
-        "QPushButton:hover { background-color: #DBEAFE; border-color: #2563EB; }"
+        "QPushButton { background-color: #EFF6FF; border: 1.5px solid #93C5FD; border-radius: 8px; padding: 0px 14px; font-weight: 700; color: #1D4ED8; font-size: 12px; }"
+        "QPushButton:hover { background-color: #DBEAFE; border-color: #3B82F6; color: #1E40AF; }"
+        "QPushButton:pressed { background-color: #BFDBFE; }"
     );
     connect(m_syncBtn, &QPushButton::clicked, this, &DashboardWidget::onSyncClicked);
     btnBox->addWidget(m_syncBtn);
@@ -176,8 +179,9 @@ void DashboardWidget::setupUi() {
     m_periodBtn->setFocusPolicy(Qt::NoFocus);
     m_periodBtn->setCursor(Qt::PointingHandCursor);
     m_periodBtn->setStyleSheet(
-        "QPushButton { background-color: #F0FDF4; border: 1.5px solid #16A34A; border-radius: 6px; padding: 0px 14px; font-weight: 700; color: #15803D; font-size: 12px; }"
-        "QPushButton:hover { background-color: #DCFCE7; }"
+        "QPushButton { background-color: #F0FDF4; border: 1.5px solid #86EFAC; border-radius: 8px; padding: 0px 14px; font-weight: 700; color: #15803D; font-size: 12px; }"
+        "QPushButton:hover { background-color: #DCFCE7; border-color: #22C55E; color: #166534; }"
+        "QPushButton:pressed { background-color: #BBF7D0; }"
     );
     connect(m_periodBtn, &QPushButton::clicked, this, &DashboardWidget::requestAccountingPeriodDialog);
     btnBox->addWidget(m_periodBtn);
@@ -188,37 +192,14 @@ void DashboardWidget::setupUi() {
     m_scaleBtn->setFocusPolicy(Qt::NoFocus);
     m_scaleBtn->setCursor(Qt::PointingHandCursor);
     m_scaleBtn->setStyleSheet(
-        "QPushButton { background-color: #F8FAFC; border: 1.5px solid #64748B; border-radius: 6px; padding: 0px 14px; font-weight: 700; color: #334155; font-size: 12px; }"
-        "QPushButton:hover { background-color: #E2E8F0; border-color: #475569; color: #0F172A; }"
+        "QPushButton { background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 8px; padding: 0px 14px; font-weight: 700; color: #475569; font-size: 12px; }"
+        "QPushButton:hover { background-color: #F1F5F9; border-color: #94A3B8; color: #0F172A; }"
+        "QPushButton:pressed { background-color: #E2E8F0; }"
     );
     connect(m_scaleBtn, &QPushButton::clicked, this, &DashboardWidget::openScaleDialog);
     connect(&ScaleManager::instance(), &ScaleManager::scaleChanged, this, &DashboardWidget::updateScaleButtonText);
     updateScaleButtonText(ScaleManager::instance().currentScaleFactor(), ScaleManager::instance().currentScalePercent());
     btnBox->addWidget(m_scaleBtn);
-
-    // New Paddy Slip Button (with F2 badge)
-    m_newPaddyBtn = new QPushButton("New Paddy Slip  [F2]", this);
-    m_newPaddyBtn->setFixedHeight(36);
-    m_newPaddyBtn->setFocusPolicy(Qt::NoFocus);
-    m_newPaddyBtn->setCursor(Qt::PointingHandCursor);
-    m_newPaddyBtn->setStyleSheet(
-        "QPushButton { background-color: #16A34A; border: none; border-radius: 6px; padding: 0px 16px; font-weight: 700; color: #FFFFFF; font-size: 12px; }"
-        "QPushButton:hover { background-color: #15803D; }"
-    );
-    connect(m_newPaddyBtn, &QPushButton::clicked, this, [this]() { emit openViewRequested(1); });
-    btnBox->addWidget(m_newPaddyBtn);
-
-    // New Invoice Button
-    m_newInvoiceBtn = new QPushButton("New Invoice", this);
-    m_newInvoiceBtn->setFixedHeight(36);
-    m_newInvoiceBtn->setFocusPolicy(Qt::NoFocus);
-    m_newInvoiceBtn->setCursor(Qt::PointingHandCursor);
-    m_newInvoiceBtn->setStyleSheet(
-        "QPushButton { background-color: #2563EB; border: none; border-radius: 6px; padding: 0px 18px; font-weight: 700; color: #FFFFFF; font-size: 12px; }"
-        "QPushButton:hover { background-color: #1D4ED8; }"
-    );
-    connect(m_newInvoiceBtn, &QPushButton::clicked, this, [this]() { emit openViewRequested(14); });
-    btnBox->addWidget(m_newInvoiceBtn);
 
     topHeaderLayout->addLayout(btnBox);
     rootLayout->addLayout(topHeaderLayout);
@@ -603,7 +584,7 @@ void DashboardWidget::updatePeriodBadge() {
     QString periodText = QString("%1 To %2 (%3)").arg(s_fmt, e_fmt, fy.name);
 
     if (m_periodBtn) {
-        m_periodBtn->setText("Period: " + periodText);
+        m_periodBtn->setText("📅 Period: " + periodText);
     }
     if (m_fyBadgeLabel) {
         m_fyBadgeLabel->setText(periodText + " (Active)");

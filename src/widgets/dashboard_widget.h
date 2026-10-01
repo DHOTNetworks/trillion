@@ -88,8 +88,6 @@ private:
     QPushButton* m_syncBtn = nullptr;
     QPushButton* m_periodBtn = nullptr;
     QPushButton* m_scaleBtn = nullptr;
-    QPushButton* m_newPaddyBtn = nullptr;
-    QPushButton* m_newInvoiceBtn = nullptr;
 
     // Firm profile labels
     QLabel* m_firmNameLabel = nullptr;
