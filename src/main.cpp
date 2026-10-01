@@ -57,9 +57,11 @@ int main(int argc, char* argv[]) {
 
     // High-DPI Desktop Scaling (scales all coordinates, fonts, tables, cards for 27" and 4K screens)
     int savedScalePercent = ScaleManager::getSavedScalePercent();
-    if (savedScalePercent >= 80 && savedScalePercent <= 250 && savedScalePercent != 100) {
+    if (savedScalePercent >= 80 && savedScalePercent <= 250) {
         double factor = savedScalePercent / 100.0;
         qputenv("QT_SCALE_FACTOR", QByteArray::number(factor, 'f', 2));
+    } else {
+        qputenv("QT_SCALE_FACTOR", "1.0");
     }
 
     QApplication app(argc, argv);

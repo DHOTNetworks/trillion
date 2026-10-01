@@ -106,6 +106,7 @@ void ScaleManager::setScalePercent(int percent, bool persist) {
     if (persist) {
         saveScaleConfigFile(percent);
         DatabaseManager::instance().setSetting("ui_scale_percent", QString::number(percent));
+        qputenv("QT_SCALE_FACTOR", QByteArray::number(m_scaleFactor, 'f', 2));
     }
 
     // 1. Universal Cross-Platform Scaled Font Configuration
