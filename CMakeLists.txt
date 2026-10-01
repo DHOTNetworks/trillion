@@ -25,6 +25,7 @@ find_package(Qt6 6.5 REQUIRED COMPONENTS
     Widgets
     PrintSupport
     Test
+    Network
 )
 
 # Embedded SQLite Amalgamation
@@ -408,8 +409,12 @@ set(SOURCES
     src/widgets/sauda_contract_widget.cpp
     src/services/scale_manager.h
     src/services/scale_manager.cpp
+    src/services/gst_portal_service.h
+    src/services/gst_portal_service.cpp
     src/widgets/scale_settings_dialog.h
     src/widgets/scale_settings_dialog.cpp
+    src/widgets/gst_portal_sync_dialog.h
+    src/widgets/gst_portal_sync_dialog.cpp
     src/widgets/main_window.h
     src/widgets/main_window.cpp
 )
@@ -442,6 +447,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::Svg
     Qt6::Widgets
     Qt6::PrintSupport
+    Qt6::Network
 )
 
 if(APPLE)

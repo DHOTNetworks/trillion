@@ -44,7 +44,7 @@ static QIcon createCalendarIcon() {
 AccountingDateEdit::AccountingDateEdit(QWidget* parent)
     : QLineEdit(parent)
 {
-    setInputMask("00-00-0000;_");
+    setPlaceholderText("DD-MM-YYYY");
     m_lastDate = QDate::currentDate();
     setText(m_lastDate.toString("dd-MM-yyyy"));
     setFixedHeight(34);
@@ -97,6 +97,13 @@ void AccountingDateEdit::openDateDialog() {
 
 QDate AccountingDateEdit::date() const {
     QString t = text().trimmed();
+    if (t.isEmpty()) return QDate();
+    FinancialYearsModel fyModel;
+    QString parsed = fyModel.parse_date_pattern(t);
+    if (!parsed.isEmpty()) {
+        QDate d = QDate::fromString(parsed, "dd-MM-yyyy");
+        if (d.isValid()) return d;
+    }
     QDate d = QDate::fromString(t, "dd-MM-yyyy");
     if (d.isValid()) return d;
     return QDate();

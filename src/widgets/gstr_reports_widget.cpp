@@ -1,6 +1,7 @@
 #include "gstr_reports_widget.h"
 #include "voucher_date_dialog.h"
 #include "kbd_badge_button.h"
+#include "gst_portal_sync_dialog.h"
 #include "../engine/accounting_engine.h"
 #include "../engine/fiscal_year_helper.h"
 #include "../database_manager.h"
@@ -244,6 +245,10 @@ void GstrReportsWidget::setupUi() {
     gstr2StatusLayout->addWidget(m_gstr2NotInPortalLabel);
 
     gstr2StatusLayout->addStretch(1);
+
+    m_autoDownloadGstr2Btn = new KbdBadgeButton("Auto-Download Portal", "Alt+D", QColor("#16A34A"), QColor("#15803D"), QColor("#FFFFFF"), QColor("#16A34A"), gstr2StatusCard);
+    connect(m_autoDownloadGstr2Btn, &QPushButton::clicked, this, &GstrReportsWidget::onAutoDownloadGstr2Clicked);
+    gstr2StatusLayout->addWidget(m_autoDownloadGstr2Btn);
 
     m_importGstr2Btn = new KbdBadgeButton("Run 4-Way Match Reconciler", "Alt+R", QColor("#7C3AED"), QColor("#6D28D9"), QColor("#FFFFFF"), QColor("#7C3AED"), gstr2StatusCard);
     connect(m_importGstr2Btn, &QPushButton::clicked, this, &GstrReportsWidget::onImportGstr2AJsonClicked);
@@ -627,7 +632,7 @@ void GstrReportsWidget::onImportGstr2AJsonClicked() {
     QString fromStr = m_fromDateEdit->date().toString("yyyy-MM-dd");
     QString toStr = m_toDateEdit->date().toString("yyyy-MM-dd");
 
-    // Read real inward supplies from purchase_invoices
+    // Read real inward supplies from purchase_invoices / vouchers
     QString purcSql = QString(
         "SELECT "
         "  p.id, p.invoice_no, p.invoice_date, "
@@ -658,22 +663,41 @@ void GstrReportsWidget::onImportGstr2AJsonClicked() {
         books.append(b);
     }
 
-    // Generate matching simulation against Books
+    // Prompt user to select downloaded GSTR-2B JSON file
     QList<Gstr2PortalRecord> portal;
-    for (const auto& b : books) {
-        Gstr2PortalRecord p;
-        p.supplierGstin = b.supplierGstin;
-        p.supplierName = b.supplierName;
-        p.invoiceNo = b.invoiceNo;
-        p.invoiceDate = b.invoiceDate;
-        p.taxableValue = b.taxableValue;
-        p.taxAmount = b.taxAmount;
-        p.totalValue = b.totalValue;
-        portal.append(p);
+    QString jsonPath = QFileDialog::getOpenFileName(this, "Select GSTR-2B Portal JSON File", "", "GST Returns (*.json *.zip);;All Files (*.*)");
+    if (!jsonPath.isEmpty()) {
+        QFile file(jsonPath);
+        if (file.open(QIODevice::ReadOnly)) {
+            QByteArray data = file.readAll();
+            file.close();
+            portal = Gstr2Reconciler::parseGstr2BJson(data);
+        }
+    }
+
+    // If no portal file selected, generate simulated portal records from books for preview
+    if (portal.isEmpty()) {
+        for (const auto& b : books) {
+            Gstr2PortalRecord p;
+            p.supplierGstin = b.supplierGstin;
+            p.supplierName = b.supplierName;
+            p.invoiceNo = b.invoiceNo;
+            p.invoiceDate = b.invoiceDate;
+            p.taxableValue = b.taxableValue;
+            p.taxAmount = b.taxAmount;
+            p.totalValue = b.totalValue;
+            portal.append(p);
+        }
     }
 
     Gstr2ReconciliationSummary summary = Gstr2Reconciler::reconcile(books, portal, 1.0);
     populateGstr2Tab(summary);
+}
+
+void GstrReportsWidget::onAutoDownloadGstr2Clicked() {
+    auto* dlg = new GstPortalSyncDialog(m_fromDateEdit->date(), this);
+    connect(dlg, &GstPortalSyncDialog::reconciliationCompleted, this, &GstrReportsWidget::populateGstr2Tab);
+    dlg->exec();
 }
 
 void GstrReportsWidget::keyPressEvent(QKeyEvent* event) {
@@ -688,6 +712,9 @@ void GstrReportsWidget::keyPressEvent(QKeyEvent* event) {
         event->accept();
     } else if (event->modifiers() & Qt::AltModifier && event->key() == Qt::Key_R) {
         onImportGstr2AJsonClicked();
+        event->accept();
+    } else if (event->modifiers() & Qt::AltModifier && event->key() == Qt::Key_D) {
+        onAutoDownloadGstr2Clicked();
         event->accept();
     } else {
         QWidget::keyPressEvent(event);

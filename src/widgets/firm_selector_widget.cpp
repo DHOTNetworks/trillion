@@ -417,6 +417,16 @@ void FirmSelectorWidget::refreshFirms() {
                 periodStr = FirmManager::getFirmPeriod(dbPath);
             }
         }
+        if (!periodStr.isEmpty() && periodStr.contains("to", Qt::CaseInsensitive)) {
+            QStringList pParts = periodStr.split(QRegularExpression("\\s+to\\s+", QRegularExpression::CaseInsensitiveOption));
+            if (pParts.size() == 2) {
+                QString sPart = FirmManager::formatDateToDisplay(pParts[0]);
+                QString ePart = FirmManager::formatDateToDisplay(pParts[1]);
+                if (!sPart.isEmpty() && !ePart.isEmpty()) {
+                    periodStr = sPart + " to " + ePart;
+                }
+            }
+        }
         if (periodStr.isEmpty()) {
             periodStr = "-";
         }

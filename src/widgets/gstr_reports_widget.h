@@ -34,6 +34,7 @@ private slots:
     void onRefreshClicked();
     void onExportGstr1JsonClicked();
     void onImportGstr2AJsonClicked();
+    void onAutoDownloadGstr2Clicked();
 
 private:
     void setupUi();
@@ -63,6 +64,7 @@ private:
     QLabel* m_gstr2MismatchLabel = nullptr;
     QLabel* m_gstr2NotInPortalLabel = nullptr;
     QPushButton* m_importGstr2Btn = nullptr;
+    QPushButton* m_autoDownloadGstr2Btn = nullptr;
 
     // GSTR-3B Widgets
     QLabel* m_gstr3bTaxableLabel = nullptr;

@@ -102,6 +102,14 @@ static QString parseDateFormatted(const QString& raw) {
         int d = parts[1].toInt();
         int y = parts[2].toInt();
         if (y < 100) y += 2000;
+        else if (y >= 1900 && y <= 1970) y += 100;
+
+        // In Jet DB libmdb date strings, format is MM/DD/YYYY
+        // If m > 12 and d <= 12, then it was DD/MM/YYYY
+        if (m > 12 && d <= 12) {
+            std::swap(m, d);
+        }
+
         return QString("%1-%2-%3")
             .arg(y, 4, 10, QChar('0'))
             .arg(m, 2, 10, QChar('0'))
@@ -109,11 +117,16 @@ static QString parseDateFormatted(const QString& raw) {
     }
     parts = firstPart.split('-');
     if (parts.size() == 3) {
-        if (parts[0].length() == 4) return firstPart;
+        if (parts[0].length() == 4) {
+            int y = parts[0].toInt();
+            if (y >= 1900 && y <= 1970) y += 100;
+            return QString("%1-%2-%3").arg(y, 4, 10, QChar('0')).arg(parts[1]).arg(parts[2]);
+        }
         int d = parts[0].toInt();
         int m = parts[1].toInt();
         int y = parts[2].toInt();
         if (y < 100) y += 2000;
+        else if (y >= 1900 && y <= 1970) y += 100;
         return QString("%1-%2-%3")
             .arg(y, 4, 10, QChar('0'))
             .arg(m, 2, 10, QChar('0'))

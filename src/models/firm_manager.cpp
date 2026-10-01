@@ -53,17 +53,43 @@ QString FirmManager::formatDateToDisplay(const QString& rawDate) {
     if (s.contains(" ")) {
         s = s.section(" ", 0, 0).trimmed();
     }
-    s.replace("/", "-");
+    s.replace("/", "-").replace(".", "-");
 
-    // Try dd-MM-yyyy, yyyy-MM-dd, etc.
+    QStringList parts = s.split('-', Qt::SkipEmptyParts);
+    if (parts.size() == 3) {
+        int day = 0, month = 0, year = 0;
+        if (parts[0].length() == 4 && parts[0].toInt() >= 1900) {
+            year = parts[0].toInt();
+            month = parts[1].toInt();
+            day = parts[2].toInt();
+        } else {
+            day = parts[0].toInt();
+            month = parts[1].toInt();
+            year = parts[2].toInt();
+            if (parts[2].length() <= 2 || year < 100) {
+                year += 2000;
+            }
+        }
+
+        if (year >= 1900 && year <= 1970) {
+            year += 100;
+        }
+
+        QDate d(year, month, day);
+        if (d.isValid()) {
+            return d.toString("dd-MM-yyyy");
+        }
+    }
+
+    // Fallback QDate parsers
     QDate d = QDate::fromString(s, "dd-MM-yyyy");
     if (!d.isValid()) d = QDate::fromString(s, "yyyy-MM-dd");
     if (!d.isValid()) d = QDate::fromString(s, "d-M-yyyy");
     if (!d.isValid()) d = QDate::fromString(s, "yyyy-M-d");
-    if (!d.isValid()) d = QDate::fromString(s, "d-M-yy");
-    if (!d.isValid()) d = QDate::fromString(s, "dd-MM-yy");
 
     if (d.isValid()) {
+        if (d.year() < 100) d = d.addYears(2000);
+        else if (d.year() >= 1900 && d.year() <= 1970) d = d.addYears(100);
         return d.toString("dd-MM-yyyy");
     }
     return s;
@@ -108,13 +134,10 @@ QString FirmManager::getFirmPeriod(const QString& dbPath) {
     sqlite3_close(db);
 
     if (!startStr.isEmpty() && !endStr.isEmpty()) {
-        QDate sDate = QDate::fromString(startStr.left(10), "yyyy-MM-dd");
-        if (!sDate.isValid()) sDate = QDate::fromString(startStr.left(10), "dd-MM-yyyy");
-        QDate eDate = QDate::fromString(endStr.left(10), "yyyy-MM-dd");
-        if (!eDate.isValid()) eDate = QDate::fromString(endStr.left(10), "dd-MM-yyyy");
-
-        if (sDate.isValid() && eDate.isValid()) {
-            return sDate.toString("dd-MM-yyyy") + " to " + eDate.toString("dd-MM-yyyy");
+        QString s_fmt = formatDateToDisplay(startStr.left(10));
+        QString e_fmt = formatDateToDisplay(endStr.left(10));
+        if (!s_fmt.isEmpty() && !e_fmt.isEmpty()) {
+            return s_fmt + " to " + e_fmt;
         }
     }
 
@@ -138,13 +161,19 @@ void FirmManager::loadRegistry() {
             }
             m_activeFolder = QDir::cleanPath(QDir::current().filePath("data"));
             QJsonArray arr = root.value("firms").toArray();
+            QSet<QString> seenIds;
             for (const auto& v : arr) {
                 QVariantMap f = v.toObject().toVariantMap();
+                QString id = f.value("id").toString();
                 QString dbName = f.value("db_name").toString();
                 QString dbPath = f.value("db_path").toString();
                 if (dbName == "test.db" || dbName == "mahadev_rice.db") continue;
                 if (dbPath.endsWith("test.db") || dbPath.endsWith("mahadev_rice.db")) continue;
                 if (!dbPath.isEmpty() && QFile::exists(dbPath) && QFileInfo(dbPath).size() == 0) continue;
+                if (!id.isEmpty() && seenIds.contains(id)) continue;
+                if (!dbName.isEmpty() && seenIds.contains(dbName)) continue;
+                if (!id.isEmpty()) seenIds.insert(id);
+                if (!dbName.isEmpty()) seenIds.insert(dbName);
                 registeredFirms.append(f);
             }
         }

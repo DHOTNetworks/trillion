@@ -25,7 +25,11 @@ VoucherDateDialog::VoucherDateDialog(const QString& currentDate, const FiscalYea
 
     QDate parsedDate;
     if (!m_initialDate.isEmpty()) {
-        parsedDate = QDate::fromString(m_initialDate, "dd-MM-yyyy");
+        QString parsed = m_fyModel.parse_date_pattern(m_initialDate);
+        if (!parsed.isEmpty()) {
+            parsedDate = QDate::fromString(parsed, "dd-MM-yyyy");
+        }
+        if (!parsedDate.isValid()) parsedDate = QDate::fromString(m_initialDate, "dd-MM-yyyy");
         if (!parsedDate.isValid()) parsedDate = QDate::fromString(m_initialDate, "yyyy-MM-dd");
         if (!parsedDate.isValid()) parsedDate = QDate::fromString(m_initialDate, "dd/MM/yyyy");
         if (!parsedDate.isValid()) parsedDate = QDate::fromString(m_initialDate, "yyyy/MM/dd");
@@ -369,7 +373,7 @@ QDate DateRangeDialog::parseDateFlexible(const QString& input, const QDate& fall
     val.replace('/', '-').replace('.', '-');
 
     // If day-month without year (e.g. "1-4" or "15-8")
-    QStringList parts = val.split('-');
+    QStringList parts = val.split('-', Qt::SkipEmptyParts);
     if (parts.size() == 2) {
         int d = parts[0].toInt();
         int m = parts[1].toInt();
@@ -386,17 +390,52 @@ QDate DateRangeDialog::parseDateFlexible(const QString& input, const QDate& fall
         }
     }
 
-    QDate d = QDate::fromString(val, "dd-MM-yyyy");
-    if (!d.isValid()) d = QDate::fromString(val, "yyyy-MM-dd");
-    if (!d.isValid()) d = QDate::fromString(val, "d-M-yyyy");
-    if (!d.isValid()) d = QDate::fromString(val, "d-M-yy");
-    if (!d.isValid() && val.length() == 8 && val.toInt() > 0) {
-        d = QDate::fromString(val, "ddMMyyyy");
+    if (parts.size() == 3) {
+        int d = 0, m = 0, y = 0;
+        if (parts[0].length() == 4 && parts[0].toInt() >= 1900) {
+            // ISO yyyy-MM-dd
+            y = parts[0].toInt();
+            m = parts[1].toInt();
+            d = parts[2].toInt();
+        } else {
+            d = parts[0].toInt();
+            m = parts[1].toInt();
+            y = parts[2].toInt();
+            if (parts[2].length() <= 2 || y < 100) {
+                y += 2000;
+            }
+        }
+        if (y >= 1900 && y <= 1970) {
+            y += 100;
+        }
+        QDate res(y, m, d);
+        if (res.isValid()) return res;
     }
-    if (!d.isValid() && val.length() == 6 && val.toInt() > 0) {
-        d = QDate::fromString(val, "ddMMyy");
+
+    // All digits: e.g. 010426 (6) or 01042026 (8)
+    if (val.length() == 6 && val.toInt() > 0) {
+        int d = val.left(2).toInt();
+        int m = val.mid(2, 2).toInt();
+        int y = val.mid(4, 2).toInt() + 2000;
+        QDate res(y, m, d);
+        if (res.isValid()) return res;
     }
-    if (d.isValid()) return d;
+    if (val.length() == 8 && val.toInt() > 0) {
+        int d = val.left(2).toInt();
+        int m = val.mid(2, 2).toInt();
+        int y = val.mid(4, 4).toInt();
+        if (y >= 1900 && y <= 1970) y += 100;
+        QDate res(y, m, d);
+        if (res.isValid()) return res;
+    }
+
+    FinancialYearsModel fyModel;
+    QString parsed = fyModel.parse_date_pattern(val);
+    if (!parsed.isEmpty()) {
+        QDate res = QDate::fromString(parsed, "dd-MM-yyyy");
+        if (res.isValid()) return res;
+    }
+
     return fallback;
 }
 

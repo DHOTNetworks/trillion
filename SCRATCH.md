@@ -665,3 +665,428 @@ If you'd like to try this hybrid approach:
 1. We can create a **C++ `SalesVoucherWidget` / `PurchaseVoucherWidget`** proof-of-concept.
 2. We embed it into the existing navigation stack without breaking any of the existing QML pages.
 3. You can test the keyboard speed, grid alignment, and focus reliability firsthand.
+
+
+# GSTR
+
+Ran command: `find /Users/karan/busy/decompiled -iname "*reconcil*" -o -iname "*gstr2*" -o -iname "*gstr*" -o -iname "*match*" | grep -v "\.baml$"`
+Ran command: `python3 -c "
+files = [
+    '/Users/karan/busy/decompiled/Controller/Controller.Reports.ReportClass/CSR_Reconcile_2A_2B_VchWise.cs',
+    '/Users/karan/busy/decompiled/Controller/Controller.Reports.ReportClass/CSR_GSTR2_MatchingSum.cs',
+    '/Users/karan/busy/decompiled/BusyMagic/Presentation.ViewModels/FrmGSTR2InvoiceTaggingViewModel.cs'
+]
+
+for f in files:
+    print(f'=== {f} ===')
+    with open(f) as fh:
+        lines = fh.readlines()
+        print('Total lines:', len(lines))
+        for line in lines[:80]:
+            print(line, end='')
+        print('\n...\n')
+"`
+Ran command: `python3 -c "
+import os, re
+
+path = '/Users/karan/busy/decompiled/Controller/Controller.Reports.ReportClass/CSR_Reconcile_2A_2B_VchWise.cs'
+with open(path) as f:
+    text = f.read()
+
+# Print method signatures and key string constants
+for m in re.finditer(r'(public|private|internal)\s+[\w\<\>\[\]\,\s]+\s+(\w+)\s*\([^)]*\)\s*\{', text):
+    print('Method:', m.group(2))
+
+lines = text.splitlines()
+for i, l in enumerate(lines):
+    if any(k in l.lower() for k in ['matched', 'mismatched', 'probable', 'missing', 'tolerance', 'taxable', 'diff', 'cgst', 'sgst', 'igst', 'cess', 'round']):
+        if len(l.strip()) < 120 and not l.strip().startswith('public static CallSite'):
+            print(f'{i+1}: {l.strip()}')
+"`
+Ran command: `python3 -c "
+import os
+
+repo_path = '/Users/karan/busy/decompiled/Infrastructure/Infrastructure.Repositories.EF/GSTRepository.cs'
+if os.path.exists(repo_path):
+    with open(repo_path) as f:
+        print(f.read()[:3000])
+else:
+    print('Not found')
+"`
+Ran command: `python3 -c "
+files = [
+    '/Users/karan/busy/decompiled/Domain/Domain.Entities/GSTR2AInfoEntity.cs',
+    '/Users/karan/busy/decompiled/Domain/Domain.Entities/GSTR2BInfoEntity.cs',
+    '/Users/karan/busy/decompiled/Domain/Domain.Entities/Tran10Entity.cs'
+]
+
+for f in files:
+    print(f'=== {f} ===')
+    with open(f) as fh:
+        print(fh.read())
+"`
+Ran command: `python3 -c "
+for fname in ['/Users/karan/busy/decompiled/Domain/Domain.Entities/GSTR2AInfoEntity.cs', '/Users/karan/busy/decompiled/Domain/Domain.Entities/GSTR2BInfoEntity.cs']:
+    print(f'=== {fname} ===')
+    with open(fname) as f:
+        lines = [l.strip() for l in f.readlines() if l.strip().startswith('public ')]
+        for l in lines:
+            print(' ', l)
+"`
+Ran command: `python3 -c "
+files = [
+    '/Users/karan/busy/decompiled/Controller/Controller.Reports.OnEnterHandlers.Handlers/GSTR2A2BReconcileOnEnterHandler.cs',
+    '/Users/karan/busy/decompiled/Controller/Controller.Reports.ReportClass/CSR_Reconcile_2A_2B_PartyWise.cs'
+]
+
+for f in files:
+    print(f'=== {f} ===')
+    with open(f) as fh:
+        text = fh.read()
+        print(text[:2500])
+"`
+Ran command: `python3 -c "
+files = [
+    '/Users/karan/busy/decompiled/BusyMagic/Presentation.ViewModels/MatchCandidateRow.cs',
+    '/Users/karan/busy/decompiled/BusyMagic/Presentation.ViewModels/GSTRStatusRow.cs',
+    '/Users/karan/busy/decompiled/BusyMagic/Presentation.ViewModels/SaveGSTR2AViewModel.cs'
+]
+
+for f in files:
+    print(f'=== {f} ===')
+    with open(f) as fh:
+        print(fh.read())
+"`
+Ran command: `python3 -c "
+import os, subprocess, re
+
+decomp_dir = '/Users/karan/busy/decompiled'
+keywords = ['Missing in Portal', 'Missing in BUSY', 'Missing in Books', 'Probable Match', 'Tax Mismatch', 'Date Mismatch', 'Amount Mismatch', 'Matched (Exact)']
+
+for root, dirs, files in os.walk(decomp_dir):
+    for f in files:
+        if f.endswith('.cs'):
+            path = os.path.join(root, f)
+            with open(path, 'r', errors='ignore') as fh:
+                content = fh.read()
+                found = [k for k in keywords if k.lower() in content.lower()]
+                if found:
+                    print(f'{f}: {found}')
+"`
+Ran command: `python3 -c "
+import os
+
+files = [
+    '/Users/karan/busy/decompiled/Controller/Controller.Reports.ReportClass/CSR_Reconcile_2A_2B_VchWise.cs',
+    '/Users/karan/busy/decompiled/Controller/Controller.Reports.ReportClass/CSR_GSTR2_MatchingSum.cs'
+]
+
+for f in files:
+    with open(f) as fh:
+        content = fh.read()
+        print(f'=== {os.path.basename(f)} ===')
+        for line in content.splitlines():
+            if 'string' in line and any(k in line.lower() for k in ['status', 'party', 'match', 'portal', 'busy', 'recon', 'tax', 'gstr']):
+                print(' ', line.strip()[:100])
+"`
+
+Based on reverse-engineering the GST engine (`GSTR2AInfoEntity`, `GSTR2BInfoEntity`, `GSTRepository`, `CSR_Reconcile_2A_2B_VchWise`, and `FrmGSTR2InvoiceTaggingViewModel`), here is the complete **GSTR Reconciliation Logic and Architecture**, broken down step-by-step so you can replicate it cleanly in **MahadevAc** (C++/Qt/SQLite).
+
+---
+
+### 1. High-Level Reconciliation Pipeline
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ 1. DATA INGESTION                                           │
+│  • Purchase Register (Books: Tran1 + Tran10)                │
+│  • Portal Data (GSTR-2B / GSTR-2A JSON / Excel)             │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 2. PRE-PROCESSING & NORMALIZATION                           │
+│  • Strip prefixes, dashes, slashes, leading zeros from Inv# │
+│  • Standardize GSTINs to uppercase (15-char)                │
+│  • Group multi-rate invoice items into single voucher totals│
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 3. 5-PASS RECONCILIATION MATCHING ENGINE                    │
+│  • Pass 1: Exact Match (GSTIN + Inv# + Date + Tax)          │
+│  • Pass 2: Rounding / Tolerance Match (|Δ| ≤ ₹1.00)         │
+│  • Pass 3: Amount Mismatch (GSTIN + Inv# match, Tax differs)│
+│  • Pass 4: Date / Period Mismatch (GSTIN + Inv# + Tax match)│
+│  • Pass 5: Fuzzy / Probable Match (GSTIN + Tax match)       │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 4. CATEGORIZATION & ITC ACTION TAGGING                      │
+│  • Matched Invoices  ──▶ Auto-tag ITC Claimed (GSTR-3B)     │
+│  • Missing in Books  ──▶ Prompt to Auto-Create Purchase Vch │
+│  • Missing in Portal ──▶ Supplier Follow-up Report (Action) │
+│  • Ineligible ITC    ──▶ Tag Section 17(5) Blocked          │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 2. Database Schema for GST Reconciliation
+
+To replicate this in **MahadevAc**, create the following tables in SQLite:
+
+```sql
+-- 1. Portal 2B / 2A Invoices
+CREATE TABLE gstr2b_portal_invoices (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    return_period TEXT NOT NULL,         -- e.g., '042026' (MMYYYY)
+    section TEXT NOT NULL,               -- 'B2B', 'B2BA', 'CDNR', 'CDNRA', 'IMPG'
+    supplier_gstin TEXT NOT NULL,
+    supplier_trade_name TEXT,
+    invoice_number TEXT NOT NULL,
+    normalized_inv_no TEXT NOT NULL,     -- Computed: lowercase, alphanumeric only
+    invoice_date TEXT NOT NULL,          -- 'YYYY-MM-DD'
+    invoice_type TEXT DEFAULT 'R',       -- 'R' (Regular), 'SEZWP', 'SEZWOP', 'DE'
+    pos TEXT,                            -- Place of Supply state code (e.g. '03')
+    taxable_value REAL NOT NULL DEFAULT 0.0,
+    igst_amount REAL NOT NULL DEFAULT 0.0,
+    cgst_amount REAL NOT NULL DEFAULT 0.0,
+    sgst_amount REAL NOT NULL DEFAULT 0.0,
+    cess_amount REAL NOT NULL DEFAULT 0.0,
+    total_amount REAL NOT NULL DEFAULT 0.0,
+    itc_available TEXT DEFAULT 'Y',      -- 'Y' or 'N'
+    itc_ineligible_reason TEXT,
+    supplier_filing_date TEXT,           -- Date supplier filed GSTR-1
+    supplier_filing_period TEXT,
+    matched_voucher_id INTEGER,          -- FK to books purchase voucher (when matched)
+    reconcile_status TEXT DEFAULT 'PENDING' -- 'MATCHED', 'MISMATCH', 'MISSING_IN_BOOKS'
+);
+
+-- 2. Indexing for fast reconciliation lookups
+CREATE INDEX idx_gstr2b_lookup ON gstr2b_portal_invoices (supplier_gstin, normalized_inv_no);
+CREATE INDEX idx_gstr2b_period ON gstr2b_portal_invoices (return_period);
+```
+
+---
+
+### 3. Normalization Rules (Critical for Real-World Matching)
+
+Suppliers and buyers frequently format the same invoice number differently (e.g., `INV/2026-27/0045` vs `45` vs `INV-45`). Normalization is the secret to accurate matching:
+
+```cpp
+// src/gst/gstr_normalizer.cpp
+#include <QString>
+#include <QRegularExpression>
+
+QString normalizeInvoiceNumber(const QString& rawInvNo) {
+    // 1. Remove all spaces, slashes, dashes, dots, and underscores
+    QString clean = rawInvNo;
+    clean.remove(QRegularExpression("[\\s/\\-_.]"));
+    clean = clean.toUpper();
+
+    // 2. Strip leading zeroes (e.g., '00045' -> '45')
+    clean.remove(QRegularExpression("^0+"));
+
+    return clean.isEmpty() ? rawInvNo.trimmed().toUpper() : clean;
+}
+```
+
+---
+
+### 4. The 5-Pass Matching Algorithm in C++
+
+```cpp
+// src/gst/gstr_reconciler.h
+#pragma once
+#include <QString>
+#include <QDate>
+#include <cmath>
+
+enum class ReconcileStatus {
+    ExactMatch,          // GSTIN + Inv# + Date + Tax matched exactly
+    RoundingMatch,       // Difference within ₹1.00 tolerance (CGST/SGST/Taxable)
+    AmountMismatch,      // GSTIN + Inv# matched, but tax/amount differs (> ₹1)
+    DateMismatch,        // GSTIN + Inv# + Tax matched, but date outside month/window
+    ProbableMatch,       // GSTIN + Exact Tax matched, but Inv# has slight difference
+    MissingInPortal,     // Present in Books, Supplier has not filed
+    MissingInBooks       // Present in GSTR-2B, Buyer has not entered in Books
+};
+
+struct GstInvoiceRecord {
+    int64_t id{0};
+    QString gstin;
+    QString invoiceNumber;
+    QString normalizedInvNo;
+    QDate invoiceDate;
+    double taxableAmount{0.0};
+    double igst{0.0};
+    double cgst{0.0};
+    double sgst{0.0};
+    double cess{0.0};
+    double totalAmount{0.0};
+    ReconcileStatus status{ReconcileStatus::MissingInBooks};
+    int64_t matchedId{0};
+    QString mismatchRemarks;
+};
+```
+
+```cpp
+// src/gst/gstr_reconciler.cpp
+#include "gstr_reconciler.h"
+#include <QList>
+#include <unordered_set>
+
+void reconcileGstr2B(QList<GstInvoiceRecord>& booksRecords, 
+                     QList<GstInvoiceRecord>& portalRecords, 
+                     double roundOffTolerance = 1.0) 
+{
+    std::unordered_set<int64_t> matchedBooksIds;
+    std::unordered_set<int64_t> matchedPortalIds;
+
+    // Helper lambda to compare amounts with tolerance
+    auto isAmountClose = [](double a, double b, double tol) {
+        return std::abs(a - b) <= tol;
+    };
+
+    // -------------------------------------------------------------
+    // PASS 1 & 2: Exact & Rounding Match (GSTIN + Inv# + Tax)
+    // -------------------------------------------------------------
+    for (auto& p : portalRecords) {
+        if (matchedPortalIds.count(p.id)) continue;
+
+        for (auto& b : booksRecords) {
+            if (matchedBooksIds.count(b.id)) continue;
+
+            if (p.gstin == b.gstin && p.normalizedInvNo == b.normalizedInvNo) {
+                double diffTaxable = std::abs(p.taxableAmount - b.taxableAmount);
+                double diffTax = std::abs((p.cgst + p.sgst + p.igst) - (b.cgst + b.sgst + b.igst));
+
+                if (diffTaxable == 0.0 && diffTax == 0.0) {
+                    p.status = ReconcileStatus::ExactMatch;
+                    b.status = ReconcileStatus::ExactMatch;
+                    p.matchedId = b.id;
+                    b.matchedId = p.id;
+                    matchedPortalIds.insert(p.id);
+                    matchedBooksIds.insert(b.id);
+                    break;
+                } 
+                else if (diffTaxable <= roundOffTolerance && diffTax <= roundOffTolerance) {
+                    p.status = ReconcileStatus::RoundingMatch;
+                    b.status = ReconcileStatus::RoundingMatch;
+                    p.mismatchRemarks = QString("Rounding diff: Taxable Δ=%1, Tax Δ=%2").arg(diffTaxable).arg(diffTax);
+                    p.matchedId = b.id;
+                    b.matchedId = p.id;
+                    matchedPortalIds.insert(p.id);
+                    matchedBooksIds.insert(b.id);
+                    break;
+                }
+            }
+        }
+    }
+
+    // -------------------------------------------------------------
+    // PASS 3: Amount Mismatch (GSTIN + Inv# Match, but Tax differs)
+    // -------------------------------------------------------------
+    for (auto& p : portalRecords) {
+        if (matchedPortalIds.count(p.id)) continue;
+
+        for (auto& b : booksRecords) {
+            if (matchedBooksIds.count(b.id)) continue;
+
+            if (p.gstin == b.gstin && p.normalizedInvNo == b.normalizedInvNo) {
+                p.status = ReconcileStatus::AmountMismatch;
+                b.status = ReconcileStatus::AmountMismatch;
+                p.mismatchRemarks = QString("Tax mismatch: Portal Tax=%1, Books Tax=%2")
+                                    .arg(p.cgst + p.sgst + p.igst)
+                                    .arg(b.cgst + b.sgst + b.igst);
+                p.matchedId = b.id;
+                b.matchedId = p.id;
+                matchedPortalIds.insert(p.id);
+                matchedBooksIds.insert(b.id);
+                break;
+            }
+        }
+    }
+
+    // -------------------------------------------------------------
+    // PASS 4: Date / Return Period Mismatch
+    // (GSTIN + Inv# + Exact Amount match, but date difference > 30 days)
+    // -------------------------------------------------------------
+    for (auto& p : portalRecords) {
+        if (matchedPortalIds.count(p.id)) continue;
+
+        for (auto& b : booksRecords) {
+            if (matchedBooksIds.count(b.id)) continue;
+
+            if (p.gstin == b.gstin && p.normalizedInvNo == b.normalizedInvNo) {
+                if (isAmountClose(p.totalAmount, b.totalAmount, roundOffTolerance)) {
+                    p.status = ReconcileStatus::DateMismatch;
+                    b.status = ReconcileStatus::DateMismatch;
+                    p.mismatchRemarks = QString("Date diff: Portal=%1, Books=%2")
+                                        .arg(p.invoiceDate.toString("yyyy-MM-dd"))
+                                        .arg(b.invoiceDate.toString("yyyy-MM-dd"));
+                    p.matchedId = b.id;
+                    b.matchedId = p.id;
+                    matchedPortalIds.insert(p.id);
+                    matchedBooksIds.insert(b.id);
+                    break;
+                }
+            }
+        }
+    }
+
+    // -------------------------------------------------------------
+    // PASS 5: Probable Match (GSTIN + Exact Amount match, typo in Inv#)
+    // -------------------------------------------------------------
+    for (auto& p : portalRecords) {
+        if (matchedPortalIds.count(p.id)) continue;
+
+        for (auto& b : booksRecords) {
+            if (matchedBooksIds.count(b.id)) continue;
+
+            if (p.gstin == b.gstin && isAmountClose(p.totalAmount, b.totalAmount, 0.01)) {
+                // Same party and exact same amount within 15 days window
+                if (std::abs(p.invoiceDate.daysTo(b.invoiceDate)) <= 15) {
+                    p.status = ReconcileStatus::ProbableMatch;
+                    b.status = ReconcileStatus::ProbableMatch;
+                    p.mismatchRemarks = QString("Probable match: Portal Inv#=%1 vs Books Inv#=%2")
+                                        .arg(p.invoiceNumber).arg(b.invoiceNumber);
+                    p.matchedId = b.id;
+                    b.matchedId = p.id;
+                    matchedPortalIds.insert(p.id);
+                    matchedBooksIds.insert(b.id);
+                    break;
+                }
+            }
+        }
+    }
+
+    // Unmatched remaining entries
+    for (auto& p : portalRecords) {
+        if (!matchedPortalIds.count(p.id)) {
+            p.status = ReconcileStatus::MissingInBooks;
+        }
+    }
+    for (auto& b : booksRecords) {
+        if (!matchedBooksIds.count(b.id)) {
+            b.status = ReconcileStatus::MissingInPortal;
+        }
+    }
+}
+```
+
+---
+
+### 5. Summary of Status Categories & Recommended UI Actions
+
+| Status | Color Code | Condition | Action in MahadevAc |
+| :--- | :--- | :--- | :--- |
+| **`Exact Match`** | 🟢 Green | GSTIN, Inv#, and Tax amounts match 100%. | Auto-tag as **Claimed in GSTR-3B**. |
+| **`Rounding Match`** | 🟢 Light Green | Difference $\le$ ₹1.00 (fractional rounding). | Auto-post ₹0.xx round-off adjustment & tag. |
+| **`Amount Mismatch`** | 🟡 Amber | Inv# matches, but Taxable/Tax amount differs. | Display side-by-side diff; allow one-click correction of purchase bill. |
+| **`Date Mismatch`** | 🔵 Blue | Amounts match, but invoice recorded in different tax month. | Tag for ITC claim in the appropriate eligible month. |
+| **`Probable Match`** | 🟣 Purple | Same GSTIN & Amount, but typo in invoice number. | One-click manual link button ("*Confirm Link*"). |
+| **`Missing in Books`** | 🔴 Red | In GSTR-2B, but not entered in purchase register. | One-click **"Create Purchase Voucher"** (pre-fills Party, Amount & GST). |
+| **`Missing in Portal`**| ⚪ Gray | In Books, but supplier hasn't filed GSTR-1. | Generate **Supplier Communication / WhatsApp Notice** list. |

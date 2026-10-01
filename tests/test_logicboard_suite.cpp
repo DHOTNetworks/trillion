@@ -252,22 +252,48 @@ void LogicBoardTestSuite::cleanupTestCase() {
 void LogicBoardTestSuite::testDateParsingAndFormatting() {
     auto &dateSvc = AccountingDateService::instance();
 
-    // Dot separated short year
+    // Dot separated short year (e.g. 1.4.26 -> 01/04/2026)
+    QCOMPARE(dateSvc.resolveDate("1.4.26"), QString("01/04/2026"));
     QCOMPARE(dateSvc.resolveDate("1.3.26"), QString("01/03/2026"));
     QCOMPARE(dateSvc.resolveDate("15.08.25"), QString("15/08/2025"));
+    QCOMPARE(dateSvc.resolveDate("01.04.26"), QString("01/04/2026"));
 
     // Dash separated
+    QCOMPARE(dateSvc.resolveDate("1-4-26"), QString("01/04/2026"));
     QCOMPARE(dateSvc.resolveDate("1-3-2026"), QString("01/03/2026"));
     QCOMPARE(dateSvc.resolveDate("01-03-2026"), QString("01/03/2026"));
 
     // Slash separated
+    QCOMPARE(dateSvc.resolveDate("1/4/26"), QString("01/04/2026"));
     QCOMPARE(dateSvc.resolveDate("1/3/26"), QString("01/03/2026"));
     QCOMPARE(dateSvc.resolveDate("31/12/2025"), QString("31/12/2025"));
 
     // ISO conversions
+    QCOMPARE(dateSvc.toIso("1.4.26"), QString("2026-04-01"));
     QCOMPARE(dateSvc.toIso("01/03/2026"), QString("2026-03-01"));
     QCOMPARE(dateSvc.toIso("15-08-2025"), QString("2025-08-15"));
     QCOMPARE(dateSvc.fromIso("2026-03-01"), QString("01/03/2026"));
+
+    // FinancialYearsModel date pattern parser (Accounting quick entry format)
+    FinancialYearsModel fyModel;
+    QCOMPARE(fyModel.parse_date_pattern("1.4.26"), QString("01-04-2026"));
+    QCOMPARE(fyModel.parse_date_pattern("01.04.26"), QString("01-04-2026"));
+    QCOMPARE(fyModel.parse_date_pattern("1/4/26"), QString("01-04-2026"));
+    QCOMPARE(fyModel.parse_date_pattern("1-4-26"), QString("01-04-2026"));
+    QCOMPARE(fyModel.parse_date_pattern("010426"), QString("01-04-2026"));
+    QCOMPARE(fyModel.parse_date_pattern("01042026"), QString("01-04-2026"));
+    QCOMPARE(fyModel.parse_date_pattern("1-4-1926"), QString("01-04-2026"));
+    QCOMPARE(fyModel.parse_date_pattern("1-4-1923"), QString("01-04-2023"));
+
+    // Firm Manager date formatting & century normalization (1-4-23 -> 01-04-2023, 31-3-27 -> 31-03-2027)
+    QCOMPARE(FirmManager::formatDateToDisplay("1-4-23"), QString("01-04-2023"));
+    QCOMPARE(FirmManager::formatDateToDisplay("31-3-27"), QString("31-03-2027"));
+    QCOMPARE(FirmManager::formatDateToDisplay("01/04/23"), QString("01-04-2023"));
+    QCOMPARE(FirmManager::formatDateToDisplay("31/03/27"), QString("31-03-2027"));
+    QCOMPARE(FirmManager::formatDateToDisplay("1-4-1923"), QString("01-04-2023"));
+    QCOMPARE(FirmManager::formatDateToDisplay("31-3-1927"), QString("31-03-2027"));
+    QCOMPARE(FirmManager::formatDateToDisplay("2023-04-01"), QString("01-04-2023"));
+    QCOMPARE(FirmManager::formatDateToDisplay("2027-03-31"), QString("31-03-2027"));
 }
 
 void LogicBoardTestSuite::testDateFyBoundaryValidation() {

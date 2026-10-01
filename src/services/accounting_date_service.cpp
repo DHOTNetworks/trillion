@@ -22,13 +22,22 @@ QString AccountingDateService::resolveDate(const QString &rawInput, int baseYear
     QStringList parts = trimmed.split('/', Qt::SkipEmptyParts);
 
     if (parts.size() == 3) {
-        int day = parts[0].toInt();
-        int month = parts[1].toInt();
-        int year = parts[2].toInt();
+        int day = 0, month = 0, year = 0;
+        if (parts[0].length() == 4 && parts[0].toInt() >= 1900) {
+            year = parts[0].toInt();
+            month = parts[1].toInt();
+            day = parts[2].toInt();
+        } else {
+            day = parts[0].toInt();
+            month = parts[1].toInt();
+            year = parts[2].toInt();
+            if (parts[2].length() <= 2 || year < 100) {
+                year += 2000;
+            }
+        }
 
-        // 2-digit year conversion
-        if (parts[2].length() <= 2) {
-            year += 2000;
+        if (year >= 1900 && year <= 1970) {
+            year += 100;
         }
 
         QDate d(year, month, day);
@@ -57,10 +66,24 @@ QString AccountingDateService::toIso(const QString &dmyStr) const
     s.replace('.', '/').replace('-', '/');
     QStringList parts = s.split('/', Qt::SkipEmptyParts);
     if (parts.size() == 3) {
-        int day = parts[0].toInt();
-        int month = parts[1].toInt();
-        int year = parts[2].toInt();
-        if (parts[2].length() <= 2) year += 2000;
+        int day = 0, month = 0, year = 0;
+        if (parts[0].length() == 4 && parts[0].toInt() >= 1900) {
+            year = parts[0].toInt();
+            month = parts[1].toInt();
+            day = parts[2].toInt();
+        } else {
+            day = parts[0].toInt();
+            month = parts[1].toInt();
+            year = parts[2].toInt();
+            if (parts[2].length() <= 2 || year < 100) {
+                year += 2000;
+            }
+        }
+
+        if (year >= 1900 && year <= 1970) {
+            year += 100;
+        }
+
         QDate d(year, month, day);
         if (d.isValid()) {
             return d.toString("yyyy-MM-dd");
@@ -69,6 +92,7 @@ QString AccountingDateService::toIso(const QString &dmyStr) const
     // If already in ISO format
     QDate d = QDate::fromString(dmyStr.trimmed(), "yyyy-MM-dd");
     if (d.isValid()) {
+        if (d.year() >= 1900 && d.year() <= 1970) d = d.addYears(100);
         return d.toString("yyyy-MM-dd");
     }
     return dmyStr.trimmed();

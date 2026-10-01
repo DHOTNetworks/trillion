@@ -145,7 +145,7 @@ QString FinancialYearsModel::parse_date_pattern(const QString& input, const QStr
             day = s.left(2).toInt();
             month = s.mid(2, 2).toInt();
             year = s.mid(4, 2).toInt();
-            year += (year <= 50 ? 2000 : 1900);
+            if (year < 100) year += 2000;
         } else if (s.length() == 8) {
             if (s.startsWith("20") || s.startsWith("19")) {
                 year = s.left(4).toInt();
@@ -162,7 +162,7 @@ QString FinancialYearsModel::parse_date_pattern(const QString& input, const QStr
     } else {
         QStringList parts = s.split('.', Qt::SkipEmptyParts);
         if (parts.size() == 3) {
-            if (parts[0].length() == 4 && parts[0].toInt() > 1900) {
+            if (parts[0].length() == 4 && parts[0].toInt() >= 1900) {
                 year = parts[0].toInt();
                 month = parts[1].toInt();
                 day = parts[2].toInt();
@@ -171,7 +171,7 @@ QString FinancialYearsModel::parse_date_pattern(const QString& input, const QStr
                 month = parts[1].toInt();
                 year = parts[2].toInt();
                 if (year < 100) {
-                    year += (year <= 50 ? 2000 : 1900);
+                    year += 2000;
                 }
             }
         } else if (parts.size() == 2) {
@@ -193,6 +193,10 @@ QString FinancialYearsModel::parse_date_pattern(const QString& input, const QStr
         } else {
             return "";
         }
+    }
+
+    if (year >= 1900 && year <= 1970) {
+        year += 100;
     }
 
     QDate result(year, month, day);
