@@ -16,6 +16,10 @@ class ScaleManager : public QObject {
 public:
     static ScaleManager& instance();
 
+    // Fast static methods for early pre-QApplication startup
+    static int getSavedScalePercent();
+    static void saveScaleConfigFile(int percent);
+
     void init();
     
     int currentScalePercent() const { return m_scalePercent; }
@@ -43,6 +47,7 @@ private:
     ScaleManager& operator=(const ScaleManager&) = delete;
 
     QString generateGlobalStyleSheet(double factor) const;
+    void applyLiveScaleToWidgetTree();
 
     int m_scalePercent = 100;
     double m_scaleFactor = 1.0;

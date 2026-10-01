@@ -4,8 +4,49 @@
 #include <QGuiApplication>
 #include <QScreen>
 #include <QFont>
+#include <QFile>
+#include <QDir>
+#include <QTextStream>
+#include <QTableView>
+#include <QTableWidget>
+#include <QHeaderView>
+#include <QStyle>
 #include <QDebug>
 #include <cmath>
+
+static QString getScaleConfigFilePath() {
+    QDir dataDir("data");
+    if (!dataDir.exists()) {
+        dataDir.mkpath(".");
+    }
+    return dataDir.filePath("ui_scale.cfg");
+}
+
+int ScaleManager::getSavedScalePercent() {
+    QString cfgPath = getScaleConfigFilePath();
+    if (QFile::exists(cfgPath)) {
+        QFile file(cfgPath);
+        if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            QTextStream in(&file);
+            QString content = in.readAll().trimmed();
+            bool ok = false;
+            int val = content.toInt(&ok);
+            if (ok && val >= 80 && val <= 250) {
+                return val;
+            }
+        }
+    }
+    return 0;
+}
+
+void ScaleManager::saveScaleConfigFile(int percent) {
+    QString cfgPath = getScaleConfigFilePath();
+    QFile file(cfgPath);
+    if (file.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
+        QTextStream out(&file);
+        out << percent << "\n";
+    }
+}
 
 ScaleManager::ScaleManager() {
 }
@@ -16,10 +57,12 @@ ScaleManager& ScaleManager::instance() {
 }
 
 void ScaleManager::init() {
-    QString saved = DatabaseManager::instance().getSetting("ui_scale_percent", "");
-    int percent = 0;
-    if (!saved.trimmed().isEmpty()) {
-        percent = saved.trimmed().toInt();
+    int percent = getSavedScalePercent();
+    if (percent < 80 || percent > 250) {
+        QString dbSetting = DatabaseManager::instance().getSetting("ui_scale_percent", "");
+        if (!dbSetting.trimmed().isEmpty()) {
+            percent = dbSetting.trimmed().toInt();
+        }
     }
     if (percent < 80 || percent > 250) {
         percent = getRecommendedScalePercent();
@@ -43,13 +86,13 @@ int ScaleManager::getRecommendedScalePercent() const {
 
 QVector<UiScaleOption> ScaleManager::availableScaleOptions() const {
     return {
-        {100, "100% (Standard / Compact)", "Default size for 1080p and laptop screens"},
-        {110, "110% (Comfortable)", "Slightly enlarged text and buttons"},
-        {125, "125% (Large Display)", "Recommended for 27\" (2560x1440) monitors"},
-        {135, "135% (Extra Clarity)", "Optimized for large high-resolution desktop screens"},
-        {150, "150% (High DPI / 4K)", "Recommended for 4K UHD displays and widescreen TVs"},
-        {175, "175% (Ultra Large)", "Maximum visibility for high-distance viewing"},
-        {200, "200% (Double Scale)", "2x magnification across entire interface"}
+        {100, "100% Standard", "Default size for 1080p & laptop screens"},
+        {110, "110% Comfortable", "Slightly enlarged text & controls"},
+        {125, "125% Large", "Recommended for 27\" (2560x1440) monitors"},
+        {135, "135% High Clarity", "Optimized for large desktop displays"},
+        {150, "150% 4K UHD", "Recommended for 4K displays & TVs"},
+        {175, "175% Ultra Large", "Maximum visibility for distance viewing"},
+        {200, "200% Double Scale", "2x magnification across interface"}
     };
 }
 
@@ -61,6 +104,7 @@ void ScaleManager::setScalePercent(int percent, bool persist) {
     m_scaleFactor = percent / 100.0;
 
     if (persist) {
+        saveScaleConfigFile(percent);
         DatabaseManager::instance().setSetting("ui_scale_percent", QString::number(percent));
     }
 
@@ -89,7 +133,34 @@ void ScaleManager::setScalePercent(int percent, bool persist) {
         qApp->setStyleSheet(appStyle);
     }
 
+    // 3. Dynamic Live Traversal of Widget Tree (Table Row Heights & Headers)
+    applyLiveScaleToWidgetTree();
+
     emit scaleChanged(m_scaleFactor, m_scalePercent);
+}
+
+void ScaleManager::applyLiveScaleToWidgetTree() {
+    if (!qApp) return;
+
+    QWidgetList allWidgets = QApplication::allWidgets();
+    int rowHeight = qMax(22, qRound(28 * m_scaleFactor));
+    int headerHeight = qMax(24, qRound(32 * m_scaleFactor));
+
+    for (QWidget* w : allWidgets) {
+        if (!w) continue;
+
+        if (QTableView* tv = qobject_cast<QTableView*>(w)) {
+            if (tv->verticalHeader()) {
+                tv->verticalHeader()->setDefaultSectionSize(rowHeight);
+            }
+            if (tv->horizontalHeader()) {
+                tv->horizontalHeader()->setDefaultSectionSize(qRound(90 * m_scaleFactor));
+            }
+        }
+
+        w->updateGeometry();
+        w->update();
+    }
 }
 
 void ScaleManager::zoomIn() {
@@ -117,7 +188,6 @@ int ScaleManager::scaleFontPt(int basePt) const {
 }
 
 QString ScaleManager::generateGlobalStyleSheet(double factor) const {
-    int dialogFontSize = qMax(11, qRound(13 * factor));
     int labelFontSize = qMax(11, qRound(13 * factor));
     int btnFontSize = qMax(10, qRound(12 * factor));
     int btnPaddingV = qMax(4, qRound(7 * factor));

@@ -55,6 +55,13 @@ int main(int argc, char* argv[]) {
     startupTimer.start();
     std::cout << "[INIT] Starting Mahadev Rice Mill ERP native executable..." << std::endl << std::flush;
 
+    // High-DPI Desktop Scaling (scales all coordinates, fonts, tables, cards for 27" and 4K screens)
+    int savedScalePercent = ScaleManager::getSavedScalePercent();
+    if (savedScalePercent >= 80 && savedScalePercent <= 250 && savedScalePercent != 100) {
+        double factor = savedScalePercent / 100.0;
+        qputenv("QT_SCALE_FACTOR", QByteArray::number(factor, 'f', 2));
+    }
+
     QApplication app(argc, argv);
     app.setApplicationName("Mahadev Rice Mill ERP & Accounting");
     app.setApplicationVersion("0.2.0");

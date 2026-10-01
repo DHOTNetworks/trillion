@@ -1,11 +1,14 @@
 #include "scale_settings_dialog.h"
 #include "../services/scale_manager.h"
+#include <QApplication>
 #include <QFrame>
 #include <QGridLayout>
 #include <QScrollArea>
 #include <QGuiApplication>
 #include <QScreen>
 #include <QFont>
+#include <QProcess>
+#include <QMessageBox>
 
 ScaleSettingsDialog::ScaleSettingsDialog(QWidget* parent)
     : QDialog(parent)
@@ -317,7 +320,22 @@ void ScaleSettingsDialog::onResetClicked() {
 
 void ScaleSettingsDialog::onApplyAndSaveClicked() {
     ScaleManager::instance().setScalePercent(m_selectedPercent, true);
-    accept();
+
+    QMessageBox msgBox(this);
+    msgBox.setWindowTitle("Display Scale Saved");
+    msgBox.setText(QString("Display scale has been saved to %1%.").arg(m_selectedPercent));
+    msgBox.setInformativeText("Would you like to restart the application now to apply High-DPI layout scaling across all windows immediately?");
+    QPushButton* restartBtn = msgBox.addButton("Restart Now", QMessageBox::AcceptRole);
+    msgBox.addButton("Apply on Next Launch", QMessageBox::RejectRole);
+    msgBox.setDefaultButton(restartBtn);
+    msgBox.exec();
+
+    if (msgBox.clickedButton() == restartBtn) {
+        QProcess::startDetached(QApplication::applicationFilePath(), QApplication::arguments());
+        QApplication::quit();
+    } else {
+        accept();
+    }
 }
 
 void ScaleSettingsDialog::onCancelClicked() {
