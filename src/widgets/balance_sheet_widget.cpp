@@ -469,24 +469,48 @@ void BalanceSheetWidget::printReport() {
 
 void BalanceSheetWidget::onLiabilitiesItemActivated(QTreeWidgetItem* item, int column) {
     Q_UNUSED(column);
+    m_activeSide = ActiveSide::Liabilities;
     handleItemDrillDown(item);
 }
 
 void BalanceSheetWidget::onAssetsItemActivated(QTreeWidgetItem* item, int column) {
     Q_UNUSED(column);
+    m_activeSide = ActiveSide::Assets;
     handleItemDrillDown(item);
 }
 
 void BalanceSheetWidget::triggerDrillDownOnCurrentItem() {
     QTreeWidget* focused = nullptr;
-    if (m_liabilitiesTree && m_liabilitiesTree->hasFocus()) focused = m_liabilitiesTree;
-    else if (m_assetsTree && m_assetsTree->hasFocus()) focused = m_assetsTree;
-    else if (m_liabilitiesTree && m_liabilitiesTree->currentItem()) focused = m_liabilitiesTree;
-    else if (m_assetsTree && m_assetsTree->currentItem()) focused = m_assetsTree;
+    if (m_liabilitiesTree && m_liabilitiesTree->hasFocus()) {
+        m_activeSide = ActiveSide::Liabilities;
+        focused = m_liabilitiesTree;
+    } else if (m_assetsTree && m_assetsTree->hasFocus()) {
+        m_activeSide = ActiveSide::Assets;
+        focused = m_assetsTree;
+    } else if (m_activeSide == ActiveSide::Assets && m_assetsTree && m_assetsTree->currentItem()) {
+        focused = m_assetsTree;
+    } else if (m_liabilitiesTree && m_liabilitiesTree->currentItem()) {
+        focused = m_liabilitiesTree;
+    }
 
     if (focused && focused->currentItem()) {
         handleItemDrillDown(focused->currentItem());
     }
+}
+
+void BalanceSheetWidget::focusActiveTree() {
+    QTreeWidget* targetTree = (m_activeSide == ActiveSide::Assets) ? m_assetsTree : m_liabilitiesTree;
+    if (targetTree) {
+        targetTree->setFocus(Qt::OtherFocusReason);
+        if (targetTree->currentItem()) {
+            targetTree->scrollToItem(targetTree->currentItem());
+        }
+    }
+}
+
+void BalanceSheetWidget::focusInEvent(QFocusEvent* event) {
+    QWidget::focusInEvent(event);
+    focusActiveTree();
 }
 
 void BalanceSheetWidget::handleItemDrillDown(QTreeWidgetItem* item) {
@@ -542,11 +566,15 @@ void BalanceSheetWidget::handleItemDrillDown(QTreeWidgetItem* item) {
 }
 
 bool BalanceSheetWidget::eventFilter(QObject* watched, QEvent* event) {
-    if (event->type() == QEvent::KeyPress) {
+    if (event->type() == QEvent::FocusIn) {
+        if (watched == m_liabilitiesTree) m_activeSide = ActiveSide::Liabilities;
+        else if (watched == m_assetsTree) m_activeSide = ActiveSide::Assets;
+    } else if (event->type() == QEvent::KeyPress) {
         QKeyEvent* kEvent = static_cast<QKeyEvent*>(event);
         if (kEvent->key() == Qt::Key_Return || kEvent->key() == Qt::Key_Enter) {
             QTreeWidget* tree = qobject_cast<QTreeWidget*>(watched);
             if (tree && tree->currentItem()) {
+                m_activeSide = (tree == m_assetsTree) ? ActiveSide::Assets : ActiveSide::Liabilities;
                 handleItemDrillDown(tree->currentItem());
                 return true;
             }
@@ -564,10 +592,17 @@ void BalanceSheetWidget::keyPressEvent(QKeyEvent* event) {
 
     if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
         QTreeWidget* focusedTree = nullptr;
-        if (m_liabilitiesTree->hasFocus()) focusedTree = m_liabilitiesTree;
-        else if (m_assetsTree->hasFocus()) focusedTree = m_assetsTree;
-        else if (m_liabilitiesTree->currentItem()) focusedTree = m_liabilitiesTree;
-        else if (m_assetsTree->currentItem()) focusedTree = m_assetsTree;
+        if (m_liabilitiesTree->hasFocus()) {
+            m_activeSide = ActiveSide::Liabilities;
+            focusedTree = m_liabilitiesTree;
+        } else if (m_assetsTree->hasFocus()) {
+            m_activeSide = ActiveSide::Assets;
+            focusedTree = m_assetsTree;
+        } else if (m_activeSide == ActiveSide::Assets && m_assetsTree && m_assetsTree->currentItem()) {
+            focusedTree = m_assetsTree;
+        } else if (m_liabilitiesTree && m_liabilitiesTree->currentItem()) {
+            focusedTree = m_liabilitiesTree;
+        }
 
         if (focusedTree && focusedTree->currentItem()) {
             event->accept();
@@ -609,9 +644,11 @@ void BalanceSheetWidget::keyPressEvent(QKeyEvent* event) {
     // Instantaneous Arrow Key Navigation
     if (event->key() == Qt::Key_Up || event->key() == Qt::Key_Down) {
         if (!m_liabilitiesTree->hasFocus() && !m_assetsTree->hasFocus()) {
-            m_liabilitiesTree->setFocus(Qt::OtherFocusReason);
-            if (m_liabilitiesTree->topLevelItemCount() > 0 && !m_liabilitiesTree->currentItem()) {
+            focusActiveTree();
+            if (m_activeSide == ActiveSide::Liabilities && m_liabilitiesTree->topLevelItemCount() > 0 && !m_liabilitiesTree->currentItem()) {
                 m_liabilitiesTree->setCurrentItem(m_liabilitiesTree->topLevelItem(0));
+            } else if (m_activeSide == ActiveSide::Assets && m_assetsTree->topLevelItemCount() > 0 && !m_assetsTree->currentItem()) {
+                m_assetsTree->setCurrentItem(m_assetsTree->topLevelItem(0));
             }
         }
     }
@@ -620,6 +657,7 @@ void BalanceSheetWidget::keyPressEvent(QKeyEvent* event) {
     if (event->key() == Qt::Key_Left) {
         if (!m_liabilitiesTree->hasFocus()) {
             event->accept();
+            m_activeSide = ActiveSide::Liabilities;
             m_lastAssetIndex = m_assetsTree->indexOfTopLevelItem(m_assetsTree->currentItem());
             m_liabilitiesTree->setFocus(Qt::OtherFocusReason);
             if (m_liabilitiesTree->currentItem()) {
@@ -633,6 +671,7 @@ void BalanceSheetWidget::keyPressEvent(QKeyEvent* event) {
     } else if (event->key() == Qt::Key_Right) {
         if (!m_assetsTree->hasFocus()) {
             event->accept();
+            m_activeSide = ActiveSide::Assets;
             m_lastLiabIndex = m_liabilitiesTree->indexOfTopLevelItem(m_liabilitiesTree->currentItem());
             m_assetsTree->setFocus(Qt::OtherFocusReason);
             if (m_assetsTree->currentItem()) {
@@ -654,6 +693,7 @@ void BalanceSheetWidget::showEvent(QShowEvent* event) {
     if (m_controller && (m_controller->data().financialYear != activeFy.name || m_controller->data().asOnDate.isEmpty())) {
         refreshData(activeFy.endDate);
     }
+    focusActiveTree();
 }
 
 void BalanceSheetWidget::paintEvent(QPaintEvent* event) {

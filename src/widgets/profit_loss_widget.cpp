@@ -453,8 +453,8 @@ void ProfitLossWidget::populateTrees() {
         m_netProfitBadge->setStyleSheet("color: #DC2626; font-size: 14px; font-weight: 900; background: transparent;");
     }
 
-    // Restore focus row
-    if (m_expensesTree->topLevelItemCount() > 0) {
+    // Restore focus row only on initial setup if nothing selected
+    if (m_expensesTree->topLevelItemCount() > 0 && !m_expensesTree->currentItem() && !m_incomesTree->currentItem()) {
         int idx = qBound(0, m_lastExpIndex, m_expensesTree->topLevelItemCount() - 1);
         m_expensesTree->setCurrentItem(m_expensesTree->topLevelItem(idx));
         m_expensesTree->setFocus(Qt::OtherFocusReason);
@@ -491,24 +491,48 @@ void ProfitLossWidget::printReport() {
 
 void ProfitLossWidget::onExpensesItemActivated(QTreeWidgetItem* item, int column) {
     Q_UNUSED(column);
+    m_activeSide = ActiveSide::Expenses;
     handleItemDrillDown(item);
 }
 
 void ProfitLossWidget::onIncomesItemActivated(QTreeWidgetItem* item, int column) {
     Q_UNUSED(column);
+    m_activeSide = ActiveSide::Incomes;
     handleItemDrillDown(item);
 }
 
 void ProfitLossWidget::triggerDrillDownOnCurrentItem() {
     QTreeWidget* focused = nullptr;
-    if (m_expensesTree && m_expensesTree->hasFocus()) focused = m_expensesTree;
-    else if (m_incomesTree && m_incomesTree->hasFocus()) focused = m_incomesTree;
-    else if (m_expensesTree && m_expensesTree->currentItem()) focused = m_expensesTree;
-    else if (m_incomesTree && m_incomesTree->currentItem()) focused = m_incomesTree;
+    if (m_expensesTree && m_expensesTree->hasFocus()) {
+        m_activeSide = ActiveSide::Expenses;
+        focused = m_expensesTree;
+    } else if (m_incomesTree && m_incomesTree->hasFocus()) {
+        m_activeSide = ActiveSide::Incomes;
+        focused = m_incomesTree;
+    } else if (m_activeSide == ActiveSide::Incomes && m_incomesTree && m_incomesTree->currentItem()) {
+        focused = m_incomesTree;
+    } else if (m_expensesTree && m_expensesTree->currentItem()) {
+        focused = m_expensesTree;
+    }
 
     if (focused && focused->currentItem()) {
         handleItemDrillDown(focused->currentItem());
     }
+}
+
+void ProfitLossWidget::focusActiveTree() {
+    QTreeWidget* targetTree = (m_activeSide == ActiveSide::Incomes) ? m_incomesTree : m_expensesTree;
+    if (targetTree) {
+        targetTree->setFocus(Qt::OtherFocusReason);
+        if (targetTree->currentItem()) {
+            targetTree->scrollToItem(targetTree->currentItem());
+        }
+    }
+}
+
+void ProfitLossWidget::focusInEvent(QFocusEvent* event) {
+    QWidget::focusInEvent(event);
+    focusActiveTree();
 }
 
 void ProfitLossWidget::handleItemDrillDown(QTreeWidgetItem* item) {
@@ -556,28 +580,16 @@ void ProfitLossWidget::handleItemDrillDown(QTreeWidgetItem* item) {
 }
 
 bool ProfitLossWidget::eventFilter(QObject* watched, QEvent* event) {
-    if (event->type() == QEvent::KeyPress) {
+    if (event->type() == QEvent::FocusIn) {
+        if (watched == m_expensesTree) m_activeSide = ActiveSide::Expenses;
+        else if (watched == m_incomesTree) m_activeSide = ActiveSide::Incomes;
+    } else if (event->type() == QEvent::KeyPress) {
         QKeyEvent* kEvent = static_cast<QKeyEvent*>(event);
         if (kEvent->key() == Qt::Key_Return || kEvent->key() == Qt::Key_Enter) {
             QTreeWidget* tree = qobject_cast<QTreeWidget*>(watched);
             if (tree && tree->currentItem()) {
+                m_activeSide = (tree == m_incomesTree) ? ActiveSide::Incomes : ActiveSide::Expenses;
                 handleItemDrillDown(tree->currentItem());
-                return true;
-            }
-        } else if (kEvent->key() == Qt::Key_Right && watched == m_expensesTree) {
-            if (m_incomesTree) {
-                m_incomesTree->setFocus(Qt::OtherFocusReason);
-                if (!m_incomesTree->currentItem() && m_incomesTree->topLevelItemCount() > 0) {
-                    m_incomesTree->setCurrentItem(m_incomesTree->topLevelItem(0));
-                }
-                return true;
-            }
-        } else if (kEvent->key() == Qt::Key_Left && watched == m_incomesTree) {
-            if (m_expensesTree) {
-                m_expensesTree->setFocus(Qt::OtherFocusReason);
-                if (!m_expensesTree->currentItem() && m_expensesTree->topLevelItemCount() > 0) {
-                    m_expensesTree->setCurrentItem(m_expensesTree->topLevelItem(0));
-                }
                 return true;
             }
         }
@@ -594,10 +606,17 @@ void ProfitLossWidget::keyPressEvent(QKeyEvent* event) {
 
     if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
         QTreeWidget* focusedTree = nullptr;
-        if (m_expensesTree->hasFocus()) focusedTree = m_expensesTree;
-        else if (m_incomesTree->hasFocus()) focusedTree = m_incomesTree;
-        else if (m_expensesTree->currentItem()) focusedTree = m_expensesTree;
-        else if (m_incomesTree->currentItem()) focusedTree = m_incomesTree;
+        if (m_expensesTree->hasFocus()) {
+            m_activeSide = ActiveSide::Expenses;
+            focusedTree = m_expensesTree;
+        } else if (m_incomesTree->hasFocus()) {
+            m_activeSide = ActiveSide::Incomes;
+            focusedTree = m_incomesTree;
+        } else if (m_activeSide == ActiveSide::Incomes && m_incomesTree && m_incomesTree->currentItem()) {
+            focusedTree = m_incomesTree;
+        } else if (m_expensesTree && m_expensesTree->currentItem()) {
+            focusedTree = m_expensesTree;
+        }
 
         if (focusedTree && focusedTree->currentItem()) {
             event->accept();
@@ -639,32 +658,42 @@ void ProfitLossWidget::keyPressEvent(QKeyEvent* event) {
     // Instantaneous Arrow Key Navigation
     if (event->key() == Qt::Key_Up || event->key() == Qt::Key_Down) {
         if (!m_expensesTree->hasFocus() && !m_incomesTree->hasFocus()) {
-            m_expensesTree->setFocus(Qt::OtherFocusReason);
-            if (m_expensesTree->topLevelItemCount() > 0 && !m_expensesTree->currentItem()) {
+            focusActiveTree();
+            if (m_activeSide == ActiveSide::Expenses && m_expensesTree->topLevelItemCount() > 0 && !m_expensesTree->currentItem()) {
                 m_expensesTree->setCurrentItem(m_expensesTree->topLevelItem(0));
+            } else if (m_activeSide == ActiveSide::Incomes && m_incomesTree->topLevelItemCount() > 0 && !m_incomesTree->currentItem()) {
+                m_incomesTree->setCurrentItem(m_incomesTree->topLevelItem(0));
             }
         }
     }
 
     // Switch between Expenses and Incomes trees with Left / Right arrows
     if (event->key() == Qt::Key_Right) {
-        if (m_incomesTree) {
-            m_incomesTree->setFocus(Qt::OtherFocusReason);
-            if (!m_incomesTree->currentItem() && m_incomesTree->topLevelItemCount() > 0) {
-                m_incomesTree->setCurrentItem(m_incomesTree->topLevelItem(0));
-            }
+        if (!m_incomesTree->hasFocus()) {
             event->accept();
+            m_activeSide = ActiveSide::Incomes;
+            m_lastExpIndex = m_expensesTree->indexOfTopLevelItem(m_expensesTree->currentItem());
+            m_incomesTree->setFocus(Qt::OtherFocusReason);
+            if (m_incomesTree->currentItem()) {
+                m_incomesTree->setCurrentItem(m_incomesTree->currentItem());
+            } else if (m_incomesTree->topLevelItemCount() > 0) {
+                int idx = qBound(0, m_lastIncIndex, m_incomesTree->topLevelItemCount() - 1);
+                m_incomesTree->setCurrentItem(m_incomesTree->topLevelItem(idx));
+            }
             return;
         }
-    }
-
-    if (event->key() == Qt::Key_Left) {
-        if (m_expensesTree) {
-            m_expensesTree->setFocus(Qt::OtherFocusReason);
-            if (!m_expensesTree->currentItem() && m_expensesTree->topLevelItemCount() > 0) {
-                m_expensesTree->setCurrentItem(m_expensesTree->topLevelItem(0));
-            }
+    } else if (event->key() == Qt::Key_Left) {
+        if (!m_expensesTree->hasFocus()) {
             event->accept();
+            m_activeSide = ActiveSide::Expenses;
+            m_lastIncIndex = m_incomesTree->indexOfTopLevelItem(m_incomesTree->currentItem());
+            m_expensesTree->setFocus(Qt::OtherFocusReason);
+            if (m_expensesTree->currentItem()) {
+                m_expensesTree->setCurrentItem(m_expensesTree->currentItem());
+            } else if (m_expensesTree->topLevelItemCount() > 0) {
+                int idx = qBound(0, m_lastExpIndex, m_expensesTree->topLevelItemCount() - 1);
+                m_expensesTree->setCurrentItem(m_expensesTree->topLevelItem(idx));
+            }
             return;
         }
     }
@@ -678,12 +707,7 @@ void ProfitLossWidget::showEvent(QShowEvent* event) {
     if (m_controller && (m_controller->data().financialYear != activeFy.name || m_controller->data().fromDate != activeFy.startDate || m_controller->data().toDate != activeFy.endDate)) {
         refreshData(activeFy.startDate, activeFy.endDate);
     }
-    if (m_expensesTree && m_expensesTree->topLevelItemCount() > 0) {
-        m_expensesTree->setFocus(Qt::OtherFocusReason);
-        if (!m_expensesTree->currentItem()) {
-            m_expensesTree->setCurrentItem(m_expensesTree->topLevelItem(0));
-        }
-    }
+    focusActiveTree();
 }
 
 void ProfitLossWidget::paintEvent(QPaintEvent* event) {

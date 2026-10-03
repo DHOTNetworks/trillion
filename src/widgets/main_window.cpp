@@ -1125,7 +1125,7 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
             if (m_balanceSheetCtrl && (m_balanceSheetCtrl->data().financialYear != activeFy.name || m_balanceSheetCtrl->data().asOnDate.isEmpty())) {
                 m_balanceSheetWidget->refreshData(activeFy.endDate);
             }
-            m_balanceSheetWidget->setFocus();
+            m_balanceSheetWidget->focusActiveTree();
         }
     } else if (viewIndex == 30) {
         FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
@@ -1134,7 +1134,7 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
             if (m_profitLossCtrl && (m_profitLossCtrl->data().financialYear != activeFy.name || m_profitLossCtrl->data().toDate.isEmpty())) {
                 m_profitLossWidget->refreshData(activeFy.startDate, activeFy.endDate);
             }
-            m_profitLossWidget->setFocus();
+            m_profitLossWidget->focusActiveTree();
         }
     } else if (viewIndex == 31) {
         if (m_millingVoucherWidget) {

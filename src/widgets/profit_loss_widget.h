@@ -24,6 +24,7 @@ public:
     QTreeWidget* expensesTree() const { return m_expensesTree; }
     QTreeWidget* incomesTree() const { return m_incomesTree; }
     void triggerDrillDownOnCurrentItem();
+    void focusActiveTree();
 
 signals:
     void backRequested();
@@ -43,6 +44,7 @@ protected:
     void keyPressEvent(QKeyEvent* event) override;
     bool eventFilter(QObject* watched, QEvent* event) override;
     void showEvent(QShowEvent* event) override;
+    void focusInEvent(QFocusEvent* event) override;
     void paintEvent(QPaintEvent* event) override;
 
 private slots:
@@ -81,6 +83,9 @@ private:
     QLabel* m_grossProfitBadge = nullptr;
     QLabel* m_netProfitBadge = nullptr;
     QLabel* m_keyLegendLbl = nullptr;
+
+    enum class ActiveSide { Expenses, Incomes };
+    ActiveSide m_activeSide = ActiveSide::Expenses;
 
     int m_lastExpIndex = 0;
     int m_lastIncIndex = 0;

@@ -24,6 +24,7 @@ public:
     QTreeWidget* liabilitiesTree() const { return m_liabilitiesTree; }
     QTreeWidget* assetsTree() const { return m_assetsTree; }
     void triggerDrillDownOnCurrentItem();
+    void focusActiveTree();
 
 signals:
     void backRequested();
@@ -43,6 +44,7 @@ protected:
     void keyPressEvent(QKeyEvent* event) override;
     bool eventFilter(QObject* watched, QEvent* event) override;
     void showEvent(QShowEvent* event) override;
+    void focusInEvent(QFocusEvent* event) override;
     void paintEvent(QPaintEvent* event) override;
 
 private slots:
@@ -83,6 +85,9 @@ private:
     QLabel* m_assetsTotalLbl = nullptr;
     QLabel* m_balanceStatusBadge = nullptr;
     QLabel* m_keyLegendLbl = nullptr;
+
+    enum class ActiveSide { Liabilities, Assets };
+    ActiveSide m_activeSide = ActiveSide::Liabilities;
 
     int m_lastLiabIndex = 0;
     int m_lastAssetIndex = 0;
