@@ -66,7 +66,7 @@ int main(int argc, char* argv[]) {
 
     QApplication app(argc, argv);
     app.setApplicationName("Mahadev Rice Mill ERP & Accounting");
-    app.setApplicationVersion("0.2.0");
+    app.setApplicationVersion("0.2.3");
     app.setOrganizationName("MahadevAgro");
 
     // Universal cross-platform font configuration (Windows, macOS, Linux x86_64/ARM64)
