@@ -1043,6 +1043,7 @@ QVariantList StockItemsModel::get_item_movements(const QString& itemName, const 
     }
 
     // 3. Inwards & Outwards from stock_transactions
+    QSet<QString> processedKeys;
     QString stSql = "SELECT voucher_date, COALESCE(bill_no, voucher_no, '') AS ref_no, trans_type, party_name, bags, weight_qtl, rate, amount, financial_year FROM stock_transactions WHERE (item_name = ? OR item_id = (SELECT id FROM stock_items WHERE name = ? LIMIT 1) OR item_code = (SELECT code FROM stock_items WHERE name = ? LIMIT 1))";
     QVariantList stParams = {itemName, itemName, itemName};
     if (!fromDate.isEmpty() && !toDate.isEmpty()) {
@@ -1055,11 +1056,14 @@ QVariantList StockItemsModel::get_item_movements(const QString& itemName, const 
         QVariantMap st = r.toMap();
         QString tType = st.value("trans_type").toString();
         bool isInward = (tType == "Purc" || tType == "Inward" || tType == "P" || tType == "M" || tType == "SlRn");
+        QString ref = st.value("ref_no").toString();
+        QString vDate = st.value("voucher_date").toString();
+        processedKeys.insert(QString("%1_%2_%3").arg(vDate, ref, isInward ? "In" : "Out"));
 
         QVariantMap m;
         m["isInward"] = isInward;
-        m["vDate"] = st.value("voucher_date").toString();
-        m["refNo"] = st.value("ref_no").toString();
+        m["vDate"] = vDate;
+        m["refNo"] = ref;
         m["type"] = isInward ? QString("Purchase / Inward (%1)").arg(tType) : QString("Sale / Outward (%1)").arg(tType);
         m["party"] = st.value("party_name").toString();
         m["bags"] = st.value("bags").toInt();
@@ -1067,6 +1071,65 @@ QVariantList StockItemsModel::get_item_movements(const QString& itemName, const 
         m["rate"] = st.value("rate").toDouble();
         m["amount"] = st.value("amount").toDouble();
         m["financial_year"] = st.value("financial_year").toString();
+        movements.append(m);
+    }
+
+    // 4. Inwards & Outwards from sales_invoices / purchase_invoices (fallback if not in stock_transactions)
+    QString saleSql = "SELECT invoice_date AS voucher_date, invoice_no AS ref_no, 'Sale' AS trans_type, customer_name AS party_name, bag_count AS bags, weight_qtl, rate_per_qtl AS rate, taxable_amount AS amount, financial_year FROM sales_invoices WHERE item_name = ?";
+    QVariantList saleParams = {itemName};
+    if (!fromDate.isEmpty() && !toDate.isEmpty()) {
+        saleSql += " AND invoice_date >= ? AND invoice_date <= ?";
+        saleParams << fromDate << toDate;
+    }
+    QVariantList saleRows = DatabaseManager::instance().executeQuery(saleSql, saleParams);
+    for (const QVariant& r : saleRows) {
+        QVariantMap s = r.toMap();
+        QString vDate = s.value("voucher_date").toString();
+        QString ref = s.value("ref_no").toString();
+        QString key = QString("%1_%2_Out").arg(vDate, ref);
+        if (processedKeys.contains(key)) continue;
+        processedKeys.insert(key);
+
+        QVariantMap m;
+        m["isInward"] = false;
+        m["vDate"] = vDate;
+        m["refNo"] = ref;
+        m["type"] = "Sale / Outward (Sale)";
+        m["party"] = s.value("party_name").toString();
+        m["bags"] = s.value("bags").toInt();
+        m["qty"] = s.value("weight_qtl").toDouble();
+        m["rate"] = s.value("rate").toDouble();
+        m["amount"] = s.value("amount").toDouble();
+        m["financial_year"] = s.value("financial_year").toString();
+        movements.append(m);
+    }
+
+    QString purcSql = "SELECT invoice_date AS voucher_date, invoice_no AS ref_no, 'Purc' AS trans_type, supplier_name AS party_name, bag_count AS bags, weight_qtl, rate_per_qtl AS rate, taxable_amount AS amount, financial_year FROM purchase_invoices WHERE item_name = ?";
+    QVariantList purcParams = {itemName};
+    if (!fromDate.isEmpty() && !toDate.isEmpty()) {
+        purcSql += " AND invoice_date >= ? AND invoice_date <= ?";
+        purcParams << fromDate << toDate;
+    }
+    QVariantList purcRows = DatabaseManager::instance().executeQuery(purcSql, purcParams);
+    for (const QVariant& r : purcRows) {
+        QVariantMap p = r.toMap();
+        QString vDate = p.value("voucher_date").toString();
+        QString ref = p.value("ref_no").toString();
+        QString key = QString("%1_%2_In").arg(vDate, ref);
+        if (processedKeys.contains(key)) continue;
+        processedKeys.insert(key);
+
+        QVariantMap m;
+        m["isInward"] = true;
+        m["vDate"] = vDate;
+        m["refNo"] = ref;
+        m["type"] = "Purchase / Inward (Purc)";
+        m["party"] = p.value("party_name").toString();
+        m["bags"] = p.value("bags").toInt();
+        m["qty"] = p.value("weight_qtl").toDouble();
+        m["rate"] = p.value("rate").toDouble();
+        m["amount"] = p.value("amount").toDouble();
+        m["financial_year"] = p.value("financial_year").toString();
         movements.append(m);
     }
 

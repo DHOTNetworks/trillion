@@ -481,9 +481,9 @@ bool TallyDataMigrator::migrate_tally_data(const QString& tallyPath, const QStri
     struct TallyStockItem {
         QString name;
         QString parent;
-        QString unit = "Qtl.";
-        QString hsn = "1006";
-        double gstRate = 5.0;
+        QString unit;
+        QString hsn;
+        double gstRate = 0.0;
         double openingQty = 0.0;
         double openingRate = 0.0;
         double openingValue = 0.0;
@@ -868,6 +868,12 @@ bool TallyDataMigrator::migrate_tally_data(const QString& tallyPath, const QStri
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);",
             {itm.name, codeStr, itm.parent, itm.hsn, itm.unit.isEmpty() ? "Qtl." : itm.unit, itm.gstRate, itm.openingQty, itm.openingRate, itm.openingValue}
         );
+
+        db.executeNonQuery(
+            "INSERT OR REPLACE INTO inventory (item_code, item_name, category, current_stock_qtl, sale_rate, gst_rate, packing_kg) "
+            "VALUES (?, ?, ?, ?, ?, ?, 0.0);",
+            {codeStr, itm.name, itm.parent, itm.openingQty, itm.openingRate, itm.gstRate}
+        );
         stats.totalStockItems++;
     }
 
@@ -938,31 +944,101 @@ bool TallyDataMigrator::migrate_tally_data(const QString& tallyPath, const QStri
         );
         stats.totalVouchers++;
 
-        // 2. Insert into sales_invoices or purchase_invoices
+        // 2. Insert into sales_invoices or purchase_invoices and stock_transactions
         if (v.vchType.compare("Sales", Qt::CaseInsensitive) == 0) {
-            QString itemName = !v.items.isEmpty() ? v.items.first().item : "Rice Basmati";
-            double qty = !v.items.isEmpty() ? v.items.first().qty : 0.0;
-            double rate = !v.items.isEmpty() ? v.items.first().rate : 0.0;
-            double taxAmt = totalAmt;
+            if (!v.items.isEmpty()) {
+                int sRowIdx = 1;
+                for (const auto& vi : v.items) {
+                    QString itemName = vi.item;
+                    double qty = vi.qty;
+                    double rate = vi.rate;
+                    double taxAmt = (vi.amount > 0.0) ? vi.amount : (qty * rate > 0.0 ? qty * rate : totalAmt);
 
-            db.executeNonQuery(
-                "INSERT OR REPLACE INTO sales_invoices (invoice_no, voucher_no, invoice_date, customer_id, customer_name, "
-                "item_name, bag_count, weight_qtl, rate_per_qtl, taxable_amount, total_amount, narration, financial_year) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-                {vNo, vNo, dateStr, partyIdParam, headerParty, itemName, static_cast<int>(qty), qty, rate, taxAmt, totalAmt, v.narration, fy}
-            );
+                    db.executeNonQuery(
+                        "INSERT OR REPLACE INTO sales_invoices (invoice_no, voucher_no, invoice_date, customer_id, customer_name, "
+                        "item_name, bag_count, weight_qtl, rate_per_qtl, taxable_amount, total_amount, narration, financial_year) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+                        {vNo, vNo, dateStr, partyIdParam, headerParty, itemName, static_cast<int>(qty), qty, rate, taxAmt, totalAmt, v.narration, fy}
+                    );
+
+                    db.executeNonQuery(
+                        "INSERT INTO sales_invoice_items ("
+                        "invoice_id, invoice_no, item_id, item_name, grade, bag_count, packing, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, total_amount) "
+                        "VALUES ((SELECT id FROM sales_invoices WHERE invoice_no = ? LIMIT 1), ?, (SELECT id FROM stock_items WHERE name = ? LIMIT 1), ?, '', ?, 'Loose', ?, ?, ?, 0.0, ?);",
+                        {vNo, vNo, itemName, itemName, static_cast<int>(qty), qty, rate, taxAmt, totalAmt}
+                    );
+
+                    db.executeNonQuery(
+                        "INSERT INTO stock_transactions ("
+                        "fy_id, financial_year, voucher_no, voucher_date, trans_type, voucher_type, "
+                        "party_id, party_name, bill_no, item_id, item_code, item_name, "
+                        "bags, packing, weight_qtl, rate, amount, taxable_amount, tax, "
+                        "tax_type, narration, row_no) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT id FROM stock_items WHERE name = ? LIMIT 1), (SELECT code FROM stock_items WHERE name = ? LIMIT 1), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+                        {
+                            fyId, fy, vNo, dateStr, "Sale", "Sales",
+                            partyIdParam, headerParty, vNo,
+                            itemName, itemName, itemName,
+                            static_cast<int>(qty), "Loose", qty, rate, taxAmt, taxAmt, 0.0,
+                            "GST", v.narration, sRowIdx++
+                        }
+                    );
+                }
+            } else {
+                db.executeNonQuery(
+                    "INSERT OR REPLACE INTO sales_invoices (invoice_no, voucher_no, invoice_date, customer_id, customer_name, "
+                    "item_name, bag_count, weight_qtl, rate_per_qtl, taxable_amount, total_amount, narration, financial_year) "
+                    "VALUES (?, ?, ?, ?, ?, '', 0, 0, 0, ?, ?, ?, ?);",
+                    {vNo, vNo, dateStr, partyIdParam, headerParty, totalAmt, totalAmt, v.narration, fy}
+                );
+            }
         } else if (v.vchType.compare("Purchase", Qt::CaseInsensitive) == 0) {
-            QString itemName = !v.items.isEmpty() ? v.items.first().item : "Paddy";
-            double qty = !v.items.isEmpty() ? v.items.first().qty : 0.0;
-            double rate = !v.items.isEmpty() ? v.items.first().rate : 0.0;
-            double taxAmt = totalAmt;
+            if (!v.items.isEmpty()) {
+                int pRowIdx = 1;
+                for (const auto& vi : v.items) {
+                    QString itemName = vi.item;
+                    double qty = vi.qty;
+                    double rate = vi.rate;
+                    double taxAmt = (vi.amount > 0.0) ? vi.amount : (qty * rate > 0.0 ? qty * rate : totalAmt);
 
-            db.executeNonQuery(
-                "INSERT OR REPLACE INTO purchase_invoices (invoice_no, voucher_no, invoice_date, supplier_id, supplier_name, "
-                "item_name, bag_count, weight_qtl, rate_per_qtl, taxable_amount, total_amount, narration, financial_year) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-                {vNo, vNo, dateStr, partyIdParam, headerParty, itemName, static_cast<int>(qty), qty, rate, taxAmt, totalAmt, v.narration, fy}
-            );
+                    db.executeNonQuery(
+                        "INSERT OR REPLACE INTO purchase_invoices (invoice_no, voucher_no, invoice_date, supplier_id, supplier_name, "
+                        "item_name, bag_count, weight_qtl, rate_per_qtl, taxable_amount, total_amount, narration, financial_year) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+                        {vNo, vNo, dateStr, partyIdParam, headerParty, itemName, static_cast<int>(qty), qty, rate, taxAmt, totalAmt, v.narration, fy}
+                    );
+
+                    db.executeNonQuery(
+                        "INSERT INTO purchase_invoice_items ("
+                        "invoice_id, invoice_no, item_id, item_name, grade, bag_count, packing, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, total_amount) "
+                        "VALUES ((SELECT id FROM purchase_invoices WHERE invoice_no = ? LIMIT 1), ?, (SELECT id FROM stock_items WHERE name = ? LIMIT 1), ?, '', ?, 'Loose', ?, ?, ?, 0.0, ?);",
+                        {vNo, vNo, itemName, itemName, static_cast<int>(qty), qty, rate, taxAmt, totalAmt}
+                    );
+
+                    db.executeNonQuery(
+                        "INSERT INTO stock_transactions ("
+                        "fy_id, financial_year, voucher_no, voucher_date, trans_type, voucher_type, "
+                        "party_id, party_name, bill_no, item_id, item_code, item_name, "
+                        "bags, packing, weight_qtl, rate, amount, taxable_amount, tax, "
+                        "tax_type, narration, row_no) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT id FROM stock_items WHERE name = ? LIMIT 1), (SELECT code FROM stock_items WHERE name = ? LIMIT 1), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+                        {
+                            fyId, fy, vNo, dateStr, "Purc", "Purchase",
+                            partyIdParam, headerParty, vNo,
+                            itemName, itemName, itemName,
+                            static_cast<int>(qty), "Loose", qty, rate, taxAmt, taxAmt, 0.0,
+                            "GST", v.narration, pRowIdx++
+                        }
+                    );
+                }
+            } else {
+                db.executeNonQuery(
+                    "INSERT OR REPLACE INTO purchase_invoices (invoice_no, voucher_no, invoice_date, supplier_id, supplier_name, "
+                    "item_name, bag_count, weight_qtl, rate_per_qtl, taxable_amount, total_amount, narration, financial_year) "
+                    "VALUES (?, ?, ?, ?, ?, '', 0, 0, 0, ?, ?, ?, ?);",
+                    {vNo, vNo, dateStr, partyIdParam, headerParty, totalAmt, totalAmt, v.narration, fy}
+                );
+            }
         }
 
         // 3. Insert Double-Entry Ledger Splits into transactions table

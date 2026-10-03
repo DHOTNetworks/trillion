@@ -8,6 +8,7 @@
 #include "../src/engine/gstr3b_engine.h"
 #include "../src/engine/tds_fvu_exporter.h"
 #include "../src/engine/gstr9_engine.h"
+#include "../src/engine/bahi_khata_migrator.h"
 #include "../src/engine/busy_data_migrator.h"
 #include "../src/engine/tally_data_migrator.h"
 #include "../src/engine/profit_loss_calculator.h"
@@ -38,6 +39,18 @@ void TestEnginesSuite::initTestCase() {
         dbPath = "../" + dbPath;
     }
     DatabaseManager::instance().switchDatabase(dbPath);
+
+    int vCount = DatabaseManager::instance().executeScalar("SELECT COUNT(*) FROM vouchers;").toInt();
+    if (vCount == 0) {
+        QString mdb002 = "Bahi-Khata-Data/Data.002";
+        if (!QFile::exists(mdb002) && QFile::exists("../Bahi-Khata-Data/Data.002")) {
+            mdb002 = "../Bahi-Khata-Data/Data.002";
+        }
+        if (QFile::exists(mdb002)) {
+            BahiKhataMigrator migrator;
+            migrator.migrate_mdb_file(mdb002);
+        }
+    }
 }
 
 void TestEnginesSuite::testMandiCalculatorMath() {
@@ -367,6 +380,8 @@ void TestEnginesSuite::testBusyDataMigratorInspectionAndMigration() {
     // 3. Verify Stock Items & Groups imported
     int itmCount = DatabaseManager::instance().executeScalar("SELECT COUNT(*) FROM stock_items;").toInt();
     QVERIFY(itmCount >= 1);
+    double itmGstRate = DatabaseManager::instance().executeScalar("SELECT gst_rate FROM stock_items LIMIT 1;").toDouble();
+    QCOMPARE(itmGstRate, 0.0); // GST rate should default to 0.0 for nil GST items, NOT 5%
 
     int grpStockCount = DatabaseManager::instance().executeScalar("SELECT COUNT(*) FROM stock_groups;").toInt();
     QVERIFY(grpStockCount >= 1);
@@ -382,6 +397,14 @@ void TestEnginesSuite::testBusyDataMigratorInspectionAndMigration() {
     QVERIFY(saleInvCount >= 1);
     double saleInvTotal = DatabaseManager::instance().executeScalar("SELECT SUM(total_amount) FROM sales_invoices;").toDouble();
     QCOMPARE(saleInvTotal, 250000.0);
+
+    // Verify stock_transactions was populated for inventory movement register
+    int stCount = DatabaseManager::instance().executeScalar("SELECT COUNT(*) FROM stock_transactions WHERE trans_type = 'Sale';").toInt();
+    QVERIFY(stCount >= 1);
+
+    QVariantMap stRow = DatabaseManager::instance().executeQuery("SELECT * FROM stock_transactions WHERE trans_type = 'Sale' LIMIT 1;").first().toMap();
+    QCOMPARE(stRow.value("weight_qtl").toDouble(), 100.0);
+    QCOMPARE(stRow.value("amount").toDouble(), 250000.0);
 
     // 5. Verify Double-Entry GL Invariance in target SQLite database: SUM(Dr) == SUM(Cr)
     QVariantList glRows = DatabaseManager::instance().executeQuery("SELECT SUM(CASE WHEN dr_cr='Dr' THEN amount ELSE 0 END) as tot_dr, SUM(CASE WHEN dr_cr='Cr' THEN amount ELSE 0 END) as tot_cr FROM transactions;");
