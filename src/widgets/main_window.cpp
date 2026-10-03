@@ -1121,15 +1121,19 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
     } else if (viewIndex == 29) {
         FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
         m_stackedWidget->setCurrentWidget(m_balanceSheetWidget);
-        m_balanceSheetWidget->refreshData(activeFy.endDate);
         if (m_balanceSheetWidget) {
+            if (m_balanceSheetCtrl && (m_balanceSheetCtrl->data().financialYear != activeFy.name || m_balanceSheetCtrl->data().asOnDate.isEmpty())) {
+                m_balanceSheetWidget->refreshData(activeFy.endDate);
+            }
             m_balanceSheetWidget->setFocus();
         }
     } else if (viewIndex == 30) {
         FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
         m_stackedWidget->setCurrentWidget(m_profitLossWidget);
-        m_profitLossWidget->refreshData(activeFy.startDate, activeFy.endDate);
         if (m_profitLossWidget) {
+            if (m_profitLossCtrl && (m_profitLossCtrl->data().financialYear != activeFy.name || m_profitLossCtrl->data().toDate.isEmpty())) {
+                m_profitLossWidget->refreshData(activeFy.startDate, activeFy.endDate);
+            }
             m_profitLossWidget->setFocus();
         }
     } else if (viewIndex == 31) {
