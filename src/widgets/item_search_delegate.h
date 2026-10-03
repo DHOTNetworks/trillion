@@ -32,6 +32,8 @@ protected:
     void focusOutEvent(QFocusEvent* event) override;
     void moveEvent(QMoveEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
+    void hideEvent(QHideEvent* event) override;
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
 private slots:
     void onTextChanged(const QString& text);

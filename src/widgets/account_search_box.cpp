@@ -6,6 +6,8 @@
 #include <QApplication>
 #include <QScreen>
 #include <QScrollBar>
+#include <QGraphicsDropShadowEffect>
+#include <QMouseEvent>
 
 #include "../engine/ledger_pipeline.h"
 
@@ -13,21 +15,21 @@ AccountSearchBox::AccountSearchBox(QWidget* parent)
     : QLineEdit(parent)
 {
     setPlaceholderText("Search Party Name / Ledger... (Alt+S)");
-    setFixedHeight(26);
+    setFixedHeight(28);
     setStyleSheet(
         "QLineEdit {"
         "  background-color: #FFFFFF;"
         "  color: #0F172A;"
         "  border: 1px solid #CBD5E1;"
-        "  border-radius: 4px;"
-        "  padding: 2px 6px;"
-        "  font-size: 11px;"
-        "  font-weight: 700;"
-        "  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', 'Noto Sans', 'Liberation Sans', Arial, sans-serif;"
+        "  border-radius: 5px;"
+        "  padding: 3px 8px;"
+        "  font-size: 12px;"
+        "  font-weight: 600;"
+        "  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;"
         "}"
         "QLineEdit:focus {"
         "  border: 1.5px solid #2563EB;"
-        "  background-color: #EFF6FF;"
+        "  background-color: #F8FAFC;"
         "}"
     );
 
@@ -36,44 +38,55 @@ AccountSearchBox::AccountSearchBox(QWidget* parent)
         return LedgerPipeline::instance().searchLedgers(query, "", 50);
     };
 
-    // Create Popup with ToolTip window type to prevent focus oscillation
-    m_popupFrame = new QFrame(nullptr, Qt::ToolTip | Qt::FramelessWindowHint);
+    // Create Popup parented to window
+    m_popupFrame = new QFrame(nullptr, Qt::Tool | Qt::FramelessWindowHint);
     m_popupFrame->setAttribute(Qt::WA_ShowWithoutActivating, true);
+    m_popupFrame->setAttribute(Qt::WA_DeleteOnClose, false);
     m_popupFrame->setFocusPolicy(Qt::NoFocus);
     m_popupFrame->setStyleSheet(
         "QFrame {"
         "  background-color: #FFFFFF;"
-        "  border: 1.5px solid #2563EB;"
-        "  border-radius: 0px;"
+        "  border: 1px solid #94A3B8;"
+        "  border-radius: 6px;"
         "}"
     );
 
+    auto* shadow = new QGraphicsDropShadowEffect(m_popupFrame);
+    shadow->setBlurRadius(16);
+    shadow->setColor(QColor(0, 0, 0, 45));
+    shadow->setOffset(0, 4);
+    m_popupFrame->setGraphicsEffect(shadow);
+
     QVBoxLayout* layout = new QVBoxLayout(m_popupFrame);
-    layout->setContentsMargins(2, 2, 2, 2);
+    layout->setContentsMargins(3, 3, 3, 3);
     layout->setSpacing(0);
 
     m_listWidget = new QListWidget(m_popupFrame);
     m_listWidget->setFocusPolicy(Qt::NoFocus);
+    m_listWidget->setUniformItemSizes(true);
     m_listWidget->setStyleSheet(
         "QListWidget {"
         "  border: none;"
         "  background-color: #FFFFFF;"
-        "  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', 'Noto Sans', 'Liberation Sans', Arial, sans-serif;"
-        "  font-size: 11.5px;"
+        "  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;"
+        "  font-size: 12px;"
+        "  outline: none;"
         "}"
         "QListWidget::item {"
-        "  padding: 6px 8px;"
-        "  border-radius: 0px;"
+        "  height: 28px;"
+        "  padding: 4px 8px;"
+        "  margin: 1px 2px;"
+        "  border-radius: 4px;"
         "  color: #1E293B;"
-        "  border-bottom: 1px solid #F1F5F9;"
         "}"
         "QListWidget::item:hover {"
-        "  background-color: #F8FAFC;"
+        "  background-color: #F1F5F9;"
+        "  color: #0F172A;"
         "}"
         "QListWidget::item:selected {"
-        "  background-color: #DBEAFE;"
-        "  color: #1D4ED8;"
-        "  font-weight: bold;"
+        "  background-color: #2563EB;"
+        "  color: #FFFFFF;"
+        "  font-weight: 600;"
         "}"
     );
 
@@ -92,7 +105,9 @@ AccountSearchBox::~AccountSearchBox() {
         qApp->removeEventFilter(this);
     }
     if (m_popupFrame) {
+        m_popupFrame->hide();
         m_popupFrame->deleteLater();
+        m_popupFrame = nullptr;
     }
 }
 
@@ -107,48 +122,53 @@ void AccountSearchBox::setPartyName(const QString& partyName) {
 void AccountSearchBox::setParty(const QString& partyName, int partyId) {
     m_programmaticChange = true;
     setText(partyName);
-    m_selectedPartyId = partyId;
-    if (m_selectedPartyId <= 0 && !partyName.isEmpty()) {
+    m_programmaticChange = false;
+
+    if (partyId > 0) {
+        m_selectedPartyId = partyId;
+    } else if (!partyName.isEmpty()) {
         QVariant v = DatabaseManager::instance().executeScalar(
             "SELECT id FROM parties WHERE name = ? COLLATE NOCASE LIMIT 1;", {partyName}
         );
-        if (v.isValid() && !v.isNull()) {
-            m_selectedPartyId = v.toInt();
-        }
+        m_selectedPartyId = (v.isValid() && !v.isNull()) ? v.toInt() : 0;
+    } else {
+        m_selectedPartyId = 0;
     }
-    m_programmaticChange = false;
+
     closeSearchPopup();
 }
 
 void AccountSearchBox::setSelectedPartyId(int partyId) {
-    if (partyId <= 0) {
-        clearParty();
-        return;
+    m_selectedPartyId = partyId;
+    if (partyId > 0) {
+        QVariant v = DatabaseManager::instance().executeScalar(
+            "SELECT name FROM parties WHERE id = ? LIMIT 1;", {partyId}
+        );
+        if (v.isValid() && !v.isNull()) {
+            m_programmaticChange = true;
+            setText(v.toString());
+            m_programmaticChange = false;
+        }
     }
-    QVariant v = DatabaseManager::instance().executeScalar(
-        "SELECT name FROM parties WHERE id = ? LIMIT 1;", {partyId}
-    );
-    if (v.isValid() && !v.isNull()) {
-        setParty(v.toString(), partyId);
-    }
+    closeSearchPopup();
 }
 
 void AccountSearchBox::clearParty() {
     m_programmaticChange = true;
     clear();
+    m_programmaticChange = false;
     m_selectedPartyId = 0;
     m_selectedPartyData.clear();
-    m_programmaticChange = false;
     closeSearchPopup();
 }
 
 QString AccountSearchBox::currentPartyName() const {
-    return text();
+    return text().trimmed();
 }
 
 int AccountSearchBox::currentPartyId() const {
     if (m_selectedPartyId > 0) return m_selectedPartyId;
-    QString txt = text();
+    QString txt = text().trimmed();
     if (txt.isEmpty()) return 0;
     QVariant v = DatabaseManager::instance().executeScalar(
         "SELECT id FROM parties WHERE name = ? COLLATE NOCASE LIMIT 1;", {txt}
@@ -158,10 +178,19 @@ int AccountSearchBox::currentPartyId() const {
 
 void AccountSearchBox::openSearchPopup() {
     if (m_isUpdatingPopup) return;
-    m_isUpdatingPopup = true;
+    if (!isVisible() || !hasFocus()) {
+        closeSearchPopup();
+        return;
+    }
+    if (window() && (!window()->isVisible() || window()->isMinimized())) {
+        closeSearchPopup();
+        return;
+    }
 
+    m_isUpdatingPopup = true;
     updateResults();
-    if (m_listWidget->count() > 0 && isVisible()) {
+
+    if (m_listWidget && m_listWidget->count() > 0 && isVisible() && hasFocus()) {
         positionPopup();
         m_popupFrame->show();
         m_popupFrame->raise();
@@ -193,9 +222,23 @@ void AccountSearchBox::selectCurrentListItem() {
 void AccountSearchBox::positionPopup() {
     if (!m_popupFrame || !isVisible()) return;
     QPoint globalPos = mapToGlobal(QPoint(0, height() + 2));
-    int popupWidth = qMax(width(), 420);
-    int itemHeight = 32;
-    int popupHeight = qMin(280, m_listWidget->count() * itemHeight + 10);
+    int popupWidth = qMax(width(), 460);
+    int itemHeight = 30;
+    int popupHeight = qBound(40, m_listWidget->count() * itemHeight + 8, 260);
+
+    // Screen boundary clamping
+    QScreen* screen = window() ? window()->screen() : QApplication::primaryScreen();
+    if (screen) {
+        QRect screenGeo = screen->availableGeometry();
+        if (globalPos.y() + popupHeight > screenGeo.bottom()) {
+            // Position above if below doesn't fit
+            globalPos.setY(mapToGlobal(QPoint(0, 0)).y() - popupHeight - 2);
+        }
+        if (globalPos.x() + popupWidth > screenGeo.right()) {
+            globalPos.setX(screenGeo.right() - popupWidth - 4);
+        }
+    }
+
     m_popupFrame->setGeometry(globalPos.x(), globalPos.y(), popupWidth, popupHeight);
 }
 
@@ -214,7 +257,6 @@ void AccountSearchBox::updateResults() {
 
         QString gstin = map.value("gstin").toString();
         QString city = map.value("city").toString();
-        QString balance = map.value("balance").toString();
 
         QString display = partyName;
         if (!city.isEmpty() || !gstin.isEmpty()) {
@@ -239,7 +281,7 @@ void AccountSearchBox::updateResults() {
 void AccountSearchBox::onTextChanged(const QString& /*text*/) {
     if (m_programmaticChange) return;
     m_selectedPartyId = 0;
-    if (hasFocus()) {
+    if (hasFocus() && isVisible()) {
         openSearchPopup();
     }
 }
@@ -300,6 +342,11 @@ void AccountSearchBox::keyPressEvent(QKeyEvent* event) {
             closeSearchPopup();
             event->accept();
             return;
+        } else if (event->key() == Qt::Key_Tab) {
+            selectCurrentListItem();
+            closeSearchPopup();
+            event->accept();
+            return;
         }
     } else {
         if (event->key() == Qt::Key_Down) {
@@ -330,17 +377,21 @@ bool AccountSearchBox::eventFilter(QObject* watched, QEvent* event) {
         event->type() == QEvent::WindowDeactivate || event->type() == QEvent::ApplicationDeactivate ||
         event->type() == QEvent::ActivationChange) {
         closeSearchPopup();
-    } else if (event->type() == QEvent::MouseButtonPress) {
+    } else if (event->type() == QEvent::MouseButtonPress || event->type() == QEvent::MouseButtonRelease) {
         if (m_popupFrame && m_popupFrame->isVisible()) {
             auto* mouseEvent = static_cast<QMouseEvent*>(event);
             QPoint globalPos = mouseEvent->globalPosition().toPoint();
-            if (!m_popupFrame->geometry().contains(globalPos) && !geometry().contains(mapFromGlobal(globalPos))) {
+            if (!m_popupFrame->geometry().contains(globalPos) && !this->rect().contains(this->mapFromGlobal(globalPos))) {
                 closeSearchPopup();
             }
         }
     } else if (event->type() == QEvent::Move || event->type() == QEvent::Resize) {
         if (m_popupFrame && m_popupFrame->isVisible()) {
-            positionPopup();
+            if (!isVisible() || (window() && (!window()->isVisible() || window()->isMinimized()))) {
+                closeSearchPopup();
+            } else {
+                positionPopup();
+            }
         }
     }
     return QLineEdit::eventFilter(watched, event);

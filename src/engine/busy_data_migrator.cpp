@@ -62,6 +62,11 @@ static std::string cleanStr(const std::string& s) {
 static std::string getVal(const std::map<std::string, std::string>& m, const std::string& key, const std::string& def = "") {
     auto it = m.find(key);
     if (it != m.end()) return it->second;
+    for (const auto& kv : m) {
+        if (QString::compare(QString::fromStdString(kv.first), QString::fromStdString(key), Qt::CaseInsensitive) == 0) {
+            return kv.second;
+        }
+    }
     return def;
 }
 
@@ -156,7 +161,10 @@ struct BusyGroupMeta {
     int extractBs = 1;
 };
 
-static BusyGroupMeta mapBusyGroup(int code, const std::string& name, int parentCode, const std::map<int, std::string>& groupNameMap, const std::map<int, std::map<std::string, std::string>>& busyMasterMap) {
+static BusyGroupMeta mapBusyGroup(int code, const std::string& name, int parentCode, const std::map<int, std::string>& groupNameMap, const std::map<int, std::map<std::string, std::string>>& busyMasterMap, int depth = 0) {
+    if (depth > 12) {
+        return {0, 0, "Assets", 1};
+    }
     QString qName = QString::fromStdString(name).trimmed().toLower();
 
     // Standard Busy MasterType=1 Account Groups
@@ -234,10 +242,12 @@ static BusyGroupMeta mapBusyGroup(int code, const std::string& name, int parentC
     }
 
     // Inherit from parent group if available
-    if (parentCode > 0 && busyMasterMap.count(parentCode)) {
-        std::string pName = groupNameMap.count(parentCode) ? groupNameMap.at(parentCode) : "";
-        int grandParent = parseInt(getVal(busyMasterMap.at(parentCode), "ParentGrp"));
-        return mapBusyGroup(parentCode, pName, grandParent, groupNameMap, busyMasterMap);
+    if (parentCode > 0 && busyMasterMap.count(parentCode) && parentCode != code) {
+        auto itGrp = groupNameMap.find(parentCode);
+        std::string pName = (itGrp != groupNameMap.end()) ? itGrp->second : "";
+        auto itMaster = busyMasterMap.find(parentCode);
+        int grandParent = parseInt(getVal(itMaster->second, "ParentGrp"));
+        return mapBusyGroup(parentCode, pName, grandParent, groupNameMap, busyMasterMap, depth + 1);
     }
 
     return {0, 0, "Assets", 1};
@@ -248,42 +258,46 @@ static std::vector<std::map<std::string, std::string>> readTable(MdbHandle* mdb,
     std::vector<std::map<std::string, std::string>> result;
     if (!mdb || !tableName) return result;
 
-    MdbTableDef* table = mdb_read_table_by_name(mdb, const_cast<char*>(tableName), MDB_TABLE);
-    if (!table) return result;
+    try {
+        MdbTableDef* table = mdb_read_table_by_name(mdb, const_cast<char*>(tableName), MDB_TABLE);
+        if (!table) return result;
 
-    mdb_read_columns(table);
-    if (!table->columns || table->num_cols == 0) {
-        mdb_free_tabledef(table);
-        return result;
-    }
-
-    unsigned int numCols = table->num_cols;
-    std::vector<std::string> colNames(numCols);
-    const size_t bufSize = MDB_BIND_SIZE + 512;
-    std::vector<std::vector<char>> colBuffers(numCols, std::vector<char>(bufSize, 0));
-
-    for (unsigned int j = 0; j < numCols; j++) {
-        MdbColumn* col = static_cast<MdbColumn*>(g_ptr_array_index(table->columns, j));
-        if (col && col->name[0] != '\0') {
-            colNames[j] = col->name;
-            mdb_bind_column(table, j + 1, colBuffers[j].data(), nullptr);
-        } else {
-            colNames[j] = "";
+        mdb_read_columns(table);
+        if (!table->columns || table->num_cols == 0) {
+            mdb_free_tabledef(table);
+            return result;
         }
-    }
 
-    mdb_rewind_table(table);
-    while (mdb_fetch_row(table)) {
-        std::map<std::string, std::string> row;
+        unsigned int numCols = table->num_cols;
+        std::vector<std::string> colNames(numCols);
+        const size_t bufSize = MDB_BIND_SIZE + 512;
+        std::vector<std::vector<char>> colBuffers(numCols, std::vector<char>(bufSize, 0));
+
         for (unsigned int j = 0; j < numCols; j++) {
-            if (!colNames[j].empty()) {
-                row[colNames[j]] = colBuffers[j].data();
+            MdbColumn* col = static_cast<MdbColumn*>(g_ptr_array_index(table->columns, j));
+            if (col && col->name[0] != '\0') {
+                colNames[j] = col->name;
+                mdb_bind_column(table, j + 1, colBuffers[j].data(), nullptr);
+            } else {
+                colNames[j] = "";
             }
         }
-        result.push_back(std::move(row));
-    }
 
-    mdb_free_tabledef(table);
+        mdb_rewind_table(table);
+        while (mdb_fetch_row(table)) {
+            std::map<std::string, std::string> row;
+            for (unsigned int j = 0; j < numCols; j++) {
+                if (!colNames[j].empty()) {
+                    row[colNames[j]] = colBuffers[j].data();
+                }
+            }
+            result.push_back(std::move(row));
+        }
+
+        mdb_free_tabledef(table);
+    } catch (...) {
+        // Suppress any unexpected read errors
+    }
     return result;
 }
 #endif
@@ -347,6 +361,8 @@ QVariantMap BusyDataMigrator::inspect_busy_data(const QString& busyPath) {
             mainDbFile = fi.absoluteFilePath();
         } else if (fi.fileName().endsWith(".bds", Qt::CaseInsensitive)) {
             yearDbFiles << fi.absoluteFilePath();
+        } else {
+            mainDbFile = fi.absoluteFilePath();
         }
     }
 
@@ -376,35 +392,39 @@ QVariantMap BusyDataMigrator::inspect_busy_data(const QString& busyPath) {
     }
 
 #if HAS_LIBMDB
-    MdbHandle* mainMdb = nullptr;
-    if (!mainDbFile.isEmpty()) {
-        mainMdb = mdb_open(mainDbFile.toUtf8().constData(), MDB_NOFLAGS);
-    }
-
     QString companyName = "Busy Accounting Company";
     QString gstin = "";
     QString pan = "";
     QString address = "";
     QString begFy = "";
 
-    if (mainMdb) {
-        auto compRows = readTable(mainMdb, "Company");
-        if (!compRows.empty()) {
-            const auto& c = compRows.front();
-            companyName = QString::fromStdString(cleanStr(c.at("Name")));
-            gstin = QString::fromStdString(cleanStr(c.at("GSTNo")));
-            pan = QString::fromStdString(cleanStr(c.at("ITPAN")));
-            QString a1 = QString::fromStdString(cleanStr(c.at("Address1")));
-            QString a2 = QString::fromStdString(cleanStr(c.at("Address2")));
-            QString a3 = QString::fromStdString(cleanStr(c.at("Address3")));
-            QStringList addrs;
-            if (!a1.isEmpty()) addrs << a1;
-            if (!a2.isEmpty()) addrs << a2;
-            if (!a3.isEmpty()) addrs << a3;
-            address = addrs.join(", ");
-            begFy = parseDateStr(QString::fromStdString(c.at("BegFY")));
+    try {
+        MdbHandle* mainMdb = nullptr;
+        if (!mainDbFile.isEmpty()) {
+            mainMdb = mdb_open(mainDbFile.toUtf8().constData(), MDB_NOFLAGS);
         }
-        mdb_close(mainMdb);
+
+        if (mainMdb) {
+            auto compRows = readTable(mainMdb, "Company");
+            if (!compRows.empty()) {
+                const auto& c = compRows.front();
+                companyName = QString::fromStdString(cleanStr(getVal(c, "Name")));
+                gstin = QString::fromStdString(cleanStr(getVal(c, "GSTNo", getVal(c, "GSTIN"))));
+                pan = QString::fromStdString(cleanStr(getVal(c, "ITPAN", getVal(c, "PAN"))));
+                QString a1 = QString::fromStdString(cleanStr(getVal(c, "Address1")));
+                QString a2 = QString::fromStdString(cleanStr(getVal(c, "Address2")));
+                QString a3 = QString::fromStdString(cleanStr(getVal(c, "Address3")));
+                QStringList addrs;
+                if (!a1.isEmpty()) addrs << a1;
+                if (!a2.isEmpty()) addrs << a2;
+                if (!a3.isEmpty()) addrs << a3;
+                address = addrs.join(", ");
+                begFy = parseDateStr(QString::fromStdString(getVal(c, "BegFY")));
+            }
+            mdb_close(mainMdb);
+        }
+    } catch (...) {
+        // Suppress and continue
     }
 
     int totalGroups = 0;
@@ -419,33 +439,49 @@ QVariantMap BusyDataMigrator::inspect_busy_data(const QString& busyPath) {
 
     QString activeYearDb = !yearDbFiles.isEmpty() ? yearDbFiles.last() : mainDbFile;
     if (!activeYearDb.isEmpty()) {
-        MdbHandle* yrMdb = mdb_open(activeYearDb.toUtf8().constData(), MDB_NOFLAGS);
-        if (yrMdb) {
-            auto m1Rows = readTable(yrMdb, "Master1");
-            for (const auto& r : m1Rows) {
-                int mt = parseInt(r.at("MasterType"));
-                if (mt == 1) totalGroups++;
-                else if (mt == 2) totalAccounts++;
-                else if (mt == 3 || mt == 5) totalItems++;
-                else if (mt == 8 || mt == 16) totalUnits++;
+        try {
+            MdbHandle* yrMdb = mdb_open(activeYearDb.toUtf8().constData(), MDB_NOFLAGS);
+            if (yrMdb) {
+                if (companyName == "Busy Accounting Company" || companyName.isEmpty()) {
+                    auto compRows = readTable(yrMdb, "Company");
+                    if (!compRows.empty()) {
+                        const auto& c = compRows.front();
+                        QString cn = QString::fromStdString(cleanStr(getVal(c, "Name")));
+                        if (!cn.isEmpty()) companyName = cn;
+                        if (gstin.isEmpty()) gstin = QString::fromStdString(cleanStr(getVal(c, "GSTNo", getVal(c, "GSTIN"))));
+                        if (pan.isEmpty()) pan = QString::fromStdString(cleanStr(getVal(c, "ITPAN", getVal(c, "PAN"))));
+                        if (begFy.isEmpty()) begFy = parseDateStr(QString::fromStdString(getVal(c, "BegFY")));
+                    }
+                }
+
+                auto m1Rows = readTable(yrMdb, "Master1");
+                for (const auto& r : m1Rows) {
+                    int mt = parseInt(getVal(r, "MasterType"));
+                    if (mt == 1) totalGroups++;
+                    else if (mt == 2) totalAccounts++;
+                    else if (mt == 3 || mt == 5) totalItems++;
+                    else if (mt == 8 || mt == 16) totalUnits++;
+                }
+
+                auto t1Rows = readTable(yrMdb, "Tran1");
+                totalVouchers = static_cast<int>(t1Rows.size());
+
+                auto t2Rows = readTable(yrMdb, "Tran2");
+                totalTransactions = static_cast<int>(t2Rows.size());
+                for (const auto& r : t2Rows) {
+                    double amt = parseDouble(getVal(r, "Amount", getVal(r, "D1")));
+                    int drcr = parseInt(getVal(r, "Type", getVal(r, "RecType")));
+                    if (drcr == 1) totalDr += amt;
+                    else if (drcr == 2) totalCr += amt;
+                }
+
+                auto mandiRows = readTable(yrMdb, "MandiVchItemDet");
+                totalMandi = static_cast<int>(mandiRows.size());
+
+                mdb_close(yrMdb);
             }
-
-            auto t1Rows = readTable(yrMdb, "Tran1");
-            totalVouchers = static_cast<int>(t1Rows.size());
-
-            auto t2Rows = readTable(yrMdb, "Tran2");
-            totalTransactions = static_cast<int>(t2Rows.size());
-            for (const auto& r : t2Rows) {
-                double amt = parseDouble(r.at("Amount"));
-                int drcr = parseInt(r.at("Type"));
-                if (drcr == 1) totalDr += amt;
-                else if (drcr == 2) totalCr += amt;
-            }
-
-            auto mandiRows = readTable(yrMdb, "MandiVchItemDet");
-            totalMandi = static_cast<int>(mandiRows.size());
-
-            mdb_close(yrMdb);
+        } catch (...) {
+            // Suppress and continue
         }
     }
 

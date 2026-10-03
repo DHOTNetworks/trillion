@@ -750,7 +750,6 @@ QString LedgerStatementWidget::toDate() const {
 void LedgerStatementWidget::focusSearch() {
     m_searchBox->setFocus();
     m_searchBox->selectAll();
-    m_searchBox->openSearchPopup();
 }
 
 void LedgerStatementWidget::onPartySelected(const QString& partyName) {
@@ -1013,11 +1012,13 @@ void LedgerStatementWidget::showEvent(QShowEvent* event) {
         m_fromDateEdit->setIsoDate(activeFy.startDate);
         m_toDateEdit->setIsoDate(activeFy.endDate);
     }
-    
-    // Automatically focus the search box on open with text selected and popup ready
-    QTimer::singleShot(0, this, [this]() {
-        focusSearch();
-    });
+}
+
+void LedgerStatementWidget::hideEvent(QHideEvent* event) {
+    QWidget::hideEvent(event);
+    if (m_searchBox) {
+        m_searchBox->closeSearchPopup();
+    }
 }
 
 void LedgerStatementWidget::paintEvent(QPaintEvent* event) {
