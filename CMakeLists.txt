@@ -686,6 +686,8 @@ set(ENGINE_TEST_SOURCES
     src/services/financial_math_service.cpp
     src/models/account_classifier.h
     src/models/account_classifier.cpp
+    src/models/mandi_reports_controller.h
+    src/models/mandi_reports_controller.cpp
     src/database_manager.h
     src/database_manager.cpp
 )

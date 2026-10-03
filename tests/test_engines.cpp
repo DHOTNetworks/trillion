@@ -12,6 +12,7 @@
 #include "../src/engine/busy_data_migrator.h"
 #include "../src/engine/tally_data_migrator.h"
 #include "../src/engine/profit_loss_calculator.h"
+#include "../src/models/mandi_reports_controller.h"
 #include "../src/database_manager.h"
 
 using namespace MahadevERP;
@@ -417,6 +418,55 @@ void TestEnginesSuite::testBusyDataMigratorInspectionAndMigration() {
     QVERIFY(std::abs(totalDr - totalCr) < 0.01);
     QCOMPARE(totalDr, 250100.0);
     QCOMPARE(totalCr, 250100.0);
+
+    // 6. Test BUSY Mandi dataset (busy-data/mandi) containing J-Forms, I-Forms and Procurement
+    QString mandiDir = busyDir + "/mandi";
+    if (QDir(mandiDir).exists()) {
+        QVariantMap inspMandi = migrator.inspect_busy_data(mandiDir);
+        QVERIFY(inspMandi.value("valid").toBool());
+        QCOMPARE(inspMandi.value("companyName").toString(), "Anaj Mandi");
+        QVERIFY(inspMandi.value("mandi_records_count").toInt() >= 8);
+
+        QString testMandiDbPath = "mahadev_busy_mandi_test_isolated.db";
+        if (QFile::exists(testMandiDbPath)) QFile::remove(testMandiDbPath);
+        DatabaseManager::instance().switchDatabase(testMandiDbPath);
+
+        bool mandiOk = migrator.migrate_busy_data(mandiDir);
+        QVERIFY(mandiOk);
+
+        // Verify J-Form and I-Form vouchers
+        int jfCount = DatabaseManager::instance().executeScalar("SELECT COUNT(*) FROM jform_vouchers;").toInt();
+        QCOMPARE(jfCount, 4);
+
+        int ifCount = DatabaseManager::instance().executeScalar("SELECT COUNT(*) FROM iform_vouchers;").toInt();
+        QCOMPARE(ifCount, 4);
+
+        int jfItemsCount = DatabaseManager::instance().executeScalar("SELECT COUNT(*) FROM jform_voucher_items;").toInt();
+        QCOMPARE(jfItemsCount, 4);
+
+        int ifItemsCount = DatabaseManager::instance().executeScalar("SELECT COUNT(*) FROM iform_voucher_items;").toInt();
+        QCOMPARE(ifItemsCount, 4);
+
+        int procCount = DatabaseManager::instance().executeScalar("SELECT COUNT(*) FROM paddy_procurement;").toInt();
+        QCOMPARE(procCount, 8);
+
+        // Verify MandiReportsController functions
+        MandiReportsController mandiCtrl;
+        QVariantList jfReg = mandiCtrl.get_jform_register("", "");
+        QCOMPARE(jfReg.size(), 4);
+
+        QVariantList ifReg = mandiCtrl.get_iform_register("", "");
+        QCOMPARE(ifReg.size(), 4);
+
+        QVariantMap formM = mandiCtrl.get_form_m_return("2026-04-01", "2026-04-30");
+        QVERIFY(formM.value("total_mandi_fee").toDouble() > 0.0);
+
+        // Verify GL Double-Entry Invariance
+        QVariantList mandiGl = DatabaseManager::instance().executeQuery("SELECT SUM(CASE WHEN dr_cr='Dr' THEN amount ELSE 0 END) as tot_dr, SUM(CASE WHEN dr_cr='Cr' THEN amount ELSE 0 END) as tot_cr FROM transactions;");
+        double mDr = mandiGl.first().toMap().value("tot_dr").toDouble();
+        double mCr = mandiGl.first().toMap().value("tot_cr").toDouble();
+        QVERIFY(std::abs(mDr - mCr) < 0.01);
+    }
 
     // Restore test database
     QString origDbPath = "data/mahadev_rice_industry_data_002.db";

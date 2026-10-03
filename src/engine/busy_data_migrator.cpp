@@ -98,6 +98,19 @@ static int parseInt(const std::string& s, int def = 0) {
     }
 }
 
+static int extractVoucherNum(const QString& vNo, int defaultNum = 1) {
+    QString numStr;
+    for (QChar c : vNo) {
+        if (c.isDigit()) numStr.append(c);
+    }
+    if (!numStr.isEmpty()) {
+        bool ok = false;
+        int n = numStr.toInt(&ok);
+        if (ok && n > 0) return n;
+    }
+    return defaultNum;
+}
+
 static QString parseDateStr(const QString& raw) {
     QString s = raw.trimmed();
     if (s.isEmpty()) return "";
@@ -568,6 +581,12 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
     db.executeNonQuery("DELETE FROM sales_invoice_items;");
     db.executeNonQuery("DELETE FROM purchase_invoices;");
     db.executeNonQuery("DELETE FROM purchase_invoice_items;");
+    db.executeNonQuery("DELETE FROM jform_vouchers;");
+    db.executeNonQuery("DELETE FROM jform_voucher_items;");
+    db.executeNonQuery("DELETE FROM iform_vouchers;");
+    db.executeNonQuery("DELETE FROM iform_voucher_items;");
+    db.executeNonQuery("DELETE FROM paddy_procurement;");
+    db.executeNonQuery("DELETE FROM paddy_arrivals;");
     db.executeNonQuery("DELETE FROM stock_transactions;");
     db.executeNonQuery("DELETE FROM inventory;");
     db.executeNonQuery("DELETE FROM stock_items;");
@@ -718,7 +737,25 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
             BusyGroupMeta grpMeta = mapBusyGroup(parentCode, pGroupName, 0, groupNameMap, busyMasterMap);
 
             QString partyType = "General";
-            if (grpMeta.code1st == 8) partyType = "Buyer";
+            QString nLower = name.toLower();
+            if (nLower.contains("mandi tax") || nLower.contains("market fee") || nLower.contains("mkt fee") ||
+                nLower.contains("kkf") || nLower.contains("hrdf") || nLower.contains("goshalla") || nLower.contains("dharmada")) {
+                grpMeta.code1st = 10;
+                grpMeta.code2nd = 9;
+                grpMeta.nature = "Liabilities";
+                grpMeta.extractBs = 1;
+                partyType = "Duties/Taxes";
+                groupName = "Duties & Taxes";
+                parentCode = 118;
+            } else if (nLower.contains("commission") || nLower.contains("dami") || nLower.contains("adhat")) {
+                grpMeta.code1st = 16;
+                grpMeta.code2nd = 15;
+                grpMeta.nature = "Income";
+                grpMeta.extractBs = 0;
+                partyType = "Nominal";
+                groupName = "Income (Indirect)";
+                parentCode = 127;
+            } else if (grpMeta.code1st == 8) partyType = "Buyer";
             else if (grpMeta.code1st == 11) partyType = "Vendor";
             else if (grpMeta.code1st == 3) partyType = "Bank";
             else if (grpMeta.code1st == 4) partyType = "Cash";
@@ -850,9 +887,9 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
         }
 
         // ========================================================
-        // STEP 5: VOUCHERS, INVOICES & TRANSACTIONS (85%)
+        // STEP 5: VOUCHERS, INVOICES & MANDI RECORDS (85%)
         // ========================================================
-        updateProgress(85, "Migrating Double-Entry Vouchers, Sales & Purchase Invoices...");
+        updateProgress(85, "Migrating Double-Entry Vouchers, J-Forms, I-Forms & Invoices...");
         auto t1Rows = readTable(yrMdb, "Tran1");
         auto t2Rows = readTable(yrMdb, "Tran2");
         auto t3Rows = readTable(yrMdb, "Tran3");
@@ -870,6 +907,12 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
             t3Map[vCode].push_back(tr);
         }
 
+        std::map<int, std::vector<std::map<std::string, std::string>>> mandiMap;
+        for (const auto& mr : mandiRows) {
+            int vCode = parseInt(getVal(mr, "VchCode"));
+            mandiMap[vCode].push_back(mr);
+        }
+
         for (const auto& v : t1Rows) {
             int vCode = parseInt(getVal(v, "VchCode"));
             int vType = parseInt(getVal(v, "VchType"));
@@ -880,14 +923,31 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
             int partyCode = parseInt(getVal(v, "MasterCode1"));
             QString partyName = QString::fromStdString(busyMasterMap.count(partyCode) ? cleanStr(getVal(busyMasterMap[partyCode], "Name")) : "");
 
+            bool isMandi = (mandiMap.count(vCode) > 0);
             QString typeStr = "Journal";
             QString rawType = "Jrnl";
             bool isSale = false;
             bool isPurchase = false;
 
-            if (vType == 9 || vType == 1) { typeStr = "Sales"; rawType = "Sale"; isSale = true; }
-            else if (vType == 10 || vType == 2) { typeStr = "Purchase"; rawType = "Purc"; isPurchase = true; }
-            else if (vType == 13 || vType == 3) { typeStr = "Payment"; rawType = "Pymt"; }
+            if (vType == 9 || vType == 1) {
+                if (isMandi) {
+                    typeStr = "I-Form";
+                    rawType = "IFrm";
+                } else {
+                    typeStr = "Sales";
+                    rawType = "Sale";
+                }
+                isSale = true;
+            } else if (vType == 10 || vType == 2) {
+                if (isMandi) {
+                    typeStr = "J-Form";
+                    rawType = "JFrm";
+                } else {
+                    typeStr = "Purchase";
+                    rawType = "Purc";
+                }
+                isPurchase = true;
+            } else if (vType == 13 || vType == 3) { typeStr = "Payment"; rawType = "Pymt"; }
             else if (vType == 14 || vType == 4) { typeStr = "Receipt"; rawType = "Rcpt"; }
             else if (vType == 15 || vType == 6) { typeStr = "Contra"; rawType = "Contra"; }
             else if (vType == 16 || vType == 5) { typeStr = "Journal"; rawType = "Jrnl"; }
@@ -896,9 +956,18 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
 
             QString vFy = computeFy(vDate);
 
-            // Separate financial GL splits (RecType==1) and inventory item rows (RecType==2)
+            // Separate financial GL splits (RecType==1), inventory item rows (RecType==2), and bill sundries (RecType==3)
             std::vector<std::map<std::string, std::string>> glRows;
             std::vector<std::map<std::string, std::string>> itemRows;
+            double labourSundry = 0.0;
+            double mFeeSundry = 0.0;
+            double mFeeRate = 2.0;
+            double hrdfSundry = 0.0;
+            double hrdfRate = 0.5;
+            double damiSundry = 0.0;
+            double damiRate = 2.5;
+            double otherSundry = 0.0;
+
             if (t2Map.count(vCode)) {
                 for (const auto& tr : t2Map[vCode]) {
                     int rType = parseInt(getVal(tr, "RecType"));
@@ -909,6 +978,25 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
                         double val = std::abs(parseDouble(getVal(tr, "Value3", getVal(tr, "D5"))));
                         if (q > 0.0001 || val > 0.0001) {
                             itemRows.push_back(tr);
+                        }
+                    } else if (rType == 3) {
+                        int sundryCode = parseInt(getVal(tr, "MasterCode1"));
+                        QString sName = QString::fromStdString(busyMasterMap.count(sundryCode) ? cleanStr(getVal(busyMasterMap[sundryCode], "Name")) : "").toLower();
+                        double val1 = parseDouble(getVal(tr, "Value1"));
+                        double val3 = std::abs(parseDouble(getVal(tr, "Value3")));
+                        if (sName.contains("tulai") || sName.contains("jhadai") || sName.contains("labour") || sName.contains("hamali")) {
+                            labourSundry += val3;
+                        } else if (sName.contains("mandi tax") || sName.contains("market fee") || sName.contains("mkt fee")) {
+                            mFeeSundry += val3;
+                            if (val1 > 0.001) mFeeRate = val1;
+                        } else if (sName.contains("kkf") || sName.contains("hrdf")) {
+                            hrdfSundry += val3;
+                            if (val1 > 0.001) hrdfRate = val1;
+                        } else if (sName.contains("commission") || sName.contains("dami") || sName.contains("adhat")) {
+                            damiSundry += val3;
+                            if (val1 > 0.001) damiRate = val1;
+                        } else {
+                            otherSundry += val3;
                         }
                     }
                 }
@@ -930,8 +1018,229 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
             );
             stats.totalGlVouchers++;
 
-            // Insert Sales Invoice & Stock Transactions
-            if (isSale) {
+            // ==========================================
+            // MANDI J-FORM / I-FORM & INVOICE CREATION
+            // ==========================================
+            if (isMandi && isPurchase) {
+                int totalBags = 0;
+                double totalWeightQtl = 0.0;
+                double goodsAmt = parseDouble(getVal(v, "VchSalePurcAmt"));
+                int farmerId = partyCode;
+                QString farmerName = partyName;
+                int buyerId = 0;
+                QString buyerName = "Self Purchase";
+                QString auctionStatus = "Zimidara Self Purchase";
+
+                const auto& mItems = mandiMap[vCode];
+                for (const auto& mi : mItems) {
+                    int bQty = std::abs(parseInt(getVal(mi, "BagQty")));
+                    double wPerBag = parseDouble(getVal(mi, "WeightPerBag"), 50.0);
+                    double lWt = parseDouble(getVal(mi, "LooseWeight"));
+                    double bWt = parseDouble(getVal(mi, "BuyerWeight"));
+                    double calcWt = (bWt > 0.001) ? bWt : ((bQty * wPerBag + lWt) / 100.0);
+                    totalBags += bQty;
+                    totalWeightQtl += calcWt;
+
+                    int pCode = parseInt(getVal(mi, "PurchaserCode"));
+                    if (pCode > 0 && busyMasterMap.count(pCode)) {
+                        buyerId = pCode;
+                        buyerName = QString::fromStdString(cleanStr(getVal(busyMasterMap[pCode], "Name")));
+                        auctionStatus = "Mandi Auction";
+                    }
+                }
+
+                if (goodsAmt < 0.01) {
+                    goodsAmt = totalAmt + labourSundry;
+                }
+                double grandTotal = (totalAmt > 0.01) ? totalAmt : (goodsAmt - labourSundry);
+                int numericVchNo = extractVoucherNum(vNo, stats.totalMandiRecords + 1);
+
+                db.executeNonQuery(
+                    "INSERT OR REPLACE INTO jform_vouchers ("
+                    "fy_id, financial_year, voucher_no, voucher_date, jform_no, zimidar_id, zimidar_name, "
+                    "party_id, party_name, auction_sale_status, due_days, total_bags, total_weight, "
+                    "goods_amount, bonus_amount, relief_amount, subtotal_amount, labour_amount, "
+                    "round_off, grand_total, narration) "
+                    "VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 0.0, 0.0, ?, ?, 0.0, ?, ?);",
+                    {vFy, numericVchNo, vDate, vNo, (farmerId > 0 ? QVariant(farmerId) : QVariant()), farmerName,
+                     (buyerId > 0 ? QVariant(buyerId) : QVariant()), buyerName, auctionStatus,
+                     totalBags, totalWeightQtl, goodsAmt, goodsAmt, labourSundry, grandTotal, narration}
+                );
+
+                QVariant jfIdVar = db.executeScalar("SELECT last_insert_rowid();");
+                int jfId = jfIdVar.toInt();
+
+                int jRowIdx = 1;
+                for (const auto& mi : mItems) {
+                    int itCode = parseInt(getVal(mi, "ItemCode"));
+                    QString itName = QString::fromStdString(busyMasterMap.count(itCode) ? cleanStr(getVal(busyMasterMap[itCode], "Name")) : "Wheat");
+                    int bQty = std::abs(parseInt(getVal(mi, "BagQty")));
+                    double wPerBag = parseDouble(getVal(mi, "WeightPerBag"), 50.0);
+                    double lWt = parseDouble(getVal(mi, "LooseWeight"));
+                    double bWt = parseDouble(getVal(mi, "BuyerWeight"));
+                    double calcWt = (bWt > 0.001) ? bWt : ((bQty * wPerBag + lWt) / 100.0);
+                    double rate = 0.0;
+                    double itAmt = 0.0;
+                    if (!itemRows.empty()) {
+                        rate = parseDouble(getVal(itemRows[0], "D2", getVal(itemRows[0], "D3")));
+                        itAmt = std::abs(parseDouble(getVal(itemRows[0], "D5", getVal(itemRows[0], "Value3"))));
+                    }
+                    if (rate < 0.01 && calcWt > 0.001) rate = goodsAmt / calcWt;
+                    if (itAmt < 0.01) itAmt = calcWt * rate;
+
+                    db.executeNonQuery(
+                        "INSERT INTO jform_voucher_items ("
+                        "voucher_id, voucher_no, item_id, item_name, bags, loose_weight, packing, weight, rate, amount) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+                        {jfId, numericVchNo, (itCode > 0 ? QVariant(itCode) : QVariant()), itName,
+                         bQty, lWt, (wPerBag / 100.0), calcWt, rate, itAmt}
+                    );
+
+                    db.executeNonQuery(
+                        "INSERT OR REPLACE INTO paddy_procurement (receipt_no, arrival_date, farmer_id, farmer_name, variety, bag_count, gross_weight_qtl, net_weight_qtl, rate_per_qtl, total_amount) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+                        {vNo, vDate, farmerId, farmerName, itName, bQty, calcWt, calcWt, rate, itAmt}
+                    );
+
+                    db.executeNonQuery(
+                        "INSERT OR REPLACE INTO purchase_invoices (invoice_no, voucher_no, invoice_date, supplier_id, supplier_name, "
+                        "item_name, bag_count, weight_qtl, rate_per_qtl, taxable_amount, total_amount, narration, financial_year, sale_status, labour, m_fee, hrdf) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Mandi J-Form', ?, ?, ?);",
+                        {vNo, vNo, vDate, (farmerId > 0 ? QVariant(farmerId) : QVariant()), farmerName, itName, bQty, calcWt, rate, itAmt, grandTotal, narration, vFy, labourSundry, mFeeSundry, hrdfSundry}
+                    );
+
+                    db.executeNonQuery(
+                        "INSERT INTO purchase_invoice_items ("
+                        "invoice_id, invoice_no, item_id, item_name, grade, bag_count, packing, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, total_amount) "
+                        "VALUES ((SELECT id FROM purchase_invoices WHERE invoice_no = ? LIMIT 1), ?, ?, ?, '', ?, 'Loose', ?, ?, ?, 0.0, ?);",
+                        {vNo, vNo, (itCode > 0 ? QVariant(itCode) : QVariant()), itName, bQty, calcWt, rate, itAmt, itAmt}
+                    );
+
+                    db.executeNonQuery(
+                        "INSERT INTO stock_transactions ("
+                        "fy_id, financial_year, voucher_no, voucher_date, trans_type, voucher_type, "
+                        "party_id, party_name, bill_no, item_id, item_code, item_name, "
+                        "bags, packing, weight_qtl, rate, amount, taxable_amount, tax, "
+                        "tax_type, narration, row_no) "
+                        "VALUES (?, ?, ?, ?, 'Purc', 'J-Form', ?, ?, ?, ?, ?, ?, ?, 'Loose', ?, ?, ?, ?, 0.0, 'GST', ?, ?);",
+                        {
+                            1, vFy, vNo, vDate,
+                            (farmerId > 0 ? QVariant(farmerId) : QVariant()),
+                            farmerName, vNo,
+                            (itCode > 0 ? QVariant(itCode) : QVariant()),
+                            (itCode > 0 ? QString::number(itCode) : QString()), itName,
+                            bQty, calcWt, rate, itAmt, itAmt, narration, jRowIdx++
+                        }
+                    );
+                    stats.totalPurchaseInvoices++;
+                }
+                stats.totalMandiRecords++;
+            } else if (isMandi && isSale) {
+                int totalBags = 0;
+                double totalWeightQtl = 0.0;
+                double goodsAmt = parseDouble(getVal(v, "VchSalePurcAmt"));
+                int buyerId = partyCode;
+                QString buyerName = partyName;
+
+                const auto& mItems = mandiMap[vCode];
+                for (const auto& mi : mItems) {
+                    int bQty = std::abs(parseInt(getVal(mi, "BagQty")));
+                    double wPerBag = parseDouble(getVal(mi, "WeightPerBag"), 50.0);
+                    double lWt = std::abs(parseDouble(getVal(mi, "LooseWeight")));
+                    double bWt = std::abs(parseDouble(getVal(mi, "BuyerWeight")));
+                    double calcWt = (bWt > 0.001) ? bWt : ((bQty * wPerBag + lWt) / 100.0);
+                    totalBags += bQty;
+                    totalWeightQtl += calcWt;
+
+                    int pCode = parseInt(getVal(mi, "PurchaserCode"));
+                    if (pCode > 0 && (buyerId == 0 || buyerName.isEmpty()) && busyMasterMap.count(pCode)) {
+                        buyerId = pCode;
+                        buyerName = QString::fromStdString(cleanStr(getVal(busyMasterMap[pCode], "Name")));
+                    }
+                }
+
+                if (goodsAmt < 0.01) {
+                    goodsAmt = totalAmt - (damiSundry + mFeeSundry + hrdfSundry + labourSundry + otherSundry);
+                }
+                double grandTotal = (totalAmt > 0.01) ? totalAmt : (goodsAmt + damiSundry + mFeeSundry + hrdfSundry + labourSundry + otherSundry);
+                int numericVchNo = extractVoucherNum(vNo, stats.totalMandiRecords + 1);
+
+                db.executeNonQuery(
+                    "INSERT OR REPLACE INTO iform_vouchers ("
+                    "fy_id, financial_year, voucher_no, voucher_date, iform_no, buyer_id, buyer_name, broker_name, "
+                    "due_days, total_bags, total_weight, goods_amount, dami_rate, dami_amount, mandi_fee_rate, "
+                    "mandi_fee_amount, hrdf_rate, hrdf_amount, labour_amount, taxable_amount, tax_amount, round_off, grand_total, narration) "
+                    "VALUES (1, ?, ?, ?, ?, ?, ?, '', 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0.0, 0.0, ?, ?);",
+                    {vFy, numericVchNo, vDate, vNo, (buyerId > 0 ? QVariant(buyerId) : QVariant()), buyerName,
+                     totalBags, totalWeightQtl, goodsAmt, damiRate, damiSundry, mFeeRate,
+                     mFeeSundry, hrdfRate, hrdfSundry, labourSundry, goodsAmt, grandTotal, narration}
+                );
+
+                QVariant ifIdVar = db.executeScalar("SELECT last_insert_rowid();");
+                int ifId = ifIdVar.toInt();
+
+                int iRowIdx = 1;
+                for (const auto& mi : mItems) {
+                    int itCode = parseInt(getVal(mi, "ItemCode"));
+                    QString itName = QString::fromStdString(busyMasterMap.count(itCode) ? cleanStr(getVal(busyMasterMap[itCode], "Name")) : "Wheat");
+                    int bQty = std::abs(parseInt(getVal(mi, "BagQty")));
+                    double wPerBag = parseDouble(getVal(mi, "WeightPerBag"), 50.0);
+                    double lWt = std::abs(parseDouble(getVal(mi, "LooseWeight")));
+                    double bWt = std::abs(parseDouble(getVal(mi, "BuyerWeight")));
+                    double calcWt = (bWt > 0.001) ? bWt : ((bQty * wPerBag + lWt) / 100.0);
+                    double rate = 0.0;
+                    double itAmt = 0.0;
+                    if (!itemRows.empty()) {
+                        rate = parseDouble(getVal(itemRows[0], "D2", getVal(itemRows[0], "D3")));
+                        itAmt = std::abs(parseDouble(getVal(itemRows[0], "D5", getVal(itemRows[0], "Value3"))));
+                    }
+                    if (rate < 0.01 && calcWt > 0.001) rate = goodsAmt / calcWt;
+                    if (itAmt < 0.01) itAmt = calcWt * rate;
+
+                    db.executeNonQuery(
+                        "INSERT INTO iform_voucher_items ("
+                        "voucher_id, voucher_no, item_id, item_name, bags, loose_weight, packing, weight, rate, amount, "
+                        "dami_rate, dami_amount, mandi_fee_rate, mandi_fee_amount, hrdf_rate, hrdf_amount, labour_amount) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+                        {ifId, numericVchNo, (itCode > 0 ? QVariant(itCode) : QVariant()), itName,
+                         bQty, lWt, (wPerBag / 100.0), calcWt, rate, itAmt,
+                         damiRate, damiSundry, mFeeRate, mFeeSundry, hrdfRate, hrdfSundry, labourSundry}
+                    );
+
+                    db.executeNonQuery(
+                        "INSERT OR REPLACE INTO sales_invoices (invoice_no, voucher_no, invoice_date, customer_id, customer_name, "
+                        "item_name, bag_count, weight_qtl, rate_per_qtl, taxable_amount, total_amount, narration, financial_year, sale_status, dami, m_fee, hrdf, labour) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Mandi I-Form', ?, ?, ?, ?);",
+                        {vNo, vNo, vDate, (buyerId > 0 ? QVariant(buyerId) : QVariant()), buyerName, itName, bQty, calcWt, rate, itAmt, grandTotal, narration, vFy, damiSundry, mFeeSundry, hrdfSundry, labourSundry}
+                    );
+
+                    db.executeNonQuery(
+                        "INSERT INTO sales_invoice_items ("
+                        "invoice_id, invoice_no, item_id, item_name, grade, bag_count, packing, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, total_amount) "
+                        "VALUES ((SELECT id FROM sales_invoices WHERE invoice_no = ? LIMIT 1), ?, ?, ?, '', ?, 'Loose', ?, ?, ?, 0.0, ?);",
+                        {vNo, vNo, (itCode > 0 ? QVariant(itCode) : QVariant()), itName, bQty, calcWt, rate, itAmt, itAmt}
+                    );
+
+                    db.executeNonQuery(
+                        "INSERT INTO stock_transactions ("
+                        "fy_id, financial_year, voucher_no, voucher_date, trans_type, voucher_type, "
+                        "party_id, party_name, bill_no, item_id, item_code, item_name, "
+                        "bags, packing, weight_qtl, rate, amount, taxable_amount, tax, "
+                        "tax_type, narration, row_no) "
+                        "VALUES (?, ?, ?, ?, 'Sale', 'I-Form', ?, ?, ?, ?, ?, ?, ?, 'Loose', ?, ?, ?, ?, 0.0, 'GST', ?, ?);",
+                        {
+                            1, vFy, vNo, vDate,
+                            (buyerId > 0 ? QVariant(buyerId) : QVariant()),
+                            buyerName, vNo,
+                            (itCode > 0 ? QVariant(itCode) : QVariant()),
+                            (itCode > 0 ? QString::number(itCode) : QString()), itName,
+                            bQty, calcWt, rate, itAmt, itAmt, narration, iRowIdx++
+                        }
+                    );
+                    stats.totalSalesInvoices++;
+                }
+                stats.totalMandiRecords++;
+            } else if (isSale) {
                 if (!itemRows.empty()) {
                     int sRowIdx = 1;
                     for (const auto& ir : itemRows) {
@@ -1169,9 +1478,9 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
         }
 
         // ========================================================
-        // STEP 6: MANDI & PADDY PROCUREMENT (95%)
+        // STEP 6: MANDI & PADDY PROCUREMENT FALLBACK (95%)
         // ========================================================
-        updateProgress(95, "Migrating Mandi Procurement & Gunny Bag records...");
+        updateProgress(95, "Verifying Mandi Procurement & Gunny Bag records...");
         for (const auto& mr : mandiRows) {
             int vCode = parseInt(getVal(mr, "VchCode"));
             int itCode = parseInt(getVal(mr, "ItemCode"));
@@ -1180,16 +1489,15 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
             QString pName = QString::fromStdString(busyMasterMap.count(pCode) ? cleanStr(getVal(busyMasterMap[pCode], "Name")) : "");
             QString vNo = QString::fromStdString(cleanStr(getVal(mr, "VchNo")));
             QString vDate = parseDateStr(QString::fromStdString(getVal(mr, "Date")));
-            double bagQty = parseDouble(getVal(mr, "BagQty"));
-            double looseWt = parseDouble(getVal(mr, "LooseWeight"));
-            double buyerWt = parseDouble(getVal(mr, "BuyerWeight"), looseWt);
+            double bagQty = std::abs(parseDouble(getVal(mr, "BagQty")));
+            double looseWt = std::abs(parseDouble(getVal(mr, "LooseWeight")));
+            double buyerWt = std::abs(parseDouble(getVal(mr, "BuyerWeight"), looseWt));
 
             db.executeNonQuery(
                 "INSERT OR REPLACE INTO paddy_procurement (receipt_no, arrival_date, farmer_id, farmer_name, variety, bag_count, gross_weight_qtl, net_weight_qtl, rate_per_qtl, total_amount) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
                 {vNo, vDate, pCode, pName, itName, static_cast<int>(bagQty), looseWt, buyerWt, 0.0, 0.0}
             );
-            stats.totalMandiRecords++;
         }
 
         mdb_close(yrMdb);

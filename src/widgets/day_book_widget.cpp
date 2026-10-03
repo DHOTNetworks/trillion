@@ -222,12 +222,14 @@ void DayBookWidget::setupUi() {
     QDate sDate = QDate::fromString(activeFy.startDate, "yyyy-MM-dd");
     QDate eDate = QDate::fromString(activeFy.endDate, "yyyy-MM-dd");
     if (!sDate.isValid()) sDate = QDate(QDate::currentDate().month() < 4 ? QDate::currentDate().year() - 1 : QDate::currentDate().year(), 4, 1);
+    if (!eDate.isValid()) eDate = sDate.addYears(1).addDays(-1);
     {
         QSignalBlocker b1(m_fromDateEdit);
         QSignalBlocker b2(m_toDateEdit);
         m_fromDateEdit->setDate(sDate);
         m_toDateEdit->setDate(eDate);
     }
+    onRefreshClicked();
 }
 
 void DayBookWidget::applyCustomStyles() {
@@ -463,6 +465,20 @@ void DayBookWidget::keyPressEvent(QKeyEvent* event) {
     } else {
         QWidget::keyPressEvent(event);
     }
+}
+
+void DayBookWidget::showEvent(QShowEvent* event) {
+    QWidget::showEvent(event);
+    FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
+    QDate sDate = QDate::fromString(activeFy.startDate, "yyyy-MM-dd");
+    QDate eDate = QDate::fromString(activeFy.endDate, "yyyy-MM-dd");
+    if (sDate.isValid() && eDate.isValid()) {
+        QSignalBlocker b1(m_fromDateEdit);
+        QSignalBlocker b2(m_toDateEdit);
+        m_fromDateEdit->setDate(sDate);
+        m_toDateEdit->setDate(eDate);
+    }
+    onRefreshClicked();
 }
 
 } // namespace MahadevERP
