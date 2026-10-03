@@ -159,6 +159,8 @@ void PurchaseRegisterWidget::setupUi() {
         "Bill No", "Date", "Supplier / Farmer", "Item / Commodity",
         "Bags", "Weight (Qtl)", "Rate (₹)", "Taxable (₹)", "GST (₹)", "Total (₹)", "Vehicle No"
     });
+    m_table->horizontalHeader()->setFixedHeight(36);
+    m_table->horizontalHeader()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     m_table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
     m_table->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
     m_table->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
@@ -179,10 +181,20 @@ void PurchaseRegisterWidget::setupUi() {
     m_table->setAlternatingRowColors(true);
     m_table->setStyleSheet(
         "QTableWidget { background-color: #FFFFFF; alternate-background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 8px; gridline-color: #F1F5F9; font-size: 12.5px; color: #0F172A; }"
-        "QTableWidget::item { padding: 4px 8px; }"
+        "QTableWidget::item { padding: 5px 12px; }"
         "QTableWidget::item:selected { background-color: #EFF6FF; color: #1D4ED8; font-weight: bold; }"
-        "QHeaderView::section { background-color: #F1F5F9; color: #1E293B; font-weight: 800; font-size: 12px; padding: 8px 10px; border: none; border-bottom: 2px solid #CBD5E1; border-right: 1px solid #E2E8F0; }"
+        "QHeaderView::section { background-color: #F1F5F9; color: #1E293B; font-weight: 800; font-size: 12px; min-height: 28px; height: 34px; padding: 6px 12px; border: none; border-bottom: 2px solid #CBD5E1; border-right: 1px solid #E2E8F0; }"
     );
+
+    // Align header items
+    for (int col = 0; col < m_table->columnCount(); ++col) {
+        if (auto* itm = m_table->horizontalHeaderItem(col)) {
+            if (col == 0 || col == 1 || col == 10) itm->setTextAlignment(Qt::AlignCenter | Qt::AlignVCenter);
+            else if (col == 2 || col == 3) itm->setTextAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+            else itm->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        }
+    }
+
     connect(m_table, &QTableWidget::cellDoubleClicked, this, &PurchaseRegisterWidget::onTableDoubleClicked);
     mainLayout->addWidget(m_table, 1);
 

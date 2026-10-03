@@ -175,6 +175,8 @@ void TrialBalanceWidget::setupUi() {
     m_table->setSelectionMode(QAbstractItemView::SingleSelection);
     m_table->verticalHeader()->setVisible(false);
     m_table->verticalHeader()->setDefaultSectionSize(30);
+    m_table->horizontalHeader()->setFixedHeight(36);
+    m_table->horizontalHeader()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     m_table->setShowGrid(true);
     m_table->setStyleSheet(
         "QTableWidget {"
@@ -186,14 +188,16 @@ void TrialBalanceWidget::setupUi() {
         "  font-size: 12.5px;"
         "  color: #0F172A;"
         "}"
-        "QTableWidget::item { padding: 4px 8px; }"
+        "QTableWidget::item { padding: 5px 12px; }"
         "QTableWidget::item:selected { background-color: #EFF6FF; color: #1D4ED8; font-weight: bold; }"
         "QHeaderView::section {"
         "  background-color: #F1F5F9;"
         "  color: #1E293B;"
         "  font-weight: 800;"
         "  font-size: 12px;"
-        "  padding: 8px 10px;"
+        "  min-height: 28px;"
+        "  height: 34px;"
+        "  padding: 6px 12px;"
         "  border: none;"
         "  border-bottom: 2px solid #CBD5E1;"
         "  border-right: 1px solid #E2E8F0;"
@@ -282,6 +286,17 @@ void TrialBalanceWidget::configureTableColumns() {
         });
         m_table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
         for (int i = 1; i < 4; ++i) m_table->horizontalHeader()->setSectionResizeMode(i, QHeaderView::ResizeToContents);
+    }
+
+    // Align header items: Col 0 & 1 Left-aligned, numeric columns Right-aligned
+    for (int col = 0; col < m_table->columnCount(); ++col) {
+        if (auto* itm = m_table->horizontalHeaderItem(col)) {
+            if (col == 0 || col == 1) {
+                itm->setTextAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+            } else {
+                itm->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+            }
+        }
     }
 }
 

@@ -54,6 +54,8 @@ private:
     void setupUi();
     void applyCustomStyles();
     void handleItemDrillDown(QTreeWidgetItem* item);
+    void saveSelectionState();
+    void restoreSelectionState();
 
     BalanceSheetController* m_controller = nullptr;
     PrintExportController* m_printExportCtrl = nullptr;
@@ -86,4 +88,7 @@ private:
 
     int m_lastLiabIndex = 0;
     int m_lastAssetIndex = 0;
+    QString m_lastActiveSide = "Liabilities";
+    QString m_lastSelectedItemKey;
+    int m_lastSelectedColumn = 0;
 };

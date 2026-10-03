@@ -428,11 +428,63 @@ void BalanceSheetWidget::populateTrees() {
         }
     }
 
-    // Select first row in liabilities tree by default
-    if (m_liabilitiesTree->topLevelItemCount() > 0) {
-        m_liabilitiesTree->setCurrentItem(m_liabilitiesTree->topLevelItem(0));
-        m_liabilitiesTree->setFocus();
+    restoreSelectionState();
+}
+
+void BalanceSheetWidget::saveSelectionState() {
+    QTreeWidget* activeTree = nullptr;
+    if (m_assetsTree && (m_assetsTree->hasFocus() || (!m_liabilitiesTree->hasFocus() && m_assetsTree->currentItem()))) {
+        m_lastActiveSide = "Assets";
+        activeTree = m_assetsTree;
+    } else {
+        m_lastActiveSide = "Liabilities";
+        activeTree = m_liabilitiesTree;
     }
+
+    if (activeTree && activeTree->currentItem()) {
+        QTreeWidgetItem* item = activeTree->currentItem();
+        m_lastSelectedColumn = activeTree->currentColumn();
+        QString partyName = item->data(0, Qt::UserRole + 1).toString();
+        if (partyName.isEmpty()) partyName = item->text(0).trimmed();
+        m_lastSelectedItemKey = partyName;
+    }
+}
+
+void BalanceSheetWidget::restoreSelectionState() {
+    QTreeWidget* targetTree = (m_lastActiveSide == "Assets") ? m_assetsTree : m_liabilitiesTree;
+    if (!targetTree) return;
+
+    QTreeWidgetItem* matchedItem = nullptr;
+    if (!m_lastSelectedItemKey.isEmpty()) {
+        std::function<void(QTreeWidgetItem*)> searchItem = [&](QTreeWidgetItem* parent) {
+            if (matchedItem) return;
+            QString name = parent->data(0, Qt::UserRole + 1).toString();
+            if (name.isEmpty()) name = parent->text(0).trimmed();
+            if (name == m_lastSelectedItemKey) {
+                matchedItem = parent;
+                return;
+            }
+            for (int i = 0; i < parent->childCount(); ++i) {
+                searchItem(parent->child(i));
+                if (matchedItem) return;
+            }
+        };
+
+        for (int i = 0; i < targetTree->topLevelItemCount(); ++i) {
+            searchItem(targetTree->topLevelItem(i));
+            if (matchedItem) break;
+        }
+    }
+
+    if (!matchedItem && targetTree->topLevelItemCount() > 0) {
+        matchedItem = targetTree->topLevelItem(0);
+    }
+
+    if (matchedItem) {
+        targetTree->setCurrentItem(matchedItem, qMax(0, m_lastSelectedColumn));
+        targetTree->scrollToItem(matchedItem);
+    }
+    targetTree->setFocus(Qt::OtherFocusReason);
 }
 
 void BalanceSheetWidget::expandAllGroups() {
@@ -492,6 +544,7 @@ void BalanceSheetWidget::triggerDrillDownOnCurrentItem() {
 
 void BalanceSheetWidget::handleItemDrillDown(QTreeWidgetItem* item) {
     if (!item) return;
+    saveSelectionState();
 
     QString itemType = item->data(0, Qt::UserRole).toString();
     QString partyName = item->data(0, Qt::UserRole + 1).toString().trimmed();
@@ -662,12 +715,8 @@ void BalanceSheetWidget::showEvent(QShowEvent* event) {
     FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
     if (m_controller && (m_controller->data().financialYear != activeFy.name || m_controller->data().asOnDate.isEmpty())) {
         refreshData(activeFy.endDate);
-    }
-    if (m_liabilitiesTree && m_liabilitiesTree->topLevelItemCount() > 0) {
-        m_liabilitiesTree->setFocus(Qt::OtherFocusReason);
-        if (!m_liabilitiesTree->currentItem()) {
-            m_liabilitiesTree->setCurrentItem(m_liabilitiesTree->topLevelItem(0));
-        }
+    } else {
+        restoreSelectionState();
     }
 }
 
