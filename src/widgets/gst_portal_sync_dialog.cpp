@@ -49,8 +49,12 @@ void GstPortalSyncDialog::setupUi() {
     credForm->setContentsMargins(16, 16, 16, 16);
     credForm->setSpacing(12);
 
-    // GSTIN (Pre-fill from DB settings or standard default)
-    QString defaultGstin = DatabaseManager::instance().getSetting("company_gstin", "06ABKFM5928Q1ZG");
+    // GSTIN (Pre-fill dynamically from company_info or app_settings)
+    QString defaultGstin = DatabaseManager::instance().getSetting("company_gstin", "");
+    if (defaultGstin.isEmpty()) {
+        QVariant gVal = DatabaseManager::instance().executeScalar("SELECT gstin FROM company_info LIMIT 1;");
+        if (gVal.isValid() && !gVal.isNull()) defaultGstin = gVal.toString().trimmed();
+    }
     m_gstinEdit = new QLineEdit(defaultGstin, credGroup);
     m_gstinEdit->setMaxLength(15);
     credForm->addRow("<b>Company GSTIN:</b>", m_gstinEdit);

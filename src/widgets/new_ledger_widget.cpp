@@ -542,7 +542,7 @@ QWidget* NewLedgerWidget::createSlateSection() {
     auto* col1 = new QVBoxLayout();
     col1->setSpacing(3);
 
-    col1->addLayout(createFormField(card, "GSTIN :", m_gstinInput, "06AJAPP3837B1ZK"));
+    col1->addLayout(createFormField(card, "GSTIN :", m_gstinInput, "06AAAAA0000A1Z5"));
 
     auto* ptBox = new QVBoxLayout();
     ptBox->setSpacing(1);
@@ -554,7 +554,7 @@ QWidget* NewLedgerWidget::createSlateSection() {
     ptBox->addWidget(m_gstPartyTypeCombo);
     col1->addLayout(ptBox);
 
-    col1->addLayout(createFormField(card, "Party PAN :", m_panInput, "AJAPP3837B"));
+    col1->addLayout(createFormField(card, "Party PAN :", m_panInput, "AAAAA0000A"));
     col1->addLayout(createFormField(card, "Party TIN / VAT :", m_tinInput, "Sales Tax / VAT TIN"));
     col1->addLayout(createFormField(card, "Udyam Reg. (URN) :", m_urnInput, "UDYAM-XX-00-0000000"));
     gridLayout->addLayout(col1, 1);
@@ -564,9 +564,9 @@ QWidget* NewLedgerWidget::createSlateSection() {
     col2->setSpacing(3);
 
     col2->addLayout(createFormField(card, "Address :", m_addressInput, "Shop / Street / Mandi Address"));
-    col2->addLayout(createFormField(card, "Phone / Mobile :", m_phoneInput, "08532-234567, 98765..."));
-    col2->addLayout(createFormField(card, "Whatsapp No. :", m_whatsappInput, "9876543210"));
-    col2->addLayout(createFormField(card, "E-mail ID :", m_emailInput, "accounts@party.com"));
+    col2->addLayout(createFormField(card, "Phone / Mobile :", m_phoneInput, "Phone / Mobile No."));
+    col2->addLayout(createFormField(card, "Whatsapp No. :", m_whatsappInput, "10-digit Mobile No."));
+    col2->addLayout(createFormField(card, "E-mail ID :", m_emailInput, "name@example.com"));
     col2->addLayout(createFormField(card, "Aadhar No. :", m_aadhaarInput, "12-digit Aadhaar"));
     gridLayout->addLayout(col2, 1);
 

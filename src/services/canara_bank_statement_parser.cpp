@@ -454,8 +454,6 @@ void CanaraBankStatementParser::classifyAndExtractParty(CanaraBankTransaction &t
         auto im = inetRegex.match(narr);
         if (im.hasMatch()) {
             QString cand = im.captured(1).trimmed();
-            if (cand.startsWith("SUSHIL TRA", Qt::CaseInsensitive)) cand = "Sushil Trading Company";
-            else if (cand.startsWith("RAMAYANA I", Qt::CaseInsensitive)) cand = "Ramayana Industries";
             txn.extractedParty = cleanCandidateName(cand);
         }
         txn.category = (txn.deposit > 0.001) ? "CUSTOMER_RECEIPT" : "SUPPLIER_PAYMENT";

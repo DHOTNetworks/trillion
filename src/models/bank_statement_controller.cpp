@@ -1060,10 +1060,11 @@ void BankStatementController::saveAlias(const QString &narration, const QString 
         static QRegularExpression ifscRegex("^[A-Z]{4}[0-9A-Z]{7}$");
         if (ifscRegex.match(parts[1].trimmed()).hasMatch()) {
             pattern = parts[2].trimmed();
-        } else if (parts[3].contains("MAHADEV", Qt::CaseInsensitive)) {
-            pattern = parts[2].trimmed();
         } else {
-            pattern = parts[3].trimmed();
+            pattern = parts[2].trimmed();
+            if (pattern.length() < 3 && parts.size() > 3) {
+                pattern = parts[3].trimmed();
+            }
         }
         pattern.remove(QRegularExpression("[/\\\\-].*"));
     }

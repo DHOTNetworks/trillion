@@ -142,7 +142,7 @@ void ScaleSettingsDialog::setupUi() {
     previewTag->setStyleSheet("font-size: 10px; font-weight: 800; color: #64748B; border: none; background: transparent;");
     previewLayout->addWidget(previewTag);
 
-    m_previewSampleLabel = new QLabel("M/s Balaji Rice Mill  •  ₹ 1,42,85,690.00 Dr", previewBox);
+    m_previewSampleLabel = new QLabel("Sample Party Ledger  •  ₹ 1,42,85,690.00 Dr", previewBox);
     m_previewSampleLabel->setStyleSheet("font-weight: 700; color: #0F172A; border: none; background: transparent;");
     previewLayout->addWidget(m_previewSampleLabel);
     previewLayout->addStretch(1);

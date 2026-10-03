@@ -12,7 +12,7 @@ GstPortalService::GstPortalService(QObject* parent)
     : QObject(parent),
       m_netManager(new QNetworkAccessManager(this))
 {
-    m_accessToken = DatabaseManager::instance().getSetting("gsp_access_token", "ef6599bdb1b1d091c56a5fbef6fab0af4b38f692");
+    m_accessToken = DatabaseManager::instance().getSetting("gsp_access_token", "");
 }
 
 void GstPortalService::ensureAccessToken(std::function<void(bool success, const QString& token, const QString& error)> callback)
@@ -22,10 +22,10 @@ void GstPortalService::ensureAccessToken(std::function<void(bool success, const 
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
 
     QJsonObject body;
-    body["username"] = "anilkamra2007@gmail.com";
-    body["password"] = "Anil@123";
-    body["client_id"] = "GHfUTjxGRuofVyqxNa";
-    body["client_secret"] = "yA24uD9KtiHnvLm0BtxBAXFT";
+    body["username"] = DatabaseManager::instance().getSetting("gsp_username", "");
+    body["password"] = DatabaseManager::instance().getSetting("gsp_password", "");
+    body["client_id"] = DatabaseManager::instance().getSetting("gsp_client_id", "");
+    body["client_secret"] = DatabaseManager::instance().getSetting("gsp_client_secret", "");
     body["grant_type"] = "password";
 
     QNetworkReply* reply = m_netManager->post(request, QJsonDocument(body).toJson(QJsonDocument::Compact));
