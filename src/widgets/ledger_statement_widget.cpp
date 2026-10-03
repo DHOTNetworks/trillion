@@ -338,7 +338,7 @@ void LedgerStatementWidget::setupUi() {
     m_aankTable->setColumnCount(12);
     m_aankTable->setHorizontalHeaderLabels({
         "Date", "Vch No", "Type", "Particulars / Narration", "Debit (₹)", "Credit (₹)",
-        "Running Bal (₹)", "Side", "Days", "Dr Aank (Product)", "Cr Aank (Product)", "Interest (₹)"
+        "Running Bal (₹)", "Side", "Days", "Dr Daily Product", "Cr Daily Product", "Interest (₹)"
     });
     m_aankTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
     m_aankTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
@@ -375,7 +375,7 @@ void LedgerStatementWidget::setupUi() {
     aankSummaryLayout->setContentsMargins(14, 4, 14, 4);
     aankSummaryLayout->setSpacing(14);
 
-    m_aankTotalDrLabel = new QLabel("Dr Aank: 0.00", aankSummaryBar);
+    m_aankTotalDrLabel = new QLabel("Dr Product: 0.00", aankSummaryBar);
     m_aankTotalDrLabel->setStyleSheet("color: #1D4ED8; font-weight: 700; font-size: 11px;");
     aankSummaryLayout->addWidget(m_aankTotalDrLabel);
 
@@ -385,7 +385,7 @@ void LedgerStatementWidget::setupUi() {
 
     aankSummaryLayout->addSpacing(15);
 
-    m_aankTotalCrLabel = new QLabel("Cr Aank: 0.00", aankSummaryBar);
+    m_aankTotalCrLabel = new QLabel("Cr Product: 0.00", aankSummaryBar);
     m_aankTotalCrLabel->setStyleSheet("color: #15803D; font-weight: 700; font-size: 11px;");
     aankSummaryLayout->addWidget(m_aankTotalCrLabel);
 
@@ -400,7 +400,7 @@ void LedgerStatementWidget::setupUi() {
     aankSummaryLayout->addWidget(m_aankNetInterestLabel);
 
     aankLayout->addWidget(aankSummaryBar);
-    m_viewTabs->addTab(m_aankWidget, "  Aank Daily Product & Interest Statement (Rokka)  ");
+    m_viewTabs->addTab(m_aankWidget, "  Daily Product & Interest Statement  ");
 
     mainLayout->addWidget(m_viewTabs, 1);
 
@@ -438,8 +438,8 @@ void LedgerStatementWidget::recalculateAankStatement() {
     QString partyName = m_searchBox->currentPartyName().trimmed();
     if (partyName.isEmpty()) {
         m_aankTable->setRowCount(0);
-        m_aankTotalDrLabel->setText("Dr Aank: 0.00");
-        m_aankTotalCrLabel->setText("Cr Aank: 0.00");
+        m_aankTotalDrLabel->setText("Dr Product: 0.00");
+        m_aankTotalCrLabel->setText("Cr Product: 0.00");
         m_aankDrInterestLabel->setText("Dr Int: ₹0.00");
         m_aankCrInterestLabel->setText("Cr Int: ₹0.00");
         m_aankNetInterestLabel->setText("Net Accrued Interest: ₹0.00");
@@ -559,8 +559,8 @@ void LedgerStatementWidget::recalculateAankStatement() {
     }
 
     // Update Summary Labels
-    m_aankTotalDrLabel->setText(QString("Dr Aank: %1").arg(AccountingEngine::formatIndianCurrency(m_currentAankStatement.totalDrAank)));
-    m_aankTotalCrLabel->setText(QString("Cr Aank: %1").arg(AccountingEngine::formatIndianCurrency(m_currentAankStatement.totalCrAank)));
+    m_aankTotalDrLabel->setText(QString("Dr Product: %1").arg(AccountingEngine::formatIndianCurrency(m_currentAankStatement.totalDrAank)));
+    m_aankTotalCrLabel->setText(QString("Cr Product: %1").arg(AccountingEngine::formatIndianCurrency(m_currentAankStatement.totalCrAank)));
     m_aankDrInterestLabel->setText(QString("Dr Int (@%1%): %2").arg(m_drInterestRateSpin->value()).arg(AccountingEngine::formatIndianCurrency(m_currentAankStatement.totalDrInterest)));
     m_aankCrInterestLabel->setText(QString("Cr Int (@%1%): %2").arg(m_crInterestRateSpin->value()).arg(AccountingEngine::formatIndianCurrency(m_currentAankStatement.totalCrInterest)));
 

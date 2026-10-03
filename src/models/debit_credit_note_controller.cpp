@@ -89,8 +89,8 @@ void DebitCreditNoteItemsModel::addItem(const QString &itemName, const QString &
                                         double amount, double gst) {
     beginInsertRows(QModelIndex(), m_items.size(), m_items.size());
     DebitCreditNoteItem it;
-    it.itemName = itemName.isEmpty() ? "Rice Byproduct" : itemName;
-    it.hsnCode = hsn.isEmpty() ? "1006" : hsn;
+    it.itemName = itemName.isEmpty() ? "Item" : itemName;
+    it.hsnCode = !hsn.isEmpty() ? hsn : MasterDataProvider::instance().getItemHsnCode(itemName);
     it.unit = "QTL";
     it.bags = bags;
     it.weightQtl = weight;

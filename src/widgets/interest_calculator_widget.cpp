@@ -47,9 +47,9 @@ void InterestCalculatorWidget::setupUi() {
 
     auto* titleCol = new QVBoxLayout();
     titleCol->setSpacing(2);
-    auto* titleLabel = new QLabel("Daily Product (Aank) & Commercial Interest Calculator", headerCard);
+    auto* titleLabel = new QLabel("Interest Calculator", headerCard);
     titleLabel->setStyleSheet("font-size: 16px; font-weight: 800; color: #0F172A; border: none; background: transparent;");
-    auto* subLabel = new QLabel("Calculate interest on ledger running balances using Mandi Daily Product (Aank/Rokka) or standard 365-day simple interest.", headerCard);
+    auto* subLabel = new QLabel("Calculate interest on ledger running balances using Daily Product or standard simple interest.", headerCard);
     subLabel->setStyleSheet("font-size: 11px; color: #64748B; border: none; background: transparent;");
     titleCol->addWidget(titleLabel);
     titleCol->addWidget(subLabel);
@@ -125,7 +125,7 @@ void InterestCalculatorWidget::setupUi() {
     paramGrid->addWidget(m_crRateEdit, 1, 3);
 
     m_divisorCombo = new QComboBox(paramCard);
-    m_divisorCombo->addItems({"365 Days (Standard Annual)", "360 Days (Commercial 30-Day Month)", "36000 (Aank / Rokka Method)"});
+    m_divisorCombo->addItems({"365 Days (Standard Annual)", "360 Days (Commercial 30-Day Month)", "36000 (Daily Product Method)"});
     paramGrid->addWidget(new QLabel("Calculation Base:", paramCard), 1, 4);
     paramGrid->addWidget(m_divisorCombo, 1, 5);
 
@@ -148,7 +148,7 @@ void InterestCalculatorWidget::setupUi() {
     m_table->setColumnCount(8);
     m_table->setHorizontalHeaderLabels({
         "Date", "Particulars", "Ref / Vch No", "Debit Amount (₹)", "Credit Amount (₹)",
-        "Running Balance (₹)", "Days", "Product (Aank)"
+        "Running Balance (₹)", "Days", "Daily Product (₹)"
     });
     m_table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
     m_table->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
@@ -196,11 +196,11 @@ void InterestCalculatorWidget::setupUi() {
         return qMakePair(card, vLabel);
     };
 
-    auto m1 = createMetric("TOTAL DEBIT PRODUCT (AANK)", "0.00", "#DC2626");
+    auto m1 = createMetric("TOTAL DEBIT PRODUCT", "0.00", "#DC2626");
     m_totalDrProductLabel = m1.second;
     footerRow->addWidget(m1.first, 1);
 
-    auto m2 = createMetric("TOTAL CREDIT PRODUCT (AANK)", "0.00", "#16A34A");
+    auto m2 = createMetric("TOTAL CREDIT PRODUCT", "0.00", "#16A34A");
     m_totalCrProductLabel = m2.second;
     footerRow->addWidget(m2.first, 1);
 

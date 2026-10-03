@@ -371,7 +371,7 @@ QString MasterDataProvider::getItemHsnCode(const QString& itemName, int itemId) 
         QVariant val = DatabaseManager::instance().executeScalar("SELECT hsn_code FROM stock_items WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) LIMIT 1;", { itemName.trimmed() });
         if (val.isValid() && !val.toString().trimmed().isEmpty()) return val.toString().trimmed();
     }
-    return "1006";
+    return "";
 }
 
 double MasterDataProvider::getTcsRate(bool hasPan) {

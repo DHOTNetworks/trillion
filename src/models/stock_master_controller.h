@@ -174,7 +174,7 @@ private:
     double m_saleRate = 0.0;
     double m_mrp = 0.0;
     double m_discount = 0.0;
-    QString m_hsnCode = "1006";
+    QString m_hsnCode;
     double m_gstRate = 5.0;
     double m_cessRate = 0.0;
 

@@ -306,7 +306,7 @@ void ModifyStockItemWidget::setupUi() {
     col2Grid->addWidget(new QLabel("Trade Discount %:"), 3, 0);
     col2Grid->addWidget(m_discountEdit, 3, 1);
 
-    m_hsnEdit = new QLineEdit("1006", col2Frame);
+    m_hsnEdit = new QLineEdit("", col2Frame);
     col2Grid->addWidget(new QLabel("HSN / SAC Code:"), 4, 0);
     col2Grid->addWidget(m_hsnEdit, 4, 1);
 
@@ -488,7 +488,7 @@ void ModifyStockItemWidget::resetForm() {
     m_saleRateEdit->setText("0.00");
     m_mrpEdit->setText("0.00");
     m_discountEdit->setText("0.00");
-    m_hsnEdit->setText("1006");
+    m_hsnEdit->clear();
     m_gstRateCombo->setCurrentIndex(0);
     m_cessRateEdit->setText("0.00");
     m_packingKgEdit->setText("50.0");
@@ -556,7 +556,7 @@ void ModifyStockItemWidget::onItemSelected(const QString& itemName) {
     m_saleRateEdit->setText(QString::number(item.value("sale_rate", 0.0).toDouble(), 'f', 2));
     m_mrpEdit->setText(QString::number(item.value("mrp", 0.0).toDouble(), 'f', 2));
     m_discountEdit->setText(QString::number(item.value("discount", 0.0).toDouble(), 'f', 2));
-    m_hsnEdit->setText(item.value("hsn_code", "1006").toString());
+    m_hsnEdit->setText(item.value("hsn_code", "").toString());
 
     double gst = item.value("gst_rate", 5.0).toDouble();
     if (gst == 0.0) m_gstRateCombo->setCurrentIndex(1);

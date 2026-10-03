@@ -615,7 +615,6 @@ void StockRegisterController::fetchRawData(const QString& fromDate, const QStrin
         e.companyVal = meta.value("company_name").toString().trimmed();
         if (e.companyVal.isEmpty()) e.companyVal = "Self Production";
         e.hsnVal = meta.value("hsn_code").toString().trimmed();
-        if (e.hsnVal.isEmpty()) e.hsnVal = "1006";
         e.unitVal = itm.value("unit", "Qtl").toString();
 
         e.opBags = itm.value("opening_bags").toLongLong();
@@ -813,7 +812,7 @@ void StockRegisterController::fetchRawData(const QString& fromDate, const QStrin
         // Group by hsnVal
         QMap<QString, StockRegisterEntry> hMap;
         for (const auto& e : itemEntries) {
-            QString hKey = e.hsnVal.trimmed().isEmpty() ? "1006" : e.hsnVal.trimmed();
+            QString hKey = e.hsnVal.trimmed().isEmpty() ? "Uncategorized" : e.hsnVal.trimmed();
             if (!hMap.contains(hKey)) {
                 StockRegisterEntry h;
                 h.nameVal = QString("HSN Code: %1").arg(hKey);

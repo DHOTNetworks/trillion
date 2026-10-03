@@ -44,7 +44,7 @@ struct DebitCreditNoteRecord {
 
 struct DebitCreditNoteItem {
     QString itemName;
-    QString hsnCode = "1006";
+    QString hsnCode;
     QString unit = "QTL";
     int bags = 0;
     double weightQtl = 0.0;
@@ -78,7 +78,7 @@ public:
 
     const QVector<DebitCreditNoteItem>& items() const { return m_items; }
     void setItems(const QVector<DebitCreditNoteItem> &items);
-    Q_INVOKABLE void addItem(const QString &itemName = QString(), const QString &hsn = "1006",
+    Q_INVOKABLE void addItem(const QString &itemName = QString(), const QString &hsn = QString(),
                              int bags = 0, double weight = 0.0, double rate = 0.0,
                              double amount = 0.0, double gst = 5.0);
     Q_INVOKABLE void removeItem(int index);

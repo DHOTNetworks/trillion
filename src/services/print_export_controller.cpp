@@ -546,7 +546,7 @@ QString PrintExportController::renderSalesInvoiceSingleHtml(const QString& invoi
 
         QVariantMap fallbackItem;
         fallbackItem["item_name"] = itemName;
-        fallbackItem["hsn_code"] = inv.value("hsn_code", "1006").toString();
+        fallbackItem["hsn_code"] = inv.value("hsn_code", "").toString();
         fallbackItem["bag_count"] = inv.value("bag_count", 0);
         fallbackItem["weight_qtl"] = inv.value("weight_qtl", 0.0);
         fallbackItem["rate_per_qtl"] = inv.value("rate_per_qtl", 0.0);
@@ -589,7 +589,7 @@ QString PrintExportController::renderSalesInvoiceSingleHtml(const QString& invoi
         )
         .arg(rowIdx++)
         .arg(it.value("item_name").toString())
-        .arg(it.value("hsn_code", "1006").toString())
+        .arg(it.value("hsn_code", "").toString())
         .arg(bags)
         .arg(QString::number(wt, 'f', 2))
         .arg(QString::number(rate, 'f', 2))
@@ -814,7 +814,7 @@ QString PrintExportController::renderPurchaseInvoiceHtml(const QString& invoiceN
 
         QVariantMap fallbackItem;
         fallbackItem["item_name"] = itemName;
-        fallbackItem["hsn_code"] = p.value("hsn_code", "1006").toString();
+        fallbackItem["hsn_code"] = p.value("hsn_code", "").toString();
         fallbackItem["bag_count"] = p.value("bag_count", 0);
         fallbackItem["weight_qtl"] = p.value("weight_qtl", 0.0);
         fallbackItem["rate_per_qtl"] = p.value("rate_per_qtl", 0.0);
@@ -857,7 +857,7 @@ QString PrintExportController::renderPurchaseInvoiceHtml(const QString& invoiceN
         )
         .arg(rowIdx++)
         .arg(it.value("item_name").toString())
-        .arg(it.value("hsn_code", "1006").toString())
+        .arg(it.value("hsn_code", "").toString())
         .arg(bags)
         .arg(QString::number(wt, 'f', 2))
         .arg(QString::number(rate, 'f', 2))

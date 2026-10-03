@@ -226,7 +226,7 @@ void MenuTreeManager::setupDefaultMenus()
         MenuItem("3. Trial Balance Sheet (Group & Ledger Summaries)", "A / F7", Qt::Key_3, MenuActionType::OpenSubmenu, -1, "trial_balance_options_hub"),
         MenuItem("4. GST Compliance Dashboard (GSTR-1, 2A Match, 3B)", "Alt+G", Qt::Key_4, MenuActionType::OpenView, 34),
         MenuItem("5. Mandi Form M & Statutory Returns (HSAMB)", "Alt+M", Qt::Key_5, MenuActionType::OpenView, 20),
-        MenuItem("6. Interest Calculation Engine (Bulk & Party-wise)", "Alt+A", Qt::Key_6, MenuActionType::OpenView, 25),
+        MenuItem("6. Interest Calculator (Bulk & Party-wise)", "Alt+A", Qt::Key_6, MenuActionType::OpenView, 25),
         MenuItem("7. Capital Accounts Summary", "C", Qt::Key_7, MenuActionType::OpenView, 40),
         MenuItem("8. Depreciation Chart & Schedule", "E", Qt::Key_8, MenuActionType::OpenSubmenu, -1, "depreciation_options_hub"),
         MenuItem("9. Closing Stock Valuation & Year-End Audit", "Alt+C", Qt::Key_9, MenuActionType::OpenView, 36)

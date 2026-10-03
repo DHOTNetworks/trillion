@@ -347,7 +347,7 @@ void DatabaseManager::ensureTablesExist() {
         "auto_adjust_name INTEGER DEFAULT 1,"
         "item_narration TEXT,"
         "capital_goods INTEGER DEFAULT 0,"
-        "hsn_code TEXT DEFAULT '1006',"
+        "hsn_code TEXT DEFAULT '',"
         "gst_rate REAL DEFAULT 5.0,"
         "cess_rate REAL DEFAULT 0.0,"
         "vat_rate REAL DEFAULT 0.0,"

@@ -551,7 +551,7 @@ void DebitCreditNoteWidget::onStockItemConfigured(int row, const QVariantMap& it
     m_isUpdatingTable = true;
 
     QString name = itemData.value("name").toString();
-    QString hsn = itemData.value("hsn_code", "1006").toString();
+    QString hsn = itemData.value("hsn_code").toString();
     QString unit = itemData.value("unit", "QTL").toString();
     double gst = itemData.value("gst_rate", 5.0).toDouble();
     double rate = (m_noteTypeCombo->currentIndex() == 0)
@@ -588,7 +588,7 @@ void DebitCreditNoteWidget::onAddItemRow() {
     };
 
     m_itemsTable->setItem(r, 0, createCell("", Qt::AlignLeft, true)); // Item Name
-    m_itemsTable->setItem(r, 1, createCell("1006", Qt::AlignCenter, true)); // HSN
+    m_itemsTable->setItem(r, 1, createCell("", Qt::AlignCenter, true)); // HSN
     m_itemsTable->setItem(r, 2, createCell("QTL", Qt::AlignCenter, true)); // Unit
     m_itemsTable->setItem(r, 3, createCell("0", Qt::AlignRight, true)); // Bags
     m_itemsTable->setItem(r, 4, createCell("0.00", Qt::AlignRight, true)); // Weight
@@ -774,7 +774,7 @@ void DebitCreditNoteWidget::onSaveClicked() {
         for (int r = 0; r < m_itemsTable->rowCount(); ++r) {
             QString iName = m_itemsTable->item(r, 0) ? m_itemsTable->item(r, 0)->text().trimmed() : "";
             if (iName.isEmpty()) continue;
-            QString hsn = m_itemsTable->item(r, 1) ? m_itemsTable->item(r, 1)->text().trimmed() : "1006";
+            QString hsn = m_itemsTable->item(r, 1) ? m_itemsTable->item(r, 1)->text().trimmed() : "";
             int bags = m_itemsTable->item(r, 3) ? m_itemsTable->item(r, 3)->text().toInt() : 0;
             double wt = m_itemsTable->item(r, 4) ? m_itemsTable->item(r, 4)->text().toDouble() : 0.0;
             double rate = m_itemsTable->item(r, 5) ? m_itemsTable->item(r, 5)->text().toDouble() : 0.0;

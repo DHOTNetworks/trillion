@@ -1455,8 +1455,7 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
 
         double cstWithoutCForm = parseDoubleVal(getField(item, "CSTWithoutCForm"));
 
-        std::string hsn = cleanText(getField(item, "HSNCode", "1006"));
-        if (hsn.empty()) hsn = "1006";
+        std::string hsn = cleanText(getField(item, "HSNCode", ""));
 
         std::string gstSlab = cleanText(getField(item, "GSTRateSlab"));
         std::string gstSlabLower = toLowerStr(gstSlab);
@@ -1693,8 +1692,8 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
         int iCode = parseIntVal(getField(st, "ItemCode"));
         auto itItem = itemCodeMap.find(iCode);
         int itemId = (itItem != itemCodeMap.end()) ? itItem->second.id : 1;
-        std::string itemName = (itItem != itemCodeMap.end()) ? itItem->second.name : "Rice Basmati(Non Branded)";
-        std::string hsn = (itItem != itemCodeMap.end()) ? itItem->second.hsn : "1006";
+        std::string itemName = (itItem != itemCodeMap.end()) ? itItem->second.name : "Commodity";
+        std::string hsn = (itItem != itemCodeMap.end()) ? itItem->second.hsn : "";
         double defaultGst = (itItem != itemCodeMap.end()) ? itItem->second.gst_rate : 5.0;
 
         int bags = parseIntVal(getField(st, "Bags"));

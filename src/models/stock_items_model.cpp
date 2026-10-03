@@ -199,7 +199,7 @@ bool StockItemsModel::save_stock_item_full(const QVariantMap& d) {
     QString itemNarration = d.value("item_narration").toString().trimmed();
     int capitalGoods = d.value("capital_goods", 0).toInt();
 
-    QString hsnCode = d.value("hsn_code", "1006").toString().trimmed();
+    QString hsnCode = d.value("hsn_code", "").toString().trimmed();
     double gstRate = d.value("gst_rate", 0.0).toDouble();
     double cessRate = d.value("cess_rate", 0.0).toDouble();
     double vatRate = d.value("vat_rate", 0.0).toDouble();
@@ -374,7 +374,7 @@ bool StockItemsModel::update_stock_item_full(int itemId, const QVariantMap& d) {
     QString itemNarration = d.value("item_narration").toString().trimmed();
     int capitalGoods = d.value("capital_goods", 0).toInt();
 
-    QString hsnCode = d.value("hsn_code", "1006").toString().trimmed();
+    QString hsnCode = d.value("hsn_code", "").toString().trimmed();
     double gstRate = d.value("gst_rate", 0.0).toDouble();
     double cessRate = d.value("cess_rate", 0.0).toDouble();
     double vatRate = d.value("vat_rate", 0.0).toDouble();

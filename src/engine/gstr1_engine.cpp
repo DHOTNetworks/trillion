@@ -36,8 +36,8 @@ Gstr1ReturnPayload Gstr1Engine::generateFromDatabase(
         "  COALESCE(s.place_of_supply, '') AS place_of_supply, "
         "  s.total_amount, "
         "  COALESCE(s.gst_amount, s.cgst_amount + s.sgst_amount + s.igst_amount, 0.0) AS tax_amount, "
-        "  COALESCE(si.item_name, s.item_name, stk.name, 'Rice Commodity') AS item_name, "
-        "  COALESCE(stk.hsn_code, s.hsn_code, '1006') AS hsn_code, "
+        "  COALESCE(si.item_name, s.item_name, stk.name, 'Commodity') AS item_name, "
+        "  COALESCE(stk.hsn_code, s.hsn_code, '') AS hsn_code, "
         "  COALESCE(si.weight_qtl, s.weight_qtl, 0.0) AS quantity, "
         "  COALESCE(si.rate_per_qtl, s.rate_per_qtl, 0.0) AS rate, "
         "  COALESCE(si.gst_pct, stk.gst_rate, s.gst_pct, 0.0) AS tax_rate, "
@@ -89,7 +89,7 @@ Gstr1ReturnPayload Gstr1Engine::generateFromDatabase(
 
         // Aggregate HSN
         QString hsn = r.value("hsn_code").toString().trimmed();
-        if (hsn.isEmpty()) hsn = "1006"; // Default Rice / Agricultural HSN
+        if (hsn.isEmpty()) hsn = "N/A";
         
         double qty = r.value("quantity").toDouble();
         double itemAmt = r.value("amount").toDouble();

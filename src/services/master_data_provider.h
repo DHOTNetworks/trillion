@@ -65,7 +65,7 @@ public:
     // 6. Tax Rates & Statutory Charges (Dami, Market Fee, HRDF, GST, TDS, TCS)
     QVariantList getActiveTaxRates();
     QVariantList getMandiChargeDefinitions();
-    double getStandardTaxRate(const QString& hsnCode = "1006");
+    double getStandardTaxRate(const QString& hsnCode = QString());
     double getItemGstRate(const QString& itemName, int itemId = 0);
     QString getItemHsnCode(const QString& itemName, int itemId = 0);
     double getTcsRate(bool hasPan = true);
