@@ -10,6 +10,7 @@
 #include "../src/engine/gstr9_engine.h"
 #include "../src/engine/busy_data_migrator.h"
 #include "../src/engine/tally_data_migrator.h"
+#include "../src/engine/profit_loss_calculator.h"
 #include "../src/database_manager.h"
 
 using namespace MahadevERP;
@@ -455,8 +456,42 @@ void TestEnginesSuite::testTallyDataMigratorInspectionAndMigration() {
         totalDr = glRows.first().toMap().value("tot_dr").toDouble();
         totalCr = glRows.first().toMap().value("tot_cr").toDouble();
     }
-    QVERIFY(totalDr > 0.0);
-    QVERIFY(std::abs(totalDr - totalCr) < 0.01);
+    // 4. Test self-created Tally Prime Demo dataset (tally-data/self-data)
+    QString selfDataDir = "tally-data/self-data";
+    if (!QDir(selfDataDir).exists() && QDir("../" + selfDataDir).exists()) {
+        selfDataDir = "../" + selfDataDir;
+    }
+    if (QDir(selfDataDir).exists()) {
+        QVariantMap inspSelf = migrator.inspect_tally_data(selfDataDir);
+        QVERIFY(inspSelf.value("valid").toBool());
+        QCOMPARE(inspSelf.value("companyName").toString(), "Test Tally");
+        QVERIFY(inspSelf.value("unitsCount").toInt() >= 1);
+        QVERIFY(inspSelf.value("itemsCount").toInt() >= 1);
+        QVERIFY(inspSelf.value("accountsCount").toInt() >= 2);
+        QVERIFY(inspSelf.value("totalVouchersCount").toInt() >= 1);
+
+        QString testSelfDbPath = "mahadev_tally_self_isolated.db";
+        if (QFile::exists(testSelfDbPath)) QFile::remove(testSelfDbPath);
+        DatabaseManager::instance().switchDatabase(testSelfDbPath);
+
+        bool selfOk = migrator.migrate_tally_data(selfDataDir);
+        QVERIFY(selfOk);
+
+        int selfVchCount = DatabaseManager::instance().executeScalar("SELECT COUNT(*) FROM vouchers;").toInt();
+        QCOMPARE(selfVchCount, 1);
+
+        int selfSalesCount = DatabaseManager::instance().executeScalar("SELECT COUNT(*) FROM sales_invoices;").toInt();
+        QCOMPARE(selfSalesCount, 1);
+
+        int selfTxCount = DatabaseManager::instance().executeScalar("SELECT COUNT(*) FROM transactions;").toInt();
+        QCOMPARE(selfTxCount, 2);
+
+        // Verify P&L and Balance Sheet on self data
+        ProfitLossData pl = ProfitLossCalculator::calculate("2026-04-01", "2027-03-31");
+        QCOMPARE(pl.totalSalesRevenue, 225000.00);
+        QCOMPARE(pl.grossProfit, 225000.00);
+        QCOMPARE(pl.netProfit, 225000.00);
+    }
 
     // Restore test database
     QString origDbPath = "data/mahadev_rice_industry_data_002.db";

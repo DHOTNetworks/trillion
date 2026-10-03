@@ -671,6 +671,19 @@ set(ENGINE_TEST_SOURCES
     src/engine/busy_data_migrator.cpp
     src/engine/tally_data_migrator.h
     src/engine/tally_data_migrator.cpp
+    src/engine/profit_loss_calculator.h
+    src/engine/profit_loss_calculator.cpp
+    src/engine/balance_sheet_calculator.h
+    src/engine/balance_sheet_calculator.cpp
+    src/engine/accounting_engine.h
+    src/engine/stock_valuation_engine.h
+    src/engine/stock_valuation_engine.cpp
+    src/engine/fiscal_year_helper.h
+    src/engine/fiscal_year_helper.cpp
+    src/services/accounting_date_service.h
+    src/services/accounting_date_service.cpp
+    src/services/financial_math_service.h
+    src/services/financial_math_service.cpp
     src/models/account_classifier.h
     src/models/account_classifier.cpp
     src/database_manager.h
