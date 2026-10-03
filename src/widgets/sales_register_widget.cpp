@@ -171,15 +171,17 @@ void SalesRegisterWidget::setupUi() {
     m_table->horizontalHeader()->setSectionResizeMode(9, QHeaderView::ResizeToContents);
     m_table->horizontalHeader()->setSectionResizeMode(10, QHeaderView::ResizeToContents);
     m_table->verticalHeader()->setVisible(false);
+    m_table->verticalHeader()->setDefaultSectionSize(30);
+    m_table->setShowGrid(true);
     m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_table->setSelectionMode(QAbstractItemView::SingleSelection);
     m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_table->setAlternatingRowColors(true);
     m_table->setStyleSheet(
-        "QTableWidget { background-color: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 8px; gridline-color: #F1F5F9; font-size: 12px; color: #0F172A; }"
-        "QTableWidget::item { padding: 6px 10px; }"
-        "QTableWidget::item:selected { background-color: #EFF6FF; color: #1E3A8A; font-weight: bold; }"
-        "QHeaderView::section { background-color: #0F172A; color: #FFFFFF; font-weight: 800; font-size: 11px; padding: 6px 10px; border: none; }"
+        "QTableWidget { background-color: #FFFFFF; alternate-background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 8px; gridline-color: #F1F5F9; font-size: 12.5px; color: #0F172A; }"
+        "QTableWidget::item { padding: 4px 8px; }"
+        "QTableWidget::item:selected { background-color: #EFF6FF; color: #1D4ED8; font-weight: bold; }"
+        "QHeaderView::section { background-color: #F1F5F9; color: #1E293B; font-weight: 800; font-size: 12px; padding: 8px 10px; border: none; border-bottom: 2px solid #CBD5E1; border-right: 1px solid #E2E8F0; }"
     );
     connect(m_table, &QTableWidget::cellDoubleClicked, this, &SalesRegisterWidget::onTableDoubleClicked);
     mainLayout->addWidget(m_table, 1);
@@ -291,41 +293,58 @@ void SalesRegisterWidget::populateTable() {
         itemInv->setData(Qt::UserRole, id);
         itemInv->setData(Qt::UserRole + 1, vchNo);
         itemInv->setData(Qt::UserRole + 2, dateVal);
-        itemInv->setFont(QFont("Segoe UI", 9, QFont::Bold));
+        itemInv->setFont(QFont("Segoe UI", 10, QFont::Bold));
         itemInv->setForeground(QBrush(QColor("#1D4ED8")));
         m_table->setItem(row, 0, itemInv);
 
-        m_table->setItem(row, 1, new QTableWidgetItem(FiscalYearHelper::formatDisplayDate(dateVal)));
-        m_table->setItem(row, 2, new QTableWidgetItem(custVal));
-        m_table->setItem(row, 3, new QTableWidgetItem(itemVal));
+        auto* itemDate = new QTableWidgetItem(FiscalYearHelper::formatDisplayDate(dateVal));
+        itemDate->setFont(QFont("Segoe UI", 9));
+        m_table->setItem(row, 1, itemDate);
+
+        auto* itemCust = new QTableWidgetItem(custVal);
+        itemCust->setFont(QFont("Segoe UI", 10, QFont::Bold));
+        itemCust->setForeground(QBrush(QColor("#0F172A")));
+        m_table->setItem(row, 2, itemCust);
+
+        auto* itemCommodity = new QTableWidgetItem(itemVal);
+        itemCommodity->setFont(QFont("Segoe UI", 9));
+        m_table->setItem(row, 3, itemCommodity);
 
         auto* itemBags = new QTableWidgetItem(QString::number(bags));
         itemBags->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        itemBags->setFont(QFont("Segoe UI", 9));
         m_table->setItem(row, 4, itemBags);
 
         auto* itemWt = new QTableWidgetItem(QString::number(weight, 'f', 2));
         itemWt->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        itemWt->setFont(QFont("Segoe UI", 9));
         m_table->setItem(row, 5, itemWt);
 
         auto* itemRate = new QTableWidgetItem(QString::number(rate, 'f', 2));
         itemRate->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        itemRate->setFont(QFont("Segoe UI", 9));
         m_table->setItem(row, 6, itemRate);
 
         auto* itemTax = new QTableWidgetItem(QString::number(taxable, 'f', 2));
         itemTax->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        itemTax->setFont(QFont("Segoe UI", 9));
         m_table->setItem(row, 7, itemTax);
 
         auto* itemGst = new QTableWidgetItem(QString::number(gst, 'f', 2));
         itemGst->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        itemGst->setFont(QFont("Segoe UI", 9));
         m_table->setItem(row, 8, itemGst);
 
         auto* itemTot = new QTableWidgetItem(QString::number(gross, 'f', 2));
         itemTot->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        itemTot->setFont(QFont("Segoe UI", 9, QFont::Bold));
+        itemTot->setFont(QFont("Segoe UI", 10, QFont::Bold));
         itemTot->setForeground(QBrush(QColor("#15803D")));
         m_table->setItem(row, 9, itemTot);
 
-        m_table->setItem(row, 10, new QTableWidgetItem(veh));
+        auto* itemVeh = new QTableWidgetItem(veh);
+        itemVeh->setFont(QFont("Segoe UI", 9));
+        itemVeh->setForeground(QBrush(QColor("#64748B")));
+        m_table->setItem(row, 10, itemVeh);
         row++;
     }
 

@@ -209,32 +209,35 @@ void CashBankFlowWidget::setupUi() {
     m_table->setSelectionMode(QAbstractItemView::SingleSelection);
     m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_table->verticalHeader()->setVisible(false);
-    m_table->verticalHeader()->setDefaultSectionSize(28);
+    m_table->verticalHeader()->setDefaultSectionSize(30);
+    m_table->setShowGrid(true);
 
     m_table->setStyleSheet(
         "QTableWidget {"
         "  background-color: #FFFFFF;"
         "  alternate-background-color: #F8FAFC;"
         "  border: 1px solid #CBD5E1;"
-        "  border-radius: 6px;"
-        "  gridline-color: #E2E8F0;"
-        "  font-size: 12px;"
+        "  border-radius: 8px;"
+        "  gridline-color: #F1F5F9;"
+        "  font-size: 12.5px;"
         "  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;"
         "  color: #0F172A;"
         "}"
+        "QTableWidget::item { padding: 4px 8px; }"
         "QTableWidget::item:selected {"
-        "  background-color: #2563EB;"
-        "  color: #FFFFFF;"
-        "  font-weight: 700;"
+        "  background-color: #EFF6FF;"
+        "  color: #1D4ED8;"
+        "  font-weight: bold;"
         "}"
         "QHeaderView::section {"
-        "  background-color: #0F172A;"
-        "  color: #FFFFFF;"
-        "  font-weight: 700;"
+        "  background-color: #F1F5F9;"
+        "  color: #1E293B;"
+        "  font-weight: 800;"
         "  font-size: 12px;"
-        "  padding: 8px 8px;"
+        "  padding: 8px 10px;"
         "  border: none;"
-        "  border-right: 1px solid #334155;"
+        "  border-bottom: 2px solid #CBD5E1;"
+        "  border-right: 1px solid #E2E8F0;"
         "}"
     );
 
@@ -533,7 +536,7 @@ void CashBankFlowWidget::onExportPdf() {
     html += "h2 { text-align: center; margin-bottom: 4px; color: #0F172A; }";
     html += "h4 { text-align: center; margin-top: 0px; color: #64748B; font-weight: 500; }";
     html += "table { width: 100%; border-collapse: collapse; margin-top: 15px; }";
-    html += "th { background-color: #0F172A; color: #FFFFFF; font-weight: bold; font-size: 11px; padding: 6px; border: 1px solid #CBD5E1; }";
+    html += "th { background-color: #F1F5F9; color: #1E293B; font-weight: bold; font-size: 11px; padding: 6px; border: 1px solid #CBD5E1; }";
     html += "td { font-size: 10.5px; padding: 5px; border: 1px solid #E2E8F0; }";
     html += "tr:nth-child(even) { background-color: #F8FAFC; }";
     html += ".num { text-align: right; }";

@@ -90,13 +90,15 @@ void TaxChallanCreationWidget::setupUi()
     m_vouchersTable->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
     m_vouchersTable->horizontalHeader()->setSectionResizeMode(4, QHeaderView::Stretch);
     m_vouchersTable->verticalHeader()->setVisible(false);
+    m_vouchersTable->verticalHeader()->setDefaultSectionSize(30);
+    m_vouchersTable->setShowGrid(true);
     m_vouchersTable->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_vouchersTable->setAlternatingRowColors(true);
     m_vouchersTable->setStyleSheet(
-        "QTableWidget { background-color: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 6px; gridline-color: #F1F5F9; font-size: 12px; color: #0F172A; }"
-        "QTableWidget::item { padding: 5px 8px; }"
-        "QTableWidget::item:selected { background-color: #EFF6FF; color: #1E3A8A; font-weight: bold; }"
-        "QHeaderView::section { background-color: #0F172A; color: #FFFFFF; font-weight: 800; font-size: 11px; padding: 6px 8px; border: none; }"
+        "QTableWidget { background-color: #FFFFFF; alternate-background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 8px; gridline-color: #F1F5F9; font-size: 12.5px; color: #0F172A; }"
+        "QTableWidget::item { padding: 4px 8px; }"
+        "QTableWidget::item:selected { background-color: #EFF6FF; color: #1D4ED8; font-weight: bold; }"
+        "QHeaderView::section { background-color: #F1F5F9; color: #1E293B; font-weight: 800; font-size: 12px; padding: 8px 10px; border: none; border-bottom: 2px solid #CBD5E1; border-right: 1px solid #E2E8F0; }"
     );
     connect(m_vouchersTable, &QTableWidget::itemChanged, this, &TaxChallanCreationWidget::onTableItemChanged);
     tableLayout->addWidget(m_vouchersTable, 1);

@@ -33,106 +33,107 @@ void ProfitLossWidget::setupUi() {
     mainLayout->setSpacing(4);
 
     // ==========================================
-    // 1. TOP FIRM & TITLE BANNER (BAHI KHATA STYLE)
+    // 1. TOP FIRM & TITLE BANNER
     // ==========================================
     QLabel* compBanner = new QLabel(this);
-    compBanner->setFixedHeight(28);
+    compBanner->setFixedHeight(32);
     compBanner->setAlignment(Qt::AlignCenter);
     compBanner->setStyleSheet(
-        "background-color: #86EFAC; color: #064E3B; font-size: 14.5px; font-weight: 900; "
-        "font-style: italic; border: 1px solid #4ADE80; border-radius: 4px; letter-spacing: 0.5px;"
+        "background-color: #F0FDF4; color: #166534; font-size: 14.5px; font-weight: 800; "
+        "border: 1px solid #BBF7D0; border-radius: 6px; letter-spacing: 0.3px;"
     );
     compBanner->setText("—");
     m_firmLabel = compBanner;
     mainLayout->addWidget(compBanner);
 
-    // Sub-header Bar (Peach/Cream)
+    // Sub-header Bar (Modern White Card)
     QFrame* subHeaderCard = new QFrame(this);
-    subHeaderCard->setFixedHeight(46);
+    subHeaderCard->setFixedHeight(48);
     subHeaderCard->setStyleSheet(
-        "background-color: #FED7AA; border: 1px solid #FDBA74; border-radius: 4px; padding: 2px 8px;"
+        "QFrame { background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; }"
+        "QLabel { border: none; background: transparent; }"
     );
     QHBoxLayout* subHeaderLayout = new QHBoxLayout(subHeaderCard);
-    subHeaderLayout->setContentsMargins(6, 0, 6, 0);
+    subHeaderLayout->setContentsMargins(12, 0, 12, 0);
     subHeaderLayout->setSpacing(10);
 
-    QLabel* f5Hint = new QLabel("(F5: Extract/UnExtract Group)", subHeaderCard);
-    f5Hint->setStyleSheet("color: #1D4ED8; font-size: 12px; font-weight: 700; background: transparent;");
+    QLabel* f5Hint = new QLabel("F5: Extract Group", subHeaderCard);
+    f5Hint->setStyleSheet("color: #64748B; font-size: 11.5px; font-weight: 700; background: transparent;");
     subHeaderLayout->addWidget(f5Hint);
 
     QVBoxLayout* centerTitleBox = new QVBoxLayout();
-    centerTitleBox->setContentsMargins(0, 2, 0, 2);
-    centerTitleBox->setSpacing(0);
+    centerTitleBox->setContentsMargins(0, 3, 0, 3);
+    centerTitleBox->setSpacing(1);
     m_titleLabel = new QLabel("Trading and Profit & Loss A/c (Provisional)", subHeaderCard);
     m_titleLabel->setAlignment(Qt::AlignCenter);
-    m_titleLabel->setStyleSheet("font-size: 15px; font-weight: 900; font-style: italic; color: #0F172A; background: transparent;");
+    m_titleLabel->setStyleSheet("font-size: 15px; font-weight: 800; color: #0F172A; background: transparent;");
     centerTitleBox->addWidget(m_titleLabel);
 
     m_fyBadge = new QLabel("(From 01/04/2025 To 31/03/2026)", subHeaderCard);
     m_fyBadge->setAlignment(Qt::AlignCenter);
-    m_fyBadge->setStyleSheet("font-size: 12.5px; font-weight: 700; color: #1E293B; background: transparent;");
+    m_fyBadge->setStyleSheet("font-size: 12px; font-weight: 600; color: #475569; background: transparent;");
     centerTitleBox->addWidget(m_fyBadge);
     subHeaderLayout->addLayout(centerTitleBox, 1);
 
     // Date range & Buttons
     QHBoxLayout* btnBox = new QHBoxLayout();
-    btnBox->setSpacing(4);
+    btnBox->setSpacing(5);
 
     m_fromDateEdit = new AccountingDateDisplay(subHeaderCard);
-    m_fromDateEdit->setFixedWidth(100);
-    m_fromDateEdit->setFixedHeight(28);
+    m_fromDateEdit->setFixedWidth(105);
+    m_fromDateEdit->setFixedHeight(30);
     m_fromDateEdit->setStyleSheet(
-        "QLabel { background: #FFFFFF; border: 1.5px solid #D97706; border-radius: 4px; "
-        "padding: 2px 4px; font-size: 11.5px; font-weight: 800; color: #78350F; } "
-        "QLabel:hover { border: 2px solid #B45309; background: #FFFBEB; }"
+        "QLabel { background: #FFFFFF; border: 1.5px solid #CBD5E1; border-radius: 6px; "
+        "padding: 2px 6px; font-size: 12px; font-weight: 700; color: #0F172A; } "
+        "QLabel:hover { border: 1.5px solid #2563EB; background: #F8FAFC; }"
     );
     connect(m_fromDateEdit, &AccountingDateDisplay::dateChanged, this, &ProfitLossWidget::onDateFilterChanged);
     connect(m_fromDateEdit, &AccountingDateDisplay::clicked, this, &ProfitLossWidget::requestAccountingPeriodDialog);
     btnBox->addWidget(m_fromDateEdit);
 
     QLabel* toSep = new QLabel("to", subHeaderCard);
-    toSep->setStyleSheet("font-weight: bold; color: #78350F; background: transparent; font-size: 11px;");
+    toSep->setStyleSheet("font-weight: bold; color: #64748B; background: transparent; font-size: 11.5px;");
     btnBox->addWidget(toSep);
 
     m_toDateEdit = new AccountingDateDisplay(subHeaderCard);
-    m_toDateEdit->setFixedWidth(100);
-    m_toDateEdit->setFixedHeight(28);
+    m_toDateEdit->setFixedWidth(105);
+    m_toDateEdit->setFixedHeight(30);
     m_toDateEdit->setStyleSheet(
-        "QLabel { background: #FFFFFF; border: 1.5px solid #D97706; border-radius: 4px; "
-        "padding: 2px 4px; font-size: 11.5px; font-weight: 800; color: #78350F; } "
-        "QLabel:hover { border: 2px solid #B45309; background: #FFFBEB; }"
+        "QLabel { background: #FFFFFF; border: 1.5px solid #CBD5E1; border-radius: 6px; "
+        "padding: 2px 6px; font-size: 12px; font-weight: 700; color: #0F172A; } "
+        "QLabel:hover { border: 1.5px solid #2563EB; background: #F8FAFC; }"
     );
     connect(m_toDateEdit, &AccountingDateDisplay::dateChanged, this, &ProfitLossWidget::onDateFilterChanged);
     connect(m_toDateEdit, &AccountingDateDisplay::clicked, this, &ProfitLossWidget::requestAccountingPeriodDialog);
     btnBox->addWidget(m_toDateEdit);
 
     m_periodBtn = new KbdBadgeButton("Period", "F2", QColor("#F8FAFC"), QColor("#F1F5F9"), QColor("#0F172A"), QColor("#CBD5E1"), subHeaderCard);
-    m_periodBtn->setFixedHeight(28);
+    m_periodBtn->setFixedHeight(30);
     connect(m_periodBtn, &QPushButton::clicked, this, &ProfitLossWidget::requestAccountingPeriodDialog);
     btnBox->addWidget(m_periodBtn);
 
     m_expandBtn = new KbdBadgeButton("Expand", "F5", QColor("#F8FAFC"), QColor("#F1F5F9"), QColor("#0F172A"), QColor("#CBD5E1"), subHeaderCard);
-    m_expandBtn->setFixedHeight(28);
+    m_expandBtn->setFixedHeight(30);
     connect(m_expandBtn, &QPushButton::clicked, this, &ProfitLossWidget::expandAllGroups);
     btnBox->addWidget(m_expandBtn);
 
     m_collapseBtn = new KbdBadgeButton("Collapse", "F6", QColor("#F8FAFC"), QColor("#F1F5F9"), QColor("#0F172A"), QColor("#CBD5E1"), subHeaderCard);
-    m_collapseBtn->setFixedHeight(28);
+    m_collapseBtn->setFixedHeight(30);
     connect(m_collapseBtn, &QPushButton::clicked, this, &ProfitLossWidget::collapseAllGroups);
     btnBox->addWidget(m_collapseBtn);
 
-    m_printBtn = new KbdBadgeButton("Print", "Ctrl+P", QColor("#F8FAFC"), QColor("#F1F5F9"), QColor("#0F172A"), QColor("#CBD5E1"), subHeaderCard);
-    m_printBtn->setFixedHeight(28);
+    m_printBtn = new KbdBadgeButton("Print", "Ctrl+P", QColor("#2563EB"), QColor("#1D4ED8"), QColor("#FFFFFF"), QColor("#2563EB"), subHeaderCard);
+    m_printBtn->setFixedHeight(30);
     connect(m_printBtn, &QPushButton::clicked, this, &ProfitLossWidget::printReport);
     btnBox->addWidget(m_printBtn);
 
-    m_pdfBtn = new KbdBadgeButton("PDF", "Ctrl+E", QColor("#DC2626"), QColor("#B91C1C"), QColor("#FFFFFF"), QColor("#991B1B"), subHeaderCard);
-    m_pdfBtn->setFixedHeight(28);
+    m_pdfBtn = new KbdBadgeButton("PDF", "Ctrl+E", QColor("#059669"), QColor("#047857"), QColor("#FFFFFF"), QColor("#059669"), subHeaderCard);
+    m_pdfBtn->setFixedHeight(30);
     connect(m_pdfBtn, &QPushButton::clicked, this, &ProfitLossWidget::exportPdf);
     btnBox->addWidget(m_pdfBtn);
 
-    m_backBtn = new KbdBadgeButton("Back", "Esc", QColor("#64748B"), QColor("#475569"), QColor("#FFFFFF"), QColor("#334155"), subHeaderCard);
-    m_backBtn->setFixedHeight(28);
+    m_backBtn = new KbdBadgeButton("Back", "Esc", QColor("#EF4444"), QColor("#DC2626"), QColor("#FFFFFF"), QColor("#EF4444"), subHeaderCard);
+    m_backBtn->setFixedHeight(30);
     connect(m_backBtn, &QPushButton::clicked, this, &ProfitLossWidget::backRequested);
     btnBox->addWidget(m_backBtn);
 
@@ -143,20 +144,20 @@ void ProfitLossWidget::setupUi() {
     // 2. MAIN SPLIT TREE VIEWS (T-FORMAT TRADING & P&L)
     // ==========================================
     m_splitter = new QSplitter(Qt::Horizontal, this);
-    m_splitter->setHandleWidth(3);
-    m_splitter->setStyleSheet("QSplitter::handle { background-color: #94A3B8; }");
+    m_splitter->setHandleWidth(4);
+    m_splitter->setStyleSheet("QSplitter::handle { background-color: #E2E8F0; border-radius: 2px; }");
 
     // Left Side: Expenses Tree (Dr)
     QWidget* expContainer = new QWidget(m_splitter);
     QVBoxLayout* expLayout = new QVBoxLayout(expContainer);
-    expLayout->setContentsMargins(0, 0, 1, 0);
+    expLayout->setContentsMargins(0, 0, 2, 0);
     expLayout->setSpacing(0);
 
     m_expensesTree = new QTreeWidget(expContainer);
     m_expensesTree->setHeaderLabels({"Trading & P&L Particulars (Expenses / Dr)", "Amount"});
     m_expensesTree->header()->setSectionResizeMode(0, QHeaderView::Stretch);
     m_expensesTree->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
-    m_expensesTree->setAlternatingRowColors(false);
+    m_expensesTree->setAlternatingRowColors(true);
     m_expensesTree->setRootIsDecorated(false);
     m_expensesTree->setAnimated(false);
     m_expensesTree->setUniformRowHeights(false);
@@ -171,14 +172,14 @@ void ProfitLossWidget::setupUi() {
     // Right Side: Incomes Tree (Cr)
     QWidget* incContainer = new QWidget(m_splitter);
     QVBoxLayout* incLayout = new QVBoxLayout(incContainer);
-    incLayout->setContentsMargins(1, 0, 0, 0);
+    incLayout->setContentsMargins(2, 0, 0, 0);
     incLayout->setSpacing(0);
 
     m_incomesTree = new QTreeWidget(incContainer);
     m_incomesTree->setHeaderLabels({"Trading & P&L Particulars (Incomes / Cr)", "Amount"});
     m_incomesTree->header()->setSectionResizeMode(0, QHeaderView::Stretch);
     m_incomesTree->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
-    m_incomesTree->setAlternatingRowColors(false);
+    m_incomesTree->setAlternatingRowColors(true);
     m_incomesTree->setRootIsDecorated(false);
     m_incomesTree->setAnimated(false);
     m_incomesTree->setUniformRowHeights(false);
@@ -194,24 +195,25 @@ void ProfitLossWidget::setupUi() {
     mainLayout->addWidget(m_splitter, 1);
 
     // ==========================================
-    // 3. FOOTER SUMMARY (BAHI KHATA GRAND TOTAL STYLE)
+    // 3. FOOTER SUMMARY
     // ==========================================
     QFrame* footerCard = new QFrame(this);
-    footerCard->setFixedHeight(34);
+    footerCard->setFixedHeight(40);
     footerCard->setStyleSheet(
-        "background-color: #FED7AA; border: 1.5px solid #FDBA74; border-radius: 4px; padding: 2px 8px;"
+        "QFrame { background-color: #FFFFFF; border: 1.5px solid #CBD5E1; border-radius: 8px; }"
+        "QLabel { border: none; background: transparent; }"
     );
 
     QHBoxLayout* footerLayout = new QHBoxLayout(footerCard);
-    footerLayout->setContentsMargins(10, 0, 10, 0);
-    footerLayout->setSpacing(20);
+    footerLayout->setContentsMargins(16, 0, 16, 0);
+    footerLayout->setSpacing(24);
 
     m_grossProfitBadge = new QLabel("Gross Profit: ₹ 0.00", footerCard);
-    m_grossProfitBadge->setStyleSheet("color: #92400E; font-size: 13.5px; font-weight: 900; background: transparent;");
+    m_grossProfitBadge->setStyleSheet("color: #0F172A; font-size: 13.5px; font-weight: 800; background: transparent;");
     footerLayout->addWidget(m_grossProfitBadge);
 
     m_netProfitBadge = new QLabel("Net Profit: ₹ 0.00", footerCard);
-    m_netProfitBadge->setStyleSheet("color: #DC2626; font-size: 14px; font-weight: 900; background: transparent;");
+    m_netProfitBadge->setStyleSheet("color: #16A34A; font-size: 14.5px; font-weight: 900; background: transparent;");
     footerLayout->addWidget(m_netProfitBadge);
 
     footerLayout->addStretch(1);
@@ -219,14 +221,14 @@ void ProfitLossWidget::setupUi() {
     mainLayout->addWidget(footerCard);
 
     // ==========================================
-    // 4. BOTTOM COMMAND KEY STRIP (DEEP MAROON)
+    // 4. BOTTOM COMMAND KEY STRIP
     // ==========================================
-    m_keyLegendLbl = new QLabel("Alt+B: Balance Sheet  -  Alt+M: Ldgr Alteration  -  Alt+F2: Date Criteria  -  Alt+C: Calculator  -  Alt+P: Print Report", this);
+    m_keyLegendLbl = new QLabel("Alt+B: Balance Sheet  •  Alt+M: Ledger Alteration  •  F2: Period  •  Ctrl+P: Print  •  Esc: Back", this);
     m_keyLegendLbl->setFixedHeight(26);
     m_keyLegendLbl->setAlignment(Qt::AlignCenter);
     m_keyLegendLbl->setStyleSheet(
-        "background-color: #7F1D1D; color: #FFFFFF; font-size: 12px; font-weight: 700; "
-        "padding: 2px; border-radius: 3px; letter-spacing: 0.3px;"
+        "background-color: #1E293B; color: #94A3B8; font-size: 11.5px; font-weight: 600; "
+        "padding: 2px; border-radius: 6px; letter-spacing: 0.3px; border: none;"
     );
     mainLayout->addWidget(m_keyLegendLbl);
 }
@@ -234,30 +236,36 @@ void ProfitLossWidget::setupUi() {
 void ProfitLossWidget::applyCustomStyles() {
     QString treeStyle =
         "QTreeWidget {"
-        "    background-color: #FFEDD5;"
+        "    background-color: #FFFFFF;"
+        "    alternate-background-color: #F8FAFC;"
         "    border: 1px solid #CBD5E1;"
-        "    font-size: 13.5px;"
-        "    color: #000000;"
+        "    border-radius: 8px;"
+        "    font-size: 12.5px;"
+        "    color: #0F172A;"
+        "    outline: none;"
         "}"
         "QTreeWidget::item {"
-        "    padding: 3px 6px;"
-        "    min-height: 22px;"
+        "    padding: 5px 8px;"
+        "    min-height: 26px;"
+        "    border-bottom: 1px solid #F1F5F9;"
         "}"
         "QTreeWidget::item:hover {"
-        "    background-color: #FED7AA;"
+        "    background-color: #F1F5F9;"
         "}"
         "QTreeWidget::item:selected {"
-        "    background-color: #818CF8;"
-        "    color: #000000;"
+        "    background-color: #EFF6FF;"
+        "    color: #1D4ED8;"
         "    font-weight: bold;"
         "}"
         "QHeaderView::section {"
-        "    background-color: #64748B;"
-        "    color: #FFFFFF;"
-        "    font-size: 13px;"
-        "    font-weight: 900;"
-        "    padding: 6px 8px;"
-        "    border: 1px solid #475569;"
+        "    background-color: #F1F5F9;"
+        "    color: #1E293B;"
+        "    font-size: 12px;"
+        "    font-weight: 800;"
+        "    padding: 8px 10px;"
+        "    border: none;"
+        "    border-bottom: 2px solid #CBD5E1;"
+        "    border-right: 1px solid #E2E8F0;"
         "}";
 
     m_expensesTree->setStyleSheet(treeStyle);
@@ -333,16 +341,18 @@ void ProfitLossWidget::populateTrees() {
 
         if (item.isSectionHeader) {
             row->setFont(0, secFont);
-            row->setBackground(0, QBrush(QColor("#64748B")));
-            row->setBackground(1, QBrush(QColor("#64748B")));
-            row->setForeground(0, QBrush(QColor("#FFFFFF")));
-            row->setForeground(1, QBrush(QColor("#FFFFFF")));
+            row->setFont(1, secFont);
+            row->setBackground(0, QBrush(QColor("#F1F5F9")));
+            row->setBackground(1, QBrush(QColor("#F1F5F9")));
+            row->setForeground(0, QBrush(QColor("#0F172A")));
+            row->setForeground(1, QBrush(QColor("#0F172A")));
             row->setFlags(Qt::ItemIsEnabled);
         } else if (item.isCalculated) {
             row->setFont(0, grpFont);
             row->setFont(1, amtFont);
-            row->setForeground(0, QBrush(QColor("#DC2626")));
-            row->setForeground(1, QBrush(QColor("#DC2626")));
+            QColor clr = item.name.contains("Loss", Qt::CaseInsensitive) ? QColor("#DC2626") : QColor("#16A34A");
+            row->setForeground(0, QBrush(clr));
+            row->setForeground(1, QBrush(clr));
         } else if (item.isGroup) {
             row->setFont(0, grpFont);
             row->setFont(1, amtFont);
@@ -351,12 +361,12 @@ void ProfitLossWidget::populateTrees() {
 
             for (const auto& child : item.children) {
                 QTreeWidgetItem* childRow = new QTreeWidgetItem(row);
-                childRow->setText(0, "-" + child.name);
+                childRow->setText(0, "   " + child.name);
                 childRow->setText(1, child.amountFmt);
                 childRow->setTextAlignment(1, Qt::AlignRight | Qt::AlignVCenter);
                 childRow->setFont(0, subFont);
                 childRow->setFont(1, amtFont);
-                childRow->setForeground(0, QBrush(QColor("#0F172A")));
+                childRow->setForeground(0, QBrush(QColor("#334155")));
                 childRow->setForeground(1, QBrush(QColor("#0F172A")));
                 childRow->setData(0, Qt::UserRole, child.partyId);
                 childRow->setData(0, Qt::UserRole + 1, child.name);
@@ -365,7 +375,7 @@ void ProfitLossWidget::populateTrees() {
         } else {
             row->setFont(0, subFont);
             row->setFont(1, amtFont);
-            row->setForeground(0, QBrush(QColor("#0F172A")));
+            row->setForeground(0, QBrush(QColor("#334155")));
             row->setForeground(1, QBrush(QColor("#0F172A")));
         }
     }
@@ -384,16 +394,18 @@ void ProfitLossWidget::populateTrees() {
 
         if (item.isSectionHeader) {
             row->setFont(0, secFont);
-            row->setBackground(0, QBrush(QColor("#64748B")));
-            row->setBackground(1, QBrush(QColor("#64748B")));
-            row->setForeground(0, QBrush(QColor("#FFFFFF")));
-            row->setForeground(1, QBrush(QColor("#FFFFFF")));
+            row->setFont(1, secFont);
+            row->setBackground(0, QBrush(QColor("#F1F5F9")));
+            row->setBackground(1, QBrush(QColor("#F1F5F9")));
+            row->setForeground(0, QBrush(QColor("#0F172A")));
+            row->setForeground(1, QBrush(QColor("#0F172A")));
             row->setFlags(Qt::ItemIsEnabled);
         } else if (item.isCalculated) {
             row->setFont(0, grpFont);
             row->setFont(1, amtFont);
-            row->setForeground(0, QBrush(QColor("#059669")));
-            row->setForeground(1, QBrush(QColor("#059669")));
+            QColor clr = item.name.contains("Loss", Qt::CaseInsensitive) ? QColor("#DC2626") : QColor("#16A34A");
+            row->setForeground(0, QBrush(clr));
+            row->setForeground(1, QBrush(clr));
         } else if (item.isGroup) {
             row->setFont(0, grpFont);
             row->setFont(1, amtFont);
@@ -402,12 +414,12 @@ void ProfitLossWidget::populateTrees() {
 
             for (const auto& child : item.children) {
                 QTreeWidgetItem* childRow = new QTreeWidgetItem(row);
-                childRow->setText(0, "-" + child.name);
+                childRow->setText(0, "   " + child.name);
                 childRow->setText(1, child.amountFmt);
                 childRow->setTextAlignment(1, Qt::AlignRight | Qt::AlignVCenter);
                 childRow->setFont(0, subFont);
                 childRow->setFont(1, amtFont);
-                childRow->setForeground(0, QBrush(QColor("#0F172A")));
+                childRow->setForeground(0, QBrush(QColor("#334155")));
                 childRow->setForeground(1, QBrush(QColor("#0F172A")));
                 childRow->setData(0, Qt::UserRole, child.partyId);
                 childRow->setData(0, Qt::UserRole + 1, child.name);
@@ -416,7 +428,7 @@ void ProfitLossWidget::populateTrees() {
         } else {
             row->setFont(0, subFont);
             row->setFont(1, amtFont);
-            row->setForeground(0, QBrush(QColor("#0F172A")));
+            row->setForeground(0, QBrush(QColor("#334155")));
             row->setForeground(1, QBrush(QColor("#0F172A")));
         }
     }

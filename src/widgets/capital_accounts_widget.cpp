@@ -130,25 +130,30 @@ void CapitalAccountsWidget::setupUi() {
     m_table->setAlternatingRowColors(true);
     m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_table->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_table->verticalHeader()->setVisible(false);
+    m_table->verticalHeader()->setDefaultSectionSize(30);
+    m_table->setShowGrid(true);
     m_table->setStyleSheet(
         "QTableWidget {"
         "  background-color: #FFFFFF;"
         "  alternate-background-color: #F8FAFC;"
         "  border: 1px solid #CBD5E1;"
         "  border-radius: 8px;"
-        "  gridline-color: #E2E8F0;"
-        "  font-size: 12px;"
+        "  gridline-color: #F1F5F9;"
+        "  font-size: 12.5px;"
         "  color: #0F172A;"
         "}"
-        "QTableWidget::item { padding: 6px 8px; }"
-        "QTableWidget::item:selected { background-color: #EFF6FF; color: #1E3A8A; font-weight: bold; }"
+        "QTableWidget::item { padding: 4px 8px; }"
+        "QTableWidget::item:selected { background-color: #EFF6FF; color: #1D4ED8; font-weight: bold; }"
         "QHeaderView::section {"
-        "  background-color: #0F172A;"
-        "  color: #FFFFFF;"
+        "  background-color: #F1F5F9;"
+        "  color: #1E293B;"
         "  font-weight: 800;"
-        "  font-size: 11px;"
-        "  padding: 8px 6px;"
-        "  border: 1px solid #1E293B;"
+        "  font-size: 12px;"
+        "  padding: 8px 10px;"
+        "  border: none;"
+        "  border-bottom: 2px solid #CBD5E1;"
+        "  border-right: 1px solid #E2E8F0;"
         "}"
     );
     m_table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);

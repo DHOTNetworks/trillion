@@ -148,7 +148,7 @@ void DayBookWidget::setupUi() {
     QLabel* fyBadge = new QLabel(activeFy.name + " (Active)", filterCard);
     fyBadge->setAlignment(Qt::AlignCenter);
     fyBadge->setFixedHeight(34);
-    fyBadge->setStyleSheet("background-color: #F0FDF4; color: #16A34A; border: 1.5px solid #86EFAC; border-radius: 6px; padding: 0px 14px; font-weight: 800; font-size: 12px;");
+    fyBadge->setStyleSheet("background-color: #F0FDF4; color: #16A34A; border: 1px solid #BBF7D0; border-radius: 6px; padding: 0px 14px; font-weight: 700; font-size: 11.5px;");
     filterLayout->addWidget(fyBadge);
 
     mainLayout->addWidget(filterCard);
@@ -169,7 +169,8 @@ void DayBookWidget::setupUi() {
     m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_table->setAlternatingRowColors(true);
     m_table->verticalHeader()->setVisible(false);
-    m_table->verticalHeader()->setDefaultSectionSize(28);
+    m_table->verticalHeader()->setDefaultSectionSize(30);
+    m_table->setShowGrid(true);
     connect(m_table, &QTableWidget::cellDoubleClicked, this, &DayBookWidget::onRowDoubleClicked);
     mainLayout->addWidget(m_table, 1);
 
@@ -188,13 +189,13 @@ void DayBookWidget::setupUi() {
     footerLayout->addStretch(1);
 
     m_totalDrLabel = new QLabel("Total Debit: ₹0.00", footerCard);
-    m_totalDrLabel->setStyleSheet("font-weight: 800; color: #16A34A; font-size: 13px; border: none; background: transparent;");
+    m_totalDrLabel->setStyleSheet("font-weight: 800; color: #16A34A; font-size: 13.5px; border: none; background: transparent;");
     footerLayout->addWidget(m_totalDrLabel);
 
     footerLayout->addSpacing(20);
 
     m_totalCrLabel = new QLabel("Total Credit: ₹0.00", footerCard);
-    m_totalCrLabel->setStyleSheet("font-weight: 800; color: #DC2626; font-size: 13px; border: none; background: transparent;");
+    m_totalCrLabel->setStyleSheet("font-weight: 800; color: #DC2626; font-size: 13.5px; border: none; background: transparent;");
     footerLayout->addWidget(m_totalCrLabel);
 
     mainLayout->addWidget(footerCard);
@@ -218,29 +219,29 @@ void DayBookWidget::applyCustomStyles() {
         "  background-color: #FFFFFF;"
         "  alternate-background-color: #F8FAFC;"
         "  border: 1px solid #CBD5E1;"
-        "  border-radius: 6px;"
-        "  gridline-color: #E2E8F0;"
-        "  font-size: 12px;"
+        "  border-radius: 8px;"
+        "  gridline-color: #F1F5F9;"
+        "  font-size: 12.5px;"
         "  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;"
         "  color: #0F172A;"
         "}"
         "QTableWidget::item {"
         "  padding: 4px 8px;"
-        "  border-bottom: 1px solid #F1F5F9;"
         "}"
         "QTableWidget::item:selected {"
-        "  background-color: #2563EB;"
-        "  color: #FFFFFF;"
-        "  font-weight: 700;"
+        "  background-color: #EFF6FF;"
+        "  color: #1D4ED8;"
+        "  font-weight: bold;"
         "}"
         "QHeaderView::section {"
-        "  background-color: #0F172A;"
-        "  color: #FFFFFF;"
-        "  font-weight: 700;"
+        "  background-color: #F1F5F9;"
+        "  color: #1E293B;"
+        "  font-weight: 800;"
         "  font-size: 12px;"
-        "  padding: 6px 8px;"
+        "  padding: 8px 10px;"
         "  border: none;"
-        "  border-right: 1px solid #334155;"
+        "  border-bottom: 2px solid #CBD5E1;"
+        "  border-right: 1px solid #E2E8F0;"
         "}"
         "QDateEdit, QComboBox, QLineEdit {"
         "  background-color: #FFFFFF;"
@@ -322,21 +323,39 @@ void DayBookWidget::loadDayBookData(const QDate& fromDate, const QDate& toDate, 
         }
 
         m_table->insertRow(row);
-        m_table->setItem(row, 0, new QTableWidgetItem(r.value("date").toString()));
-        m_table->setItem(row, 1, new QTableWidgetItem(r.value("voucher_no").toString()));
-        m_table->setItem(row, 2, new QTableWidgetItem(vType));
-        m_table->setItem(row, 3, new QTableWidgetItem(party));
+        auto* dateItem = new QTableWidgetItem(r.value("date").toString());
+        dateItem->setFont(QFont("Segoe UI", 9));
+        m_table->setItem(row, 0, dateItem);
+
+        auto* vchItem = new QTableWidgetItem(r.value("voucher_no").toString());
+        vchItem->setFont(QFont("Segoe UI", 9));
+        m_table->setItem(row, 1, vchItem);
+
+        auto* typeItem = new QTableWidgetItem(vType);
+        typeItem->setFont(QFont("Segoe UI", 9, QFont::DemiBold));
+        typeItem->setForeground(QColor("#2563EB"));
+        m_table->setItem(row, 2, typeItem);
+
+        auto* partyItem = new QTableWidgetItem(party);
+        partyItem->setFont(QFont("Segoe UI", 10, QFont::Bold));
+        partyItem->setForeground(QColor("#0F172A"));
+        m_table->setItem(row, 3, partyItem);
 
         QString desc = opp.isEmpty() ? narr : (opp + (narr.isEmpty() ? "" : " - " + narr));
-        m_table->setItem(row, 4, new QTableWidgetItem(desc));
+        auto* descItem = new QTableWidgetItem(desc);
+        descItem->setFont(QFont("Segoe UI", 9));
+        descItem->setForeground(QColor("#475569"));
+        m_table->setItem(row, 4, descItem);
 
         auto* drItem = new QTableWidgetItem(dr > 0.0 ? AccountingEngine::formatCurrency(dr) : "");
         drItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        drItem->setFont(QFont("Segoe UI", 10, QFont::Bold));
         if (dr > 0.0) drItem->setForeground(QColor("#16A34A"));
         m_table->setItem(row, 5, drItem);
 
         auto* crItem = new QTableWidgetItem(cr > 0.0 ? AccountingEngine::formatCurrency(cr) : "");
         crItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        crItem->setFont(QFont("Segoe UI", 10, QFont::Bold));
         if (cr > 0.0) crItem->setForeground(QColor("#DC2626"));
         m_table->setItem(row, 6, crItem);
 

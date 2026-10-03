@@ -33,91 +33,91 @@ void BalanceSheetWidget::setupUi() {
     mainLayout->setSpacing(4);
 
     // ==========================================
-    // 1. TOP FIRM & TITLE BANNER (BAHI KHATA STYLE)
+    // 1. TOP FIRM & TITLE BANNER
     // ==========================================
-    // Top Green Firm Title Banner
     QLabel* compBanner = new QLabel(this);
-    compBanner->setFixedHeight(28);
+    compBanner->setFixedHeight(32);
     compBanner->setAlignment(Qt::AlignCenter);
     compBanner->setStyleSheet(
-        "background-color: #86EFAC; color: #064E3B; font-size: 14.5px; font-weight: 900; "
-        "font-style: italic; border: 1px solid #4ADE80; border-radius: 4px; letter-spacing: 0.5px;"
+        "background-color: #F0FDF4; color: #166534; font-size: 14.5px; font-weight: 800; "
+        "border: 1px solid #BBF7D0; border-radius: 6px; letter-spacing: 0.3px;"
     );
     compBanner->setText("—");
     m_firmLabel = compBanner;
     mainLayout->addWidget(compBanner);
 
-    // Sub-header Bar (Peach/Cream)
+    // Sub-header Bar (Modern White Card)
     QFrame* subHeaderCard = new QFrame(this);
-    subHeaderCard->setFixedHeight(46);
+    subHeaderCard->setFixedHeight(48);
     subHeaderCard->setStyleSheet(
-        "background-color: #FED7AA; border: 1px solid #FDBA74; border-radius: 4px; padding: 2px 8px;"
+        "QFrame { background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; }"
+        "QLabel { border: none; background: transparent; }"
     );
     QHBoxLayout* subHeaderLayout = new QHBoxLayout(subHeaderCard);
-    subHeaderLayout->setContentsMargins(6, 0, 6, 0);
+    subHeaderLayout->setContentsMargins(12, 0, 12, 0);
     subHeaderLayout->setSpacing(10);
 
-    QLabel* f5Hint = new QLabel("(F5: Extract/UnExtract Group)", subHeaderCard);
-    f5Hint->setStyleSheet("color: #1D4ED8; font-size: 12px; font-weight: 700; background: transparent;");
+    QLabel* f5Hint = new QLabel("F5: Extract Group", subHeaderCard);
+    f5Hint->setStyleSheet("color: #64748B; font-size: 11.5px; font-weight: 700; background: transparent;");
     subHeaderLayout->addWidget(f5Hint);
 
     QVBoxLayout* centerTitleBox = new QVBoxLayout();
-    centerTitleBox->setContentsMargins(0, 2, 0, 2);
-    centerTitleBox->setSpacing(0);
+    centerTitleBox->setContentsMargins(0, 3, 0, 3);
+    centerTitleBox->setSpacing(1);
     m_titleLabel = new QLabel("Balance Sheet (Provisional)", subHeaderCard);
     m_titleLabel->setAlignment(Qt::AlignCenter);
-    m_titleLabel->setStyleSheet("font-size: 15px; font-weight: 900; font-style: italic; color: #0F172A; background: transparent;");
+    m_titleLabel->setStyleSheet("font-size: 15px; font-weight: 800; color: #0F172A; background: transparent;");
     centerTitleBox->addWidget(m_titleLabel);
 
     m_fyBadge = new QLabel("(From 01/04/2025 To 31/03/2026)", subHeaderCard);
     m_fyBadge->setAlignment(Qt::AlignCenter);
-    m_fyBadge->setStyleSheet("font-size: 12.5px; font-weight: 700; color: #1E293B; background: transparent;");
+    m_fyBadge->setStyleSheet("font-size: 12px; font-weight: 600; color: #475569; background: transparent;");
     centerTitleBox->addWidget(m_fyBadge);
     subHeaderLayout->addLayout(centerTitleBox, 1);
 
     // Quick Date & Buttons
     QHBoxLayout* btnBox = new QHBoxLayout();
-    btnBox->setSpacing(4);
+    btnBox->setSpacing(5);
 
     m_asOnDateEdit = new AccountingDateDisplay(subHeaderCard);
-    m_asOnDateEdit->setFixedWidth(105);
-    m_asOnDateEdit->setFixedHeight(28);
+    m_asOnDateEdit->setFixedWidth(110);
+    m_asOnDateEdit->setFixedHeight(30);
     m_asOnDateEdit->setStyleSheet(
-        "QLabel { background: #FFFFFF; border: 1.5px solid #D97706; border-radius: 4px; "
-        "padding: 2px 4px; font-size: 11.5px; font-weight: 800; color: #78350F; } "
-        "QLabel:hover { border: 2px solid #B45309; background: #FFFBEB; }"
+        "QLabel { background: #FFFFFF; border: 1.5px solid #CBD5E1; border-radius: 6px; "
+        "padding: 2px 6px; font-size: 12px; font-weight: 700; color: #0F172A; } "
+        "QLabel:hover { border: 1.5px solid #2563EB; background: #F8FAFC; }"
     );
     connect(m_asOnDateEdit, &AccountingDateDisplay::dateChanged, this, &BalanceSheetWidget::onDateFilterChanged);
     connect(m_asOnDateEdit, &AccountingDateDisplay::clicked, this, &BalanceSheetWidget::requestAccountingPeriodDialog);
     btnBox->addWidget(m_asOnDateEdit);
 
     m_periodBtn = new KbdBadgeButton("Period", "F2", QColor("#F8FAFC"), QColor("#F1F5F9"), QColor("#0F172A"), QColor("#CBD5E1"), subHeaderCard);
-    m_periodBtn->setFixedHeight(28);
+    m_periodBtn->setFixedHeight(30);
     connect(m_periodBtn, &QPushButton::clicked, this, &BalanceSheetWidget::requestAccountingPeriodDialog);
     btnBox->addWidget(m_periodBtn);
 
     m_expandBtn = new KbdBadgeButton("Expand", "F5", QColor("#F8FAFC"), QColor("#F1F5F9"), QColor("#0F172A"), QColor("#CBD5E1"), subHeaderCard);
-    m_expandBtn->setFixedHeight(28);
+    m_expandBtn->setFixedHeight(30);
     connect(m_expandBtn, &QPushButton::clicked, this, &BalanceSheetWidget::expandAllGroups);
     btnBox->addWidget(m_expandBtn);
 
     m_collapseBtn = new KbdBadgeButton("Collapse", "F6", QColor("#F8FAFC"), QColor("#F1F5F9"), QColor("#0F172A"), QColor("#CBD5E1"), subHeaderCard);
-    m_collapseBtn->setFixedHeight(28);
+    m_collapseBtn->setFixedHeight(30);
     connect(m_collapseBtn, &QPushButton::clicked, this, &BalanceSheetWidget::collapseAllGroups);
     btnBox->addWidget(m_collapseBtn);
 
-    m_printBtn = new KbdBadgeButton("Print", "Ctrl+P", QColor("#F8FAFC"), QColor("#F1F5F9"), QColor("#0F172A"), QColor("#CBD5E1"), subHeaderCard);
-    m_printBtn->setFixedHeight(28);
+    m_printBtn = new KbdBadgeButton("Print", "Ctrl+P", QColor("#2563EB"), QColor("#1D4ED8"), QColor("#FFFFFF"), QColor("#2563EB"), subHeaderCard);
+    m_printBtn->setFixedHeight(30);
     connect(m_printBtn, &QPushButton::clicked, this, &BalanceSheetWidget::printReport);
     btnBox->addWidget(m_printBtn);
 
-    m_pdfBtn = new KbdBadgeButton("PDF", "Ctrl+E", QColor("#DC2626"), QColor("#B91C1C"), QColor("#FFFFFF"), QColor("#991B1B"), subHeaderCard);
-    m_pdfBtn->setFixedHeight(28);
+    m_pdfBtn = new KbdBadgeButton("PDF", "Ctrl+E", QColor("#059669"), QColor("#047857"), QColor("#FFFFFF"), QColor("#059669"), subHeaderCard);
+    m_pdfBtn->setFixedHeight(30);
     connect(m_pdfBtn, &QPushButton::clicked, this, &BalanceSheetWidget::exportPdf);
     btnBox->addWidget(m_pdfBtn);
 
-    m_backBtn = new KbdBadgeButton("Back", "Esc", QColor("#64748B"), QColor("#475569"), QColor("#FFFFFF"), QColor("#334155"), subHeaderCard);
-    m_backBtn->setFixedHeight(28);
+    m_backBtn = new KbdBadgeButton("Back", "Esc", QColor("#EF4444"), QColor("#DC2626"), QColor("#FFFFFF"), QColor("#EF4444"), subHeaderCard);
+    m_backBtn->setFixedHeight(30);
     connect(m_backBtn, &QPushButton::clicked, this, &BalanceSheetWidget::backRequested);
     btnBox->addWidget(m_backBtn);
 
@@ -128,20 +128,20 @@ void BalanceSheetWidget::setupUi() {
     // 2. MAIN SPLIT TREE VIEWS (DOUBLE COLUMN T-FORMAT)
     // ==========================================
     m_splitter = new QSplitter(Qt::Horizontal, this);
-    m_splitter->setHandleWidth(3);
-    m_splitter->setStyleSheet("QSplitter::handle { background-color: #94A3B8; }");
+    m_splitter->setHandleWidth(4);
+    m_splitter->setStyleSheet("QSplitter::handle { background-color: #E2E8F0; border-radius: 2px; }");
 
     // Left Side: Liabilities Tree
     QWidget* liabContainer = new QWidget(m_splitter);
     QVBoxLayout* liabLayout = new QVBoxLayout(liabContainer);
-    liabLayout->setContentsMargins(0, 0, 1, 0);
+    liabLayout->setContentsMargins(0, 0, 2, 0);
     liabLayout->setSpacing(0);
 
     m_liabilitiesTree = new QTreeWidget(liabContainer);
-    m_liabilitiesTree->setHeaderLabels({"Liabilities (51)", "Amount"});
+    m_liabilitiesTree->setHeaderLabels({"Liabilities", "Amount"});
     m_liabilitiesTree->header()->setSectionResizeMode(0, QHeaderView::Stretch);
     m_liabilitiesTree->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
-    m_liabilitiesTree->setAlternatingRowColors(false);
+    m_liabilitiesTree->setAlternatingRowColors(true);
     m_liabilitiesTree->setRootIsDecorated(false);
     m_liabilitiesTree->setAnimated(false);
     m_liabilitiesTree->setUniformRowHeights(false);
@@ -156,14 +156,14 @@ void BalanceSheetWidget::setupUi() {
     // Right Side: Assets Tree
     QWidget* assetContainer = new QWidget(m_splitter);
     QVBoxLayout* assetLayout = new QVBoxLayout(assetContainer);
-    assetLayout->setContentsMargins(1, 0, 0, 0);
+    assetLayout->setContentsMargins(2, 0, 0, 0);
     assetLayout->setSpacing(0);
 
     m_assetsTree = new QTreeWidget(assetContainer);
-    m_assetsTree->setHeaderLabels({"Assets (68)", "Amount"});
+    m_assetsTree->setHeaderLabels({"Assets", "Amount"});
     m_assetsTree->header()->setSectionResizeMode(0, QHeaderView::Stretch);
     m_assetsTree->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
-    m_assetsTree->setAlternatingRowColors(false);
+    m_assetsTree->setAlternatingRowColors(true);
     m_assetsTree->setRootIsDecorated(false);
     m_assetsTree->setAnimated(false);
     m_assetsTree->setUniformRowHeights(false);
@@ -179,23 +179,24 @@ void BalanceSheetWidget::setupUi() {
     mainLayout->addWidget(m_splitter, 1);
 
     // ==========================================
-    // 3. GRAND TOTAL FOOTER (BAHI KHATA STYLE)
+    // 3. GRAND TOTAL FOOTER
     // ==========================================
     QFrame* footerCard = new QFrame(this);
-    footerCard->setFixedHeight(34);
+    footerCard->setFixedHeight(40);
     footerCard->setStyleSheet(
-        "background-color: #FED7AA; border: 1.5px solid #FDBA74; border-radius: 4px; padding: 2px 8px;"
+        "QFrame { background-color: #FFFFFF; border: 1.5px solid #CBD5E1; border-radius: 8px; }"
+        "QLabel { border: none; background: transparent; }"
     );
     QHBoxLayout* footerLayout = new QHBoxLayout(footerCard);
-    footerLayout->setContentsMargins(10, 0, 10, 0);
-    footerLayout->setSpacing(20);
+    footerLayout->setContentsMargins(16, 0, 16, 0);
+    footerLayout->setSpacing(24);
 
     // Left Grand Total
     QHBoxLayout* lTotBox = new QHBoxLayout();
     QLabel* lTotTitle = new QLabel("Grand Total", footerCard);
-    lTotTitle->setStyleSheet("font-size: 14.5px; font-weight: 900; color: #DC2626; background: transparent; text-decoration: underline;");
-    m_liabilitiesTotalLbl = new QLabel("49,14,29,438.15", footerCard);
-    m_liabilitiesTotalLbl->setStyleSheet("font-size: 15px; font-weight: 900; color: #1E3A8A; font-family: 'Consolas', 'Menlo', 'Monaco', 'DejaVu Sans Mono', 'Liberation Mono', 'Courier New', monospace; background: transparent;");
+    lTotTitle->setStyleSheet("font-size: 13.5px; font-weight: 800; color: #DC2626; background: transparent;");
+    m_liabilitiesTotalLbl = new QLabel("₹0.00", footerCard);
+    m_liabilitiesTotalLbl->setStyleSheet("font-size: 15px; font-weight: 900; color: #0F172A; font-family: 'Segoe UI', -apple-system, sans-serif; background: transparent;");
     lTotBox->addWidget(lTotTitle);
     lTotBox->addStretch();
     lTotBox->addWidget(m_liabilitiesTotalLbl);
@@ -204,9 +205,9 @@ void BalanceSheetWidget::setupUi() {
     // Right Grand Total
     QHBoxLayout* rTotBox = new QHBoxLayout();
     QLabel* rTotTitle = new QLabel("Grand Total", footerCard);
-    rTotTitle->setStyleSheet("font-size: 14.5px; font-weight: 900; color: #DC2626; background: transparent; text-decoration: underline;");
-    m_assetsTotalLbl = new QLabel("49,14,29,438.15", footerCard);
-    m_assetsTotalLbl->setStyleSheet("font-size: 15px; font-weight: 900; color: #1E3A8A; font-family: 'Consolas', 'Menlo', 'Monaco', 'DejaVu Sans Mono', 'Liberation Mono', 'Courier New', monospace; background: transparent;");
+    rTotTitle->setStyleSheet("font-size: 13.5px; font-weight: 800; color: #16A34A; background: transparent;");
+    m_assetsTotalLbl = new QLabel("₹0.00", footerCard);
+    m_assetsTotalLbl->setStyleSheet("font-size: 15px; font-weight: 900; color: #0F172A; font-family: 'Segoe UI', -apple-system, sans-serif; background: transparent;");
     rTotBox->addWidget(rTotTitle);
     rTotBox->addStretch();
     rTotBox->addWidget(m_assetsTotalLbl);
@@ -215,14 +216,14 @@ void BalanceSheetWidget::setupUi() {
     mainLayout->addWidget(footerCard);
 
     // ==========================================
-    // 4. BOTTOM COMMAND KEY STRIP (DEEP MAROON)
+    // 4. BOTTOM COMMAND KEY STRIP
     // ==========================================
-    m_keyLegendLbl = new QLabel("Ctrl+Alt+P: Profit & Loss  -  Alt+M: Ldgr Alteration  -  Alt+F2: Date Criteria  -  Alt+C: Calculator  -  Alt+P: Print Report", this);
+    m_keyLegendLbl = new QLabel("Ctrl+Alt+P: Profit & Loss  •  Alt+M: Ledger Alteration  •  F2: Period  •  Ctrl+P: Print  •  Esc: Back", this);
     m_keyLegendLbl->setFixedHeight(26);
     m_keyLegendLbl->setAlignment(Qt::AlignCenter);
     m_keyLegendLbl->setStyleSheet(
-        "background-color: #7F1D1D; color: #FFFFFF; font-size: 12px; font-weight: 700; "
-        "padding: 2px; border-radius: 3px; letter-spacing: 0.3px;"
+        "background-color: #1E293B; color: #94A3B8; font-size: 11.5px; font-weight: 600; "
+        "padding: 2px; border-radius: 6px; letter-spacing: 0.3px; border: none;"
     );
     mainLayout->addWidget(m_keyLegendLbl);
 }
@@ -230,30 +231,36 @@ void BalanceSheetWidget::setupUi() {
 void BalanceSheetWidget::applyCustomStyles() {
     QString treeStyle =
         "QTreeWidget {"
-        "    background-color: #FFEDD5;"
+        "    background-color: #FFFFFF;"
+        "    alternate-background-color: #F8FAFC;"
         "    border: 1px solid #CBD5E1;"
-        "    font-size: 13.5px;"
-        "    color: #000000;"
+        "    border-radius: 8px;"
+        "    font-size: 12.5px;"
+        "    color: #0F172A;"
+        "    outline: none;"
         "}"
         "QTreeWidget::item {"
-        "    padding: 3px 6px;"
-        "    min-height: 22px;"
+        "    padding: 5px 8px;"
+        "    min-height: 26px;"
+        "    border-bottom: 1px solid #F1F5F9;"
         "}"
         "QTreeWidget::item:hover {"
-        "    background-color: #FED7AA;"
+        "    background-color: #F1F5F9;"
         "}"
         "QTreeWidget::item:selected {"
-        "    background-color: #818CF8;"
-        "    color: #000000;"
+        "    background-color: #EFF6FF;"
+        "    color: #1D4ED8;"
         "    font-weight: bold;"
         "}"
         "QHeaderView::section {"
-        "    background-color: #64748B;"
-        "    color: #FFFFFF;"
-        "    font-size: 13px;"
-        "    font-weight: 900;"
-        "    padding: 6px 8px;"
-        "    border: 1px solid #475569;"
+        "    background-color: #F1F5F9;"
+        "    color: #1E293B;"
+        "    font-size: 12px;"
+        "    font-weight: 800;"
+        "    padding: 8px 10px;"
+        "    border: none;"
+        "    border-bottom: 2px solid #CBD5E1;"
+        "    border-right: 1px solid #E2E8F0;"
         "}";
 
     m_liabilitiesTree->setStyleSheet(treeStyle);
@@ -316,14 +323,15 @@ void BalanceSheetWidget::populateTrees() {
     QFont groupFont;
     groupFont.setBold(true);
     groupFont.setPixelSize(13);
-    groupFont.setUnderline(true);
+    groupFont.setUnderline(false);
 
     QFont itemFont;
-    itemFont.setPixelSize(12);
+    itemFont.setPixelSize(12.5);
+    itemFont.setBold(false);
 
     QFont amtFont;
     amtFont.setBold(true);
-    amtFont.setPixelSize(12);
+    amtFont.setPixelSize(13);
 
     // 1. Populate Liabilities
     for (const auto& g : d.liabilitiesGroups) {
@@ -339,19 +347,21 @@ void BalanceSheetWidget::populateTrees() {
 
         for (const auto& c : g.children) {
             QTreeWidgetItem* cItem = new QTreeWidgetItem(gItem);
-            cItem->setText(0, "-" + c.name);
+            cItem->setText(0, "   " + c.name);
             cItem->setText(1, c.amountFmt);
             cItem->setTextAlignment(1, Qt::AlignRight | Qt::AlignVCenter);
             cItem->setFont(0, itemFont);
             cItem->setFont(1, amtFont);
+            cItem->setForeground(0, QBrush(QColor("#334155")));
+            cItem->setForeground(1, QBrush(QColor("#0F172A")));
             cItem->setData(0, Qt::UserRole, c.isCalculated ? "CALCULATED" : "PARTY");
             cItem->setData(0, Qt::UserRole + 1, c.name);
             cItem->setData(0, Qt::UserRole + 2, c.partyId);
             cItem->setData(0, Qt::UserRole + 3, g.name);
 
             if (c.isCalculated || c.name.contains("Profit", Qt::CaseInsensitive)) {
-                cItem->setForeground(0, QBrush(QColor("#DC2626"))); // Red for Net profit
-                cItem->setForeground(1, QBrush(QColor("#DC2626")));
+                cItem->setForeground(0, QBrush(QColor("#16A34A"))); // Green for Net Profit
+                cItem->setForeground(1, QBrush(QColor("#16A34A")));
                 cItem->setFont(0, groupFont);
             }
         }
@@ -372,18 +382,21 @@ void BalanceSheetWidget::populateTrees() {
 
         for (const auto& c : g.children) {
             QTreeWidgetItem* cItem = new QTreeWidgetItem(gItem);
-            cItem->setText(0, "-" + c.name);
+            cItem->setText(0, "   " + c.name);
             cItem->setText(1, c.amountFmt);
             cItem->setTextAlignment(1, Qt::AlignRight | Qt::AlignVCenter);
             cItem->setFont(0, itemFont);
             cItem->setFont(1, amtFont);
+            cItem->setForeground(0, QBrush(QColor("#334155")));
+            cItem->setForeground(1, QBrush(QColor("#0F172A")));
             cItem->setData(0, Qt::UserRole, c.isCalculated ? "CALCULATED" : "PARTY");
             cItem->setData(0, Qt::UserRole + 1, c.name);
             cItem->setData(0, Qt::UserRole + 2, c.partyId);
             cItem->setData(0, Qt::UserRole + 3, g.name);
 
             if (c.name.contains("Stock", Qt::CaseInsensitive) || c.isCalculated) {
-                cItem->setForeground(0, QBrush(QColor("#1D4ED8")));
+                cItem->setForeground(0, QBrush(QColor("#2563EB")));
+                cItem->setForeground(1, QBrush(QColor("#2563EB")));
             }
         }
     }

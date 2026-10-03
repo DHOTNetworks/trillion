@@ -218,7 +218,8 @@ void MillingStatementWidget::setupUi() {
     m_batchTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_batchTable->setAlternatingRowColors(true);
     m_batchTable->verticalHeader()->setVisible(false);
-    m_batchTable->verticalHeader()->setDefaultSectionSize(28);
+    m_batchTable->verticalHeader()->setDefaultSectionSize(30);
+    m_batchTable->setShowGrid(true);
     connect(m_batchTable, &QTableWidget::itemSelectionChanged, this, &MillingStatementWidget::onBatchSelectionChanged);
     batchLayout->addWidget(m_batchTable);
     splitter->addWidget(batchWidget);
@@ -277,7 +278,8 @@ void MillingStatementWidget::setupUi() {
     m_detailTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_detailTable->setAlternatingRowColors(true);
     m_detailTable->verticalHeader()->setVisible(false);
-    m_detailTable->verticalHeader()->setDefaultSectionSize(26);
+    m_detailTable->verticalHeader()->setDefaultSectionSize(28);
+    m_detailTable->setShowGrid(true);
     detailLayout->addWidget(m_detailTable);
 
     splitter->addWidget(detailWidget);
@@ -306,28 +308,28 @@ void MillingStatementWidget::applyCustomStyles() {
         "  background-color: #FFFFFF;"
         "  alternate-background-color: #F8FAFC;"
         "  border: 1px solid #CBD5E1;"
-        "  border-radius: 6px;"
-        "  gridline-color: #E2E8F0;"
-        "  font-size: 12px;"
+        "  border-radius: 8px;"
+        "  gridline-color: #F1F5F9;"
+        "  font-size: 12.5px;"
         "  color: #0F172A;"
         "}"
         "QTableWidget::item {"
         "  padding: 4px 8px;"
-        "  border-bottom: 1px solid #F1F5F9;"
         "}"
         "QTableWidget::item:selected {"
-        "  background-color: #2563EB;"
-        "  color: #FFFFFF;"
-        "  font-weight: 700;"
+        "  background-color: #EFF6FF;"
+        "  color: #1D4ED8;"
+        "  font-weight: bold;"
         "}"
         "QHeaderView::section {"
-        "  background-color: #0F172A;"
-        "  color: #FFFFFF;"
-        "  font-weight: 700;"
+        "  background-color: #F1F5F9;"
+        "  color: #1E293B;"
+        "  font-weight: 800;"
         "  font-size: 12px;"
-        "  padding: 6px 8px;"
+        "  padding: 8px 10px;"
         "  border: none;"
-        "  border-right: 1px solid #334155;"
+        "  border-bottom: 2px solid #CBD5E1;"
+        "  border-right: 1px solid #E2E8F0;"
         "}"
         "QDateEdit, QComboBox, QLineEdit {"
         "  background-color: #FFFFFF;"

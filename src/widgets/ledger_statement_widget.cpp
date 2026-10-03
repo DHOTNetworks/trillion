@@ -357,10 +357,13 @@ void LedgerStatementWidget::setupUi() {
     m_aankTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_aankTable->setAlternatingRowColors(true);
     m_aankTable->verticalHeader()->setVisible(false);
-    m_aankTable->verticalHeader()->setDefaultSectionSize(26);
+    m_aankTable->verticalHeader()->setDefaultSectionSize(30);
+    m_aankTable->setShowGrid(true);
     m_aankTable->setStyleSheet(
-        "QTableWidget { background-color: #FFFFFF; alternate-background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 6px; font-size: 11px; }"
-        "QHeaderView::section { background-color: #0F172A; color: #FFFFFF; font-weight: 700; font-size: 11px; padding: 5px 6px; border: none; }"
+        "QTableWidget { background-color: #FFFFFF; alternate-background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 8px; gridline-color: #F1F5F9; font-size: 12px; color: #0F172A; }"
+        "QTableWidget::item { padding: 4px 6px; }"
+        "QTableWidget::item:selected { background-color: #EFF6FF; color: #1D4ED8; font-weight: bold; }"
+        "QHeaderView::section { background-color: #F1F5F9; color: #1E293B; font-weight: 800; font-size: 11.5px; padding: 7px 8px; border: none; border-bottom: 2px solid #CBD5E1; border-right: 1px solid #E2E8F0; }"
     );
     aankLayout->addWidget(m_aankTable, 1);
 
