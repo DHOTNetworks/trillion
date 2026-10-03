@@ -459,7 +459,7 @@ QVariantMap BusyDataMigrator::inspect_busy_data(const QString& busyPath) {
                     int mt = parseInt(getVal(r, "MasterType"));
                     if (mt == 1) totalGroups++;
                     else if (mt == 2) totalAccounts++;
-                    else if (mt == 3 || mt == 5) totalItems++;
+                    else if (mt == 6 || (mt == 5 && parseInt(getVal(r, "ParentGrp")) > 0)) totalItems++;
                     else if (mt == 8 || mt == 16) totalUnits++;
                 }
 
@@ -467,12 +467,27 @@ QVariantMap BusyDataMigrator::inspect_busy_data(const QString& busyPath) {
                 totalVouchers = static_cast<int>(t1Rows.size());
 
                 auto t2Rows = readTable(yrMdb, "Tran2");
-                totalTransactions = static_cast<int>(t2Rows.size());
                 for (const auto& r : t2Rows) {
-                    double amt = parseDouble(getVal(r, "Amount", getVal(r, "D1")));
-                    int drcr = parseInt(getVal(r, "Type", getVal(r, "RecType")));
-                    if (drcr == 1) totalDr += amt;
-                    else if (drcr == 2) totalCr += amt;
+                    int rType = parseInt(getVal(r, "RecType"));
+                    if (rType == 1) {
+                        totalTransactions++;
+                        double val1 = parseDouble(getVal(r, "Value1"));
+                        double d1 = parseDouble(getVal(r, "D1"));
+                        double d2 = parseDouble(getVal(r, "D2"));
+                        if (std::abs(val1) > 0.001) {
+                            double a = std::abs(val1);
+                            if (val1 < 0) totalDr += a;
+                            else totalCr += a;
+                        } else {
+                            if (d1 > 0.001) totalDr += d1;
+                            else if (d2 > 0.001) totalCr += d2;
+                            else {
+                                double amt = std::abs(parseDouble(getVal(r, "Amount")));
+                                if (parseInt(getVal(r, "Type")) == 1) totalDr += amt;
+                                else totalCr += amt;
+                            }
+                        }
+                    }
                 }
 
                 auto mandiRows = readTable(yrMdb, "MandiVchItemDet");
@@ -761,27 +776,38 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
             const auto& r = kv.second;
             int mt = parseInt(getVal(r, "MasterType"));
             int code = kv.first;
-            QString name = QString::fromStdString(cleanStr(getVal(r, "Name")));
-            if (name.isEmpty()) continue;
+            QString mName = QString::fromStdString(cleanStr(getVal(r, "Name")));
+            if (mName.isEmpty()) continue;
 
-            if (mt == 3) {
-                // Item Group
+            if (mt == 5 || (mt == 3 && parseInt(getVal(r, "ParentGrp")) == 0)) {
+                // Stock Group
                 db.executeNonQuery(
                     "INSERT OR REPLACE INTO stock_groups (id, group_name, legacy_code) VALUES (?, ?, ?);",
-                    {code, name, code}
+                    {code, mName, code}
                 );
             } else if (mt == 8 || mt == 16) {
                 // Stock Units
                 db.executeNonQuery(
                     "INSERT OR REPLACE INTO stock_units (id, unit_name, legacy_code) VALUES (?, ?, ?);",
-                    {code, name, code}
+                    {code, mName, code}
                 );
                 stats.totalStockUnits++;
-            } else if (mt == 5 || mt == 6) {
+            } else if (mt == 6 || (mt == 5 && parseInt(getVal(r, "ParentGrp")) > 0)) {
                 // Stock Item
                 QString hsn = QString::fromStdString(cleanStr(getVal(r, "HSNCode", "1006")));
+                if (hsn.isEmpty()) hsn = "1006";
                 int pGrp = parseInt(getVal(r, "ParentGrp"));
-                QString grpName = QString::fromStdString(busyMasterMap.count(pGrp) ? cleanStr(getVal(busyMasterMap[pGrp], "Name")) : "Rice Commodities");
+                QString grpName = "General";
+                if (pGrp > 0 && busyMasterMap.count(pGrp)) {
+                    grpName = QString::fromStdString(cleanStr(getVal(busyMasterMap[pGrp], "Name")));
+                }
+
+                int uCode = parseInt(getVal(r, "CM2", getVal(r, "MasterSupport")));
+                QString unitName = "Qtl.";
+                if (uCode > 0 && busyMasterMap.count(uCode)) {
+                    unitName = QString::fromStdString(cleanStr(getVal(busyMasterMap[uCode], "Name")));
+                }
+
                 double opQty = parseDouble(getVal(r, "D1"));
                 double opRate = parseDouble(getVal(r, "D2"));
                 double opVal = parseDouble(getVal(r, "D3"), opQty * opRate);
@@ -791,7 +817,7 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
                     "INSERT OR REPLACE INTO stock_items (id, name, code, trading_group, group_code, hsn_code, unit, gst_rate, "
                     "opening_bags, opening_qty, opening_rate, opening_value) "
                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-                    {code, name, QString::number(code), grpName, pGrp, hsn, "Qtl.", gstRate,
+                    {code, mName, QString::number(code), grpName, pGrp, hsn, unitName, gstRate,
                      static_cast<int>(opQty), opQty, opRate, opVal}
                 );
                 stats.totalStockItems++;
@@ -805,7 +831,6 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
         auto t1Rows = readTable(yrMdb, "Tran1");
         auto t2Rows = readTable(yrMdb, "Tran2");
         auto t3Rows = readTable(yrMdb, "Tran3");
-        auto t4Rows = readTable(yrMdb, "Tran4");
         auto mandiRows = readTable(yrMdb, "MandiVchItemDet");
 
         std::map<int, std::vector<std::map<std::string, std::string>>> t2Map;
@@ -825,103 +850,195 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
             int vType = parseInt(getVal(v, "VchType"));
             QString vNo = QString::fromStdString(cleanStr(getVal(v, "VchNo")));
             QString vDate = parseDateStr(QString::fromStdString(getVal(v, "Date")));
-            double totalAmt = parseDouble(getVal(v, "TotalAmount"));
+            double totalAmt = parseDouble(getVal(v, "VchAmtBaseCur", getVal(v, "VchSalePurcAmt", getVal(v, "OrgVchAmtBaseCur", getVal(v, "TotalAmount")))));
             QString narration = QString::fromStdString(cleanStr(getVal(v, "Narration")));
             int partyCode = parseInt(getVal(v, "MasterCode1"));
             QString partyName = QString::fromStdString(busyMasterMap.count(partyCode) ? cleanStr(getVal(busyMasterMap[partyCode], "Name")) : "General Account");
 
             QString typeStr = "Journal";
             QString rawType = "Jrnl";
-            if (vType == 1) { typeStr = "Sales"; rawType = "Sale"; }
-            else if (vType == 2) { typeStr = "Purchase"; rawType = "Purc"; }
-            else if (vType == 3) { typeStr = "Payment"; rawType = "Pymt"; }
-            else if (vType == 4) { typeStr = "Receipt"; rawType = "Rcpt"; }
-            else if (vType == 6) { typeStr = "Contra"; rawType = "Contra"; }
-            else if (vType == 7) { typeStr = "Debit Note"; rawType = "DbNt"; }
-            else if (vType == 8) { typeStr = "Credit Note"; rawType = "CrNt"; }
+            bool isSale = false;
+            bool isPurchase = false;
+
+            if (vType == 9 || vType == 1) { typeStr = "Sales"; rawType = "Sale"; isSale = true; }
+            else if (vType == 10 || vType == 2) { typeStr = "Purchase"; rawType = "Purc"; isPurchase = true; }
+            else if (vType == 13 || vType == 3) { typeStr = "Payment"; rawType = "Pymt"; }
+            else if (vType == 14 || vType == 4) { typeStr = "Receipt"; rawType = "Rcpt"; }
+            else if (vType == 15 || vType == 6) { typeStr = "Contra"; rawType = "Contra"; }
+            else if (vType == 16 || vType == 5) { typeStr = "Journal"; rawType = "Jrnl"; }
+            else if (vType == 11 || vType == 8) { typeStr = "Credit Note"; rawType = "CrNt"; }
+            else if (vType == 12 || vType == 7) { typeStr = "Debit Note"; rawType = "DbNt"; }
 
             QString vFy = computeFy(vDate);
 
+            // Separate financial GL splits (RecType==1) and inventory item rows (RecType==2)
+            std::vector<std::map<std::string, std::string>> glRows;
+            std::vector<std::map<std::string, std::string>> itemRows;
+            if (t2Map.count(vCode)) {
+                for (const auto& tr : t2Map[vCode]) {
+                    int rType = parseInt(getVal(tr, "RecType"));
+                    if (rType == 1) {
+                        glRows.push_back(tr);
+                    } else if (rType == 2) {
+                        double q = std::abs(parseDouble(getVal(tr, "Value1", getVal(tr, "D1"))));
+                        double val = std::abs(parseDouble(getVal(tr, "Value3", getVal(tr, "D5"))));
+                        if (q > 0.0001 || val > 0.0001) {
+                            itemRows.push_back(tr);
+                        }
+                    }
+                }
+            }
+
+            // Insert Voucher Header
             db.executeNonQuery(
-                "INSERT OR REPLACE INTO vouchers (id, voucher_no, voucher_type, voucher_date, amount, narration, financial_year) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?);",
-                {vCode, vNo, typeStr, vDate, totalAmt, narration, vFy}
+                "INSERT OR REPLACE INTO vouchers (voucher_no, voucher_type, voucher_date, party_id, party_name, account_type, amount, narration, financial_year) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);",
+                {vNo, typeStr, vDate, partyCode, partyName, partyName, totalAmt, narration, vFy}
             );
             stats.totalGlVouchers++;
 
             // Insert Sales Invoice
-            if (vType == 1) {
-                QString itemName = "Rice Basmati";
-                double bags = 0, weight = 0, rate = 0, taxAmt = 0;
-                if (t3Map.count(vCode) && !t3Map[vCode].empty()) {
-                    const auto& itemRow = t3Map[vCode].front();
-                    int itCode = parseInt(getVal(itemRow, "MasterCode1"));
-                    itemName = QString::fromStdString(busyMasterMap.count(itCode) ? cleanStr(getVal(busyMasterMap[itCode], "Name")) : "Rice Basmati");
-                    weight = parseDouble(getVal(itemRow, "Value1"));
-                    rate = parseDouble(getVal(itemRow, "Value2"));
-                    taxAmt = parseDouble(getVal(itemRow, "Value3"));
-                } else {
-                    taxAmt = totalAmt;
-                }
+            if (isSale) {
+                if (!itemRows.empty()) {
+                    for (const auto& ir : itemRows) {
+                        int itCode = parseInt(getVal(ir, "MasterCode1"));
+                        QString itName = QString::fromStdString(busyMasterMap.count(itCode) ? cleanStr(getVal(busyMasterMap[itCode], "Name")) : "Rice Basmati");
+                        double qty = std::abs(parseDouble(getVal(ir, "Value1", getVal(ir, "D1"))));
+                        double rate = parseDouble(getVal(ir, "D2", getVal(ir, "D3")));
+                        double taxable = std::abs(parseDouble(getVal(ir, "D5", getVal(ir, "Value3"))));
+                        if (taxable < 0.01 && qty > 0.001 && rate > 0.001) taxable = qty * rate;
+                        double rowTotal = (taxable > 0.01) ? taxable : totalAmt;
 
-                db.executeNonQuery(
-                    "INSERT OR REPLACE INTO sales_invoices (id, invoice_no, voucher_no, invoice_date, customer_id, customer_name, "
-                    "item_name, bag_count, weight_qtl, rate_per_qtl, taxable_amount, total_amount, narration, financial_year) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-                    {vCode, vNo, vNo, vDate, partyCode, partyName, itemName, static_cast<int>(bags), weight, rate, taxAmt, totalAmt, narration, vFy}
-                );
-                stats.totalSalesInvoices++;
-            } else if (vType == 2) {
-                // Purchase Invoice
-                QString itemName = "Paddy 1509";
-                double bags = 0, weight = 0, rate = 0, taxAmt = 0;
-                if (t3Map.count(vCode) && !t3Map[vCode].empty()) {
-                    const auto& itemRow = t3Map[vCode].front();
-                    int itCode = parseInt(getVal(itemRow, "MasterCode1"));
-                    itemName = QString::fromStdString(busyMasterMap.count(itCode) ? cleanStr(getVal(busyMasterMap[itCode], "Name")) : "Paddy 1509");
-                    weight = parseDouble(getVal(itemRow, "Value1"));
-                    rate = parseDouble(getVal(itemRow, "Value2"));
-                    taxAmt = parseDouble(getVal(itemRow, "Value3"));
+                        db.executeNonQuery(
+                            "INSERT OR REPLACE INTO sales_invoices (invoice_no, voucher_no, invoice_date, customer_id, customer_name, "
+                            "item_name, bag_count, weight_qtl, rate_per_qtl, taxable_amount, total_amount, narration, financial_year) "
+                            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+                            {vNo, vNo, vDate, partyCode, partyName, itName, static_cast<int>(qty), qty, rate, taxable, rowTotal, narration, vFy}
+                        );
+                        stats.totalSalesInvoices++;
+                    }
                 } else {
-                    taxAmt = totalAmt;
+                    db.executeNonQuery(
+                        "INSERT OR REPLACE INTO sales_invoices (invoice_no, voucher_no, invoice_date, customer_id, customer_name, "
+                        "item_name, bag_count, weight_qtl, rate_per_qtl, taxable_amount, total_amount, narration, financial_year) "
+                        "VALUES (?, ?, ?, ?, ?, ?, 'Rice Commodities', 0, 0, 0, ?, ?, ?, ?);",
+                        {vNo, vNo, vDate, partyCode, partyName, totalAmt, totalAmt, narration, vFy}
+                    );
+                    stats.totalSalesInvoices++;
                 }
+            } else if (isPurchase) {
+                if (!itemRows.empty()) {
+                    for (const auto& ir : itemRows) {
+                        int itCode = parseInt(getVal(ir, "MasterCode1"));
+                        QString itName = QString::fromStdString(busyMasterMap.count(itCode) ? cleanStr(getVal(busyMasterMap[itCode], "Name")) : "Paddy 1509");
+                        double qty = std::abs(parseDouble(getVal(ir, "Value1", getVal(ir, "D1"))));
+                        double rate = parseDouble(getVal(ir, "D2", getVal(ir, "D3")));
+                        double taxable = std::abs(parseDouble(getVal(ir, "D5", getVal(ir, "Value3"))));
+                        if (taxable < 0.01 && qty > 0.001 && rate > 0.001) taxable = qty * rate;
+                        double rowTotal = (taxable > 0.01) ? taxable : totalAmt;
 
-                db.executeNonQuery(
-                    "INSERT OR REPLACE INTO purchase_invoices (id, invoice_no, voucher_no, invoice_date, supplier_id, supplier_name, "
-                    "item_name, bag_count, weight_qtl, rate_per_qtl, taxable_amount, total_amount, narration, financial_year) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-                    {vCode, vNo, vNo, vDate, partyCode, partyName, itemName, static_cast<int>(bags), weight, rate, taxAmt, totalAmt, narration, vFy}
-                );
-                stats.totalPurchaseInvoices++;
+                        db.executeNonQuery(
+                            "INSERT OR REPLACE INTO purchase_invoices (invoice_no, voucher_no, invoice_date, supplier_id, supplier_name, "
+                            "item_name, bag_count, weight_qtl, rate_per_qtl, taxable_amount, total_amount, narration, financial_year) "
+                            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+                            {vNo, vNo, vDate, partyCode, partyName, itName, static_cast<int>(qty), qty, rate, taxable, rowTotal, narration, vFy}
+                        );
+                        stats.totalPurchaseInvoices++;
+                    }
+                } else {
+                    db.executeNonQuery(
+                        "INSERT OR REPLACE INTO purchase_invoices (invoice_no, voucher_no, invoice_date, supplier_id, supplier_name, "
+                        "item_name, bag_count, weight_qtl, rate_per_qtl, taxable_amount, total_amount, narration, financial_year) "
+                        "VALUES (?, ?, ?, ?, ?, ?, 'Paddy 1509', 0, 0, 0, ?, ?, ?, ?);",
+                        {vNo, vNo, vDate, partyCode, partyName, totalAmt, totalAmt, narration, vFy}
+                    );
+                    stats.totalPurchaseInvoices++;
+                }
             }
 
             // Insert Double-Entry Ledger Splits from Tran2
-            if (t2Map.count(vCode) && !t2Map[vCode].empty()) {
+            if (!glRows.empty()) {
                 int rIdx = 1;
-                for (const auto& tr : t2Map[vCode]) {
-                    int accCode = parseInt(getVal(tr, "MasterCode1"));
-                    QString accName = QString::fromStdString(busyMasterMap.count(accCode) ? cleanStr(getVal(busyMasterMap[accCode], "Name")) : "General Ledger");
-                    int recType = parseInt(getVal(tr, "RecType"));
-                    double d1 = parseDouble(getVal(tr, "D1"));
-                    double d2 = parseDouble(getVal(tr, "D2"));
-                    QString drCr = (recType == 1 || d1 > 0.001) ? "Dr" : "Cr";
-                    double amt = (drCr == "Dr") ? (d1 > 0.001 ? d1 : d2) : (d2 > 0.001 ? d2 : d1);
-                    QString lineNar = QString::fromStdString(cleanStr(getVal(tr, "ShortNar")));
-                    if (lineNar.isEmpty()) lineNar = narration;
+                QString opposingName = partyName;
+                if (glRows.size() == 2) {
+                    int a1 = parseInt(getVal(glRows[0], "MasterCode1"));
+                    int a2 = parseInt(getVal(glRows[1], "MasterCode1"));
+                    QString n1 = QString::fromStdString(busyMasterMap.count(a1) ? cleanStr(getVal(busyMasterMap[a1], "Name")) : "General Ledger");
+                    QString n2 = QString::fromStdString(busyMasterMap.count(a2) ? cleanStr(getVal(busyMasterMap[a2], "Name")) : "General Ledger");
 
-                    db.executeNonQuery(
-                        "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_type, trans_type, voucher_date, account_code, party_id, party_name, opposing_account, dr_cr, amount, narration, row_no) "
-                        "VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-                        {vFy, vNo, typeStr, rawType, vDate, accCode, accCode, accName, partyName, drCr, amt, lineNar, rIdx++}
-                    );
-                    stats.totalGlTransactions++;
-                    if (drCr == "Dr") stats.totalDebitSum += amt;
-                    else stats.totalCreditSum += amt;
+                    for (size_t i = 0; i < glRows.size(); ++i) {
+                        const auto& tr = glRows[i];
+                        int accCode = parseInt(getVal(tr, "MasterCode1"));
+                        QString accName = (i == 0) ? n1 : n2;
+                        QString oppName = (i == 0) ? n2 : n1;
+
+                        double val1 = parseDouble(getVal(tr, "Value1"));
+                        double d1 = parseDouble(getVal(tr, "D1"));
+                        double d2 = parseDouble(getVal(tr, "D2"));
+                        QString drCr;
+                        double amt = 0.0;
+                        if (std::abs(val1) > 0.001) {
+                            amt = std::abs(val1);
+                            drCr = (val1 < 0) ? "Dr" : "Cr";
+                        } else {
+                            if (d1 > 0.001) { amt = d1; drCr = "Dr"; }
+                            else if (d2 > 0.001) { amt = d2; drCr = "Cr"; }
+                            else {
+                                amt = std::abs(parseDouble(getVal(tr, "Amount")));
+                                drCr = (parseInt(getVal(tr, "Type")) == 1) ? "Dr" : "Cr";
+                            }
+                        }
+
+                        QString lineNar = QString::fromStdString(cleanStr(getVal(tr, "ShortNar")));
+                        if (lineNar.isEmpty()) lineNar = narration;
+
+                        db.executeNonQuery(
+                            "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_type, trans_type, voucher_date, account_code, party_id, party_name, opposing_account, dr_cr, amount, narration, row_no) "
+                            "VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+                            {vFy, vNo, typeStr, rawType, vDate, accCode, accCode, accName, oppName, drCr, amt, lineNar, rIdx++}
+                        );
+                        stats.totalGlTransactions++;
+                        if (drCr == "Dr") stats.totalDebitSum += amt;
+                        else stats.totalCreditSum += amt;
+                    }
+                } else {
+                    for (const auto& tr : glRows) {
+                        int accCode = parseInt(getVal(tr, "MasterCode1"));
+                        QString accName = QString::fromStdString(busyMasterMap.count(accCode) ? cleanStr(getVal(busyMasterMap[accCode], "Name")) : "General Ledger");
+
+                        double val1 = parseDouble(getVal(tr, "Value1"));
+                        double d1 = parseDouble(getVal(tr, "D1"));
+                        double d2 = parseDouble(getVal(tr, "D2"));
+                        QString drCr;
+                        double amt = 0.0;
+                        if (std::abs(val1) > 0.001) {
+                            amt = std::abs(val1);
+                            drCr = (val1 < 0) ? "Dr" : "Cr";
+                        } else {
+                            if (d1 > 0.001) { amt = d1; drCr = "Dr"; }
+                            else if (d2 > 0.001) { amt = d2; drCr = "Cr"; }
+                            else {
+                                amt = std::abs(parseDouble(getVal(tr, "Amount")));
+                                drCr = (parseInt(getVal(tr, "Type")) == 1) ? "Dr" : "Cr";
+                            }
+                        }
+
+                        QString lineNar = QString::fromStdString(cleanStr(getVal(tr, "ShortNar")));
+                        if (lineNar.isEmpty()) lineNar = narration;
+
+                        db.executeNonQuery(
+                            "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_type, trans_type, voucher_date, account_code, party_id, party_name, opposing_account, dr_cr, amount, narration, row_no) "
+                            "VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+                            {vFy, vNo, typeStr, rawType, vDate, accCode, accCode, accName, opposingName, drCr, amt, lineNar, rIdx++}
+                        );
+                        stats.totalGlTransactions++;
+                        if (drCr == "Dr") stats.totalDebitSum += amt;
+                        else stats.totalCreditSum += amt;
+                    }
                 }
             } else if (totalAmt > 0.0001) {
-                // Synthesize complete double-entry transaction splits if Tran2 is empty
-                if (vType == 1) {
-                    // Sales: Debit Customer, Credit Sale A/c
+                // Fallback double-entry generation
+                if (isSale) {
                     db.executeNonQuery(
                         "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_type, trans_type, voucher_date, account_code, party_id, party_name, opposing_account, dr_cr, amount, invoice_no, narration, taxable_amount, row_no) "
                         "VALUES (1, ?, ?, 'Sales', 'Sale', ?, ?, ?, ?, 'Sale A/c', 'Dr', ?, ?, ?, ?, 1);",
@@ -935,8 +1052,7 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
                     stats.totalGlTransactions += 2;
                     stats.totalDebitSum += totalAmt;
                     stats.totalCreditSum += totalAmt;
-                } else if (vType == 2) {
-                    // Purchase: Debit Purchase A/c, Credit Supplier
+                } else if (isPurchase) {
                     db.executeNonQuery(
                         "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_type, trans_type, voucher_date, account_code, party_id, party_name, opposing_account, dr_cr, amount, invoice_no, narration, taxable_amount, row_no) "
                         "VALUES (1, ?, ?, 'Purchase', 'Purc', ?, 5, 5, 'Purchase', ?, 'Dr', ?, ?, ?, ?, 1);",
@@ -946,36 +1062,6 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
                         "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_type, trans_type, voucher_date, account_code, party_id, party_name, opposing_account, dr_cr, amount, invoice_no, narration, taxable_amount, row_no) "
                         "VALUES (1, ?, ?, 'Purchase', 'Purc', ?, ?, ?, ?, 'Purchase A/c', 'Cr', ?, ?, ?, ?, 2);",
                         {vFy, vNo, vDate, partyCode, partyCode, partyName, totalAmt, vNo, narration, totalAmt}
-                    );
-                    stats.totalGlTransactions += 2;
-                    stats.totalDebitSum += totalAmt;
-                    stats.totalCreditSum += totalAmt;
-                } else if (vType == 3) {
-                    // Payment: Debit Party, Credit Cash
-                    db.executeNonQuery(
-                        "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_type, trans_type, voucher_date, account_code, party_id, party_name, opposing_account, dr_cr, amount, invoice_no, narration, row_no) "
-                        "VALUES (1, ?, ?, 'Payment', 'Pymt', ?, ?, ?, ?, 'Cash', 'Dr', ?, ?, ?, 1);",
-                        {vFy, vNo, vDate, partyCode, partyCode, partyName, totalAmt, vNo, narration}
-                    );
-                    db.executeNonQuery(
-                        "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_type, trans_type, voucher_date, account_code, party_id, party_name, opposing_account, dr_cr, amount, invoice_no, narration, row_no) "
-                        "VALUES (1, ?, ?, 'Payment', 'Pymt', ?, 1, 1, 'Cash', ?, 'Cr', ?, ?, ?, 2);",
-                        {vFy, vNo, vDate, partyName, totalAmt, vNo, narration}
-                    );
-                    stats.totalGlTransactions += 2;
-                    stats.totalDebitSum += totalAmt;
-                    stats.totalCreditSum += totalAmt;
-                } else if (vType == 4) {
-                    // Receipt: Debit Cash, Credit Party
-                    db.executeNonQuery(
-                        "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_type, trans_type, voucher_date, account_code, party_id, party_name, opposing_account, dr_cr, amount, invoice_no, narration, row_no) "
-                        "VALUES (1, ?, ?, 'Receipt', 'Rcpt', ?, 1, 1, 'Cash', ?, 'Dr', ?, ?, ?, 1);",
-                        {vFy, vNo, vDate, partyName, totalAmt, vNo, narration}
-                    );
-                    db.executeNonQuery(
-                        "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_type, trans_type, voucher_date, account_code, party_id, party_name, opposing_account, dr_cr, amount, invoice_no, narration, row_no) "
-                        "VALUES (1, ?, ?, 'Receipt', 'Rcpt', ?, ?, ?, ?, 'Cash', 'Cr', ?, ?, ?, 2);",
-                        {vFy, vNo, vDate, partyCode, partyCode, partyName, totalAmt, vNo, narration}
                     );
                     stats.totalGlTransactions += 2;
                     stats.totalDebitSum += totalAmt;

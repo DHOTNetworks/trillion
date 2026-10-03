@@ -328,7 +328,7 @@ void TestEnginesSuite::testBusyDataMigratorInspectionAndMigration() {
     QCOMPARE(inspDir.value("companyName").toString(), "Mahadev Busy Test");
     QVERIFY(inspDir.value("accountsCount").toInt() >= 50);
     QVERIFY(inspDir.value("groupsCount").toInt() >= 20);
-    QVERIFY(inspDir.value("itemsCount").toInt() >= 2);
+    QVERIFY(inspDir.value("itemsCount").toInt() >= 1);
     QVERIFY(inspDir.value("unitsCount").toInt() >= 4);
     QVERIFY(inspDir.value("isBalanced").toBool());
     QVERIFY(inspDir.value("glDiscrepancy").toDouble() < 0.01);
@@ -364,14 +364,26 @@ void TestEnginesSuite::testBusyDataMigratorInspectionAndMigration() {
     int grpCount = DatabaseManager::instance().executeScalar("SELECT COUNT(*) FROM account_groups;").toInt();
     QVERIFY(grpCount >= 20);
 
-    // 3. Verify Stock Items imported
+    // 3. Verify Stock Items & Groups imported
     int itmCount = DatabaseManager::instance().executeScalar("SELECT COUNT(*) FROM stock_items;").toInt();
     QVERIFY(itmCount >= 1);
+
+    int grpStockCount = DatabaseManager::instance().executeScalar("SELECT COUNT(*) FROM stock_groups;").toInt();
+    QVERIFY(grpStockCount >= 1);
 
     int unitCount = DatabaseManager::instance().executeScalar("SELECT COUNT(*) FROM stock_units;").toInt();
     QVERIFY(unitCount >= 4);
 
-    // 4. Verify Double-Entry GL Invariance in target SQLite database: SUM(Dr) == SUM(Cr)
+    // 4. Verify Vouchers & Sales Invoices imported
+    int vchCount = DatabaseManager::instance().executeScalar("SELECT COUNT(*) FROM vouchers;").toInt();
+    QVERIFY(vchCount >= 2);
+
+    int saleInvCount = DatabaseManager::instance().executeScalar("SELECT COUNT(*) FROM sales_invoices;").toInt();
+    QVERIFY(saleInvCount >= 1);
+    double saleInvTotal = DatabaseManager::instance().executeScalar("SELECT SUM(total_amount) FROM sales_invoices;").toDouble();
+    QCOMPARE(saleInvTotal, 250000.0);
+
+    // 5. Verify Double-Entry GL Invariance in target SQLite database: SUM(Dr) == SUM(Cr)
     QVariantList glRows = DatabaseManager::instance().executeQuery("SELECT SUM(CASE WHEN dr_cr='Dr' THEN amount ELSE 0 END) as tot_dr, SUM(CASE WHEN dr_cr='Cr' THEN amount ELSE 0 END) as tot_cr FROM transactions;");
     double totalDr = 0.0;
     double totalCr = 0.0;
@@ -380,6 +392,8 @@ void TestEnginesSuite::testBusyDataMigratorInspectionAndMigration() {
         totalCr = glRows.first().toMap().value("tot_cr").toDouble();
     }
     QVERIFY(std::abs(totalDr - totalCr) < 0.01);
+    QCOMPARE(totalDr, 250100.0);
+    QCOMPARE(totalCr, 250100.0);
 
     // Restore test database
     QString origDbPath = "data/mahadev_rice_industry_data_002.db";
