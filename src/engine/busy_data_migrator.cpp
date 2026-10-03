@@ -578,6 +578,8 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
     db.executeNonQuery("DELETE FROM financial_years;");
     db.executeNonQuery("DELETE FROM company_info;");
     AccountClassifier::invalidateCache();
+    db.setSetting("firm_source_type", "busy");
+    db.setSetting("is_migrated", "1");
 
     BusyMigrationStats stats;
     stats.companyName = insp.value("company_name").toString();
@@ -912,6 +914,14 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
                 }
             }
 
+            if (partyName.isEmpty() && !glRows.empty()) {
+                int firstAcc = parseInt(getVal(glRows[0], "MasterCode1"));
+                if (busyMasterMap.count(firstAcc)) {
+                    partyCode = firstAcc;
+                    partyName = QString::fromStdString(cleanStr(getVal(busyMasterMap[firstAcc], "Name")));
+                }
+            }
+
             // Insert Voucher Header
             db.executeNonQuery(
                 "INSERT OR REPLACE INTO vouchers (voucher_no, voucher_type, voucher_date, party_id, party_name, account_type, amount, narration, financial_year) "
@@ -1077,6 +1087,16 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
                         else stats.totalCreditSum += amt;
                     }
                 } else {
+                    QString drOpposing = "";
+                    QString crOpposing = "";
+                    for (const auto& tr : glRows) {
+                        int ac = parseInt(getVal(tr, "MasterCode1"));
+                        QString an = QString::fromStdString(busyMasterMap.count(ac) ? cleanStr(getVal(busyMasterMap[ac], "Name")) : "");
+                        double v1 = parseDouble(getVal(tr, "Value1"));
+                        if (v1 < 0 && drOpposing.isEmpty()) drOpposing = an;
+                        else if (v1 > 0 && crOpposing.isEmpty()) crOpposing = an;
+                    }
+
                     for (const auto& tr : glRows) {
                         int accCode = parseInt(getVal(tr, "MasterCode1"));
                         QString accName = QString::fromStdString(busyMasterMap.count(accCode) ? cleanStr(getVal(busyMasterMap[accCode], "Name")) : "");
@@ -1098,13 +1118,16 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
                             }
                         }
 
+                        QString oppName = (drCr == "Dr") ? crOpposing : drOpposing;
+                        if (oppName.isEmpty()) oppName = opposingName;
+
                         QString lineNar = QString::fromStdString(cleanStr(getVal(tr, "ShortNar")));
                         if (lineNar.isEmpty()) lineNar = narration;
 
                         db.executeNonQuery(
                             "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_type, trans_type, voucher_date, account_code, party_id, party_name, opposing_account, dr_cr, amount, narration, row_no) "
                             "VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-                            {vFy, vNo, typeStr, rawType, vDate, accCode, accCode, accName, opposingName, drCr, amt, lineNar, rIdx++}
+                            {vFy, vNo, typeStr, rawType, vDate, accCode, accCode, accName, oppName, drCr, amt, lineNar, rIdx++}
                         );
                         stats.totalGlTransactions++;
                         if (drCr == "Dr") stats.totalDebitSum += amt;

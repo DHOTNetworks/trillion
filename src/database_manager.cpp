@@ -1851,21 +1851,38 @@ void DatabaseManager::ensureTablesExist() {
         {955, 16, "Interest Received A/c", "Cr"}
     };
 
-    for (const auto& bl : defaultBahiLedgers) {
-        QVariant v = executeScalar("SELECT id FROM parties WHERE name = ? OR legacy_id = ? LIMIT 1;", {bl.name, bl.code});
-        if (!v.isValid() || v.isNull()) {
-            QVariant grp = executeScalar("SELECT id, name FROM account_groups WHERE code1st = ? LIMIT 1;", {bl.groupCode});
-            QString gName = AccountClassifier::getStandardGroupName(bl.groupCode);
-            qint64 gId = 0;
-            if (grp.isValid() && !grp.isNull()) {
-                gId = grp.toLongLong();
+    // Only insert default Bahi-Khata template ledgers for brand-new, empty, non-migrated databases
+    int partyCount = executeScalar("SELECT COUNT(*) FROM parties;").toInt();
+    QString isMigrated = getSetting("is_migrated", "0");
+    QString srcType = getSetting("firm_source_type", "");
+    if (partyCount == 0 && isMigrated != "1" && srcType.isEmpty()) {
+        for (const auto& bl : defaultBahiLedgers) {
+            QVariant v = executeScalar("SELECT id FROM parties WHERE name = ? OR legacy_id = ? LIMIT 1;", {bl.name, bl.code});
+            if (!v.isValid() || v.isNull()) {
+                QVariant grp = executeScalar("SELECT id, name FROM account_groups WHERE code1st = ? LIMIT 1;", {bl.groupCode});
+                QString gName = AccountClassifier::getStandardGroupName(bl.groupCode);
+                qint64 gId = 0;
+                if (grp.isValid() && !grp.isNull()) {
+                    gId = grp.toLongLong();
+                }
+                executeNonQuery(
+                    "INSERT INTO parties (name, group_name, group_code, group_id, balance_type, legacy_id) "
+                    "VALUES (?, ?, ?, ?, ?, ?);",
+                    {bl.name, gName, bl.groupCode, gId, bl.balType, bl.code}
+                );
             }
-            executeNonQuery(
-                "INSERT INTO parties (name, group_name, group_code, group_id, balance_type, legacy_id) "
-                "VALUES (?, ?, ?, ?, ?, ?);",
-                {bl.name, gName, bl.groupCode, gId, bl.balType, bl.code}
-            );
         }
+    } else if (partyCount > 0) {
+        // Automatically purge unreferenced duplicate parties
+        executeNonQuery(
+            "DELETE FROM parties WHERE id NOT IN ("
+            "  SELECT MIN(id) FROM parties GROUP BY LOWER(TRIM(name)), group_code"
+            ") AND id NOT IN ("
+            "  SELECT DISTINCT party_id FROM transactions WHERE party_id IS NOT NULL AND party_id > 0"
+            ") AND id NOT IN ("
+            "  SELECT DISTINCT party_id FROM vouchers WHERE party_id IS NOT NULL AND party_id > 0"
+            ");"
+        );
     }
 
     executeNonQuery("COMMIT;");

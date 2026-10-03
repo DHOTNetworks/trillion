@@ -105,12 +105,10 @@ BalanceSheetData BalanceSheetCalculator::calculate(const QString& requestedAsOnD
         if (pId > 0) {
             if (isDr) sumByPartyId[pId].dr += amt;
             else sumByPartyId[pId].cr += amt;
-        }
-        if (legId > 0) {
+        } else if (legId > 0) {
             if (isDr) sumByLegacyId[legId].dr += amt;
             else sumByLegacyId[legId].cr += amt;
-        }
-        if (!pName.isEmpty()) {
+        } else if (!pName.isEmpty()) {
             if (isDr) sumByName[pName].dr += amt;
             else sumByName[pName].cr += amt;
         }
@@ -146,12 +144,14 @@ BalanceSheetData BalanceSheetCalculator::calculate(const QString& requestedAsOnD
 
     // Fetch all parties once
     QVariantList partyList = DatabaseManager::instance().executeQuery(
-        "SELECT id, legacy_id, name, group_name, party_type, opening_balance, balance_type, calc_direct_expense FROM parties ORDER BY group_name, name COLLATE NOCASE ASC;"
+        "SELECT id, legacy_id, name, group_name, party_type, opening_balance, balance_type, calc_direct_expense FROM parties ORDER BY id ASC;"
     );
 
     // Map to hold dynamic group containers
     QMap<QString, BalanceSheetItem> liabGroupMap;
     QMap<QString, BalanceSheetItem> assetGroupMap;
+    QSet<int> processedPartyIds;
+    QSet<QString> processedPartyKeys;
 
     for (const auto& pVar : partyList) {
         QVariantMap p = pVar.toMap();
@@ -160,6 +160,14 @@ BalanceSheetData BalanceSheetCalculator::calculate(const QString& requestedAsOnD
         QString pName = p.value("name").toString().trimmed();
         QString gName = p.value("group_name").toString().trimmed();
         if (gName.isEmpty()) gName = "Sundry Accounts";
+
+        if (pId > 0) {
+            if (processedPartyIds.contains(pId)) continue;
+            processedPartyIds.insert(pId);
+        }
+        QString partyKey = QString("%1|%2").arg(pName.toLower(), gName.toLower());
+        if (processedPartyKeys.contains(partyKey)) continue;
+        processedPartyKeys.insert(partyKey);
 
         // Dynamic classification: exclude all nominal groups from direct balance sheet listing
         int extractBs = groupExtractBs.value(gName, 1);

@@ -788,6 +788,8 @@ bool TallyDataMigrator::migrate_tally_data(const QString& tallyPath, const QStri
     db.executeNonQuery("DELETE FROM financial_years;");
     db.executeNonQuery("DELETE FROM company_info;");
     AccountClassifier::invalidateCache();
+    db.setSetting("firm_source_type", "tally");
+    db.setSetting("is_migrated", "1");
 
     db.executeNonQuery(
         "INSERT OR REPLACE INTO company_info (id, company_name, gstin, state, state_code) VALUES (1, ?, ?, ?, ?);",
