@@ -561,6 +561,24 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
     DatabaseManager& db = DatabaseManager::instance();
     db.beginTransaction();
 
+    // Clear initial database tables before migrating so default seed placeholders do not duplicate
+    db.executeNonQuery("DELETE FROM transactions;");
+    db.executeNonQuery("DELETE FROM vouchers;");
+    db.executeNonQuery("DELETE FROM sales_invoices;");
+    db.executeNonQuery("DELETE FROM sales_invoice_items;");
+    db.executeNonQuery("DELETE FROM purchase_invoices;");
+    db.executeNonQuery("DELETE FROM purchase_invoice_items;");
+    db.executeNonQuery("DELETE FROM stock_transactions;");
+    db.executeNonQuery("DELETE FROM inventory;");
+    db.executeNonQuery("DELETE FROM stock_items;");
+    db.executeNonQuery("DELETE FROM stock_groups;");
+    db.executeNonQuery("DELETE FROM stock_units;");
+    db.executeNonQuery("DELETE FROM parties;");
+    db.executeNonQuery("DELETE FROM account_groups;");
+    db.executeNonQuery("DELETE FROM financial_years;");
+    db.executeNonQuery("DELETE FROM company_info;");
+    AccountClassifier::invalidateCache();
+
     BusyMigrationStats stats;
     stats.companyName = insp.value("company_name").toString();
     stats.gstin = insp.value("gstin").toString();

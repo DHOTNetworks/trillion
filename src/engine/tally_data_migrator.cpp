@@ -1,5 +1,6 @@
 #include "tally_data_migrator.h"
 #include "../database_manager.h"
+#include "../models/account_classifier.h"
 #include <QFile>
 #include <QFileInfo>
 #include <QDir>
@@ -519,6 +520,12 @@ bool TallyDataMigrator::migrate_tally_data(const QString& tallyPath, const QStri
         QList<TallyVoucherItem> items;
     };
 
+    struct TallyUnit {
+        QString name;
+        int decimalPlaces = 0;
+    };
+
+    QList<TallyUnit> stockUnits;
     QList<TallyGroup> groups;
     QList<TallyStockGroup> stockGroups;
     QList<TallyLedger> ledgers;
@@ -557,11 +564,7 @@ bool TallyDataMigrator::migrate_tally_data(const QString& tallyPath, const QStri
                         }
                     }
                     if (!name.isEmpty()) {
-                        db.executeNonQuery(
-                            "INSERT OR REPLACE INTO stock_units (unit_name, decimal_places) VALUES (?, ?);",
-                            {name, decPlaces}
-                        );
-                        stats.totalUnits++;
+                        stockUnits.append({name, decPlaces});
                     }
                 }
                 else if (tag == "STOCKGROUP") {
@@ -767,6 +770,25 @@ bool TallyDataMigrator::migrate_tally_data(const QString& tallyPath, const QStri
 
     // STEP 1: Insert Company Profile & Financial Years (35%)
     updateProgress(35, "Writing Company Profile & Fiscal Years...");
+
+    // Clear initial database tables before migrating so default seed placeholders do not duplicate
+    db.executeNonQuery("DELETE FROM transactions;");
+    db.executeNonQuery("DELETE FROM vouchers;");
+    db.executeNonQuery("DELETE FROM sales_invoices;");
+    db.executeNonQuery("DELETE FROM sales_invoice_items;");
+    db.executeNonQuery("DELETE FROM purchase_invoices;");
+    db.executeNonQuery("DELETE FROM purchase_invoice_items;");
+    db.executeNonQuery("DELETE FROM stock_transactions;");
+    db.executeNonQuery("DELETE FROM inventory;");
+    db.executeNonQuery("DELETE FROM stock_items;");
+    db.executeNonQuery("DELETE FROM stock_groups;");
+    db.executeNonQuery("DELETE FROM stock_units;");
+    db.executeNonQuery("DELETE FROM parties;");
+    db.executeNonQuery("DELETE FROM account_groups;");
+    db.executeNonQuery("DELETE FROM financial_years;");
+    db.executeNonQuery("DELETE FROM company_info;");
+    AccountClassifier::invalidateCache();
+
     db.executeNonQuery(
         "INSERT OR REPLACE INTO company_info (id, company_name, gstin, state, state_code) VALUES (1, ?, ?, ?, ?);",
         {detectedCompanyName, detectedGstin, "Haryana", "06"}
@@ -791,6 +813,13 @@ bool TallyDataMigrator::migrate_tally_data(const QString& tallyPath, const QStri
 
     // STEP 2: Stock Groups & Units (45%)
     updateProgress(45, "Writing Stock Groups and Units...");
+    for (const auto& u : stockUnits) {
+        db.executeNonQuery(
+            "INSERT OR REPLACE INTO stock_units (unit_name, decimal_places) VALUES (?, ?);",
+            {u.name, u.decimalPlaces}
+        );
+        stats.totalUnits++;
+    }
     for (const auto& sg : stockGroups) {
         db.executeNonQuery(
             "INSERT OR IGNORE INTO stock_groups (group_name) VALUES (?);",

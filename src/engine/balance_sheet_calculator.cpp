@@ -180,14 +180,14 @@ BalanceSheetData BalanceSheetCalculator::calculate(const QString& requestedAsOnD
         if (pId > 0 && sumByPartyId.contains(pId)) {
             transDr = sumByPartyId[pId].dr;
             transCr = sumByPartyId[pId].cr;
+        } else if (legId > 0 && sumByLegacyId.contains(legId)) {
+            transDr = sumByLegacyId[legId].dr;
+            transCr = sumByLegacyId[legId].cr;
         } else {
             QString pLower = pName.toLower();
-            if (sumByName.contains(pLower)) {
+            if (!pLower.isEmpty() && sumByName.contains(pLower)) {
                 transDr = sumByName[pLower].dr;
                 transCr = sumByName[pLower].cr;
-            } else if (legId > 0 && sumByLegacyId.contains(legId)) {
-                transDr = sumByLegacyId[legId].dr;
-                transCr = sumByLegacyId[legId].cr;
             }
         }
 
@@ -207,38 +207,38 @@ BalanceSheetData BalanceSheetCalculator::calculate(const QString& requestedAsOnD
         item.level = 1;
         item.isGroup = false;
 
-        QString targetGrp = gName;
+        GroupHierarchyInfo gInfo = AccountClassifier::getGroupInfo(gName);
+        QString canonicalGrp = !gInfo.name.isEmpty() ? gInfo.name : gName;
+        QString grpKey = canonicalGrp.trimmed().toLower();
 
         if (netBal < 0) {
             // Credit balance -> Liabilities side under this Account Group
-            if (!liabGroupMap.contains(targetGrp)) {
+            if (!liabGroupMap.contains(grpKey)) {
                 BalanceSheetItem grp;
-                grp.name = targetGrp;
-                grp.groupName = targetGrp;
+                grp.name = canonicalGrp;
+                grp.groupName = canonicalGrp;
                 grp.isGroup = true;
                 grp.level = 0;
                 grp.amount = 0.0;
-                GroupHierarchyInfo gInfo = AccountClassifier::getGroupInfo(targetGrp);
                 grp.extractInBalanceSheet = (gInfo.extractInBs != 0);
-                liabGroupMap[targetGrp] = grp;
+                liabGroupMap[grpKey] = grp;
             }
-            liabGroupMap[targetGrp].children.append(item);
-            liabGroupMap[targetGrp].amount += item.amount;
+            liabGroupMap[grpKey].children.append(item);
+            liabGroupMap[grpKey].amount += item.amount;
         } else {
             // Debit balance -> Assets side under this Account Group
-            if (!assetGroupMap.contains(targetGrp)) {
+            if (!assetGroupMap.contains(grpKey)) {
                 BalanceSheetItem grp;
-                grp.name = targetGrp;
-                grp.groupName = targetGrp;
+                grp.name = canonicalGrp;
+                grp.groupName = canonicalGrp;
                 grp.isGroup = true;
                 grp.level = 0;
                 grp.amount = 0.0;
-                GroupHierarchyInfo gInfo = AccountClassifier::getGroupInfo(targetGrp);
                 grp.extractInBalanceSheet = (gInfo.extractInBs != 0);
-                assetGroupMap[targetGrp] = grp;
+                assetGroupMap[grpKey] = grp;
             }
-            assetGroupMap[targetGrp].children.append(item);
-            assetGroupMap[targetGrp].amount += item.amount;
+            assetGroupMap[grpKey].children.append(item);
+            assetGroupMap[grpKey].amount += item.amount;
         }
     }
 
