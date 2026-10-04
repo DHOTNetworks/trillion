@@ -1,6 +1,7 @@
 #include "jform_model.h"
 #include "../database_manager.h"
 #include "../engine/accounting_engine.h"
+#include "../engine/fiscal_year_helper.h"
 #include <QDate>
 #include <QLocale>
 #include <iostream>
@@ -290,22 +291,181 @@ bool JFormModel::save_jform_voucher(const QVariantMap& data, const QVariantList&
 QVariantMap JFormModel::get_jform_voucher(const QVariant& voucherIdOrNo) {
     QVariantMap res;
     auto& db = DatabaseManager::instance();
-    QString queryVal = voucherIdOrNo.toString().trimmed();
-    if (queryVal.isEmpty()) return res;
 
-    QVariantList rows = db.executeQuery(
-        "SELECT * FROM jform_vouchers WHERE id = ? OR voucher_no = ? OR jform_no = ? LIMIT 1;",
-        {queryVal, queryVal, queryVal}
-    );
-    if (rows.isEmpty()) return res;
+    int targetId = 0;
+    QString vNo;
+    QString jfNo;
+    QString vDate;
+    QString fy;
 
-    res = rows.first().toMap();
-    int vId = res.value("id").toInt();
-    QVariantList items = db.executeQuery(
-        "SELECT * FROM jform_voucher_items WHERE voucher_id = ? ORDER BY id ASC;",
-        {vId}
+    if (voucherIdOrNo.typeId() == QMetaType::QVariantMap) {
+        QVariantMap m = voucherIdOrNo.toMap();
+        targetId = m.value("id").toInt();
+        vNo = m.value("voucher_no", m.value("voucherNo")).toString().trimmed();
+        jfNo = m.value("jform_no", m.value("jformNo", m.value("refNo", m.value("invoice_no")))).toString().trimmed();
+        vDate = FiscalYearHelper::normalizeToIso(m.value("vIso", m.value("voucher_date", m.value("date"))).toString());
+        fy = m.value("financial_year", m.value("financialYear")).toString().trimmed();
+    } else {
+        bool isNum = false;
+        int parsedId = voucherIdOrNo.toInt(&isNum);
+        if (isNum && parsedId > 0) {
+            targetId = parsedId;
+            vNo = QString::number(parsedId);
+        } else {
+            vNo = voucherIdOrNo.toString().trimmed();
+        }
+    }
+
+    static const QRegularExpression prefixRe(QStringLiteral("^(Sale|Sales|Purc|Purchase|Pur|Jrnl|Journal|ChPt|ChRt|Pymt|Rcpt|TDS|JFrm|J-Form|JForm|JF)[-\\s#]*"), QRegularExpression::CaseInsensitiveOption);
+    QString cleanVNo = vNo;
+    cleanVNo = cleanVNo.remove(prefixRe).trimmed();
+    if (cleanVNo.isEmpty()) cleanVNo = vNo;
+    if (jfNo.isEmpty()) jfNo = cleanVNo;
+
+    // 1. Direct search in jform_vouchers
+    QVariantList rows;
+    if (targetId > 0) {
+        rows = db.executeQuery("SELECT * FROM jform_vouchers WHERE id = ? LIMIT 1;", {targetId});
+    }
+    if (rows.isEmpty() && (!vNo.isEmpty() || !cleanVNo.isEmpty() || !jfNo.isEmpty())) {
+        rows = db.executeQuery(
+            "SELECT * FROM jform_vouchers WHERE voucher_no = ? OR voucher_no = ? OR jform_no = ? OR jform_no = ? LIMIT 1;",
+            {vNo, cleanVNo, jfNo, cleanVNo}
+        );
+    }
+    if (rows.isEmpty() && !vDate.isEmpty() && (!vNo.isEmpty() || !cleanVNo.isEmpty())) {
+        rows = db.executeQuery(
+            "SELECT * FROM jform_vouchers WHERE (voucher_no = ? OR voucher_no = ?) AND voucher_date = ? LIMIT 1;",
+            {vNo, cleanVNo, vDate}
+        );
+    }
+
+    if (!rows.isEmpty()) {
+        res = rows.first().toMap();
+        int vId = res.value("id").toInt();
+        int vNumber = res.value("voucher_no").toInt();
+        QVariantList items = db.executeQuery(
+            "SELECT * FROM jform_voucher_items WHERE voucher_id = ? OR voucher_no = ? ORDER BY id ASC;",
+            {vId, vNumber}
+        );
+        if (items.isEmpty() && vNumber > 0) {
+            QVariantList stRows = db.executeQuery(
+                "SELECT * FROM stock_transactions WHERE (voucher_no = ? OR voucher_no = ?) AND trans_type IN ('JFrm', 'J-Form', 'JForm') ORDER BY id ASC;",
+                {vNumber, QString::number(vNumber)}
+            );
+            for (const auto& stVar : stRows) {
+                QVariantMap st = stVar.toMap();
+                QVariantMap it;
+                it["item_id"] = st.value("item_id");
+                it["item_name"] = st.value("item_name");
+                it["bags"] = st.value("bags");
+                it["packing"] = 0.500;
+                it["loose_weight"] = 0.0;
+                it["weight"] = st.value("weight_qtl");
+                it["rate"] = st.value("rate");
+                it["amount"] = st.value("amount");
+                items.append(it);
+            }
+        }
+        res["items"] = items;
+        return res;
+    }
+
+    // 2. Fallback to purchase_invoices (Mandi J-Forms stored as purchase invoices)
+    QVariantList piRows;
+    if (targetId > 0) {
+        piRows = db.executeQuery("SELECT * FROM purchase_invoices WHERE id = ? LIMIT 1;", {targetId});
+    }
+    if (piRows.isEmpty() && (!cleanVNo.isEmpty() || !vNo.isEmpty() || !jfNo.isEmpty())) {
+        piRows = db.executeQuery(
+            "SELECT * FROM purchase_invoices WHERE invoice_no = ? OR invoice_no = ? OR voucher_no = ? OR voucher_no = ? OR ref_no = ? LIMIT 1;",
+            {vNo, cleanVNo, vNo, cleanVNo, jfNo}
+        );
+    }
+    if (!piRows.isEmpty()) {
+        QVariantMap pi = piRows.first().toMap();
+        res["id"] = pi.value("id");
+        res["voucher_no"] = pi.value("voucher_no").toInt() > 0 ? pi.value("voucher_no") : cleanVNo;
+        res["jform_no"] = !pi.value("invoice_no").toString().isEmpty() ? pi.value("invoice_no") : cleanVNo;
+        res["voucher_date"] = pi.value("invoice_date");
+        res["financial_year"] = pi.value("financial_year");
+        res["zimidar_id"] = pi.value("party_id");
+        res["zimidar_name"] = pi.value("party_name");
+        res["party_id"] = pi.value("party_id");
+        res["party_name"] = pi.value("party_name");
+        res["goods_amount"] = pi.value("taxable_amount").toDouble() > 0.001 ? pi.value("taxable_amount") : pi.value("total_amount");
+        res["labour_amount"] = pi.value("labour_charges");
+        res["round_off"] = pi.value("round_off");
+        res["grand_total"] = pi.value("grand_total").toDouble() > 0.001 ? pi.value("grand_total") : pi.value("total_amount");
+        res["narration"] = pi.value("remarks", pi.value("narration"));
+        res["vehicle_no"] = pi.value("vehicle_no");
+        res["broker_name"] = pi.value("broker_name", pi.value("broker"));
+
+        int piId = pi.value("id").toInt();
+        QVariantList piItems = db.executeQuery("SELECT * FROM purchase_invoice_items WHERE invoice_id = ? ORDER BY id ASC;", {piId});
+        QVariantList items;
+        for (const auto& pitVar : piItems) {
+            QVariantMap pit = pitVar.toMap();
+            QVariantMap it;
+            it["item_id"] = pit.value("item_id");
+            it["item_name"] = pit.value("item_name");
+            it["bags"] = pit.value("quantity_bags", pit.value("bags"));
+            it["packing"] = 0.500;
+            it["loose_weight"] = 0.0;
+            it["weight"] = pit.value("weight_quintals", pit.value("quantity"));
+            it["rate"] = pit.value("rate");
+            it["amount"] = pit.value("amount");
+            items.append(it);
+        }
+        res["items"] = items;
+        return res;
+    }
+
+    // 3. Fallback to stock_transactions
+    QVariantList stRows = db.executeQuery(
+        "SELECT * FROM stock_transactions WHERE (voucher_no = ? OR voucher_no = ?) AND trans_type IN ('JFrm', 'J-Form', 'JForm') ORDER BY id ASC;",
+        {vNo, cleanVNo}
     );
-    res["items"] = items;
+    if (!stRows.isEmpty()) {
+        QVariantMap first = stRows.first().toMap();
+        res["id"] = first.value("id");
+        res["voucher_no"] = cleanVNo;
+        res["jform_no"] = cleanVNo;
+        res["voucher_date"] = first.value("voucher_date");
+        res["zimidar_id"] = first.value("party_id");
+        res["zimidar_name"] = first.value("party_name");
+        res["party_id"] = first.value("party_id");
+        res["party_name"] = first.value("party_name");
+        res["narration"] = first.value("narration");
+
+        double totalGoods = 0.0;
+        int totalBags = 0;
+        double totalWt = 0.0;
+        QVariantList items;
+        for (const auto& stVar : stRows) {
+            QVariantMap st = stVar.toMap();
+            QVariantMap it;
+            it["item_id"] = st.value("item_id");
+            it["item_name"] = st.value("item_name");
+            it["bags"] = st.value("bags");
+            it["packing"] = 0.500;
+            it["loose_weight"] = 0.0;
+            it["weight"] = st.value("weight_qtl");
+            it["rate"] = st.value("rate");
+            it["amount"] = st.value("amount");
+            totalGoods += it["amount"].toDouble();
+            totalBags += it["bags"].toInt();
+            totalWt += it["weight"].toDouble();
+            items.append(it);
+        }
+        res["goods_amount"] = totalGoods;
+        res["grand_total"] = totalGoods;
+        res["total_bags"] = totalBags;
+        res["total_weight"] = totalWt;
+        res["items"] = items;
+        return res;
+    }
+
     return res;
 }
 

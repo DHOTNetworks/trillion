@@ -823,8 +823,10 @@ void IFormVoucherWidget::deleteVoucher() {
 void IFormVoucherWidget::openDateDialog(bool isInitial) {
     Q_UNUSED(isInitial);
     QString curDate = m_dateEdit ? m_dateEdit->date().toString("dd-MM-yyyy") : "";
+    QString curIso = m_dateEdit ? m_dateEdit->date().toString("yyyy-MM-dd") : "";
+    FiscalYearInfo fyCtx = FiscalYearHelper::getFiscalYearForDate(curIso);
     QString newDisp, newIso;
-    if (VoucherDateDialog::getVoucherDate(this, curDate, &newDisp, &newIso)) {
+    if (VoucherDateDialog::getVoucherDate(this, curDate, &newDisp, &newIso, fyCtx)) {
         if (m_dateEdit) {
             m_dateEdit->setDate(QDate::fromString(newIso, "yyyy-MM-dd"));
         }

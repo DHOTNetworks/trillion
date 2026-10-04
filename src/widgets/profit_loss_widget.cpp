@@ -8,6 +8,7 @@
 #include <QPainter>
 #include <QStyleOption>
 #include <QMessageBox>
+#include <QScrollBar>
 #include <QDebug>
 
 ProfitLossWidget::ProfitLossWidget(ProfitLossController* controller,
@@ -273,19 +274,24 @@ void ProfitLossWidget::applyCustomStyles() {
 }
 
 void ProfitLossWidget::refreshData(const QString& fromDateIso, const QString& toDateIso) {
-    m_controller->reload(fromDateIso, toDateIso);
+    if (m_controller) {
+        m_controller->reload(fromDateIso, toDateIso);
+    }
+    m_isDirty = false;
 }
 
 void ProfitLossWidget::setDateRange(const QString& fromDateIso, const QString& toDateIso) {
-    m_fromDateEdit->setIsoDate(fromDateIso);
-    m_toDateEdit->setIsoDate(toDateIso);
+    if (m_fromDateEdit) m_fromDateEdit->setIsoDate(fromDateIso);
+    if (m_toDateEdit) m_toDateEdit->setIsoDate(toDateIso);
+    m_isDirty = true;
     refreshData(fromDateIso, toDateIso);
 }
 
 void ProfitLossWidget::onDateFilterChanged() {
-    QString fDate = m_fromDateEdit->isoDate();
-    QString tDate = m_toDateEdit->isoDate();
+    QString fDate = m_fromDateEdit ? m_fromDateEdit->isoDate() : "";
+    QString tDate = m_toDateEdit ? m_toDateEdit->isoDate() : "";
     if (!fDate.isEmpty() && !tDate.isEmpty()) {
+        m_isDirty = true;
         refreshData(fDate, tDate);
     }
 }
@@ -304,9 +310,8 @@ void ProfitLossWidget::populateTrees() {
     m_fromDateEdit->blockSignals(false);
     m_toDateEdit->blockSignals(false);
 
-    // Save scroll & selection positions
-    m_lastExpIndex = m_expensesTree->currentIndex().row();
-    m_lastIncIndex = m_incomesTree->currentIndex().row();
+    m_expensesTree->setUpdatesEnabled(false);
+    m_incomesTree->setUpdatesEnabled(false);
 
     m_expensesTree->clear();
     m_incomesTree->clear();
@@ -435,6 +440,12 @@ void ProfitLossWidget::populateTrees() {
 
     m_expensesTree->expandAll();
     m_incomesTree->expandAll();
+    if (m_expensesTree->topLevelItemCount() > 0 && !m_expensesTree->currentItem() && !m_incomesTree->currentItem()) {
+        m_expensesTree->setCurrentItem(m_expensesTree->topLevelItem(0));
+    }
+
+    m_expensesTree->setUpdatesEnabled(true);
+    m_incomesTree->setUpdatesEnabled(true);
 
     // Footer Updates
     if (d.grossProfit >= 0.0) {
@@ -451,13 +462,6 @@ void ProfitLossWidget::populateTrees() {
     } else {
         m_netProfitBadge->setText(QString("Net Loss: %1").arg(m_controller->netProfitFmt()));
         m_netProfitBadge->setStyleSheet("color: #DC2626; font-size: 14px; font-weight: 900; background: transparent;");
-    }
-
-    // Restore focus row only on initial setup if nothing selected
-    if (m_expensesTree->topLevelItemCount() > 0 && !m_expensesTree->currentItem() && !m_incomesTree->currentItem()) {
-        int idx = qBound(0, m_lastExpIndex, m_expensesTree->topLevelItemCount() - 1);
-        m_expensesTree->setCurrentItem(m_expensesTree->topLevelItem(idx));
-        m_expensesTree->setFocus(Qt::OtherFocusReason);
     }
 }
 
@@ -704,7 +708,7 @@ void ProfitLossWidget::keyPressEvent(QKeyEvent* event) {
 void ProfitLossWidget::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
     FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
-    if (m_controller && (m_controller->data().financialYear != activeFy.name || m_controller->data().fromDate != activeFy.startDate || m_controller->data().toDate != activeFy.endDate)) {
+    if (m_isDirty || (m_controller && (m_controller->data().financialYear != activeFy.name || m_controller->data().fromDate.isEmpty()))) {
         refreshData(activeFy.startDate, activeFy.endDate);
     }
     focusActiveTree();

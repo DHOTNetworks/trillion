@@ -31,6 +31,7 @@ signals:
 
 protected:
     void keyPressEvent(QKeyEvent* event) override;
+    void showEvent(QShowEvent* event) override;
 
 private slots:
     void onSearchChanged(const QString& query);

@@ -298,22 +298,27 @@ void StockRegisterController::fetchRawData(const QString& fromDate, const QStrin
         // Mode 4: Item Monthly / Daily Timeline Breakdown
         // ====================================================================
         int itmId = m_selectedItemId;
-        if (itmId <= 0) {
+        QVariantList itmRows;
+        if (itmId > 0) {
+            itmRows = db.executeQuery("SELECT name, code, unit, opening_qty, opening_bags, opening_rate FROM stock_items WHERE id = ?;", {itmId});
+        }
+        if (itmRows.isEmpty()) {
             QVariant activeItem = db.executeScalar("SELECT item_id FROM stock_transactions WHERE item_id > 0 ORDER BY voucher_date DESC LIMIT 1;");
             if (activeItem.isValid() && activeItem.toInt() > 0) {
                 itmId = activeItem.toInt();
-            } else {
+                itmRows = db.executeQuery("SELECT name, code, unit, opening_qty, opening_bags, opening_rate FROM stock_items WHERE id = ?;", {itmId});
+            }
+            if (itmRows.isEmpty()) {
                 QVariant fst = db.executeScalar("SELECT id FROM stock_items ORDER BY name COLLATE NOCASE ASC LIMIT 1;");
-                if (fst.isValid()) itmId = fst.toInt();
+                if (fst.isValid()) {
+                    itmId = fst.toInt();
+                    itmRows = db.executeQuery("SELECT name, code, unit, opening_qty, opening_bags, opening_rate FROM stock_items WHERE id = ?;", {itmId});
+                }
             }
             m_selectedItemId = itmId;
         }
-        if (itmId <= 0) return;
-
-        QVariantMap itmMeta = db.executeScalar("SELECT name, code, unit, opening_qty, opening_bags, opening_rate FROM stock_items WHERE id = ?;", {itmId}).toMap();
-        QVariantList itmRows = db.executeQuery("SELECT name, code, unit, opening_qty, opening_bags, opening_rate FROM stock_items WHERE id = ?;", {itmId});
         if (itmRows.isEmpty()) return;
-        itmMeta = itmRows.first().toMap();
+        QVariantMap itmMeta = itmRows.first().toMap();
 
         QString itmName = itmMeta.value("name").toString();
         QString itmCode = itmMeta.value("code").toString();

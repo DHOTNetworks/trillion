@@ -401,20 +401,20 @@ QVariantMap VouchersModel::get_cheque_voucher(const QVariant& vchNoOrId, const Q
                 {vNo, cleanVNo, vDate}
             );
         }
-        if (foundRows.isEmpty() && !fy.isEmpty() && (!vNo.isEmpty() || !cleanVNo.isEmpty())) {
-            foundRows = DatabaseManager::instance().executeQuery(
-                "SELECT * FROM transactions WHERE (voucher_no = ? OR voucher_no = ?) AND (financial_year = ? OR financial_year = ?) "
-                "AND (voucher_type IN ('Payment', 'Receipt', 'ChPt', 'ChRt', 'Bank', 'Pymt', 'Rcpt', 'Cash Payment', 'Cash Receipt') "
-                "OR trans_type IN ('Payment', 'Receipt', 'ChPt', 'ChRt', 'Bank', 'Pymt', 'Rcpt', 'Cash Payment', 'Cash Receipt')) ORDER BY id ASC LIMIT 1;",
-                {vNo, cleanVNo, fy, "FY " + fy}
-            );
-        }
         if (foundRows.isEmpty() && !vDate.isEmpty() && (!vNo.isEmpty() || !cleanVNo.isEmpty())) {
             foundRows = DatabaseManager::instance().executeQuery(
                 "SELECT * FROM vouchers WHERE (voucher_no = ? OR voucher_no = ?) AND voucher_date = ? "
                 "AND (voucher_type IN ('Payment', 'Receipt', 'ChPt', 'ChRt', 'Bank', 'Pymt', 'Rcpt', 'Cash Payment', 'Cash Receipt') "
                 "OR legacy_type IN ('Payment', 'Receipt', 'ChPt', 'ChRt', 'Bank', 'Pymt', 'Rcpt', 'Cash Payment', 'Cash Receipt')) ORDER BY id ASC LIMIT 1;",
                 {vNo, cleanVNo, vDate}
+            );
+        }
+        if (foundRows.isEmpty() && !fy.isEmpty() && (!vNo.isEmpty() || !cleanVNo.isEmpty())) {
+            foundRows = DatabaseManager::instance().executeQuery(
+                "SELECT * FROM transactions WHERE (voucher_no = ? OR voucher_no = ?) AND (financial_year = ? OR financial_year = ?) "
+                "AND (voucher_type IN ('Payment', 'Receipt', 'ChPt', 'ChRt', 'Bank', 'Pymt', 'Rcpt', 'Cash Payment', 'Cash Receipt') "
+                "OR trans_type IN ('Payment', 'Receipt', 'ChPt', 'ChRt', 'Bank', 'Pymt', 'Rcpt', 'Cash Payment', 'Cash Receipt')) ORDER BY id ASC LIMIT 1;",
+                {vNo, cleanVNo, fy, "FY " + fy}
             );
         }
         if (foundRows.isEmpty() && !fy.isEmpty() && (!vNo.isEmpty() || !cleanVNo.isEmpty())) {
@@ -438,22 +438,22 @@ QVariantMap VouchersModel::get_cheque_voucher(const QVariant& vchNoOrId, const Q
 
     if (v.isEmpty()) return {};
 
-    // 3. Assemble all sibling line items for this exact voucher and fiscal year
+    // 3. Assemble all sibling line items for this exact voucher (prioritize matching by date)
     QVariantList txRows;
-    if (!fy.isEmpty()) {
-        txRows = DatabaseManager::instance().executeQuery(
-            "SELECT * FROM transactions WHERE (voucher_no = ? OR voucher_no = ?) AND (financial_year = ? OR financial_year = ?) "
-            "AND (voucher_type IN ('Payment', 'Receipt', 'ChPt', 'ChRt', 'Bank', 'Pymt', 'Rcpt', 'Cash Payment', 'Cash Receipt') "
-            "OR trans_type IN ('Payment', 'Receipt', 'ChPt', 'ChRt', 'Bank', 'Pymt', 'Rcpt', 'Cash Payment', 'Cash Receipt')) ORDER BY id ASC;",
-            {vNo, cleanVNo, fy, "FY " + fy}
-        );
-    }
-    if (txRows.isEmpty() && !vDate.isEmpty()) {
+    if (!vDate.isEmpty() && (!vNo.isEmpty() || !cleanVNo.isEmpty())) {
         txRows = DatabaseManager::instance().executeQuery(
             "SELECT * FROM transactions WHERE (voucher_no = ? OR voucher_no = ?) AND voucher_date = ? "
             "AND (voucher_type IN ('Payment', 'Receipt', 'ChPt', 'ChRt', 'Bank', 'Pymt', 'Rcpt', 'Cash Payment', 'Cash Receipt') "
-            "OR trans_type IN ('Payment', 'Receipt', 'ChPt', 'ChRt', 'Bank', 'Pymt', 'Rcpt', 'Cash Payment', 'Cash Receipt')) ORDER BY id ASC;",
+            "OR trans_type IN ('Payment', 'Receipt', 'ChPt', 'ChRt', 'Bank', 'Pymt', 'Rcpt', 'Cash Payment', 'Cash Receipt')) ORDER BY row_no ASC, id ASC;",
             {vNo, cleanVNo, vDate}
+        );
+    }
+    if (txRows.isEmpty() && !fy.isEmpty() && (!vNo.isEmpty() || !cleanVNo.isEmpty())) {
+        txRows = DatabaseManager::instance().executeQuery(
+            "SELECT * FROM transactions WHERE (voucher_no = ? OR voucher_no = ?) AND (financial_year = ? OR financial_year = ?) "
+            "AND (voucher_type IN ('Payment', 'Receipt', 'ChPt', 'ChRt', 'Bank', 'Pymt', 'Rcpt', 'Cash Payment', 'Cash Receipt') "
+            "OR trans_type IN ('Payment', 'Receipt', 'ChPt', 'ChRt', 'Bank', 'Pymt', 'Rcpt', 'Cash Payment', 'Cash Receipt')) ORDER BY row_no ASC, id ASC;",
+            {vNo, cleanVNo, fy, "FY " + fy}
         );
     }
 
@@ -475,6 +475,27 @@ QVariantMap VouchersModel::get_cheque_voucher(const QVariant& vchNoOrId, const Q
             item["refNo"] = t.value("invoice_no").toString();
             items.append(item);
         }
+
+        if (items.size() == 1) {
+            QString opp = v.value("opposing_account").toString().trimmed();
+            if (opp.isEmpty()) opp = v.value("account_type").toString().trimmed();
+            if (!opp.isEmpty()) {
+                QVariantMap firstItm = items[0].toMap();
+                QVariantMap oppItem;
+                bool isDr = (firstItm.value("drcr").toString().toUpper() == "DR");
+                oppItem["drcr"] = isDr ? "Cr" : "Dr";
+                oppItem["ledgerName"] = opp;
+                if (isDr) {
+                    oppItem["debitAmt"] = "";
+                    oppItem["creditAmt"] = firstItm.value("debitAmt");
+                } else {
+                    oppItem["debitAmt"] = firstItm.value("creditAmt");
+                    oppItem["creditAmt"] = "";
+                }
+                oppItem["refNo"] = firstItm.value("refNo");
+                items.append(oppItem);
+            }
+        }
     } else {
         QVariantMap drItem;
         drItem["drcr"] = "Dr";
@@ -486,7 +507,7 @@ QVariantMap VouchersModel::get_cheque_voucher(const QVariant& vchNoOrId, const Q
 
         QVariantMap crItem;
         crItem["drcr"] = "Cr";
-        crItem["ledgerName"] = v.value("account_type").toString();
+        crItem["ledgerName"] = v.value("account_type", v.value("opposing_account")).toString();
         crItem["debitAmt"] = "";
         crItem["creditAmt"] = QString::number(v.value("amount").toDouble(), 'f', 2);
         crItem["refNo"] = v.value("instrument_no").toString();
@@ -519,7 +540,12 @@ QVariantMap VouchersModel::get_journal_voucher(const QVariant& vchNoOrId, const 
             if (!chk.isEmpty()) {
                 txId = parsedId;
             } else {
-                vNo = QString::number(parsedId);
+                QVariantList chkV = DatabaseManager::instance().executeQuery("SELECT * FROM vouchers WHERE id = ? LIMIT 1;", {parsedId});
+                if (!chkV.isEmpty()) {
+                    txId = parsedId;
+                } else {
+                    vNo = QString::number(parsedId);
+                }
             }
         } else {
             vNo = vchNoOrId.toString().trimmed();
@@ -531,7 +557,24 @@ QVariantMap VouchersModel::get_journal_voucher(const QVariant& vchNoOrId, const 
     cleanVNo = cleanVNo.remove(prefixRe).trimmed();
     if (cleanVNo.isEmpty()) cleanVNo = vNo;
 
-    // 1. If exact transaction ID provided
+    // Support structured voucher numbers like 2526/JRNL-1 or FY 2025-26/1
+    if (vNo.contains("/")) {
+        QStringList parts = vNo.split("/");
+        if (parts.size() >= 2) {
+            QString p0 = parts[0].trimmed();
+            if (p0.length() == 4 && p0.toInt() > 1000) {
+                int y1 = p0.left(2).toInt() + 2000;
+                int y2 = p0.mid(2, 2).toInt() + 2000;
+                fy = QString("FY %1-%2").arg(y1).arg(QString::number(y2).right(2));
+            } else if (p0.startsWith("FY", Qt::CaseInsensitive)) {
+                fy = p0;
+            }
+            cleanVNo = parts.last().trimmed();
+            cleanVNo = cleanVNo.remove(prefixRe).trimmed();
+        }
+    }
+
+    // 1. If exact transaction or voucher ID provided
     if (txId > 0) {
         QVariantList txRow = DatabaseManager::instance().executeQuery("SELECT * FROM transactions WHERE id = ? LIMIT 1;", {txId});
         if (!txRow.isEmpty()) {
@@ -541,6 +584,16 @@ QVariantMap VouchersModel::get_journal_voucher(const QVariant& vchNoOrId, const 
             cleanVNo = cleanVNo.remove(prefixRe).trimmed();
             vDate = v.value("voucher_date").toString();
             fy = v.value("financial_year").toString();
+        } else {
+            QVariantList vRow = DatabaseManager::instance().executeQuery("SELECT * FROM vouchers WHERE id = ? LIMIT 1;", {txId});
+            if (!vRow.isEmpty()) {
+                v = vRow.first().toMap();
+                vNo = v.value("voucher_no").toString();
+                cleanVNo = vNo;
+                cleanVNo = cleanVNo.remove(prefixRe).trimmed();
+                vDate = v.value("voucher_date").toString();
+                fy = v.value("financial_year").toString();
+            }
         }
     }
 
@@ -559,28 +612,28 @@ QVariantMap VouchersModel::get_journal_voucher(const QVariant& vchNoOrId, const 
         if (!vDate.isEmpty() && (!vNo.isEmpty() || !cleanVNo.isEmpty())) {
             foundRows = DatabaseManager::instance().executeQuery(
                 "SELECT * FROM transactions WHERE (voucher_no = ? OR voucher_no = ?) AND voucher_date = ? "
-                "AND (voucher_type IN ('Journal', 'Jrnl') OR trans_type IN ('Journal', 'Jrnl')) ORDER BY id ASC LIMIT 1;",
+                "AND (UPPER(voucher_type) IN ('JOURNAL', 'JRNL', 'JV', 'JL', 'JRN') OR UPPER(trans_type) IN ('JOURNAL', 'JRNL', 'JV', 'JL', 'JRN')) ORDER BY id ASC LIMIT 1;",
+                {vNo, cleanVNo, vDate}
+            );
+        }
+        if (foundRows.isEmpty() && !vDate.isEmpty() && (!vNo.isEmpty() || !cleanVNo.isEmpty())) {
+            foundRows = DatabaseManager::instance().executeQuery(
+                "SELECT * FROM vouchers WHERE (voucher_no = ? OR voucher_no = ?) AND voucher_date = ? "
+                "AND (UPPER(voucher_type) IN ('JOURNAL', 'JRNL', 'JV', 'JL', 'JRN') OR UPPER(legacy_type) IN ('JOURNAL', 'JRNL', 'JV', 'JL', 'JRN')) ORDER BY id ASC LIMIT 1;",
                 {vNo, cleanVNo, vDate}
             );
         }
         if (foundRows.isEmpty() && !fy.isEmpty() && (!vNo.isEmpty() || !cleanVNo.isEmpty())) {
             foundRows = DatabaseManager::instance().executeQuery(
                 "SELECT * FROM transactions WHERE (voucher_no = ? OR voucher_no = ?) AND (financial_year = ? OR financial_year = ?) "
-                "AND (voucher_type IN ('Journal', 'Jrnl') OR trans_type IN ('Journal', 'Jrnl')) ORDER BY id ASC LIMIT 1;",
+                "AND (UPPER(voucher_type) IN ('JOURNAL', 'JRNL', 'JV', 'JL', 'JRN') OR UPPER(trans_type) IN ('JOURNAL', 'JRNL', 'JV', 'JL', 'JRN')) ORDER BY id ASC LIMIT 1;",
                 {vNo, cleanVNo, fy, "FY " + fy}
-            );
-        }
-        if (foundRows.isEmpty() && !vDate.isEmpty() && (!vNo.isEmpty() || !cleanVNo.isEmpty())) {
-            foundRows = DatabaseManager::instance().executeQuery(
-                "SELECT * FROM vouchers WHERE (voucher_no = ? OR voucher_no = ?) AND voucher_date = ? "
-                "AND (voucher_type IN ('Journal', 'Jrnl') OR legacy_type IN ('Journal', 'Jrnl')) ORDER BY id ASC LIMIT 1;",
-                {vNo, cleanVNo, vDate}
             );
         }
         if (foundRows.isEmpty() && !fy.isEmpty() && (!vNo.isEmpty() || !cleanVNo.isEmpty())) {
             foundRows = DatabaseManager::instance().executeQuery(
                 "SELECT * FROM vouchers WHERE (voucher_no = ? OR voucher_no = ?) AND (financial_year = ? OR financial_year = ?) "
-                "AND (voucher_type IN ('Journal', 'Jrnl') OR legacy_type IN ('Journal', 'Jrnl')) ORDER BY id ASC LIMIT 1;",
+                "AND (UPPER(voucher_type) IN ('JOURNAL', 'JRNL', 'JV', 'JL', 'JRN') OR UPPER(legacy_type) IN ('JOURNAL', 'JRNL', 'JV', 'JL', 'JRN')) ORDER BY id ASC LIMIT 1;",
                 {vNo, cleanVNo, fy, "FY " + fy}
             );
         }
@@ -597,20 +650,20 @@ QVariantMap VouchersModel::get_journal_voucher(const QVariant& vchNoOrId, const 
 
     if (v.isEmpty()) return {};
 
-    // 3. Assemble all sibling line items for this exact Journal Voucher and fiscal year
+    // 3. Assemble all sibling line items for this exact Journal Voucher (prioritize matching by date)
     QVariantList txRows;
-    if (!fy.isEmpty()) {
-        txRows = DatabaseManager::instance().executeQuery(
-            "SELECT * FROM transactions WHERE (voucher_no = ? OR voucher_no = ?) AND (financial_year = ? OR financial_year = ?) "
-            "AND (voucher_type IN ('Journal', 'Jrnl') OR trans_type IN ('Journal', 'Jrnl')) ORDER BY id ASC;",
-            {vNo, cleanVNo, fy, "FY " + fy}
-        );
-    }
-    if (txRows.isEmpty() && !vDate.isEmpty()) {
+    if (!vDate.isEmpty() && (!vNo.isEmpty() || !cleanVNo.isEmpty())) {
         txRows = DatabaseManager::instance().executeQuery(
             "SELECT * FROM transactions WHERE (voucher_no = ? OR voucher_no = ?) AND voucher_date = ? "
-            "AND (voucher_type IN ('Journal', 'Jrnl') OR trans_type IN ('Journal', 'Jrnl')) ORDER BY id ASC;",
+            "AND (UPPER(voucher_type) IN ('JOURNAL', 'JRNL', 'JV', 'JL', 'JRN') OR UPPER(trans_type) IN ('JOURNAL', 'JRNL', 'JV', 'JL', 'JRN')) ORDER BY row_no ASC, id ASC;",
             {vNo, cleanVNo, vDate}
+        );
+    }
+    if (txRows.isEmpty() && !fy.isEmpty() && (!vNo.isEmpty() || !cleanVNo.isEmpty())) {
+        txRows = DatabaseManager::instance().executeQuery(
+            "SELECT * FROM transactions WHERE (voucher_no = ? OR voucher_no = ?) AND (financial_year = ? OR financial_year = ?) "
+            "AND (UPPER(voucher_type) IN ('JOURNAL', 'JRNL', 'JV', 'JL', 'JRN') OR UPPER(trans_type) IN ('JOURNAL', 'JRNL', 'JV', 'JL', 'JRN')) ORDER BY row_no ASC, id ASC;",
+            {vNo, cleanVNo, fy, "FY " + fy}
         );
     }
 
@@ -622,7 +675,7 @@ QVariantMap VouchersModel::get_journal_voucher(const QVariant& vchNoOrId, const 
             item["drcr"] = t.value("dr_cr").toString().trimmed().isEmpty() ? "Dr" : t.value("dr_cr").toString();
             item["ledgerName"] = t.value("party_name").toString();
             double amt = t.value("amount").toDouble();
-            if (item["drcr"] == "Dr") {
+            if (item["drcr"].toString().toUpper() == "DR") {
                 item["debitAmt"] = QString::number(amt, 'f', 2);
                 item["creditAmt"] = "";
             } else {
@@ -632,26 +685,84 @@ QVariantMap VouchersModel::get_journal_voucher(const QVariant& vchNoOrId, const 
             item["refNo"] = t.value("invoice_no").toString();
             items.append(item);
         }
-    } else {
-        QVariantMap drItem;
-        drItem["drcr"] = "Dr";
-        drItem["ledgerName"] = v.value("party_name").toString();
-        drItem["debitAmt"] = QString::number(v.value("amount").toDouble(), 'f', 2);
-        drItem["creditAmt"] = "";
-        drItem["refNo"] = v.value("instrument_no").toString();
-        items.append(drItem);
 
-        QVariantMap crItem;
-        crItem["drcr"] = "Cr";
-        crItem["ledgerName"] = v.value("account_type").toString();
-        crItem["debitAmt"] = "";
-        crItem["creditAmt"] = QString::number(v.value("amount").toDouble(), 'f', 2);
-        crItem["refNo"] = v.value("instrument_no").toString();
-        items.append(crItem);
+        if (items.size() == 1) {
+            QString opp = v.value("opposing_account").toString().trimmed();
+            if (opp.isEmpty()) opp = v.value("account_type").toString().trimmed();
+            if (!opp.isEmpty()) {
+                QVariantMap firstItm = items[0].toMap();
+                QVariantMap oppItem;
+                bool isDr = (firstItm.value("drcr").toString().toUpper() == "DR");
+                oppItem["drcr"] = isDr ? "Cr" : "Dr";
+                oppItem["ledgerName"] = opp;
+                if (isDr) {
+                    oppItem["debitAmt"] = "";
+                    oppItem["creditAmt"] = firstItm.value("debitAmt");
+                } else {
+                    oppItem["debitAmt"] = firstItm.value("creditAmt");
+                    oppItem["creditAmt"] = "";
+                }
+                oppItem["refNo"] = firstItm.value("refNo");
+                items.append(oppItem);
+            }
+        }
+    } else {
+        // Check vouchers table for sibling rows
+        QVariantList vRows;
+        if (!vDate.isEmpty() && (!vNo.isEmpty() || !cleanVNo.isEmpty())) {
+            vRows = DatabaseManager::instance().executeQuery(
+                "SELECT * FROM vouchers WHERE (voucher_no = ? OR voucher_no = ?) AND voucher_date = ? "
+                "AND (UPPER(voucher_type) IN ('JOURNAL', 'JRNL', 'JV', 'JL', 'JRN') OR UPPER(legacy_type) IN ('JOURNAL', 'JRNL', 'JV', 'JL', 'JRN')) ORDER BY id ASC;",
+                {vNo, cleanVNo, vDate}
+            );
+        }
+        if (vRows.isEmpty() && !fy.isEmpty() && (!vNo.isEmpty() || !cleanVNo.isEmpty())) {
+            vRows = DatabaseManager::instance().executeQuery(
+                "SELECT * FROM vouchers WHERE (voucher_no = ? OR voucher_no = ?) AND (financial_year = ? OR financial_year = ?) "
+                "AND (UPPER(voucher_type) IN ('JOURNAL', 'JRNL', 'JV', 'JL', 'JRN') OR UPPER(legacy_type) IN ('JOURNAL', 'JRNL', 'JV', 'JL', 'JRN')) ORDER BY id ASC;",
+                {vNo, cleanVNo, fy, "FY " + fy}
+            );
+        }
+
+        if (vRows.size() > 1) {
+            for (const auto& vr : vRows) {
+                QVariantMap vm = vr.toMap();
+                QVariantMap item;
+                item["drcr"] = vm.value("drcr", vm.value("dr_cr")).toString().trimmed().isEmpty() ? "Dr" : vm.value("drcr", vm.value("dr_cr")).toString();
+                item["ledgerName"] = !vm.value("party_name").toString().isEmpty() ? vm.value("party_name").toString() : vm.value("ledger_name").toString();
+                double amt = vm.value("amount").toDouble();
+                if (item["drcr"].toString().toUpper() == "DR") {
+                    item["debitAmt"] = QString::number(amt, 'f', 2);
+                    item["creditAmt"] = "";
+                } else {
+                    item["debitAmt"] = "";
+                    item["creditAmt"] = QString::number(amt, 'f', 2);
+                }
+                item["refNo"] = vm.value("instrument_no", vm.value("invoice_no")).toString();
+                items.append(item);
+            }
+        } else {
+            QVariantMap drItem;
+            drItem["drcr"] = "Dr";
+            drItem["ledgerName"] = v.value("party_name").toString();
+            drItem["debitAmt"] = QString::number(v.value("amount").toDouble(), 'f', 2);
+            drItem["creditAmt"] = "";
+            drItem["refNo"] = v.value("instrument_no").toString();
+            items.append(drItem);
+
+            QVariantMap crItem;
+            crItem["drcr"] = "Cr";
+            crItem["ledgerName"] = v.value("account_type", v.value("opposing_account")).toString();
+            crItem["debitAmt"] = "";
+            crItem["creditAmt"] = QString::number(v.value("amount").toDouble(), 'f', 2);
+            crItem["refNo"] = v.value("instrument_no").toString();
+            items.append(crItem);
+        }
     }
     v["rows"] = items;
     return v;
 }
+
 
 bool VouchersModel::save_multi_row_voucher(
     int editId,

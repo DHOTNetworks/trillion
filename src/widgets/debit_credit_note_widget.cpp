@@ -500,8 +500,9 @@ void DebitCreditNoteWidget::resetForm() {
 void DebitCreditNoteWidget::openDateDialog() {
     QDate curDate = m_noteDateEdit->date();
     if (!curDate.isValid()) curDate = QDate::currentDate();
+    FiscalYearInfo fyCtx = FiscalYearHelper::getFiscalYearForDate(curDate.toString("yyyy-MM-dd"));
 
-    QDate chosen = VoucherDateDialog::selectDate(this, curDate);
+    QDate chosen = VoucherDateDialog::selectDate(this, curDate, fyCtx);
     if (chosen.isValid()) {
         m_noteDateEdit->setDate(chosen);
     }

@@ -436,8 +436,9 @@ void TdsVoucherWidget::resetForm() {
 void TdsVoucherWidget::openDateDialog() {
     QDate curDate = QDate::fromString(m_voucherDateEdit->text(), "dd-MM-yyyy");
     if (!curDate.isValid()) curDate = QDate::currentDate();
+    FiscalYearInfo fyCtx = FiscalYearHelper::getFiscalYearForDate(curDate.toString("yyyy-MM-dd"));
 
-    QDate chosen = VoucherDateDialog::selectDate(this, curDate);
+    QDate chosen = VoucherDateDialog::selectDate(this, curDate, fyCtx);
     if (chosen.isValid()) {
         m_voucherDateEdit->setText(chosen.toString("dd-MM-yyyy"));
         m_dayLabel->setText(chosen.toString("dddd"));

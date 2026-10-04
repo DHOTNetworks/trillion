@@ -88,8 +88,9 @@ void AccountingDateEdit::openDateDialog() {
     QDate cur = date();
     if (!cur.isValid()) cur = QDate::currentDate();
 
-    FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
-    QDate chosen = VoucherDateDialog::selectDate(this, cur, activeFy);
+    FiscalYearInfo fyContext = FiscalYearHelper::getFiscalYearForDate(cur.toString("yyyy-MM-dd"));
+    if (!fyContext.isValid()) fyContext = FiscalYearHelper::getActiveFiscalYear();
+    QDate chosen = VoucherDateDialog::selectDate(this, cur, fyContext);
     if (chosen.isValid() && chosen != date()) {
         setDate(chosen);
     }
@@ -111,23 +112,13 @@ QDate AccountingDateEdit::date() const {
 
 void AccountingDateEdit::setDate(const QDate& date) {
     if (!date.isValid()) return;
-    QDate target = date;
-    FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
-    if (activeFy.isValid()) {
-        QDate fyStart = QDate::fromString(activeFy.startDate, "yyyy-MM-dd");
-        QDate fyEnd = QDate::fromString(activeFy.endDate, "yyyy-MM-dd");
-        if (fyStart.isValid() && fyEnd.isValid()) {
-            if (target < fyStart) target = fyStart;
-            if (target > fyEnd) target = fyEnd;
-        }
-    }
-    QString formatted = target.toString("dd-MM-yyyy");
+    QString formatted = date.toString("dd-MM-yyyy");
     if (text() != formatted) {
         setText(formatted);
     }
-    if (target != m_lastDate) {
-        m_lastDate = target;
-        emit dateChanged(target);
+    if (date != m_lastDate) {
+        m_lastDate = date;
+        emit dateChanged(date);
     }
 }
 

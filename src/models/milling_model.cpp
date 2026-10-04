@@ -549,13 +549,57 @@ QVariantList MillingModel::get_batch_items(int batch_id, const QString& batch_no
 }
 
 QVariantMap MillingModel::get_milling_batch(const QVariant& batchNoOrId) {
-    QString qVal = batchNoOrId.toString().trimmed();
-    if (qVal.isEmpty()) return {};
+    int targetId = 0;
+    QString batchNo = "";
+    QString dateHint = "";
 
-    QVariantList rows = DatabaseManager::instance().executeQuery(
-        "SELECT * FROM milling_batches WHERE id = ? OR batch_no = ? LIMIT 1;",
-        {qVal, qVal}
-    );
+    if (batchNoOrId.userType() == QMetaType::QVariantMap) {
+        QVariantMap m = batchNoOrId.toMap();
+        if (m.contains("targetId")) targetId = m.value("targetId").toInt();
+        else if (m.contains("id")) targetId = m.value("id").toInt();
+        else if (m.contains("batch_id")) targetId = m.value("batch_id").toInt();
+
+        if (m.contains("batch_no")) batchNo = m.value("batch_no").toString().trimmed();
+        else if (m.contains("voucher_no")) batchNo = m.value("voucher_no").toString().trimmed();
+        else if (m.contains("invoice_no")) batchNo = m.value("invoice_no").toString().trimmed();
+
+        if (m.contains("dateHint")) dateHint = m.value("dateHint").toString().trimmed();
+        else if (m.contains("batch_date")) dateHint = m.value("batch_date").toString().trimmed();
+        else if (m.contains("voucher_date")) dateHint = m.value("voucher_date").toString().trimmed();
+        else if (m.contains("vIso")) dateHint = m.value("vIso").toString().trimmed();
+    } else {
+        QString qVal = batchNoOrId.toString().trimmed();
+        if (qVal.isEmpty()) return {};
+        bool isNum = false;
+        int num = qVal.toInt(&isNum);
+        if (isNum && num > 0) {
+            targetId = num;
+        }
+        batchNo = qVal;
+    }
+
+    QVariantList rows;
+    if (targetId > 0) {
+        rows = DatabaseManager::instance().executeQuery(
+            "SELECT * FROM milling_batches WHERE id = ? LIMIT 1;",
+            {targetId}
+        );
+    }
+
+    if (rows.isEmpty() && !batchNo.isEmpty() && !dateHint.isEmpty()) {
+        rows = DatabaseManager::instance().executeQuery(
+            "SELECT * FROM milling_batches WHERE batch_no = ? AND batch_date = ? LIMIT 1;",
+            {batchNo, dateHint}
+        );
+    }
+
+    if (rows.isEmpty() && !batchNo.isEmpty()) {
+        rows = DatabaseManager::instance().executeQuery(
+            "SELECT * FROM milling_batches WHERE batch_no = ? ORDER BY id DESC LIMIT 1;",
+            {batchNo}
+        );
+    }
+
     if (rows.isEmpty()) return {};
 
     QVariantMap batch = rows.first().toMap();

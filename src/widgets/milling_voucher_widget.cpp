@@ -370,8 +370,9 @@ void MillingVoucherWidget::openDateDialog(bool isInitial) {
     Q_UNUSED(isInitial);
     QDate curDate = QDate::fromString(m_batchDateEdit->text(), "dd-MM-yyyy");
     if (!curDate.isValid()) curDate = QDate::currentDate();
+    FiscalYearInfo fyCtx = FiscalYearHelper::getFiscalYearForDate(curDate.toString("yyyy-MM-dd"));
 
-    QDate chosen = VoucherDateDialog::selectDate(this, curDate);
+    QDate chosen = VoucherDateDialog::selectDate(this, curDate, fyCtx);
     if (chosen.isValid()) {
         m_batchDateEdit->setText(chosen.toString("dd-MM-yyyy"));
         m_dayLabel->setText(chosen.toString("dddd"));

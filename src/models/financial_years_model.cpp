@@ -242,15 +242,15 @@ QVariantMap FinancialYearsModel::validate_voucher_date(const QString& input, con
         res["resolvedFyName"] = matchedFy.name;
         res["resolvedStartDate"] = matchedFy.startDate;
         res["resolvedEndDate"] = matchedFy.endDate;
+        res["valid"] = true;
+        return res;
     } else {
         res["resolvedFyName"] = AccountingEngine::resolveFinancialYear(res["isoDate"].toString());
     }
 
     if (fyStart.isValid() && fyEnd.isValid()) {
-        if (d < fyStart || d > fyEnd) {
-            res["valid"] = false;
-            res["error"] = QString("Date %1 is outside the active Period (%2: %3 to %4).\nPlease enter a date within this period or switch the Financial Year in FY Selector (Alt+F).")
-                                .arg(d.toString("dd-MM-yyyy"), fyName, fyStart.toString("dd-MM-yyyy"), fyEnd.toString("dd-MM-yyyy"));
+        if (d >= fyStart && d <= fyEnd) {
+            res["valid"] = true;
             return res;
         }
     }

@@ -21,6 +21,9 @@ public:
     void refreshData(const QString& asOnDateIso = "");
     void setAsOnDate(const QString& asOnDateIso);
 
+    void markDirty() { m_isDirty = true; }
+    bool isDirty() const { return m_isDirty; }
+
     QTreeWidget* liabilitiesTree() const { return m_liabilitiesTree; }
     QTreeWidget* assetsTree() const { return m_assetsTree; }
     void triggerDrillDownOnCurrentItem();
@@ -88,7 +91,7 @@ private:
 
     enum class ActiveSide { Liabilities, Assets };
     ActiveSide m_activeSide = ActiveSide::Liabilities;
-
+    bool m_isDirty = true;
     int m_lastLiabIndex = 0;
     int m_lastAssetIndex = 0;
 };

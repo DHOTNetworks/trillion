@@ -313,9 +313,7 @@ void StockDetailWidget::setViewConfiguration(StockViewMode mode, StockGrouping g
     m_isUpdatingUi = true;
     m_customTitle = title;
 
-    if (m_itemSelectorCombo->count() == 0) {
-        populateItemDropdown();
-    }
+    populateItemDropdown();
 
     if (m_controller) {
         m_controller->setViewMode(mode);
@@ -452,9 +450,8 @@ void StockDetailWidget::reloadData(const QString& fromDate, const QString& toDat
     if (!fromDate.isEmpty()) m_fromDateEdit->setDate(QDate::fromString(fromDate, "yyyy-MM-dd"));
     if (!toDate.isEmpty()) m_toDateEdit->setDate(QDate::fromString(toDate, "yyyy-MM-dd"));
 
-    if (m_itemSelectorCombo->count() == 0) {
-        populateItemDropdown();
-    }
+    // Always repopulate — ensures new firm's items appear after DB switch / import
+    populateItemDropdown();
 
     if (m_controller) {
         if (m_controller->viewMode() == StockViewMode::MonthlyDaily && m_controller->selectedItemId() <= 0 && m_itemSelectorCombo->count() > 0) {
@@ -842,6 +839,24 @@ void StockDetailWidget::keyPressEvent(QKeyEvent* event) {
         return;
     }
     QWidget::keyPressEvent(event);
+}
+
+void StockDetailWidget::showEvent(QShowEvent* event) {
+    QWidget::showEvent(event);
+    FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
+    QDate sDate = QDate::fromString(activeFy.startDate, "yyyy-MM-dd");
+    QDate eDate = QDate::fromString(activeFy.endDate, "yyyy-MM-dd");
+    if (!sDate.isValid()) sDate = QDate(QDate::currentDate().month() < 4 ? QDate::currentDate().year() - 1 : QDate::currentDate().year(), 4, 1);
+    if (!eDate.isValid()) eDate = sDate.addYears(1).addDays(-1);
+    if (sDate.isValid() && eDate.isValid()) {
+        m_fromDateEdit->blockSignals(true);
+        m_toDateEdit->blockSignals(true);
+        m_fromDateEdit->setDate(sDate);
+        m_toDateEdit->setDate(eDate);
+        m_fromDateEdit->blockSignals(false);
+        m_toDateEdit->blockSignals(false);
+    }
+    reloadData(m_fromDateEdit->date().toString("yyyy-MM-dd"), m_toDateEdit->date().toString("yyyy-MM-dd"));
 }
 
 } // namespace MahadevERP

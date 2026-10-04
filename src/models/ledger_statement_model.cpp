@@ -163,6 +163,8 @@ QVariantMap LedgerStatementSideModel::get(int row) const {
     m["isSelected"] = e.isSelected;
     m["vIso"] = e.vIso;
     m["vDate"] = e.vDate;
+    m["date"] = e.vIso;
+    m["voucher_date"] = e.vIso;
     m["refNo"] = e.refNo;
     m["voucherNo"] = e.voucherNo;
     m["voucher_no"] = e.voucherNo;

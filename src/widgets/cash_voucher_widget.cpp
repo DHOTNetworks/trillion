@@ -639,8 +639,9 @@ void CashVoucherWidget::recalculateTotals() {
 void CashVoucherWidget::openDateDialog(bool isInitial) {
     Q_UNUSED(isInitial);
     QString curIso = m_dateEdit ? m_dateEdit->isoDate() : QDate::currentDate().toString("yyyy-MM-dd");
+    FiscalYearInfo fyCtx = FiscalYearHelper::getFiscalYearForDate(curIso);
     QString displayDate, isoDate;
-    if (VoucherDateDialog::getVoucherDate(this, curIso, &displayDate, &isoDate)) {
+    if (VoucherDateDialog::getVoucherDate(this, curIso, &displayDate, &isoDate, fyCtx)) {
         if (!isoDate.isEmpty() && m_dateEdit) {
             m_dateEdit->setIsoDate(isoDate);
             updateDayOfWeek(m_dateEdit->date());

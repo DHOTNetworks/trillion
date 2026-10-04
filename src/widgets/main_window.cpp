@@ -122,6 +122,8 @@ MainWindow::MainWindow(const MainWindowDependencies& deps, QWidget* parent)
     connect(m_firmSelectorWidget, &FirmSelectorWidget::firmOpened, this, [this](const QString& firmId, const QString& firmName) {
         Q_UNUSED(firmId);
         Q_UNUSED(firmName);
+        if (m_balanceSheetWidget) m_balanceSheetWidget->markDirty();
+        if (m_profitLossWidget) m_profitLossWidget->markDirty();
         MahadevERP::MenuTreeManager::instance().clearNavigationStack();
         MahadevERP::MenuTreeManager::instance().resetLastTriggeredMenu();
         navigateToView(0);
@@ -781,6 +783,9 @@ void MainWindow::openAccountingPeriodDialog() {
             m_dashCtrl->refresh_stats(fIso, tIso, fyLabel);
         }
 
+        if (m_balanceSheetWidget) m_balanceSheetWidget->markDirty();
+        if (m_profitLossWidget) m_profitLossWidget->markDirty();
+
         int vIdx = currentViewIndex();
         QDate fDate = QDate::fromString(fIso, "yyyy-MM-dd");
         QDate tDate = QDate::fromString(tIso, "yyyy-MM-dd");
@@ -993,7 +998,9 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
     } else if (viewIndex == 14) {
         if (m_salesVoucherWidget) {
             m_stackedWidget->setCurrentWidget(m_salesVoucherWidget);
-            if (!pendingInv.isEmpty() || !pendingVNo.isEmpty() || pendingId > 0) {
+            if (!pendingEntry.isEmpty()) {
+                m_salesVoucherWidget->loadInvoiceForEditing(QVariant::fromValue(pendingEntry), pendingDate);
+            } else if (!pendingInv.isEmpty() || !pendingVNo.isEmpty() || pendingId > 0) {
                 QVariant target = !pendingInv.isEmpty() ? QVariant(pendingInv) : (!pendingVNo.isEmpty() ? QVariant(pendingVNo) : QVariant(pendingId));
                 m_salesVoucherWidget->loadInvoiceForEditing(target, pendingDate);
             } else {
@@ -1004,7 +1011,9 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
     } else if (viewIndex == 15) {
         if (m_purchaseVoucherWidget) {
             m_stackedWidget->setCurrentWidget(m_purchaseVoucherWidget);
-            if (!pendingInv.isEmpty() || !pendingVNo.isEmpty() || pendingId > 0) {
+            if (!pendingEntry.isEmpty()) {
+                m_purchaseVoucherWidget->loadInvoiceForEditing(QVariant::fromValue(pendingEntry), pendingDate);
+            } else if (!pendingInv.isEmpty() || !pendingVNo.isEmpty() || pendingId > 0) {
                 QVariant target = !pendingInv.isEmpty() ? QVariant(pendingInv) : (!pendingVNo.isEmpty() ? QVariant(pendingVNo) : QVariant(pendingId));
                 m_purchaseVoucherWidget->loadInvoiceForEditing(target, pendingDate);
             } else {
@@ -1046,7 +1055,9 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
     } else if (viewIndex == 18) {
         if (m_jformVoucherWidget) {
             m_stackedWidget->setCurrentWidget(m_jformVoucherWidget);
-            if (!pendingInv.isEmpty() || !pendingVNo.isEmpty() || pendingId > 0) {
+            if (!pendingEntry.isEmpty()) {
+                m_jformVoucherWidget->loadVoucherForEditing(QVariant::fromValue(pendingEntry), pendingDate);
+            } else if (!pendingInv.isEmpty() || !pendingVNo.isEmpty() || pendingId > 0) {
                 QVariant target = !pendingInv.isEmpty() ? QVariant(pendingInv) : (!pendingVNo.isEmpty() ? QVariant(pendingVNo) : QVariant(pendingId));
                 m_jformVoucherWidget->loadVoucherForEditing(target, pendingDate);
             } else {
@@ -1057,7 +1068,9 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
     } else if (viewIndex == 19) {
         if (m_iformVoucherWidget) {
             m_stackedWidget->setCurrentWidget(m_iformVoucherWidget);
-            if (!pendingInv.isEmpty() || !pendingVNo.isEmpty() || pendingId > 0) {
+            if (!pendingEntry.isEmpty()) {
+                m_iformVoucherWidget->loadVoucherForEditing(QVariant::fromValue(pendingEntry), pendingDate);
+            } else if (!pendingInv.isEmpty() || !pendingVNo.isEmpty() || pendingId > 0) {
                 QVariant target = !pendingInv.isEmpty() ? QVariant(pendingInv) : (!pendingVNo.isEmpty() ? QVariant(pendingVNo) : QVariant(pendingId));
                 m_iformVoucherWidget->loadVoucherForEditing(target, pendingDate);
             } else {
@@ -1081,7 +1094,10 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
     } else if (viewIndex == 24) {
         if (m_tdsVoucherWidget) {
             m_stackedWidget->setCurrentWidget(m_tdsVoucherWidget);
-            if (pendingId > 0) {
+            if (!pendingEntry.isEmpty()) {
+                int tId = pendingEntry.value("id").toInt();
+                if (tId > 0) m_tdsVoucherWidget->loadVoucherForEditing(tId);
+            } else if (pendingId > 0) {
                 m_tdsVoucherWidget->loadVoucherForEditing(pendingId);
             } else {
                 m_tdsVoucherWidget->resetForm();
@@ -1111,7 +1127,10 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
     } else if (viewIndex == 28) {
         if (m_debitCreditNoteWidget) {
             m_stackedWidget->setCurrentWidget(m_debitCreditNoteWidget);
-            if (pendingId > 0) {
+            if (!pendingEntry.isEmpty()) {
+                int nId = pendingEntry.value("id").toInt();
+                if (nId > 0) m_debitCreditNoteWidget->loadNoteForEditing(nId);
+            } else if (pendingId > 0) {
                 m_debitCreditNoteWidget->loadNoteForEditing(pendingId);
             } else {
                 m_debitCreditNoteWidget->resetForm();
@@ -1122,7 +1141,7 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
         FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
         m_stackedWidget->setCurrentWidget(m_balanceSheetWidget);
         if (m_balanceSheetWidget) {
-            if (m_balanceSheetCtrl && (m_balanceSheetCtrl->data().financialYear != activeFy.name || m_balanceSheetCtrl->data().asOnDate.isEmpty())) {
+            if (m_balanceSheetWidget->isDirty()) {
                 m_balanceSheetWidget->refreshData(activeFy.endDate);
             }
             m_balanceSheetWidget->focusActiveTree();
@@ -1131,7 +1150,7 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
         FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
         m_stackedWidget->setCurrentWidget(m_profitLossWidget);
         if (m_profitLossWidget) {
-            if (m_profitLossCtrl && (m_profitLossCtrl->data().financialYear != activeFy.name || m_profitLossCtrl->data().toDate.isEmpty())) {
+            if (m_profitLossWidget->isDirty()) {
                 m_profitLossWidget->refreshData(activeFy.startDate, activeFy.endDate);
             }
             m_profitLossWidget->focusActiveTree();
@@ -1139,7 +1158,9 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
     } else if (viewIndex == 31) {
         if (m_millingVoucherWidget) {
             m_stackedWidget->setCurrentWidget(m_millingVoucherWidget);
-            if (!pendingInv.isEmpty() || !pendingVNo.isEmpty() || pendingId > 0) {
+            if (!pendingEntry.isEmpty()) {
+                m_millingVoucherWidget->loadBatchForEditing(QVariant::fromValue(pendingEntry));
+            } else if (!pendingInv.isEmpty() || !pendingVNo.isEmpty() || pendingId > 0) {
                 QVariant target = !pendingInv.isEmpty() ? QVariant(pendingInv) : (!pendingVNo.isEmpty() ? QVariant(pendingVNo) : QVariant(pendingId));
                 m_millingVoucherWidget->loadBatchForEditing(target);
             } else {
@@ -1384,6 +1405,8 @@ void MainWindow::onSalesVoucherBackRequested() {
 
 void MainWindow::onSalesVoucherSaved(const QString& invoiceNo) {
     Q_UNUSED(invoiceNo);
+    if (m_balanceSheetWidget) m_balanceSheetWidget->markDirty();
+    if (m_profitLossWidget) m_profitLossWidget->markDirty();
     navigateBack();
 }
 
@@ -1393,6 +1416,8 @@ void MainWindow::onPurchaseVoucherBackRequested() {
 
 void MainWindow::onPurchaseVoucherSaved(const QString& invoiceNo) {
     Q_UNUSED(invoiceNo);
+    if (m_balanceSheetWidget) m_balanceSheetWidget->markDirty();
+    if (m_profitLossWidget) m_profitLossWidget->markDirty();
     navigateBack();
 }
 
@@ -1402,6 +1427,8 @@ void MainWindow::onChequeVoucherBackRequested() {
 
 void MainWindow::onChequeVoucherSaved(const QString& voucherNo) {
     Q_UNUSED(voucherNo);
+    if (m_balanceSheetWidget) m_balanceSheetWidget->markDirty();
+    if (m_profitLossWidget) m_profitLossWidget->markDirty();
     navigateBack();
 }
 
@@ -1411,6 +1438,8 @@ void MainWindow::onCashVoucherBackRequested() {
 
 void MainWindow::onCashVoucherSaved(const QString& voucherNo) {
     Q_UNUSED(voucherNo);
+    if (m_balanceSheetWidget) m_balanceSheetWidget->markDirty();
+    if (m_profitLossWidget) m_profitLossWidget->markDirty();
     navigateBack();
 }
 
@@ -1424,6 +1453,8 @@ void MainWindow::onJournalVoucherBackRequested() {
 
 void MainWindow::onJournalVoucherSaved(const QString& voucherNo) {
     Q_UNUSED(voucherNo);
+    if (m_balanceSheetWidget) m_balanceSheetWidget->markDirty();
+    if (m_profitLossWidget) m_profitLossWidget->markDirty();
     navigateBack();
 }
 
@@ -1432,6 +1463,8 @@ void MainWindow::onNewLedgerBackRequested() {
 }
 
 void MainWindow::onNewLedgerSaved() {
+    if (m_balanceSheetWidget) m_balanceSheetWidget->markDirty();
+    if (m_profitLossWidget) m_profitLossWidget->markDirty();
     navigateBack();
 }
 
@@ -1440,6 +1473,8 @@ void MainWindow::onModifyLedgerBackRequested() {
 }
 
 void MainWindow::onModifyLedgerSaved() {
+    if (m_balanceSheetWidget) m_balanceSheetWidget->markDirty();
+    if (m_profitLossWidget) m_profitLossWidget->markDirty();
     navigateBack();
 }
 
@@ -1449,6 +1484,8 @@ void MainWindow::onJFormVoucherBackRequested() {
 
 void MainWindow::onJFormVoucherSaved(const QString& jformNo) {
     Q_UNUSED(jformNo);
+    if (m_balanceSheetWidget) m_balanceSheetWidget->markDirty();
+    if (m_profitLossWidget) m_profitLossWidget->markDirty();
     navigateBack();
 }
 
@@ -1458,6 +1495,8 @@ void MainWindow::onIFormVoucherBackRequested() {
 
 void MainWindow::onIFormVoucherSaved(const QString& iformNo) {
     Q_UNUSED(iformNo);
+    if (m_balanceSheetWidget) m_balanceSheetWidget->markDirty();
+    if (m_profitLossWidget) m_profitLossWidget->markDirty();
     navigateBack();
 }
 

@@ -21,6 +21,9 @@ public:
     void refreshData(const QString& fromDateIso = "", const QString& toDateIso = "");
     void setDateRange(const QString& fromDateIso, const QString& toDateIso);
 
+    void markDirty() { m_isDirty = true; }
+    bool isDirty() const { return m_isDirty; }
+
     QTreeWidget* expensesTree() const { return m_expensesTree; }
     QTreeWidget* incomesTree() const { return m_incomesTree; }
     void triggerDrillDownOnCurrentItem();
@@ -86,6 +89,7 @@ private:
 
     enum class ActiveSide { Expenses, Incomes };
     ActiveSide m_activeSide = ActiveSide::Expenses;
+    bool m_isDirty = true;
 
     int m_lastExpIndex = 0;
     int m_lastIncIndex = 0;

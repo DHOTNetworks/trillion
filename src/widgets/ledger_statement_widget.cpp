@@ -883,43 +883,59 @@ void LedgerStatementWidget::openVoucherForEntry(const QVariantMap& entry) {
         vType = prefix;
     }
 
+    QString upVType = vType.trimmed().toUpper();
+    QString upRawType = rawType.trimmed().toUpper();
+    QString upRefNo = refNo.trimmed().toUpper();
+
     int targetViewIndex = -1;
 
     // 1. TDS Voucher (View 24)
-    if (vType == "TDS" || rawType == "TDS" || refNo.startsWith("TDS") || part.contains("t.d.s.")) {
+    if (upVType == "TDS" || upRawType == "TDS" || upRefNo.startsWith("TDS") || part.contains("t.d.s.")) {
         targetViewIndex = 24;
     }
-    // 2. Sales Voucher (View 14)
-    else if (vType == "Sales" || rawType == "Sale" || rawType == "Sales" || vType == "Sale" || refNo.startsWith("Sale")) {
-        targetViewIndex = 14;
-    }
-    // 3. Purchase Voucher (View 15)
-    else if (vType == "Purchase" || rawType == "Purc" || rawType == "Purchase" || vType == "Purc" || refNo.startsWith("Purc")) {
-        targetViewIndex = 15;
-    }
-    // 4. Cash Payment / Receipt (View 60)
-    else if (rawType == "Pymt" || rawType == "Rcpt" || refNo.startsWith("Pymt") || refNo.startsWith("Rcpt") || vType == "Cash Payment" || vType == "Cash Receipt") {
-        targetViewIndex = 60;
-    }
-    // 4b. Cheque / Bank Payment / Receipt (View 16)
-    else if (vType == "Payment" || vType == "Receipt" || rawType == "ChPt" || rawType == "ChRt" || rawType == "Bank" ||
-             refNo.startsWith("ChPt") || refNo.startsWith("ChRt")) {
-        targetViewIndex = 16;
-    }
-    // 5. Journal Voucher (View 17)
-    else if (vType == "Journal" || rawType == "Jrnl" || rawType == "Journal" || vType == "Jrnl" || refNo.startsWith("Jrnl")) {
-        targetViewIndex = 17;
-    }
-    // 6. Milling Voucher (View 18)
-    else if (vType == "Milling" || rawType == "Mill" || rawType == "Prod" || rawType == "ML" || refNo.startsWith("Mill") || refNo.startsWith("ML")) {
+    // 2. J-Form Voucher (View 18)
+    else if (upVType.contains("J-FORM") || upVType.contains("JFORM") || upVType == "JFRM" || upVType == "JF" ||
+             upRawType.contains("J-FORM") || upRawType.contains("JFORM") || upRawType == "JFRM" || upRawType == "JF" ||
+             upRefNo.startsWith("JFRM") || upRefNo.startsWith("J-FORM") || upRefNo.startsWith("JFORM") || upRefNo.startsWith("JF-")) {
         targetViewIndex = 18;
     }
-    // 7. J-Form Voucher (View 23)
-    else if (vType == "J-Form" || rawType == "JFrm" || rawType == "J-Form" || vType == "JFrm" || refNo.startsWith("JFrm") || refNo.startsWith("J-Form")) {
-        targetViewIndex = 23;
+    // 3. I-Form Voucher (View 19)
+    else if (upVType.contains("I-FORM") || upVType.contains("IFORM") || upVType == "IFRM" || upVType == "IF" ||
+             upRawType.contains("I-FORM") || upRawType.contains("IFORM") || upRawType == "IFRM" || upRawType == "IF" ||
+             upRefNo.startsWith("IFRM") || upRefNo.startsWith("I-FORM") || upRefNo.startsWith("IFORM") || upRefNo.startsWith("IF-")) {
+        targetViewIndex = 19;
     }
-    // 8. Debit / Credit Note (View 28)
-    else if (vType == "Debit Note" || vType == "Credit Note" || rawType == "DbNt" || rawType == "CrNt" || rawType == "DN" || rawType == "CN" || refNo.startsWith("DbNt") || refNo.startsWith("CrNt")) {
+    // 4. Sales Voucher (View 14)
+    else if (upVType.contains("SALE") || upRawType.contains("SALE") || upRawType == "SL" || upRefNo.startsWith("SALE") || upRefNo.startsWith("SL-")) {
+        targetViewIndex = 14;
+    }
+    // 5. Purchase Voucher (View 15)
+    else if (upVType.contains("PURCHASE") || upVType.contains("PURC") || upRawType.contains("PURCHASE") || upRawType.contains("PURC") || upRawType == "PU" || upRefNo.startsWith("PURC") || upRefNo.startsWith("PUR") || upRefNo.startsWith("PU-")) {
+        targetViewIndex = 15;
+    }
+    // 6. Cash Payment / Receipt (View 60)
+    else if (upRawType == "PYMT" || upRawType == "RCPT" || upRefNo.startsWith("PYMT") || upRefNo.startsWith("RCPT") || upVType == "CASH PAYMENT" || upVType == "CASH RECEIPT") {
+        targetViewIndex = 60;
+    }
+    // 7. Cheque / Bank Payment / Receipt (View 16)
+    else if (upVType == "PAYMENT" || upVType == "RECEIPT" || upRawType == "CHPT" || upRawType == "CHRT" || upRawType == "BANK" ||
+             upRefNo.startsWith("CHPT") || upRefNo.startsWith("CHRT") || upRefNo.startsWith("CHQ") || upRefNo.startsWith("BANK")) {
+        targetViewIndex = 16;
+    }
+    // 8. Journal Voucher (View 17)
+    else if (upVType.contains("JOURNAL") || upVType == "JRNL" || upVType == "JV" || upVType == "JL" || upVType == "JRN" ||
+             upRawType.contains("JOURNAL") || upRawType == "JRNL" || upRawType == "JV" || upRawType == "JL" || upRawType == "JRN" ||
+             upRefNo.startsWith("JRNL") || upRefNo.startsWith("JV-") || upRefNo.startsWith("JL-") || upRefNo.startsWith("JOURNAL")) {
+        targetViewIndex = 17;
+    }
+    // 9. Milling Voucher (View 31)
+    else if (upVType.contains("MILLING") || upRawType.contains("MILL") || upRawType == "PROD" || upRawType == "ML" ||
+             upRefNo.startsWith("MILL") || upRefNo.startsWith("ML-") || upRefNo.startsWith("PROD")) {
+        targetViewIndex = 31;
+    }
+    // 10. Debit / Credit Note (View 28)
+    else if (upVType.contains("DEBIT NOTE") || upVType.contains("CREDIT NOTE") || upRawType == "DBNT" || upRawType == "CRNT" ||
+             upRawType == "DN" || upRawType == "CN" || upRefNo.startsWith("DBNT") || upRefNo.startsWith("CRNT") || upRefNo.startsWith("DN-") || upRefNo.startsWith("CN-")) {
         targetViewIndex = 28;
     }
 

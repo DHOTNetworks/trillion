@@ -525,40 +525,74 @@ QVariantMap SalesModel::get_next_sales_invoice(int currentId, const QString& cur
     return {};
 }
 
-QVariantMap SalesModel::get_sales_invoice(const QVariant& invoiceNoOrId, const QString& dateHint, const QString& partyHint) {
-    QString q = invoiceNoOrId.toString().trimmed();
-    qDebug() << "[SALES_MODEL] get_sales_invoice called with invoiceNoOrId:" << invoiceNoOrId << "dateHint:" << dateHint << "partyHint:" << partyHint;
-    if (q.isEmpty() && dateHint.isEmpty() && partyHint.isEmpty()) return {};
+QVariantMap SalesModel::get_sales_invoice(const QVariant& invoiceNoOrId, const QString& dateHintParam, const QString& partyHintParam) {
+    int targetId = 0;
+    QString q;
+    QString vNo;
+    QString dateHint = FiscalYearHelper::normalizeToIso(dateHintParam);
+    QString partyHint = partyHintParam.trimmed();
+
+    if (invoiceNoOrId.typeId() == QMetaType::QVariantMap) {
+        QVariantMap m = invoiceNoOrId.toMap();
+        targetId = m.value("id").toInt();
+        q = m.value("invoice_no", m.value("invoiceNo", m.value("refNo", m.value("voucher_no", m.value("voucherNo"))))).toString().trimmed();
+        vNo = m.value("voucher_no", m.value("voucherNo")).toString().trimmed();
+        if (dateHint.isEmpty()) dateHint = FiscalYearHelper::normalizeToIso(m.value("vIso", m.value("invoice_date", m.value("voucher_date", m.value("date")))).toString());
+        if (partyHint.isEmpty()) partyHint = m.value("party_name", m.value("partyName", m.value("customer_name", m.value("customerName")))).toString().trimmed();
+    } else {
+        bool isNum = false;
+        int parsedId = invoiceNoOrId.toInt(&isNum);
+        if (isNum && parsedId > 0 && dateHint.isEmpty()) {
+            QVariantList chk = DatabaseManager::instance().executeQuery("SELECT id FROM sales_invoices WHERE id = ? LIMIT 1;", {parsedId});
+            if (!chk.isEmpty()) {
+                targetId = parsedId;
+            } else {
+                q = QString::number(parsedId);
+            }
+        } else {
+            q = invoiceNoOrId.toString().trimmed();
+        }
+    }
+
+    qDebug() << "[SALES_MODEL] get_sales_invoice targetId:" << targetId << "q:" << q << "vNo:" << vNo << "dateHint:" << dateHint << "partyHint:" << partyHint;
+    if (targetId <= 0 && q.isEmpty() && vNo.isEmpty() && dateHint.isEmpty() && partyHint.isEmpty()) return {};
 
     static const QRegularExpression prefixRe(QStringLiteral("^(Sale|Sales|Purc|Purchase|Pur|Jrnl|Journal|ChPt|ChRt|Pymt|Rcpt|TDS|JFrm|J-Form)[-\\s]*"), QRegularExpression::CaseInsensitiveOption);
     QString cleanQ = q;
     cleanQ = cleanQ.remove(prefixRe).trimmed();
+    QString cleanVNo = vNo;
+    cleanVNo = cleanVNo.remove(prefixRe).trimmed();
+    if (cleanQ.isEmpty()) cleanQ = cleanVNo;
+    if (cleanVNo.isEmpty()) cleanVNo = cleanQ;
 
     QVariantList rows;
-    bool isNum = false;
-    int numId = cleanQ.toInt(&isNum);
 
-    // 0. If dateHint provided and invoice_no or voucher_no matches in sales_invoices
-    if (!dateHint.isEmpty() && (!q.isEmpty() || !cleanQ.isEmpty())) {
+    // 1. Direct search by ID if valid in sales_invoices
+    if (targetId > 0) {
+        rows = DatabaseManager::instance().executeQuery("SELECT * FROM sales_invoices WHERE id = ? LIMIT 1;", {targetId});
+    }
+
+    // 2. Match with dateHint and invoice_no / voucher_no
+    if (rows.isEmpty() && !dateHint.isEmpty() && (!cleanQ.isEmpty() || !cleanVNo.isEmpty())) {
         rows = DatabaseManager::instance().executeQuery(
-            "SELECT * FROM sales_invoices WHERE (invoice_no = ? OR voucher_no = ? OR invoice_no = ? OR voucher_no = ?) AND invoice_date = ? ORDER BY id DESC LIMIT 1;",
-            {q, q, cleanQ, cleanQ, dateHint}
+            "SELECT * FROM sales_invoices WHERE (invoice_no = ? OR voucher_no = ? OR invoice_no = ? OR voucher_no = ? OR invoice_no = ? OR voucher_no = ?) AND invoice_date = ? ORDER BY id DESC LIMIT 1;",
+            {q, vNo, cleanQ, cleanVNo, ("Sale-" + cleanVNo), ("Sale-" + cleanQ), dateHint}
         );
     }
 
-    // 1. If exact invoice_no or voucher_no matches in sales_invoices
-    if (rows.isEmpty() && (!q.isEmpty() || !cleanQ.isEmpty())) {
+    // 3. Match with dateHint and partyHint
+    if (rows.isEmpty() && !dateHint.isEmpty() && !partyHint.isEmpty()) {
+        rows = DatabaseManager::instance().executeQuery(
+            "SELECT * FROM sales_invoices WHERE invoice_date = ? AND (customer_name = ? OR customer_name LIKE ?) ORDER BY id DESC LIMIT 1;",
+            {dateHint, partyHint, "%" + partyHint + "%"}
+        );
+    }
+
+    // 4. Exact invoice_no or voucher_no match in sales_invoices
+    if (rows.isEmpty() && (!cleanQ.isEmpty() || !cleanVNo.isEmpty())) {
         rows = DatabaseManager::instance().executeQuery(
             "SELECT * FROM sales_invoices WHERE invoice_no = ? OR voucher_no = ? OR invoice_no = ? OR voucher_no = ? OR voucher_no = ('Sale-' || ?) OR voucher_no = ('Sale-' || ?) ORDER BY id DESC LIMIT 1;",
-            {q, q, cleanQ, cleanQ, q, cleanQ}
-        );
-    }
-
-    // 2. Try numeric id in sales_invoices if isNum
-    if (rows.isEmpty() && isNum && numId > 0) {
-        rows = DatabaseManager::instance().executeQuery(
-            "SELECT * FROM sales_invoices WHERE id = ? LIMIT 1;",
-            {numId}
+            {q, vNo, cleanQ, cleanVNo, q, cleanVNo}
         );
     }
 
@@ -744,7 +778,7 @@ QVariantMap SalesModel::get_sales_invoice(const QVariant& invoiceNoOrId, const Q
     QVariantMap inv = rows.first().toMap();
     int invId = inv.value("id").toInt();
     QString invNo = inv.value("invoice_no").toString().trimmed();
-    QString vNo = inv.value("voucher_no").toString().trimmed();
+    vNo = inv.value("voucher_no").toString().trimmed();
 
     // Auto-resolve party metadata if gstin or address is missing
     QString custName = inv.value("customer_name").toString().trimmed();

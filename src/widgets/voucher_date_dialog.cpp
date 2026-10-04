@@ -14,26 +14,39 @@ VoucherDateDialog::VoucherDateDialog(const QString& currentDate, const FiscalYea
     setAttribute(Qt::WA_TranslucentBackground, false);
     setAttribute(Qt::WA_StyledBackground, true);
 
-    if (!m_contextFy.isValid()) {
-        if (!m_initialDate.isEmpty()) {
-            m_contextFy = FiscalYearHelper::getFiscalYearForDate(m_initialDate);
-        }
-        if (!m_contextFy.isValid()) {
-            m_contextFy = FiscalYearHelper::getActiveFiscalYear();
-        }
-    }
-
     QDate parsedDate;
     if (!m_initialDate.isEmpty()) {
-        QString parsed = m_fyModel.parse_date_pattern(m_initialDate);
-        if (!parsed.isEmpty()) {
-            parsedDate = QDate::fromString(parsed, "dd-MM-yyyy");
+        QString iso = FiscalYearHelper::normalizeToIso(m_initialDate);
+        if (!iso.isEmpty()) {
+            parsedDate = QDate::fromString(iso, "yyyy-MM-dd");
+        }
+        if (!parsedDate.isValid()) {
+            QString parsed = m_fyModel.parse_date_pattern(m_initialDate);
+            if (!parsed.isEmpty()) {
+                parsedDate = QDate::fromString(parsed, "dd-MM-yyyy");
+            }
         }
         if (!parsedDate.isValid()) parsedDate = QDate::fromString(m_initialDate, "dd-MM-yyyy");
         if (!parsedDate.isValid()) parsedDate = QDate::fromString(m_initialDate, "yyyy-MM-dd");
         if (!parsedDate.isValid()) parsedDate = QDate::fromString(m_initialDate, "dd/MM/yyyy");
         if (!parsedDate.isValid()) parsedDate = QDate::fromString(m_initialDate, "yyyy/MM/dd");
     }
+
+    if (!m_contextFy.isValid()) {
+        if (parsedDate.isValid()) {
+            m_contextFy = FiscalYearHelper::getFiscalYearForDate(parsedDate.toString("yyyy-MM-dd"));
+        }
+        if (!m_contextFy.isValid() && !m_initialDate.isEmpty()) {
+            QString iso = FiscalYearHelper::normalizeToIso(m_initialDate);
+            if (!iso.isEmpty()) {
+                m_contextFy = FiscalYearHelper::getFiscalYearForDate(iso);
+            }
+        }
+        if (!m_contextFy.isValid()) {
+            m_contextFy = FiscalYearHelper::getActiveFiscalYear();
+        }
+    }
+
     if (!parsedDate.isValid()) {
         QString wDate = m_fyModel.get_working_date();
         parsedDate = QDate::fromString(wDate, "dd-MM-yyyy");
@@ -202,9 +215,14 @@ void VoucherDateDialog::onAccept() {
             QDate s = QDate::fromString(targetFy.startDate, "yyyy-MM-dd");
             QDate e = QDate::fromString(targetFy.endDate, "yyyy-MM-dd");
             if (s.isValid() && e.isValid() && (d < s || d > e)) {
-                valid = false;
-                res["error"] = QString("Date %1 is outside the Financial Year Period (%2: %3 to %4).\nPlease enter a date within this period or switch the Financial Year (Alt+F).")
-                                    .arg(d.toString("dd-MM-yyyy"), targetFy.name, s.toString("dd-MM-yyyy"), e.toString("dd-MM-yyyy"));
+                FiscalYearInfo altFy = FiscalYearHelper::getFiscalYearForDate(res.value("isoDate").toString());
+                if (altFy.isValid()) {
+                    m_contextFy = altFy;
+                } else {
+                    valid = false;
+                    res["error"] = QString("Date %1 is outside the Financial Year Period (%2: %3 to %4).\nPlease enter a date within this period or switch the Financial Year (Alt+F).")
+                                        .arg(d.toString("dd-MM-yyyy"), targetFy.name, s.toString("dd-MM-yyyy"), e.toString("dd-MM-yyyy"));
+                }
             }
         }
     }

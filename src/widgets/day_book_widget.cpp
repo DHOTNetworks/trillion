@@ -289,10 +289,12 @@ void DayBookWidget::loadDayBookData(const QDate& fromDate, const QDate& toDate, 
     // Robust query reading from transactions table containing all double-entry postings
     QString sql = QString(
         "SELECT "
+        "  id, "
         "  voucher_date AS date, "
         "  voucher_no, "
         "  voucher_type, "
         "  trans_type, "
+        "  COALESCE(financial_year, '') AS financial_year, "
         "  COALESCE(party_name, '') AS party_name, "
         "  COALESCE(opposing_account, '') AS opposing_account, "
         "  COALESCE(narration, '') AS narration, "
@@ -325,11 +327,11 @@ void DayBookWidget::loadDayBookData(const QDate& fromDate, const QDate& toDate, 
         double cr = r.value("credit").toDouble();
 
         // Voucher Type Filter
-        if (selectedType.contains("SALES") && !vType.contains("Sales", Qt::CaseInsensitive) && tType != "SL") continue;
-        if (selectedType.contains("PURCHASE") && !vType.contains("Purchase", Qt::CaseInsensitive) && tType != "PU") continue;
-        if (selectedType.contains("JOURNAL") && !vType.contains("Journal", Qt::CaseInsensitive) && tType != "JRNL" && tType != "JV") continue;
-        if (selectedType.contains("BANK") && !vType.contains("Payment", Qt::CaseInsensitive) && !vType.contains("Receipt", Qt::CaseInsensitive) && tType != "CHPT" && tType != "CHRT") continue;
-        if (selectedType.contains("CASH") && !vType.contains("Cash", Qt::CaseInsensitive) && tType != "PYMT" && tType != "RCPT") continue;
+        if (selectedType.contains("SALES") && !vType.contains("Sale", Qt::CaseInsensitive) && tType != "SL" && tType != "SALE") continue;
+        if (selectedType.contains("PURCHASE") && !vType.contains("Purch", Qt::CaseInsensitive) && tType != "PU" && tType != "PURC") continue;
+        if (selectedType.contains("JOURNAL") && !vType.contains("Journ", Qt::CaseInsensitive) && tType != "JRNL" && tType != "JV" && tType != "JRN") continue;
+        if (selectedType.contains("BANK") && !vType.contains("Payment", Qt::CaseInsensitive) && !vType.contains("Receipt", Qt::CaseInsensitive) && !vType.contains("Bank", Qt::CaseInsensitive) && tType != "CHPT" && tType != "CHRT" && tType != "BKPT" && tType != "BKRT") continue;
+        if (selectedType.contains("CASH") && !vType.contains("Cash", Qt::CaseInsensitive) && tType != "PYMT" && tType != "RCPT" && tType != "CSHP" && tType != "CSHR") continue;
         if (selectedType.contains("J-FORM") && !vType.contains("J-Form", Qt::CaseInsensitive) && tType != "JFRM") continue;
         if (selectedType.contains("I-FORM") && !vType.contains("I-Form", Qt::CaseInsensitive) && tType != "IFRM") continue;
         if (selectedType.contains("MILLING") && !vType.contains("Milling", Qt::CaseInsensitive) && tType != "MILL") continue;
@@ -344,6 +346,7 @@ void DayBookWidget::loadDayBookData(const QDate& fromDate, const QDate& toDate, 
 
         m_table->insertRow(row);
         auto* dateItem = new QTableWidgetItem(r.value("date").toString());
+        dateItem->setData(Qt::UserRole, QVariant::fromValue(r));
         dateItem->setFont(QFont("Segoe UI", 9));
         m_table->setItem(row, 0, dateItem);
 
@@ -398,21 +401,31 @@ void DayBookWidget::onDateChanged() {
 }
 
 void DayBookWidget::onRowDoubleClicked(int row, int /*column*/) {
-    if (row < 0 || row >= m_records.size()) return;
-    const QVariantMap entry = m_records[row].toMap();
+    if (row < 0 || row >= m_table->rowCount()) return;
+    auto* itm = m_table->item(row, 0);
+    if (!itm) return;
+    const QVariantMap entry = itm->data(Qt::UserRole).toMap();
+    if (entry.isEmpty()) return;
+
     QString vType = entry.value("voucher_type").toString().toUpper();
     QString tType = entry.value("trans_type").toString().toUpper();
+    QString lType = entry.value("legacy_type").toString().toUpper();
+    QString vNo = entry.value("voucher_no").toString().toUpper();
 
     int targetView = 0;
-    if (vType.contains("SALE") || tType == "SL") targetView = 14;
-    else if (vType.contains("PURCHASE") || tType == "PU") targetView = 15;
-    else if (vType.contains("JOURNAL") || tType == "JRNL" || tType == "JV") targetView = 17;
-    else if (tType == "PYMT" || tType == "RCPT" || vType == "CASH PAYMENT" || vType == "CASH RECEIPT") targetView = 60;
-    else if (vType.contains("PAYMENT") || vType.contains("RECEIPT") || tType == "CHPT" || tType == "CHRT") targetView = 16;
-    else if (vType.contains("J-FORM") || tType == "JFRM") targetView = 18;
-    else if (vType.contains("I-FORM") || tType == "IFRM") targetView = 19;
-
-    emit alterVoucherRequested(targetView, entry);
+    if (vType == "TDS" || tType == "TDS" || lType == "TDS" || vNo.startsWith("TDS")) targetView = 24;
+    else if (vType.contains("J-FORM") || vType.contains("JFORM") || tType == "JFRM" || tType == "JF" || lType == "JFRM" || vNo.startsWith("JFRM") || vNo.startsWith("J-FORM") || vNo.startsWith("JFORM")) targetView = 18;
+    else if (vType.contains("I-FORM") || vType.contains("IFORM") || tType == "IFRM" || tType == "IF" || lType == "IFRM" || vNo.startsWith("IFRM") || vNo.startsWith("I-FORM") || vNo.startsWith("IFORM")) targetView = 19;
+    else if (vType.contains("SALE") || tType == "SL" || lType == "SALE" || vNo.startsWith("SALE") || vNo.startsWith("SL-")) targetView = 14;
+    else if (vType.contains("PURCHASE") || vType.contains("PURC") || tType == "PU" || lType == "PURC" || vNo.startsWith("PURC") || vNo.startsWith("PUR") || vNo.startsWith("PU-")) targetView = 15;
+    else if (tType == "PYMT" || tType == "RCPT" || lType == "PYMT" || lType == "RCPT" || vType == "CASH PAYMENT" || vType == "CASH RECEIPT") targetView = 60;
+    else if (vType.contains("PAYMENT") || vType.contains("RECEIPT") || tType == "CHPT" || tType == "CHRT" || tType == "BANK" || lType == "CHPT" || lType == "CHRT" || vNo.startsWith("CHPT") || vNo.startsWith("CHRT") || vNo.startsWith("CHQ")) targetView = 16;
+    else if (vType.contains("JOURNAL") || vType == "JRNL" || vType == "JV" || vType == "JL" || tType == "JRNL" || tType == "JV" || tType == "JL" || lType == "JRNL" || lType == "JV" || vNo.startsWith("JRNL") || vNo.startsWith("JV-") || vNo.startsWith("JL-")) targetView = 17;
+    else if (vType.contains("MILLING") || tType == "MILL" || tType == "PROD" || tType == "ML" || lType == "MILL" || vNo.startsWith("MILL") || vNo.startsWith("ML-")) targetView = 31;
+    else if (vType.contains("DEBIT NOTE") || vType.contains("CREDIT NOTE") || tType == "DBNT" || tType == "CRNT" || tType == "DN" || tType == "CN" || lType == "DBNT" || lType == "CRNT" || vNo.startsWith("DBNT") || vNo.startsWith("CRNT")) targetView = 28;
+    if (targetView > 0) {
+        emit alterVoucherRequested(targetView, entry);
+    }
 }
 
 void DayBookWidget::onExportPdfClicked() {

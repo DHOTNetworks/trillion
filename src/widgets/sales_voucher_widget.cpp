@@ -1002,8 +1002,10 @@ void SalesVoucherWidget::onStockItemConfigured(int row, const QVariantMap& itemD
 void SalesVoucherWidget::openDateDialog(bool isInitial) {
     Q_UNUSED(isInitial);
     QString curDate = m_invoiceDateEdit ? m_invoiceDateEdit->formattedDate() : "";
+    QString curIso = m_invoiceDateEdit ? m_invoiceDateEdit->isoDate() : "";
+    FiscalYearInfo fyCtx = FiscalYearHelper::getFiscalYearForDate(curIso);
     QString newDisp, newIso;
-    if (VoucherDateDialog::getVoucherDate(this, curDate, &newDisp, &newIso)) {
+    if (VoucherDateDialog::getVoucherDate(this, curDate, &newDisp, &newIso, fyCtx)) {
         if (m_invoiceDateEdit) {
             m_invoiceDateEdit->setIsoDate(newIso);
         }

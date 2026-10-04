@@ -8,6 +8,7 @@
 #include <QPainter>
 #include <QStyleOption>
 #include <QMessageBox>
+#include <QScrollBar>
 #include <QDebug>
 
 BalanceSheetWidget::BalanceSheetWidget(BalanceSheetController* controller,
@@ -271,17 +272,20 @@ void BalanceSheetWidget::refreshData(const QString& asOnDateIso) {
     if (m_controller) {
         m_controller->reload(asOnDateIso);
     }
+    m_isDirty = false;
 }
 
 void BalanceSheetWidget::setAsOnDate(const QString& asOnDateIso) {
     if (m_asOnDateEdit) {
         m_asOnDateEdit->setIsoDate(asOnDateIso);
     }
+    m_isDirty = true;
     refreshData(asOnDateIso);
 }
 
 void BalanceSheetWidget::onDateFilterChanged() {
     if (m_asOnDateEdit) {
+        m_isDirty = true;
         refreshData(m_asOnDateEdit->isoDate());
     }
 }
@@ -401,9 +405,11 @@ void BalanceSheetWidget::populateTrees() {
         }
     }
 
-    // Expand all items by default for clear overview
     m_liabilitiesTree->expandAll();
     m_assetsTree->expandAll();
+    if (m_liabilitiesTree->topLevelItemCount() > 0 && !m_liabilitiesTree->currentItem() && !m_assetsTree->currentItem()) {
+        m_liabilitiesTree->setCurrentItem(m_liabilitiesTree->topLevelItem(0));
+    }
 
     m_liabilitiesTree->setUpdatesEnabled(true);
     m_assetsTree->setUpdatesEnabled(true);
@@ -426,11 +432,6 @@ void BalanceSheetWidget::populateTrees() {
                 "padding: 4px 14px; border-radius: 6px; border: 1.5px solid #FCA5A5;"
             );
         }
-    }
-
-    if (m_liabilitiesTree->topLevelItemCount() > 0 && !m_liabilitiesTree->currentItem() && !m_assetsTree->currentItem()) {
-        m_liabilitiesTree->setCurrentItem(m_liabilitiesTree->topLevelItem(0));
-        m_liabilitiesTree->setFocus();
     }
 }
 
@@ -690,7 +691,7 @@ void BalanceSheetWidget::keyPressEvent(QKeyEvent* event) {
 void BalanceSheetWidget::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
     FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
-    if (m_controller && (m_controller->data().financialYear != activeFy.name || m_controller->data().asOnDate.isEmpty())) {
+    if (m_isDirty || (m_controller && (m_controller->data().financialYear != activeFy.name || m_controller->data().asOnDate.isEmpty()))) {
         refreshData(activeFy.endDate);
     }
     focusActiveTree();
