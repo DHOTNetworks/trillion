@@ -224,6 +224,8 @@ set(SOURCES
     src/engine/migration/migration_manager.cpp
     src/engine/bahi_khata_migrator.h
     src/engine/bahi_khata_migrator.cpp
+    src/engine/bahi_khata_exporter.h
+    src/engine/bahi_khata_exporter.cpp
     src/engine/busy_data_migrator.h
     src/engine/busy_data_migrator.cpp
     src/engine/tally_data_migrator.h
@@ -248,6 +250,8 @@ set(SOURCES
     src/widgets/salary_register_widget.cpp
     src/widgets/accounting_period_dialog.h
     src/widgets/accounting_period_dialog.cpp
+    src/widgets/bahi_khata_export_dialog.h
+    src/widgets/bahi_khata_export_dialog.cpp
     src/engine/balance_sheet_calculator.h
     src/engine/balance_sheet_calculator.cpp
     src/engine/stock_valuation_engine.h
@@ -612,6 +616,8 @@ set(TEST_SOURCES
     src/engine/bahi_khata_migrator.cpp
     src/engine/busy_data_migrator.h
     src/engine/busy_data_migrator.cpp
+    src/engine/bahi_khata_exporter.h
+    src/engine/bahi_khata_exporter.cpp
     src/models/iform_model.h
     src/models/iform_model.cpp
     src/models/mandi_reports_controller.h
@@ -656,6 +662,7 @@ target_link_libraries(LogicBoardTestSuite PRIVATE
     libxls_embedded
     Qt6::Core
     Qt6::Gui
+    Qt6::Sql
     Qt6::Widgets
     Qt6::PrintSupport
     Qt6::Test

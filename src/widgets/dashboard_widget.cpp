@@ -1,6 +1,7 @@
 #include "dashboard_widget.h"
 #include "accounting_period_dialog.h"
 #include "mdb_migration_dialog.h"
+#include "bahi_khata_export_dialog.h"
 #include "scale_settings_dialog.h"
 #include "../services/scale_manager.h"
 #include "../engine/accounting_engine.h"
@@ -100,6 +101,11 @@ void DashboardWidget::onSyncClicked() {
     });
     dlg.exec();
     refreshStats();
+}
+
+void DashboardWidget::onExportBahiKhataClicked() {
+    MahadevERP::BahiKhataExportDialog dlg(m_firmMgr, this);
+    dlg.exec();
 }
 
 void DashboardWidget::setupUi() {
@@ -298,6 +304,19 @@ QWidget* DashboardWidget::createLeftSection() {
     makeField("Location:", m_locationLabel, "—");
 
     layout->addStretch(1);
+
+    // Export to Bahi-Khata Button (Above GST Registered with green dot)
+    m_exportBahiKhataBtn = new QPushButton("Export to Bahi-Khata", card);
+    m_exportBahiKhataBtn->setObjectName("exportBahiKhataBtn");
+    m_exportBahiKhataBtn->setFixedHeight(36);
+    m_exportBahiKhataBtn->setCursor(Qt::PointingHandCursor);
+    m_exportBahiKhataBtn->setStyleSheet(
+        "#exportBahiKhataBtn { background-color: #EEF2FF; border: 1.5px solid #C7D2FE; border-radius: 8px; font-weight: 800; color: #4338CA; font-size: 12px; }"
+        "#exportBahiKhataBtn:hover { background-color: #E0E7FF; border-color: #818CF8; color: #3730A3; }"
+        "#exportBahiKhataBtn:pressed { background-color: #C7D2FE; }"
+    );
+    connect(m_exportBahiKhataBtn, &QPushButton::clicked, this, &DashboardWidget::onExportBahiKhataClicked);
+    layout->addWidget(m_exportBahiKhataBtn);
 
     // Bottom Status Badge
     QFrame* statusCard = new QFrame(card);

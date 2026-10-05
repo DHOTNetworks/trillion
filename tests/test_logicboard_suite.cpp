@@ -57,6 +57,7 @@
 #include "../src/models/capital_accounts_controller.h"
 #include "../src/models/cash_bank_flow_controller.h"
 #include "../src/models/salary_register_controller.h"
+#include "../src/engine/bahi_khata_exporter.h"
 #include "../src/services/print_export_controller.h"
 
 class LogicBoardTestSuite : public QObject {
@@ -143,6 +144,9 @@ private slots:
 
     // 18. Employee Payroll & Salary Register Crediting
     void testSalaryRegisterControllerAndPayrollPosting();
+
+    // 19. Bahi-Khata JetDB Bidirectional Exporter
+    void testBahiKhataJetDbExporterPipeline();
 };
 
 #include "mdbtools.h"
@@ -2194,6 +2198,50 @@ void LogicBoardTestSuite::testSalaryRegisterControllerAndPayrollPosting() {
     }
 
     qDebug() << "[TEST] Employee Payroll & Salary Register Crediting verified successfully!";
+}
+
+void LogicBoardTestSuite::testBahiKhataJetDbExporterPipeline() {
+    using namespace MahadevERP;
+    BahiKhataExporter exporter;
+
+    // 1. Configure export options targeting a test file in build directory
+    QString targetExportPath = "build/test_exported_Data.002";
+    if (QFile::exists(targetExportPath)) {
+        QFile::remove(targetExportPath);
+    }
+
+    BahiKhataExporter::ExportOptions opts;
+    opts.targetMdbPath = targetExportPath;
+    opts.templateMdbPath = "Bahi-Khata-Data/Data.002";
+    opts.financialYear = "FY 2025-26";
+    opts.createBackup = false;
+    opts.exportTransactions = true;
+    opts.exportMillingAndStock = true;
+
+    // 2. Run export pipeline
+    BahiKhataExporter::ExportSummary summary = exporter.exportToBahiKhata(opts);
+    QVERIFY2(summary.success, qPrintable(summary.errorMessage));
+    QVERIFY(QFile::exists(targetExportPath));
+    QVERIFY(summary.ledgersExported > 0);
+    QVERIFY(summary.transactionsExported > 0);
+
+    // 3. Inspect the exported Jet 4 database with BahiKhataMigrator
+    BahiKhataMigrator migrator;
+    QVariantMap insp = migrator.inspect_mdb_file(targetExportPath);
+    QVERIFY(insp.contains("tableCount"));
+    QVERIFY(insp.value("tableCount").toInt() > 10);
+
+    // 4. Verify file header has Jet 4 version (0x01)
+    QFile f(targetExportPath);
+    QVERIFY(f.open(QIODevice::ReadOnly));
+    QByteArray hdr = f.read(128);
+    f.close();
+    QCOMPARE(static_cast<unsigned char>(hdr.at(0x14)), 1); // 1 = Jet 4
+
+    // Clean up test file
+    QFile::remove(targetExportPath);
+
+    qDebug() << "[TEST] Bahi-Khata JetDB Bidirectional Exporter verified successfully!";
 }
 
 QTEST_MAIN(LogicBoardTestSuite)

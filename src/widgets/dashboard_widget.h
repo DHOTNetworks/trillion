@@ -48,6 +48,7 @@ public slots:
     void openReportsMenu(int initialIndex = 0);
     void openFinalAccountsMenu(int initialIndex = 0);
     void onSyncClicked();
+    void onExportBahiKhataClicked();
     void openScaleDialog();
 
 protected:
@@ -88,6 +89,7 @@ private:
     QPushButton* m_syncBtn = nullptr;
     QPushButton* m_periodBtn = nullptr;
     QPushButton* m_scaleBtn = nullptr;
+    QPushButton* m_exportBahiKhataBtn = nullptr;
 
     // Firm profile labels
     QLabel* m_firmNameLabel = nullptr;
