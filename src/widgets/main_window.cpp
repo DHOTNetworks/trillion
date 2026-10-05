@@ -454,6 +454,13 @@ MainWindow::MainWindow(const MainWindowDependencies& deps, QWidget* parent)
     connect(m_saudaContractWidget, &SaudaContractWidget::backRequested, this, &MainWindow::navigateBack);
     m_stackedWidget->addWidget(m_saudaContractWidget);
 
+    // Index 48: Employee Payroll & Salary Crediting Register Widget (View 80)
+    m_salaryRegisterCtrl = new MahadevERP::SalaryRegisterController(this);
+    m_salaryRegisterWidget = new MahadevERP::SalaryRegisterWidget(m_salaryRegisterCtrl, m_printExportCtrl, this);
+    connect(m_salaryRegisterWidget, &MahadevERP::SalaryRegisterWidget::backRequested, this, &MainWindow::navigateBack);
+    connect(m_salaryRegisterWidget, &MahadevERP::SalaryRegisterWidget::statementRequested, this, &MainWindow::openStatementForParty);
+    m_stackedWidget->addWidget(m_salaryRegisterWidget);
+
     // Global Shortcut for Accounting Period (Alt+F2)
     QShortcut* altF2Shortcut = new QShortcut(QKeySequence(Qt::ALT | Qt::Key_F2), this);
     connect(altF2Shortcut, &QShortcut::activated, this, &MainWindow::openAccountingPeriodDialog);
@@ -815,6 +822,9 @@ void MainWindow::restoreActiveViewFocus() {
         m_profitLossWidget->setFocus(Qt::OtherFocusReason);
     } else if (vIdx == 8 && m_ledgerWidget) {
         m_ledgerWidget->setFocus(Qt::OtherFocusReason);
+    } else if (vIdx == 80 && m_salaryRegisterWidget) {
+        m_salaryRegisterWidget->setFocus(Qt::OtherFocusReason);
+        m_salaryRegisterWidget->focusTable();
     }
 }
 
@@ -890,6 +900,8 @@ void MainWindow::openAccountingPeriodDialog() {
             m_gateRegisterWidget->refreshData();
         } else if (vIdx == 72 && m_saudaContractWidget) {
             m_saudaContractWidget->refreshData();
+        } else if (vIdx == 80 && m_salaryRegisterWidget) {
+            m_salaryRegisterWidget->loadData();
         }
     }
 
@@ -1428,6 +1440,15 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
             }
             m_saudaContractWidget->setFocus();
         }
+    } else if (viewIndex == 80) {
+        if (m_salaryRegisterWidget) {
+            m_stackedWidget->setCurrentWidget(m_salaryRegisterWidget);
+            if (m_salaryRegisterWidget->isDirty()) {
+                m_salaryRegisterWidget->loadData();
+            }
+            m_salaryRegisterWidget->setFocus();
+            m_salaryRegisterWidget->focusTable();
+        }
     }
 
     m_isNavigating = false;
@@ -1658,6 +1679,7 @@ void MainWindow::markAllStatementsDirty() {
     if (m_taxChallanRegisterWidget) m_taxChallanRegisterWidget->markDirty();
     if (m_gstrReportsWidget) m_gstrReportsWidget->markDirty();
     if (m_mandiReportsWidget) m_mandiReportsWidget->markDirty();
+    if (m_salaryRegisterWidget) m_salaryRegisterWidget->markDirty();
 }
 
 void MainWindow::closeEvent(QCloseEvent* event) {

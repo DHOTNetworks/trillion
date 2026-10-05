@@ -302,6 +302,7 @@ void DatabaseManager::ensureTablesExist() {
         "set_title_case INTEGER DEFAULT 1,"
         "ledger_open_from TEXT,"
         "books_start_from TEXT,"
+        "salary_per_month REAL DEFAULT 0.0,"
         "legacy_id INTEGER"
         ");"
     );
@@ -1580,6 +1581,36 @@ void DatabaseManager::ensureTablesExist() {
     addColumnIfNotExists("parties", "set_title_case", "INTEGER DEFAULT 1");
     addColumnIfNotExists("parties", "ledger_open_from", "TEXT");
     addColumnIfNotExists("parties", "books_start_from", "TEXT");
+    addColumnIfNotExists("parties", "salary_per_month", "REAL DEFAULT 0.0");
+
+    // Salary Payments & Payroll Log Table
+    executeNonQuery(
+        "CREATE TABLE IF NOT EXISTS salary_payments ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "fy_id INTEGER,"
+        "financial_year TEXT,"
+        "month_year TEXT NOT NULL,"
+        "voucher_date TEXT NOT NULL,"
+        "voucher_no TEXT NOT NULL,"
+        "party_id INTEGER NOT NULL,"
+        "employee_name TEXT NOT NULL,"
+        "base_salary REAL DEFAULT 0.0,"
+        "days_in_month INTEGER DEFAULT 30,"
+        "present_days REAL DEFAULT 30.0,"
+        "earned_basic REAL DEFAULT 0.0,"
+        "allowances REAL DEFAULT 0.0,"
+        "pf_deduction REAL DEFAULT 0.0,"
+        "tds_deduction REAL DEFAULT 0.0,"
+        "advance_deduction REAL DEFAULT 0.0,"
+        "other_deduction REAL DEFAULT 0.0,"
+        "net_salary REAL NOT NULL,"
+        "narration TEXT,"
+        "created_at TEXT DEFAULT CURRENT_TIMESTAMP,"
+        "FOREIGN KEY (party_id) REFERENCES parties(id)"
+        ");"
+    );
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_salary_payments_month ON salary_payments(month_year);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_salary_payments_party ON salary_payments(party_id, month_year);");
 
     // Ensure deterministic hierarchy columns exist for account_groups and parties
     addColumnIfNotExists("account_groups", "code1st", "INTEGER DEFAULT 0");

@@ -59,6 +59,8 @@
 #include "bardana_widget.h"
 #include "gate_register_widget.h"
 #include "sauda_contract_widget.h"
+#include "salary_register_widget.h"
+#include "../models/salary_register_controller.h"
 #include "../models/bardana_controller.h"
 #include "../models/gate_register_controller.h"
 #include "../models/sauda_controller.h"
@@ -162,6 +164,7 @@ public:
     BardanaWidget* bardanaWidget() const { return m_bardanaWidget; }
     GateRegisterWidget* gateRegisterWidget() const { return m_gateRegisterWidget; }
     SaudaContractWidget* saudaContractWidget() const { return m_saudaContractWidget; }
+    MahadevERP::SalaryRegisterWidget* salaryRegisterWidget() const { return m_salaryRegisterWidget; }
 
     QStackedWidget* stackedWidget() const { return m_stackedWidget; }
 
@@ -258,10 +261,12 @@ private:
     BardanaWidget* m_bardanaWidget = nullptr;
     GateRegisterWidget* m_gateRegisterWidget = nullptr;
     SaudaContractWidget* m_saudaContractWidget = nullptr;
+    MahadevERP::SalaryRegisterWidget* m_salaryRegisterWidget = nullptr;
 
     BardanaController* m_bardanaCtrl = nullptr;
     GateRegisterController* m_gateRegisterCtrl = nullptr;
     SaudaController* m_saudaCtrl = nullptr;
+    MahadevERP::SalaryRegisterController* m_salaryRegisterCtrl = nullptr;
 
     TaxChallanController* m_taxChallanCtrl = nullptr;
     TcsReceiptVoucherController* m_tcsReceiptVoucherCtrl = nullptr;

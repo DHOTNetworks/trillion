@@ -242,6 +242,10 @@ set(SOURCES
     src/widgets/ledger_statement_widget.cpp
     src/widgets/ledger_directory_widget.h
     src/widgets/ledger_directory_widget.cpp
+    src/models/salary_register_controller.h
+    src/models/salary_register_controller.cpp
+    src/widgets/salary_register_widget.h
+    src/widgets/salary_register_widget.cpp
     src/widgets/accounting_period_dialog.h
     src/widgets/accounting_period_dialog.cpp
     src/engine/balance_sheet_calculator.h
@@ -626,6 +630,8 @@ set(TEST_SOURCES
     src/models/gate_register_controller.cpp
     src/models/sauda_controller.h
     src/models/sauda_controller.cpp
+    src/models/salary_register_controller.h
+    src/models/salary_register_controller.cpp
     src/services/scale_manager.h
     src/services/scale_manager.cpp
 )

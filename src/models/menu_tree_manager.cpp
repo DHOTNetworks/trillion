@@ -188,7 +188,8 @@ void MenuTreeManager::setupDefaultMenus()
         MenuItem("4. Bank Statement Auto-Import & Reconciliation", "Ctrl+B", Qt::Key_4, MenuActionType::OpenView, 26),
         MenuItem("5. Transport Dispatch & Gate Pass Register", "Alt+T", Qt::Key_5, MenuActionType::OpenView, 27),
         MenuItem("6. GST Debit Notes & Credit Notes", "Alt+D", Qt::Key_6, MenuActionType::OpenView, 28),
-        MenuItem("7. GSTR-2A Matching & ITC Reconciliation", "Alt+G", Qt::Key_7, MenuActionType::OpenView, 34)
+        MenuItem("7. GSTR-2A Matching & ITC Reconciliation", "Alt+G", Qt::Key_7, MenuActionType::OpenView, 34),
+        MenuItem("8. Employee Payroll & Salary Register", "Alt+S", Qt::Key_8, MenuActionType::OpenView, 80)
     };
     registerMenu(otherVoucherMenu);
 
@@ -214,7 +215,8 @@ void MenuTreeManager::setupDefaultMenus()
         MenuItem("5. Purchase Register & Summary", "", Qt::Key_5, MenuActionType::OpenView, 4),
         MenuItem("6. Stock Register (View Options)", "S", Qt::Key_6, MenuActionType::OpenSubmenu, -1, "stock_register_hub"),
         MenuItem("7. Transport Dispatch & Gate Pass Register", "Alt+T", Qt::Key_7, MenuActionType::OpenView, 27),
-        MenuItem("8. Milling Production & Out-turn Statement", "Alt+M", Qt::Key_8, MenuActionType::OpenView, 35)
+        MenuItem("8. Milling Production & Out-turn Statement", "Alt+M", Qt::Key_8, MenuActionType::OpenView, 35),
+        MenuItem("9. Employee Payroll & Salary Register", "Alt+S", Qt::Key_9, MenuActionType::OpenView, 80)
     };
     registerMenu(reportsMenu);
 

@@ -56,6 +56,7 @@
 #include "../src/models/trial_balance_controller.h"
 #include "../src/models/capital_accounts_controller.h"
 #include "../src/models/cash_bank_flow_controller.h"
+#include "../src/models/salary_register_controller.h"
 #include "../src/services/print_export_controller.h"
 
 class LogicBoardTestSuite : public QObject {
@@ -139,6 +140,9 @@ private slots:
 
     // 17. 4-Code Structure Enforcement for New Groups & Ledgers
     void testNewGroupAndLedgerFourCodeStructure();
+
+    // 18. Employee Payroll & Salary Register Crediting
+    void testSalaryRegisterControllerAndPayrollPosting();
 };
 
 #include "mdbtools.h"
@@ -2102,6 +2106,94 @@ void LogicBoardTestSuite::testNewGroupAndLedgerFourCodeStructure() {
     QCOMPARE(pipeMap.value("party_type").toString(), QString("Buyer"));
 
     qDebug() << "[TEST] 4-code structure hierarchy and ledger generation verified successfully!";
+}
+
+void LogicBoardTestSuite::testSalaryRegisterControllerAndPayrollPosting() {
+    auto& db = DatabaseManager::instance();
+
+    // 1. Insert test employees
+    QString emp1 = "TEST_EMP_RAMESH_SINGH";
+    QString emp2 = "TEST_EMP_SURESH_KUMAR";
+
+    db.executeNonQuery("DELETE FROM parties WHERE name IN (?, ?);", {emp1, emp2});
+    db.executeNonQuery(
+        "INSERT INTO parties (name, group_name, group_code, party_type, salary_per_month) "
+        "VALUES (?, 'Employees', 35, 'Employee', 30000.0);",
+        {emp1}
+    );
+    int emp1Id = db.executeScalar("SELECT last_insert_rowid();").toInt();
+
+    db.executeNonQuery(
+        "INSERT INTO parties (name, group_name, group_code, party_type, salary_per_month) "
+        "VALUES (?, 'Employees', 35, 'Employee', 45000.0);",
+        {emp2}
+    );
+    int emp2Id = db.executeScalar("SELECT last_insert_rowid();").toInt();
+
+    // 2. Instantiate SalaryRegisterController
+    MahadevERP::SalaryRegisterController ctrl;
+    ctrl.loadPayroll(2025, 4); // April 2025 (30 days)
+
+    const auto& items = ctrl.items();
+    int idx1 = -1, idx2 = -1;
+    for (int i = 0; i < items.size(); ++i) {
+        if (items[i].partyId == emp1Id) idx1 = i;
+        if (items[i].partyId == emp2Id) idx2 = i;
+    }
+
+    QVERIFY(idx1 >= 0);
+    QVERIFY(idx2 >= 0);
+
+    QCOMPARE(ctrl.items()[idx1].masterSalary, 30000.0);
+    QCOMPARE(ctrl.items()[idx2].masterSalary, 45000.0);
+    QCOMPARE(ctrl.items()[idx1].daysInMonth, 30);
+
+    // 3. Test adjustments: Emp1 has 25 present days, 2000 allowance, 1800 PF, 1000 advance
+    ctrl.setItemPresentDays(idx1, 25.0); // Earned = 30000/30 * 25 = 25000
+    ctrl.setItemAllowances(idx1, 2000.0);
+    ctrl.setItemPf(idx1, 1800.0);
+    ctrl.setItemAdvance(idx1, 1000.0);
+
+    // Expected net = 25000 + 2000 - 1800 - 1000 = 24200
+    QCOMPARE(ctrl.items()[idx1].earnedBasic, 25000.0);
+    QCOMPARE(ctrl.items()[idx1].netPayable, 24200.0);
+
+    // Emp2: Full 30 days, 5000 bonus, 2000 TDS -> Net = 45000 + 5000 - 2000 = 48000
+    ctrl.setItemAllowances(idx2, 5000.0);
+    ctrl.setItemTds(idx2, 2000.0);
+    QCOMPARE(ctrl.items()[idx2].netPayable, 48000.0);
+
+    // Select only our two test employees
+    ctrl.selectAll(false);
+    ctrl.setItemSelected(idx1, true);
+    ctrl.setItemSelected(idx2, true);
+
+    QCOMPARE(ctrl.summary().selectedEmployees, 2);
+    QCOMPARE(ctrl.summary().totalNetPayable, 72200.0);
+
+    // 4. Batch Post Salaries
+    QDate vDate(2025, 4, 30);
+    auto res = ctrl.postSelectedSalaries(vDate);
+    QVERIFY2(res.success, qPrintable(res.errorMessage));
+    QCOMPARE(res.vouchersCreated, 2);
+    QCOMPARE(res.totalAmountPosted, 72200.0);
+
+    // 5. Verify database records in salary_payments, vouchers, transactions
+    QVariant payCount = db.executeScalar(
+        "SELECT COUNT(*) FROM salary_payments WHERE month_year = '2025-04' AND party_id IN (?, ?);",
+        {emp1Id, emp2Id}
+    );
+    QCOMPARE(payCount.toInt(), 2);
+
+    // Verify double-entry balancing for each posted voucher
+    for (const QString& vNo : res.createdVoucherNumbers) {
+        QVariant sumDr = db.executeScalar("SELECT SUM(amount) FROM transactions WHERE voucher_no = ? AND dr_cr = 'Dr';", {vNo});
+        QVariant sumCr = db.executeScalar("SELECT SUM(amount) FROM transactions WHERE voucher_no = ? AND dr_cr = 'Cr';", {vNo});
+        QVERIFY(sumDr.isValid() && sumCr.isValid());
+        QCOMPARE(sumDr.toDouble(), sumCr.toDouble());
+    }
+
+    qDebug() << "[TEST] Employee Payroll & Salary Register Crediting verified successfully!";
 }
 
 QTEST_MAIN(LogicBoardTestSuite)

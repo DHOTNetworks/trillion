@@ -1288,6 +1288,7 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
         double creditLimit = parseDoubleVal(getField(l, "CreditLimit"));
         double interestRate = parseDoubleVal(getField(l, "InterestRate"));
         double commissionRate = parseDoubleVal(getField(l, "Percentage"));
+        double salaryPerMonth = parseDoubleVal(getField(l, "SalaryPerMonth"));
         std::string commissionOn = cleanText(getField(l, "CommnCalcOn"));
 
         std::string applyTcsStr = toLowerStr(getField(l, "ApplyTCSForParty"));
@@ -1331,8 +1332,8 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
             "mobile, whatsapp, phone, email, contact_person, pan, aadhaar, tan, gstin, gst_party_type, "
             "bank_name, bank_account, ifsc_code, credit_limit, credit_days, interest_rate, commission_rate, commission_on, "
             "apply_tcs, tcs_exempt, party_station, use_routes, shop_no, tin, urn, stock_not_calc, use_credit_limit, "
-            "show_date_totals, calc_direct_expense, set_title_case, books_start_from, legacy_id) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 30, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?);",
+            "show_date_totals, calc_direct_expense, set_title_case, books_start_from, salary_per_month, legacy_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 30, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?);",
             {
                 QString::fromStdString(lName),
                 QString::fromStdString(alias),
@@ -1381,6 +1382,7 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
                 showDateTotals,
                 calcDirectExpense,
                 QString::fromStdString(booksStartFrom),
+                salaryPerMonth,
                 legacyId
             }
         );
