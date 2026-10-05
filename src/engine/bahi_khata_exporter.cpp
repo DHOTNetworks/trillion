@@ -13,11 +13,15 @@
 #include <QRegularExpression>
 #include <QDebug>
 #include <cmath>
+#include <set>
+#include <tuple>
 #include <iostream>
 
 #if defined(HAS_LIBMDB) || __has_include("mdbtools.h")
 #include "mdbtools.h"
 #define USE_LIBMDB 1
+
+extern "C" ssize_t mdb_write_pg(MdbHandle *mdb, unsigned long pg);
 #endif
 
 namespace MahadevERP {
@@ -51,12 +55,141 @@ QString BahiKhataExporter::formatMdbDate(const QString& isoDate) {
     return d.toString("MM/dd/yyyy");
 }
 
+#if USE_LIBMDB
+static double toOleDate(const QString& dateStr) {
+    if (dateStr.isEmpty()) return 0.0;
+    QDate d = QDate::fromString(dateStr.left(10), "yyyy-MM-dd");
+    if (!d.isValid()) d = QDate::fromString(dateStr.left(10), Qt::ISODate);
+    if (!d.isValid()) return 0.0;
+    QDate base(1899, 12, 30);
+    return static_cast<double>(base.daysTo(d));
+}
+
+static QByteArray toJet4Text(const QString& str) {
+    if (str.isEmpty()) return QByteArray();
+    QByteArray res;
+    res.reserve(2 + str.length() * 2);
+    res.append(static_cast<char>(0xFF));
+    res.append(static_cast<char>(0xFE));
+    for (int i = 0; i < str.length(); ++i) {
+        ushort u = str.at(i).unicode();
+        res.append(static_cast<char>(u & 0xFF));
+        res.append(static_cast<char>((u >> 8) & 0xFF));
+    }
+    return res;
+}
+
+static int packJet4Row(MdbTableDef* table, unsigned char* out_buf, MdbField* fields, int num_fields) {
+    int max_fixed_size = 0;
+    for (int i = 0; i < table->num_cols; i++) {
+        MdbColumn *col = (MdbColumn *)g_ptr_array_index(table->columns, i);
+        if (col->is_fixed) {
+            int end_off = col->fixed_offset + col->col_size;
+            if (end_off > max_fixed_size) max_fixed_size = end_off;
+        }
+    }
+
+    int pos = 0;
+    out_buf[pos++] = table->num_cols & 0xFF;
+    out_buf[pos++] = (table->num_cols >> 8) & 0xFF;
+
+    int fixed_start = pos;
+    memset(&out_buf[fixed_start], 0, max_fixed_size);
+    pos += max_fixed_size;
+
+    for (int i = 0; i < num_fields; i++) {
+        MdbColumn *col = (MdbColumn *)g_ptr_array_index(table->columns, fields[i].colnum);
+        if (col->is_fixed && !fields[i].is_null && fields[i].value) {
+            memcpy(&out_buf[fixed_start + col->fixed_offset], fields[i].value, fields[i].siz);
+        }
+    }
+
+    int num_var = table->num_var_cols;
+    std::vector<unsigned int> var_offsets(num_var + 1, 0);
+
+    MdbField *var_fields[128];
+    memset(var_fields, 0, sizeof(var_fields));
+    for (int i = 0; i < num_fields; i++) {
+        MdbColumn *col = (MdbColumn *)g_ptr_array_index(table->columns, fields[i].colnum);
+        if (!col->is_fixed && col->var_col_num < num_var && col->var_col_num < 128) {
+            var_fields[col->var_col_num] = &fields[i];
+        }
+    }
+
+    for (int v = 0; v < num_var; v++) {
+        var_offsets[v] = pos;
+        MdbField *f = var_fields[v];
+        if (f && !f->is_null && f->value && f->siz > 0) {
+            memcpy(&out_buf[pos], f->value, f->siz);
+            pos += f->siz;
+        }
+    }
+    var_offsets[num_var] = pos;
+
+    for (int v = num_var; v >= 0; v--) {
+        out_buf[pos++] = var_offsets[v] & 0xFF;
+        out_buf[pos++] = (var_offsets[v] >> 8) & 0xFF;
+    }
+
+    out_buf[pos++] = num_var & 0xFF;
+    out_buf[pos++] = (num_var >> 8) & 0xFF;
+
+    int null_bytes = (table->num_cols + 7) / 8;
+    unsigned char *nullmask = &out_buf[pos];
+    memset(nullmask, 0, null_bytes);
+    pos += null_bytes;
+
+    for (int i = 0; i < num_fields; i++) {
+        MdbColumn *col = (MdbColumn *)g_ptr_array_index(table->columns, fields[i].colnum);
+        if (!fields[i].is_null) {
+            int byte_idx = col->col_num / 8;
+            int bit_idx = col->col_num % 8;
+            nullmask[byte_idx] |= (1 << bit_idx);
+        }
+    }
+
+    return pos;
+}
+
+static bool insertJet4Row(MdbHandle* mdb, MdbTableDef* table, MdbField* fields, int num_fields) {
+    unsigned char row_buf[4096];
+    int row_size = packJet4Row(table, row_buf, fields, num_fields);
+    gint32 pgnum = mdb_map_find_next_freepage(table, row_size);
+    if (!pgnum || pgnum == -1) {
+        return false;
+    }
+
+    guint16 rownum = mdb_add_row_to_pg(table, row_buf, row_size);
+    if (!mdb_write_pg(mdb, pgnum)) {
+        return false;
+    }
+
+    if (table->indices) {
+        for (guint i = 0; i < table->indices->len; i++) {
+            MdbIndex *idx = (MdbIndex *)g_ptr_array_index(table->indices, i);
+            if (idx && idx->index_type == 1) {
+                mdb_update_index(table, idx, num_fields, fields, pgnum, rownum);
+            }
+        }
+    }
+
+    table->num_rows++;
+    return true;
+}
+
+static void finalizeJet4Table(MdbHandle* mdb, MdbTableDef* table) {
+    if (!mdb || !table || !table->entry) return;
+    mdb_read_pg(mdb, table->entry->table_pg);
+    mdb_put_int32(mdb->pg_buf, mdb->fmt->tab_num_rows_offset, table->num_rows);
+    mdb_write_pg(mdb, table->entry->table_pg);
+}
+#endif
+
 QString BahiKhataExporter::resolveSeedTemplate(const QString& explicitPath) {
     if (!explicitPath.isEmpty() && QFile::exists(explicitPath)) {
         return explicitPath;
     }
 
-    // Look for existing standard Bahi-Khata data files in project workspace
     QStringList candidates = {
         "Bahi-Khata-Data/Data.002",
         "Bahi-Khata-Data/Data.001",
@@ -71,7 +204,6 @@ QString BahiKhataExporter::resolveSeedTemplate(const QString& explicitPath) {
         }
     }
 
-    // Check application dir
     QString appDir = QCoreApplication::applicationDirPath();
     for (const auto& c : candidates) {
         QString p = QDir(appDir).filePath(c);
@@ -337,7 +469,7 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaOdbc(const ExportOp
         // 5. Export Stock Items
         if (options.exportMillingAndStock) {
             updateProgress(85, "Exporting Stock Items & Commodity Masters...");
-            QVariantList stockRows = appDb.executeQuery("SELECT code, name, category, opening_bags, opening_qty, opening_value, hsn_code FROM stock_items;");
+            QVariantList stockRows = appDb.executeQuery("SELECT code, name, category_name, opening_bags, opening_qty, opening_value, hsn_code FROM stock_items;");
             QSqlQuery qDel(mdb);
             qDel.exec("DELETE FROM StockItems;");
 
@@ -374,7 +506,7 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaOdbc(const ExportOp
 BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const ExportOptions& options, const QString& targetPath) {
     ExportSummary summary;
     summary.targetFilePath = targetPath;
-    updateProgress(15, "Opening Jet 4.0 database via embedded libmdb engine...");
+    updateProgress(15, "Opening Jet 4.0 database via embedded binary engine...");
 
 #ifdef USE_LIBMDB
     QByteArray pathBytes = QFile::encodeName(targetPath);
@@ -391,12 +523,82 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
 
     auto& appDb = DatabaseManager::instance();
 
-    // 1. Sync Ledgers
-    updateProgress(35, "Syncing Ledgers and Account Masters into Jet 4 tables...");
+    // 1. Sync Groups
+    updateProgress(25, "Syncing Account Groups into Jet 4 Groups table...");
+    MdbTableDef* grpTbl = mdb_read_table_by_name(mdb, (char*)"Groups", MDB_TABLE);
+    if (grpTbl) {
+        mdb_read_columns(grpTbl);
+        mdb_read_indices(grpTbl);
+
+        std::set<int> existingGroupCodes;
+        mdb_rewind_table(grpTbl);
+        MdbColumn* colC1 = (MdbColumn*)g_ptr_array_index(grpTbl->columns, 1);
+        while (mdb_fetch_row(grpTbl)) {
+            char* cStr = mdb_col_to_string(mdb, mdb->pg_buf, colC1->cur_value_start, colC1->col_type, colC1->cur_value_len);
+            if (cStr) {
+                existingGroupCodes.insert(atoi(cStr));
+                g_free(cStr);
+            }
+        }
+
+        QVariantList grpRows = appDb.executeQuery("SELECT name, code1st, code2nd, code3rd, code4th, extract_in_balance_sheet FROM account_groups ORDER BY code1st ASC;");
+        for (const auto& gVar : grpRows) {
+            QVariantMap g = gVar.toMap();
+            int c1 = g.value("code1st").toInt();
+            if (existingGroupCodes.find(c1) == existingGroupCodes.end()) {
+                // Insert new group
+                std::vector<MdbField> fieldsVec(grpTbl->num_cols);
+                MdbField* fields = fieldsVec.data();
+                for (int i = 0; i < grpTbl->num_cols; i++) {
+                    MdbColumn* col = (MdbColumn*)g_ptr_array_index(grpTbl->columns, i);
+                    fields[i].colnum = i;
+                    fields[i].is_fixed = col->is_fixed;
+                    fields[i].is_null = 1;
+                }
+
+                QByteArray gNameBytes = toJet4Text(g.value("name").toString().left(50));
+                fields[0].is_null = 0; fields[0].value = gNameBytes.data(); fields[0].siz = gNameBytes.size();
+
+                guint16 c1Val = c1;
+                fields[1].is_null = 0; fields[1].value = &c1Val; fields[1].siz = 2;
+
+                guint16 c2Val = g.value("code2nd", c1).toInt();
+                fields[2].is_null = 0; fields[2].value = &c2Val; fields[2].siz = 2;
+
+                guint16 c3Val = g.value("code3rd", c1).toInt();
+                fields[3].is_null = 0; fields[3].value = &c3Val; fields[3].siz = 2;
+
+                guint16 c4Val = g.value("code4th", c1).toInt();
+                fields[4].is_null = 0; fields[4].value = &c4Val; fields[4].siz = 2;
+
+                double extBs = g.value("extract_in_balance_sheet", 0.0).toDouble();
+                fields[5].is_null = 0; fields[5].value = &extBs; fields[5].siz = 8;
+
+                if (insertJet4Row(mdb, grpTbl, fields, grpTbl->num_cols)) {
+                    summary.groupsExported++;
+                }
+            } else {
+                summary.groupsExported++;
+            }
+        }
+        finalizeJet4Table(mdb, grpTbl);
+        mdb_free_tabledef(grpTbl);
+    }
+
+    // 2. Sync Ledgers
+    updateProgress(45, "Syncing Ledgers and Account Masters into Jet 4 Ledgers table...");
     MdbTableDef* ledgersTbl = mdb_read_table_by_name(mdb, (char*)"Ledgers", MDB_TABLE);
     if (ledgersTbl) {
         mdb_read_columns(ledgersTbl);
+        mdb_read_indices(ledgersTbl);
 
+        std::map<int, int> ledgerCodeToPhysPg;
+        mdb_rewind_table(ledgersTbl);
+        MdbColumn* colCode = (MdbColumn*)g_ptr_array_index(ledgersTbl->columns, 3);
+        MdbColumn* colOpBal = (MdbColumn*)g_ptr_array_index(ledgersTbl->columns, 6);
+        MdbColumn* colSalary = (MdbColumn*)g_ptr_array_index(ledgersTbl->columns, 19);
+
+        // In-place updates for existing ledgers
         QVariantList partyRows = appDb.executeQuery(
             "SELECT id, legacy_id, name, group_code, opening_balance, balance_type, "
             "address, city, party_station, phone, mobile, contact_person, pan, gstin, "
@@ -404,33 +606,241 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
             "FROM parties ORDER BY COALESCE(legacy_id, id) ASC;"
         );
 
-        summary.ledgersExported = partyRows.size();
-        mdb_free_tabledef(ledgersTbl);
-    }
+        std::map<int, QVariantMap> partyMap;
+        for (const auto& pVar : partyRows) {
+            QVariantMap p = pVar.toMap();
+            int legId = p.value("legacy_id").toInt();
+            if (legId <= 0) legId = p.value("id").toInt();
+            partyMap[legId] = p;
+        }
 
-    // 2. Sync Groups
-    updateProgress(55, "Syncing 4-code Account Groups into Jet 4 tables...");
-    MdbTableDef* grpTbl = mdb_read_table_by_name(mdb, (char*)"Groups", MDB_TABLE);
-    if (grpTbl) {
-        mdb_read_columns(grpTbl);
-        QVariantList grpRows = appDb.executeQuery("SELECT name, code1st FROM account_groups ORDER BY code1st ASC;");
-        summary.groupsExported = grpRows.size();
-        mdb_free_tabledef(grpTbl);
+        while (mdb_fetch_row(ledgersTbl)) {
+            char* cStr = mdb_col_to_string(mdb, mdb->pg_buf, colCode->cur_value_start, colCode->col_type, colCode->cur_value_len);
+            if (cStr) {
+                int c = atoi(cStr);
+                g_free(cStr);
+                ledgerCodeToPhysPg[c] = ledgersTbl->cur_phys_pg;
+
+                auto it = partyMap.find(c);
+                if (it != partyMap.end()) {
+                    bool modified = false;
+                    double opBal = round2(it->second.value("opening_balance").toDouble());
+                    if (colOpBal->cur_value_start > 0) {
+                        memcpy(mdb->pg_buf + colOpBal->cur_value_start, &opBal, sizeof(double));
+                        modified = true;
+                    }
+                    double sal = round2(it->second.value("salary_per_month").toDouble());
+                    if (colSalary->cur_value_start > 0) {
+                        memcpy(mdb->pg_buf + colSalary->cur_value_start, &sal, sizeof(double));
+                        modified = true;
+                    }
+                    if (modified) {
+                        mdb_write_pg(mdb, ledgersTbl->cur_phys_pg);
+                    }
+                    summary.ledgersExported++;
+                }
+            }
+        }
+
+        // Insert new ledgers not existing in Jet 4
+        for (const auto& pair : partyMap) {
+            int code = pair.first;
+            if (ledgerCodeToPhysPg.find(code) == ledgerCodeToPhysPg.end()) {
+                const QVariantMap& p = pair.second;
+                std::vector<MdbField> fieldsVec(ledgersTbl->num_cols);
+                MdbField* fields = fieldsVec.data();
+                for (int i = 0; i < ledgersTbl->num_cols; i++) {
+                    MdbColumn* col = (MdbColumn*)g_ptr_array_index(ledgersTbl->columns, i);
+                    fields[i].colnum = i;
+                    fields[i].is_fixed = col->is_fixed;
+                    fields[i].is_null = 1;
+                }
+
+                QByteArray nameBytes = toJet4Text(p.value("name").toString().left(50));
+                fields[1].is_null = 0; fields[1].value = nameBytes.data(); fields[1].siz = nameBytes.size();
+
+                guint16 codeVal = code;
+                fields[3].is_null = 0; fields[3].value = &codeVal; fields[3].siz = 2;
+
+                guint16 grpVal = p.value("group_code", 1).toInt();
+                fields[4].is_null = 0; fields[4].value = &grpVal; fields[4].siz = 2;
+
+                double opBal = round2(p.value("opening_balance").toDouble());
+                fields[6].is_null = 0; fields[6].value = &opBal; fields[6].siz = 8;
+
+                QByteArray drCrBytes = toJet4Text(p.value("balance_type", "Dr").toString().left(2));
+                fields[7].is_null = 0; fields[7].value = drCrBytes.data(); fields[7].siz = drCrBytes.size();
+
+                QByteArray addBytes = toJet4Text(p.value("address").toString().left(250));
+                fields[9].is_null = 0; fields[9].value = addBytes.data(); fields[9].siz = addBytes.size();
+
+                QByteArray panBytes = toJet4Text(p.value("pan").toString().left(50));
+                fields[10].is_null = 0; fields[10].value = panBytes.data(); fields[10].siz = panBytes.size();
+
+                QByteArray stnBytes = toJet4Text(p.value("party_station", p.value("city")).toString().left(50));
+                fields[13].is_null = 0; fields[13].value = stnBytes.data(); fields[13].siz = stnBytes.size();
+
+                double sal = round2(p.value("salary_per_month").toDouble());
+                fields[19].is_null = 0; fields[19].value = &sal; fields[19].siz = 8;
+
+                QByteArray acctBytes = toJet4Text(p.value("bank_account").toString().left(50));
+                fields[20].is_null = 0; fields[20].value = acctBytes.data(); fields[20].siz = acctBytes.size();
+
+                QByteArray cpBytes = toJet4Text(p.value("contact_person").toString().left(50));
+                fields[26].is_null = 0; fields[26].value = cpBytes.data(); fields[26].siz = cpBytes.size();
+
+                QByteArray gstinBytes = toJet4Text(p.value("gstin").toString().left(50));
+                fields[39].is_null = 0; fields[39].value = gstinBytes.data(); fields[39].siz = gstinBytes.size();
+
+                QByteArray ifscBytes = toJet4Text(p.value("ifsc_code").toString().left(50));
+                fields[43].is_null = 0; fields[43].value = ifscBytes.data(); fields[43].siz = ifscBytes.size();
+
+                QByteArray bankBytes = toJet4Text(p.value("bank_name").toString().left(50));
+                fields[44].is_null = 0; fields[44].value = bankBytes.data(); fields[44].siz = bankBytes.size();
+
+                if (insertJet4Row(mdb, ledgersTbl, fields, ledgersTbl->num_cols)) {
+                    summary.ledgersExported++;
+                }
+            }
+        }
+
+        finalizeJet4Table(mdb, ledgersTbl);
+        mdb_free_tabledef(ledgersTbl);
     }
 
     // 3. Sync Transactions
     if (options.exportTransactions && !options.exportMastersOnly) {
-        updateProgress(75, "Syncing Double-Entry Vouchers into Jet 4 Transactions table...");
+        updateProgress(65, "Syncing Double-Entry Vouchers into Jet 4 Transactions table...");
         MdbTableDef* txTbl = mdb_read_table_by_name(mdb, (char*)"Transactions", MDB_TABLE);
         if (txTbl) {
             mdb_read_columns(txTbl);
-            QVariantList txRows = appDb.executeQuery("SELECT id, voucher_no, voucher_date, trans_type, dr_cr, amount FROM transactions;");
-            summary.transactionsExported = txRows.size();
-            for (const auto& t : txRows) {
-                double a = round2(t.toMap().value("amount").toDouble());
-                if (t.toMap().value("dr_cr") == "Dr") summary.totalDebitAmount += a;
-                else summary.totalCreditAmount += a;
+            mdb_read_indices(txTbl);
+
+            std::set<std::tuple<int, QString, int, int, QString>> existingTxSignatures;
+            mdb_rewind_table(txTbl);
+
+            MdbColumn* colVchNo = (MdbColumn*)g_ptr_array_index(txTbl->columns, 1);
+            MdbColumn* colVchDate = (MdbColumn*)g_ptr_array_index(txTbl->columns, 2);
+            MdbColumn* colAcCode = (MdbColumn*)g_ptr_array_index(txTbl->columns, 4);
+            MdbColumn* colDrCr = (MdbColumn*)g_ptr_array_index(txTbl->columns, 5);
+            MdbColumn* colAmt = (MdbColumn*)g_ptr_array_index(txTbl->columns, 6);
+
+            while (mdb_fetch_row(txTbl)) {
+                char* vNoStr = mdb_col_to_string(mdb, mdb->pg_buf, colVchNo->cur_value_start, colVchNo->col_type, colVchNo->cur_value_len);
+                char* dStr = mdb_col_to_string(mdb, mdb->pg_buf, colVchDate->cur_value_start, colVchDate->col_type, colVchDate->cur_value_len);
+                char* acStr = mdb_col_to_string(mdb, mdb->pg_buf, colAcCode->cur_value_start, colAcCode->col_type, colAcCode->cur_value_len);
+                char* dcStr = mdb_col_to_string(mdb, mdb->pg_buf, colDrCr->cur_value_start, colDrCr->col_type, colDrCr->cur_value_len);
+                char* amtStr = mdb_col_to_string(mdb, mdb->pg_buf, colAmt->cur_value_start, colAmt->col_type, colAmt->cur_value_len);
+
+                int vNo = vNoStr ? atoi(vNoStr) : 0;
+                QString dVal = dStr ? QString::fromUtf8(dStr).left(10) : "";
+                int ac = acStr ? atoi(acStr) : 0;
+                QString dc = dcStr ? QString::fromUtf8(dcStr) : "";
+                int amtCents = amtStr ? static_cast<int>(std::round(atof(amtStr) * 100.0)) : 0;
+
+                existingTxSignatures.insert(std::make_tuple(vNo, dVal, ac, amtCents, dc));
+
+                if (vNoStr) g_free(vNoStr);
+                if (dStr) g_free(dStr);
+                if (acStr) g_free(acStr);
+                if (dcStr) g_free(dcStr);
+                if (amtStr) g_free(amtStr);
             }
+
+            QString txSql = 
+                "SELECT t.id, t.voucher_no, t.voucher_date, t.trans_type, t.dr_cr, t.amount, t.narration, "
+                "COALESCE(p.legacy_id, p.id) as ac_code, "
+                "COALESCE(op.legacy_id, op.id, 0) as party_code "
+                "FROM transactions t "
+                "LEFT JOIN parties p ON t.party_id = p.id OR t.party_name = p.name "
+                "LEFT JOIN parties op ON t.opposing_account = op.name ";
+
+            if (!options.financialYear.isEmpty()) {
+                txSql += QString("WHERE t.financial_year = '%1' ").arg(options.financialYear);
+            }
+            txSql += "ORDER BY t.voucher_date ASC, t.id ASC;";
+
+            QVariantList txRows = appDb.executeQuery(txSql);
+            int rowIdx = 1;
+
+            for (const auto& tVar : txRows) {
+                QVariantMap t = tVar.toMap();
+                int rawVchNo = t.value("voucher_no").toInt();
+                if (rawVchNo <= 0) {
+                    // Extract digits from voucher_no like "Jrnl-28"
+                    QString vStr = t.value("voucher_no").toString();
+                    static QRegularExpression reDigits(R"(\d+)");
+                    QRegularExpressionMatch m = reDigits.match(vStr);
+                    if (m.hasMatch()) rawVchNo = m.captured(0).toInt();
+                    else rawVchNo = rowIdx;
+                }
+
+                QString isoDate = t.value("voucher_date").toString().left(10);
+                int acCode = t.value("ac_code").toInt();
+                double amt = round2(t.value("amount").toDouble());
+                int amtCents = static_cast<int>(std::round(amt * 100.0));
+                QString drCr = t.value("dr_cr", "Dr").toString().left(2);
+
+                // Date key formatting
+                QDate qd = QDate::fromString(isoDate, "yyyy-MM-dd");
+                QString dKey = qd.isValid() ? qd.toString("MM/dd/yy") : isoDate;
+
+                auto sig = std::make_tuple(rawVchNo, dKey, acCode, amtCents, drCr);
+                if (existingTxSignatures.find(sig) == existingTxSignatures.end()) {
+                    // Insert new transaction row
+                    std::vector<MdbField> fieldsVec(txTbl->num_cols);
+                    MdbField* fields = fieldsVec.data();
+                    for (int i = 0; i < txTbl->num_cols; i++) {
+                        MdbColumn* col = (MdbColumn*)g_ptr_array_index(txTbl->columns, i);
+                        fields[i].colnum = i;
+                        fields[i].is_fixed = col->is_fixed;
+                        fields[i].is_null = 1;
+                    }
+
+                    guint16 rowNo = (drCr == "Dr") ? 1 : 2;
+                    fields[0].is_null = 0; fields[0].value = &rowNo; fields[0].siz = 2;
+
+                    guint32 vchNoVal = rawVchNo;
+                    fields[1].is_null = 0; fields[1].value = &vchNoVal; fields[1].siz = 4;
+
+                    double oleD = toOleDate(isoDate);
+                    fields[2].is_null = 0; fields[2].value = &oleD; fields[2].siz = 8;
+
+                    QByteArray ttBytes = toJet4Text(t.value("trans_type", "Jrnl").toString().left(5));
+                    fields[3].is_null = 0; fields[3].value = ttBytes.data(); fields[3].siz = ttBytes.size();
+
+                    guint16 acVal = acCode;
+                    fields[4].is_null = 0; fields[4].value = &acVal; fields[4].siz = 2;
+
+                    QByteArray dcBytes = toJet4Text(drCr);
+                    fields[5].is_null = 0; fields[5].value = dcBytes.data(); fields[5].siz = dcBytes.size();
+
+                    fields[6].is_null = 0; fields[6].value = &amt; fields[6].siz = 8;
+
+                    QByteArray invBytes = toJet4Text(t.value("voucher_no").toString().left(50));
+                    fields[7].is_null = 0; fields[7].value = invBytes.data(); fields[7].siz = invBytes.size();
+
+                    guint16 ptVal = t.value("party_code").toInt();
+                    fields[8].is_null = 0; fields[8].value = &ptVal; fields[8].siz = 2;
+
+                    QByteArray narrBytes = toJet4Text(t.value("narration").toString().left(200));
+                    fields[14].is_null = 0; fields[14].value = narrBytes.data(); fields[14].siz = narrBytes.size();
+
+                    if (insertJet4Row(mdb, txTbl, fields, txTbl->num_cols)) {
+                        summary.transactionsExported++;
+                        if (drCr == "Dr") summary.totalDebitAmount += amt;
+                        else summary.totalCreditAmount += amt;
+                        existingTxSignatures.insert(sig);
+                    }
+                } else {
+                    summary.transactionsExported++;
+                    if (drCr == "Dr") summary.totalDebitAmount += amt;
+                    else summary.totalCreditAmount += amt;
+                }
+                rowIdx++;
+            }
+
+            finalizeJet4Table(mdb, txTbl);
             mdb_free_tabledef(txTbl);
         }
     }
@@ -441,8 +851,60 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
         MdbTableDef* stkTbl = mdb_read_table_by_name(mdb, (char*)"StockItems", MDB_TABLE);
         if (stkTbl) {
             mdb_read_columns(stkTbl);
-            QVariantList stockRows = appDb.executeQuery("SELECT code, name FROM stock_items;");
-            summary.stockItemsExported = stockRows.size();
+            mdb_read_indices(stkTbl);
+
+            std::set<int> existingStockCodes;
+            mdb_rewind_table(stkTbl);
+            MdbColumn* colCode = (MdbColumn*)g_ptr_array_index(stkTbl->columns, 1);
+            while (mdb_fetch_row(stkTbl)) {
+                char* cStr = mdb_col_to_string(mdb, mdb->pg_buf, colCode->cur_value_start, colCode->col_type, colCode->cur_value_len);
+                if (cStr) {
+                    existingStockCodes.insert(atoi(cStr));
+                    g_free(cStr);
+                }
+            }
+
+            QVariantList stockRows = appDb.executeQuery("SELECT code, name, category_name, opening_bags, opening_qty, opening_value, hsn_code FROM stock_items;");
+            for (const auto& sVar : stockRows) {
+                QVariantMap s = sVar.toMap();
+                int c = s.value("code").toInt();
+                if (existingStockCodes.find(c) == existingStockCodes.end()) {
+                    std::vector<MdbField> fieldsVec(stkTbl->num_cols);
+                    MdbField* fields = fieldsVec.data();
+                    for (int i = 0; i < stkTbl->num_cols; i++) {
+                        MdbColumn* col = (MdbColumn*)g_ptr_array_index(stkTbl->columns, i);
+                        fields[i].colnum = i;
+                        fields[i].is_fixed = col->is_fixed;
+                        fields[i].is_null = 1;
+                    }
+
+                    QByteArray nameBytes = toJet4Text(s.value("name").toString().left(50));
+                    fields[0].is_null = 0; fields[0].value = nameBytes.data(); fields[0].siz = nameBytes.size();
+
+                    guint16 cVal = c;
+                    fields[1].is_null = 0; fields[1].value = &cVal; fields[1].siz = 2;
+
+                    guint16 grpVal = 1;
+                    fields[2].is_null = 0; fields[2].value = &grpVal; fields[2].siz = 2;
+
+                    double opBags = s.value("opening_bags").toDouble();
+                    fields[18].is_null = 0; fields[18].value = &opBags; fields[18].siz = 8;
+
+                    double opQty = s.value("opening_qty").toDouble();
+                    fields[19].is_null = 0; fields[19].value = &opQty; fields[19].siz = 8;
+
+                    double opVal = s.value("opening_value").toDouble();
+                    fields[20].is_null = 0; fields[20].value = &opVal; fields[20].siz = 8;
+
+                    if (insertJet4Row(mdb, stkTbl, fields, stkTbl->num_cols)) {
+                        summary.stockItemsExported++;
+                    }
+                } else {
+                    summary.stockItemsExported++;
+                }
+            }
+
+            finalizeJet4Table(mdb, stkTbl);
             mdb_free_tabledef(stkTbl);
         }
     }
