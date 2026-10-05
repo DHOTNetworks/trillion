@@ -589,6 +589,7 @@ void GstrReportsWidget::loadReturns(const QDate& fromDate, const QDate& toDate) 
 
     Gstr2ReconciliationSummary summary = Gstr2Reconciler::reconcile(books, m_loadedPortalRecords, 1.0, 30);
     populateGstr2Tab(summary);
+    m_isDirty = false;
 }
 
 void GstrReportsWidget::populateGstr1Tab(const Gstr1ReturnPayload& payload) {

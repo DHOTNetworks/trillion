@@ -118,7 +118,7 @@ void GstPortalSyncDialog::setupUi() {
 
     // 5. Action Buttons
     auto* btnLayout = new QHBoxLayout();
-    m_browseJsonBtn = new QPushButton("📂 Import Local 2B JSON", this);
+    m_browseJsonBtn = new QPushButton("Import Local 2B JSON", this);
     m_browseJsonBtn->setStyleSheet("background-color: #F1F5F9; color: #334155; border: 1px solid #CBD5E1;");
     connect(m_browseJsonBtn, &QPushButton::clicked, this, &GstPortalSyncDialog::onBrowseLocalJsonClicked);
 
@@ -130,7 +130,7 @@ void GstPortalSyncDialog::setupUi() {
     connect(m_cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
     btnLayout->addWidget(m_cancelBtn);
 
-    m_downloadMatchBtn = new QPushButton("⚡ Download & Auto-Match", this);
+    m_downloadMatchBtn = new QPushButton("Download & Auto-Match", this);
     m_downloadMatchBtn->setStyleSheet("background-color: #16A34A; color: #FFFFFF; font-size: 13px; font-weight: 800; border: none; padding: 10px 20px;");
     m_downloadMatchBtn->setDefault(true);
     connect(m_downloadMatchBtn, &QPushButton::clicked, this, &GstPortalSyncDialog::onDownloadAndMatchClicked);
@@ -171,11 +171,11 @@ void GstPortalSyncDialog::onRequestOtpClicked() {
         m_progressBar->setVisible(false);
         m_requestOtpBtn->setEnabled(true);
         if (success) {
-            setStatus("✅ " + msg, false);
+            setStatus(msg, false);
             m_otpEdit->setFocus();
             QMessageBox::information(this, "OTP Sent", msg + "\nPlease enter the OTP to proceed.");
         } else {
-            setStatus("❌ " + msg, true);
+            setStatus(msg, true);
             QMessageBox msgBox(this);
             msgBox.setIcon(QMessageBox::Information);
             msgBox.setWindowTitle("GST Portal Authentication");
@@ -184,7 +184,7 @@ void GstPortalSyncDialog::onRequestOtpClicked() {
             msgBox.setInformativeText("Would you like to select your downloaded GSTR-2B JSON file now?");
             msgBox.setStandardButtons(QMessageBox::Open | QMessageBox::Cancel);
             msgBox.setDefaultButton(QMessageBox::Open);
-            msgBox.button(QMessageBox::Open)->setText("📂 Select 2B JSON File");
+            msgBox.button(QMessageBox::Open)->setText("Select 2B JSON File");
             
             if (msgBox.exec() == QMessageBox::Open) {
                 onBrowseLocalJsonClicked();
@@ -225,7 +225,7 @@ void GstPortalSyncDialog::onDownloadAndMatchClicked() {
                     finalPayload = f.readAll();
                     f.close();
                 } else {
-                    setStatus("❌ " + error, true);
+                    setStatus(error, true);
                     QMessageBox::warning(this, "Download Failed", error.isEmpty() ? "No data returned from GST Portal." : error);
                     return;
                 }
@@ -257,7 +257,7 @@ void GstPortalSyncDialog::onDownloadAndMatchClicked() {
             } else {
                 m_progressBar->setVisible(false);
                 m_downloadMatchBtn->setEnabled(true);
-                setStatus("❌ " + msg, true);
+                setStatus(msg, true);
                 QMessageBox::warning(this, "Authentication Failed", msg);
             }
         });

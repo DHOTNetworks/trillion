@@ -22,6 +22,8 @@ public:
     explicit SaudaContractWidget(SaudaController* controller, PrintExportController* printCtrl, QWidget* parent = nullptr);
 
     void refreshData();
+    void markDirty() { m_isDirty = true; }
+    bool isDirty() const { return m_isDirty; }
 
 signals:
     void backRequested();
@@ -85,4 +87,5 @@ private:
     QComboBox* m_filterStatusCombo = nullptr;
     QLineEdit* m_searchSaudaEdit = nullptr;
     AccountSearchBox* m_searchDalaliBox = nullptr;
+    bool m_isDirty = true;
 };

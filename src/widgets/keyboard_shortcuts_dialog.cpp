@@ -39,10 +39,6 @@ void KeyboardShortcutsDialog::setupUi() {
 
     // Header Title
     auto* headerLayout = new QHBoxLayout();
-    auto* iconLabel = new QLabel(QString::fromUtf8("⌨️"), this);
-    iconLabel->setStyleSheet("font-size: 24px;");
-    headerLayout->addWidget(iconLabel);
-
     auto* titleCol = new QVBoxLayout();
     auto* titleLabel = new QLabel("Keyboard Shortcuts Cheat Sheet", this);
     titleLabel->setStyleSheet("font-size: 18px; font-weight: bold; color: #0F172A;");

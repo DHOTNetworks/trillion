@@ -18,6 +18,8 @@ public:
     explicit SalesRegisterWidget(SalesRegisterController* controller = nullptr, PrintExportController* printExportCtrl = nullptr, QWidget* parent = nullptr);
 
     void loadData(const QDate& fromDate = QDate(), const QDate& toDate = QDate());
+    void markDirty() { m_isDirty = true; }
+    bool isDirty() const { return m_isDirty; }
     void focusTable();
 
 signals:
@@ -54,6 +56,7 @@ private:
     QLabel* m_totalGrossLabel = nullptr;
 
     QTableWidget* m_table = nullptr;
+    bool m_isDirty = true;
 };
 
 } // namespace MahadevERP

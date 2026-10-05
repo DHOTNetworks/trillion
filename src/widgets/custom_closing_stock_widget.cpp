@@ -310,6 +310,7 @@ void CustomClosingStockWidget::reloadData() {
         m_currentReport = StockValuationEngine::calculateLivePhysicalStock(dateIso);
     }
     populateTable(m_currentReport);
+    m_isDirty = false;
 }
 
 void CustomClosingStockWidget::onDateChanged() {
@@ -356,10 +357,10 @@ void CustomClosingStockWidget::populateTable(const StockValuationReport& report)
     m_table->setRowCount(0);
 
     if (report.isAuditedSnapshot) {
-        m_statusBadge->setText("🔒 Audited Snapshot (Locked for Final Accounts)");
+        m_statusBadge->setText("[Audited Snapshot] (Locked for Final Accounts)");
         m_statusBadge->setStyleSheet("background-color: #F0FDF4; color: #16A34A; border: 1.5px solid #86EFAC; border-radius: 6px; padding: 0px 14px; font-weight: 800; font-size: 12px;");
     } else {
-        m_statusBadge->setText("⚡ Live System Physical Stock (Auto-Calculated)");
+        m_statusBadge->setText("[Live System] Physical Stock (Auto-Calculated)");
         m_statusBadge->setStyleSheet("background-color: #F0F9FF; color: #0284C7; border: 1.5px solid #BAE6FD; border-radius: 6px; padding: 0px 14px; font-weight: 800; font-size: 12px;");
     }
 

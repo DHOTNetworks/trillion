@@ -122,8 +122,7 @@ MainWindow::MainWindow(const MainWindowDependencies& deps, QWidget* parent)
     connect(m_firmSelectorWidget, &FirmSelectorWidget::firmOpened, this, [this](const QString& firmId, const QString& firmName) {
         Q_UNUSED(firmId);
         Q_UNUSED(firmName);
-        if (m_balanceSheetWidget) m_balanceSheetWidget->markDirty();
-        if (m_profitLossWidget) m_profitLossWidget->markDirty();
+        markAllStatementsDirty();
         MahadevERP::MenuTreeManager::instance().clearNavigationStack();
         MahadevERP::MenuTreeManager::instance().resetLastTriggeredMenu();
         navigateToView(0);
@@ -201,25 +200,37 @@ MainWindow::MainWindow(const MainWindowDependencies& deps, QWidget* parent)
     // Index 18: Native C++ New Group Widget (View 9)
     m_newGroupWidget = new MahadevERP::NewGroupWidget(m_groupsModel, this);
     connect(m_newGroupWidget, &MahadevERP::NewGroupWidget::backRequested, this, &MainWindow::navigateBack);
-    connect(m_newGroupWidget, &MahadevERP::NewGroupWidget::savedSuccess, this, &MainWindow::navigateBack);
+    connect(m_newGroupWidget, &MahadevERP::NewGroupWidget::savedSuccess, this, [this]() {
+        markAllStatementsDirty();
+        navigateBack();
+    });
     m_stackedWidget->addWidget(m_newGroupWidget);
 
     // Index 19: Native C++ Modify Group Widget (View 10)
     m_modifyGroupWidget = new MahadevERP::ModifyGroupWidget(m_groupsModel, this);
     connect(m_modifyGroupWidget, &MahadevERP::ModifyGroupWidget::backRequested, this, &MainWindow::navigateBack);
-    connect(m_modifyGroupWidget, &MahadevERP::ModifyGroupWidget::savedSuccess, this, &MainWindow::navigateBack);
+    connect(m_modifyGroupWidget, &MahadevERP::ModifyGroupWidget::savedSuccess, this, [this]() {
+        markAllStatementsDirty();
+        navigateBack();
+    });
     m_stackedWidget->addWidget(m_modifyGroupWidget);
 
     // Index 20: Native C++ New Stock Item Widget (View 11)
     m_newStockItemWidget = new MahadevERP::NewStockItemWidget(m_stockMasterCtrl, m_stockItemsModel, this);
     connect(m_newStockItemWidget, &MahadevERP::NewStockItemWidget::backRequested, this, &MainWindow::navigateBack);
-    connect(m_newStockItemWidget, &MahadevERP::NewStockItemWidget::savedSuccess, this, &MainWindow::navigateBack);
+    connect(m_newStockItemWidget, &MahadevERP::NewStockItemWidget::savedSuccess, this, [this]() {
+        markAllStatementsDirty();
+        navigateBack();
+    });
     m_stackedWidget->addWidget(m_newStockItemWidget);
 
     // Index 21: Native C++ Modify Stock Item Widget (View 12)
     m_modifyStockItemWidget = new MahadevERP::ModifyStockItemWidget(m_stockMasterCtrl, m_stockItemsModel, this);
     connect(m_modifyStockItemWidget, &MahadevERP::ModifyStockItemWidget::backRequested, this, &MainWindow::navigateBack);
-    connect(m_modifyStockItemWidget, &MahadevERP::ModifyStockItemWidget::savedSuccess, this, &MainWindow::navigateBack);
+    connect(m_modifyStockItemWidget, &MahadevERP::ModifyStockItemWidget::savedSuccess, this, [this]() {
+        markAllStatementsDirty();
+        navigateBack();
+    });
     m_stackedWidget->addWidget(m_modifyStockItemWidget);
 
     // Index 22: Native C++ Sales Register Widget (View 3)
@@ -251,6 +262,7 @@ MainWindow::MainWindow(const MainWindowDependencies& deps, QWidget* parent)
     connect(m_millingVoucherWidget, &MahadevERP::MillingVoucherWidget::backRequested, this, &MainWindow::navigateBack);
     connect(m_millingVoucherWidget, &MahadevERP::MillingVoucherWidget::batchSaved, this, [this](const QString& batchNo) {
         Q_UNUSED(batchNo);
+        markAllStatementsDirty();
         navigateBack();
     });
     m_stackedWidget->addWidget(m_millingVoucherWidget);
@@ -260,6 +272,7 @@ MainWindow::MainWindow(const MainWindowDependencies& deps, QWidget* parent)
     connect(m_tdsVoucherWidget, &MahadevERP::TdsVoucherWidget::backRequested, this, &MainWindow::navigateBack);
     connect(m_tdsVoucherWidget, &MahadevERP::TdsVoucherWidget::voucherSaved, this, [this](int voucherNo) {
         Q_UNUSED(voucherNo);
+        markAllStatementsDirty();
         navigateBack();
     });
     m_stackedWidget->addWidget(m_tdsVoucherWidget);
@@ -272,7 +285,10 @@ MainWindow::MainWindow(const MainWindowDependencies& deps, QWidget* parent)
     // Index 29: Native C++ Bank Statement Import Widget (View 26)
     m_bankStatementWidget = new MahadevERP::BankStatementImportWidget(m_bankStatementCtrl, m_printExportCtrl, this);
     connect(m_bankStatementWidget, &MahadevERP::BankStatementImportWidget::backRequested, this, &MainWindow::navigateBack);
-    connect(m_bankStatementWidget, &MahadevERP::BankStatementImportWidget::importCompleted, this, &MainWindow::navigateBack);
+    connect(m_bankStatementWidget, &MahadevERP::BankStatementImportWidget::importCompleted, this, [this]() {
+        markAllStatementsDirty();
+        navigateBack();
+    });
     m_stackedWidget->addWidget(m_bankStatementWidget);
 
     // Index 30: Native C++ Transport Dispatch Widget (View 27)
@@ -285,6 +301,7 @@ MainWindow::MainWindow(const MainWindowDependencies& deps, QWidget* parent)
     connect(m_debitCreditNoteWidget, &MahadevERP::DebitCreditNoteWidget::backRequested, this, &MainWindow::navigateBack);
     connect(m_debitCreditNoteWidget, &MahadevERP::DebitCreditNoteWidget::noteSaved, this, [this](const QString& noteNo) {
         Q_UNUSED(noteNo);
+        markAllStatementsDirty();
         navigateBack();
     });
     m_stackedWidget->addWidget(m_debitCreditNoteWidget);
@@ -306,7 +323,10 @@ MainWindow::MainWindow(const MainWindowDependencies& deps, QWidget* parent)
     // Index 33: Tax Challan Creation (View 51)
     m_taxChallanCreationWidget = new MahadevERP::TaxChallanCreationWidget(m_taxChallanCtrl, this);
     connect(m_taxChallanCreationWidget, &MahadevERP::TaxChallanCreationWidget::backRequested, this, &MainWindow::navigateBack);
-    connect(m_taxChallanCreationWidget, &MahadevERP::TaxChallanCreationWidget::challanSaved, this, [this]() { navigateToView(52); });
+    connect(m_taxChallanCreationWidget, &MahadevERP::TaxChallanCreationWidget::challanSaved, this, [this]() {
+        markAllStatementsDirty();
+        navigateToView(52);
+    });
     m_stackedWidget->addWidget(m_taxChallanCreationWidget);
 
     // Index 34: Tax Challan Register (View 52)
@@ -321,7 +341,10 @@ MainWindow::MainWindow(const MainWindowDependencies& deps, QWidget* parent)
     // Index 35: TCS Receipt Voucher (View 53)
     m_tcsReceiptVoucherWidget = new MahadevERP::TcsReceiptVoucherWidget(m_tcsReceiptVoucherCtrl, this);
     connect(m_tcsReceiptVoucherWidget, &MahadevERP::TcsReceiptVoucherWidget::backRequested, this, &MainWindow::navigateBack);
-    connect(m_tcsReceiptVoucherWidget, &MahadevERP::TcsReceiptVoucherWidget::voucherSaved, this, [this]() { navigateToView(54); });
+    connect(m_tcsReceiptVoucherWidget, &MahadevERP::TcsReceiptVoucherWidget::voucherSaved, this, [this]() {
+        markAllStatementsDirty();
+        navigateToView(54);
+    });
     m_stackedWidget->addWidget(m_tcsReceiptVoucherWidget);
 
     // Index 36: TCS Receipt List (View 54)
@@ -333,7 +356,10 @@ MainWindow::MainWindow(const MainWindowDependencies& deps, QWidget* parent)
     // Index 37: Advance Payment 194-Q (View 55)
     m_advancePayment194QWidget = new MahadevERP::AdvancePayment194QWidget(this);
     connect(m_advancePayment194QWidget, &MahadevERP::AdvancePayment194QWidget::backRequested, this, &MainWindow::navigateBack);
-    connect(m_advancePayment194QWidget, &MahadevERP::AdvancePayment194QWidget::voucherSaved, this, [this]() { navigateToView(56); });
+    connect(m_advancePayment194QWidget, &MahadevERP::AdvancePayment194QWidget::voucherSaved, this, [this]() {
+        markAllStatementsDirty();
+        navigateToView(56);
+    });
     m_stackedWidget->addWidget(m_advancePayment194QWidget);
 
     // Index 38: Advance Payment 194-Q List (View 56)
@@ -353,11 +379,27 @@ MainWindow::MainWindow(const MainWindowDependencies& deps, QWidget* parent)
     });
     m_stackedWidget->addWidget(m_form16AListWidget);
 
+    // Index 40: All Ledgers Directory / Master List Widget (View 5)
+    m_ledgerDirectoryWidget = new MahadevERP::LedgerDirectoryWidget(m_printExportCtrl, this);
+    connect(m_ledgerDirectoryWidget, &MahadevERP::LedgerDirectoryWidget::backRequested, this, &MainWindow::navigateBack);
+    connect(m_ledgerDirectoryWidget, &MahadevERP::LedgerDirectoryWidget::openStatementRequested, this, &MainWindow::openStatementForParty);
+    connect(m_ledgerDirectoryWidget, &MahadevERP::LedgerDirectoryWidget::modifyLedgerRequested, this, [this](int id, const QString& name) {
+        Q_UNUSED(name);
+        if (m_modifyLedgerWidget) {
+            m_modifyLedgerWidget->loadParty(id);
+        }
+        navigateToView(7);
+    });
+    connect(m_ledgerDirectoryWidget, &MahadevERP::LedgerDirectoryWidget::newLedgerRequested, this, [this]() {
+        navigateToView(6);
+    });
+    m_stackedWidget->addWidget(m_ledgerDirectoryWidget);
+
     // Final Reports Subsystem Controllers & Widgets
     m_trialBalanceCtrl = new MahadevERP::TrialBalanceController(this);
     m_capitalAccountsCtrl = new MahadevERP::CapitalAccountsController(this);
 
-    // Index 40: Trial Balance Widget (View 39)
+    // Index 41: Trial Balance Widget (View 39)
     m_trialBalanceWidget = new MahadevERP::TrialBalanceWidget(m_trialBalanceCtrl, m_printExportCtrl, this);
     connect(m_trialBalanceWidget, &MahadevERP::TrialBalanceWidget::backRequested, this, &MainWindow::navigateBack);
     connect(m_trialBalanceWidget, &MahadevERP::TrialBalanceWidget::openLedgerRequested, this, &MainWindow::openStatementForParty);
@@ -730,6 +772,9 @@ void MainWindow::restoreActiveViewFocus() {
         m_millingStatementWidget->setFocus(Qt::OtherFocusReason);
     } else if (vIdx == 36 && m_customClosingStockWidget) {
         m_customClosingStockWidget->setFocus(Qt::OtherFocusReason);
+    } else if (vIdx == 5 && m_ledgerDirectoryWidget) {
+        m_ledgerDirectoryWidget->setFocus(Qt::OtherFocusReason);
+        m_ledgerDirectoryWidget->focusTable();
     } else if (vIdx == 39 && m_trialBalanceWidget) {
         m_trialBalanceWidget->setFocus(Qt::OtherFocusReason);
         m_trialBalanceWidget->focusTable();
@@ -783,8 +828,7 @@ void MainWindow::openAccountingPeriodDialog() {
             m_dashCtrl->refresh_stats(fIso, tIso, fyLabel);
         }
 
-        if (m_balanceSheetWidget) m_balanceSheetWidget->markDirty();
-        if (m_profitLossWidget) m_profitLossWidget->markDirty();
+        markAllStatementsDirty();
 
         int vIdx = currentViewIndex();
         QDate fDate = QDate::fromString(fIso, "yyyy-MM-dd");
@@ -818,6 +862,8 @@ void MainWindow::openAccountingPeriodDialog() {
             m_gstrReportsWidget->loadReturns(fDate, tDate);
         } else if (vIdx == 35 && m_millingStatementWidget) {
             m_millingStatementWidget->loadMillingData(fDate, tDate);
+        } else if (vIdx == 5 && m_ledgerDirectoryWidget) {
+            m_ledgerDirectoryWidget->loadData();
         } else if (vIdx == 36 && m_customClosingStockWidget) {
             m_customClosingStockWidget->reloadData();
         } else if (vIdx == 39 && m_trialBalanceWidget) {
@@ -871,6 +917,8 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
         m_lastViewedStatementToDate.clear();
         m_lastViewedStatementSide.clear();
         m_lastViewedStatementIndex = 0;
+        m_lastViewedStatementDrIndex = 0;
+        m_lastViewedStatementCrIndex = 0;
         if (m_ledgerWidget) {
             m_ledgerWidget->resetSearch();
         }
@@ -901,26 +949,41 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
     } else if (viewIndex == 1) {
         if (m_paddyProcurementWidget) {
             m_stackedWidget->setCurrentWidget(m_paddyProcurementWidget);
-            FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
-            m_paddyProcurementWidget->loadArrivals(QDate::fromString(activeFy.startDate, "yyyy-MM-dd"), QDate::fromString(activeFy.endDate, "yyyy-MM-dd"));
+            if (m_paddyProcurementWidget->isDirty()) {
+                FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
+                m_paddyProcurementWidget->loadArrivals(QDate::fromString(activeFy.startDate, "yyyy-MM-dd"), QDate::fromString(activeFy.endDate, "yyyy-MM-dd"));
+            }
             m_paddyProcurementWidget->setFocus();
             m_paddyProcurementWidget->focusTable();
         }
     } else if (viewIndex == 3) {
         if (m_salesRegisterWidget) {
             m_stackedWidget->setCurrentWidget(m_salesRegisterWidget);
-            FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
-            m_salesRegisterWidget->loadData(QDate::fromString(activeFy.startDate, "yyyy-MM-dd"), QDate::fromString(activeFy.endDate, "yyyy-MM-dd"));
+            if (m_salesRegisterWidget->isDirty()) {
+                FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
+                m_salesRegisterWidget->loadData(QDate::fromString(activeFy.startDate, "yyyy-MM-dd"), QDate::fromString(activeFy.endDate, "yyyy-MM-dd"));
+            }
             m_salesRegisterWidget->setFocus();
             m_salesRegisterWidget->focusTable();
         }
     } else if (viewIndex == 4 || viewIndex == 21) {
         if (m_purchaseRegisterWidget) {
             m_stackedWidget->setCurrentWidget(m_purchaseRegisterWidget);
-            FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
-            m_purchaseRegisterWidget->loadData(QDate::fromString(activeFy.startDate, "yyyy-MM-dd"), QDate::fromString(activeFy.endDate, "yyyy-MM-dd"));
+            if (m_purchaseRegisterWidget->isDirty()) {
+                FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
+                m_purchaseRegisterWidget->loadData(QDate::fromString(activeFy.startDate, "yyyy-MM-dd"), QDate::fromString(activeFy.endDate, "yyyy-MM-dd"));
+            }
             m_purchaseRegisterWidget->setFocus();
             m_purchaseRegisterWidget->focusTable();
+        }
+    } else if (viewIndex == 5) {
+        if (m_ledgerDirectoryWidget) {
+            m_stackedWidget->setCurrentWidget(m_ledgerDirectoryWidget);
+            if (m_ledgerDirectoryWidget->isDirty()) {
+                m_ledgerDirectoryWidget->loadData();
+            }
+            m_ledgerDirectoryWidget->setFocus();
+            m_ledgerDirectoryWidget->focusTable();
         }
     } else if (viewIndex == 6) {
         if (m_newLedgerWidget) {
@@ -941,17 +1004,20 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
         QString fromDate = m_lastViewedStatementFromDate;
         QString toDate = m_lastViewedStatementToDate;
         QString side = m_lastViewedStatementSide.isEmpty() ? "Dr" : m_lastViewedStatementSide;
-        int rowIndex = m_lastViewedStatementIndex;
+        int drIndex = m_lastViewedStatementDrIndex;
+        int crIndex = m_lastViewedStatementCrIndex;
 
         m_targetStatementParty.clear();
         m_lastViewedStatementFromDate.clear();
         m_lastViewedStatementToDate.clear();
         m_lastViewedStatementSide.clear();
         m_lastViewedStatementIndex = 0;
+        m_lastViewedStatementDrIndex = 0;
+        m_lastViewedStatementCrIndex = 0;
 
         m_stackedWidget->setCurrentWidget(m_ledgerWidget);
         if (!party.isEmpty()) {
-            m_ledgerWidget->restoreState(party, fromDate, toDate, side, rowIndex);
+            m_ledgerWidget->restoreState(party, fromDate, toDate, side, drIndex, crIndex);
         } else {
             m_ledgerWidget->resetSearch();
             m_ledgerWidget->focusSearch();
@@ -990,8 +1056,10 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
     } else if (viewIndex == 13) {
         if (m_stockDetailWidget) {
             m_stackedWidget->setCurrentWidget(m_stockDetailWidget);
-            FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
-            m_stockDetailWidget->reloadData(activeFy.startDate, activeFy.endDate);
+            if (m_stockDetailWidget->isDirty()) {
+                FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
+                m_stockDetailWidget->reloadData(activeFy.startDate, activeFy.endDate);
+            }
             m_stockDetailWidget->setFocus();
             m_stockDetailWidget->focusTable();
         }
@@ -1081,7 +1149,9 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
     } else if (viewIndex == 20) {
         if (m_mandiReportsWidget) {
             m_stackedWidget->setCurrentWidget(m_mandiReportsWidget);
-            m_mandiReportsWidget->refreshAllTabs();
+            if (m_mandiReportsWidget->isDirty()) {
+                m_mandiReportsWidget->refreshAllTabs();
+            }
             m_mandiReportsWidget->setFocus();
         }
     } else if (viewIndex == 22) {
@@ -1119,8 +1189,10 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
     } else if (viewIndex == 27) {
         if (m_transportDispatchWidget) {
             m_stackedWidget->setCurrentWidget(m_transportDispatchWidget);
-            FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
-            m_transportDispatchWidget->loadData(QDate::fromString(activeFy.startDate, "yyyy-MM-dd"), QDate::fromString(activeFy.endDate, "yyyy-MM-dd"));
+            if (m_transportDispatchWidget->isDirty()) {
+                FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
+                m_transportDispatchWidget->loadData(QDate::fromString(activeFy.startDate, "yyyy-MM-dd"), QDate::fromString(activeFy.endDate, "yyyy-MM-dd"));
+            }
             m_transportDispatchWidget->setFocus();
             m_transportDispatchWidget->focusTable();
         }
@@ -1171,46 +1243,56 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
     } else if (viewIndex == 33) {
         if (m_dayBookWidget) {
             m_stackedWidget->setCurrentWidget(m_dayBookWidget);
-            FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
-            QDate sDate = QDate::fromString(activeFy.startDate, "yyyy-MM-dd");
-            QDate eDate = QDate::fromString(activeFy.endDate, "yyyy-MM-dd");
-            if (!sDate.isValid()) sDate = QDate(QDate::currentDate().month() < 4 ? QDate::currentDate().year() - 1 : QDate::currentDate().year(), 4, 1);
-            if (!eDate.isValid()) eDate = QDate::currentDate();
-            m_dayBookWidget->loadDayBookData(sDate, eDate);
+            if (m_dayBookWidget->isDirty()) {
+                FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
+                QDate sDate = QDate::fromString(activeFy.startDate, "yyyy-MM-dd");
+                QDate eDate = QDate::fromString(activeFy.endDate, "yyyy-MM-dd");
+                if (!sDate.isValid()) sDate = QDate(QDate::currentDate().month() < 4 ? QDate::currentDate().year() - 1 : QDate::currentDate().year(), 4, 1);
+                if (!eDate.isValid()) eDate = QDate::currentDate();
+                m_dayBookWidget->loadDayBookData(sDate, eDate);
+            }
             m_dayBookWidget->setFocus();
         }
     } else if (viewIndex == 34) {
         if (m_gstrReportsWidget) {
             m_stackedWidget->setCurrentWidget(m_gstrReportsWidget);
-            FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
-            QDate sDate = QDate::fromString(activeFy.startDate, "yyyy-MM-dd");
-            QDate eDate = QDate::fromString(activeFy.endDate, "yyyy-MM-dd");
-            if (!sDate.isValid()) sDate = QDate(QDate::currentDate().month() < 4 ? QDate::currentDate().year() - 1 : QDate::currentDate().year(), 4, 1);
-            if (!eDate.isValid()) eDate = QDate::currentDate();
-            m_gstrReportsWidget->loadReturns(sDate, eDate);
+            if (m_gstrReportsWidget->isDirty()) {
+                FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
+                QDate sDate = QDate::fromString(activeFy.startDate, "yyyy-MM-dd");
+                QDate eDate = QDate::fromString(activeFy.endDate, "yyyy-MM-dd");
+                if (!sDate.isValid()) sDate = QDate(QDate::currentDate().month() < 4 ? QDate::currentDate().year() - 1 : QDate::currentDate().year(), 4, 1);
+                if (!eDate.isValid()) eDate = QDate::currentDate();
+                m_gstrReportsWidget->loadReturns(sDate, eDate);
+            }
             m_gstrReportsWidget->setFocus();
         }
     } else if (viewIndex == 35) {
         if (m_millingStatementWidget) {
             m_stackedWidget->setCurrentWidget(m_millingStatementWidget);
-            FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
-            QDate sDate = QDate::fromString(activeFy.startDate, "yyyy-MM-dd");
-            QDate eDate = QDate::fromString(activeFy.endDate, "yyyy-MM-dd");
-            if (!sDate.isValid()) sDate = QDate(QDate::currentDate().month() < 4 ? QDate::currentDate().year() - 1 : QDate::currentDate().year(), 4, 1);
-            if (!eDate.isValid()) eDate = QDate::currentDate();
-            m_millingStatementWidget->loadMillingData(sDate, eDate);
+            if (m_millingStatementWidget->isDirty()) {
+                FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
+                QDate sDate = QDate::fromString(activeFy.startDate, "yyyy-MM-dd");
+                QDate eDate = QDate::fromString(activeFy.endDate, "yyyy-MM-dd");
+                if (!sDate.isValid()) sDate = QDate(QDate::currentDate().month() < 4 ? QDate::currentDate().year() - 1 : QDate::currentDate().year(), 4, 1);
+                if (!eDate.isValid()) eDate = QDate::currentDate();
+                m_millingStatementWidget->loadMillingData(sDate, eDate);
+            }
             m_millingStatementWidget->setFocus();
         }
     } else if (viewIndex == 36) {
         if (m_customClosingStockWidget) {
             m_stackedWidget->setCurrentWidget(m_customClosingStockWidget);
-            m_customClosingStockWidget->reloadData();
+            if (m_customClosingStockWidget->isDirty()) {
+                m_customClosingStockWidget->reloadData();
+            }
             m_customClosingStockWidget->setFocus();
         }
     } else if (viewIndex == 50) {
         if (m_tdsVouchersListWidget) {
             m_stackedWidget->setCurrentWidget(m_tdsVouchersListWidget);
-            m_tdsVouchersListWidget->reloadData();
+            if (m_tdsVouchersListWidget->isDirty()) {
+                m_tdsVouchersListWidget->reloadData();
+            }
             m_tdsVouchersListWidget->setFocus();
         }
     } else if (viewIndex == 51) {
@@ -1221,7 +1303,9 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
     } else if (viewIndex == 52) {
         if (m_taxChallanRegisterWidget) {
             m_stackedWidget->setCurrentWidget(m_taxChallanRegisterWidget);
-            m_taxChallanRegisterWidget->reloadData();
+            if (m_taxChallanRegisterWidget->isDirty()) {
+                m_taxChallanRegisterWidget->reloadData();
+            }
             m_taxChallanRegisterWidget->setFocus();
         }
     } else if (viewIndex == 53) {
@@ -1257,14 +1341,18 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
     } else if (viewIndex == 39) {
         if (m_trialBalanceWidget) {
             m_stackedWidget->setCurrentWidget(m_trialBalanceWidget);
-            m_trialBalanceWidget->reloadData();
+            if (m_trialBalanceWidget->isDirty()) {
+                m_trialBalanceWidget->reloadData();
+            }
             m_trialBalanceWidget->setFocus();
             m_trialBalanceWidget->focusTable();
         }
     } else if (viewIndex == 40) {
         if (m_capitalAccountsWidget) {
             m_stackedWidget->setCurrentWidget(m_capitalAccountsWidget);
-            m_capitalAccountsWidget->reloadData();
+            if (m_capitalAccountsWidget->isDirty()) {
+                m_capitalAccountsWidget->reloadData();
+            }
             m_capitalAccountsWidget->setFocus();
             m_capitalAccountsWidget->focusTable();
         }
@@ -1319,19 +1407,25 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
     } else if (viewIndex == 70) {
         if (m_bardanaWidget) {
             m_stackedWidget->setCurrentWidget(m_bardanaWidget);
-            m_bardanaWidget->refreshData();
+            if (m_bardanaWidget->isDirty()) {
+                m_bardanaWidget->refreshData();
+            }
             m_bardanaWidget->setFocus();
         }
     } else if (viewIndex == 71) {
         if (m_gateRegisterWidget) {
             m_stackedWidget->setCurrentWidget(m_gateRegisterWidget);
-            m_gateRegisterWidget->refreshData();
+            if (m_gateRegisterWidget->isDirty()) {
+                m_gateRegisterWidget->refreshData();
+            }
             m_gateRegisterWidget->setFocus();
         }
     } else if (viewIndex == 72) {
         if (m_saudaContractWidget) {
             m_stackedWidget->setCurrentWidget(m_saudaContractWidget);
-            m_saudaContractWidget->refreshData();
+            if (m_saudaContractWidget->isDirty()) {
+                m_saudaContractWidget->refreshData();
+            }
             m_saudaContractWidget->setFocus();
         }
     }
@@ -1384,6 +1478,8 @@ void MainWindow::openStatementForParty(const QString& partyName) {
     m_lastViewedStatementToDate = activeFy.endDate;
     m_lastViewedStatementSide = "Dr";
     m_lastViewedStatementIndex = 0;
+    m_lastViewedStatementDrIndex = 0;
+    m_lastViewedStatementCrIndex = 0;
     navigateToView(8, true);
 }
 
@@ -1393,6 +1489,8 @@ void MainWindow::onLedgerBackRequested() {
     m_lastViewedStatementToDate.clear();
     m_lastViewedStatementSide.clear();
     m_lastViewedStatementIndex = 0;
+    m_lastViewedStatementDrIndex = 0;
+    m_lastViewedStatementCrIndex = 0;
     if (m_ledgerWidget) {
         m_ledgerWidget->resetSearch();
     }
@@ -1405,8 +1503,7 @@ void MainWindow::onSalesVoucherBackRequested() {
 
 void MainWindow::onSalesVoucherSaved(const QString& invoiceNo) {
     Q_UNUSED(invoiceNo);
-    if (m_balanceSheetWidget) m_balanceSheetWidget->markDirty();
-    if (m_profitLossWidget) m_profitLossWidget->markDirty();
+    markAllStatementsDirty();
     navigateBack();
 }
 
@@ -1416,8 +1513,7 @@ void MainWindow::onPurchaseVoucherBackRequested() {
 
 void MainWindow::onPurchaseVoucherSaved(const QString& invoiceNo) {
     Q_UNUSED(invoiceNo);
-    if (m_balanceSheetWidget) m_balanceSheetWidget->markDirty();
-    if (m_profitLossWidget) m_profitLossWidget->markDirty();
+    markAllStatementsDirty();
     navigateBack();
 }
 
@@ -1427,8 +1523,7 @@ void MainWindow::onChequeVoucherBackRequested() {
 
 void MainWindow::onChequeVoucherSaved(const QString& voucherNo) {
     Q_UNUSED(voucherNo);
-    if (m_balanceSheetWidget) m_balanceSheetWidget->markDirty();
-    if (m_profitLossWidget) m_profitLossWidget->markDirty();
+    markAllStatementsDirty();
     navigateBack();
 }
 
@@ -1438,8 +1533,7 @@ void MainWindow::onCashVoucherBackRequested() {
 
 void MainWindow::onCashVoucherSaved(const QString& voucherNo) {
     Q_UNUSED(voucherNo);
-    if (m_balanceSheetWidget) m_balanceSheetWidget->markDirty();
-    if (m_profitLossWidget) m_profitLossWidget->markDirty();
+    markAllStatementsDirty();
     navigateBack();
 }
 
@@ -1453,8 +1547,7 @@ void MainWindow::onJournalVoucherBackRequested() {
 
 void MainWindow::onJournalVoucherSaved(const QString& voucherNo) {
     Q_UNUSED(voucherNo);
-    if (m_balanceSheetWidget) m_balanceSheetWidget->markDirty();
-    if (m_profitLossWidget) m_profitLossWidget->markDirty();
+    markAllStatementsDirty();
     navigateBack();
 }
 
@@ -1463,8 +1556,7 @@ void MainWindow::onNewLedgerBackRequested() {
 }
 
 void MainWindow::onNewLedgerSaved() {
-    if (m_balanceSheetWidget) m_balanceSheetWidget->markDirty();
-    if (m_profitLossWidget) m_profitLossWidget->markDirty();
+    markAllStatementsDirty();
     navigateBack();
 }
 
@@ -1473,8 +1565,7 @@ void MainWindow::onModifyLedgerBackRequested() {
 }
 
 void MainWindow::onModifyLedgerSaved() {
-    if (m_balanceSheetWidget) m_balanceSheetWidget->markDirty();
-    if (m_profitLossWidget) m_profitLossWidget->markDirty();
+    markAllStatementsDirty();
     navigateBack();
 }
 
@@ -1484,8 +1575,7 @@ void MainWindow::onJFormVoucherBackRequested() {
 
 void MainWindow::onJFormVoucherSaved(const QString& jformNo) {
     Q_UNUSED(jformNo);
-    if (m_balanceSheetWidget) m_balanceSheetWidget->markDirty();
-    if (m_profitLossWidget) m_profitLossWidget->markDirty();
+    markAllStatementsDirty();
     navigateBack();
 }
 
@@ -1495,8 +1585,7 @@ void MainWindow::onIFormVoucherBackRequested() {
 
 void MainWindow::onIFormVoucherSaved(const QString& iformNo) {
     Q_UNUSED(iformNo);
-    if (m_balanceSheetWidget) m_balanceSheetWidget->markDirty();
-    if (m_profitLossWidget) m_profitLossWidget->markDirty();
+    markAllStatementsDirty();
     navigateBack();
 }
 
@@ -1533,6 +1622,8 @@ void MainWindow::onLedgerAlterVoucherRequested(int targetViewIndex, const QVaria
         m_lastViewedStatementToDate = m_ledgerWidget->toDate();
         m_lastViewedStatementSide = m_ledgerWidget->lastSide();
         m_lastViewedStatementIndex = m_ledgerWidget->lastIndex();
+        m_lastViewedStatementDrIndex = m_ledgerWidget->lastDrIndex();
+        m_lastViewedStatementCrIndex = m_ledgerWidget->lastCrIndex();
     }
     m_pendingEditEntry = entry;  // Store FULL entry map for FY-scoped lookup
     m_pendingEditInvoiceNo = entry.value("invoiceNo", entry.value("voucherNo", "")).toString();
@@ -1544,6 +1635,29 @@ void MainWindow::onLedgerAlterVoucherRequested(int targetViewIndex, const QVaria
         m_targetChequeMode = entry.value("type").toString();
     }
     navigateToView(targetViewIndex, true);
+}
+
+void MainWindow::markAllStatementsDirty() {
+    if (m_balanceSheetWidget) m_balanceSheetWidget->markDirty();
+    if (m_profitLossWidget) m_profitLossWidget->markDirty();
+    if (m_trialBalanceWidget) m_trialBalanceWidget->markDirty();
+    if (m_ledgerDirectoryWidget) m_ledgerDirectoryWidget->markDirty();
+    if (m_salesRegisterWidget) m_salesRegisterWidget->markDirty();
+    if (m_purchaseRegisterWidget) m_purchaseRegisterWidget->markDirty();
+    if (m_stockDetailWidget) m_stockDetailWidget->markDirty();
+    if (m_dayBookWidget) m_dayBookWidget->markDirty();
+    if (m_millingStatementWidget) m_millingStatementWidget->markDirty();
+    if (m_paddyProcurementWidget) m_paddyProcurementWidget->markDirty();
+    if (m_transportDispatchWidget) m_transportDispatchWidget->markDirty();
+    if (m_bardanaWidget) m_bardanaWidget->markDirty();
+    if (m_gateRegisterWidget) m_gateRegisterWidget->markDirty();
+    if (m_saudaContractWidget) m_saudaContractWidget->markDirty();
+    if (m_capitalAccountsWidget) m_capitalAccountsWidget->markDirty();
+    if (m_tdsVouchersListWidget) m_tdsVouchersListWidget->markDirty();
+    if (m_customClosingStockWidget) m_customClosingStockWidget->markDirty();
+    if (m_taxChallanRegisterWidget) m_taxChallanRegisterWidget->markDirty();
+    if (m_gstrReportsWidget) m_gstrReportsWidget->markDirty();
+    if (m_mandiReportsWidget) m_mandiReportsWidget->markDirty();
 }
 
 void MainWindow::closeEvent(QCloseEvent* event) {

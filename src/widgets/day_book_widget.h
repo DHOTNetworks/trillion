@@ -20,6 +20,8 @@ public:
     explicit DayBookWidget(PrintExportController* printExportCtrl = nullptr, QWidget* parent = nullptr);
 
     void loadDayBookData(const QDate& fromDate, const QDate& toDate, const QString& voucherTypeFilter = "ALL");
+    void markDirty() { m_isDirty = true; }
+    bool isDirty() const { return m_isDirty; }
 
 signals:
     void backRequested();
@@ -57,6 +59,7 @@ private:
 
     PrintExportController* m_printExportCtrl = nullptr;
     QVariantList m_records;
+    bool m_isDirty = true;
 };
 
 } // namespace MahadevERP

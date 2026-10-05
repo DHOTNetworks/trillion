@@ -333,7 +333,7 @@ void GateRegisterWidget::setupUi() {
     m_liveTable->setAlternatingRowColors(true);
     tab1Layout->addWidget(m_liveTable);
 
-    m_tabWidget->addTab(tab1, "🚚 Active Vehicles at Gate / Yard");
+    m_tabWidget->addTab(tab1, "Active Vehicles at Gate / Yard");
 
     // ------------------------------------------------------------------------
     // TAB 2: COMPLETED HISTORY & WEIGHBRIDGE OUT-TURN
@@ -423,7 +423,7 @@ void GateRegisterWidget::setupUi() {
     m_historyTable->setAlternatingRowColors(true);
     tab2Layout->addWidget(m_historyTable);
 
-    m_tabWidget->addTab(tab2, "📜 Completed Dispatches & Gate History");
+    m_tabWidget->addTab(tab2, "Completed Dispatches & Gate History");
 
     mainLayout->addWidget(m_tabWidget, 1);
 }
@@ -464,6 +464,7 @@ void GateRegisterWidget::refreshData() {
     populateLiveTable();
     populateHistoryTable();
     updateSummaryKpis();
+    m_isDirty = false;
 }
 
 void GateRegisterWidget::updateSummaryKpis() {

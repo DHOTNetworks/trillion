@@ -51,7 +51,8 @@ void FirmSelectorWidget::setupUi() {
     QFrame* iconBox = new QFrame(headerCard);
     iconBox->setFixedSize(40, 40);
     iconBox->setStyleSheet("background-color: #EFF6FF; border: 1px solid #BFDBFE; border-radius: 8px;");
-    QLabel* iconLabel = new QLabel("🏢", iconBox);
+    QLabel* iconLabel = new QLabel("FIRM", iconBox);
+    iconLabel->setStyleSheet("font-size: 11px; font-weight: 800; color: #1D4ED8; border: none;");
     iconLabel->setAlignment(Qt::AlignCenter);
     iconLabel->setGeometry(0, 0, 40, 40);
     headerLayout->addWidget(iconBox);
@@ -116,7 +117,7 @@ void FirmSelectorWidget::setupUi() {
     connect(m_folderInput, &QLineEdit::returnPressed, this, &FirmSelectorWidget::onFolderAccepted);
     folderLayout->addWidget(m_folderInput, 1);
 
-    m_appDataBtn = new QPushButton("📁 App Data Folder", m_folderBarFrame);
+    m_appDataBtn = new QPushButton("App Data Folder", m_folderBarFrame);
     m_appDataBtn->setFixedHeight(34);
     m_appDataBtn->setCursor(Qt::PointingHandCursor);
     m_appDataBtn->setStyleSheet(
@@ -263,7 +264,7 @@ void FirmSelectorWidget::setupUi() {
     emptyBtnRow->setSpacing(12);
     emptyBtnRow->setAlignment(Qt::AlignCenter);
 
-    QPushButton* createBtn = new QPushButton("➕ Create New Firm", m_emptyStateWidget);
+    QPushButton* createBtn = new QPushButton("Create New Firm", m_emptyStateWidget);
     createBtn->setFixedSize(190, 38);
     createBtn->setCursor(Qt::PointingHandCursor);
     createBtn->setStyleSheet(

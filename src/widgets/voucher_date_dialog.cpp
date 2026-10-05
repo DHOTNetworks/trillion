@@ -668,7 +668,7 @@ void DateRangeDialog::updateDurationLabel() {
             m_durationLabel->setStyleSheet("font-size: 12px; font-weight: 700; color: #059669;");
             if (m_errorLabel) m_errorLabel->setVisible(false);
         } else {
-            m_durationLabel->setText("⚠️ From Date cannot be after To Date");
+            m_durationLabel->setText("From Date cannot be after To Date");
             m_durationLabel->setStyleSheet("font-size: 12px; font-weight: 700; color: #DC2626;");
         }
     }

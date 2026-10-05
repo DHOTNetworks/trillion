@@ -365,7 +365,7 @@ void BardanaWidget::setupUi() {
     m_registerTable->setAlternatingRowColors(true);
     tab1Layout->addWidget(m_registerTable);
 
-    m_tabWidget->addTab(tab1, "📋 Bardana Transactions Register");
+    m_tabWidget->addTab(tab1, "Bardana Transactions Register");
 
     // ------------------------------------------------------------------------
     // TAB 2: PARTY-WISE BAG BALANCES
@@ -413,7 +413,7 @@ void BardanaWidget::setupUi() {
     m_partyTable->setAlternatingRowColors(true);
     tab2Layout->addWidget(m_partyTable);
 
-    m_tabWidget->addTab(tab2, "👥 Party-Wise Bag Balances");
+    m_tabWidget->addTab(tab2, "Party-Wise Bag Balances");
 
     // ------------------------------------------------------------------------
     // TAB 3: GODOWN PHYSICAL STOCK
@@ -441,7 +441,7 @@ void BardanaWidget::setupUi() {
     m_godownTable->setAlternatingRowColors(true);
     tab3Layout->addWidget(m_godownTable);
 
-    m_tabWidget->addTab(tab3, "🏭 Godown Physical Stock");
+    m_tabWidget->addTab(tab3, "Godown Physical Stock");
 
     mainLayout->addWidget(m_tabWidget, 1);
 }
@@ -479,6 +479,7 @@ void BardanaWidget::refreshData() {
     populateGodownSummary();
     populatePartySummary();
     updateSummaryKpis();
+    m_isDirty = false;
 }
 
 void BardanaWidget::updateSummaryKpis() {

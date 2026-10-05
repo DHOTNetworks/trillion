@@ -21,6 +21,8 @@ public:
     ~TrialBalanceWidget() override = default;
 
     void reloadData();
+    void markDirty() { m_isDirty = true; }
+    bool isDirty() const { return m_isDirty; }
     void setMode(TrialBalanceMode mode);
     void focusTable();
 
@@ -84,6 +86,8 @@ private:
     QFrame* m_card4 = nullptr;
     QLabel* m_card4Title = nullptr;
     QLabel* m_card4Val = nullptr;
+
+    bool m_isDirty = true;
 };
 
 } // namespace MahadevERP

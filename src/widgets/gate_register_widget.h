@@ -22,6 +22,8 @@ public:
     explicit GateRegisterWidget(GateRegisterController* controller, PrintExportController* printCtrl, QWidget* parent = nullptr);
 
     void refreshData();
+    void markDirty() { m_isDirty = true; }
+    bool isDirty() const { return m_isDirty; }
 
 signals:
     void backRequested();
@@ -85,4 +87,5 @@ private:
     QComboBox* m_histDirectionCombo = nullptr;
     QLineEdit* m_searchLiveEdit = nullptr;
     QLineEdit* m_searchHistEdit = nullptr;
+    bool m_isDirty = true;
 };

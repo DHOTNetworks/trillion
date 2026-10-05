@@ -33,8 +33,19 @@ void DayBookWidget::setupUi() {
 
     // ================= 1. TOP HEADER BAR CARD =================
     QFrame* headerCard = new QFrame(this);
+    headerCard->setObjectName("headerCard");
     headerCard->setFixedHeight(58);
-    headerCard->setStyleSheet("background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px;");
+    headerCard->setStyleSheet(
+        "QFrame#headerCard {"
+        "  background-color: #FFFFFF;"
+        "  border: 1px solid #E2E8F0;"
+        "  border-radius: 8px;"
+        "}"
+        "QFrame#headerCard QLabel {"
+        "  border: none;"
+        "  background: transparent;"
+        "}"
+    );
     QHBoxLayout* headerLayout = new QHBoxLayout(headerCard);
     headerLayout->setContentsMargins(14, 6, 14, 6);
     headerLayout->setSpacing(10);
@@ -74,8 +85,19 @@ void DayBookWidget::setupUi() {
 
     // ================= 2. FILTER & CONTROL BAR CARD =================
     QFrame* filterCard = new QFrame(this);
+    filterCard->setObjectName("filterCard");
     filterCard->setFixedHeight(54);
-    filterCard->setStyleSheet("background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px;");
+    filterCard->setStyleSheet(
+        "QFrame#filterCard {"
+        "  background-color: #FFFFFF;"
+        "  border: 1px solid #E2E8F0;"
+        "  border-radius: 8px;"
+        "}"
+        "QFrame#filterCard QLabel {"
+        "  border: none;"
+        "  background: transparent;"
+        "}"
+    );
     QHBoxLayout* filterLayout = new QHBoxLayout(filterCard);
     filterLayout->setContentsMargins(12, 6, 12, 6);
     filterLayout->setSpacing(10);
@@ -194,8 +216,19 @@ void DayBookWidget::setupUi() {
 
     // ================= 4. SUMMARY FOOTER BAR CARD =================
     QFrame* footerCard = new QFrame(this);
+    footerCard->setObjectName("footerCard");
     footerCard->setFixedHeight(44);
-    footerCard->setStyleSheet("background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px;");
+    footerCard->setStyleSheet(
+        "QFrame#footerCard {"
+        "  background-color: #FFFFFF;"
+        "  border: 1px solid #CBD5E1;"
+        "  border-radius: 8px;"
+        "}"
+        "QFrame#footerCard QLabel {"
+        "  border: none;"
+        "  background: transparent;"
+        "}"
+    );
     QHBoxLayout* footerLayout = new QHBoxLayout(footerCard);
     footerLayout->setContentsMargins(14, 4, 14, 4);
     footerLayout->setSpacing(14);
@@ -390,6 +423,7 @@ void DayBookWidget::loadDayBookData(const QDate& fromDate, const QDate& toDate, 
     m_rowCountLabel->setText(QString("Total Records: %1").arg(row));
     m_totalDrLabel->setText(QString("Total Debit: %1").arg(AccountingEngine::formatIndianCurrency(totalDr)));
     m_totalCrLabel->setText(QString("Total Credit: %1").arg(AccountingEngine::formatIndianCurrency(totalCr)));
+    m_isDirty = false;
 }
 
 void DayBookWidget::onRefreshClicked() {
@@ -397,6 +431,7 @@ void DayBookWidget::onRefreshClicked() {
 }
 
 void DayBookWidget::onDateChanged() {
+    m_isDirty = true;
     onRefreshClicked();
 }
 
@@ -485,13 +520,18 @@ void DayBookWidget::showEvent(QShowEvent* event) {
     FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
     QDate sDate = QDate::fromString(activeFy.startDate, "yyyy-MM-dd");
     QDate eDate = QDate::fromString(activeFy.endDate, "yyyy-MM-dd");
-    if (sDate.isValid() && eDate.isValid()) {
-        QSignalBlocker b1(m_fromDateEdit);
-        QSignalBlocker b2(m_toDateEdit);
-        m_fromDateEdit->setDate(sDate);
-        m_toDateEdit->setDate(eDate);
+    if (!sDate.isValid()) sDate = QDate(QDate::currentDate().month() < 4 ? QDate::currentDate().year() - 1 : QDate::currentDate().year(), 4, 1);
+    if (!eDate.isValid()) eDate = QDate::currentDate();
+
+    if (m_isDirty || !m_fromDateEdit->date().isValid() || !m_toDateEdit->date().isValid()) {
+        if (sDate.isValid() && eDate.isValid() && (!m_fromDateEdit->date().isValid() || !m_toDateEdit->date().isValid())) {
+            QSignalBlocker b1(m_fromDateEdit);
+            QSignalBlocker b2(m_toDateEdit);
+            m_fromDateEdit->setDate(sDate);
+            m_toDateEdit->setDate(eDate);
+        }
+        onRefreshClicked();
     }
-    onRefreshClicked();
 }
 
 } // namespace MahadevERP

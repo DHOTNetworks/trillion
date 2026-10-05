@@ -59,7 +59,7 @@ void ModifyGroupWidget::setupUi() {
     selectLayout->setContentsMargins(12, 8, 12, 8);
     selectLayout->setSpacing(10);
 
-    auto* searchIconLbl = new QLabel("🔍 SELECT GROUP TO MODIFY :", selectFrame);
+    auto* searchIconLbl = new QLabel("SELECT GROUP TO MODIFY :", selectFrame);
     selectLayout->addWidget(searchIconLbl);
 
     m_groupSearchBox = new AccountSearchBox(selectFrame);

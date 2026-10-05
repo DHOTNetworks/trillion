@@ -23,6 +23,8 @@ public:
     explicit MillingStatementWidget(PrintExportController* printExportCtrl = nullptr, QWidget* parent = nullptr);
 
     void loadMillingData(const QDate& fromDate, const QDate& toDate, const QString& varietyFilter = "All");
+    void markDirty() { m_isDirty = true; }
+    bool isDirty() const { return m_isDirty; }
 
 signals:
     void backRequested();
@@ -72,6 +74,7 @@ private:
     QLabel* m_detailVarianceLabel = nullptr;
 
     QVariantList m_rawBatches;
+    bool m_isDirty = true;
 };
 
 } // namespace MahadevERP

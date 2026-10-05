@@ -135,7 +135,7 @@ void DashboardWidget::setupUi() {
     btnBox->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
 
     // Open Firm Button (Alt+F1)
-    m_openFirmBtn = new QPushButton("🏢 Open Firm  [Alt+F1]", this);
+    m_openFirmBtn = new QPushButton("Open Firm  [Alt+F1]", this);
     m_openFirmBtn->setFixedHeight(36);
     m_openFirmBtn->setFocusPolicy(Qt::NoFocus);
     m_openFirmBtn->setCursor(Qt::PointingHandCursor);

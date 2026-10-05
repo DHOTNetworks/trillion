@@ -24,6 +24,8 @@ class CustomClosingStockWidget : public QWidget {
 public:
     explicit CustomClosingStockWidget(PrintExportController* printCtrl, QWidget* parent = nullptr);
     void reloadData();
+    void markDirty() { m_isDirty = true; }
+    bool isDirty() const { return m_isDirty; }
 
 signals:
     void backRequested();
@@ -71,6 +73,7 @@ private:
 
     StockValuationReport m_currentReport;
     bool m_isUpdatingTable = false;
+    bool m_isDirty = true;
 };
 
 } // namespace MahadevERP

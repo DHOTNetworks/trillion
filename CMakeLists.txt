@@ -207,7 +207,21 @@ set(SOURCES
     src/engine/stock_pipeline.h
     src/engine/stock_pipeline.cpp
     src/engine/voucher_pipeline.h
-    src/engine/voucher_pipeline.cpp
+    src/engine/migration/migration_types.h
+    src/engine/migration/migration_utils.h
+    src/engine/migration/migration_utils.cpp
+    src/engine/migration/group_migrator.h
+    src/engine/migration/group_migrator.cpp
+    src/engine/migration/ledger_migrator.h
+    src/engine/migration/ledger_migrator.cpp
+    src/engine/migration/stock_migrator.h
+    src/engine/migration/stock_migrator.cpp
+    src/engine/migration/voucher_migrator.h
+    src/engine/migration/voucher_migrator.cpp
+    src/engine/migration/mandi_migrator.h
+    src/engine/migration/mandi_migrator.cpp
+    src/engine/migration/migration_manager.h
+    src/engine/migration/migration_manager.cpp
     src/engine/bahi_khata_migrator.h
     src/engine/bahi_khata_migrator.cpp
     src/engine/busy_data_migrator.h
@@ -226,6 +240,8 @@ set(SOURCES
     src/widgets/ledger_table_view.cpp
     src/widgets/ledger_statement_widget.h
     src/widgets/ledger_statement_widget.cpp
+    src/widgets/ledger_directory_widget.h
+    src/widgets/ledger_directory_widget.cpp
     src/widgets/accounting_period_dialog.h
     src/widgets/accounting_period_dialog.cpp
     src/engine/balance_sheet_calculator.h

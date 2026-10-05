@@ -177,10 +177,18 @@ void LedgerStatementWidget::setupUi() {
     crSideLayout->addWidget(crBanner);
 
     m_crTable = new LedgerTableView("Cr", m_controller ? m_controller->crModel() : nullptr, m_twoColumnWidget);
+    connect(m_crTable, &LedgerTableView::focusReceived, this, [this]() {
+        m_lastSide = "Cr";
+        int row = m_crTable->selectedRowIndex();
+        if (row >= 0) m_lastCrIndex = row;
+    });
     connect(m_crTable, &LedgerTableView::voucherActivated, this, [this](const QVariantMap& entry) {
         m_lastSide = "Cr";
         int row = m_crTable->selectedRowIndex();
-        m_lastIndex = (row >= 0) ? row : 0;
+        if (row >= 0) m_lastCrIndex = row;
+        int drRow = m_drTable->selectedRowIndex();
+        if (drRow >= 0) m_lastDrIndex = drRow;
+        m_lastIndex = m_lastCrIndex;
         openVoucherForEntry(entry);
     });
     connect(m_crTable, &LedgerTableView::switchSideRequested, this, &LedgerStatementWidget::onSwitchSideRequested);
@@ -223,10 +231,18 @@ void LedgerStatementWidget::setupUi() {
     drSideLayout->addWidget(drBanner);
 
     m_drTable = new LedgerTableView("Dr", m_controller ? m_controller->drModel() : nullptr, m_twoColumnWidget);
+    connect(m_drTable, &LedgerTableView::focusReceived, this, [this]() {
+        m_lastSide = "Dr";
+        int row = m_drTable->selectedRowIndex();
+        if (row >= 0) m_lastDrIndex = row;
+    });
     connect(m_drTable, &LedgerTableView::voucherActivated, this, [this](const QVariantMap& entry) {
         m_lastSide = "Dr";
         int row = m_drTable->selectedRowIndex();
-        m_lastIndex = (row >= 0) ? row : 0;
+        if (row >= 0) m_lastDrIndex = row;
+        int crRow = m_crTable->selectedRowIndex();
+        if (crRow >= 0) m_lastCrIndex = crRow;
+        m_lastIndex = m_lastDrIndex;
         openVoucherForEntry(entry);
     });
     connect(m_drTable, &LedgerTableView::switchSideRequested, this, &LedgerStatementWidget::onSwitchSideRequested);
@@ -669,17 +685,28 @@ void LedgerStatementWidget::loadParty(const QString& partyName, const QString& f
     recalculateAankStatement();
 
     // Default focus to Dr table if entries exist, else Cr
+    m_lastSide = "Dr";
+    m_lastDrIndex = 0;
+    m_lastCrIndex = 0;
+    m_lastIndex = 0;
+
+    if (m_controller && m_controller->drModel()->rowCount() > 0) {
+        m_drTable->selectRowIndex(0);
+    }
+    if (m_controller && m_controller->crModel()->rowCount() > 0) {
+        m_crTable->selectRowIndex(0);
+    }
+
     if (m_controller && m_controller->drModel()->rowCount() > 0) {
         m_drTable->setFocus();
-        m_drTable->selectRowIndex(0);
     } else if (m_controller && m_controller->crModel()->rowCount() > 0) {
         m_crTable->setFocus();
-        m_crTable->selectRowIndex(0);
+        m_lastSide = "Cr";
     }
 }
 
 void LedgerStatementWidget::restoreState(const QString& partyName, const QString& fromDate, const QString& toDate,
-                                         const QString& side, int rowIndex) {
+                                         const QString& side, int drRowIndex, int crRowIndex) {
     if (partyName.trimmed().isEmpty()) {
         resetSearch();
         return;
@@ -703,21 +730,29 @@ void LedgerStatementWidget::restoreState(const QString& partyName, const QString
     updateHeadersAndTotals();
     recalculateAankStatement();
 
-    m_lastSide = side;
-    m_lastIndex = rowIndex;
+    m_lastSide = side.isEmpty() ? "Dr" : side;
+    m_lastDrIndex = drRowIndex;
+    m_lastCrIndex = crRowIndex;
+    m_lastIndex = (m_lastSide == "Cr") ? m_lastCrIndex : m_lastDrIndex;
 
-    QTimer::singleShot(20, this, [this, side, rowIndex]() {
+    QTimer::singleShot(20, this, [this, side, drRowIndex, crRowIndex]() {
+        // Restore selections on BOTH sides
+        if (m_controller && m_controller->drModel()->rowCount() > 0) {
+            int targetDr = qBound(0, drRowIndex, m_controller->drModel()->rowCount() - 1);
+            m_drTable->selectRowIndex(targetDr);
+        }
+        if (m_controller && m_controller->crModel()->rowCount() > 0) {
+            int targetCr = qBound(0, crRowIndex, m_controller->crModel()->rowCount() - 1);
+            m_crTable->selectRowIndex(targetCr);
+        }
+
+        // Set focus to the active side
         if (side == "Cr" && m_controller && m_controller->crModel()->rowCount() > 0) {
-            int target = qBound(0, rowIndex, m_controller->crModel()->rowCount() - 1);
             m_crTable->setFocus();
-            m_crTable->selectRowIndex(target);
         } else if (m_controller && m_controller->drModel()->rowCount() > 0) {
-            int target = qBound(0, rowIndex, m_controller->drModel()->rowCount() - 1);
             m_drTable->setFocus();
-            m_drTable->selectRowIndex(target);
         } else if (m_controller && m_controller->crModel()->rowCount() > 0) {
             m_crTable->setFocus();
-            m_crTable->selectRowIndex(0);
         }
     });
 }
@@ -831,28 +866,31 @@ void LedgerStatementWidget::updateHeadersAndTotals() {
 }
 
 void LedgerStatementWidget::openSelectedVoucher() {
-    if (m_crTable->hasFocus() || (m_crTable->selectedRowIndex() >= 0 && !m_drTable->hasFocus())) {
-        int row = m_crTable->selectedRowIndex();
-        if (row >= 0 && m_controller) {
+    int crRow = m_crTable->selectedRowIndex();
+    if (crRow >= 0) m_lastCrIndex = crRow;
+    int drRow = m_drTable->selectedRowIndex();
+    if (drRow >= 0) m_lastDrIndex = drRow;
+
+    if (m_crTable->hasFocus() || (crRow >= 0 && !m_drTable->hasFocus())) {
+        if (crRow >= 0 && m_controller) {
             m_lastSide = "Cr";
-            m_lastIndex = row;
-            onVoucherActivated(m_controller->crModel()->get(row));
+            m_lastIndex = crRow;
+            onVoucherActivated(m_controller->crModel()->get(crRow));
             return;
         }
     }
-    if (m_drTable->hasFocus() || m_drTable->selectedRowIndex() >= 0) {
-        int row = m_drTable->selectedRowIndex();
-        if (row >= 0 && m_controller) {
+    if (m_drTable->hasFocus() || drRow >= 0) {
+        if (drRow >= 0 && m_controller) {
             m_lastSide = "Dr";
-            m_lastIndex = row;
-            onVoucherActivated(m_controller->drModel()->get(row));
+            m_lastIndex = drRow;
+            onVoucherActivated(m_controller->drModel()->get(drRow));
             return;
         }
     }
-    if (m_crTable->selectedRowIndex() >= 0 && m_controller) {
+    if (crRow >= 0 && m_controller) {
         m_lastSide = "Cr";
-        m_lastIndex = m_crTable->selectedRowIndex();
-        onVoucherActivated(m_controller->crModel()->get(m_crTable->selectedRowIndex()));
+        m_lastIndex = crRow;
+        onVoucherActivated(m_controller->crModel()->get(crRow));
     }
 }
 
@@ -946,18 +984,28 @@ void LedgerStatementWidget::openVoucherForEntry(const QVariantMap& entry) {
 
 void LedgerStatementWidget::onSwitchSideRequested(const QString& targetSide) {
     if (targetSide == "Cr" && m_controller && m_controller->crModel()->rowCount() > 0) {
+        int drRow = m_drTable->selectedRowIndex();
+        if (drRow >= 0) m_lastDrIndex = drRow;
+
         int existingCrRow = m_crTable->selectedRowIndex();
-        int targetRow = (existingCrRow >= 0) ? qBound(0, existingCrRow, m_controller->crModel()->rowCount() - 1) : 0;
+        int targetRow = (existingCrRow >= 0) ? qBound(0, existingCrRow, m_controller->crModel()->rowCount() - 1)
+                                             : qBound(0, m_lastCrIndex, m_controller->crModel()->rowCount() - 1);
         m_crTable->setFocus();
         m_crTable->selectRowIndex(targetRow);
         m_lastSide = "Cr";
+        m_lastCrIndex = targetRow;
         m_lastIndex = targetRow;
     } else if (targetSide == "Dr" && m_controller && m_controller->drModel()->rowCount() > 0) {
+        int crRow = m_crTable->selectedRowIndex();
+        if (crRow >= 0) m_lastCrIndex = crRow;
+
         int existingDrRow = m_drTable->selectedRowIndex();
-        int targetRow = (existingDrRow >= 0) ? qBound(0, existingDrRow, m_controller->drModel()->rowCount() - 1) : 0;
+        int targetRow = (existingDrRow >= 0) ? qBound(0, existingDrRow, m_controller->drModel()->rowCount() - 1)
+                                             : qBound(0, m_lastDrIndex, m_controller->drModel()->rowCount() - 1);
         m_drTable->setFocus();
         m_drTable->selectRowIndex(targetRow);
         m_lastSide = "Dr";
+        m_lastDrIndex = targetRow;
         m_lastIndex = targetRow;
     }
 }

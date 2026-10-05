@@ -22,6 +22,8 @@ public:
     explicit BardanaWidget(BardanaController* controller, PrintExportController* printCtrl, QWidget* parent = nullptr);
 
     void refreshData();
+    void markDirty() { m_isDirty = true; }
+    bool isDirty() const { return m_isDirty; }
 
 signals:
     void backRequested();
@@ -85,4 +87,5 @@ private:
     QComboBox* m_filterTypeCombo = nullptr;
     AccountSearchBox* m_searchPartyBox = nullptr;
     QLineEdit* m_searchGeneralEdit = nullptr;
+    bool m_isDirty = true;
 };

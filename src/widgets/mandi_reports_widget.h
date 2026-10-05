@@ -20,6 +20,8 @@ public:
     ~MandiReportsWidget() override;
 
     void refreshAllTabs();
+    void markDirty() { m_isDirty = true; }
+    bool isDirty() const { return m_isDirty; }
     void setWorkingPeriod(const QString& fromDate, const QString& toDate);
 
 public slots:
@@ -91,4 +93,6 @@ private:
     AccountingDateDisplay* m_damiToDate = nullptr;
     QTableWidget* m_damiTable = nullptr;
     QLabel* m_damiSummaryLabel = nullptr;
+
+    bool m_isDirty = true;
 };

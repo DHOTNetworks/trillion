@@ -33,7 +33,8 @@ void NewFirmDialog::setupUi() {
     QFrame* iconFrame = new QFrame(this);
     iconFrame->setFixedSize(36, 36);
     iconFrame->setStyleSheet("background-color: #EFF6FF; border: 1px solid #BFDBFE; border-radius: 8px;");
-    QLabel* iconLabel = new QLabel("🏢", iconFrame);
+    QLabel* iconLabel = new QLabel("FIRM", iconFrame);
+    iconLabel->setStyleSheet("font-size: 10px; font-weight: 800; color: #1D4ED8; border: none;");
     iconLabel->setAlignment(Qt::AlignCenter);
     iconLabel->setGeometry(0, 0, 36, 36);
     headerLayout->addWidget(iconFrame);

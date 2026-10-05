@@ -89,7 +89,7 @@ void BankStatementImportWidget::setupUi() {
     m_filePathEdit->setStyleSheet("background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 5px 8px; font-size: 12px; color: #0F172A;");
     row1->addWidget(m_filePathEdit, 1);
 
-    auto* browseBtn = new QPushButton("Browse File 📁", filterCard);
+    auto* browseBtn = new QPushButton("Browse File", filterCard);
     browseBtn->setCursor(Qt::PointingHandCursor);
     browseBtn->setStyleSheet("QPushButton { background-color: #2563EB; color: #FFFFFF; font-weight: 800; font-size: 12px; padding: 5px 14px; border-radius: 6px; border: none; } QPushButton:hover { background-color: #1D4ED8; }");
     connect(browseBtn, &QPushButton::clicked, this, &BankStatementImportWidget::onSelectFileClicked);
@@ -114,7 +114,7 @@ void BankStatementImportWidget::setupUi() {
     connect(m_selectAllCheck, &QCheckBox::toggled, this, &BankStatementImportWidget::onSelectAllToggled);
     row2->addWidget(m_selectAllCheck);
 
-    auto* deselectDupBtn = new QPushButton("Deselect Duplicates ⚠️", filterCard);
+    auto* deselectDupBtn = new QPushButton("Deselect Duplicates", filterCard);
     deselectDupBtn->setCursor(Qt::PointingHandCursor);
     deselectDupBtn->setStyleSheet("QPushButton { background-color: #FEF3C7; border: 1px solid #FCD34D; color: #92400E; font-weight: 800; font-size: 11.5px; padding: 4px 10px; border-radius: 6px; } QPushButton:hover { background-color: #FDE68A; }");
     connect(deselectDupBtn, &QPushButton::clicked, this, &BankStatementImportWidget::onDeselectDuplicatesClicked);
@@ -451,16 +451,16 @@ void BankStatementImportWidget::refreshTable() {
         QString statusText = "Unmatched";
         QColor statusColor("#DC2626");
         if (isDup) {
-            statusText = "DUPLICATE ⚠️";
+            statusText = "DUPLICATE";
             statusColor = QColor("#D97706");
         } else if (confidence == "ALIAS_MATCH") {
-            statusText = "Learned ⚡";
+            statusText = "Learned";
             statusColor = QColor("#7C3AED");
         } else if (confidence == "HIGH" || confidence == "ACCOUNT_MATCH") {
-            statusText = "Matched ✓";
+            statusText = "Matched";
             statusColor = QColor("#16A34A");
         } else if (confidence == "MEDIUM") {
-            statusText = "Suggestion ?";
+            statusText = "Suggestion";
             statusColor = QColor("#2563EB");
         }
 

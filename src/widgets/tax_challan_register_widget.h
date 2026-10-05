@@ -18,6 +18,8 @@ public:
 
     void setTaxType(const QString &type);
     void reloadData();
+    void markDirty() { m_isDirty = true; }
+    bool isDirty() const { return m_isDirty; }
 
 signals:
     void backRequested();
@@ -50,6 +52,7 @@ private:
     QLabel *m_totalDepositedVal = nullptr;
 
     QVariantList m_currentChallans;
+    bool m_isDirty = true;
 };
 
 } // namespace MahadevERP

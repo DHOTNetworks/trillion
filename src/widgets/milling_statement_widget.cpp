@@ -370,6 +370,7 @@ void MillingStatementWidget::loadMillingData(const QDate& fromDate, const QDate&
 
     m_rawBatches = DatabaseManager::instance().executeQuery(sql);
     populateBatchTable();
+    m_isDirty = false;
 }
 
 void MillingStatementWidget::populateBatchTable() {

@@ -420,13 +420,13 @@ void BalanceSheetWidget::populateTrees() {
 
     if (m_balanceStatusBadge) {
         if (d.isBalanced) {
-            m_balanceStatusBadge->setText("✔ BALANCED (Diff: ₹ 0.00)");
+            m_balanceStatusBadge->setText("BALANCED (Diff: 0.00)");
             m_balanceStatusBadge->setStyleSheet(
                 "background-color: #DCFCE7; color: #15803D; font-size: 12px; font-weight: 800; "
                 "padding: 4px 14px; border-radius: 6px; border: 1.5px solid #86EFAC;"
             );
         } else {
-            m_balanceStatusBadge->setText(QString("⚠ DIFF: %1").arg(m_controller->differenceFmt()));
+            m_balanceStatusBadge->setText(QString("DIFFERENCE: %1").arg(m_controller->differenceFmt()));
             m_balanceStatusBadge->setStyleSheet(
                 "background-color: #FEE2E2; color: #B91C1C; font-size: 12px; font-weight: 800; "
                 "padding: 4px 14px; border-radius: 6px; border: 1.5px solid #FCA5A5;"

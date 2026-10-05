@@ -215,7 +215,7 @@ void DepreciationChartWidget::setupUi() {
     actionLayout->setContentsMargins(10, 6, 10, 6);
     actionLayout->setSpacing(10);
 
-    m_makeDepBtn = new QPushButton("⚡ Make Depreciation Transactions (In Books)", actionCard);
+    m_makeDepBtn = new QPushButton("Make Depreciation Transactions (In Books)", actionCard);
     m_makeDepBtn->setStyleSheet(
         "QPushButton { background-color: #059669; color: #FFFFFF; border: none; border-radius: 6px; padding: 6px 14px; font-weight: 800; font-size: 11.5px; }"
         "QPushButton:hover { background-color: #047857; }"
@@ -223,7 +223,7 @@ void DepreciationChartWidget::setupUi() {
     connect(m_makeDepBtn, &QPushButton::clicked, this, &DepreciationChartWidget::onMakeDepreciationClicked);
     actionLayout->addWidget(m_makeDepBtn);
 
-    m_deleteDepBtn = new QPushButton("🗑️ Delete Depreciation Transactions (From Books)", actionCard);
+    m_deleteDepBtn = new QPushButton("Delete Depreciation Transactions (From Books)", actionCard);
     m_deleteDepBtn->setStyleSheet(
         "QPushButton { background-color: #FEF2F2; color: #DC2626; border: 1.5px solid #FECACA; border-radius: 6px; padding: 6px 14px; font-weight: 800; font-size: 11.5px; }"
         "QPushButton:hover { background-color: #FEE2E2; }"
@@ -231,7 +231,7 @@ void DepreciationChartWidget::setupUi() {
     connect(m_deleteDepBtn, &QPushButton::clicked, this, &DepreciationChartWidget::onDeleteDepreciationClicked);
     actionLayout->addWidget(m_deleteDepBtn);
 
-    m_openLedgerBtn = new QPushButton("🔍 Open Selected Fixed Assets Ledger Info", actionCard);
+    m_openLedgerBtn = new QPushButton("Open Selected Fixed Assets Ledger Info", actionCard);
     m_openLedgerBtn->setStyleSheet(
         "QPushButton { background-color: #EFF6FF; color: #2563EB; border: 1.5px solid #BFDBFE; border-radius: 6px; padding: 6px 14px; font-weight: 800; font-size: 11.5px; }"
         "QPushButton:hover { background-color: #DBEAFE; }"

@@ -22,6 +22,8 @@ public:
     ~StockDetailWidget() override = default;
 
     void reloadData(const QString& fromDate = "", const QString& toDate = "");
+    void markDirty() { m_isDirty = true; }
+    bool isDirty() const { return m_isDirty; }
     void setViewConfiguration(StockViewMode mode, StockGrouping grouping, const QString& title = "");
     void focusTable();
 
@@ -92,6 +94,7 @@ private:
 
     bool m_isUpdatingUi = false;
     QString m_customTitle;
+    bool m_isDirty = true;
 };
 
 } // namespace MahadevERP

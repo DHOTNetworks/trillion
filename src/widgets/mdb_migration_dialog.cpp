@@ -230,9 +230,9 @@ void MdbMigrationDialog::setupUi() {
     successLayout->setSpacing(8);
     successLayout->setAlignment(Qt::AlignCenter);
 
-    QLabel* celebrationLabel = new QLabel("🎉", successPage);
+    QLabel* celebrationLabel = new QLabel("SUCCESS", successPage);
     celebrationLabel->setAlignment(Qt::AlignCenter);
-    celebrationLabel->setStyleSheet("font-size: 32px; border: none; background: transparent;");
+    celebrationLabel->setStyleSheet("font-size: 14px; font-weight: 800; color: #16A34A; border: none; background: transparent; letter-spacing: 1px;");
     successLayout->addWidget(celebrationLabel);
 
     m_successMessageLabel = new QLabel("Migration completed successfully!", successPage);

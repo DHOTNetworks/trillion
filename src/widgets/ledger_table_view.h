@@ -54,10 +54,12 @@ signals:
     void voucherActivated(const QVariantMap& entry);
     void switchSideRequested(const QString& targetSide);
     void focusSearchRequested();
+    void focusReceived();
 
 protected:
     void keyPressEvent(QKeyEvent* event) override;
     void mouseDoubleClickEvent(QMouseEvent* event) override;
+    void focusInEvent(QFocusEvent* event) override;
 
 private:
     QString m_side;

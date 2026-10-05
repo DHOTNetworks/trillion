@@ -133,7 +133,7 @@ void InterestCalculatorWidget::setupUi() {
     m_includeOpBalCheck->setChecked(true);
     paramGrid->addWidget(m_includeOpBalCheck, 1, 6);
 
-    auto* calcBtn = new QPushButton("Calculate ⚡", paramCard);
+    auto* calcBtn = new QPushButton("Calculate", paramCard);
     calcBtn->setCursor(Qt::PointingHandCursor);
     calcBtn->setStyleSheet("QPushButton { background-color: #2563EB; color: #FFFFFF; font-weight: 800; font-size: 12px; padding: 5px 14px; border-radius: 6px; border: none; } QPushButton:hover { background-color: #1D4ED8; }");
     connect(calcBtn, &QPushButton::clicked, this, &InterestCalculatorWidget::onCalculateClicked);

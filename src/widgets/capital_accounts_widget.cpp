@@ -51,7 +51,7 @@ void CapitalAccountsWidget::setupUi() {
     auto* headerCard = new QFrame(this);
     headerCard->setStyleSheet(
         "QFrame { background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; }"
-        "QLabel { border: none; background: transparent; }"
+        "QLabel, QWidget { border: none; background: transparent; }"
     );
     auto* headerLayout = new QHBoxLayout(headerCard);
     headerLayout->setContentsMargins(14, 10, 14, 10);
@@ -173,7 +173,7 @@ void CapitalAccountsWidget::setupUi() {
         cardOut = new QFrame(this);
         cardOut->setStyleSheet(
             "QFrame { background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; border-left: 4px solid " + color + "; }"
-            "QLabel { border: none; background: transparent; }"
+            "QLabel, QWidget { border: none; background: transparent; }"
         );
         auto* cLayout = new QVBoxLayout(cardOut);
         cLayout->setContentsMargins(10, 6, 10, 6);
@@ -212,6 +212,7 @@ void CapitalAccountsWidget::reloadData() {
         m_controller->setDateRange(m_fromDateEdit->date(), m_toDateEdit->date());
         m_controller->reload();
     }
+    m_isDirty = false;
 }
 
 void CapitalAccountsWidget::populateTable() {

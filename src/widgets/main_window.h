@@ -50,6 +50,7 @@
 #include "tds_acknowledgement_dialog.h"
 #include "tcs_config_dialog.h"
 #include "trial_balance_widget.h"
+#include "ledger_directory_widget.h"
 #include "capital_accounts_widget.h"
 #include "depreciation_chart_widget.h"
 #include "cash_bank_flow_widget.h"
@@ -152,6 +153,7 @@ public:
     MahadevERP::BankStatementImportWidget* bankStatementWidget() const { return m_bankStatementWidget; }
     MahadevERP::TransportDispatchWidget* transportDispatchWidget() const { return m_transportDispatchWidget; }
     MahadevERP::DebitCreditNoteWidget* debitCreditNoteWidget() const { return m_debitCreditNoteWidget; }
+    MahadevERP::LedgerDirectoryWidget* ledgerDirectoryWidget() const { return m_ledgerDirectoryWidget; }
     MahadevERP::TrialBalanceWidget* trialBalanceWidget() const { return m_trialBalanceWidget; }
     MahadevERP::CapitalAccountsWidget* capitalAccountsWidget() const { return m_capitalAccountsWidget; }
     MahadevERP::DepreciationChartWidget* depreciationChartWidget() const { return m_depreciationChartWidget; }
@@ -165,6 +167,7 @@ public:
 
     int currentViewIndex() const;
     void restoreActiveViewFocus();
+    void markAllStatementsDirty();
     AppKeyboardController* keyboardController() const { return m_keyboardCtrl; }
 
 public slots:
@@ -246,6 +249,7 @@ private:
     MahadevERP::AdvancePayment194QWidget* m_advancePayment194QWidget = nullptr;
     MahadevERP::AdvancePayment194QListWidget* m_advancePayment194QListWidget = nullptr;
     MahadevERP::Form16AListWidget* m_form16AListWidget = nullptr;
+    MahadevERP::LedgerDirectoryWidget* m_ledgerDirectoryWidget = nullptr;
     MahadevERP::TrialBalanceWidget* m_trialBalanceWidget = nullptr;
     MahadevERP::CapitalAccountsWidget* m_capitalAccountsWidget = nullptr;
     MahadevERP::DepreciationChartWidget* m_depreciationChartWidget = nullptr;
@@ -309,4 +313,6 @@ private:
     QString m_lastViewedStatementToDate;
     QString m_lastViewedStatementSide;
     int m_lastViewedStatementIndex = 0;
+    int m_lastViewedStatementDrIndex = 0;
+    int m_lastViewedStatementCrIndex = 0;
 };

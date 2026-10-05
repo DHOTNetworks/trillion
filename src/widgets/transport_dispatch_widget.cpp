@@ -209,6 +209,7 @@ void TransportDispatchWidget::loadData(const QDate& fromDate, const QDate& toDat
     }
 
     populateTable();
+    m_isDirty = false;
 }
 
 void TransportDispatchWidget::populateTable() {

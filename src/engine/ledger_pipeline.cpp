@@ -133,28 +133,52 @@ QVector<LedgerPeriodBalance> LedgerPipeline::calculateBalancesForPeriod(
     };
     QHash<int, AggBalance> aggMap;
 
+    auto addTransaction = [&](int pId, int acCode, const QString& pName, const QString& drCr, double amt, bool isPrior) {
+        int targetId = 0;
+        if (pId > 0 && m_byId.contains(pId)) {
+            targetId = pId;
+        } else if (acCode > 0 && m_byLegacyId.contains(acCode)) {
+            targetId = m_byLegacyId.value(acCode).id;
+        } else {
+            QString clean = pName.trimmed().toLower();
+            if (m_byName.contains(clean)) {
+                targetId = m_byName.value(clean).id;
+            }
+        }
+        if (targetId <= 0) return;
+
+        bool isDr = (drCr.compare("Dr", Qt::CaseInsensitive) == 0 || drCr.compare("D", Qt::CaseInsensitive) == 0);
+        if (isPrior) {
+            if (isDr) aggMap[targetId].priorDr += amt;
+            else aggMap[targetId].priorCr += amt;
+        } else {
+            if (isDr) aggMap[targetId].periodDr += amt;
+            else aggMap[targetId].periodCr += amt;
+        }
+    };
+
     if (!fromDateIso.isEmpty()) {
         QVariantList priorRows = DatabaseManager::instance().executeQuery(
-            "SELECT party_id, dr_cr, SUM(amount) AS total_amt FROM transactions "
-            "WHERE voucher_date < ? AND party_id IS NOT NULL AND party_id > 0 "
-            "GROUP BY party_id, dr_cr;",
+            "SELECT party_id, account_code, party_name, dr_cr, SUM(amount) AS total_amt FROM transactions "
+            "WHERE voucher_date < ? "
+            "GROUP BY party_id, account_code, party_name, dr_cr;",
             { fromDateIso }
         );
         for (const auto& rVar : priorRows) {
             QVariantMap r = rVar.toMap();
-            int pId = r.value("party_id").toInt();
-            QString drCr = r.value("dr_cr").toString().trimmed();
-            double amt = r.value("total_amt").toDouble();
-            if (drCr.compare("Dr", Qt::CaseInsensitive) == 0) {
-                aggMap[pId].priorDr += amt;
-            } else {
-                aggMap[pId].priorCr += amt;
-            }
+            addTransaction(
+                r.value("party_id").toInt(),
+                r.value("account_code").toInt(),
+                r.value("party_name").toString(),
+                r.value("dr_cr").toString().trimmed(),
+                r.value("total_amt").toDouble(),
+                true
+            );
         }
     }
 
     // 2. Fetch current period transactions (fromDateIso <= voucher_date <= toDateIso)
-    QString currentSql = "SELECT party_id, dr_cr, SUM(amount) AS total_amt FROM transactions WHERE 1=1 ";
+    QString currentSql = "SELECT party_id, account_code, party_name, dr_cr, SUM(amount) AS total_amt FROM transactions WHERE 1=1 ";
     QVariantList currentParams;
     if (!fromDateIso.isEmpty()) {
         currentSql += " AND voucher_date >= ?";
@@ -164,19 +188,19 @@ QVector<LedgerPeriodBalance> LedgerPipeline::calculateBalancesForPeriod(
         currentSql += " AND voucher_date <= ?";
         currentParams << toDateIso;
     }
-    currentSql += " AND party_id IS NOT NULL AND party_id > 0 GROUP BY party_id, dr_cr;";
+    currentSql += " GROUP BY party_id, account_code, party_name, dr_cr;";
 
     QVariantList curRows = DatabaseManager::instance().executeQuery(currentSql, currentParams);
     for (const auto& rVar : curRows) {
         QVariantMap r = rVar.toMap();
-        int pId = r.value("party_id").toInt();
-        QString drCr = r.value("dr_cr").toString().trimmed();
-        double amt = r.value("total_amt").toDouble();
-        if (drCr.compare("Dr", Qt::CaseInsensitive) == 0) {
-            aggMap[pId].periodDr += amt;
-        } else {
-            aggMap[pId].periodCr += amt;
-        }
+        addTransaction(
+            r.value("party_id").toInt(),
+            r.value("account_code").toInt(),
+            r.value("party_name").toString(),
+            r.value("dr_cr").toString().trimmed(),
+            r.value("total_amt").toDouble(),
+            false
+        );
     }
 
     // 3. Resolve for each ledger in chart of accounts

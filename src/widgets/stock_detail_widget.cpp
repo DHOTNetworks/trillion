@@ -245,7 +245,7 @@ void StockDetailWidget::setupUi() {
         cardOut = new QFrame(this);
         cardOut->setStyleSheet(
             "QFrame { background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; border-left: 4px solid " + color + "; }"
-            "QLabel { border: none; background: transparent; }"
+            "QLabel, QWidget { border: none; background: transparent; }"
         );
         auto* cLayout = new QVBoxLayout(cardOut);
         cLayout->setContentsMargins(10, 6, 10, 6);
@@ -463,6 +463,7 @@ void StockDetailWidget::reloadData(const QString& fromDate, const QString& toDat
     updateHeaderLabels();
     populateTable();
     updateSummaryMetrics();
+    m_isDirty = false;
 }
 
 void StockDetailWidget::populateTable() {
@@ -848,15 +849,18 @@ void StockDetailWidget::showEvent(QShowEvent* event) {
     QDate eDate = QDate::fromString(activeFy.endDate, "yyyy-MM-dd");
     if (!sDate.isValid()) sDate = QDate(QDate::currentDate().month() < 4 ? QDate::currentDate().year() - 1 : QDate::currentDate().year(), 4, 1);
     if (!eDate.isValid()) eDate = sDate.addYears(1).addDays(-1);
-    if (sDate.isValid() && eDate.isValid()) {
-        m_fromDateEdit->blockSignals(true);
-        m_toDateEdit->blockSignals(true);
-        m_fromDateEdit->setDate(sDate);
-        m_toDateEdit->setDate(eDate);
-        m_fromDateEdit->blockSignals(false);
-        m_toDateEdit->blockSignals(false);
+
+    if (m_isDirty || !m_fromDateEdit->date().isValid() || !m_toDateEdit->date().isValid()) {
+        if (sDate.isValid() && eDate.isValid() && (!m_fromDateEdit->date().isValid() || !m_toDateEdit->date().isValid())) {
+            m_fromDateEdit->blockSignals(true);
+            m_toDateEdit->blockSignals(true);
+            m_fromDateEdit->setDate(sDate);
+            m_toDateEdit->setDate(eDate);
+            m_fromDateEdit->blockSignals(false);
+            m_toDateEdit->blockSignals(false);
+        }
+        reloadData(m_fromDateEdit->date().toString("yyyy-MM-dd"), m_toDateEdit->date().toString("yyyy-MM-dd"));
     }
-    reloadData(m_fromDateEdit->date().toString("yyyy-MM-dd"), m_toDateEdit->date().toString("yyyy-MM-dd"));
 }
 
 } // namespace MahadevERP

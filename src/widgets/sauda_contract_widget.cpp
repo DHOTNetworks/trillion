@@ -323,7 +323,7 @@ void SaudaContractWidget::setupUi() {
     m_saudaTable->setAlternatingRowColors(true);
     tab1Layout->addWidget(m_saudaTable);
 
-    m_tabWidget->addTab(tab1, "📜 Sauda Forward Contracts");
+    m_tabWidget->addTab(tab1, "Sauda Forward Contracts");
 
     // ------------------------------------------------------------------------
     // TAB 2: DALALI SETTLEMENTS & DOUBLE-ENTRY JV
@@ -384,7 +384,7 @@ void SaudaContractWidget::setupUi() {
     m_dalaliTable->setAlternatingRowColors(true);
     tab2Layout->addWidget(m_dalaliTable);
 
-    m_tabWidget->addTab(tab2, "💼 Brokerage (Dalali) Settlement & JV Postings");
+    m_tabWidget->addTab(tab2, "Brokerage (Dalali) Settlement & JV Postings");
 
     mainLayout->addWidget(m_tabWidget, 1);
 }
@@ -422,6 +422,7 @@ void SaudaContractWidget::refreshData() {
     populateSaudaTable();
     populateDalaliTable();
     updateSummaryKpis();
+    m_isDirty = false;
 }
 
 void SaudaContractWidget::updateSummaryKpis() {

@@ -17,6 +17,8 @@ public:
     explicit TdsVouchersListWidget(TdsVoucherController *controller, QWidget *parent = nullptr);
 
     void reloadData();
+    void markDirty() { m_isDirty = true; }
+    bool isDirty() const { return m_isDirty; }
 
 signals:
     void backRequested();
@@ -49,6 +51,7 @@ private:
     QLabel *m_totalNetVal = nullptr;
 
     QVariantList m_currentVouchers;
+    bool m_isDirty = true;
 };
 
 } // namespace MahadevERP

@@ -52,9 +52,9 @@ void PrintCopyOptionsDialog::setupUi() {
     iconBadge->setStyleSheet(
         "background-color: " + QString(m_mode == Mode::Print ? "#ECFDF5" : "#F0F9FF") + ";"
         "border: 1px solid " + QString(m_mode == Mode::Print ? "#A7F3D0" : "#BAE6FD") + ";"
-        "border-radius: 8px; font-size: 18px;"
+        "border-radius: 8px; font-size: 11px; font-weight: bold; color: " + QString(m_mode == Mode::Print ? "#047857" : "#0284C7") + ";"
     );
-    iconBadge->setText(QString::fromUtf8(m_mode == Mode::Print ? "🖨️" : "📄"));
+    iconBadge->setText(m_mode == Mode::Print ? "PRN" : "PDF");
     headerLayout->addWidget(iconBadge);
 
     auto* titleCol = new QVBoxLayout();

@@ -52,7 +52,7 @@ void TrialBalanceWidget::setupUi() {
     auto* headerCard = new QFrame(this);
     headerCard->setStyleSheet(
         "QFrame { background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; }"
-        "QLabel { border: none; background: transparent; }"
+        "QLabel, QWidget { border: none; background: transparent; }"
     );
     auto* headerLayout = new QHBoxLayout(headerCard);
     headerLayout->setContentsMargins(14, 10, 14, 10);
@@ -216,7 +216,7 @@ void TrialBalanceWidget::setupUi() {
         cardOut = new QFrame(this);
         cardOut->setStyleSheet(
             "QFrame { background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; border-left: 4px solid " + color + "; }"
-            "QLabel { border: none; background: transparent; }"
+            "QLabel, QWidget { border: none; background: transparent; }"
         );
         auto* cLayout = new QVBoxLayout(cardOut);
         cLayout->setContentsMargins(10, 6, 10, 6);
@@ -326,6 +326,7 @@ void TrialBalanceWidget::reloadData() {
         m_controller->setDateRange(m_fromDateEdit->date(), m_toDateEdit->date());
         m_controller->reload();
     }
+    m_isDirty = false;
 }
 
 void TrialBalanceWidget::populateTable() {
@@ -435,13 +436,13 @@ void TrialBalanceWidget::updateSummaryMetrics() {
     if (totals.isBalanced) {
         m_card4Title->setText("TRIAL BALANCE STATUS");
         m_card4Val->setText("₹0.00 (Balanced)");
-        m_card4->setStyleSheet("QFrame { background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; border-left: 4px solid #16A34A; } QLabel { border: none; background: transparent; }");
+        m_card4->setStyleSheet("QFrame { background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; border-left: 4px solid #16A34A; } QLabel, QWidget { border: none; background: transparent; }");
         m_balanceStatusBadge->setText("● Balanced (₹0.00)");
         m_balanceStatusBadge->setStyleSheet("QLabel { background-color: #F0FDF4; color: #16A34A; border: 1.5px solid #86EFAC; border-radius: 6px; padding: 3px 8px; font-weight: 800; font-size: 11px; }");
     } else {
         m_card4Title->setText("DISCREPANCY / DIFFERENCE");
         m_card4Val->setText(totals.differenceFmt);
-        m_card4->setStyleSheet("QFrame { background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; border-left: 4px solid #DC2626; } QLabel { border: none; background: transparent; }");
+        m_card4->setStyleSheet("QFrame { background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; border-left: 4px solid #DC2626; } QLabel, QWidget { border: none; background: transparent; }");
         m_balanceStatusBadge->setText("● Difference: " + totals.differenceFmt);
         m_balanceStatusBadge->setStyleSheet("QLabel { background-color: #FEF2F2; color: #DC2626; border: 1.5px solid #FECACA; border-radius: 6px; padding: 3px 8px; font-weight: 800; font-size: 11px; }");
     }

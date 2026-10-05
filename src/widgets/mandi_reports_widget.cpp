@@ -622,6 +622,7 @@ void MandiReportsWidget::refreshAllTabs() {
     generateIFormRegister();
     generateFarmerStatement();
     generateDamiRegister();
+    m_isDirty = false;
 }
 
 void MandiReportsWidget::setWorkingPeriod(const QString& fromDate, const QString& toDate) {

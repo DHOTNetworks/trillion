@@ -26,14 +26,16 @@ public:
 
     void loadParty(const QString& partyName, const QString& fromDate = "", const QString& toDate = "");
     void restoreState(const QString& partyName, const QString& fromDate, const QString& toDate,
-                      const QString& side, int rowIndex);
+                      const QString& side, int drRowIndex = 0, int crRowIndex = 0);
     void resetSearch();
 
     QString currentParty() const;
     QString fromDate() const;
     QString toDate() const;
     QString lastSide() const { return m_lastSide; }
-    int lastIndex() const { return m_lastIndex; }
+    int lastIndex() const { return (m_lastSide == "Cr") ? m_lastCrIndex : m_lastDrIndex; }
+    int lastDrIndex() const { return m_lastDrIndex; }
+    int lastCrIndex() const { return m_lastCrIndex; }
 
     LedgerTableView* drTable() const { return m_drTable; }
     LedgerTableView* crTable() const { return m_crTable; }
@@ -131,6 +133,8 @@ private:
 
     // State Tracking
     QString m_lastSide = "Dr";
+    int m_lastDrIndex = 0;
+    int m_lastCrIndex = 0;
     int m_lastIndex = 0;
 };
 

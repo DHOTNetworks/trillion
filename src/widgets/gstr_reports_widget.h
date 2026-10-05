@@ -23,6 +23,8 @@ public:
     explicit GstrReportsWidget(PrintExportController* printExportCtrl = nullptr, QWidget* parent = nullptr);
 
     void loadReturns(const QDate& fromDate, const QDate& toDate);
+    void markDirty() { m_isDirty = true; }
+    bool isDirty() const { return m_isDirty; }
 
 signals:
     void backRequested();
@@ -81,6 +83,7 @@ private:
     Gstr3BReturnSummary m_currentGstr3BSummary;
     QList<Gstr2PortalRecord> m_loadedPortalRecords;
     QString m_loadedPortalPeriod;
+    bool m_isDirty = true;
 };
 
 } // namespace MahadevERP

@@ -66,7 +66,7 @@ void PaddyProcurementWidget::setupUi() {
     connect(newArrivalBtn, &QPushButton::clicked, this, &PaddyProcurementWidget::openNewArrivalDialog);
     headerLayout->addWidget(newArrivalBtn);
 
-    auto* kandaBtn = new QPushButton("Weighbridge (Kanda) ⚖️", this);
+    auto* kandaBtn = new QPushButton("Weighbridge (Kanda)", this);
     kandaBtn->setStyleSheet("background-color: #EFF6FF; border: 1.5px solid #93C5FD; border-radius: 6px; padding: 6px 12px; font-weight: bold; color: #1D4ED8;");
     connect(kandaBtn, &QPushButton::clicked, this, [this]() {
         WeighbridgeKandaDialog::openKandaSlip(nullptr, 0, this);
@@ -231,6 +231,7 @@ void PaddyProcurementWidget::loadArrivals(const QDate& fromDate, const QDate& to
     }
 
     populateTable();
+    m_isDirty = false;
 }
 
 void PaddyProcurementWidget::populateTable() {

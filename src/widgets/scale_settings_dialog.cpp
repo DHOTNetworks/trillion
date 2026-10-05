@@ -44,7 +44,7 @@ void ScaleSettingsDialog::setupUi() {
     QVBoxLayout* titleBox = new QVBoxLayout();
     titleBox->setSpacing(2);
 
-    QLabel* titleLabel = new QLabel("🖥️ Display & UI Scaling Settings", headerCard);
+    QLabel* titleLabel = new QLabel("Display & UI Scaling Settings", headerCard);
     titleLabel->setStyleSheet("font-size: 16px; font-weight: 800; color: #0F172A; border: none; background: transparent;");
     titleBox->addWidget(titleLabel);
 
@@ -55,7 +55,7 @@ void ScaleSettingsDialog::setupUi() {
 
     headerLayout->addStretch(1);
 
-    m_autoDetectBtn = new QPushButton("🎯 Auto-Detect", headerCard);
+    m_autoDetectBtn = new QPushButton("Auto-Detect", headerCard);
     m_autoDetectBtn->setFixedHeight(32);
     m_autoDetectBtn->setCursor(Qt::PointingHandCursor);
     m_autoDetectBtn->setStyleSheet(
@@ -237,7 +237,7 @@ void ScaleSettingsDialog::setupUi() {
     connect(m_cancelBtn, &QPushButton::clicked, this, &ScaleSettingsDialog::onCancelClicked);
     footerLayout->addWidget(m_cancelBtn);
 
-    m_saveBtn = new QPushButton("✓ Apply & Save", this);
+    m_saveBtn = new QPushButton("Apply & Save", this);
     m_saveBtn->setFixedHeight(36);
     m_saveBtn->setCursor(Qt::PointingHandCursor);
     m_saveBtn->setStyleSheet(

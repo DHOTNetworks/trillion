@@ -208,7 +208,7 @@ void PurchaseRegisterWidget::setupUi() {
         auto* card = new QFrame(this);
         card->setStyleSheet(
             "QFrame { background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; border-left: 4px solid " + color + "; }"
-            "QLabel { border: none; background: transparent; }"
+            "QLabel, QWidget { border: none; background: transparent; }"
         );
         auto* cLayout = new QVBoxLayout(card);
         cLayout->setContentsMargins(10, 6, 10, 6);
@@ -248,6 +248,7 @@ void PurchaseRegisterWidget::loadData(const QDate& fromDate, const QDate& toDate
     }
 
     populateTable();
+    m_isDirty = false;
 }
 
 void PurchaseRegisterWidget::populateTable() {
