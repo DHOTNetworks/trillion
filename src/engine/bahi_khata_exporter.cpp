@@ -160,17 +160,9 @@ static bool insertJet4Row(MdbHandle* mdb, MdbTableDef* table, MdbField* fields, 
     }
 
     guint16 rownum = mdb_add_row_to_pg(table, row_buf, row_size);
+    Q_UNUSED(rownum);
     if (!mdb_write_pg(mdb, pgnum)) {
         return false;
-    }
-
-    if (table->indices) {
-        for (guint i = 0; i < table->indices->len; i++) {
-            MdbIndex *idx = (MdbIndex *)g_ptr_array_index(table->indices, i);
-            if (idx && idx->index_type == 1) {
-                mdb_update_index(table, idx, num_fields, fields, pgnum, rownum);
-            }
-        }
     }
 
     table->num_rows++;
