@@ -656,6 +656,9 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
                     fields[i].is_null = 1;
                 }
 
+                QByteArray prefixBytes = toJet4Text("None");
+                fields[0].is_null = 0; fields[0].value = prefixBytes.data(); fields[0].siz = prefixBytes.size();
+
                 QByteArray nameBytes = toJet4Text(p.value("name").toString().left(50));
                 fields[1].is_null = 0; fields[1].value = nameBytes.data(); fields[1].siz = nameBytes.size();
 
@@ -665,11 +668,17 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
                 guint16 grpVal = p.value("group_code", 1).toInt();
                 fields[4].is_null = 0; fields[4].value = &grpVal; fields[4].siz = 2;
 
+                QByteArray invChoice = toJet4Text("No");
+                fields[5].is_null = 0; fields[5].value = invChoice.data(); fields[5].siz = invChoice.size();
+
                 double opBal = round2(p.value("opening_balance").toDouble());
                 fields[6].is_null = 0; fields[6].value = &opBal; fields[6].siz = 8;
 
                 QByteArray drCrBytes = toJet4Text(p.value("balance_type", "Dr").toString().left(2));
                 fields[7].is_null = 0; fields[7].value = drCrBytes.data(); fields[7].siz = drCrBytes.size();
+
+                QByteArray mailName = toJet4Text("01/04/2023");
+                fields[8].is_null = 0; fields[8].value = mailName.data(); fields[8].siz = mailName.size();
 
                 QByteArray addBytes = toJet4Text(p.value("address").toString().left(250));
                 fields[9].is_null = 0; fields[9].value = addBytes.data(); fields[9].siz = addBytes.size();
@@ -680,23 +689,68 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
                 QByteArray stnBytes = toJet4Text(p.value("party_station", p.value("city")).toString().left(50));
                 fields[13].is_null = 0; fields[13].value = stnBytes.data(); fields[13].siz = stnBytes.size();
 
+                QByteArray noneBytes = toJet4Text("None");
+                fields[14].is_null = 0; fields[14].value = noneBytes.data(); fields[14].siz = noneBytes.size(); // Route
+                fields[15].is_null = 0; fields[15].value = noneBytes.data(); fields[15].siz = noneBytes.size(); // Distt
+
+                QByteArray curBalBytes = toJet4Text("0.00");
+                fields[16].is_null = 0; fields[16].value = curBalBytes.data(); fields[16].siz = curBalBytes.size(); // CurrentBalance
+
+                double zeroDbl = 0.0;
+                guint32 zero32 = 0;
+                fields[17].is_null = 0; fields[17].value = &zeroDbl; fields[17].siz = 8; // Percentage
+                fields[18].is_null = 0; fields[18].value = &zeroDbl; fields[18].siz = 8; // InterestRate
+
                 double sal = round2(p.value("salary_per_month").toDouble());
                 fields[19].is_null = 0; fields[19].value = &sal; fields[19].siz = 8;
 
                 QByteArray acctBytes = toJet4Text(p.value("bank_account").toString().left(50));
                 fields[20].is_null = 0; fields[20].value = acctBytes.data(); fields[20].siz = acctBytes.size();
 
+                QByteArray stateBytes = toJet4Text("STATE");
+                fields[21].is_null = 0; fields[21].value = stateBytes.data(); fields[21].siz = stateBytes.size();
+
+                fields[22].is_null = 0; fields[22].value = &zero32; fields[22].siz = 4; // ShowDateTotals
+                fields[23].is_null = 0; fields[23].value = &zero32; fields[23].siz = 4; // AutoSplitUpdate
+
+                QByteArray pTypeBytes = toJet4Text("Proprietorship Firm");
+                fields[25].is_null = 0; fields[25].value = pTypeBytes.data(); fields[25].siz = pTypeBytes.size();
+
                 QByteArray cpBytes = toJet4Text(p.value("contact_person").toString().left(50));
                 fields[26].is_null = 0; fields[26].value = cpBytes.data(); fields[26].siz = cpBytes.size();
+
+                QByteArray pStateBytes = toJet4Text("Haryana");
+                fields[27].is_null = 0; fields[27].value = pStateBytes.data(); fields[27].siz = pStateBytes.size();
+
+                QByteArray vatDlrBytes = toJet4Text("NON-VAT DEALER");
+                fields[29].is_null = 0; fields[29].value = vatDlrBytes.data(); fields[29].siz = vatDlrBytes.size();
+
+                fields[30].is_null = 0; fields[30].value = stnBytes.data(); fields[30].siz = stnBytes.size(); // PartyStation
+                fields[31].is_null = 0; fields[31].value = &zeroDbl; fields[31].siz = 8; // CreditLimit
+                fields[33].is_null = 0; fields[33].value = &zero32; fields[33].siz = 4; // CalculateInJointTrading
+
+                QByteArray naBytes = toJet4Text("N/A");
+                fields[34].is_null = 0; fields[34].value = naBytes.data(); fields[34].siz = naBytes.size(); // SpecialPartyType
+                fields[36].is_null = 0; fields[36].value = naBytes.data(); fields[36].siz = naBytes.size(); // CommnCalcOn
+
+                fields[38].is_null = 0; fields[38].value = &zero32; fields[38].siz = 4; // StockNotCalculateInLedger
 
                 QByteArray gstinBytes = toJet4Text(p.value("gstin").toString().left(50));
                 fields[39].is_null = 0; fields[39].value = gstinBytes.data(); fields[39].siz = gstinBytes.size();
 
+                QByteArray gstTypeBytes = toJet4Text("Normal Dealer");
+                fields[41].is_null = 0; fields[41].value = gstTypeBytes.data(); fields[41].siz = gstTypeBytes.size();
+
+                fields[43].is_null = 0; fields[43].value = &zero32; fields[43].siz = 4; // SyncEnabled
+
                 QByteArray ifscBytes = toJet4Text(p.value("ifsc_code").toString().left(50));
-                fields[43].is_null = 0; fields[43].value = ifscBytes.data(); fields[43].siz = ifscBytes.size();
+                fields[44].is_null = 0; fields[44].value = ifscBytes.data(); fields[44].siz = ifscBytes.size();
 
                 QByteArray bankBytes = toJet4Text(p.value("bank_name").toString().left(50));
-                fields[44].is_null = 0; fields[44].value = bankBytes.data(); fields[44].siz = bankBytes.size();
+                fields[45].is_null = 0; fields[45].value = bankBytes.data(); fields[45].siz = bankBytes.size();
+
+                fields[46].is_null = 0; fields[46].value = &zero32; fields[46].siz = 4; // ApplyTCSForParty
+                fields[49].is_null = 0; fields[49].value = &zero32; fields[49].siz = 4; // TCSNotApplyInSale
 
                 if (insertJet4Row(mdb, ledgersTbl, fields, ledgersTbl->num_cols)) {
                     summary.ledgersExported++;
@@ -825,6 +879,43 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
 
                     QByteArray narrBytes = toJet4Text(t.value("narration").toString().left(200));
                     fields[14].is_null = 0; fields[14].value = narrBytes.data(); fields[14].siz = narrBytes.size();
+
+                    // Canonical Bahi-Khata default values for complete schema recognition
+                    guint16 zero16 = 0;
+                    guint32 zero32 = 0;
+                    double zeroDbl = 0.0;
+                    float zeroFlt = 0.0f;
+                    QByteArray zeroStr = toJet4Text("0");
+
+                    fields[16].is_null = 0; fields[16].value = &zero16; fields[16].siz = 2; // DueDays
+                    fields[17].is_null = 0; fields[17].value = &zero16; fields[17].siz = 2; // ItemCode
+                    fields[29].is_null = 0; fields[29].value = &oleD; fields[29].siz = 8;   // BankDate
+                    fields[30].is_null = 0; fields[30].value = &zero32; fields[30].siz = 4; // VoucherReconcile
+                    fields[35].is_null = 0; fields[35].value = &zeroDbl; fields[35].siz = 8;// ExpRate
+                    fields[39].is_null = 0; fields[39].value = &zeroDbl; fields[39].siz = 8;// EstimatedAmount
+                    fields[42].is_null = 0; fields[42].value = &zero32; fields[42].siz = 4; // MktCommttSrNo
+                    fields[45].is_null = 0; fields[45].value = &zero32; fields[45].siz = 4; // URDPurc
+                    fields[46].is_null = 0; fields[46].value = &zero32; fields[46].siz = 4; // E1PartyCode
+                    fields[50].is_null = 0; fields[50].value = &zero32; fields[50].siz = 4; // CompositionVch
+                    fields[52].is_null = 0; fields[52].value = zeroStr.data(); fields[52].siz = zeroStr.size(); // PlaceOfSupply
+                    fields[53].is_null = 0; fields[53].value = zeroStr.data(); fields[53].siz = zeroStr.size(); // ECommGSTIN
+                    fields[54].is_null = 0; fields[54].value = &zero32; fields[54].siz = 4; // TransReturn
+                    fields[55].is_null = 0; fields[55].value = &zero32; fields[55].siz = 4; // GroupTick
+                    fields[57].is_null = 0; fields[57].value = &zero32; fields[57].siz = 4; // ActualInv
+                    fields[58].is_null = 0; fields[58].value = &zero32; fields[58].siz = 4; // ITCNotClaim
+                    fields[59].is_null = 0; fields[59].value = &zero32; fields[59].siz = 4; // ReverseChargePayable
+                    fields[60].is_null = 0; fields[60].value = &zero32; fields[60].siz = 4; // GSTOnGoodsAmount
+                    fields[62].is_null = 0; fields[62].value = &zeroFlt; fields[62].siz = 4; // TCSRate
+                    fields[63].is_null = 0; fields[63].value = &zeroDbl; fields[63].siz = 8; // TCSTaxable
+                    fields[65].is_null = 0; fields[65].value = &zero32; fields[65].siz = 4; // ChallanVchNo
+                    fields[68].is_null = 0; fields[68].value = &zeroFlt; fields[68].siz = 4; // TDSRate194Q
+                    fields[69].is_null = 0; fields[69].value = &zeroDbl; fields[69].siz = 8; // Taxable194Q
+                    fields[70].is_null = 0; fields[70].value = &zero32; fields[70].siz = 4; // TDS194QChallanVchNo
+                    fields[73].is_null = 0; fields[73].value = &oleD; fields[73].siz = 8;   // TaxInputDate
+                    fields[74].is_null = 0; fields[74].value = &zero32; fields[74].siz = 4; // PymtDone
+                    fields[75].is_null = 0; fields[75].value = &zeroDbl; fields[75].siz = 8;// tmpBookNo
+                    fields[76].is_null = 0; fields[76].value = &zeroDbl; fields[76].siz = 8;// tmpSlipNo
+                    fields[78].is_null = 0; fields[78].value = &zeroDbl; fields[78].siz = 8;// RunningBNo
 
                     if (insertJet4Row(mdb, txTbl, fields, txTbl->num_cols)) {
                         summary.transactionsExported++;
