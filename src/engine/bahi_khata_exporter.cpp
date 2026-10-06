@@ -2191,7 +2191,11 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
                         L.accountCode = (guint16)acCode;
                         L.drCr = drCr;
                         L.amount = amt;
-                        L.narration = narration;
+                        if (vType == "Sale" && narration.startsWith("Sales Invoice", Qt::CaseInsensitive)) {
+                            L.narration = "";
+                        } else {
+                            L.narration = narration;
+                        }
                         L.invoiceNo = invoiceNo;
                         L.isFirstLeg = isFirst;
                         L.dueDays = dueDays;
