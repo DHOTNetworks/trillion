@@ -1690,18 +1690,59 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
         mdb_read_columns(grpTbl);
         mdb_read_indices(grpTbl);
 
+        QVariantList grpRows = appDb.executeQuery("SELECT name, code1st, code2nd, code3rd, code4th, extract_in_balance_sheet FROM account_groups ORDER BY code1st ASC;");
+        std::map<int, QVariantMap> grpMap;
+        for (const auto& gVar : grpRows) {
+            QVariantMap g = gVar.toMap();
+            grpMap[g.value("code1st").toInt()] = g;
+        }
+
         std::set<int> existingGroupCodes;
         mdb_rewind_table(grpTbl);
         MdbColumn* colC1 = (MdbColumn*)g_ptr_array_index(grpTbl->columns, 1);
+        MdbColumn* colC2 = (MdbColumn*)g_ptr_array_index(grpTbl->columns, 2);
+        MdbColumn* colC3 = (MdbColumn*)g_ptr_array_index(grpTbl->columns, 3);
+        MdbColumn* colC4 = (MdbColumn*)g_ptr_array_index(grpTbl->columns, 4);
+
         while (mdb_fetch_row(grpTbl)) {
             char* cStr = mdb_col_to_string(mdb, mdb->pg_buf, colC1->cur_value_start, colC1->col_type, colC1->cur_value_len);
             if (cStr) {
-                existingGroupCodes.insert(atoi(cStr));
+                int c1 = atoi(cStr);
                 g_free(cStr);
+                existingGroupCodes.insert(c1);
+
+                auto it = grpMap.find(c1);
+                if (it != grpMap.end()) {
+                    bool modified = false;
+                    guint16 c2Val = (guint16)it->second.value("code2nd").toInt();
+                    guint16 c3Val = (guint16)it->second.value("code3rd").toInt();
+                    guint16 c4Val = (guint16)it->second.value("code4th").toInt();
+
+                    if (colC2->cur_value_start > 0 && colC2->cur_value_len == (int)sizeof(guint16)) {
+                        if (memcmp(mdb->pg_buf + colC2->cur_value_start, &c2Val, sizeof(guint16)) != 0) {
+                            memcpy(mdb->pg_buf + colC2->cur_value_start, &c2Val, sizeof(guint16));
+                            modified = true;
+                        }
+                    }
+                    if (colC3->cur_value_start > 0 && colC3->cur_value_len == (int)sizeof(guint16)) {
+                        if (memcmp(mdb->pg_buf + colC3->cur_value_start, &c3Val, sizeof(guint16)) != 0) {
+                            memcpy(mdb->pg_buf + colC3->cur_value_start, &c3Val, sizeof(guint16));
+                            modified = true;
+                        }
+                    }
+                    if (colC4->cur_value_start > 0 && colC4->cur_value_len == (int)sizeof(guint16)) {
+                        if (memcmp(mdb->pg_buf + colC4->cur_value_start, &c4Val, sizeof(guint16)) != 0) {
+                            memcpy(mdb->pg_buf + colC4->cur_value_start, &c4Val, sizeof(guint16));
+                            modified = true;
+                        }
+                    }
+                    if (modified) {
+                        mdb_write_pg(mdb, grpTbl->cur_phys_pg);
+                    }
+                }
             }
         }
 
-        QVariantList grpRows = appDb.executeQuery("SELECT name, code1st, code2nd, code3rd, code4th, extract_in_balance_sheet FROM account_groups ORDER BY code1st ASC;");
         std::cout << "[EXPORT] Account Groups in SQLite: " << grpRows.size() << ", existing in JetDB: " << existingGroupCodes.size() << std::endl;
         for (const auto& gVar : grpRows) {
             QVariantMap g = gVar.toMap();
