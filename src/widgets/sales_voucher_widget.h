@@ -75,6 +75,7 @@ private slots:
 private:
     void setupUi();
     void setupNavigationChains();
+    void setupCompleters();
     void applyCustomStyles();
     void updateNextNumbers();
     void updateFiscalYearBadge();

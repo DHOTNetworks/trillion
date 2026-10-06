@@ -13,10 +13,12 @@
 #include <QScrollBar>
 #include <QKeyEvent>
 #include <QApplication>
+#include <QCompleter>
 #include <QDate>
 #include <QTimer>
 #include <cmath>
 #include <QDebug>
+#include "../database_manager.h"
 
 // ============================================================================
 // PurchaseVoucherWidget Implementation (Authentic Bahi-Khata Replication)
@@ -29,6 +31,7 @@ PurchaseVoucherWidget::PurchaseVoucherWidget(PrintExportController* printExportC
     setupUi();
     applyCustomStyles();
     setupNavigationChains();
+    setupCompleters();
     resetForm();
 }
 
@@ -882,6 +885,48 @@ void PurchaseVoucherWidget::setupNavigationChains() {
     VoucherCommon::installGridNavigation(m_kandaWeightEdit, m_challanNoEdit, m_brokerEdit);
     VoucherCommon::installGridNavigation(m_brokerEdit, m_kandaWeightEdit, m_narrationEdit);
     VoucherCommon::installGridNavigation(m_narrationEdit, m_brokerEdit, nullptr);
+}
+
+void PurchaseVoucherWidget::setupCompleters() {
+    auto& db = DatabaseManager::instance();
+
+    // 1. Broker Completer: Group 46 (Broker) parties + historical broker names
+    if (m_brokerEdit) {
+        QStringList brokers;
+        QVariantList brRows = db.executeQuery(
+            "SELECT DISTINCT name FROM parties WHERE group_id IN (SELECT id FROM account_groups WHERE code1st = 46 OR name LIKE '%Broker%') "
+            "UNION SELECT DISTINCT broker_name FROM sales_invoices WHERE broker_name IS NOT NULL AND broker_name <> '' "
+            "UNION SELECT DISTINCT broker_name FROM purchase_invoices WHERE broker_name IS NOT NULL AND broker_name <> '' "
+            "ORDER BY 1 ASC;");
+        for (const auto& r : brRows) {
+            QString name = r.toMap().value("name").toString().trimmed();
+            if (name.isEmpty()) name = r.toMap().value("broker_name").toString().trimmed();
+            if (!name.isEmpty() && !brokers.contains(name)) brokers << name;
+        }
+        auto* brokerCompleter = new QCompleter(brokers, m_brokerEdit);
+        brokerCompleter->setCaseSensitivity(Qt::CaseInsensitive);
+        brokerCompleter->setFilterMode(Qt::MatchContains);
+        brokerCompleter->setCompletionMode(QCompleter::PopupCompletion);
+        m_brokerEdit->setCompleter(brokerCompleter);
+    }
+
+    // 2. Transport Completer: Historical transport companies
+    if (m_transportEdit) {
+        QStringList transports;
+        QVariantList trRows = db.executeQuery(
+            "SELECT DISTINCT transport FROM sales_invoices WHERE transport IS NOT NULL AND transport <> '' "
+            "UNION SELECT DISTINCT transport FROM purchase_invoices WHERE transport IS NOT NULL AND transport <> '' "
+            "ORDER BY 1 ASC;");
+        for (const auto& r : trRows) {
+            QString name = r.toMap().value("transport").toString().trimmed();
+            if (!name.isEmpty() && !transports.contains(name)) transports << name;
+        }
+        auto* transportCompleter = new QCompleter(transports, m_transportEdit);
+        transportCompleter->setCaseSensitivity(Qt::CaseInsensitive);
+        transportCompleter->setFilterMode(Qt::MatchContains);
+        transportCompleter->setCompletionMode(QCompleter::PopupCompletion);
+        m_transportEdit->setCompleter(transportCompleter);
+    }
 }
 
 void PurchaseVoucherWidget::focusTableAt(int row, int col) {
