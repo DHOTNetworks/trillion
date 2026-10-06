@@ -497,6 +497,10 @@ struct mdbindex {
 	unsigned char	key_col_order[MDB_MAX_IDX_COLS];
 	unsigned char	flags;
 	MdbTableDef	*table;
+	/* Jet4 per-index owned-pages map location (pg_row convention:
+	 * map_pg = bits>>8, map_row = bits&0xFF). Zero when absent. */
+	guint32		idx_map_pg;
+	guint16		idx_map_row;
 };
 
 typedef struct {
@@ -648,6 +652,7 @@ int mdb_index_find_row(MdbHandle *mdb, MdbIndex *idx, MdbIndexChain *chain, guin
 void mdb_index_swap_n(unsigned char *src, int sz, unsigned char *dest);
 void mdb_free_indices(GPtrArray *indices);
 void mdb_index_page_reset(MdbHandle *mdb, MdbIndexPage *ipg);
+void mdb_index_page_init(MdbHandle *mdb, MdbIndexPage *ipg);
 int mdb_index_pack_bitmap(MdbHandle *mdb, MdbIndexPage *ipg);
 
 /* stats.c */

@@ -1,5 +1,6 @@
 #include "bahi_khata_export_dialog.h"
 #include "../engine/fiscal_year_helper.h"
+#include "../engine/jet4_writer.h"
 #include "../database_manager.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -11,27 +12,97 @@
 #include <QRegularExpression>
 #include <QKeyEvent>
 #include <QMessageBox>
+#include <QThread>
 #include <QDebug>
+#if defined(HAS_LIBMDB) || __has_include("mdbtools.h")
+#include "mdbtools.h"
+#endif
 
 namespace MahadevERP {
+
+BahiKhataExportWorker::BahiKhataExportWorker(BahiKhataExporter::ExportOptions opts, bool verify,
+                                             QObject* parent)
+    : QObject(parent)
+    , m_opts(std::move(opts))
+    , m_verify(verify)
+{
+}
+
+QString BahiKhataExportWorker::runVerify(const QString& mdbPath) {
+#if defined(HAS_LIBMDB) || __has_include("mdbtools.h")
+    QByteArray pathBytes = QFile::encodeName(mdbPath);
+    MdbHandle* mdb = mdb_open(pathBytes.constData(), MDB_NOFLAGS);
+    if (!mdb) mdb = mdb_open(mdbPath.toUtf8().constData(), MDB_NOFLAGS);
+    if (!mdb) return QString("Verify skipped: cannot open %1").arg(mdbPath);
+    Jet4Writer::VerifyReport rep = Jet4Writer::verifyDatabase(mdb);
+    mdb_close(mdb);
+    if (!rep.error.empty())
+        return QString("Verify FAILED: %1").arg(QString::fromStdString(rep.error));
+    QStringList badIdx;
+    for (const auto& vi : rep.indexes) {
+        if (!vi.sorted || vi.walked != vi.dataRows)
+            badIdx << QString("%1.%2").arg(QString::fromStdString(vi.table),
+                                           QString::fromStdString(vi.name));
+    }
+    if (rep.badRows > 0 || !badIdx.isEmpty() || !rep.ok) {
+        return QString("Verify FAILED: %1 bad rows, indexes off: %2")
+            .arg(rep.badRows).arg(badIdx.join(", "));
+    }
+    long idxCount = static_cast<long>(rep.indexes.size());
+    return QString("Verified: %1 tables, %2 rows, %3 indexes (walked == rows, sorted).")
+        .arg(rep.tablesChecked).arg(rep.dataRows).arg(idxCount);
+#else
+    Q_UNUSED(mdbPath);
+    return QString("Verify skipped: libmdb unavailable.");
+#endif
+}
+
+void BahiKhataExportWorker::run() {
+    BahiKhataExporter exporter; // parentless: lives on this worker thread
+    connect(&exporter, &BahiKhataExporter::exportProgress,
+            this, &BahiKhataExportWorker::progress);
+    BahiKhataExporter::ExportSummary summary = exporter.exportToBahiKhata(m_opts);
+    QString verifyText;
+    if (summary.success && m_verify) {
+        emit progress(98, "Verifying Jet indexes...");
+        verifyText = runVerify(summary.targetFilePath);
+    }
+    emit finished(summary, verifyText);
+}
 
 BahiKhataExportDialog::BahiKhataExportDialog(FirmManager* firmMgr, QWidget* parent)
     : QDialog(parent)
     , m_firmMgr(firmMgr)
     , m_exporter(new BahiKhataExporter(this))
 {
+    qRegisterMetaType<BahiKhataExporter::ExportSummary>();
     setWindowTitle("Export Database to Bahi-Khata (Data.00x)");
     setFixedWidth(640);
     setModal(true);
     setStyleSheet("QDialog { background-color: #F8FAFC; } QLabel { border: none; background: transparent; }");
 
+    // NOTE: actual exports run on BahiKhataExportWorker (off the UI thread);
+    // m_exporter is retained for API compatibility only.
     connect(m_exporter, &BahiKhataExporter::exportProgress, this, &BahiKhataExportDialog::onExportProgress);
     connect(m_exporter, &BahiKhataExporter::exportFinished, this, &BahiKhataExportDialog::onExportFinished);
 
     setupUi();
 }
 
-BahiKhataExportDialog::~BahiKhataExportDialog() = default;
+BahiKhataExportDialog::~BahiKhataExportDialog() {
+    teardownWorker();
+}
+
+void BahiKhataExportDialog::teardownWorker() {
+    if (m_workerThread) {
+        m_workerThread->quit();
+        if (!m_workerThread->wait(60000))
+            m_workerThread->terminate();
+        // Worker deletes itself via deleteLater; thread deletes via connection.
+        m_workerThread = nullptr;
+        m_worker = nullptr;
+    }
+}
 
 void BahiKhataExportDialog::keyPressEvent(QKeyEvent* event) {
     if (event->key() == Qt::Key_Escape && !m_isExporting) {
@@ -188,6 +259,11 @@ void BahiKhataExportDialog::setupUi() {
     m_millingStockCheck->setStyleSheet("QCheckBox { font-size: 12px; font-weight: 600; color: #334155; }");
     formLayout->addWidget(m_millingStockCheck);
 
+    m_verifyCheck = new QCheckBox("Verify Jet indexes after export (walk + sort check, recommended)", formCard);
+    m_verifyCheck->setChecked(true);
+    m_verifyCheck->setStyleSheet("QCheckBox { font-size: 12px; font-weight: 600; color: #334155; }");
+    formLayout->addWidget(m_verifyCheck);
+
     rootLayout->addWidget(formCard);
 
     // 3. Progress Card
@@ -264,12 +340,15 @@ void BahiKhataExportDialog::onExportClicked() {
         QMessageBox::warning(this, "Invalid File Name", err);
         return;
     }
+    if (m_isExporting) return;
 
     m_isExporting = true;
     m_exportBtn->setEnabled(false);
     m_browseBtn->setEnabled(false);
     m_pathEdit->setEnabled(false);
     m_closeBtn->setEnabled(false);
+    m_progressBar->setValue(2);
+    m_statusLabel->setText("Starting export on background thread...");
 
     BahiKhataExporter::ExportOptions opts;
     opts.targetMdbPath = targetPath;
@@ -278,8 +357,58 @@ void BahiKhataExportDialog::onExportClicked() {
     opts.exportTransactions = m_txCheck->isChecked();
     opts.exportMastersOnly = !m_txCheck->isChecked();
     opts.exportMillingAndStock = m_millingStockCheck->isChecked();
+    const bool doVerify = m_verifyCheck->isChecked();
 
-    m_exporter->exportToBahiKhata(opts);
+    teardownWorker();
+    m_workerThread = new QThread(this);
+    m_worker = new BahiKhataExportWorker(opts, doVerify);
+    m_worker->moveToThread(m_workerThread);
+    connect(m_workerThread, &QThread::started, m_worker, &BahiKhataExportWorker::run);
+    connect(m_worker, &BahiKhataExportWorker::progress,
+            this, &BahiKhataExportDialog::onExportProgress);
+    connect(m_worker, &BahiKhataExportWorker::finished,
+            this, &BahiKhataExportDialog::onWorkerFinished);
+    connect(m_worker, &BahiKhataExportWorker::finished,
+            m_worker, &QObject::deleteLater);
+    connect(m_workerThread, &QThread::finished,
+            m_workerThread, &QObject::deleteLater);
+    m_workerThread->start();
+}
+
+void BahiKhataExportDialog::onWorkerFinished(BahiKhataExporter::ExportSummary summary,
+                                             const QString& verifyText) {
+    m_isExporting = false;
+    m_exportBtn->setEnabled(true);
+    m_browseBtn->setEnabled(true);
+    m_pathEdit->setEnabled(true);
+    m_closeBtn->setEnabled(true);
+    m_worker = nullptr;
+    if (m_workerThread) {
+        m_workerThread->quit();
+        m_workerThread = nullptr; // deletes itself via deleteLater
+    }
+
+    if (!summary.success) {
+        m_statusLabel->setText("Export Failed: " + summary.errorMessage);
+        QMessageBox::critical(this, "Export Failed", summary.errorMessage);
+        return;
+    }
+    QString msg = QString("Exported %1 ledgers and %2 transactions to Bahi-Khata JetDB at %3")
+        .arg(summary.ledgersExported).arg(summary.transactionsExported).arg(summary.targetFilePath);
+    if (!verifyText.isEmpty()) {
+        if (verifyText.startsWith("Verify FAILED")) {
+            m_progressBar->setValue(100);
+            m_statusLabel->setText("Export done, but verification failed!");
+            QMessageBox::warning(this, "Export Completed With Warnings",
+                                 msg + "\n\n" + verifyText);
+            return;
+        }
+        msg += "\n\n" + verifyText;
+    }
+    m_progressBar->setValue(100);
+    m_statusLabel->setText("Export Completed Successfully!");
+    QMessageBox::information(this, "Export Completed", msg);
+    accept();
 }
 
 void BahiKhataExportDialog::onExportProgress(int percent, const QString& status) {

@@ -20,8 +20,9 @@
 #include <inttypes.h>
 #include "mdbprivate.h"
 
-//static int mdb_copy_index_pg(MdbTableDef *table, MdbIndex *idx, MdbIndexPage *ipg);
-static int mdb_add_row_to_leaf_pg(MdbTableDef *table, MdbIndex *idx, MdbIndexPage *ipg, MdbField *idx_fields, guint32 pgnum, guint16 rownum);
+extern char idx_to_text_ling[];
+int mdb_index_unpack_bitmap(MdbHandle *mdb, MdbIndexPage *ipg);
+gint32 mdb_alloc_page(MdbTableDef *table);
 
 void
 mdb_put_int16(void *buf, guint32 offset, guint32 value)
@@ -329,62 +330,23 @@ mdb_pack_null_mask(unsigned char *buffer, int num_fields, MdbField *fields)
 	
 	return pos;
 }
-/* fields must be ordered with fixed columns first, then vars, subsorted by 
+/* Jet4 row packing is implemented by the clean C++ module
+ * src/engine/jet4_writer.cpp (Jet4Writer::packRow), spec derived from
+ * Jackcess TableImpl.createRow. Thin C delegate below. */
+int jet4_pack_row(MdbTableDef *table, MdbField *fields, unsigned num_fields,
+                  unsigned char *out, unsigned out_size);
+
+/* fields must be ordered with fixed columns first, then vars, subsorted by
  * column number */
 static int
 mdb_pack_row4(MdbTableDef *table, unsigned char *row_buffer, unsigned int num_fields, MdbField *fields)
 {
-	unsigned int pos = 0;
-	unsigned int var_cols = 0;
-	unsigned int i;
-
-	row_buffer[pos++] = num_fields & 0xff;
-	row_buffer[pos++] = (num_fields >> 8) & 0xff; 
-
-	/* Fixed length columns */
-	for (i=0;i<num_fields;i++) {
-		if (fields[i].is_fixed) {
-			fields[i].offset = pos;
-			if (!fields[i].is_null) {
-				memcpy(&row_buffer[pos], fields[i].value, fields[i].siz);
-			}
-			pos += fields[i].siz;
-		}
+	int len = jet4_pack_row(table, fields, num_fields, row_buffer, 4096);
+	if (len < 0) {
+		fprintf(stderr, "jet4_pack_row failed\n");
+		return 0;
 	}
-	/* For tables without variable-length columns */
-	if (table->num_var_cols == 0) {
-		pos += mdb_pack_null_mask(&row_buffer[pos], num_fields, fields);
-		return pos;
-	}
-	/* Variable length columns */
-	for (i=0;i<num_fields;i++) {
-		if (!fields[i].is_fixed) {
-			var_cols++;
-			fields[i].offset = pos;
-			if (! fields[i].is_null) {
-				memcpy(&row_buffer[pos], fields[i].value, fields[i].siz);
-				pos += fields[i].siz;
-			}
-		}
-	}
-	/* EOD */
-	row_buffer[pos] = pos & 0xff;
-	row_buffer[pos+1] = (pos >> 8) & 0xff;
-	pos += 2;
-
-	/* Offsets of the variable-length columns */
-	for (i=num_fields; i>0; i--) {
-		if (!fields[i-1].is_fixed) {
-			row_buffer[pos++] = fields[i-1].offset & 0xff;
-			row_buffer[pos++] = (fields[i-1].offset >> 8) & 0xff;
-		}
-	}
-	/* Number of variable-length columns */
-	row_buffer[pos++] = var_cols & 0xff;
-	row_buffer[pos++] = (var_cols >> 8) & 0xff;
-
-	pos += mdb_pack_null_mask(&row_buffer[pos], num_fields, fields);
-	return pos;
+	return len;
 }
 
 static int
@@ -485,11 +447,29 @@ mdb_pg_get_freespace(MdbHandle *mdb)
 	int rows, free_start, free_end;
 	int row_count_offset = mdb->fmt->row_count_offset;
 
+	if (mdb->pg_buf[0] != MDB_PAGE_DATA) {
+		return 0;
+	}
+
 	rows = mdb_get_int16(mdb->pg_buf, row_count_offset);
-	free_start = row_count_offset + 2 + (rows * 2);
-	free_end = mdb_get_int16(mdb->pg_buf, row_count_offset + (rows * 2));
-	mdb_debug(MDB_DEBUG_WRITE,"free space left on page = %d", free_end - free_start);
-	return (free_end - free_start);
+	if (rows <= 0) {
+		/* Exact native semantics: offset table is empty, free runs to end. */
+		free_start = row_count_offset + 2;
+		free_end = mdb->fmt->pg_size;
+	} else {
+		/* Exact: table occupies rows*2 bytes; no phantom slot reserved.
+		 * (Verified: native pages store free == minStart - tableEnd.) */
+		free_start = row_count_offset + 2 + (rows * 2);
+		free_end = mdb_get_int16(mdb->pg_buf, (row_count_offset + 2) + ((rows - 1) * 2)) & 0x0FFF;
+		if (free_end <= 0 || free_end > mdb->fmt->pg_size) {
+			free_end = mdb->fmt->pg_size;
+		}
+	}
+
+	int space = free_end - free_start;
+	if (space < 0) space = 0;
+	mdb_debug(MDB_DEBUG_WRITE, "free space left on page = %d (rows=%d, start=%d, end=%d)", space, rows, free_start, free_end);
+	return space;
 }
 void *
 mdb_new_leaf_pg(MdbCatalogEntry *entry)
@@ -521,11 +501,17 @@ mdb_update_indexes(MdbTableDef *table, int num_fields, MdbField *fields, guint32
 {
 	unsigned int i;
 	MdbIndex *idx;
-	
+
+	/* Test hook for bisection: JET4_NO_INDEX=1 skips all index writes
+	 * (rows + table counts still maintained). */
+	if (getenv("JET4_NO_INDEX") != NULL) {
+		return 1;
+	}
+
 	for (i=0;i<table->num_idxs;i++) {
 		idx = g_ptr_array_index (table->indices, i);
-		mdb_debug(MDB_DEBUG_WRITE,"Updating %s (%d).", idx->name, idx->index_type);
-		if (idx->index_type==1) {
+		mdb_debug(MDB_DEBUG_WRITE,"Updating index %s (type %d, first_pg %d).", idx->name, idx->index_type, idx->first_pg);
+		if (idx->index_type != 2 && idx->first_pg > 0) {
 			mdb_update_index(table, idx, num_fields, fields, pgnum, rownum);
 		}
 	}
@@ -546,50 +532,19 @@ mdb_init_index_chain(MdbTableDef *table, MdbIndex *idx)
 	return 1;
 }
 
+/* Jet4 B-tree index maintenance is implemented by the clean C++ module
+ * src/engine/jet4_writer.cpp (Jet4Writer::updateIndex), spec derived from
+ * Jackcess IndexData/IndexPageCache/JetFormat. Thin C delegate below. */
+int jet4_update_index(MdbTableDef *table, MdbIndex *idx, MdbField *fields,
+                      unsigned num_fields, unsigned data_pg, unsigned rownum);
+
 /* could be static */
 int
 mdb_update_index(MdbTableDef *table, MdbIndex *idx, unsigned int num_fields, MdbField *fields, guint32 pgnum, guint16 rownum)
 {
-	MdbCatalogEntry *entry = table->entry;
-	MdbHandle *mdb = entry->mdb;
-	/*int idx_xref[16];*/
-	unsigned int i, j;
-	MdbIndexChain *chain;
-	MdbField idx_fields[10];
-
-	for (i = 0; i < idx->num_keys; i++) {
-		for (j = 0; j < num_fields; j++) {
-			// key_col_num is 1 based, can't remember why though
-			if (fields[j].colnum == idx->key_col_num[i]-1) {
-				/* idx_xref[i] = j; */
-				idx_fields[i] = fields[j];
-			}
-		}
-	}
-/*
-	for (i = 0; i < idx->num_keys; i++) {
-		fprintf(stdout, "key col %d (%d) is mapped to field %d (%d %d)\n",
-			i, idx->key_col_num[i], idx_xref[i], fields[idx_xref[i]].colnum, 
-			fields[idx_xref[i]].siz);
-	}
-	for (i = 0; i < num_fields; i++) {
-		fprintf(stdout, "%d (%d %d)\n",
-			i, fields[i].colnum, 
-			fields[i].siz);
-	}
-*/
-
-	chain = g_malloc0(sizeof(MdbIndexChain));
-
-	mdb_index_find_row(mdb, idx, chain, pgnum, rownum);
-	//printf("chain depth = %d\n", chain->cur_depth);
-	//printf("pg = %" G_GUINT32_FORMAT "\n",
-		//chain->pages[chain->cur_depth-1].pg);
-	//mdb_copy_index_pg(table, idx, &chain->pages[chain->cur_depth-1]);
-	mdb_add_row_to_leaf_pg(table, idx, &chain->pages[chain->cur_depth-1], idx_fields, pgnum, rownum);
-	
-	return 1;
+	return jet4_update_index(table, idx, fields, num_fields, pgnum, rownum);
 }
+
 
 int
 mdb_insert_row(MdbTableDef *table, int num_fields, MdbField *fields)
@@ -617,6 +572,10 @@ mdb_insert_row(MdbTableDef *table, int num_fields, MdbField *fields)
 	}
 
 	rownum = mdb_add_row_to_pg(table, row_buffer, new_row_size);
+	if (!rownum) {
+		fprintf(stderr, "Failed to add row to page %d\n", pgnum);
+		return 0;
+	}
 
 	if (mdb_get_option(MDB_DEBUG_WRITE)) {
 		mdb_buffer_dump(mdb->pg_buf, 0, 40);
@@ -629,6 +588,9 @@ mdb_insert_row(MdbTableDef *table, int num_fields, MdbField *fields)
 	}
 
 	mdb_update_indexes(table, num_fields, fields, pgnum, rownum);
+
+	/* Update table record count in memory (finalized once on table close) */
+	table->num_rows++;
  
 	return 1;
 }
@@ -639,14 +601,13 @@ mdb_insert_row(MdbTableDef *table, int num_fields, MdbField *fields)
 guint16
 mdb_add_row_to_pg(MdbTableDef *table, unsigned char *row_buffer, int new_row_size)
 {
-	void *new_pg;
-	int num_rows, i, pos, row_start;
-	size_t row_size;
+	int num_rows, pos;
 	MdbCatalogEntry *entry = table->entry;
 	MdbHandle *mdb = entry->mdb;
 	MdbFormatConstants *fmt = mdb->fmt;
 
 	if (table->is_temp_table) {
+		void *new_pg;
 		GPtrArray *pages = table->temp_table_pages;
 		if (pages->len == 0) {
 			new_pg = mdb_new_data_pg(entry);
@@ -661,40 +622,54 @@ mdb_add_row_to_pg(MdbTableDef *table, unsigned char *row_buffer, int new_row_siz
 
 		num_rows = mdb_get_int16(new_pg, fmt->row_count_offset);
 		pos = (num_rows == 0) ? fmt->pg_size :
-			mdb_get_int16(new_pg, fmt->row_count_offset + (num_rows*2));
-	} else {  /* is not a temp table */
-		new_pg = mdb_new_data_pg(entry);
+			mdb_get_int16(new_pg, (fmt->row_count_offset + 2) + ((num_rows - 1)*2)) & 0x0FFF;
 
+		pos -= new_row_size;
+		memcpy((char*)new_pg + pos, row_buffer, new_row_size);
+		mdb_put_int16(new_pg, (fmt->row_count_offset + 2) + (num_rows*2), pos);
+		num_rows++;
+		mdb_put_int16(new_pg, fmt->row_count_offset, num_rows);
+		mdb_put_int16(new_pg, 2, pos - (fmt->row_count_offset + 2 + (num_rows*2)));
+		return num_rows;
+	}
+
+	/* Ensure page header is valid data page */
+	if (mdb_get_int16(mdb->pg_buf, 0) != 0x0101) {
+		mdb_put_int16(mdb->pg_buf, 0, 0x0101);
+		mdb_put_int32(mdb->pg_buf, 4, entry->table_pg);
+		num_rows = 0;
+	} else {
 		num_rows = mdb_get_int16(mdb->pg_buf, fmt->row_count_offset);
-		pos = fmt->pg_size;
+	}
 
-		/* copy existing rows */
-		for (i=0;i<num_rows;i++) {
-			mdb_find_row(mdb, i, &row_start, &row_size);
-			pos -= row_size;
-			memcpy((char*)new_pg + pos, mdb->pg_buf + row_start, row_size);
-			mdb_put_int16(new_pg, (fmt->row_count_offset + 2) + (i*2), pos);
+	if (num_rows <= 0) {
+		num_rows = 0;
+		pos = fmt->pg_size;
+	} else {
+		pos = mdb_get_int16(mdb->pg_buf, (fmt->row_count_offset + 2) + ((num_rows - 1) * 2)) & 0x0FFF;
+		if (pos <= 0 || pos > fmt->pg_size) {
+			pos = fmt->pg_size;
 		}
 	}
 
-	/* add our new row */
 	pos -= new_row_size;
-	memcpy((char*)new_pg + pos, row_buffer, new_row_size);
-	/* add row to the row offset table */
-	mdb_put_int16(new_pg, (fmt->row_count_offset + 2) + (num_rows*2), pos);
-
-	/* update number rows on this page */
-	num_rows++;
-	mdb_put_int16(new_pg, fmt->row_count_offset, num_rows);
-
-	/* update the freespace */
-	mdb_put_int16(new_pg,2,pos - fmt->row_count_offset - 2 - (num_rows*2));
-
-	/* copy new page over old */
-	if (!table->is_temp_table) {
-		memcpy(mdb->pg_buf, new_pg, fmt->pg_size);
-		g_free(new_pg);
+	if (pos < (int)(fmt->row_count_offset + 2 + ((num_rows + 1) * 2))) {
+		fprintf(stderr, "Page full: cannot insert row of size %d (pos=%d)\n", new_row_size, pos);
+		return 0;
 	}
+
+	/* Copy row directly into data page buffer */
+	memcpy((char*)mdb->pg_buf + pos, row_buffer, new_row_size);
+
+	/* Add row to row offset table */
+	mdb_put_int16(mdb->pg_buf, (fmt->row_count_offset + 2) + (num_rows * 2), pos);
+
+	/* Increment row count */
+	num_rows++;
+	mdb_put_int16(mdb->pg_buf, fmt->row_count_offset, num_rows);
+
+	/* Update freespace */
+	mdb_put_int16(mdb->pg_buf, 2, pos - (fmt->row_count_offset + 2 + (num_rows * 2)));
 
 	return num_rows;
 }
@@ -833,102 +808,4 @@ int i, pos;
 	}
 	return 0;
 }
-static int
-mdb_add_row_to_leaf_pg(MdbTableDef *table, MdbIndex *idx, MdbIndexPage *ipg, MdbField *idx_fields, guint32 pgnum, guint16 rownum) 
-/*,  guint32 pgnum, guint16 rownum) 
-static int
-mdb_copy_index_pg(MdbTableDef *table, MdbIndex *idx, MdbIndexPage *ipg)
-*/
-{
-	MdbCatalogEntry *entry = table->entry;
-	MdbHandle *mdb = entry->mdb;
-	MdbColumn *col;
-	guint32 pg_row;
-	guint16 row = 0;
-	void *new_pg;
-	unsigned char key_hash[256];
-	int keycol;
 
-	new_pg = mdb_new_leaf_pg(entry);
-
-	/* reinitial ipg pointers to start of page */
-	mdb_index_page_reset(mdb, ipg);
-	mdb_read_pg(mdb, ipg->pg);
-
-	/* do we support this index type yet? */
-	if (idx->num_keys > 1) {
-		fprintf(stderr,"multikey indexes not yet supported, aborting\n");
-		return 0;
-	}
-	keycol = idx->key_col_num[0];
-	col = g_ptr_array_index (table->columns, keycol - 1);
-	if (!col->is_fixed) {
-		fprintf(stderr,"variable length key columns not yet supported, aborting\n");
-		return 0;
-	}
-
-	while (mdb_index_find_next_on_page(mdb, ipg)) {
-
-		/* check for compressed indexes.  */
-		if (ipg->len < col->col_size + 1) {
-			fprintf(stderr,"compressed indexes not yet supported, aborting\n");
-			return 0;
-		}
-
-		pg_row = mdb_get_int32_msb(mdb->pg_buf, ipg->offset + ipg->len - 4);
-		/* guint32 pg = pg_row >> 8; */
-		row = pg_row & 0xff;
-		/* unsigned char iflag = mdb->pg_buf[ipg->offset]; */
-
-		/* turn the key hash back into a value */
-		mdb_index_swap_n(&mdb->pg_buf[ipg->offset + 1], col->col_size, key_hash);
-		key_hash[col->col_size - 1] &= 0x7f;
-
-		if (mdb_get_option(MDB_DEBUG_WRITE)) {
-			mdb_buffer_dump(mdb->pg_buf, ipg->offset, ipg->len);
-			mdb_buffer_dump(mdb->pg_buf, ipg->offset + 1, col->col_size);
-			mdb_buffer_dump(key_hash, 0, col->col_size);
-		}
-
-		memcpy((char*)new_pg + ipg->offset, mdb->pg_buf + ipg->offset, ipg->len);
-		ipg->offset += ipg->len;
-		ipg->len = 0;
-
-		row++;
-	}
-
-	if (!row) {
-		fprintf(stderr,"missing indexes not yet supported, aborting\n");
-		return 0;
-	}
-	//mdb_put_int16(new_pg, mdb->fmt->row_count_offset, row);
-	/* free space left */
-	mdb_put_int16(new_pg, 2, mdb->fmt->pg_size - ipg->offset);
-	//printf("offset = %d\n", ipg->offset);
-
-	mdb_index_swap_n(idx_fields[0].value, col->col_size, key_hash);
-	key_hash[0] |= 0x080;
-	if (mdb_get_option(MDB_DEBUG_WRITE)) {
-		printf("key_hash\n");
-		mdb_buffer_dump(idx_fields[0].value, 0, col->col_size);
-		mdb_buffer_dump(key_hash, 0, col->col_size);
-		printf("--------\n");
-	}
-	((char *)new_pg)[ipg->offset] = 0x7f;
-	memcpy((char*)new_pg + ipg->offset + 1, key_hash, col->col_size);
-	pg_row = (pgnum << 8) | ((rownum-1) & 0xff);
-	mdb_put_int32_msb(new_pg, ipg->offset + 5, pg_row);
-	ipg->idx_starts[row++] = ipg->offset + ipg->len;
-	//ipg->idx_starts[row] = ipg->offset + ipg->len;
-	if (mdb_get_option(MDB_DEBUG_WRITE)) {
-		mdb_buffer_dump(mdb->pg_buf, 0, mdb->fmt->pg_size);
-	}
-	memcpy(mdb->pg_buf, new_pg, mdb->fmt->pg_size);
-	mdb_index_pack_bitmap(mdb, ipg);
-	if (mdb_get_option(MDB_DEBUG_WRITE)) {
-		mdb_buffer_dump(mdb->pg_buf, 0, mdb->fmt->pg_size);
-	}
-	g_free(new_pg);
-
-	return ipg->len;
-}

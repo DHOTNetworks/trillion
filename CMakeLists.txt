@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(MahadevRiceMillERP VERSION 0.2.3 LANGUAGES C CXX)
+project(MahadevRiceMillERP VERSION 0.2.5 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -226,6 +226,8 @@ set(SOURCES
     src/engine/bahi_khata_migrator.cpp
     src/engine/bahi_khata_exporter.h
     src/engine/bahi_khata_exporter.cpp
+    src/engine/jet4_writer.h
+    src/engine/jet4_writer.cpp
     src/engine/busy_data_migrator.h
     src/engine/busy_data_migrator.cpp
     src/engine/tally_data_migrator.h
@@ -487,8 +489,8 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
     MACOSX_BUNDLE TRUE
     MACOSX_BUNDLE_BUNDLE_NAME "Mahadev Accounts ERP"
     MACOSX_BUNDLE_GUI_IDENTIFIER "com.mahadev.accounts"
-    MACOSX_BUNDLE_SHORT_VERSION_STRING "0.2.3"
-    MACOSX_BUNDLE_VERSION "0.2.3"
+    MACOSX_BUNDLE_SHORT_VERSION_STRING "0.2.5"
+    MACOSX_BUNDLE_VERSION "0.2.5"
     WIN32_EXECUTABLE $<IF:$<CONFIG:Debug>,FALSE,TRUE>
 )
 
@@ -618,6 +620,8 @@ set(TEST_SOURCES
     src/engine/busy_data_migrator.cpp
     src/engine/bahi_khata_exporter.h
     src/engine/bahi_khata_exporter.cpp
+    src/engine/jet4_writer.h
+    src/engine/jet4_writer.cpp
     src/models/iform_model.h
     src/models/iform_model.cpp
     src/models/mandi_reports_controller.h
@@ -719,6 +723,8 @@ set(ENGINE_TEST_SOURCES
     src/models/mandi_reports_controller.cpp
     src/database_manager.h
     src/database_manager.cpp
+    src/engine/jet4_writer.h
+    src/engine/jet4_writer.cpp
 )
 
 add_executable(EnginesTestSuite ${ENGINE_TEST_SOURCES})
@@ -756,6 +762,10 @@ set(CLI_SOURCES
     src/database_manager.cpp
     src/engine/bahi_khata_migrator.h
     src/engine/bahi_khata_migrator.cpp
+    src/engine/bahi_khata_exporter.h
+    src/engine/bahi_khata_exporter.cpp
+    src/engine/jet4_writer.h
+    src/engine/jet4_writer.cpp
     src/engine/busy_data_migrator.h
     src/engine/busy_data_migrator.cpp
     src/engine/tally_data_migrator.h

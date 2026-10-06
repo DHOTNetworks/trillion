@@ -107,9 +107,16 @@ void DayBookWidget::setupUi() {
     fromLbl->setStyleSheet("font-size: 12px; font-weight: 700; color: #334155; border: none; background: transparent;");
     filterLayout->addWidget(fromLbl);
 
+    FiscalYearInfo initFy = FiscalYearHelper::getActiveFiscalYear();
+    QDate initStart = QDate::fromString(initFy.startDate, "yyyy-MM-dd");
+    QDate initEnd = QDate::fromString(initFy.endDate, "yyyy-MM-dd");
+    if (!initStart.isValid()) initStart = QDate(QDate::currentDate().month() < 4 ? QDate::currentDate().year() - 1 : QDate::currentDate().year(), 4, 1);
+    if (!initEnd.isValid()) initEnd = QDate::currentDate();
+
     m_fromDateEdit = new AccountingDateDisplay(filterCard);
     m_fromDateEdit->setFixedHeight(34);
     m_fromDateEdit->setFixedWidth(115);
+    m_fromDateEdit->setDate(initStart);
     connect(m_fromDateEdit, &AccountingDateDisplay::dateChanged, this, &DayBookWidget::onDateChanged);
     filterLayout->addWidget(m_fromDateEdit);
 
@@ -121,6 +128,7 @@ void DayBookWidget::setupUi() {
     m_toDateEdit = new AccountingDateDisplay(filterCard);
     m_toDateEdit->setFixedHeight(34);
     m_toDateEdit->setFixedWidth(115);
+    m_toDateEdit->setDate(initEnd);
     connect(m_toDateEdit, &AccountingDateDisplay::dateChanged, this, &DayBookWidget::onDateChanged);
     filterLayout->addWidget(m_toDateEdit);
 
@@ -523,15 +531,14 @@ void DayBookWidget::showEvent(QShowEvent* event) {
     if (!sDate.isValid()) sDate = QDate(QDate::currentDate().month() < 4 ? QDate::currentDate().year() - 1 : QDate::currentDate().year(), 4, 1);
     if (!eDate.isValid()) eDate = QDate::currentDate();
 
-    if (m_isDirty || !m_fromDateEdit->date().isValid() || !m_toDateEdit->date().isValid()) {
-        if (sDate.isValid() && eDate.isValid() && (!m_fromDateEdit->date().isValid() || !m_toDateEdit->date().isValid())) {
-            QSignalBlocker b1(m_fromDateEdit);
-            QSignalBlocker b2(m_toDateEdit);
-            m_fromDateEdit->setDate(sDate);
-            m_toDateEdit->setDate(eDate);
-        }
-        onRefreshClicked();
+    if (!m_fromDateEdit->date().isValid() || !m_toDateEdit->date().isValid()) {
+        QSignalBlocker b1(m_fromDateEdit);
+        QSignalBlocker b2(m_toDateEdit);
+        m_fromDateEdit->setDate(sDate);
+        m_toDateEdit->setDate(eDate);
     }
+    m_isDirty = false;
+    onRefreshClicked();
 }
 
 } // namespace MahadevERP

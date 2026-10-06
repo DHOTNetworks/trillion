@@ -271,7 +271,23 @@ ProfitLossData ProfitLossCalculator::calculate(const QString& requestedFromDate,
                     cCr = sumCumulativeByLegacyId[legId].cr;
                 }
 
-                if (AccountClassifier::isDescendantOf(info.c1, info.c2, info.c3, info.c4, 16) || info.nature == "Income") {
+                if (info.c1 == 15) {
+                    double netTradingCr = tCr - tDr;
+                    if (netTradingCr > 0.001) {
+                        calcIndInc += netTradingCr;
+                        itm.amount = netTradingCr;
+                        itm.amountFmt = AccountingEngine::formatIndianCurrency(netTradingCr, true);
+                        itm.side = "Cr";
+                        indirectIncByGroup[grp].append(itm);
+                    } else if (netTradingCr < -0.001) {
+                        double netTradingDr = -netTradingCr;
+                        calcIndExp += netTradingDr;
+                        itm.amount = netTradingDr;
+                        itm.amountFmt = AccountingEngine::formatIndianCurrency(netTradingDr, true);
+                        itm.side = "Dr";
+                        indirectExpByGroup[grp].append(itm);
+                    }
+                } else if (AccountClassifier::isDescendantOf(info.c1, info.c2, info.c3, info.c4, 16) || info.nature == "Income") {
                     double netCr = cCr - cDr;
                     if (netCr > 0.001) {
                         calcIndInc += netCr;
@@ -288,6 +304,13 @@ ProfitLossData ProfitLossCalculator::calculate(const QString& requestedFromDate,
                         itm.amountFmt = AccountingEngine::formatIndianCurrency(netDr, true);
                         itm.side = "Dr";
                         indirectExpByGroup[grp].append(itm);
+                    } else if (netDr < -0.001) {
+                        double netCr = -netDr;
+                        calcIndInc += netCr;
+                        itm.amount = netCr;
+                        itm.amountFmt = AccountingEngine::formatIndianCurrency(netCr, true);
+                        itm.side = "Cr";
+                        indirectIncByGroup[grp].append(itm);
                     }
                 }
             }

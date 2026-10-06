@@ -513,8 +513,13 @@ QVariantMap BusyDataMigrator::inspect_busy_data(const QString& busyPath) {
         }
     }
 
-    report["success"] = true;
-    report["valid"] = true;
+    bool hasBusyData = (totalAccounts > 0 || totalVouchers > 0 || totalItems > 0 || totalGroups > 0);
+    report["success"] = hasBusyData;
+    report["valid"] = hasBusyData;
+    if (!hasBusyData) {
+        report["message"] = "No Busy accounting masters or vouchers found in database.";
+        report["error"] = report["message"];
+    }
     report["sourceType"] = "Busy";
     report["company_name"] = companyName;
     report["companyName"] = companyName;

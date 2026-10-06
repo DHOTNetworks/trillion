@@ -551,11 +551,13 @@ QVariantMap BahiKhataMigrator::inspect_mdb_file(const QString& mdbFilePath) {
     auto ledgers = readTableRows(mdb, "Ledgers");
     auto stockTx = readTableRows(mdb, "StockTransactions");
     auto milling = readTableRows(mdb, "MillingVouchers");
+    auto transRows = readTableRows(mdb, "Transactions");
 
     result["stockItemsCount"] = static_cast<int>(stockItems.size());
     result["ledgersCount"] = static_cast<int>(ledgers.size());
     result["stockTxCount"] = static_cast<int>(stockTx.size());
     result["millingCount"] = static_cast<int>(milling.size());
+    result["transactionsCount"] = static_cast<int>(transRows.size());
 
     auto compRows = readTableRows(mdb, "CompanyInfo");
     if (!compRows.empty()) {

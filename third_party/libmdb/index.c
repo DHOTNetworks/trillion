@@ -368,8 +368,14 @@ mdb_read_indices(MdbTableDef *table)
 		{
 			gint32 usage_map = read_pg_if_32(mdb, &cur_pos);
 			fprintf(stderr, "pidx->unknown_pre_first_pg:0x%08x\n", usage_map);
+			pidx->idx_map_pg = ((guint32)usage_map) >> 8;
+			pidx->idx_map_row = ((guint32)usage_map) & 0xFF;
 		} else {
-			cur_pos += 4;    // Skip Usage map information
+			/* Per-index owned-pages map reference (pg_row convention:
+			 * low byte = row, upper 3 bytes = page), Jackcess UsageMap. */
+			guint32 idx_mapref = (guint32)read_pg_if_32(mdb, &cur_pos);
+			pidx->idx_map_pg = (idx_mapref >> 8) & 0xFFFFFF;
+			pidx->idx_map_row = idx_mapref & 0xFF;
 		}
 		pidx->first_pg = read_pg_if_32(mdb, &cur_pos);
 
@@ -902,7 +908,10 @@ mdb_index_find_row(MdbHandle *mdb, MdbIndex *idx, MdbIndexChain *chain, guint32 
 	guint32 pg_row = (pg << 8) | (row & 0xff);
 	guint32 datapg_row;
 
+	if (!mdb || !idx || !chain || idx->first_pg == 0) return 0;
+
 	ipg = mdb_index_read_bottom_pg(mdb, idx, chain);
+	if (!ipg) return 0;
 
 	do {
 		ipg->len = 0;
@@ -911,26 +920,28 @@ mdb_index_find_row(MdbHandle *mdb, MdbIndex *idx, MdbIndexChain *chain, guint32 
 		 */
 		if (!mdb_index_find_next_on_page(mdb, ipg)) {
 			/* back to top? We're done */
-			if (chain->cur_depth==1)
+			if (chain->cur_depth <= 1)
 				return 0;
 
 			/* 
 			 * unwind the stack until we find something or reach 
 			 * the top.
 			 */
-			while (chain->cur_depth>1) {
+			while (chain->cur_depth > 1) {
 				chain->cur_depth--;
 				if (!(ipg = mdb_find_next_leaf(mdb, idx, chain)))
 					return 0;
 				mdb_index_find_next_on_page(mdb, ipg);
 			}
-			if (chain->cur_depth==1)
+			if (chain->cur_depth <= 1)
 				return 0;
 		}
 		/* test row and pg */
-		datapg_row = mdb_get_int32_msb(mdb->pg_buf, ipg->offset + ipg->len - 4);
-		if (pg_row == datapg_row) {
-			passed = 1;
+		if (ipg->len >= 4) {
+			datapg_row = mdb_get_int32_msb(mdb->pg_buf, ipg->offset + ipg->len - 4);
+			if (pg_row == datapg_row) {
+				passed = 1;
+			}
 		}
 		ipg->offset += ipg->len;
 	} while (!passed);

@@ -369,10 +369,19 @@ void MdbMigrationDialog::inspectFile() {
 
     m_inspectionData.clear();
     MigrationSourceType effectiveType = m_selectedSourceType;
-
     if (effectiveType == MigrationSourceType::AutoDetect) {
-        // Smart Probe: Tally -> Busy -> BahiKhata
-        if (m_tallyMigrator) {
+        QFileInfo fi(m_filePath);
+        QString fn = fi.fileName().toLower();
+        bool looksLikeBahiKhata = fn.startsWith("data.") || fn.endsWith(".mdb") || fn.endsWith(".accdb");
+
+        if (looksLikeBahiKhata && m_migrator) {
+            QVariantMap res = m_migrator->inspect_mdb_file(m_filePath);
+            if (res.value("valid", false).toBool() && (res.value("ledgersCount", 0).toInt() > 0 || res.value("stockTxCount", 0).toInt() > 0)) {
+                effectiveType = MigrationSourceType::BahiKhata;
+                m_inspectionData = res;
+            }
+        }
+        if (effectiveType == MigrationSourceType::AutoDetect && m_tallyMigrator) {
             QVariantMap res = m_tallyMigrator->inspect_tally_data(m_filePath);
             if (res.value("valid", false).toBool()) {
                 effectiveType = MigrationSourceType::Tally;
@@ -381,7 +390,7 @@ void MdbMigrationDialog::inspectFile() {
         }
         if (effectiveType == MigrationSourceType::AutoDetect && m_busyMigrator) {
             QVariantMap res = m_busyMigrator->inspect_busy_data(m_filePath);
-            if (res.value("valid", false).toBool()) {
+            if (res.value("valid", false).toBool() && (res.value("accountsCount", 0).toInt() > 0 || res.value("totalVouchersCount", 0).toInt() > 0)) {
                 effectiveType = MigrationSourceType::Busy;
                 m_inspectionData = res;
             }

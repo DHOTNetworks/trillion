@@ -65,121 +65,432 @@ static double toOleDate(const QString& dateStr) {
     return static_cast<double>(base.daysTo(d));
 }
 
-static QByteArray toJet4Text(const QString& str) {
+/* Native Jet honors the per-column UnicodeCompression property
+ * (Ledgers.CurrentBalance and Transactions.DrCr are "no" -> always UCS-2LE).
+ * mdb_ascii2unicode ignores it; we must not, for byte-exact rows. */
+static bool jetColCompress(MdbColumn* col) {
+    if (!col || !col->props || !col->props->hash) return true; // legacy default
+    char* v = static_cast<char*>(g_hash_table_lookup(col->props->hash, (gpointer)"UnicodeCompression"));
+    if (!v) return true;
+    QString s = QString::fromUtf8(v).trimmed();
+    return s.compare("yes", Qt::CaseInsensitive) == 0 || s == "1" || s.compare("true", Qt::CaseInsensitive) == 0;
+}
+
+static QByteArray toJet4TextRaw(const QString& str, bool allowCompress) {
     if (str.isEmpty()) return QByteArray();
+    // Replicate mdb_ascii2unicode compression logic (iconv.c:209):
+    // - Convert to UCS-2LE (2 bytes per char)
+    // - Only apply Unicode Compression (FF FE + toggles) if UCS-2 length > 4
+    //   This matches native Bahi-Khata Data.002: "Jrnl"/"ChPt" (6B compressed) vs "Dr"/"0" (4B/2B uncompressed)
+    bool isAscii = true;
+    for (int i = 0; i < str.length(); ++i) {
+        if (str.at(i).unicode() > 0xFF) { isAscii = false; break; }
+    }
+    QByteArray ucs2;
+    ucs2.reserve(str.length() * 2);
+    for (int i = 0; i < str.length(); ++i) {
+        ushort u = str.at(i).unicode();
+        ucs2.append(static_cast<char>(u & 0xFF));
+        ucs2.append(static_cast<char>((u >> 8) & 0xFF));
+    }
+    // No compression for Jet3, for Jet4 only if >4 bytes and pure ASCII
+    if (!allowCompress || !isAscii || ucs2.size() <= 4) {
+        return ucs2;
+    }
+    // Compressed path: FF FE + single bytes (all ASCII, so no mode toggles needed)
     QByteArray res;
-    res.reserve(2 + str.length() * 2);
+    res.reserve(2 + str.length());
     res.append(static_cast<char>(0xFF));
     res.append(static_cast<char>(0xFE));
     for (int i = 0; i < str.length(); ++i) {
-        ushort u = str.at(i).unicode();
-        res.append(static_cast<char>(u & 0xFF));
-        res.append(static_cast<char>((u >> 8) & 0xFF));
+        res.append(static_cast<char>(str.at(i).toLatin1()));
     }
     return res;
 }
 
-static int packJet4Row(MdbTableDef* table, unsigned char* out_buf, MdbField* fields, int num_fields) {
-    int max_fixed_size = 0;
-    for (int i = 0; i < table->num_cols; i++) {
-        MdbColumn *col = (MdbColumn *)g_ptr_array_index(table->columns, i);
-        if (col->is_fixed) {
-            int end_off = col->fixed_offset + col->col_size;
-            if (end_off > max_fixed_size) max_fixed_size = end_off;
+static QByteArray toJet4Text(const QString& str) {
+    return toJet4TextRaw(str, true);
+}
+
+static QByteArray toJet4TextForCol(const QString& str, MdbColumn* col) {
+    return toJet4TextRaw(str, jetColCompress(col));
+}
+
+static double round2dbl(double v) { return std::round(v * 100.0) / 100.0; }
+
+/* Shared voucher-type normalization (Jet short codes). Used by both engines. */
+static QString normalizeTxType(const QString& raw) {
+    QString t = raw.trimmed();
+    if (t.compare("Journal", Qt::CaseInsensitive) == 0) return "Jrnl";
+    if (t.compare("Payment", Qt::CaseInsensitive) == 0) return "ChPt";
+    if (t.compare("Receipt", Qt::CaseInsensitive) == 0) return "ChRt";
+    if (t.compare("Sales", Qt::CaseInsensitive) == 0) return "Sale";
+    if (t.compare("Purchase", Qt::CaseInsensitive) == 0) return "Purc";
+    if (t.compare("Contra", Qt::CaseInsensitive) == 0) return "Jrnl";
+    if (t.length() > 5) return t.left(5);
+    return t;
+}
+
+/* Shared FY filter builder. Empty/"ALL" -> no filter (export all years).
+ * Matches Data.002's "FY 2023-24" storage against "2026-2027"/"26-27"/etc. */
+static QString buildFyWhere(const QString& fyParam, const QString& col = "t.financial_year") {
+    QString p = fyParam.trimmed();
+    if (p.isEmpty() || p.compare("ALL", Qt::CaseInsensitive) == 0) return QString();
+    QString norm = p;
+    norm.remove("FY", Qt::CaseInsensitive);
+    norm.remove(' ');
+    QRegularExpression reFy("(\\d{2})\\D*(\\d{2,4})");
+    QString likePat;
+    auto m = reFy.globalMatch(norm);
+    if (m.hasNext()) {
+        QRegularExpressionMatch lm;
+        while (m.hasNext()) lm = m.next();
+        QString a = lm.captured(1), b = lm.captured(2);
+        if (b.length() == 4) b = b.right(2);
+        likePat = a + "-" + b;
+    }
+    if (likePat.isEmpty()) likePat = norm.left(5);
+    QString fyWithPrefix = p.startsWith("FY", Qt::CaseInsensitive) ? p : "FY " + p;
+    return QString("WHERE (%1 = '%2' OR %1 = '%3' OR %1 LIKE '%%4%' OR %1 LIKE '%%5%') ")
+        .arg(col, p, fyWithPrefix, likePat, norm);
+}
+
+/* ---- Cached ledger balance (Ledgers.CurrentBalance) maintenance ----
+ * Bahi-Khata reads ledger balances from the stored CurrentBalance TEXT
+ * ("0.00" | "N,NNN.NN Dr|Cr", US grouping), NOT computed live. Its voucher
+ * save applies each leg incrementally (Dr-positive signed arithmetic).
+ * The exporter must do the same or balances/reports stay stale. */
+static double parseJetBalance(const QString& txt, QString& sideOut) {
+    sideOut.clear();
+    QString s = txt.trimmed();
+    if (s.isEmpty() || s.compare("None", Qt::CaseInsensitive) == 0) return 0.0;
+    // Optional trailing Dr/Cr (native uses " Dr"/" Cr"; tolerate missing/attached)
+    QString up = s.toUpper();
+    bool isCr = up.endsWith("CR");
+    bool isDr = !isCr && up.endsWith("DR");
+    if (isCr || isDr) {
+        sideOut = isCr ? "Cr" : "Dr";
+        s = s.left(s.length() - 2).trimmed();
+    }
+    s.remove(','); // US grouping
+    s.remove(' ');
+    bool ok = false;
+    double v = s.toDouble(&ok);
+    if (!ok) return 0.0;
+    if (isCr) v = -std::abs(v);
+    else if (isDr) v = std::abs(v);
+    return v;
+}
+
+static QString formatJetBalance(double signedVal, const QString& zeroSideFallback) {
+    double v = round2dbl(signedVal);
+    if (std::abs(v) < 0.005) {
+        // Preserve a zero-with-side residue ("0.00 Dr") when present natively.
+        return zeroSideFallback.isEmpty() ? QString("0.00")
+                                          : QString("0.00 %1").arg(zeroSideFallback);
+    }
+    QString side = (v > 0) ? "Dr" : "Cr";
+    // US grouping with 2 decimals, exactly as the app stores ("61,218,935.35 Cr").
+    static const QLocale usLoc(QLocale::English, QLocale::UnitedStates);
+    QString num = usLoc.toString(std::abs(v), 'f', 2);
+    return QString("%1 %2").arg(num, side);
+}
+
+/* Surgically replaces one data row: same-size edits overwrite in place;
+ * growing/shrinking rows shift only the contiguous block at/below them,
+ * preserving offset order, flag bits, gaps and every other byte.
+ * (mdb_replace_row rebuilds whole pages; this keeps the structural delta
+ * minimal for Jet compatibility.) Returns false on any validation failure. */
+static bool surgicalReplaceRow(MdbHandle* mdb, MdbTableDef* tbl, int rowIdx0,
+                               const unsigned char* newRow, int newSize) {
+    if (!mdb || !tbl || !tbl->entry || !newRow || newSize <= 0 || newSize > 4000)
+        return false;
+    const int pgSize = mdb->fmt->pg_size;
+    const int rco = mdb->fmt->row_count_offset;
+    unsigned char* buf = (unsigned char*)mdb->pg_buf;
+    int nrows = mdb_get_int16(buf, rco);
+    if (rowIdx0 < 0 || rowIdx0 >= nrows) return false;
+    std::vector<int> offs(nrows), flags(nrows);
+    for (int i = 0; i < nrows; i++) {
+        int raw = mdb_get_int16(buf, rco + 2 + i * 2);
+        offs[i] = raw & 0x0FFF;
+        flags[i] = raw & ~0x0FFF;
+        if (offs[i] < rco + 2 + nrows * 2 || offs[i] > pgSize) return false;
+    }
+    int oldStart = offs[rowIdx0];
+    // Old size = next higher offset - own (page end if highest).
+    int oldEnd = pgSize;
+    for (int o : offs) if (o > oldStart && o < oldEnd) oldEnd = o;
+    int oldSize = oldEnd - oldStart;
+    // Shared storage (duplicate offsets, e.g. native triplet slots) cannot be
+    // resized per-slot: only allow in-place (delta==0) updates there.
+    int sharers = 0;
+    for (int o : offs) if (o == oldStart) sharers++;
+    if (oldSize <= 0 || oldSize > 4000) return false;
+    int delta = newSize - oldSize;
+    if (sharers > 1 && delta != 0) return false; // shared storage: in-place only
+    int freeNow = mdb_get_int16(buf, 2);
+    if (delta > freeNow) return false; // not enough room
+
+    if (delta == 0) {
+        memcpy(buf + oldStart, newRow, newSize);
+    } else if (delta > 0) {
+        // Growth: move span [spanLo, oldEnd) DOWN by delta into free space.
+        // Target lands at oldStart - delta and ends exactly at oldEnd.
+        int spanLo = oldStart;
+        for (int o : offs) if (o < spanLo) spanLo = o;
+        if (spanLo - delta < rco + 2 + nrows * 2) return false;
+        memmove(buf + spanLo - delta, buf + spanLo, oldEnd - spanLo);
+        int newStart = oldStart - delta;
+        memcpy(buf + newStart, newRow, newSize);
+        for (int i = 0; i < nrows; i++) {
+            if (offs[i] >= spanLo && offs[i] < oldEnd) {
+                int noff = offs[i] - delta;
+                if (noff < rco + 2 + nrows * 2 || noff > pgSize) return false;
+                mdb_put_int16(buf, rco + 2 + i * 2, (guint32)(noff | flags[i]));
+            }
         }
+    } else {
+        // Shrink: overwrite in place; the freed tail becomes a zeroed interior
+        // gap (exactly like post-delete state: offsets and free count stay).
+        int k = -delta;
+        memcpy(buf + oldStart, newRow, newSize);
+        memset(buf + oldStart + newSize, 0, (size_t)k);
     }
-
-    int pos = 0;
-    out_buf[pos++] = table->num_cols & 0xFF;
-    out_buf[pos++] = (table->num_cols >> 8) & 0xFF;
-
-    int fixed_start = pos;
-    memset(&out_buf[fixed_start], 0, max_fixed_size);
-    pos += max_fixed_size;
-
-    for (int i = 0; i < num_fields; i++) {
-        MdbColumn *col = (MdbColumn *)g_ptr_array_index(table->columns, fields[i].colnum);
-        if (col->is_fixed && !fields[i].is_null && fields[i].value) {
-            memcpy(&out_buf[fixed_start + col->fixed_offset], fields[i].value, fields[i].siz);
+    if (delta != 0) {
+        // Exact free-space recompute (native semantics).
+        int minStart = pgSize;
+        for (int i = 0; i < nrows; i++) {
+            int o = mdb_get_int16(buf, rco + 2 + i * 2) & 0x0FFF;
+            if (o < minStart) minStart = o;
         }
+        mdb_put_int16(buf, 2, (guint32)(minStart - (rco + 2 + nrows * 2)));
     }
+    return mdb_write_pg(mdb, tbl->cur_phys_pg) != 0;
+}
 
-    int num_var = table->num_var_cols;
-    std::vector<unsigned int> var_offsets(num_var + 1, 0);
-
-    MdbField *var_fields[128];
-    memset(var_fields, 0, sizeof(var_fields));
-    for (int i = 0; i < num_fields; i++) {
-        MdbColumn *col = (MdbColumn *)g_ptr_array_index(table->columns, fields[i].colnum);
-        if (!col->is_fixed && col->var_col_num < num_var && col->var_col_num < 128) {
-            var_fields[col->var_col_num] = &fields[i];
+/* Applies one signed delta (Dr-positive) to a ledger's cached CurrentBalance
+ * by repacking that ledger's row in place. Mirrors the app's voucher-save. */
+static bool applyLedgerBalanceDelta(MdbHandle* mdb, int ledgerCode, double delta) {
+    if (!mdb || ledgerCode <= 0 || std::abs(delta) < 0.0005) return true;
+    MdbTableDef* tbl = mdb_read_table_by_name(mdb, (char*)"Ledgers", MDB_TABLE);
+    if (!tbl) return false;
+    mdb_read_columns(tbl);
+    // Ledgers layout (Data.002): col 3 = Code1st (INT), col 16 = CurrentBalance (TEXT)
+    bool done = false;
+    mdb_rewind_table(tbl);
+    while (!done && mdb_fetch_row(tbl)) {
+        MdbColumn* colCode = (MdbColumn*)g_ptr_array_index(tbl->columns, 3);
+        int code = 0;
+        if (colCode->cur_value_len == 2)
+            code = mdb_get_int16(mdb->pg_buf, colCode->cur_value_start);
+        else {
+            char* s = mdb_col_to_string(mdb, mdb->pg_buf, colCode->cur_value_start,
+                                        colCode->col_type, colCode->cur_value_len);
+            if (s) { code = atoi(s); g_free(s); }
         }
-    }
+        if (code != ledgerCode) continue;
 
-    for (int v = 0; v < num_var; v++) {
-        var_offsets[v] = pos;
-        MdbField *f = var_fields[v];
-        if (f && !f->is_null && f->value && f->siz > 0) {
-            memcpy(&out_buf[pos], f->value, f->siz);
-            pos += f->siz;
+        int rowStart = 0;
+        size_t rowSize = 0;
+        mdb_find_row(mdb, tbl->cur_row - 1, &rowStart, &rowSize);
+        rowStart &= 0x0FFF;
+        MdbField fields[128];
+        memset(fields, 0, sizeof(fields));
+        if (mdb_crack_row(tbl, rowStart, rowSize, fields) < 0) break;
+
+        MdbColumn* colBal = (MdbColumn*)g_ptr_array_index(tbl->columns, 16);
+        char* curStr = mdb_col_to_string(mdb, mdb->pg_buf, colBal->cur_value_start,
+                                         colBal->col_type, colBal->cur_value_len);
+        QString oldText = curStr ? QString::fromUtf8(curStr) : QString();
+        if (curStr) g_free(curStr);
+        QString side;
+        double cur = parseJetBalance(oldText, side);
+        double updated = round2dbl(cur + delta);
+        QString newText = formatJetBalance(updated, side);
+        // CurrentBalance is UnicodeCompression=no -> always UCS-2LE.
+        QByteArray newBytes = toJet4TextForCol(newText, colBal);
+        // Empty must stay a valid pointer (Jet4Writer null-vs-empty rule).
+        static const char kEmpty = '\0';
+        fields[16].is_null = 0;
+        fields[16].value = newBytes.isEmpty() ? (void*)&kEmpty : (void*)newBytes.data();
+        fields[16].siz = newBytes.size();
+
+        unsigned char rowBuf[4096];
+        int newSize = mdb_pack_row(tbl, rowBuf, tbl->num_cols, fields);
+        if (newSize <= 0 || newSize > 4000) break;
+        // Surgical in-place/sliding update (NOT mdb_replace_row: minimal delta).
+        if (!surgicalReplaceRow(mdb, tbl, tbl->cur_row - 1, rowBuf, newSize)) {
+            std::cout << "[BAL] skip ledger " << ledgerCode << " (no room)" << std::endl;
+            break;
         }
-    }
-    var_offsets[num_var] = pos;
-
-    for (int v = num_var; v >= 0; v--) {
-        out_buf[pos++] = var_offsets[v] & 0xFF;
-        out_buf[pos++] = (var_offsets[v] >> 8) & 0xFF;
-    }
-
-    out_buf[pos++] = num_var & 0xFF;
-    out_buf[pos++] = (num_var >> 8) & 0xFF;
-
-    int null_bytes = (table->num_cols + 7) / 8;
-    unsigned char *nullmask = &out_buf[pos];
-    memset(nullmask, 0, null_bytes);
-    pos += null_bytes;
-
-    for (int i = 0; i < num_fields; i++) {
-        MdbColumn *col = (MdbColumn *)g_ptr_array_index(table->columns, fields[i].colnum);
-        if (!fields[i].is_null) {
-            int byte_idx = col->col_num / 8;
-            int bit_idx = col->col_num % 8;
-            nullmask[byte_idx] |= (1 << bit_idx);
+        {
+            std::cout << "[BAL] ledger " << ledgerCode << " "
+                      << oldText.toStdString() << " -> " << newText.toStdString() << std::endl;
+            done = true;
         }
+        break;
     }
-
-    return pos;
+    mdb_free_tabledef(tbl);
+    return done;
 }
 
 static bool insertJet4Row(MdbHandle* mdb, MdbTableDef* table, MdbField* fields, int num_fields) {
-    unsigned char row_buf[4096];
-    int row_size = packJet4Row(table, row_buf, fields, num_fields);
-    gint32 pgnum = mdb_map_find_next_freepage(table, row_size);
-    if (!pgnum || pgnum == -1) {
-        return false;
-    }
-
-    guint16 rownum = mdb_add_row_to_pg(table, row_buf, row_size);
-    Q_UNUSED(rownum);
-    if (!mdb_write_pg(mdb, pgnum)) {
-        return false;
-    }
-
-    table->num_rows++;
-    return true;
+    Q_UNUSED(mdb);
+    return mdb_insert_row(table, num_fields, fields) != 0;
 }
 
 static void finalizeJet4Table(MdbHandle* mdb, MdbTableDef* table) {
     if (!mdb || !table || !table->entry) return;
     mdb_read_pg(mdb, table->entry->table_pg);
     mdb_put_int32(mdb->pg_buf, mdb->fmt->tab_num_rows_offset, table->num_rows);
+    if (table->indices) {
+        for (guint i = 0; i < table->indices->len; i++) {
+            MdbIndex *pidx = (MdbIndex *)g_ptr_array_index(table->indices, i);
+            if (pidx->index_type != 2) {
+                int off = mdb->fmt->tab_cols_start_offset + (pidx->index_num * mdb->fmt->tab_ridx_entry_size);
+                mdb_put_int32(mdb->pg_buf, off, pidx->num_rows);
+            }
+        }
+    }
     mdb_write_pg(mdb, table->entry->table_pg);
+}
+
+struct BahiKhataJournalTx {
+    guint16 rowNo = 1;
+    guint32 vchNo = 0;
+    QString dateStr;
+    QString transType = "Jrnl";
+    guint16 accountCode = 0;
+    QString drCr = "Dr";
+    double amount = 0.0;
+    QString narration;
+    guint16 partyCode = 0;
+};
+
+static bool insertBahiKhataJournalTx(MdbHandle* mdb, MdbTableDef* txTbl, const BahiKhataJournalTx& tx) {
+    if (!mdb || !txTbl) return false;
+    std::vector<MdbField> fields(txTbl->num_cols);
+    for (int i = 0; i < txTbl->num_cols; i++) {
+        MdbColumn* col = (MdbColumn*)g_ptr_array_index(txTbl->columns, i);
+        fields[i].colnum = i;
+        fields[i].is_fixed = col->is_fixed;
+        fields[i].is_null = 1;
+        fields[i].value = nullptr;
+        fields[i].siz = 0;
+    }
+
+    guint16 rowNo = tx.rowNo;
+    fields[0].is_null = 0; fields[0].value = &rowNo; fields[0].siz = 2;
+
+    guint32 vchNo = tx.vchNo;
+    fields[1].is_null = 0; fields[1].value = &vchNo; fields[1].siz = 4;
+
+    double oleD = toOleDate(tx.dateStr);
+    fields[2].is_null = 0; fields[2].value = &oleD; fields[2].siz = 8;
+
+    MdbColumn* colTT = (MdbColumn*)g_ptr_array_index(txTbl->columns, 3);
+    MdbColumn* colDC = (MdbColumn*)g_ptr_array_index(txTbl->columns, 5);
+    MdbColumn* colNarr = (MdbColumn*)g_ptr_array_index(txTbl->columns, 14);
+    QByteArray ttBytes = toJet4TextForCol(tx.transType.left(5), colTT);
+    fields[3].is_null = 0; fields[3].value = ttBytes.data(); fields[3].siz = ttBytes.size();
+
+    guint16 acVal = tx.accountCode;
+    fields[4].is_null = 0; fields[4].value = &acVal; fields[4].siz = 2;
+
+    // DrCr is UnicodeCompression=no -> always UCS-2LE ("Dr" = 44 00 72 00).
+    QByteArray dcBytes = toJet4TextForCol(tx.drCr, colDC);
+    fields[5].is_null = 0; fields[5].value = dcBytes.data(); fields[5].siz = dcBytes.size();
+
+    double amtVal = tx.amount;
+    fields[6].is_null = 0; fields[6].value = &amtVal; fields[6].siz = 8;
+
+    // Col 7: InvoiceNo is null for Journal
+    fields[7].is_null = 1;
+
+    guint16 ptVal = tx.partyCode;
+    fields[8].is_null = 0; fields[8].value = &ptVal; fields[8].siz = 2;
+
+    QByteArray narrBytes = toJet4TextForCol(tx.narration.left(200), colNarr);
+    fields[14].is_null = 0; fields[14].value = narrBytes.data(); fields[14].siz = narrBytes.size();
+
+    // Canonical Bahi-Khata default values matching authentic Data.002 Journal (1883) schema
+    // Data.002 Journal not-null set: 0,1,2,3,4,5,6,8,14,15,16,17,35,38,39,42,45,46,50,52,53,54,55,57-60,62,63,65,68-70,73-76,78
+    guint16 zero16 = 0;
+    guint32 zero32 = 0;
+    double zeroDbl = 0.0;
+    float zeroFlt = 0.0f;
+    QByteArray zeroStr = toJet4Text("0");
+    static const char kEmpty = '\0'; // 0-length but NOT NULL (pristine mask 7f c1... bit 15 set)
+
+    // Col 15: EntryType = empty (not null, 0-length) for Journal — pristine Jrnl 472 mask
+    // has bit 15 SET. NULL would emit single 0x00 in Idx_DateTransVchWise (5th key EntryType)
+    // instead of 7F 01 00, breaking Bahi-Khata date-wise seeks and max-date lookup.
+    fields[15].is_null = 0; fields[15].value = (void*)&kEmpty; fields[15].siz = 0;
+
+    fields[16].is_null = 0; fields[16].value = &zero16; fields[16].siz = 2; // DueDays
+    fields[17].is_null = 0; fields[17].value = &zero16; fields[17].siz = 2; // ItemCode
+
+    // Col 29: BankDate = same as VoucherDate for Journal (matches authentic Data.002)
+    fields[29].is_null = 0; fields[29].value = &oleD; fields[29].siz = 8;
+
+    // Col 30: VoucherReconcile = 0 for Journal (matches authentic Data.002)
+    fields[30].is_null = 0; fields[30].value = &zero32; fields[30].siz = 4;
+
+    fields[35].is_null = 0; fields[35].value = &zeroDbl; fields[35].siz = 8;// ExpRate
+    fields[37].is_null = 0; fields[37].value = (void*)&kEmpty; fields[37].siz = 0; // ImagePath = "" (not null empty, pristine Jrnl 472)
+    fields[38].is_null = 0; fields[38].value = (void*)&kEmpty; fields[38].siz = 0; // BrokerName = "" (not null empty)
+    fields[39].is_null = 0; fields[39].value = &zeroDbl; fields[39].siz = 8;// EstimatedAmount
+    fields[42].is_null = 0; fields[42].value = &zero32; fields[42].siz = 4; // MktCommttSrNo
+    fields[45].is_null = 0; fields[45].value = &zero32; fields[45].siz = 4; // URDPurc
+    fields[46].is_null = 0; fields[46].value = &zero32; fields[46].siz = 4; // E1PartyCode
+    fields[50].is_null = 0; fields[50].value = &zero32; fields[50].siz = 4; // CompositionVch
+    fields[52].is_null = 0; fields[52].value = zeroStr.data(); fields[52].siz = zeroStr.size(); // PlaceOfSupply
+    fields[53].is_null = 0; fields[53].value = zeroStr.data(); fields[53].siz = zeroStr.size(); // ECommGSTIN
+    fields[54].is_null = 0; fields[54].value = &zero32; fields[54].siz = 4; // TransReturn
+    fields[55].is_null = 0; fields[55].value = &zero32; fields[55].siz = 4; // GroupTick
+    fields[57].is_null = 0; fields[57].value = &zero32; fields[57].siz = 4; // ActualInv
+    fields[58].is_null = 0; fields[58].value = &zero32; fields[58].siz = 4; // ITCNotClaim
+    fields[59].is_null = 0; fields[59].value = &zero32; fields[59].siz = 4; // ReverseChargePayable
+    fields[60].is_null = 0; fields[60].value = &zero32; fields[60].siz = 4; // GSTOnGoodsAmount
+    fields[62].is_null = 0; fields[62].value = &zeroFlt; fields[62].siz = 4; // TCSRate
+    fields[63].is_null = 0; fields[63].value = &zeroDbl; fields[63].siz = 8; // TCSTaxable
+    fields[65].is_null = 0; fields[65].value = &zero32; fields[65].siz = 4; // ChallanVchNo
+    // 67 TempInv remains NULL for Journal (as Data.002)
+    fields[68].is_null = 0; fields[68].value = &zeroFlt; fields[68].siz = 4; // TDSRate194Q
+    fields[69].is_null = 0; fields[69].value = &zeroDbl; fields[69].siz = 8; // Taxable194Q
+    fields[70].is_null = 0; fields[70].value = &zero32; fields[70].siz = 4; // TDS194QChallanVchNo
+    fields[73].is_null = 0; fields[73].value = &oleD; fields[73].siz = 8; // TaxInputDate = voucher date (pristine Jrnl 472)
+    fields[74].is_null = 0; fields[74].value = &zero32; fields[74].siz = 4; // PymtDone
+    fields[75].is_null = 0; fields[75].value = &zeroDbl; fields[75].siz = 8;// tmpBookNo
+    fields[76].is_null = 0; fields[76].value = &zeroDbl; fields[76].siz = 8;// tmpSlipNo
+    fields[78].is_null = 0; fields[78].value = &zeroDbl; fields[78].siz = 8;// RunningBNo
+
+    return mdb_insert_row(txTbl, txTbl->num_cols, fields.data()) != 0;
 }
 #endif
 
 QString BahiKhataExporter::resolveSeedTemplate(const QString& explicitPath) {
-    if (!explicitPath.isEmpty() && QFile::exists(explicitPath)) {
-        return explicitPath;
+    /* Test hook: JET4_SEED_PATH forces an explicit seed file. */
+    if (const char* envSeed = getenv("JET4_SEED_PATH")) {
+        QString s = QString::fromLocal8Bit(envSeed);
+        if (QFile::exists(s)) return s;
+    }
+    if (!explicitPath.isEmpty()) {
+        if (QFile::exists(explicitPath)) return explicitPath;
+        // Try resolve relative explicitPath from build/app dirs (for tests)
+        QString appDir = QCoreApplication::applicationDirPath();
+        QStringList roots = { QDir::currentPath(), appDir };
+        for (auto root : roots) {
+            QDir d(root);
+            for (int up=0; up<4; ++up) {
+                QString p = d.filePath(explicitPath);
+                if (QFile::exists(p)) return p;
+                if (!d.cdUp()) break;
+            }
+        }
+        QString abs = "/Users/karan/MahadevAc/" + explicitPath;
+        if (QFile::exists(abs)) return abs;
     }
 
     QStringList candidates = {
@@ -200,6 +511,23 @@ QString BahiKhataExporter::resolveSeedTemplate(const QString& explicitPath) {
     for (const auto& c : candidates) {
         QString p = QDir(appDir).filePath(c);
         if (QFile::exists(p)) return p;
+    }
+    // Search upward from appDir and current dir (for tests running in build/)
+    QStringList searchRoots = { QDir::currentPath(), appDir };
+    for (auto root : searchRoots) {
+        QDir d(root);
+        for (int up=0; up<4; ++up) {
+            for (const auto& c : candidates) {
+                QString p = d.filePath(c);
+                if (QFile::exists(p)) return p;
+            }
+            if (!d.cdUp()) break;
+        }
+    }
+    // Last resort: absolute source location (matches Data.002)
+    for (const auto& c : candidates) {
+        QString abs = "/Users/karan/MahadevAc/" + c;
+        if (QFile::exists(abs)) return abs;
     }
 
     return "";
@@ -246,9 +574,14 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportToBahiKhata(const Expo
 
     // 1. Prepare target file (Clone seed template if target does not exist, or backup existing)
     QString targetPath = QDir::toNativeSeparators(options.targetMdbPath);
-    QString seedPath = resolveSeedTemplate(options.templateMdbPath);
+    {
+        QFileInfo tInfo(targetPath);
+        QDir parent = tInfo.dir();
+        if (!parent.exists()) parent.mkpath(".");
+    }
 
     if (!QFile::exists(targetPath)) {
+        QString seedPath = resolveSeedTemplate(options.templateMdbPath);
         if (seedPath.isEmpty()) {
             summary.success = false;
             summary.errorMessage = "No seed Bahi-Khata template found to construct JetDB schema.";
@@ -258,6 +591,7 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportToBahiKhata(const Expo
             emit exportingChanged();
             return summary;
         }
+
         updateProgress(10, QString("Creating target database from seed template: %1").arg(seedPath));
         if (!QFile::copy(seedPath, targetPath)) {
             summary.success = false;
@@ -268,10 +602,12 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportToBahiKhata(const Expo
             emit exportingChanged();
             return summary;
         }
-    } else if (options.createBackup) {
-        updateProgress(10, "Creating safety backup of target file...");
-        QString backupPath = targetPath + QString(".bak_%1").arg(QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss"));
-        QFile::copy(targetPath, backupPath);
+    } else {
+        if (options.createBackup) {
+            updateProgress(10, "Creating safety backup of target file...");
+            QString backupPath = targetPath + QString(".bak_%1").arg(QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss"));
+            QFile::copy(targetPath, backupPath);
+        }
     }
 
     // 2. Select execution engine based on platform and driver availability
@@ -405,20 +741,30 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaOdbc(const ExportOp
         if (options.exportTransactions && !options.exportMastersOnly) {
             updateProgress(65, "Exporting Double-Entry Vouchers & Transactions...");
             
-            QString txSql = 
+            QString txSql =
                 "SELECT t.voucher_no, t.voucher_date, t.trans_type, t.dr_cr, t.amount, t.narration, "
                 "COALESCE(p.legacy_id, p.id) as ac_code, "
-                "COALESCE(op.legacy_id, op.id, 0) as party_code "
+                "COALESCE(op.legacy_id, op.id, 0) as party_code, "
+                "t.financial_year "
                 "FROM transactions t "
                 "LEFT JOIN parties p ON t.party_id = p.id OR t.party_name = p.name "
                 "LEFT JOIN parties op ON t.opposing_account = op.name ";
 
-            if (!options.financialYear.isEmpty()) {
-                txSql += QString("WHERE t.financial_year = '%1' ").arg(options.financialYear);
-            }
+            txSql += buildFyWhere(options.financialYear);
             txSql += "ORDER BY t.voucher_date ASC, t.id ASC;";
 
             QVariantList txRows = appDb.executeQuery(txSql);
+
+            // Snapshot native cached balances BEFORE wiping, so per-leg deltas
+            // below use identical incremental semantics as the libmdb engine.
+            QMap<int, QString> nativeBalances;
+            {
+                QSqlQuery qBal(mdb);
+                if (qBal.exec("SELECT Code1st, CurrentBalance FROM Ledgers;")) {
+                    while (qBal.next())
+                        nativeBalances[qBal.value(0).toInt()] = qBal.value(1).toString();
+                }
+            }
 
             QSqlQuery qDel(mdb);
             qDel.exec("DELETE FROM Transactions;");
@@ -429,32 +775,65 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaOdbc(const ExportOp
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);"
             );
 
+            // RowNo is sequential per voucher (1..n), matching native Jet rows.
+            QMap<QString, int> voucherRowCounter;
+            QMap<int, double> balDeltas;
             int rowIdx = 1;
             for (const auto& tVar : txRows) {
                 QVariantMap t = tVar.toMap();
                 int vchNum = t.value("voucher_no").toInt();
-                if (vchNum <= 0) vchNum = rowIdx;
+                if (vchNum <= 0) {
+                    static QRegularExpression reDigits(R"(\d+)");
+                    QRegularExpressionMatch mm = reDigits.match(t.value("voucher_no").toString());
+                    vchNum = mm.hasMatch() ? mm.captured(0).toInt() : rowIdx;
+                }
+                QString isoDate = t.value("voucher_date").toString().left(10);
+                QString vKey = QString("%1|%2|%3").arg(vchNum).arg(isoDate).arg(t.value("financial_year").toString());
+                int nextRow = voucherRowCounter.value(vKey, 0) + 1;
+                voucherRowCounter[vKey] = nextRow;
 
                 double amt = round2(t.value("amount").toDouble());
-                QString drCr = t.value("dr_cr", "Dr").toString().left(3);
+                QString drCr = t.value("dr_cr", "Dr").toString().left(2);
+                QString transType = normalizeTxType(t.value("trans_type", "Jrnl").toString());
+                int acCode = t.value("ac_code").toInt();
                 if (drCr == "Dr") summary.totalDebitAmount += amt;
                 else summary.totalCreditAmount += amt;
 
-                q.addBindValue(rowIdx);
+                q.addBindValue(nextRow);
                 q.addBindValue(vchNum);
                 q.addBindValue(formatMdbDate(t.value("voucher_date").toString()));
-                q.addBindValue(t.value("trans_type", "Jrnl").toString().left(5));
-                q.addBindValue(t.value("ac_code").toInt());
+                q.addBindValue(transType.left(5));
+                q.addBindValue(acCode);
                 q.addBindValue(drCr);
                 q.addBindValue(amt);
                 q.addBindValue(t.value("voucher_no").toString().left(50));
-                q.addBindValue(t.value("party_code").toInt());
+                q.addBindValue(transType.compare("Jrnl", Qt::CaseInsensitive) == 0
+                               ? 0 : t.value("party_code").toInt());
                 q.addBindValue(t.value("narration").toString().left(200));
 
                 if (q.exec()) {
                     summary.transactionsExported++;
                     rowIdx++;
+                    if (acCode > 0 && std::abs(amt) >= 0.0005) {
+                        double signedAmt = (drCr == "Dr") ? amt : -amt;
+                        balDeltas[acCode] = round2dbl(balDeltas.value(acCode, 0.0) + signedAmt);
+                    }
                 }
+            }
+
+            // Mirror the app's voucher-save: post each leg to the ledger's
+            // cached CurrentBalance, starting from the snapshotted native value.
+            updateProgress(80, "Updating cached ledger balances...");
+            QSqlQuery qBalUpd(mdb);
+            qBalUpd.prepare("UPDATE Ledgers SET CurrentBalance = ? WHERE Code1st = ?;");
+            for (auto it = balDeltas.constBegin(); it != balDeltas.constEnd(); ++it) {
+                if (std::abs(it.value()) < 0.0005) continue;
+                QString side;
+                double cur = parseJetBalance(nativeBalances.value(it.key(), "0.00"), side);
+                QString newText = formatJetBalance(round2dbl(cur + it.value()), side);
+                qBalUpd.addBindValue(newText);
+                qBalUpd.addBindValue(it.key());
+                qBalUpd.exec();
             }
         }
 
@@ -515,6 +894,135 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
 
     auto& appDb = DatabaseManager::instance();
 
+    // 0. Sync CompanyInfo
+    updateProgress(20, "Updating CompanyInfo in Jet 4 database...");
+    MdbTableDef* compTbl = mdb_read_table_by_name(mdb, (char*)"CompanyInfo", MDB_TABLE);
+    if (compTbl) {
+        mdb_read_columns(compTbl);
+        QVariantList compList = appDb.executeQuery("SELECT * FROM company_info LIMIT 1;");
+        if (!compList.isEmpty()) {
+            QVariantMap c = compList.first().toMap();
+            std::vector<MdbField> fieldsVec(compTbl->num_cols);
+            MdbField* fields = fieldsVec.data();
+            for (int i = 0; i < compTbl->num_cols; i++) {
+                MdbColumn* col = (MdbColumn*)g_ptr_array_index(compTbl->columns, i);
+                fields[i].colnum = i;
+                fields[i].is_fixed = col->is_fixed;
+                fields[i].is_null = 1;
+            }
+
+            // --- Complete Format as Data.002: 4 FY rows, all share same Company metadata ---
+            QVariantList fyRows = appDb.executeQuery("SELECT year_name, start_date, end_date FROM financial_years ORDER BY start_date ASC;");
+            if (fyRows.isEmpty()) {
+                // Fallback to single FY from company_info (legacy)
+                QVariantMap single;
+                single["year_name"] = "FY 2026-27";
+                single["start_date"] = c.value("acc_year_from", "2026-04-01");
+                single["end_date"] = c.value("acc_year_to", "2027-03-31");
+                fyRows.append(single);
+            }
+            // BooksBeginingFrom is earliest FY start (Data.002: 04/01/23 for all rows)
+            QString booksIso = c.value("books_from", "").toString();
+            if (booksIso.isEmpty()) booksIso = fyRows.first().toMap().value("start_date").toString();
+            // Ensure earliest FY determines BooksBeginingFrom if not set
+            {
+                QString earliest = fyRows.first().toMap().value("start_date").toString();
+                for (auto &v : fyRows) {
+                    QString s = v.toMap().value("start_date").toString();
+                    if (s < earliest) earliest = s;
+                }
+                if (c.value("books_from").toString().isEmpty()) booksIso = earliest;
+                if (booksIso.isEmpty()) booksIso = "2023-04-01";
+            }
+            double dBooks = toOleDate(booksIso);
+
+            // Cache existing AccYearFrom values to avoid duplicates
+            std::set<long long> existingFromDays;
+            {
+                MdbColumn* colFrom = nullptr;
+                for (int i = 0; i < compTbl->num_cols; i++) {
+                    MdbColumn* col = (MdbColumn*)g_ptr_array_index(compTbl->columns, i);
+                    if (QString::fromLatin1(col->name) == "AccYearFrom") { colFrom = col; break; }
+                }
+                if (colFrom && colFrom->col_type == MDB_DATETIME) {
+                    mdb_rewind_table(compTbl);
+                    while (mdb_fetch_row(compTbl)) {
+                        if (colFrom->cur_value_len == sizeof(double)) {
+                            double rowFrom = mdb_get_double(mdb->pg_buf, colFrom->cur_value_start);
+                            existingFromDays.insert((long long)llround(rowFrom));
+                        }
+                    }
+                }
+            }
+
+            for (auto &fyVar : fyRows) {
+                QVariantMap fy = fyVar.toMap();
+                QString fyStart = fy.value("start_date").toString();
+                QString fyEnd = fy.value("end_date").toString();
+                if (fyStart.isEmpty() || fyEnd.isEmpty()) continue;
+                double dFrom = toOleDate(fyStart);
+                double dTo = toOleDate(fyEnd);
+                long long key = llround(dFrom);
+                if (existingFromDays.find(key) != existingFromDays.end()) continue;
+
+                // Build fresh field set per FY (QByteArray must stay alive until insert)
+                auto compCol = [&](const char* n) -> MdbColumn* {
+                    for (int i = 0; i < compTbl->num_cols; i++) {
+                        MdbColumn* cc = (MdbColumn*)g_ptr_array_index(compTbl->columns, i);
+                        if (strcmp(cc->name, n) == 0) return cc;
+                    }
+                    return nullptr;
+                };
+                QByteArray nameBytes = toJet4Text(c.value("company_name", "M/S MAHADEV RICE INDUSTRY").toString().left(50));
+                QByteArray busBytes = toJet4Text(c.value("business_type", "RICE MANUFACTURER (FSSAI LIC NO. : 10822019000152)").toString().left(100));
+                QByteArray addBytes = toJet4Text(c.value("address", "BABA SAWAN SINGH THERI ROAD,VPO SIKANDERPUR, SIRSA, HARYANA -125055").toString().left(250));
+                QByteArray phoneBytes = toJet4Text(c.value("phone", "01666-297533").toString().left(50));
+                QByteArray mobBytes = toJet4Text(c.value("mobile", "9416595091").toString().left(50));
+                QByteArray panBytes = toJet4Text(c.value("pan_no", "ABKFM5928Q").toString().left(50));
+                QByteArray gstinBytes = toJet4Text(c.value("gstin", "06ABKFM5928Q1ZG").toString().left(50));
+                // MyStation/MySTATE/Bank2 are UnicodeCompression=no -> UCS-2LE.
+                QByteArray stnBytes = toJet4TextForCol(c.value("city", "SIRSA").toString().left(50), compCol("MyStation"));
+                QByteArray stateBytes = toJet4TextForCol(c.value("state", "HARYANA").toString().left(50), compCol("MySTATE"));
+                QByteArray b2Bytes = toJet4TextForCol(QString("A/c No:- %1").arg(c.value("bank_account", "128001400717").toString()).left(50), compCol("Bank2"));
+                QByteArray b3Bytes = toJet4Text(QString("IFSC:- %1").arg(c.value("ifsc_code", "CNRB0002058").toString()).left(50));
+                QByteArray firmTypeBytes = toJet4Text("Partnership Firm");
+                guint32 syncVal = 1;
+                guint16 zero16 = 0;
+
+                // Reset fields
+                for (int i = 0; i < compTbl->num_cols; i++) {
+                    MdbColumn* col = (MdbColumn*)g_ptr_array_index(compTbl->columns, i);
+                    fields[i].colnum = i; fields[i].is_fixed = col->is_fixed; fields[i].is_null = 1; fields[i].value = nullptr; fields[i].siz = 0;
+                }
+                for (int i = 0; i < compTbl->num_cols; i++) {
+                    MdbColumn* col = (MdbColumn*)g_ptr_array_index(compTbl->columns, i);
+                    QString cname = QString::fromLatin1(col->name);
+                    if (cname == "CompanyName") { fields[i].is_null = 0; fields[i].value = nameBytes.data(); fields[i].siz = nameBytes.size(); }
+                    else if (cname == "Business") { fields[i].is_null = 0; fields[i].value = busBytes.data(); fields[i].siz = busBytes.size(); }
+                    else if (cname == "Address") { fields[i].is_null = 0; fields[i].value = addBytes.data(); fields[i].siz = addBytes.size(); }
+                    else if (cname == "Phone_O") { fields[i].is_null = 0; fields[i].value = phoneBytes.data(); fields[i].siz = phoneBytes.size(); }
+                    else if (cname == "Mobile1") { fields[i].is_null = 0; fields[i].value = mobBytes.data(); fields[i].siz = mobBytes.size(); }
+                    else if (cname == "PAN_No") { fields[i].is_null = 0; fields[i].value = panBytes.data(); fields[i].siz = panBytes.size(); }
+                    else if (cname == "GSTIN") { fields[i].is_null = 0; fields[i].value = gstinBytes.data(); fields[i].siz = gstinBytes.size(); }
+                    else if (cname == "MyStation") { fields[i].is_null = 0; fields[i].value = stnBytes.data(); fields[i].siz = stnBytes.size(); }
+                    else if (cname == "MySTATE") { fields[i].is_null = 0; fields[i].value = stateBytes.data(); fields[i].siz = stateBytes.size(); }
+                    else if (cname == "Bank2") { fields[i].is_null = 0; fields[i].value = b2Bytes.data(); fields[i].siz = b2Bytes.size(); }
+                    else if (cname == "Bank3") { fields[i].is_null = 0; fields[i].value = b3Bytes.data(); fields[i].siz = b3Bytes.size(); }
+                    else if (cname == "FirmType") { fields[i].is_null = 0; fields[i].value = firmTypeBytes.data(); fields[i].siz = firmTypeBytes.size(); }
+                    else if (cname == "AccYearFrom") { fields[i].is_null = 0; fields[i].value = &dFrom; fields[i].siz = 8; }
+                    else if (cname == "AccYearTo") { fields[i].is_null = 0; fields[i].value = &dTo; fields[i].siz = 8; }
+                    else if (cname == "BooksBeginingFrom") { fields[i].is_null = 0; fields[i].value = &dBooks; fields[i].siz = 8; }
+                    else if (cname == "CompositionScheme") { fields[i].is_null = 0; fields[i].value = &zero16; fields[i].siz = 2; }
+                    else if (cname == "SyncEnabled") { fields[i].is_null = 0; fields[i].value = &syncVal; fields[i].siz = 4; }
+                }
+                insertJet4Row(mdb, compTbl, fields, compTbl->num_cols);
+                existingFromDays.insert(key);
+            }
+        }
+        finalizeJet4Table(mdb, compTbl);
+        mdb_free_tabledef(compTbl);
+    }
+
     // 1. Sync Groups
     updateProgress(25, "Syncing Account Groups into Jet 4 Groups table...");
     MdbTableDef* grpTbl = mdb_read_table_by_name(mdb, (char*)"Groups", MDB_TABLE);
@@ -534,6 +1042,7 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
         }
 
         QVariantList grpRows = appDb.executeQuery("SELECT name, code1st, code2nd, code3rd, code4th, extract_in_balance_sheet FROM account_groups ORDER BY code1st ASC;");
+        std::cout << "[EXPORT] Account Groups in SQLite: " << grpRows.size() << ", existing in JetDB: " << existingGroupCodes.size() << std::endl;
         for (const auto& gVar : grpRows) {
             QVariantMap g = gVar.toMap();
             int c1 = g.value("code1st").toInt();
@@ -605,6 +1114,7 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
             if (legId <= 0) legId = p.value("id").toInt();
             partyMap[legId] = p;
         }
+        std::cout << "[EXPORT] Parties fetched from SQLite: " << partyMap.size() << std::endl;
 
         while (mdb_fetch_row(ledgersTbl)) {
             char* cStr = mdb_col_to_string(mdb, mdb->pg_buf, colCode->cur_value_start, colCode->col_type, colCode->cur_value_len);
@@ -617,12 +1127,14 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
                 if (it != partyMap.end()) {
                     bool modified = false;
                     double opBal = round2(it->second.value("opening_balance").toDouble());
-                    if (colOpBal->cur_value_start > 0) {
+                    if (colOpBal->cur_value_start > 0 &&
+                        colOpBal->cur_value_len == (int)sizeof(double)) {
                         memcpy(mdb->pg_buf + colOpBal->cur_value_start, &opBal, sizeof(double));
                         modified = true;
                     }
                     double sal = round2(it->second.value("salary_per_month").toDouble());
-                    if (colSalary->cur_value_start > 0) {
+                    if (colSalary->cur_value_start > 0 &&
+                        colSalary->cur_value_len == (int)sizeof(double)) {
                         memcpy(mdb->pg_buf + colSalary->cur_value_start, &sal, sizeof(double));
                         modified = true;
                     }
@@ -647,6 +1159,11 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
                     fields[i].is_fixed = col->is_fixed;
                     fields[i].is_null = 1;
                 }
+                // Column-aware text encoding (respects UnicodeCompression=no).
+                auto T4C = [&](const QString& s, int colIdx) {
+                    MdbColumn* c = (MdbColumn*)g_ptr_array_index(ledgersTbl->columns, colIdx);
+                    return toJet4TextForCol(s, c);
+                };
 
                 QByteArray prefixBytes = toJet4Text("None");
                 fields[0].is_null = 0; fields[0].value = prefixBytes.data(); fields[0].siz = prefixBytes.size();
@@ -685,7 +1202,7 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
                 fields[14].is_null = 0; fields[14].value = noneBytes.data(); fields[14].siz = noneBytes.size(); // Route
                 fields[15].is_null = 0; fields[15].value = noneBytes.data(); fields[15].siz = noneBytes.size(); // Distt
 
-                QByteArray curBalBytes = toJet4Text("0.00");
+                QByteArray curBalBytes = T4C("0.00", 16);
                 fields[16].is_null = 0; fields[16].value = curBalBytes.data(); fields[16].siz = curBalBytes.size(); // CurrentBalance
 
                 double zeroDbl = 0.0;
@@ -696,25 +1213,25 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
                 double sal = round2(p.value("salary_per_month").toDouble());
                 fields[19].is_null = 0; fields[19].value = &sal; fields[19].siz = 8;
 
-                QByteArray acctBytes = toJet4Text(p.value("bank_account").toString().left(50));
+                QByteArray acctBytes = T4C(p.value("bank_account").toString().left(50), 20);
                 fields[20].is_null = 0; fields[20].value = acctBytes.data(); fields[20].siz = acctBytes.size();
 
-                QByteArray stateBytes = toJet4Text("STATE");
+                QByteArray stateBytes = T4C("STATE", 21);
                 fields[21].is_null = 0; fields[21].value = stateBytes.data(); fields[21].siz = stateBytes.size();
 
                 fields[22].is_null = 0; fields[22].value = &zero32; fields[22].siz = 4; // ShowDateTotals
                 fields[23].is_null = 0; fields[23].value = &zero32; fields[23].siz = 4; // AutoSplitUpdate
 
-                QByteArray pTypeBytes = toJet4Text("Proprietorship Firm");
+                QByteArray pTypeBytes = T4C("Proprietorship Firm", 25);
                 fields[25].is_null = 0; fields[25].value = pTypeBytes.data(); fields[25].siz = pTypeBytes.size();
 
-                QByteArray cpBytes = toJet4Text(p.value("contact_person").toString().left(50));
+                QByteArray cpBytes = T4C(p.value("contact_person").toString().left(50), 26);
                 fields[26].is_null = 0; fields[26].value = cpBytes.data(); fields[26].siz = cpBytes.size();
 
-                QByteArray pStateBytes = toJet4Text("Haryana");
+                QByteArray pStateBytes = T4C("Haryana", 27);
                 fields[27].is_null = 0; fields[27].value = pStateBytes.data(); fields[27].siz = pStateBytes.size();
 
-                QByteArray vatDlrBytes = toJet4Text("NON-VAT DEALER");
+                QByteArray vatDlrBytes = T4C("NON-VAT DEALER", 29);
                 fields[29].is_null = 0; fields[29].value = vatDlrBytes.data(); fields[29].siz = vatDlrBytes.size();
 
                 fields[30].is_null = 0; fields[30].value = stnBytes.data(); fields[30].siz = stnBytes.size(); // PartyStation
@@ -744,11 +1261,17 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
                 fields[46].is_null = 0; fields[46].value = &zero32; fields[46].siz = 4; // ApplyTCSForParty
                 fields[49].is_null = 0; fields[49].value = &zero32; fields[49].siz = 4; // TCSNotApplyInSale
 
-                if (insertJet4Row(mdb, ledgersTbl, fields, ledgersTbl->num_cols)) {
+                bool insOk = insertJet4Row(mdb, ledgersTbl, fields, ledgersTbl->num_cols);
+                static int ledgDbg = 0;
+                if (++ledgDbg <= 5 || !insOk) {
+                    std::cout << "[LEDGER INSERT] code=" << code << " name=" << p.value("name").toString().toStdString() << " ok=" << insOk << std::endl;
+                }
+                if (insOk) {
                     summary.ledgersExported++;
                 }
             }
         }
+        std::cout << "[EXPORT] Total Ledgers Exported: " << summary.ledgersExported << std::endl;
 
         finalizeJet4Table(mdb, ledgersTbl);
         mdb_free_tabledef(ledgersTbl);
@@ -772,48 +1295,56 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
             MdbColumn* colAmt = (MdbColumn*)g_ptr_array_index(txTbl->columns, 6);
 
             while (mdb_fetch_row(txTbl)) {
-                char* vNoStr = mdb_col_to_string(mdb, mdb->pg_buf, colVchNo->cur_value_start, colVchNo->col_type, colVchNo->cur_value_len);
-                char* dStr = mdb_col_to_string(mdb, mdb->pg_buf, colVchDate->cur_value_start, colVchDate->col_type, colVchDate->cur_value_len);
-                char* acStr = mdb_col_to_string(mdb, mdb->pg_buf, colAcCode->cur_value_start, colAcCode->col_type, colAcCode->cur_value_len);
-                char* dcStr = mdb_col_to_string(mdb, mdb->pg_buf, colDrCr->cur_value_start, colDrCr->col_type, colDrCr->cur_value_len);
-                char* amtStr = mdb_col_to_string(mdb, mdb->pg_buf, colAmt->cur_value_start, colAmt->col_type, colAmt->cur_value_len);
+                int vNo = (colVchNo && colVchNo->cur_value_len > 0) ? mdb_get_int32(mdb->pg_buf, colVchNo->cur_value_start) : 0;
+                int ac = (colAcCode && colAcCode->cur_value_len > 0) ? mdb_get_int16(mdb->pg_buf, colAcCode->cur_value_start) : 0;
+                double amt = (colAmt && colAmt->cur_value_len > 0) ? mdb_get_double(mdb->pg_buf, colAmt->cur_value_start) : 0.0;
+                int amtCents = static_cast<int>(std::round(amt * 100.0));
 
-                int vNo = vNoStr ? atoi(vNoStr) : 0;
-                QString dVal = dStr ? QString::fromUtf8(dStr).left(10) : "";
-                int ac = acStr ? atoi(acStr) : 0;
-                QString dc = dcStr ? QString::fromUtf8(dcStr) : "";
-                int amtCents = amtStr ? static_cast<int>(std::round(atof(amtStr) * 100.0)) : 0;
+                QString dVal;
+                if (colVchDate && colVchDate->cur_value_len > 0) {
+                    double oleDays = mdb_get_double(mdb->pg_buf, colVchDate->cur_value_start);
+                    QDate qd = QDate(1899, 12, 30).addDays(static_cast<qint64>(oleDays));
+                    dVal = qd.toString("yyyy-MM-dd");
+                }
+
+                QString dc = "Dr";
+                if (colDrCr && colDrCr->cur_value_len > 0) {
+                    const unsigned char* p = (const unsigned char*)mdb->pg_buf + colDrCr->cur_value_start;
+                    if (colDrCr->cur_value_len >= 3 && p[0] == 0xFF && p[1] == 0xFE) {
+                        if (p[2] == 'C' || p[2] == 'c') dc = "Cr";
+                    } else if (p[0] == 'C' || p[0] == 'c' || (colDrCr->cur_value_len >= 2 && p[1] == 'C')) {
+                        dc = "Cr";
+                    }
+                }
 
                 existingTxSignatures.insert(std::make_tuple(vNo, dVal, ac, amtCents, dc));
-
-                if (vNoStr) g_free(vNoStr);
-                if (dStr) g_free(dStr);
-                if (acStr) g_free(acStr);
-                if (dcStr) g_free(dcStr);
-                if (amtStr) g_free(amtStr);
             }
 
+            // --- Match Data.002: export ALL FYs when param empty, else robust FY match ---
             QString txSql = 
                 "SELECT t.id, t.voucher_no, t.voucher_date, t.trans_type, t.dr_cr, t.amount, t.narration, "
-                "COALESCE(p.legacy_id, p.id) as ac_code, "
-                "COALESCE(op.legacy_id, op.id, 0) as party_code "
+                "COALESCE(t.account_code, p.legacy_id, p.id) as ac_code, "
+                "COALESCE(op.legacy_id, op.id, 0) as party_code, "
+                "t.financial_year "
                 "FROM transactions t "
                 "LEFT JOIN parties p ON t.party_id = p.id OR t.party_name = p.name "
                 "LEFT JOIN parties op ON t.opposing_account = op.name ";
 
-            if (!options.financialYear.isEmpty()) {
-                txSql += QString("WHERE t.financial_year = '%1' ").arg(options.financialYear);
-            }
+            // Shared robust FY filter (same normalization as the ODBC engine).
+            txSql += buildFyWhere(options.financialYear);
             txSql += "ORDER BY t.voucher_date ASC, t.id ASC;";
-
             QVariantList txRows = appDb.executeQuery(txSql);
+            std::cout << "[EXPORT] Transactions fetched from SQLite: " << txRows.size() << ", existing in JetDB: " << existingTxSignatures.size() << std::endl;
+            // RowNo must be sequential per voucher (Bahi-Khata expects 1..n per VoucherNumber+Date)
+            QMap<QString, int> voucherRowCounter;
             int rowIdx = 1;
+            // Signed per-ledger deltas (Dr-positive) for Ledgers.CurrentBalance.
+            QMap<int, double> balDeltas;
 
             for (const auto& tVar : txRows) {
                 QVariantMap t = tVar.toMap();
                 int rawVchNo = t.value("voucher_no").toInt();
                 if (rawVchNo <= 0) {
-                    // Extract digits from voucher_no like "Jrnl-28"
                     QString vStr = t.value("voucher_no").toString();
                     static QRegularExpression reDigits(R"(\d+)");
                     QRegularExpressionMatch m = reDigits.match(vStr);
@@ -827,93 +1358,40 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
                 int amtCents = static_cast<int>(std::round(amt * 100.0));
                 QString drCr = t.value("dr_cr", "Dr").toString().left(2);
 
-                // Date key formatting
-                QDate qd = QDate::fromString(isoDate, "yyyy-MM-dd");
-                QString dKey = qd.isValid() ? qd.toString("MM/dd/yy") : isoDate;
-
-                auto sig = std::make_tuple(rawVchNo, dKey, acCode, amtCents, drCr);
+                auto sig = std::make_tuple(rawVchNo, isoDate, acCode, amtCents, drCr);
                 if (existingTxSignatures.find(sig) == existingTxSignatures.end()) {
-                    // Insert new transaction row
-                    std::vector<MdbField> fieldsVec(txTbl->num_cols);
-                    MdbField* fields = fieldsVec.data();
-                    for (int i = 0; i < txTbl->num_cols; i++) {
-                        MdbColumn* col = (MdbColumn*)g_ptr_array_index(txTbl->columns, i);
-                        fields[i].colnum = i;
-                        fields[i].is_fixed = col->is_fixed;
-                        fields[i].is_null = 1;
+                    BahiKhataJournalTx tx;
+                    QString vKey = QString("%1|%2|%3").arg(rawVchNo).arg(isoDate).arg(t.value("financial_year").toString());
+                    int nextRow = voucherRowCounter.value(vKey, 0) + 1;
+                    voucherRowCounter[vKey] = nextRow;
+                    tx.rowNo = nextRow;
+                    tx.vchNo = rawVchNo;
+                    tx.dateStr = isoDate;
+                    tx.transType = normalizeTxType(t.value("trans_type", "Jrnl").toString());
+                    tx.accountCode = acCode;
+                    tx.drCr = drCr;
+                    tx.amount = amt;
+                    tx.narration = t.value("narration").toString();
+                    // PartyCode: 0 for Journal, else party_code (as Data.002)
+                    tx.partyCode = (tx.transType.compare("Jrnl", Qt::CaseInsensitive)==0) ? 0 : t.value("party_code").toInt();
+
+                    bool txInsOk = insertBahiKhataJournalTx(mdb, txTbl, tx);
+                    static int txDbg = 0;
+                    if (++txDbg <= 5 || !txInsOk) {
+                        std::cout << "[TX INSERT] vch=" << rawVchNo << " drCr=" << drCr.toStdString() << " amt=" << amt << " ok=" << txInsOk << std::endl;
                     }
-
-                    guint16 rowNo = (drCr == "Dr") ? 1 : 2;
-                    fields[0].is_null = 0; fields[0].value = &rowNo; fields[0].siz = 2;
-
-                    guint32 vchNoVal = rawVchNo;
-                    fields[1].is_null = 0; fields[1].value = &vchNoVal; fields[1].siz = 4;
-
-                    double oleD = toOleDate(isoDate);
-                    fields[2].is_null = 0; fields[2].value = &oleD; fields[2].siz = 8;
-
-                    QByteArray ttBytes = toJet4Text(t.value("trans_type", "Jrnl").toString().left(5));
-                    fields[3].is_null = 0; fields[3].value = ttBytes.data(); fields[3].siz = ttBytes.size();
-
-                    guint16 acVal = acCode;
-                    fields[4].is_null = 0; fields[4].value = &acVal; fields[4].siz = 2;
-
-                    QByteArray dcBytes = toJet4Text(drCr);
-                    fields[5].is_null = 0; fields[5].value = dcBytes.data(); fields[5].siz = dcBytes.size();
-
-                    fields[6].is_null = 0; fields[6].value = &amt; fields[6].siz = 8;
-
-                    QByteArray invBytes = toJet4Text(t.value("voucher_no").toString().left(50));
-                    fields[7].is_null = 0; fields[7].value = invBytes.data(); fields[7].siz = invBytes.size();
-
-                    guint16 ptVal = t.value("party_code").toInt();
-                    fields[8].is_null = 0; fields[8].value = &ptVal; fields[8].siz = 2;
-
-                    QByteArray narrBytes = toJet4Text(t.value("narration").toString().left(200));
-                    fields[14].is_null = 0; fields[14].value = narrBytes.data(); fields[14].siz = narrBytes.size();
-
-                    // Canonical Bahi-Khata default values for complete schema recognition
-                    guint16 zero16 = 0;
-                    guint32 zero32 = 0;
-                    double zeroDbl = 0.0;
-                    float zeroFlt = 0.0f;
-                    QByteArray zeroStr = toJet4Text("0");
-
-                    fields[16].is_null = 0; fields[16].value = &zero16; fields[16].siz = 2; // DueDays
-                    fields[17].is_null = 0; fields[17].value = &zero16; fields[17].siz = 2; // ItemCode
-                    fields[29].is_null = 0; fields[29].value = &oleD; fields[29].siz = 8;   // BankDate
-                    fields[30].is_null = 0; fields[30].value = &zero32; fields[30].siz = 4; // VoucherReconcile
-                    fields[35].is_null = 0; fields[35].value = &zeroDbl; fields[35].siz = 8;// ExpRate
-                    fields[39].is_null = 0; fields[39].value = &zeroDbl; fields[39].siz = 8;// EstimatedAmount
-                    fields[42].is_null = 0; fields[42].value = &zero32; fields[42].siz = 4; // MktCommttSrNo
-                    fields[45].is_null = 0; fields[45].value = &zero32; fields[45].siz = 4; // URDPurc
-                    fields[46].is_null = 0; fields[46].value = &zero32; fields[46].siz = 4; // E1PartyCode
-                    fields[50].is_null = 0; fields[50].value = &zero32; fields[50].siz = 4; // CompositionVch
-                    fields[52].is_null = 0; fields[52].value = zeroStr.data(); fields[52].siz = zeroStr.size(); // PlaceOfSupply
-                    fields[53].is_null = 0; fields[53].value = zeroStr.data(); fields[53].siz = zeroStr.size(); // ECommGSTIN
-                    fields[54].is_null = 0; fields[54].value = &zero32; fields[54].siz = 4; // TransReturn
-                    fields[55].is_null = 0; fields[55].value = &zero32; fields[55].siz = 4; // GroupTick
-                    fields[57].is_null = 0; fields[57].value = &zero32; fields[57].siz = 4; // ActualInv
-                    fields[58].is_null = 0; fields[58].value = &zero32; fields[58].siz = 4; // ITCNotClaim
-                    fields[59].is_null = 0; fields[59].value = &zero32; fields[59].siz = 4; // ReverseChargePayable
-                    fields[60].is_null = 0; fields[60].value = &zero32; fields[60].siz = 4; // GSTOnGoodsAmount
-                    fields[62].is_null = 0; fields[62].value = &zeroFlt; fields[62].siz = 4; // TCSRate
-                    fields[63].is_null = 0; fields[63].value = &zeroDbl; fields[63].siz = 8; // TCSTaxable
-                    fields[65].is_null = 0; fields[65].value = &zero32; fields[65].siz = 4; // ChallanVchNo
-                    fields[68].is_null = 0; fields[68].value = &zeroFlt; fields[68].siz = 4; // TDSRate194Q
-                    fields[69].is_null = 0; fields[69].value = &zeroDbl; fields[69].siz = 8; // Taxable194Q
-                    fields[70].is_null = 0; fields[70].value = &zero32; fields[70].siz = 4; // TDS194QChallanVchNo
-                    fields[73].is_null = 0; fields[73].value = &oleD; fields[73].siz = 8;   // TaxInputDate
-                    fields[74].is_null = 0; fields[74].value = &zero32; fields[74].siz = 4; // PymtDone
-                    fields[75].is_null = 0; fields[75].value = &zeroDbl; fields[75].siz = 8;// tmpBookNo
-                    fields[76].is_null = 0; fields[76].value = &zeroDbl; fields[76].siz = 8;// tmpSlipNo
-                    fields[78].is_null = 0; fields[78].value = &zeroDbl; fields[78].siz = 8;// RunningBNo
-
-                    if (insertJet4Row(mdb, txTbl, fields, txTbl->num_cols)) {
+                    if (txInsOk) {
                         summary.transactionsExported++;
                         if (drCr == "Dr") summary.totalDebitAmount += amt;
                         else summary.totalCreditAmount += amt;
                         existingTxSignatures.insert(sig);
+                        // Mirror the app's voucher-save: post each leg to its
+                        // ledger's cached CurrentBalance (Dr-positive signed).
+                        if (acCode > 0 && std::abs(amt) >= 0.0005) {
+                            double signedAmt = (drCr == "Dr") ? amt : -amt;
+                            balDeltas[acCode] = round2dbl(
+                                balDeltas.value(acCode, 0.0) + signedAmt);
+                        }
                     }
                 } else {
                     summary.transactionsExported++;
@@ -922,9 +1400,81 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
                 }
                 rowIdx++;
             }
+            std::cout << "[EXPORT] Total Transactions Exported: " << summary.transactionsExported << std::endl;
+
+            // Apply cached ledger balances for newly inserted vouchers so the
+            // app reflects them without a manual open+save per voucher.
+            updateProgress(80, "Updating cached ledger balances...");
+            for (auto it = balDeltas.constBegin(); it != balDeltas.constEnd(); ++it) {
+                if (std::abs(it.value()) >= 0.0005)
+                    applyLedgerBalanceDelta(mdb, it.key(), it.value());
+            }
 
             finalizeJet4Table(mdb, txTbl);
             mdb_free_tabledef(txTbl);
+
+            // Sync TempLastEnteredVoucher with latest transaction date and FY range
+            MdbTableDef* lastVchTbl = mdb_read_table_by_name(mdb, (char*)"TempLastEnteredVoucher", MDB_TABLE);
+            if (lastVchTbl) {
+                mdb_read_columns(lastVchTbl);
+                mdb_rewind_table(lastVchTbl);
+                if (mdb_fetch_row(lastVchTbl)) {
+                    guint32 data_pg = lastVchTbl->cur_phys_pg;
+                    MdbColumn* colVT = (MdbColumn*)g_ptr_array_index(lastVchTbl->columns, 0);
+                    MdbColumn* colVD = (MdbColumn*)g_ptr_array_index(lastVchTbl->columns, 1);
+                    MdbColumn* colFrom = (MdbColumn*)g_ptr_array_index(lastVchTbl->columns, 2);
+                    MdbColumn* colTo = (MdbColumn*)g_ptr_array_index(lastVchTbl->columns, 3);
+
+                    int v_start = colVD->cur_value_start;
+                    int v_len = colVD->cur_value_len;
+                    int from_start = colFrom->cur_value_start;
+                    int from_len = colFrom->cur_value_len;
+                    int to_start = colTo->cur_value_start;
+                    int to_len = colTo->cur_value_len;
+                    int vt_start = colVT->cur_value_start;
+                    int vt_len = colVT->cur_value_len;
+
+                    // Query latest transaction date & FY from SQLite
+                    QVariantList maxTx = appDb.executeQuery(
+                        "SELECT t.voucher_date, t.trans_type, f.start_date, f.end_date "
+                        "FROM transactions t "
+                        "LEFT JOIN financial_years f ON t.financial_year = f.year_name "
+                        "ORDER BY t.voucher_date DESC, t.id DESC LIMIT 1;"
+                    );
+
+                    if (!maxTx.isEmpty()) {
+                        QVariantMap m = maxTx.first().toMap();
+                        QString maxDate = m.value("voucher_date").toString();
+                        QString tt = normalizeTxType(m.value("trans_type", "Jrnl").toString());
+                        QString fStart = m.value("start_date", "2026-04-01").toString();
+                        QString fEnd = m.value("end_date", "2027-03-31").toString();
+
+                        double oleMaxDate = toOleDate(maxDate);
+                        double oleFrom = toOleDate(fStart);
+                        double oleTo = toOleDate(fEnd);
+
+                        mdb_read_pg(mdb, data_pg);
+                        if (v_start > 0 && v_len == (int)sizeof(double) && oleMaxDate > 0.0) {
+                            memcpy(mdb->pg_buf + v_start, &oleMaxDate, sizeof(double));
+                        }
+                        if (from_start > 0 && from_len == (int)sizeof(double) && oleFrom > 0.0) {
+                            memcpy(mdb->pg_buf + from_start, &oleFrom, sizeof(double));
+                        }
+                        if (to_start > 0 && to_len == (int)sizeof(double) && oleTo > 0.0) {
+                            memcpy(mdb->pg_buf + to_start, &oleTo, sizeof(double));
+                        }
+                        if (vt_start > 0 && vt_len == 6) {
+                            QByteArray ttBytes = toJet4Text(tt.left(4));
+                            if (ttBytes.size() == 6) {
+                                memcpy(mdb->pg_buf + vt_start, ttBytes.constData(), 6);
+                            }
+                        }
+                        mdb_write_pg(mdb, data_pg);
+                        std::cout << "[EXPORT] Updated TempLastEnteredVoucher: date=" << maxDate.toStdString() << " type=" << tt.toStdString() << std::endl;
+                    }
+                }
+                mdb_free_tabledef(lastVchTbl);
+            }
         }
     }
 

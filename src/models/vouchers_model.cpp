@@ -774,20 +774,8 @@ bool VouchersModel::save_multi_row_voucher(
 ) {
     if (rows.size() < 2) return false;
 
-    // Normalize date
-    QString dt = vch_date.trimmed();
-    if (dt.contains("-") || dt.contains(".")) {
-        QString s = dt;
-        s.replace(".", "-");
-        QStringList pts = s.split("-");
-        if (pts.size() == 3) {
-            if (pts[0].length() == 4) {
-                dt = QString("%1-%2-%3").arg(pts[0], pts[1].rightJustified(2, '0'), pts[2].rightJustified(2, '0'));
-            } else if (pts[2].length() == 4) {
-                dt = QString("%1-%2-%3").arg(pts[2], pts[1].rightJustified(2, '0'), pts[0].rightJustified(2, '0'));
-            }
-        }
-    }
+    // Normalize date with standard helper
+    QString dt = FiscalYearHelper::normalizeToIso(vch_date.trimmed());
     if (dt.isEmpty()) dt = QDate::currentDate().toString("yyyy-MM-dd");
 
     FiscalYearInfo fy = FiscalYearHelper::getFiscalYearForDate(dt);
@@ -903,16 +891,23 @@ bool VouchersModel::save_multi_row_voucher(
         QString ref = r.value("refNo").toString().trimmed();
         QString opposing = (drcr == "Dr") ? primaryCrParty : primaryDrParty;
 
-        QVariant partyIdVar = DatabaseManager::instance().executeScalar(
-            "SELECT id FROM parties WHERE name = ? COLLATE NOCASE OR alias = ? COLLATE NOCASE LIMIT 1;",
+        QVariantList partyInfo = DatabaseManager::instance().executeQuery(
+            "SELECT id, legacy_id FROM parties WHERE name = ? COLLATE NOCASE OR alias = ? COLLATE NOCASE LIMIT 1;",
             {party, party}
         );
-        QVariant partyIdParam = (partyIdVar.isValid() && !partyIdVar.isNull() && partyIdVar.toInt() > 0) ? partyIdVar.toInt() : QVariant();
+        QVariant partyIdParam;
+        QVariant accCodeParam;
+        if (!partyInfo.isEmpty()) {
+            int pId = partyInfo.first().toMap().value("id").toInt();
+            int lId = partyInfo.first().toMap().value("legacy_id").toInt();
+            if (pId > 0) partyIdParam = pId;
+            if (lId > 0) accCodeParam = lId;
+        }
 
         DatabaseManager::instance().executeNonQuery(
-            "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, party_id, party_name, opposing_account, dr_cr, amount, invoice_no, narration, row_no) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-            {fyIdParam, fyLabel, activeVchNo, dt, normalizedVType, rawType, partyIdParam, party, opposing, drcr, amt, ref, narration, (i + 1)}
+            "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, account_code, party_id, party_name, opposing_account, dr_cr, amount, invoice_no, narration, row_no) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+            {fyIdParam, fyLabel, activeVchNo, dt, normalizedVType, rawType, accCodeParam, partyIdParam, party, opposing, drcr, amt, ref, narration, (i + 1)}
         );
     }
 

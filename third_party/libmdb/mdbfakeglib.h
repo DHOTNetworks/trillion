@@ -26,6 +26,10 @@
 #include <inttypes.h>
 #include <string.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #if defined(_WIN32) || defined(_MSC_VER)
 #ifndef strcasecmp
 #define strcasecmp _stricmp
@@ -209,5 +213,9 @@ gchar *g_option_context_get_help (GOptionContext *context,
 gboolean g_option_context_parse (GOptionContext *context,
         gint *argc, gchar ***argv, GError **error);
 void g_option_context_free (GOptionContext *context);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

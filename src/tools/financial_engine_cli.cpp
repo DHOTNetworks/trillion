@@ -6,6 +6,7 @@
 #include <iostream>
 #include "../database_manager.h"
 #include "../engine/bahi_khata_migrator.h"
+#include "../engine/bahi_khata_exporter.h"
 #include "../engine/busy_data_migrator.h"
 #include "../engine/tally_data_migrator.h"
 #include "../engine/balance_sheet_calculator.h"
@@ -13,6 +14,7 @@
 #include "../engine/stock_valuation_engine.h"
 #include "../engine/fiscal_year_helper.h"
 #include "../engine/accounting_engine.h"
+#include "../engine/jet4_writer.h"
 #include "mdbtools.h"
 
 using namespace MahadevERP;
@@ -25,8 +27,38 @@ void printUsage() {
               << "  ./FinancialEngineCLI --migrate-tally <tally_folder_or_file> <sqlite_db_path>\n"
               << "  ./FinancialEngineCLI --inspect <sqlite_db_path> [--fy <YYYY-YY> | --as-on <YYYY-MM-DD>]\n"
               << "  ./FinancialEngineCLI --inspect-busy <busy_folder_or_file>\n"
+              << "  ./FinancialEngineCLI --verify-jet <mdb_path>\n"
               << "  ./FinancialEngineCLI --all\n"
               << std::endl;
+}
+
+/* Jet index/data verification front-end: delegates to the shared
+ * Jet4Writer::verifyDatabase used by the export dialog as well. */
+int verifyJetDb(const QString& mdbPath) {
+    QByteArray pathBytes = QFile::encodeName(mdbPath);
+    MdbHandle* mdb = mdb_open(pathBytes.constData(), MDB_NOFLAGS);
+    if (!mdb) mdb = mdb_open(mdbPath.toUtf8().constData(), MDB_NOFLAGS);
+    if (!mdb) { std::cerr << "Cannot open " << mdbPath.toStdString() << "\n"; return 1; }
+    Jet4Writer::VerifyReport rep = Jet4Writer::verifyDatabase(mdb);
+    mdb_close(mdb);
+    if (!rep.error.empty()) {
+        std::cout << "[VERIFY] ERROR: " << rep.error << "\n";
+        return 1;
+    }
+    std::cout << "[VERIFY] tables=" << rep.tablesChecked
+              << " datarows=" << rep.dataRows << " badrows=" << rep.badRows << "\n";
+    int failures = (rep.badRows > 0) ? 1 : 0;
+    for (const auto& vi : rep.indexes) {
+        const bool countOk = vi.walked == vi.dataRows;
+        std::cout << "[VERIFY] " << vi.table << "." << vi.name
+                  << " walked=" << vi.walked << " datarows=" << vi.dataRows
+                  << " catalog=" << vi.catalogRows
+                  << " sorted=" << (vi.sorted ? "yes" : "NO")
+                  << (countOk ? "" : " COUNT-MISMATCH") << "\n";
+        if (!vi.sorted || !countOk) failures++;
+    }
+    std::cout << (failures || !rep.ok ? "[VERIFY] FAILURES\n" : "[VERIFY] ALL OK\n");
+    return (failures || !rep.ok) ? 1 : 0;
 }
 
 void inspectDatabase(const QString& dbPath, const QString& fyParam, const QString& asOnParam) {
@@ -265,6 +297,44 @@ int main(int argc, char* argv[]) {
         std::cout << "  GL Discrepancy:     " << AccountingEngine::formatIndianCurrency(insp.value("glDiscrepancy").toDouble(), true).toStdString() << "\n";
         std::cout << "  Status:             " << (insp.value("isBalanced").toBool() ? "BALANCED" : "DISCREPANCY DETECTED") << "\n";
         return 0;
+    }
+
+    if (args.contains("--export-bahi-khata")) {
+        int idx = args.indexOf("--export-bahi-khata");
+        if (idx + 2 >= args.size()) {
+            std::cerr << "Error: --export-bahi-khata requires <sqlite_db_path> <target_mdb_path> [financial_year]\n";
+            return 1;
+        }
+        QString dbPath = args[idx + 1];
+        QString targetMdbPath = args[idx + 2];
+        QString fyParam = (idx + 3 < args.size()) ? args[idx + 3] : "";
+
+        std::cout << "Exporting from SQLite: " << dbPath.toStdString() << " -> JetDB: " << targetMdbPath.toStdString() << "\n";
+        DatabaseManager::instance().closeDatabase();
+        if (!DatabaseManager::instance().initDatabase(dbPath)) {
+            std::cerr << "Failed to open SQLite database at " << dbPath.toStdString() << "\n";
+            return 1;
+        }
+
+        BahiKhataExporter exporter;
+        bool ok = exporter.exportDatabase(targetMdbPath, fyParam);
+
+        if (ok) {
+            std::cout << "Bahi-Khata JetDB Export SUCCESSFUL!\n";
+            return 0;
+        } else {
+            std::cerr << "Bahi-Khata JetDB Export FAILED.\n";
+            return 1;
+        }
+    }
+
+    if (args.contains("--verify-jet")) {
+        int idx = args.indexOf("--verify-jet");
+        if (idx + 1 >= args.size()) {
+            std::cerr << "Error: --verify-jet requires <mdb_path>\n";
+            return 1;
+        }
+        return verifyJetDb(args[idx + 1]);
     }
 
     printUsage();
