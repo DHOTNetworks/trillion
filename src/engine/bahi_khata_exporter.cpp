@@ -1756,6 +1756,7 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
         std::map<int, int> ledgerCodeToPhysPg;
         mdb_rewind_table(ledgersTbl);
         MdbColumn* colCode = (MdbColumn*)g_ptr_array_index(ledgersTbl->columns, 3);
+        MdbColumn* colGroup = (MdbColumn*)g_ptr_array_index(ledgersTbl->columns, 4);
         MdbColumn* colOpBal = (MdbColumn*)g_ptr_array_index(ledgersTbl->columns, 6);
         MdbColumn* colSalary = (MdbColumn*)g_ptr_array_index(ledgersTbl->columns, 19);
 
@@ -1786,17 +1787,30 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
                 auto it = partyMap.find(c);
                 if (it != partyMap.end()) {
                     bool modified = false;
+                    int grp = it->second.value("group_code").toInt();
+                    if (grp > 0 && colGroup->cur_value_start > 0 &&
+                        colGroup->cur_value_len == (int)sizeof(guint16)) {
+                        guint16 grpVal = (guint16)grp;
+                        if (memcmp(mdb->pg_buf + colGroup->cur_value_start, &grpVal, sizeof(guint16)) != 0) {
+                            memcpy(mdb->pg_buf + colGroup->cur_value_start, &grpVal, sizeof(guint16));
+                            modified = true;
+                        }
+                    }
                     double opBal = round2(it->second.value("opening_balance").toDouble());
                     if (colOpBal->cur_value_start > 0 &&
                         colOpBal->cur_value_len == (int)sizeof(double)) {
-                        memcpy(mdb->pg_buf + colOpBal->cur_value_start, &opBal, sizeof(double));
-                        modified = true;
+                        if (memcmp(mdb->pg_buf + colOpBal->cur_value_start, &opBal, sizeof(double)) != 0) {
+                            memcpy(mdb->pg_buf + colOpBal->cur_value_start, &opBal, sizeof(double));
+                            modified = true;
+                        }
                     }
                     double sal = round2(it->second.value("salary_per_month").toDouble());
                     if (colSalary->cur_value_start > 0 &&
                         colSalary->cur_value_len == (int)sizeof(double)) {
-                        memcpy(mdb->pg_buf + colSalary->cur_value_start, &sal, sizeof(double));
-                        modified = true;
+                        if (memcmp(mdb->pg_buf + colSalary->cur_value_start, &sal, sizeof(double)) != 0) {
+                            memcpy(mdb->pg_buf + colSalary->cur_value_start, &sal, sizeof(double));
+                            modified = true;
+                        }
                     }
                     if (modified) {
                         mdb_write_pg(mdb, ledgersTbl->cur_phys_pg);
