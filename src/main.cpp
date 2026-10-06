@@ -140,6 +140,17 @@ int main(int argc, char* argv[]) {
         "  border: 2px solid #0284C7;"
         "  background-color: #FFFFDD;"
         "}"
+        "QListView {"
+        "  background-color: #FFFFFF;"
+        "  color: #0F172A;"
+        "  border: 1px solid #94A3B8;"
+        "  selection-background-color: #2563EB;"
+        "  selection-color: #FFFFFF;"
+        "}"
+        "QListView::item:hover {"
+        "  background-color: #EFF6FF;"
+        "  color: #1E40AF;"
+        "}"
     );
 
     std::cout << "[PERF-TIMER] QApplication created: " << startupTimer.elapsed() << " ms" << std::endl;

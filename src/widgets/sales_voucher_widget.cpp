@@ -914,6 +914,14 @@ void SalesVoucherWidget::setupCompleters() {
         brokerCompleter->setCaseSensitivity(Qt::CaseInsensitive);
         brokerCompleter->setFilterMode(Qt::MatchContains);
         brokerCompleter->setCompletionMode(QCompleter::PopupCompletion);
+        if (auto* pop = brokerCompleter->popup()) {
+            pop->setStyleSheet(
+                "QListView { background-color: #FFFFFF; color: #0F172A; border: 1px solid #94A3B8; border-radius: 4px; font-size: 12px; font-weight: 700; padding: 2px; selection-background-color: #2563EB; selection-color: #FFFFFF; outline: none; }"
+                "QListView::item { padding: 5px 8px; border-radius: 3px; min-height: 20px; color: #0F172A; }"
+                "QListView::item:hover { background-color: #EFF6FF; color: #1E40AF; }"
+                "QListView::item:selected { background-color: #2563EB; color: #FFFFFF; }"
+            );
+        }
         m_brokerEdit->setCompleter(brokerCompleter);
     }
 
@@ -932,6 +940,14 @@ void SalesVoucherWidget::setupCompleters() {
         transportCompleter->setCaseSensitivity(Qt::CaseInsensitive);
         transportCompleter->setFilterMode(Qt::MatchContains);
         transportCompleter->setCompletionMode(QCompleter::PopupCompletion);
+        if (auto* pop = transportCompleter->popup()) {
+            pop->setStyleSheet(
+                "QListView { background-color: #FFFFFF; color: #0F172A; border: 1px solid #94A3B8; border-radius: 4px; font-size: 12px; font-weight: 700; padding: 2px; selection-background-color: #2563EB; selection-color: #FFFFFF; outline: none; }"
+                "QListView::item { padding: 5px 8px; border-radius: 3px; min-height: 20px; color: #0F172A; }"
+                "QListView::item:hover { background-color: #EFF6FF; color: #1E40AF; }"
+                "QListView::item:selected { background-color: #2563EB; color: #FFFFFF; }"
+            );
+        }
         m_transportEdit->setCompleter(transportCompleter);
     }
 }
