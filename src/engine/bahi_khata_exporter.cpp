@@ -526,6 +526,7 @@ struct JetInvoiceCtx {
     QString irnNo;
     QString transport;
     QString grade;
+    double kandaWeight = 0.0;
     std::vector<JetInvoiceItem> items;
     // charge multiset: cents -> label (consumed once each, exact match)
     std::multimap<long long, QString> charges;
@@ -625,7 +626,9 @@ static JetInvoiceCtx fetchInvoiceCtxCached(const JetInvoiceCache& cache, const Q
     ctx.headerItemCode = jetItemCodeCached(cache, h.value("item_id").toInt());
     ctx.vehicleNo = h.value("vehicle_no").toString();
     ctx.grNo = h.value("gr_no").toString();
-    ctx.driverName = h.value("driver_name", h.value("driver")).toString();
+    ctx.driverName = h.value("driver_name").toString().trimmed();
+    if (ctx.driverName.isEmpty()) ctx.driverName = h.value("driver").toString().trimmed();
+    ctx.kandaWeight = h.value("kanda_weight").toDouble();
     ctx.shippingAddress = h.value("shipping_address").toString();
     ctx.poNo = h.value("po_no").toString();
     ctx.challanNo = h.value("challan_no").toString();
@@ -1205,10 +1208,11 @@ static bool insertSaleTransportationRow(MdbHandle* mdb, MdbTableDef* trTbl, cons
     QByteArray chB = toJet4TextForCol(ctx.challanNo.left(255), colOf(12));
     setTNull(12, chB, chB.isEmpty());
 
-    double z = 0.0;
-    fields[13].is_null = 0; fields[13].value = &z; fields[13].siz = 8; // KandaWeight
+    double kw = ctx.kandaWeight;
+    fields[13].is_null = 0; fields[13].value = &kw; fields[13].siz = 8; // KandaWeight
     setTNull(14, QByteArray(), true); // OtherInfo
     setTNull(15, QByteArray(), true); // BardanaType
+    double z = 0.0;
     fields[16].is_null = 0; fields[16].value = &z; fields[16].siz = 8; // BardanaBags
     fields[17].is_null = 0; fields[17].value = &z; fields[17].siz = 8; // BardanaRate
     fields[18].is_null = 0; fields[18].value = &z; fields[18].siz = 8; // BardanaAmount
