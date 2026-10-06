@@ -502,6 +502,16 @@ struct JetInvoiceCtx {
     double tcsRate = 0.0;
     int dueDays = 0;
     int headerItemCode = 0;
+    QString vehicleNo;
+    QString grNo;
+    QString driverName;
+    QString shippingAddress;
+    QString poNo;
+    QString challanNo;
+    QString buyerPin;
+    QString irnNo;
+    QString transport;
+    QString grade;
     std::vector<JetInvoiceItem> items;
     // charge multiset: cents -> label (consumed once each, exact match)
     std::multimap<long long, QString> charges;
@@ -599,6 +609,16 @@ static JetInvoiceCtx fetchInvoiceCtxCached(const JetInvoiceCache& cache, const Q
     ctx.tcsRate = h.value("tcs_rate", 0.0).toDouble();
     ctx.dueDays = h.value("due_days", 0).toInt();
     ctx.headerItemCode = jetItemCodeCached(cache, h.value("item_id").toInt());
+    ctx.vehicleNo = h.value("vehicle_no").toString();
+    ctx.grNo = h.value("gr_no").toString();
+    ctx.driverName = h.value("driver_name", h.value("driver")).toString();
+    ctx.shippingAddress = h.value("shipping_address").toString();
+    ctx.poNo = h.value("po_no").toString();
+    ctx.challanNo = h.value("challan_no").toString();
+    ctx.buyerPin = h.value("pincode", h.value("buyer_pin")).toString();
+    ctx.irnNo = h.value("irn_no").toString();
+    ctx.transport = h.value("transport", h.value("transport_name")).toString();
+    ctx.grade = h.value("grade").toString();
 
     auto addCharge = [&](const QString& label, double amt) {
         if (std::abs(amt) >= 0.005) ctx.charges.insert({toCents(amt), label});
@@ -1126,6 +1146,121 @@ static int insertStockLines(MdbHandle* mdb, MdbTableDef* stkTxTbl, const JetInvo
         if (insertJet4Row(mdb, stkTxTbl, fields.data(), stkTxTbl->num_cols)) done++;
     }
     return done;
+}
+
+static bool insertSaleTransportationRow(MdbHandle* mdb, MdbTableDef* trTbl, const JetInvoiceCtx& ctx,
+                                       guint32 vchNo, const QString& isoDate, const QString& transType) {
+    if (!mdb || !trTbl) return false;
+    std::vector<MdbField> fields(trTbl->num_cols);
+    for (int i = 0; i < trTbl->num_cols; i++) {
+        MdbColumn* col = (MdbColumn*)g_ptr_array_index(trTbl->columns, i);
+        fields[i].colnum = i;
+        fields[i].is_fixed = col->is_fixed;
+        fields[i].is_null = 1;
+    }
+    auto colOf = [&](int idx) -> MdbColumn* {
+        return (idx >= 0 && idx < trTbl->num_cols) ? (MdbColumn*)g_ptr_array_index(trTbl->columns, idx) : nullptr;
+    };
+    auto setT = [&](int idx, const QByteArray& bytes) {
+        fields[idx].is_null = 0;
+        fields[idx].value = (void*)bytes.constData();
+        fields[idx].siz = bytes.size();
+    };
+    auto setTNull = [&](int idx, const QByteArray& bytes, bool condNull) {
+        if (condNull || bytes.isEmpty()) fields[idx].is_null = 1;
+        else setT(idx, bytes);
+    };
+
+    double oleD = toOleDate(isoDate);
+    fields[0].is_null = 0; fields[0].value = &oleD; fields[0].siz = 8;
+    guint32 vn = vchNo;
+    fields[1].is_null = 0; fields[1].value = &vn; fields[1].siz = 4;
+    QByteArray ttB = toJet4TextForCol(transType.left(5), colOf(2));
+    setT(2, ttB);
+
+    QByteArray vehB = toJet4TextForCol(ctx.vehicleNo.left(50), colOf(3));
+    setTNull(3, vehB, vehB.isEmpty());
+    QByteArray grB = toJet4TextForCol(ctx.grNo.left(50), colOf(4));
+    setTNull(4, grB, grB.isEmpty());
+    QByteArray drvB = toJet4TextForCol(ctx.driverName.left(50), colOf(5));
+    setTNull(5, drvB, drvB.isEmpty());
+    setTNull(6, QByteArray(), true); // ST38No
+    setTNull(7, QByteArray(), true); // DispatchTime
+    setTNull(8, QByteArray(), true); // DispatchDate
+    QByteArray poB = toJet4TextForCol(ctx.poNo.left(255), colOf(9));
+    setTNull(9, poB, poB.isEmpty());
+    QByteArray itemB = toJet4TextForCol(ctx.broker.left(255), colOf(10));
+    setTNull(10, itemB, itemB.isEmpty());
+    QByteArray gradeB = toJet4TextForCol(ctx.grade.left(255), colOf(11));
+    setTNull(11, gradeB, gradeB.isEmpty());
+    QByteArray chB = toJet4TextForCol(ctx.challanNo.left(255), colOf(12));
+    setTNull(12, chB, chB.isEmpty());
+
+    double z = 0.0;
+    fields[13].is_null = 0; fields[13].value = &z; fields[13].siz = 8; // KandaWeight
+    setTNull(14, QByteArray(), true); // OtherInfo
+    setTNull(15, QByteArray(), true); // BardanaType
+    fields[16].is_null = 0; fields[16].value = &z; fields[16].siz = 8; // BardanaBags
+    fields[17].is_null = 0; fields[17].value = &z; fields[17].siz = 8; // BardanaRate
+    fields[18].is_null = 0; fields[18].value = &z; fields[18].siz = 8; // BardanaAmount
+    guint32 z32 = 0;
+    fields[19].is_null = 0; fields[19].value = &z32; fields[19].siz = 4; // CalculateVATonFreight
+    fields[20].is_null = 0; fields[20].value = &z32; fields[20].siz = 4; // CalculateCommissiononFreight
+
+    QByteArray shipB = toJet4TextForCol(ctx.shippingAddress.left(255), colOf(21));
+    setTNull(21, shipB, shipB.isEmpty());
+    fields[22].is_null = 1; // QRCode NULL
+    QByteArray irnB = toJet4TextForCol(ctx.irnNo.left(255), colOf(23));
+    setTNull(23, irnB, irnB.isEmpty());
+    QByteArray trNmB = toJet4TextForCol(ctx.transport.left(255), colOf(24));
+    setTNull(24, trNmB, trNmB.isEmpty());
+    setTNull(25, QByteArray(), true); // TransporterGSTIN
+
+    // Standard dropdown defaults required by VB6 ComboBoxes:
+    QByteArray trModB = toJet4TextForCol("By Road", colOf(26));
+    setT(26, trModB); // TransportMode
+
+    setTNull(27, QByteArray(), true); // Distance
+    setTNull(28, QByteArray(), true); // TransportDocNo
+    setTNull(29, QByteArray(), true); // TransportDocDt
+    setTNull(30, QByteArray(), true); // BuyerLocation
+    QByteArray pinB = toJet4TextForCol(ctx.buyerPin.left(255), colOf(31));
+    setTNull(31, pinB, pinB.isEmpty());
+
+    QByteArray ewOB = toJet4TextForCol("Regular", colOf(32));
+    setT(32, ewOB); // EWayOthers
+
+    setTNull(33, QByteArray(), true); // ShipFrom_GSTIN
+    setTNull(34, QByteArray(), true); // ShipFrom_Nm
+    setTNull(35, QByteArray(), true); // ShipFrom_Addr1
+    setTNull(36, QByteArray(), true); // ShipFrom_Loc
+    setTNull(37, QByteArray(), true); // ShipFrom_Pin
+    QByteArray naB = toJet4TextForCol("N/A", colOf(38));
+    setT(38, naB); // ShipFrom_Stcd
+    setTNull(39, QByteArray(), true); // ShipFrom_Others
+
+    setTNull(40, QByteArray(), true); // ShipTo_Gstin
+    setTNull(41, QByteArray(), true); // ShipTo_Nm
+    setTNull(42, QByteArray(), true); // ShipTo_Addr1
+    setTNull(43, QByteArray(), true); // ShipTo_Loc
+    setTNull(44, QByteArray(), true); // ShipTo_Pin
+    QByteArray naB2 = toJet4TextForCol("N/A", colOf(45));
+    setT(45, naB2); // ShipTo_Stcd
+    setTNull(46, QByteArray(), true); // ShipTo_Others
+
+    QByteArray eiTrB = toJet4TextForCol("Regular", colOf(47));
+    setT(47, eiTrB); // EInvTransType
+
+    setTNull(48, QByteArray(), true); // EInvStatus
+    setTNull(49, QByteArray(), true); // EWayStatus
+    setTNull(50, QByteArray(), true); // ShippingBillDate
+    setTNull(51, QByteArray(), true); // ShippingBillNo
+    setTNull(52, QByteArray(), true); // ShippingPortCode
+    fields[53].is_null = 1; // EInvPDF NULL
+    setTNull(54, QByteArray(), true); // EInvAckNo
+    setTNull(55, QByteArray(), true); // EInvAckDate
+
+    return insertJet4Row(mdb, trTbl, fields.data(), trTbl->num_cols);
 }
 #endif
 
@@ -2090,6 +2225,39 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
                 }
             }
 
+            // SaleTransportationDetail table for voucher transport metadata
+            MdbTableDef* trTbl = mdb_read_table_by_name(mdb, (char*)"SaleTransportationDetail", MDB_TABLE);
+            std::set<std::tuple<int, QString, QString>> existingTransportSig;
+            if (trTbl) {
+                mdb_read_columns(trTbl);
+                mdb_read_indices(trTbl);
+                MdbColumn* trDate = (MdbColumn*)g_ptr_array_index(trTbl->columns, 0);
+                MdbColumn* trVch = (MdbColumn*)g_ptr_array_index(trTbl->columns, 1);
+                MdbColumn* trType = (MdbColumn*)g_ptr_array_index(trTbl->columns, 2);
+                mdb_rewind_table(trTbl);
+                while (mdb_fetch_row(trTbl)) {
+                    int vn = (trVch && trVch->cur_value_len == 4)
+                        ? mdb_get_int32(mdb->pg_buf, trVch->cur_value_start) : 0;
+                    QString dv;
+                    if (trDate && trDate->cur_value_len == 8) {
+                        double od = mdb_get_double(mdb->pg_buf, trDate->cur_value_start);
+                        dv = QDate(1899, 12, 30).addDays((qint64)od).toString("yyyy-MM-dd");
+                    }
+                    QString tt;
+                    if (trType && trType->cur_value_len > 0) {
+                        const unsigned char* p = (const unsigned char*)mdb->pg_buf + trType->cur_value_start;
+                        if (trType->cur_value_len >= 3 && p[0] == 0xFF && p[1] == 0xFE)
+                            tt = QString::fromLatin1((const char*)p + 2, trType->cur_value_len - 2);
+                        else {
+                            QString u;
+                            for (int bi = 0; bi + 1 < trType->cur_value_len; bi += 2) u += QChar(p[bi]);
+                            tt = u;
+                        }
+                    }
+                    existingTransportSig.insert(std::make_tuple(vn, dv, tt.trimmed()));
+                }
+            }
+
             // Group legs by voucher (ordered), sort each by (row_no, id).
             // RowNo comes from SQLite (native-preserved); fallback counter fills gaps.
             struct LegRow { QVariantMap m; int id = 0; int rowNo = 0; };
@@ -2316,6 +2484,20 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
                         }
                     }
                 }
+
+                // Transportation detail record once per Sale/Purc voucher
+                if (isSalePurc && trTbl) {
+                    auto tkey = std::make_tuple(
+                        legs.first().m.value("__vch").toInt(),
+                        legs.first().m.value("__date").toString(), vType);
+                    if (existingTransportSig.find(tkey) == existingTransportSig.end()) {
+                        if (insertSaleTransportationRow(mdb, trTbl, ictx,
+                                                       (guint32)legs.first().m.value("__vch").toInt(),
+                                                       legs.first().m.value("__date").toString(), vType)) {
+                            existingTransportSig.insert(tkey);
+                        }
+                    }
+                }
             }
             std::cout << "[EXPORT] Total Transactions Exported: " << summary.transactionsExported
                       << ", StockTransactions lines: " << stockLines << std::endl;
@@ -2327,6 +2509,10 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
 
             finalizeJet4Table(mdb, txTbl);
             mdb_free_tabledef(txTbl);
+            if (trTbl) {
+                finalizeJet4Table(mdb, trTbl);
+                mdb_free_tabledef(trTbl);
+            }
 
             // Sync TempLastEnteredVoucher with latest transaction date and FY range
             MdbTableDef* lastVchTbl = mdb_read_table_by_name(mdb, (char*)"TempLastEnteredVoucher", MDB_TABLE);
