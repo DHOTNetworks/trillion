@@ -67,13 +67,15 @@ static double toOleDate(const QString& dateStr) {
 
 /* Native Jet honors the per-column UnicodeCompression property
  * (Ledgers.CurrentBalance and Transactions.DrCr are "no" -> always UCS-2LE).
- * mdb_ascii2unicode ignores it; we must not, for byte-exact rows. */
+ * We determine this safely by column name to avoid uninitialized props pointers. */
 static bool jetColCompress(MdbColumn* col) {
-    if (!col || !col->props || !col->props->hash) return true; // legacy default
-    char* v = static_cast<char*>(g_hash_table_lookup(col->props->hash, (gpointer)"UnicodeCompression"));
-    if (!v) return true;
-    QString s = QString::fromUtf8(v).trimmed();
-    return s.compare("yes", Qt::CaseInsensitive) == 0 || s == "1" || s.compare("true", Qt::CaseInsensitive) == 0;
+    if (!col) return true;
+    const char* n = col->name;
+    if (strcmp(n, "CurrentBalance") == 0 || strcmp(n, "DrCr") == 0 ||
+        strcmp(n, "MyStation") == 0 || strcmp(n, "MySTATE") == 0 || strcmp(n, "Bank2") == 0) {
+        return false;
+    }
+    return true;
 }
 
 static QByteArray toJet4TextRaw(const QString& str, bool allowCompress) {
@@ -269,17 +271,18 @@ static bool surgicalReplaceRow(MdbHandle* mdb, MdbTableDef* tbl, int rowIdx0,
     return mdb_write_pg(mdb, tbl->cur_phys_pg) != 0;
 }
 
-/* Applies one signed delta (Dr-positive) to a ledger's cached CurrentBalance
- * by repacking that ledger's row in place. Mirrors the app's voucher-save. */
-static bool applyLedgerBalanceDelta(MdbHandle* mdb, int ledgerCode, double delta) {
-    if (!mdb || ledgerCode <= 0 || std::abs(delta) < 0.0005) return true;
+static void finalizeJet4Table(MdbHandle* mdb, MdbTableDef* table);
+
+/* Applies signed deltas (Dr-positive) to cached CurrentBalance of all
+ * modified ledgers in a single pass over the Ledgers table. Mirrors the app's voucher-save. */
+static bool applyLedgerBalanceDeltas(MdbHandle* mdb, const QMap<int, double>& balDeltas) {
+    if (!mdb || balDeltas.isEmpty()) return true;
     MdbTableDef* tbl = mdb_read_table_by_name(mdb, (char*)"Ledgers", MDB_TABLE);
     if (!tbl) return false;
     mdb_read_columns(tbl);
-    // Ledgers layout (Data.002): col 3 = Code1st (INT), col 16 = CurrentBalance (TEXT)
-    bool done = false;
     mdb_rewind_table(tbl);
-    while (!done && mdb_fetch_row(tbl)) {
+    int updatedCount = 0;
+    while (mdb_fetch_row(tbl)) {
         MdbColumn* colCode = (MdbColumn*)g_ptr_array_index(tbl->columns, 3);
         int code = 0;
         if (colCode->cur_value_len == 2)
@@ -289,7 +292,9 @@ static bool applyLedgerBalanceDelta(MdbHandle* mdb, int ledgerCode, double delta
                                         colCode->col_type, colCode->cur_value_len);
             if (s) { code = atoi(s); g_free(s); }
         }
-        if (code != ledgerCode) continue;
+        auto it = balDeltas.constFind(code);
+        if (it == balDeltas.constEnd() || std::abs(it.value()) < 0.0005) continue;
+        double delta = it.value();
 
         int rowStart = 0;
         size_t rowSize = 0;
@@ -297,7 +302,7 @@ static bool applyLedgerBalanceDelta(MdbHandle* mdb, int ledgerCode, double delta
         rowStart &= 0x0FFF;
         MdbField fields[128];
         memset(fields, 0, sizeof(fields));
-        if (mdb_crack_row(tbl, rowStart, rowSize, fields) < 0) break;
+        if (mdb_crack_row(tbl, rowStart, rowSize, fields) < 0) continue;
 
         MdbColumn* colBal = (MdbColumn*)g_ptr_array_index(tbl->columns, 16);
         char* curStr = mdb_col_to_string(mdb, mdb->pg_buf, colBal->cur_value_start,
@@ -308,9 +313,7 @@ static bool applyLedgerBalanceDelta(MdbHandle* mdb, int ledgerCode, double delta
         double cur = parseJetBalance(oldText, side);
         double updated = round2dbl(cur + delta);
         QString newText = formatJetBalance(updated, side);
-        // CurrentBalance is UnicodeCompression=no -> always UCS-2LE.
         QByteArray newBytes = toJet4TextForCol(newText, colBal);
-        // Empty must stay a valid pointer (Jet4Writer null-vs-empty rule).
         static const char kEmpty = '\0';
         fields[16].is_null = 0;
         fields[16].value = newBytes.isEmpty() ? (void*)&kEmpty : (void*)newBytes.data();
@@ -318,21 +321,15 @@ static bool applyLedgerBalanceDelta(MdbHandle* mdb, int ledgerCode, double delta
 
         unsigned char rowBuf[4096];
         int newSize = mdb_pack_row(tbl, rowBuf, tbl->num_cols, fields);
-        if (newSize <= 0 || newSize > 4000) break;
-        // Surgical in-place/sliding update (NOT mdb_replace_row: minimal delta).
-        if (!surgicalReplaceRow(mdb, tbl, tbl->cur_row - 1, rowBuf, newSize)) {
-            std::cout << "[BAL] skip ledger " << ledgerCode << " (no room)" << std::endl;
-            break;
+        if (newSize <= 0 || newSize > 4000) continue;
+        if (surgicalReplaceRow(mdb, tbl, tbl->cur_row - 1, rowBuf, newSize)) {
+            updatedCount++;
         }
-        {
-            std::cout << "[BAL] ledger " << ledgerCode << " "
-                      << oldText.toStdString() << " -> " << newText.toStdString() << std::endl;
-            done = true;
-        }
-        break;
     }
+    finalizeJet4Table(mdb, tbl);
     mdb_free_tabledef(tbl);
-    return done;
+    std::cout << "[BAL] Applied balance deltas to " << updatedCount << " ledgers." << std::endl;
+    return true;
 }
 
 static bool insertJet4Row(MdbHandle* mdb, MdbTableDef* table, MdbField* fields, int num_fields) {
@@ -512,14 +509,51 @@ struct JetInvoiceCtx {
 
 static long long toCents(double v) { return (long long)std::llround(v * 100.0); }
 
-static int jetItemCode(DatabaseManager& appDb, int sqliteItemId) {
-    if (sqliteItemId <= 0) return 0;
-    QVariantList r = appDb.executeQuery(
-        "SELECT code FROM stock_items WHERE id = ? LIMIT 1;", {sqliteItemId});
-    if (r.isEmpty()) return 0;
-    bool ok = false;
-    int c = r.first().toMap().value("code").toInt(&ok);
-    return ok ? c : 0;
+struct JetInvoiceCache {
+    std::unordered_map<int, int> stockItemCodes; // sqlite item id -> code
+    std::unordered_map<std::string, QVariantMap> salesInvoices;
+    std::unordered_map<std::string, QVariantMap> purcInvoices;
+    std::unordered_map<int, std::vector<QVariantMap>> salesItems;
+    std::unordered_map<int, std::vector<QVariantMap>> purcItems;
+};
+
+static JetInvoiceCache buildInvoiceCache(DatabaseManager& appDb) {
+    JetInvoiceCache cache;
+    QVariantList stkV = appDb.executeQuery("SELECT id, code FROM stock_items;");
+    for (const auto& v : stkV) {
+        QVariantMap m = v.toMap();
+        cache.stockItemCodes[m.value("id").toInt()] = m.value("code").toInt();
+    }
+    QVariantList sInvV = appDb.executeQuery("SELECT * FROM sales_invoices;");
+    for (const auto& v : sInvV) {
+        QVariantMap m = v.toMap();
+        cache.salesInvoices[m.value("invoice_no").toString().trimmed().toStdString()] = m;
+    }
+    QVariantList pInvV = appDb.executeQuery("SELECT * FROM purchase_invoices;");
+    for (const auto& v : pInvV) {
+        QVariantMap m = v.toMap();
+        cache.purcInvoices[m.value("invoice_no").toString().trimmed().toStdString()] = m;
+    }
+    QVariantList sItmV = appDb.executeQuery(
+        "SELECT item_id, item_name, grade, bag_count, packing, weight_qtl,"
+        " rate_per_qtl, taxable_amount, total_amount, gst_pct, invoice_id FROM sales_invoice_items ORDER BY id ASC;");
+    for (const auto& v : sItmV) {
+        QVariantMap m = v.toMap();
+        cache.salesItems[m.value("invoice_id").toInt()].push_back(m);
+    }
+    QVariantList pItmV = appDb.executeQuery(
+        "SELECT item_id, item_name, grade, bag_count, packing, weight_qtl,"
+        " rate_per_qtl, taxable_amount, total_amount, gst_pct, invoice_id FROM purchase_invoice_items ORDER BY id ASC;");
+    for (const auto& v : pItmV) {
+        QVariantMap m = v.toMap();
+        cache.purcItems[m.value("invoice_id").toInt()].push_back(m);
+    }
+    return cache;
+}
+
+static int jetItemCodeCached(const JetInvoiceCache& cache, int sqliteItemId) {
+    auto it = cache.stockItemCodes.find(sqliteItemId);
+    return (it != cache.stockItemCodes.end()) ? it->second : 0;
 }
 
 static int parseInvSeq(const QString& invNo) {
@@ -534,19 +568,18 @@ static QString mapTaxStatus(const QString& raw) {
     return "GST"; // native default (covers "GST", "GST / Exempt", empty)
 }
 
-static JetInvoiceCtx fetchInvoiceCtx(DatabaseManager& appDb, const QString& transType,
-                                     const QString& invoiceNo) {
+static JetInvoiceCtx fetchInvoiceCtxCached(const JetInvoiceCache& cache, const QString& transType,
+                                           const QString& invoiceNo) {
     JetInvoiceCtx ctx;
-    QString tbl = (transType.compare("Sale", Qt::CaseInsensitive) == 0)
-        ? "sales_invoices" : "purchase_invoices";
-    QString itemTbl = (transType.compare("Sale", Qt::CaseInsensitive) == 0)
-        ? "sales_invoice_items" : "purchase_invoice_items";
-    ctx.isSale = (tbl == "sales_invoices");
-    if (invoiceNo.trimmed().isEmpty()) return ctx;
-    QVariantList inv = appDb.executeQuery(
-        QString("SELECT * FROM %1 WHERE invoice_no = ? LIMIT 1;").arg(tbl), {invoiceNo});
-    if (inv.isEmpty()) return ctx;
-    QVariantMap h = inv.first().toMap();
+    ctx.isSale = (transType.compare("Sale", Qt::CaseInsensitive) == 0);
+    std::string invKey = invoiceNo.trimmed().toStdString();
+    if (invKey.empty()) return ctx;
+
+    const auto& invMap = ctx.isSale ? cache.salesInvoices : cache.purcInvoices;
+    auto it = invMap.find(invKey);
+    if (it == invMap.end()) return ctx;
+    const QVariantMap& h = it->second;
+
     ctx.valid = true;
     ctx.invoiceNo = invoiceNo;
     QString dcol = "invoice_date";
@@ -565,13 +598,11 @@ static JetInvoiceCtx fetchInvoiceCtx(DatabaseManager& appDb, const QString& tran
     ctx.invSeq = parseInvSeq(invoiceNo);
     ctx.tcsRate = h.value("tcs_rate", 0.0).toDouble();
     ctx.dueDays = h.value("due_days", 0).toInt();
-    ctx.headerItemCode = jetItemCode(appDb, h.value("item_id").toInt());
+    ctx.headerItemCode = jetItemCodeCached(cache, h.value("item_id").toInt());
 
     auto addCharge = [&](const QString& label, double amt) {
         if (std::abs(amt) >= 0.005) ctx.charges.insert({toCents(amt), label});
     };
-    // Order here does not matter (multimap sorted by amount); consumption
-    // order is driven by leg sequence with priority rules in the resolver.
     addCharge("SGST", h.value("sgst_amount").toDouble());
     addCharge("CGST", h.value("cgst_amount").toDouble());
     addCharge("IGST", h.value("igst_amount").toDouble());
@@ -585,29 +616,27 @@ static JetInvoiceCtx fetchInvoiceCtx(DatabaseManager& appDb, const QString& tran
     addCharge("Auction", h.value("auction").toDouble());
     addCharge("OtherExp", h.value("other_exp").toDouble());
     addCharge("Freight", h.value("freight_charges").toDouble());
-    // round_off/tcs/tds handled by account rules; kept out of the multiset.
 
     int invId = h.value("id").toInt();
-    QVariantList items = appDb.executeQuery(
-        QString("SELECT item_id, item_name, grade, bag_count, packing, weight_qtl,"
-                " rate_per_qtl, taxable_amount, total_amount, gst_pct FROM %1"
-                " WHERE invoice_id = ? ORDER BY id ASC;").arg(itemTbl), {invId});
-    for (const auto& iv : items) {
-        QVariantMap m = iv.toMap();
-        JetInvoiceItem it;
-        it.jetCode = jetItemCode(appDb, m.value("item_id").toInt());
-        it.name = m.value("item_name").toString();
-        it.grade = m.value("grade").toString();
-        it.bags = m.value("bag_count").toInt();
-        it.packing = m.value("packing").toString().toFloat();
-        if (it.packing == 0.0f) it.packing = (float)m.value("packing").toDouble();
-        it.weight = m.value("weight_qtl").toDouble();
-        it.rate = m.value("rate_per_qtl").toDouble();
-        it.amount = m.value("total_amount").toDouble();
-        if (std::abs(it.amount) < 0.005) it.amount = m.value("taxable_amount").toDouble();
-        it.taxable = m.value("taxable_amount").toDouble();
-        it.gstPct = m.value("gst_pct").toDouble();
-        ctx.items.push_back(it);
+    const auto& itemsMap = ctx.isSale ? cache.salesItems : cache.purcItems;
+    auto itemIt = itemsMap.find(invId);
+    if (itemIt != itemsMap.end()) {
+        for (const auto& m : itemIt->second) {
+            JetInvoiceItem item;
+            item.jetCode = jetItemCodeCached(cache, m.value("item_id").toInt());
+            item.name = m.value("item_name").toString();
+            item.grade = m.value("grade").toString();
+            item.bags = m.value("bag_count").toInt();
+            item.packing = m.value("packing").toString().toFloat();
+            if (item.packing == 0.0f) item.packing = (float)m.value("packing").toDouble();
+            item.weight = m.value("weight_qtl").toDouble();
+            item.rate = m.value("rate_per_qtl").toDouble();
+            item.amount = m.value("total_amount").toDouble();
+            if (std::abs(item.amount) < 0.005) item.amount = m.value("taxable_amount").toDouble();
+            item.taxable = m.value("taxable_amount").toDouble();
+            item.gstPct = m.value("gst_pct").toDouble();
+            ctx.items.push_back(item);
+        }
     }
     if (ctx.headerItemCode == 0 && !ctx.items.empty())
         ctx.headerItemCode = ctx.items.front().jetCode;
@@ -698,6 +727,7 @@ static bool insertSalePurcLeg(MdbHandle* mdb, MdbTableDef* txTbl, const SalePurc
     if (!mdb || !txTbl) return false;
     const bool isSale = (L.transType.compare("Sale", Qt::CaseInsensitive) == 0);
     std::vector<MdbField> fields(txTbl->num_cols);
+    std::vector<QByteArray> textBuffers(txTbl->num_cols);
     for (int i = 0; i < txTbl->num_cols; i++) {
         MdbColumn* col = (MdbColumn*)g_ptr_array_index(txTbl->columns, i);
         fields[i].colnum = i;
@@ -707,7 +737,10 @@ static bool insertSalePurcLeg(MdbHandle* mdb, MdbTableDef* txTbl, const SalePurc
         fields[i].siz = 0;
     }
     auto setText = [&](int idx, const QByteArray& b) {
-        fields[idx].is_null = 0; fields[idx].value = (void*)b.data(); fields[idx].siz = b.size();
+        textBuffers[idx] = b;
+        fields[idx].is_null = 0;
+        fields[idx].value = (void*)textBuffers[idx].data();
+        fields[idx].siz = textBuffers[idx].size();
     };
     auto setTextOrNull = [&](int idx, const QByteArray& b, bool isNull) {
         if (isNull) { fields[idx].is_null = 1; return; }
@@ -724,14 +757,12 @@ static bool insertSalePurcLeg(MdbHandle* mdb, MdbTableDef* txTbl, const SalePurc
     double oleD = toOleDate(L.dateStr);
     fields[2].is_null = 0; fields[2].value = &oleD; fields[2].siz = 8;
 
-    QByteArray ttBytes = toJet4TextForCol(L.transType.left(5), colOf(3));
-    fields[3].is_null = 0; fields[3].value = ttBytes.data(); fields[3].siz = ttBytes.size();
+    setText(3, toJet4TextForCol(L.transType.left(5), colOf(3)));
 
     guint16 acVal = L.accountCode;
     fields[4].is_null = 0; fields[4].value = &acVal; fields[4].siz = 2;
 
-    QByteArray dcBytes = toJet4TextForCol(L.drCr, colOf(5));
-    fields[5].is_null = 0; fields[5].value = dcBytes.data(); fields[5].siz = dcBytes.size();
+    setText(5, toJet4TextForCol(L.drCr, colOf(5)));
 
     double amtVal = L.amount;
     fields[6].is_null = 0; fields[6].value = &amtVal; fields[6].siz = 8;
@@ -767,8 +798,7 @@ static bool insertSalePurcLeg(MdbHandle* mdb, MdbTableDef* txTbl, const SalePurc
     } else if (L.entryType.isEmpty()) {
         fields[15].is_null = 1;
     } else {
-        QByteArray eBytes = toJet4TextForCol(L.entryType.left(25), colOf(15));
-        setText(15, eBytes);
+        setText(15, toJet4TextForCol(L.entryType.left(25), colOf(15)));
     }
 
     guint16 dueVal = (guint16)qMax(0, L.dueDays);
@@ -788,9 +818,8 @@ static bool insertSalePurcLeg(MdbHandle* mdb, MdbTableDef* txTbl, const SalePurc
     const double oleZeroDate = 2.0; // 01/01/1900 sentinel ("01/01/00")
 
     if (isSale) {
+        setText(18, toJet4TextForCol("None", colOf(18)));
         if (L.isFirstLeg) {
-            QByteArray spBytes = toJet4TextForCol("None", colOf(18));
-            setText(18, spBytes);
             setEmpty(19); setEmpty(20);
             fields[21].is_null = 0; fields[21].value = &zero32; fields[21].siz = 4;
             fields[23].is_null = 0; fields[23].value = &zero32; fields[23].siz = 4;
@@ -836,13 +865,11 @@ static bool insertSalePurcLeg(MdbHandle* mdb, MdbTableDef* txTbl, const SalePurc
     fields[46].is_null = 0; fields[46].value = &zero32; fields[46].siz = 4; // E1PartyCode
     if (isSale) { setEmpty(47); setEmpty(48); setEmpty(49); }
     fields[50].is_null = 0; fields[50].value = &zero32; fields[50].siz = 4; // CompositionVch
-    QByteArray posBytes = toJet4TextForCol("0", colOf(52));
-    setText(52, posBytes); // PlaceOfSupply "0"
+    setText(52, toJet4TextForCol("0", colOf(52))); // PlaceOfSupply "0"
     if (isSale) {
         setEmpty(53); // ECommGSTIN "" (Purc: "0")
     } else {
-        QByteArray ecBytes = toJet4TextForCol("0", colOf(53));
-        setText(53, ecBytes);
+        setText(53, toJet4TextForCol("0", colOf(53)));
     }
     fields[54].is_null = 0; fields[54].value = &zero32; fields[54].siz = 4; // TransReturn
     fields[55].is_null = 0; fields[55].value = &zero32; fields[55].siz = 4; // GroupTick
@@ -859,8 +886,7 @@ static bool insertSalePurcLeg(MdbHandle* mdb, MdbTableDef* txTbl, const SalePurc
     if (isSale) {
         fields[66].is_null = 0; fields[66].value = (void*)&oleZeroDate; fields[66].siz = 8;
     }
-    QByteArray tmpBytes = toJet4TextForCol("0", colOf(67));
-    setText(67, tmpBytes); // TempInv "0"
+    setText(67, toJet4TextForCol("0", colOf(67))); // TempInv "0"
     float tdsRate = 0.0f;
     fields[68].is_null = 0; fields[68].value = &tdsRate; fields[68].siz = 4; // TDSRate194Q
     fields[69].is_null = 0; fields[69].value = &zeroDbl; fields[69].siz = 8; // Taxable194Q
@@ -1375,13 +1401,14 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaOdbc(const ExportOp
             updateProgress(65, "Exporting Double-Entry Vouchers & Transactions...");
             
             QString txSql =
-                "SELECT t.voucher_no, t.voucher_date, t.trans_type, t.dr_cr, t.amount, t.narration, "
-                "COALESCE(p.legacy_id, p.id) as ac_code, "
-                "COALESCE(op.legacy_id, op.id, 0) as party_code, "
+                "SELECT t.id, t.voucher_no, t.voucher_date, t.trans_type, t.dr_cr, t.amount, t.narration, "
+                "COALESCE(p.legacy_id, (SELECT legacy_id FROM parties WHERE name = t.party_name), (SELECT legacy_id FROM parties WHERE id = t.account_code), p.id, t.account_code) as ac_code, "
+                "COALESCE(op.legacy_id, op.id, (SELECT legacy_id FROM parties WHERE name = t.opposing_account), 0) as party_code, "
+                "t.party_name, t.opposing_account, "
                 "t.financial_year "
                 "FROM transactions t "
-                "LEFT JOIN parties p ON t.party_id = p.id OR t.party_name = p.name "
-                "LEFT JOIN parties op ON t.opposing_account = op.name ";
+                "LEFT JOIN parties p ON (t.party_id = p.id OR (t.party_id IS NULL AND t.party_name = p.name)) "
+                "LEFT JOIN parties op ON (t.opposing_account = op.name) ";
 
             txSql += buildFyWhere(options.financialYear);
             txSql += "ORDER BY t.voucher_date ASC, t.id ASC;";
@@ -1956,13 +1983,14 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
             // --- Match Data.002: export ALL FYs when param empty, else robust FY match ---
             QString txSql =
                 "SELECT t.id, t.voucher_no, t.voucher_date, t.trans_type, t.dr_cr, t.amount, t.narration, "
-                "COALESCE(t.account_code, p.legacy_id, p.id) as ac_code, "
-                "COALESCE(op.legacy_id, op.id, 0) as party_code, "
+                "COALESCE(p.legacy_id, (SELECT legacy_id FROM parties WHERE name = t.party_name), (SELECT legacy_id FROM parties WHERE id = t.account_code), p.id, t.account_code) as ac_code, "
+                "COALESCE(op.legacy_id, op.id, (SELECT legacy_id FROM parties WHERE name = t.opposing_account), 0) as party_code, "
+                "t.party_name, t.opposing_account, "
                 "t.financial_year, t.row_no, t.invoice_no, t.due_days, "
                 "t.tds_amount, t.taxable_amount "
                 "FROM transactions t "
-                "LEFT JOIN parties p ON t.party_id = p.id OR t.party_name = p.name "
-                "LEFT JOIN parties op ON t.opposing_account = op.name ";
+                "LEFT JOIN parties p ON (t.party_id = p.id OR (t.party_id IS NULL AND t.party_name = p.name)) "
+                "LEFT JOIN parties op ON (t.opposing_account = op.name) ";
 
             // Shared robust FY filter (same normalization as the ODBC engine).
             txSql += buildFyWhere(options.financialYear);
@@ -2057,6 +2085,8 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
                 }
             };
 
+            JetInvoiceCache invCache = buildInvoiceCache(appDb);
+
             for (const QString& vKey : groupOrder) {
                 QList<LegRow> legs = groups[vKey];
                 std::sort(legs.begin(), legs.end(), [](const LegRow& a, const LegRow& b) {
@@ -2095,7 +2125,7 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
                         QString ino = lr.m.value("invoice_no").toString().trimmed();
                         if (!ino.isEmpty()) { groupInvoice = ino; break; }
                     }
-                    ictx = fetchInvoiceCtx(appDb, vType, groupInvoice);
+                    ictx = fetchInvoiceCtxCached(invCache, vType, groupInvoice);
                 }
 
                 bool goodsAssigned = false;
@@ -2176,7 +2206,8 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
                                 ictx, amt, acCode, party, goodsAssigned, fallbackIdx);
                             if (L.entryType == "Goods Amount") goodsAssigned = true;
                             if (L.entryType != "Round Off" && L.entryType != "TDS194Q" &&
-                                L.entryType != "TCS" && L.entryType != "DamiTDS") {
+                                L.entryType != "TCS" && L.entryType != "DamiTDS" &&
+                                L.entryType != "Freight") {
                                 L.itemCode = (guint16)ictx.headerItemCode;
                             } else {
                                 L.itemCode = 0;
@@ -2233,10 +2264,7 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
             // Apply cached ledger balances for newly inserted vouchers so the
             // app reflects them without a manual open+save per voucher.
             updateProgress(80, "Updating cached ledger balances...");
-            for (auto it = balDeltas.constBegin(); it != balDeltas.constEnd(); ++it) {
-                if (std::abs(it.value()) >= 0.0005)
-                    applyLedgerBalanceDelta(mdb, it.key(), it.value());
-            }
+            applyLedgerBalanceDeltas(mdb, balDeltas);
 
             finalizeJet4Table(mdb, txTbl);
             mdb_free_tabledef(txTbl);
