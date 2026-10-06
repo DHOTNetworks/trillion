@@ -1066,12 +1066,7 @@ static int insertStockLines(MdbHandle* mdb, MdbTableDef* stkTxTbl, const JetInvo
         fields[11].is_null = 1; // DheriPurchaseDate NULL
         guint16 zero16 = 0;
         fields[12].is_null = 0; fields[12].value = &zero16; fields[12].siz = 2;
-        if (isSale) {
-            QByteArray gB = toJet4TextForCol(it.grade.left(50), colOf(13));
-            setTNull(13, gB, gB.isEmpty());
-        } else {
-            fields[13].is_null = 1;
-        }
+        fields[13].is_null = 1; // DheriBillNo NULL for both Sale and Purc
         fields[14].is_null = 0; fields[14].value = &zero16; fields[14].siz = 2;
         if (isSale) {
             fields[15].is_null = 1; fields[16].is_null = 1; // Taxable/Tax NULL
@@ -1141,7 +1136,7 @@ static int insertStockLines(MdbHandle* mdb, MdbTableDef* stkTxTbl, const JetInvo
         fields[47].is_null = 0; fields[47].value = &z32; fields[47].siz = 4;
         fields[48].is_null = 0; fields[48].value = &z32; fields[48].siz = 4;
         fields[49].is_null = 0; fields[49].value = &z32; fields[49].siz = 4;
-        double ibags = it.bags;
+        double ibags = isSale ? 0.0 : it.bags;
         fields[50].is_null = 0; fields[50].value = &ibags; fields[50].siz = 8;
         if (insertJet4Row(mdb, stkTxTbl, fields.data(), stkTxTbl->num_cols)) done++;
     }
