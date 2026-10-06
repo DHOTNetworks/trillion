@@ -468,6 +468,639 @@ static bool insertBahiKhataJournalTx(MdbHandle* mdb, MdbTableDef* txTbl, const B
 
     return mdb_insert_row(txTbl, txTbl->num_cols, fields.data()) != 0;
 }
+
+/* ================= Sale / Purchase voucher support =================
+ * Native shapes (Data.002 exemplars: Sale-394, Purc-449/Nutech):
+ * - Sale: party-Dr "Ledger" leg + detail-Cr legs ("Goods Amount", taxes...).
+ * - Purc: party-Cr "Ledger" leg + detail-Dr legs (charges matched to invoice).
+ * Two row shapes per type (party leg vs detail leg) differ in ~15 fields.
+ * StockTransactions item lines mirror sales/purchase_invoice_items.
+ * Fallback label pool + loud logging cover unmapped charge legs. */
+
+struct JetInvoiceItem {
+    int jetCode = 0;          // Jet StockItems code (from stock_items.code)
+    QString name;
+    QString grade;
+    int bags = 0;
+    double packing = 0.0;
+    double weight = 0.0;
+    double rate = 0.0;
+    double amount = 0.0;      // taxable/total line amount
+    double taxable = 0.0;
+    double gstPct = 0.0;
+};
+
+struct JetInvoiceCtx {
+    bool valid = false;
+    bool isSale = false;
+    QString invoiceNo;
+    QString dateStr;          // yyyy-MM-dd
+    QString saleStatus;       // Self Sale / Self Purchase
+    QString taxStatus;        // GST / IGST (mapped)
+    QString marketFeeStatus;  // Paid
+    QString marketType;       // Market Type (With Stock)
+    QString payMode;          // Credit
+    QString broker;           // broker/transport text or ""
+    int invSeq = 0;           // trailing integer of invoice_no
+    double tcsRate = 0.0;
+    int dueDays = 0;
+    int headerItemCode = 0;
+    std::vector<JetInvoiceItem> items;
+    // charge multiset: cents -> label (consumed once each, exact match)
+    std::multimap<long long, QString> charges;
+};
+
+static long long toCents(double v) { return (long long)std::llround(v * 100.0); }
+
+static int jetItemCode(DatabaseManager& appDb, int sqliteItemId) {
+    if (sqliteItemId <= 0) return 0;
+    QVariantList r = appDb.executeQuery(
+        "SELECT code FROM stock_items WHERE id = ? LIMIT 1;", {sqliteItemId});
+    if (r.isEmpty()) return 0;
+    bool ok = false;
+    int c = r.first().toMap().value("code").toInt(&ok);
+    return ok ? c : 0;
+}
+
+static int parseInvSeq(const QString& invNo) {
+    static QRegularExpression re(R"((\d+)(?!.*\d))");
+    QRegularExpressionMatch m = re.match(invNo);
+    return m.hasMatch() ? m.captured(1).toInt() : 0;
+}
+
+static QString mapTaxStatus(const QString& raw) {
+    QString t = raw.trimmed();
+    if (t.contains("IGST", Qt::CaseInsensitive)) return "IGST";
+    return "GST"; // native default (covers "GST", "GST / Exempt", empty)
+}
+
+static JetInvoiceCtx fetchInvoiceCtx(DatabaseManager& appDb, const QString& transType,
+                                     const QString& invoiceNo) {
+    JetInvoiceCtx ctx;
+    QString tbl = (transType.compare("Sale", Qt::CaseInsensitive) == 0)
+        ? "sales_invoices" : "purchase_invoices";
+    QString itemTbl = (transType.compare("Sale", Qt::CaseInsensitive) == 0)
+        ? "sales_invoice_items" : "purchase_invoice_items";
+    ctx.isSale = (tbl == "sales_invoices");
+    if (invoiceNo.trimmed().isEmpty()) return ctx;
+    QVariantList inv = appDb.executeQuery(
+        QString("SELECT * FROM %1 WHERE invoice_no = ? LIMIT 1;").arg(tbl), {invoiceNo});
+    if (inv.isEmpty()) return ctx;
+    QVariantMap h = inv.first().toMap();
+    ctx.valid = true;
+    ctx.invoiceNo = invoiceNo;
+    QString dcol = "invoice_date";
+    ctx.dateStr = h.value(dcol).toString().left(10);
+    ctx.saleStatus = h.value("sale_status", ctx.isSale ? "Self Sale" : "Self Purchase").toString();
+    if (ctx.saleStatus.isEmpty()) ctx.saleStatus = ctx.isSale ? "Self Sale" : "Self Purchase";
+    ctx.taxStatus = mapTaxStatus(h.value("tax_status", "GST").toString());
+    ctx.marketFeeStatus = h.value("market_fee_status", "Paid").toString();
+    if (ctx.marketFeeStatus.isEmpty()) ctx.marketFeeStatus = "Paid";
+    ctx.marketType = h.value("market_type", "Market Type (With Stock)").toString();
+    if (ctx.marketType.isEmpty()) ctx.marketType = "Market Type (With Stock)";
+    ctx.payMode = h.value("payment_mode", "Credit").toString();
+    if (ctx.payMode.isEmpty()) ctx.payMode = "Credit";
+    ctx.broker = h.value("broker_name").toString().trimmed();
+    if (ctx.broker.isEmpty()) ctx.broker = h.value("transport", h.value("transport_name")).toString().trimmed();
+    ctx.invSeq = parseInvSeq(invoiceNo);
+    ctx.tcsRate = h.value("tcs_rate", 0.0).toDouble();
+    ctx.dueDays = h.value("due_days", 0).toInt();
+    ctx.headerItemCode = jetItemCode(appDb, h.value("item_id").toInt());
+
+    auto addCharge = [&](const QString& label, double amt) {
+        if (std::abs(amt) >= 0.005) ctx.charges.insert({toCents(amt), label});
+    };
+    // Order here does not matter (multimap sorted by amount); consumption
+    // order is driven by leg sequence with priority rules in the resolver.
+    addCharge("SGST", h.value("sgst_amount").toDouble());
+    addCharge("CGST", h.value("cgst_amount").toDouble());
+    addCharge("IGST", h.value("igst_amount").toDouble());
+    addCharge("Dami", h.value("dami").toDouble());
+    addCharge("MFees", h.value("m_fee").toDouble());
+    addCharge("CessHRDF", h.value("hrdf").toDouble());
+    addCharge("Loading", h.value("labour").toDouble());
+    addCharge("Sutli", h.value("sutli").toDouble());
+    addCharge("Welfare", h.value("welfare").toDouble());
+    addCharge("Dharmada", h.value("dhrmd").toDouble());
+    addCharge("Auction", h.value("auction").toDouble());
+    addCharge("OtherExp", h.value("other_exp").toDouble());
+    addCharge("Freight", h.value("freight_charges").toDouble());
+    // round_off/tcs/tds handled by account rules; kept out of the multiset.
+
+    int invId = h.value("id").toInt();
+    QVariantList items = appDb.executeQuery(
+        QString("SELECT item_id, item_name, grade, bag_count, packing, weight_qtl,"
+                " rate_per_qtl, taxable_amount, total_amount, gst_pct FROM %1"
+                " WHERE invoice_id = ? ORDER BY id ASC;").arg(itemTbl), {invId});
+    for (const auto& iv : items) {
+        QVariantMap m = iv.toMap();
+        JetInvoiceItem it;
+        it.jetCode = jetItemCode(appDb, m.value("item_id").toInt());
+        it.name = m.value("item_name").toString();
+        it.grade = m.value("grade").toString();
+        it.bags = m.value("bag_count").toInt();
+        it.packing = m.value("packing").toString().toFloat();
+        if (it.packing == 0.0f) it.packing = (float)m.value("packing").toDouble();
+        it.weight = m.value("weight_qtl").toDouble();
+        it.rate = m.value("rate_per_qtl").toDouble();
+        it.amount = m.value("total_amount").toDouble();
+        if (std::abs(it.amount) < 0.005) it.amount = m.value("taxable_amount").toDouble();
+        it.taxable = m.value("taxable_amount").toDouble();
+        it.gstPct = m.value("gst_pct").toDouble();
+        ctx.items.push_back(it);
+    }
+    if (ctx.headerItemCode == 0 && !ctx.items.empty())
+        ctx.headerItemCode = ctx.items.front().jetCode;
+    return ctx;
+}
+
+/* System ledger accounts with fixed EntryType labels (stable across firms). */
+static QString systemEntryLabel(int accountCode, const QString& partyName) {
+    switch (accountCode) {
+        case 943: return "SGST";
+        case 944: return "CGST";
+        case 945: return "IGST";
+        case 44: return "Round Off";
+        case 2176: return "TDS194Q";
+        case 1729: return "TCS";
+        case 61: return "DamiTDS";
+        case 57: return "MFee";
+        case 80: return "OtherExp";
+        default: break;
+    }
+    QString pl = partyName.trimmed().toUpper();
+    if (pl.contains("T.D.S.") || pl.contains("TDS")) return "TDS194Q";
+    if (pl.contains("T C S") || pl == "TCS" || pl.contains("TCS ")) return "TCS";
+    if (pl.contains("SGST")) return "SGST";
+    if (pl.contains("CGST")) return "CGST";
+    if (pl.contains("IGST")) return "IGST";
+    if (pl.contains("ROUND")) return "Round Off";
+    return QString();
+}
+
+/* Ordered EntryType resolution for a non-Ledger detail leg.
+ * fallbackIdx is per-voucher state (caller-owned) for deterministic output. */
+static QString resolveDetailEntryType(JetInvoiceCtx& ctx, double amount,
+                                      int accountCode, const QString& partyName,
+                                      bool goodsAssigned, int& fallbackIdx) {
+    QString sys = systemEntryLabel(accountCode, partyName);
+    if (!sys.isEmpty()) return sys;
+    long long cents = toCents(amount);
+    // Exact charge match (consumed once).
+    auto range = ctx.charges.equal_range(cents);
+    for (auto it = range.first; it != range.second; ++it) {
+        QString label = it->second;
+        ctx.charges.erase(it);
+        return label;
+    }
+    if (!goodsAssigned) return "Goods Amount";
+    // Canonical-order fallback for unmapped charge legs (logged by caller).
+    static const char* kFallback[] = {"Tulai", "Commission", "Freight", "Labour",
+        "MktFee", "Cess", "CessTax", "Bardana", "Sutli", "Welfare", "Dharmada",
+        "Gaushala", "OtherExp", "Auction"};
+    QString pick(kFallback[fallbackIdx % 14]);
+    fallbackIdx++;
+    return pick;
+}
+
+/* Insert one Sale/Purchase/Cash voucher leg with an explicit per-type field
+ * profile (native nullmask sets from Data.002 exemplars). isFirstLeg marks
+ * the party ("Ledger") leg; detail legs carry EntryType/ItemCode shapes. */
+struct SalePurcLeg {
+    guint16 rowNo = 1;
+    guint32 vchNo = 0;
+    QString dateStr;
+    QString transType;      // Sale / Purc (canonical short)
+    guint16 accountCode = 0;
+    QString drCr = "Dr";
+    double amount = 0.0;
+    QString narration;
+    QString invoiceNo;
+    QString entryType;      // resolved label ("" + emptyNotNull for "")
+    bool entryEmpty = false;
+    guint16 itemCode = 0;
+    bool isFirstLeg = false;
+    // Voucher-level (same for all legs of the voucher):
+    QString jform;          // Self Sale / Self Purchase
+    QString iformTax;       // GST / IGST
+    QString mfeeStatus;     // Paid (Purc) / "" (Sale -> NULL)
+    QString marketType;     // Market Type (...)
+    QString cashCredit;     // Credit
+    QString broker;         // Sale broker text (Purc: "")
+    double balAmount = 0.0; // party-leg voucher total (detail legs: ignored)
+    bool hasBalAmount = false;
+    int invSeq = 0;         // Sale invoice sequence (Purc: 0)
+    double tcsRate = 0.0;
+    int dueDays = 0;
+};
+
+static bool insertSalePurcLeg(MdbHandle* mdb, MdbTableDef* txTbl, const SalePurcLeg& L) {
+    if (!mdb || !txTbl) return false;
+    const bool isSale = (L.transType.compare("Sale", Qt::CaseInsensitive) == 0);
+    std::vector<MdbField> fields(txTbl->num_cols);
+    for (int i = 0; i < txTbl->num_cols; i++) {
+        MdbColumn* col = (MdbColumn*)g_ptr_array_index(txTbl->columns, i);
+        fields[i].colnum = i;
+        fields[i].is_fixed = col->is_fixed;
+        fields[i].is_null = 1;
+        fields[i].value = nullptr;
+        fields[i].siz = 0;
+    }
+    auto setText = [&](int idx, const QByteArray& b) {
+        fields[idx].is_null = 0; fields[idx].value = (void*)b.data(); fields[idx].siz = b.size();
+    };
+    auto setTextOrNull = [&](int idx, const QByteArray& b, bool isNull) {
+        if (isNull) { fields[idx].is_null = 1; return; }
+        setText(idx, b);
+    };
+    auto colOf = [&](int idx) {
+        return (MdbColumn*)g_ptr_array_index(txTbl->columns, idx);
+    };
+
+    guint16 rowNo = L.rowNo;
+    fields[0].is_null = 0; fields[0].value = &rowNo; fields[0].siz = 2;
+    guint32 vchNo = L.vchNo;
+    fields[1].is_null = 0; fields[1].value = &vchNo; fields[1].siz = 4;
+    double oleD = toOleDate(L.dateStr);
+    fields[2].is_null = 0; fields[2].value = &oleD; fields[2].siz = 8;
+
+    QByteArray ttBytes = toJet4TextForCol(L.transType.left(5), colOf(3));
+    fields[3].is_null = 0; fields[3].value = ttBytes.data(); fields[3].siz = ttBytes.size();
+
+    guint16 acVal = L.accountCode;
+    fields[4].is_null = 0; fields[4].value = &acVal; fields[4].siz = 2;
+
+    QByteArray dcBytes = toJet4TextForCol(L.drCr, colOf(5));
+    fields[5].is_null = 0; fields[5].value = dcBytes.data(); fields[5].siz = dcBytes.size();
+
+    double amtVal = L.amount;
+    fields[6].is_null = 0; fields[6].value = &amtVal; fields[6].siz = 8;
+
+    QByteArray invBytes = toJet4TextForCol(L.invoiceNo.left(50), colOf(7));
+    if (invBytes.isEmpty()) { fields[7].is_null = 1; }
+    else setText(7, invBytes);
+
+    guint16 zero16 = 0;
+    fields[8].is_null = 0; fields[8].value = &zero16; fields[8].siz = 2; // PartyCode 0
+
+    QByteArray jfBytes = toJet4TextForCol(L.jform, colOf(9));
+    setTextOrNull(9, jfBytes, jfBytes.isEmpty());
+    QByteArray itBytes = toJet4TextForCol(L.iformTax, colOf(10));
+    setTextOrNull(10, itBytes, itBytes.isEmpty());
+    if (!isSale) {
+        QByteArray mfBytes = toJet4TextForCol(L.mfeeStatus, colOf(11));
+        setTextOrNull(11, mfBytes, mfBytes.isEmpty());
+    }
+    QByteArray ptBytes = toJet4TextForCol(L.marketType, colOf(12));
+    setTextOrNull(12, ptBytes, ptBytes.isEmpty());
+    QByteArray ccBytes = toJet4TextForCol(L.cashCredit, colOf(13));
+    setTextOrNull(13, ccBytes, ccBytes.isEmpty());
+
+    QByteArray narrBytes = toJet4TextForCol(L.narration.left(200), colOf(14));
+    fields[14].is_null = 0;
+    fields[14].value = narrBytes.isEmpty() ? (void*)&zero16 : (void*)narrBytes.data();
+    fields[14].siz = narrBytes.size();
+
+    if (L.entryEmpty) {
+        static const char kEmpty = '\0';
+        fields[15].is_null = 0; fields[15].value = (void*)&kEmpty; fields[15].siz = 0;
+    } else if (L.entryType.isEmpty()) {
+        fields[15].is_null = 1;
+    } else {
+        QByteArray eBytes = toJet4TextForCol(L.entryType.left(25), colOf(15));
+        setText(15, eBytes);
+    }
+
+    guint16 dueVal = (guint16)qMax(0, L.dueDays);
+    fields[16].is_null = 0; fields[16].value = &dueVal; fields[16].siz = 2;
+    guint16 itemVal = L.itemCode;
+    fields[17].is_null = 0; fields[17].value = &itemVal; fields[17].siz = 2;
+
+    guint16 zero16b = 0;
+    guint32 zero32 = 0;
+    double zeroDbl = 0.0;
+    float zeroFlt = 0.0f;
+    static const char kEmpty2 = '\0';
+    auto setEmpty = [&](int idx) {
+        fields[idx].is_null = 0; fields[idx].value = (void*)&kEmpty2; fields[idx].siz = 0;
+    };
+    QByteArray zeroStr = toJet4Text("0");
+    const double oleZeroDate = 2.0; // 01/01/1900 sentinel ("01/01/00")
+
+    if (isSale) {
+        if (L.isFirstLeg) {
+            QByteArray spBytes = toJet4TextForCol("None", colOf(18));
+            setText(18, spBytes);
+            setEmpty(19); setEmpty(20);
+            fields[21].is_null = 0; fields[21].value = &zero32; fields[21].siz = 4;
+            fields[23].is_null = 0; fields[23].value = &zero32; fields[23].siz = 4;
+            setEmpty(27);
+            double bal = L.hasBalAmount ? L.balAmount : L.amount;
+            fields[41].is_null = 0; fields[41].value = &bal; fields[41].siz = 8;
+        }
+        // 19/20/21/23/27/41 stay NULL on detail legs
+    } else {
+        if (L.isFirstLeg) {
+            setEmpty(19); setEmpty(20);
+            fields[21].is_null = 0; fields[21].value = &zero32; fields[21].siz = 4;
+            fields[23].is_null = 0; fields[23].value = &zero32; fields[23].siz = 4;
+            setEmpty(27);
+            double bal = L.hasBalAmount ? L.balAmount : L.amount;
+            fields[41].is_null = 0; fields[41].value = &bal; fields[41].siz = 8;
+        } else {
+            fields[23].is_null = 0; fields[23].value = &zero32; fields[23].siz = 4;
+            setEmpty(28);
+        }
+        setEmpty(28);
+        // 19/20/21/27/41 stay NULL on detail legs (23 is 0, 28 is "")
+    }
+
+    // Shared Sale/Purc defaults (native shapes)
+    fields[25].is_null = isSale ? 0 : 1;
+    if (isSale) { fields[25].value = &zeroDbl; fields[25].siz = 8; } // HideAmount
+    fields[26].is_null = 0; fields[26].value = &zero32; fields[26].siz = 4; // FormQuery
+    fields[31].is_null = 0; fields[31].value = &zero32; fields[31].siz = 4; // DebitCreditNote
+    fields[35].is_null = 0; fields[35].value = &zeroDbl; fields[35].siz = 8; // ExpRate
+    setEmpty(37); // ImagePath ""
+    if (isSale) {
+        QByteArray brBytes = toJet4TextForCol(L.broker.left(255), colOf(38));
+        if (brBytes.isEmpty()) setEmpty(38); else setText(38, brBytes);
+    } else {
+        setEmpty(38);
+    }
+    fields[39].is_null = 0; fields[39].value = &zeroDbl; fields[39].siz = 8; // EstimatedAmount
+    fields[42].is_null = 0; fields[42].value = &zero32; fields[42].siz = 4; // MktCommttSrNo
+    double retD = oleD;
+    fields[43].is_null = 0; fields[43].value = &retD; fields[43].siz = 8; // ReturnDate
+    fields[45].is_null = 0; fields[45].value = &zero32; fields[45].siz = 4; // URDPurc
+    fields[46].is_null = 0; fields[46].value = &zero32; fields[46].siz = 4; // E1PartyCode
+    if (isSale) { setEmpty(47); setEmpty(48); setEmpty(49); }
+    fields[50].is_null = 0; fields[50].value = &zero32; fields[50].siz = 4; // CompositionVch
+    QByteArray posBytes = toJet4TextForCol("0", colOf(52));
+    setText(52, posBytes); // PlaceOfSupply "0"
+    if (isSale) {
+        setEmpty(53); // ECommGSTIN "" (Purc: "0")
+    } else {
+        QByteArray ecBytes = toJet4TextForCol("0", colOf(53));
+        setText(53, ecBytes);
+    }
+    fields[54].is_null = 0; fields[54].value = &zero32; fields[54].siz = 4; // TransReturn
+    fields[55].is_null = 0; fields[55].value = &zero32; fields[55].siz = 4; // GroupTick
+    guint32 invSeqVal = (guint32)(isSale ? L.invSeq : 0);
+    fields[57].is_null = 0; fields[57].value = &invSeqVal; fields[57].siz = 4; // ActualInv
+    fields[58].is_null = 0; fields[58].value = &zero32; fields[58].siz = 4; // ITCNotClaim
+    fields[59].is_null = 0; fields[59].value = &zero32; fields[59].siz = 4; // ReverseChargePayable
+    fields[60].is_null = 0; fields[60].value = &zero32; fields[60].siz = 4; // GSTOnGoodsAmount
+    float tcsRate = (float)L.tcsRate;
+    fields[62].is_null = 0; fields[62].value = &tcsRate; fields[62].siz = 4; // TCSRate
+    double tcsTax = isSale ? L.amount : 0.0;
+    fields[63].is_null = 0; fields[63].value = &tcsTax; fields[63].siz = 8; // TCSTaxable
+    fields[65].is_null = 0; fields[65].value = &zero32; fields[65].siz = 4; // ChallanVchNo
+    if (isSale) {
+        fields[66].is_null = 0; fields[66].value = (void*)&oleZeroDate; fields[66].siz = 8;
+    }
+    QByteArray tmpBytes = toJet4TextForCol("0", colOf(67));
+    setText(67, tmpBytes); // TempInv "0"
+    float tdsRate = 0.0f;
+    fields[68].is_null = 0; fields[68].value = &tdsRate; fields[68].siz = 4; // TDSRate194Q
+    fields[69].is_null = 0; fields[69].value = &zeroDbl; fields[69].siz = 8; // Taxable194Q
+    fields[70].is_null = 0; fields[70].value = &zero32; fields[70].siz = 4; // TDS194QChallanVchNo
+    if (!isSale) {
+        fields[71].is_null = 0; fields[71].value = (void*)&oleZeroDate; fields[71].siz = 8;
+        setEmpty(72);
+    }
+    fields[73].is_null = 0; fields[73].value = &oleD; fields[73].siz = 8; // TaxInputDate
+    fields[74].is_null = 0; fields[74].value = &zero32; fields[74].siz = 4; // PymtDone
+    fields[75].is_null = 0; fields[75].value = &zeroDbl; fields[75].siz = 8; // tmpBookNo
+    fields[76].is_null = 0; fields[76].value = &zeroDbl; fields[76].siz = 8; // tmpSlipNo
+    double runB = isSale ? (double)L.invSeq : 0.0;
+    fields[78].is_null = 0; fields[78].value = &runB; fields[78].siz = 8; // RunningBNo
+
+    return mdb_insert_row(txTbl, txTbl->num_cols, fields.data()) != 0;
+}
+
+/* Cash-bank family leg (ChPt/ChRt/Pymt/Rcpt): Journal base minus per-type
+ * null sets (native shapes; fixes the EntryType Seek class for ~20k rows).
+ * Rcpt additionally carries LtNo "" (col 77). */
+static bool insertCashLeg(MdbHandle* mdb, MdbTableDef* txTbl, const BahiKhataJournalTx& tx,
+                          const QString& kind) {
+    if (!mdb || !txTbl) return false;
+    std::vector<MdbField> fields(txTbl->num_cols);
+    for (int i = 0; i < txTbl->num_cols; i++) {
+        MdbColumn* col = (MdbColumn*)g_ptr_array_index(txTbl->columns, i);
+        fields[i].colnum = i;
+        fields[i].is_fixed = col->is_fixed;
+        fields[i].is_null = 1;
+        fields[i].value = nullptr;
+        fields[i].siz = 0;
+    }
+    guint16 rowNo = tx.rowNo;
+    fields[0].is_null = 0; fields[0].value = &rowNo; fields[0].siz = 2;
+    guint32 vchNo = tx.vchNo;
+    fields[1].is_null = 0; fields[1].value = &vchNo; fields[1].siz = 4;
+    double oleD = toOleDate(tx.dateStr);
+    fields[2].is_null = 0; fields[2].value = &oleD; fields[2].siz = 8;
+    MdbColumn* colTT = (MdbColumn*)g_ptr_array_index(txTbl->columns, 3);
+    MdbColumn* colDC = (MdbColumn*)g_ptr_array_index(txTbl->columns, 5);
+    MdbColumn* colNarr = (MdbColumn*)g_ptr_array_index(txTbl->columns, 14);
+    QByteArray ttBytes = toJet4TextForCol(tx.transType.left(5), colTT);
+    fields[3].is_null = 0; fields[3].value = ttBytes.data(); fields[3].siz = ttBytes.size();
+    guint16 acVal = tx.accountCode;
+    fields[4].is_null = 0; fields[4].value = &acVal; fields[4].siz = 2;
+    QByteArray dcBytes = toJet4TextForCol(tx.drCr, colDC);
+    fields[5].is_null = 0; fields[5].value = dcBytes.data(); fields[5].siz = dcBytes.size();
+    double amtVal = tx.amount;
+    fields[6].is_null = 0; fields[6].value = &amtVal; fields[6].siz = 8;
+    fields[7].is_null = 1; // InvoiceNo null
+    guint16 ptVal = tx.partyCode;
+    fields[8].is_null = 0; fields[8].value = &ptVal; fields[8].siz = 2;
+    QByteArray narrBytes = toJet4TextForCol(tx.narration.left(200), colNarr);
+    static const char kEmptyNarr = '\0';
+    fields[14].is_null = 0;
+    fields[14].value = narrBytes.isEmpty() ? (void*)&kEmptyNarr : (void*)narrBytes.data();
+    fields[14].siz = narrBytes.size();
+    // NOTE: col 15 EntryType stays NULL for the cash family (native shape).
+    guint16 zero16 = 0;
+    guint32 zero32 = 0;
+    double zeroDbl = 0.0;
+    float zeroFlt = 0.0f;
+    QByteArray zeroStr = toJet4Text("0");
+    static const char kEmpty = '\0';
+    auto setEmpty = [&](int idx) {
+        fields[idx].is_null = 0; fields[idx].value = (void*)&kEmpty; fields[idx].siz = 0;
+    };
+    fields[16].is_null = 0; fields[16].value = &zero16; fields[16].siz = 2;
+    fields[17].is_null = 0; fields[17].value = &zero16; fields[17].siz = 2;
+    if (kind == "Pymt")
+        { fields[23].is_null = 0; fields[23].value = &zero32; fields[23].siz = 4; }
+    fields[29].is_null = 0; fields[29].value = &oleD; fields[29].siz = 8;
+    fields[30].is_null = 0; fields[30].value = &zero32; fields[30].siz = 4;
+    fields[35].is_null = 0; fields[35].value = &zeroDbl; fields[35].siz = 8;
+    setEmpty(37); setEmpty(38);
+    fields[39].is_null = 0; fields[39].value = &zeroDbl; fields[39].siz = 8;
+    fields[42].is_null = 0; fields[42].value = &zero32; fields[42].siz = 4;
+    fields[45].is_null = 0; fields[45].value = &zero32; fields[45].siz = 4;
+    fields[46].is_null = 0; fields[46].value = &zero32; fields[46].siz = 4;
+    fields[50].is_null = 0; fields[50].value = &zero32; fields[50].siz = 4;
+    fields[52].is_null = 0; fields[52].value = zeroStr.data(); fields[52].siz = zeroStr.size();
+    fields[53].is_null = 0; fields[53].value = zeroStr.data(); fields[53].siz = zeroStr.size();
+    fields[54].is_null = 0; fields[54].value = &zero32; fields[54].siz = 4;
+    fields[55].is_null = 0; fields[55].value = &zero32; fields[55].siz = 4;
+    fields[57].is_null = 0; fields[57].value = &zero32; fields[57].siz = 4;
+    fields[58].is_null = 0; fields[58].value = &zero32; fields[58].siz = 4;
+    fields[59].is_null = 0; fields[59].value = &zero32; fields[59].siz = 4;
+    fields[60].is_null = 0; fields[60].value = &zero32; fields[60].siz = 4;
+    fields[62].is_null = 0; fields[62].value = &zeroFlt; fields[62].siz = 4;
+    fields[63].is_null = 0; fields[63].value = &zeroDbl; fields[63].siz = 8;
+    fields[65].is_null = 0; fields[65].value = &zero32; fields[65].siz = 4;
+    fields[67].is_null = 0; fields[67].value = zeroStr.data(); fields[67].siz = zeroStr.size();
+    fields[68].is_null = 0; fields[68].value = &zeroFlt; fields[68].siz = 4;
+    fields[69].is_null = 0; fields[69].value = &zeroDbl; fields[69].siz = 8;
+    fields[70].is_null = 0; fields[70].value = &zero32; fields[70].siz = 4;
+    fields[73].is_null = 0; fields[73].value = &oleD; fields[73].siz = 8;
+    fields[74].is_null = 0; fields[74].value = &zero32; fields[74].siz = 4;
+    fields[75].is_null = 0; fields[75].value = &zeroDbl; fields[75].siz = 8;
+    fields[76].is_null = 0; fields[76].value = &zeroDbl; fields[76].siz = 8;
+    if (kind == "Rcpt") setEmpty(77); // LtNo ""
+    fields[78].is_null = 0; fields[78].value = &zeroDbl; fields[78].siz = 8;
+    return mdb_insert_row(txTbl, txTbl->num_cols, fields.data()) != 0;
+}
+
+/* StockTransactions item lines for one Sale/Purc voucher. */
+static int insertStockLines(MdbHandle* mdb, MdbTableDef* stkTxTbl, const JetInvoiceCtx& ctx,
+                            guint32 vchNo, const QString& isoDate, const QString& transType) {
+    if (!mdb || !stkTxTbl || ctx.items.empty()) return 0;
+    int done = 0;
+    double oleD = toOleDate(isoDate);
+    const double oleZero = 2.0; // 01/01/1900 sentinel
+    const bool isSale = ctx.isSale;
+    int rowNo = 0;
+    for (const auto& it : ctx.items) {
+        rowNo++;
+        std::vector<MdbField> fields(stkTxTbl->num_cols);
+        for (int i = 0; i < stkTxTbl->num_cols; i++) {
+            MdbColumn* col = (MdbColumn*)g_ptr_array_index(stkTxTbl->columns, i);
+            fields[i].colnum = i;
+            fields[i].is_fixed = col->is_fixed;
+            fields[i].is_null = 1;
+        }
+        auto colOf = [&](int idx) {
+            return (MdbColumn*)g_ptr_array_index(stkTxTbl->columns, idx);
+        };
+        auto setT = [&](int idx, const QByteArray& b) {
+            fields[idx].is_null = 0; fields[idx].value = (void*)b.data(); fields[idx].siz = b.size();
+        };
+        auto setTNull = [&](int idx, const QByteArray& b, bool isNull) {
+            if (isNull) { fields[idx].is_null = 1; return; }
+            setT(idx, b);
+        };
+        static const char kEmpty = '\0';
+        auto setE = [&](int idx) {
+            fields[idx].is_null = 0; fields[idx].value = (void*)&kEmpty; fields[idx].siz = 0;
+        };
+        guint16 rn = (guint16)rowNo;
+        fields[0].is_null = 0; fields[0].value = &rn; fields[0].siz = 2;
+        fields[1].is_null = 0; fields[1].value = &oleD; fields[1].siz = 8;
+        guint32 vn = vchNo;
+        fields[2].is_null = 0; fields[2].value = &vn; fields[2].siz = 4;
+        QByteArray ttB = toJet4TextForCol(transType.left(5), colOf(3));
+        setT(3, ttB);
+        guint16 ic = (guint16)it.jetCode;
+        fields[4].is_null = 0; fields[4].value = &ic; fields[4].siz = 2;
+        double bags = it.bags, pack = it.packing, wt = it.weight;
+        double rate = it.rate, amt = it.amount;
+        fields[5].is_null = 0; fields[5].value = &bags; fields[5].siz = 8;
+        float packF = (float)pack;
+        fields[6].is_null = 0; fields[6].value = &packF; fields[6].siz = 4;
+        fields[7].is_null = 0; fields[7].value = &wt; fields[7].siz = 8;
+        float vatcst = 0.0f;
+        fields[8].is_null = 0; fields[8].value = &vatcst; fields[8].siz = 4;
+        fields[9].is_null = 0; fields[9].value = &rate; fields[9].siz = 8;
+        fields[10].is_null = 0; fields[10].value = &amt; fields[10].siz = 8;
+        fields[11].is_null = 1; // DheriPurchaseDate NULL
+        guint16 zero16 = 0;
+        fields[12].is_null = 0; fields[12].value = &zero16; fields[12].siz = 2;
+        if (isSale) {
+            QByteArray gB = toJet4TextForCol(it.grade.left(50), colOf(13));
+            setTNull(13, gB, gB.isEmpty());
+        } else {
+            fields[13].is_null = 1;
+        }
+        fields[14].is_null = 0; fields[14].value = &zero16; fields[14].siz = 2;
+        if (isSale) {
+            fields[15].is_null = 1; fields[16].is_null = 1; // Taxable/Tax NULL
+        } else {
+            double tax = it.taxable;
+            double taxAmt = (it.gstPct > 0 && tax > 0) ? round2dbl(tax * it.gstPct / 100.0) : 0.0;
+            fields[15].is_null = 0; fields[15].value = &tax; fields[15].siz = 8;
+            fields[16].is_null = 0; fields[16].value = &taxAmt; fields[16].siz = 8;
+        }
+        QByteArray txB = toJet4TextForCol(ctx.taxStatus, colOf(17));
+        setTNull(17, txB, txB.isEmpty());
+        if (isSale) {
+            fields[18].is_null = 1; // Narration NULL
+        } else {
+            setE(18);
+        }
+        QByteArray vtB = toJet4TextForCol(ctx.saleStatus, colOf(19));
+        setTNull(19, vtB, vtB.isEmpty());
+        fields[20].is_null = 1; // CommissionPartyCode NULL
+        if (isSale) {
+            guint32 zero32 = 0;
+            fields[21].is_null = 0; fields[21].value = &zero32; fields[21].siz = 4; // GodownCode 0
+            // 22..28 are NULL on Sale rows (0.0 not-null on Purc rows below).
+            fields[22].is_null = 1; fields[23].is_null = 1; fields[24].is_null = 1;
+            fields[25].is_null = 1; fields[26].is_null = 1; fields[27].is_null = 1;
+            fields[28].is_null = 1;
+        } else {
+            double z = 0.0;
+            fields[22].is_null = 0; fields[22].value = &z; fields[22].siz = 8;
+            fields[23].is_null = 0; fields[23].value = &z; fields[23].siz = 8;
+            fields[24].is_null = 0; fields[24].value = &z; fields[24].siz = 8;
+            fields[25].is_null = 0; fields[25].value = &z; fields[25].siz = 8;
+            fields[26].is_null = 0; fields[26].value = &z; fields[26].siz = 8;
+            fields[27].is_null = 0; fields[27].value = &z; fields[27].siz = 8;
+            fields[28].is_null = 0; fields[28].value = &z; fields[28].siz = 8;
+        }
+        fields[29].is_null = 1; // TimberItemRowNo NULL
+        double zl = 0.0;
+        fields[30].is_null = 0; fields[30].value = &zl; fields[30].siz = 8; // LooseWeight
+        if (isSale) {
+            fields[31].is_null = 1; // TaxIncluding NULL
+        } else {
+            // Native Purc rows carry TaxIncluding text ("Excluding" observed).
+            QByteArray tiB = toJet4TextForCol("Excluding", colOf(31));
+            setTNull(31, tiB, tiB.isEmpty());
+        }
+        float zf = 0.0f;
+        fields[32].is_null = 0; fields[32].value = &zf; fields[32].siz = 4;
+        fields[33].is_null = 0; fields[33].value = &zf; fields[33].siz = 4;
+        fields[34].is_null = 0; fields[34].value = &zl; fields[34].siz = 8;
+        // ActivationDate: native stores 2.0 (01/01/00), NOT the voucher date.
+        fields[35].is_null = 0; fields[35].value = (void*)&oleZero; fields[35].siz = 8;
+        fields[36].is_null = 0; fields[36].value = &zl; fields[36].siz = 8;
+        setE(37);
+        double z2 = 0.0;
+        fields[38].is_null = 0; fields[38].value = &z2; fields[38].siz = 8;
+        fields[39].is_null = 0; fields[39].value = &z2; fields[39].siz = 8;
+        fields[40].is_null = 0; fields[40].value = &z2; fields[40].siz = 8;
+        fields[41].is_null = 0; fields[41].value = &z2; fields[41].siz = 8;
+        guint32 z32 = 0;
+        fields[42].is_null = 0; fields[42].value = &z32; fields[42].siz = 4;
+        float zf2 = 0.0f;
+        fields[43].is_null = 0; fields[43].value = &zf2; fields[43].siz = 4;
+        fields[44].is_null = 0; fields[44].value = &z2; fields[44].siz = 8;
+        fields[45].is_null = 0; fields[45].value = &z2; fields[45].siz = 8;
+        fields[46].is_null = 0; fields[46].value = &z2; fields[46].siz = 8;
+        fields[47].is_null = 0; fields[47].value = &z32; fields[47].siz = 4;
+        fields[48].is_null = 0; fields[48].value = &z32; fields[48].siz = 4;
+        fields[49].is_null = 0; fields[49].value = &z32; fields[49].siz = 4;
+        double ibags = it.bags;
+        fields[50].is_null = 0; fields[50].value = &ibags; fields[50].siz = 8;
+        if (insertJet4Row(mdb, stkTxTbl, fields.data(), stkTxTbl->num_cols)) done++;
+    }
+    return done;
+}
 #endif
 
 QString BahiKhataExporter::resolveSeedTemplate(const QString& explicitPath) {
@@ -1321,11 +1954,12 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
             }
 
             // --- Match Data.002: export ALL FYs when param empty, else robust FY match ---
-            QString txSql = 
+            QString txSql =
                 "SELECT t.id, t.voucher_no, t.voucher_date, t.trans_type, t.dr_cr, t.amount, t.narration, "
                 "COALESCE(t.account_code, p.legacy_id, p.id) as ac_code, "
                 "COALESCE(op.legacy_id, op.id, 0) as party_code, "
-                "t.financial_year "
+                "t.financial_year, t.row_no, t.invoice_no, t.due_days, "
+                "t.tds_amount, t.taxable_amount "
                 "FROM transactions t "
                 "LEFT JOIN parties p ON t.party_id = p.id OR t.party_name = p.name "
                 "LEFT JOIN parties op ON t.opposing_account = op.name ";
@@ -1335,72 +1969,266 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
             txSql += "ORDER BY t.voucher_date ASC, t.id ASC;";
             QVariantList txRows = appDb.executeQuery(txSql);
             std::cout << "[EXPORT] Transactions fetched from SQLite: " << txRows.size() << ", existing in JetDB: " << existingTxSignatures.size() << std::endl;
-            // RowNo must be sequential per voucher (Bahi-Khata expects 1..n per VoucherNumber+Date)
-            QMap<QString, int> voucherRowCounter;
-            int rowIdx = 1;
+
+            // StockTransactions table for Sale/Purc item lines (with indexes
+            // so Jet4Writer maintains them like Transactions).
+            MdbTableDef* stkTxTbl = nullptr;
+            std::set<std::tuple<int, QString, QString>> existingStockSig;
+            if (options.exportMillingAndStock) {
+                stkTxTbl = mdb_read_table_by_name(mdb, (char*)"StockTransactions", MDB_TABLE);
+                if (stkTxTbl) {
+                    mdb_read_columns(stkTxTbl);
+                    mdb_read_indices(stkTxTbl);
+                    MdbColumn* scDate = (MdbColumn*)g_ptr_array_index(stkTxTbl->columns, 1);
+                    MdbColumn* scVch = (MdbColumn*)g_ptr_array_index(stkTxTbl->columns, 2);
+                    MdbColumn* scType = (MdbColumn*)g_ptr_array_index(stkTxTbl->columns, 3);
+                    mdb_rewind_table(stkTxTbl);
+                    while (mdb_fetch_row(stkTxTbl)) {
+                        int vn = (scVch && scVch->cur_value_len == 4)
+                            ? mdb_get_int32(mdb->pg_buf, scVch->cur_value_start) : 0;
+                        QString dv;
+                        if (scDate && scDate->cur_value_len == 8) {
+                            double od = mdb_get_double(mdb->pg_buf, scDate->cur_value_start);
+                            dv = QDate(1899, 12, 30).addDays((qint64)od).toString("yyyy-MM-dd");
+                        }
+                        QString tt;
+                        if (scType && scType->cur_value_len > 0) {
+                            const unsigned char* p = (const unsigned char*)mdb->pg_buf + scType->cur_value_start;
+                            if (scType->cur_value_len >= 3 && p[0] == 0xFF && p[1] == 0xFE)
+                                tt = QString::fromLatin1((const char*)p + 2, scType->cur_value_len - 2);
+                            else {
+                                QString u;
+                                for (int bi = 0; bi + 1 < scType->cur_value_len; bi += 2) u += QChar(p[bi]);
+                                tt = u;
+                            }
+                        }
+                        existingStockSig.insert(std::make_tuple(vn, dv, tt.trimmed()));
+                    }
+                }
+            }
+
+            // Group legs by voucher (ordered), sort each by (row_no, id).
+            // RowNo comes from SQLite (native-preserved); fallback counter fills gaps.
+            struct LegRow { QVariantMap m; int id = 0; int rowNo = 0; };
+            QList<QString> groupOrder;
+            QMap<QString, QList<LegRow>> groups;
+            {
+                int rowIdx = 1;
+                for (const auto& tVar : txRows) {
+                    QVariantMap t = tVar.toMap();
+                    int rawVchNo = t.value("voucher_no").toInt();
+                    if (rawVchNo <= 0) {
+                        QString vStr = t.value("voucher_no").toString();
+                        static QRegularExpression reDigits(R"(\d+)");
+                        QRegularExpressionMatch mm = reDigits.match(vStr);
+                        if (mm.hasMatch()) rawVchNo = mm.captured(0).toInt();
+                        else rawVchNo = rowIdx;
+                    }
+                    QString isoDate = t.value("voucher_date").toString().left(10);
+                    QString vKey = QString("%1|%2|%3").arg(rawVchNo).arg(isoDate).arg(t.value("financial_year").toString());
+                    if (!groups.contains(vKey)) { groups[vKey] = QList<LegRow>(); groupOrder.append(vKey); }
+                    LegRow lr;
+                    lr.m = t; lr.m["__vch"] = rawVchNo; lr.m["__date"] = isoDate;
+                    lr.id = t.value("id").toInt();
+                    lr.rowNo = t.value("row_no").toInt();
+                    groups[vKey].append(lr);
+                    rowIdx++;
+                }
+            }
             // Signed per-ledger deltas (Dr-positive) for Ledgers.CurrentBalance.
             QMap<int, double> balDeltas;
+            static int txDbg = 0;
+            long stockLines = 0;
 
-            for (const auto& tVar : txRows) {
-                QVariantMap t = tVar.toMap();
-                int rawVchNo = t.value("voucher_no").toInt();
-                if (rawVchNo <= 0) {
-                    QString vStr = t.value("voucher_no").toString();
-                    static QRegularExpression reDigits(R"(\d+)");
-                    QRegularExpressionMatch m = reDigits.match(vStr);
-                    if (m.hasMatch()) rawVchNo = m.captured(0).toInt();
-                    else rawVchNo = rowIdx;
+            auto noteInserted = [&](int rawVchNo, const QString& isoDate, int acCode,
+                                    double amt, const QString& drCr,
+                                    const std::tuple<int, QString, int, int, QString>& sig) {
+                summary.transactionsExported++;
+                if (drCr == "Dr") summary.totalDebitAmount += amt;
+                else summary.totalCreditAmount += amt;
+                existingTxSignatures.insert(sig);
+                if (acCode > 0 && std::abs(amt) >= 0.0005) {
+                    double signedAmt = (drCr == "Dr") ? amt : -amt;
+                    balDeltas[acCode] = round2dbl(balDeltas.value(acCode, 0.0) + signedAmt);
+                }
+                if (++txDbg <= 5) {
+                    std::cout << "[TX INSERT] vch=" << rawVchNo << " drCr=" << drCr.toStdString()
+                              << " amt=" << amt << " ok=1" << std::endl;
+                }
+            };
+
+            for (const QString& vKey : groupOrder) {
+                QList<LegRow> legs = groups[vKey];
+                std::sort(legs.begin(), legs.end(), [](const LegRow& a, const LegRow& b) {
+                    int ra = a.rowNo > 0 ? a.rowNo : 1000000 + a.id;
+                    int rb = b.rowNo > 0 ? b.rowNo : 1000000 + b.id;
+                    if (ra != rb) return ra < rb;
+                    return a.id < b.id;
+                });
+                // Assign RowNo: keep sqlite row_no on first sight, else smallest
+                // free positive int (native rows are dense 1..n per voucher).
+                {
+                    QSet<int> seen;
+                    int nextFree = 1;
+                    for (auto& lr : legs) {
+                        int orig = lr.m.value("row_no").toInt();
+                        if (orig > 0 && !seen.contains(orig)) {
+                            lr.rowNo = orig;
+                            seen.insert(orig);
+                        } else {
+                            while (seen.contains(nextFree)) nextFree++;
+                            lr.rowNo = nextFree;
+                            seen.insert(nextFree);
+                        }
+                        while (seen.contains(nextFree)) nextFree++;
+                    }
+                }
+                QString vType = normalizeTxType(legs.first().m.value("trans_type", "Jrnl").toString());
+                const bool isSalePurc = (vType.compare("Sale", Qt::CaseInsensitive) == 0 ||
+                                         vType.compare("Purc", Qt::CaseInsensitive) == 0);
+
+                // Invoice context for Sale/Purc (entry labels, items, stock).
+                JetInvoiceCtx ictx;
+                QString groupInvoice;
+                if (isSalePurc) {
+                    for (auto& lr : legs) {
+                        QString ino = lr.m.value("invoice_no").toString().trimmed();
+                        if (!ino.isEmpty()) { groupInvoice = ino; break; }
+                    }
+                    ictx = fetchInvoiceCtx(appDb, vType, groupInvoice);
                 }
 
-                QString isoDate = t.value("voucher_date").toString().left(10);
-                int acCode = t.value("ac_code").toInt();
-                double amt = round2(t.value("amount").toDouble());
-                int amtCents = static_cast<int>(std::round(amt * 100.0));
-                QString drCr = t.value("dr_cr", "Dr").toString().left(2);
+                bool goodsAssigned = false;
+                int fallbackIdx = 0;
+                bool stockDoneForGroup = false;
+                for (int li = 0; li < legs.size(); li++) {
+                    QVariantMap t = legs[li].m;
+                    int rawVchNo = t.value("__vch").toInt();
+                    QString isoDate = t.value("__date").toString();
+                    int acCode = t.value("ac_code").toInt();
+                    double amt = round2(t.value("amount").toDouble());
+                    int amtCents = static_cast<int>(std::round(amt * 100.0));
+                    QString drCr = t.value("dr_cr", "Dr").toString().left(2);
+                    QString narration = t.value("narration").toString();
+                    QString invoiceNo = t.value("invoice_no").toString().left(50);
+                    int dueDays = t.value("due_days", 0).toInt();
 
-                auto sig = std::make_tuple(rawVchNo, isoDate, acCode, amtCents, drCr);
-                if (existingTxSignatures.find(sig) == existingTxSignatures.end()) {
-                    BahiKhataJournalTx tx;
-                    QString vKey = QString("%1|%2|%3").arg(rawVchNo).arg(isoDate).arg(t.value("financial_year").toString());
-                    int nextRow = voucherRowCounter.value(vKey, 0) + 1;
-                    voucherRowCounter[vKey] = nextRow;
-                    tx.rowNo = nextRow;
-                    tx.vchNo = rawVchNo;
-                    tx.dateStr = isoDate;
-                    tx.transType = normalizeTxType(t.value("trans_type", "Jrnl").toString());
-                    tx.accountCode = acCode;
-                    tx.drCr = drCr;
-                    tx.amount = amt;
-                    tx.narration = t.value("narration").toString();
-                    // PartyCode: 0 for Journal, else party_code (as Data.002)
-                    tx.partyCode = (tx.transType.compare("Jrnl", Qt::CaseInsensitive)==0) ? 0 : t.value("party_code").toInt();
-
-                    bool txInsOk = insertBahiKhataJournalTx(mdb, txTbl, tx);
-                    static int txDbg = 0;
-                    if (++txDbg <= 5 || !txInsOk) {
-                        std::cout << "[TX INSERT] vch=" << rawVchNo << " drCr=" << drCr.toStdString() << " amt=" << amt << " ok=" << txInsOk << std::endl;
-                    }
-                    if (txInsOk) {
+                    auto sig = std::make_tuple(rawVchNo, isoDate, acCode, amtCents, drCr);
+                    if (existingTxSignatures.find(sig) != existingTxSignatures.end()) {
                         summary.transactionsExported++;
                         if (drCr == "Dr") summary.totalDebitAmount += amt;
                         else summary.totalCreditAmount += amt;
-                        existingTxSignatures.insert(sig);
-                        // Mirror the app's voucher-save: post each leg to its
-                        // ledger's cached CurrentBalance (Dr-positive signed).
-                        if (acCode > 0 && std::abs(amt) >= 0.0005) {
-                            double signedAmt = (drCr == "Dr") ? amt : -amt;
-                            balDeltas[acCode] = round2dbl(
-                                balDeltas.value(acCode, 0.0) + signedAmt);
+                        continue;
+                    }
+
+                    bool txInsOk = false;
+                    const bool isFirst = (li == 0);
+                    if (vType.compare("Jrnl", Qt::CaseInsensitive) == 0 ||
+                        (vType != "Sale" && vType != "Purc" && vType != "ChPt" &&
+                         vType != "ChRt" && vType != "Pymt" && vType != "Rcpt")) {
+                        // Journal + all other rare types: frozen canonical shape.
+                        BahiKhataJournalTx tx;
+                        tx.rowNo = (guint16)legs[li].rowNo;
+                        tx.vchNo = (guint32)rawVchNo;
+                        tx.dateStr = isoDate;
+                        tx.transType = vType;
+                        tx.accountCode = (guint16)acCode;
+                        tx.drCr = drCr;
+                        tx.amount = amt;
+                        tx.narration = narration;
+                        tx.partyCode = 0;
+                        txInsOk = insertBahiKhataJournalTx(mdb, txTbl, tx);
+                    } else if (vType == "ChPt" || vType == "ChRt" ||
+                               vType == "Pymt" || vType == "Rcpt") {
+                        BahiKhataJournalTx tx;
+                        tx.rowNo = (guint16)legs[li].rowNo;
+                        tx.vchNo = (guint32)rawVchNo;
+                        tx.dateStr = isoDate;
+                        tx.transType = vType;
+                        tx.accountCode = (guint16)acCode;
+                        tx.drCr = drCr;
+                        tx.amount = amt;
+                        tx.narration = narration;
+                        tx.partyCode = 0;
+                        txInsOk = insertCashLeg(mdb, txTbl, tx, vType);
+                    } else {
+                        // Sale / Purc leg with resolved shape.
+                        SalePurcLeg L;
+                        L.rowNo = (guint16)legs[li].rowNo;
+                        L.vchNo = (guint32)rawVchNo;
+                        L.dateStr = isoDate;
+                        L.transType = vType;
+                        L.accountCode = (guint16)acCode;
+                        L.drCr = drCr;
+                        L.amount = amt;
+                        L.narration = narration;
+                        L.invoiceNo = invoiceNo;
+                        L.isFirstLeg = isFirst;
+                        L.dueDays = dueDays;
+                        if (isFirst) {
+                            L.entryType = "Ledger";
+                            L.itemCode = 0;
+                            L.hasBalAmount = true;
+                            L.balAmount = amt;
+                        } else {
+                            QString party = t.value("party_name").toString();
+                            L.entryType = resolveDetailEntryType(
+                                ictx, amt, acCode, party, goodsAssigned, fallbackIdx);
+                            if (L.entryType == "Goods Amount") goodsAssigned = true;
+                            if (L.entryType != "Round Off" && L.entryType != "TDS194Q" &&
+                                L.entryType != "TCS" && L.entryType != "DamiTDS") {
+                                L.itemCode = (guint16)ictx.headerItemCode;
+                            } else {
+                                L.itemCode = 0;
+                            }
+                            if (L.entryType != "Ledger" && L.entryType != "Goods Amount" &&
+                                L.entryType != "SGST" && L.entryType != "CGST" &&
+                                L.entryType != "IGST" && L.entryType != "Round Off" &&
+                                L.entryType != "TDS194Q" && L.entryType != "TCS" &&
+                                L.entryType != "DamiTDS") {
+                                std::cout << "[TX LABEL] vch=" << rawVchNo << " ac=" << acCode
+                                          << " amt=" << amt << " -> " << L.entryType.toStdString()
+                                          << " (fallback)" << std::endl;
+                            }
+                        }
+                        L.jform = ictx.valid ? ictx.saleStatus
+                                             : (vType == "Sale" ? "Self Sale" : "Self Purchase");
+                        L.iformTax = ictx.valid ? ictx.taxStatus : "GST";
+                        L.mfeeStatus = ictx.valid ? ictx.marketFeeStatus
+                                                  : (vType == "Purc" ? "Paid" : "");
+                        L.marketType = ictx.valid ? ictx.marketType : "Market Type (With Stock)";
+                        L.cashCredit = "Credit";
+                        L.broker = ictx.valid ? ictx.broker : "";
+                        L.invSeq = ictx.valid ? ictx.invSeq : parseInvSeq(invoiceNo);
+                        L.tcsRate = ictx.valid ? ictx.tcsRate : 0.0;
+                        txInsOk = insertSalePurcLeg(mdb, txTbl, L);
+                    }
+                    if (!txInsOk) {
+                        std::cout << "[TX INSERT] vch=" << rawVchNo << " FAILED drCr="
+                                  << drCr.toStdString() << " amt=" << amt << std::endl;
+                        continue;
+                    }
+                    noteInserted(rawVchNo, isoDate, acCode, amt, drCr, sig);
+                }
+
+                // Stock item lines once per Sale/Purc voucher with items.
+                if (isSalePurc && stkTxTbl && ictx.valid && !ictx.items.empty()) {
+                    auto skey = std::make_tuple(
+                        legs.first().m.value("__vch").toInt(),
+                        legs.first().m.value("__date").toString(), vType);
+                    if (existingStockSig.find(skey) == existingStockSig.end()) {
+                        int n = insertStockLines(mdb, stkTxTbl, ictx,
+                                                 (guint32)legs.first().m.value("__vch").toInt(),
+                                                 legs.first().m.value("__date").toString(), vType);
+                        if (n > 0) {
+                            stockLines += n;
+                            existingStockSig.insert(skey);
                         }
                     }
-                } else {
-                    summary.transactionsExported++;
-                    if (drCr == "Dr") summary.totalDebitAmount += amt;
-                    else summary.totalCreditAmount += amt;
                 }
-                rowIdx++;
             }
-            std::cout << "[EXPORT] Total Transactions Exported: " << summary.transactionsExported << std::endl;
+            std::cout << "[EXPORT] Total Transactions Exported: " << summary.transactionsExported
+                      << ", StockTransactions lines: " << stockLines << std::endl;
 
             // Apply cached ledger balances for newly inserted vouchers so the
             // app reflects them without a manual open+save per voucher.

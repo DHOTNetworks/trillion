@@ -32,8 +32,10 @@ static gint mdb_col_comparer(MdbColumn **a, MdbColumn **b)
 MdbTableDef *mdb_alloc_tabledef(MdbCatalogEntry *entry)
 {
 	MdbTableDef *table = g_malloc0(sizeof(MdbTableDef));
-	table->entry=entry;
-	snprintf(table->name, sizeof(table->name), "%s", entry->object_name);
+	table->entry = entry ? g_memdup2(entry, sizeof(MdbCatalogEntry)) : NULL;
+	if (entry) {
+		snprintf(table->name, sizeof(table->name), "%s", entry->object_name);
+	}
 
 	return table;	
 }
@@ -46,8 +48,10 @@ void mdb_free_tabledef(MdbTableDef *table)
 		for (i=0; i<table->temp_table_pages->len; i++)
 			g_free(g_ptr_array_index(table->temp_table_pages,i));
 		g_ptr_array_free(table->temp_table_pages, TRUE);
-		/* Temp tables use dummy entries */
+	}
+	if (table->entry) {
 		g_free(table->entry);
+		table->entry = NULL;
 	}
 	mdb_free_columns(table->columns);
 	mdb_free_indices(table->indices);
