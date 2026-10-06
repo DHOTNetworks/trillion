@@ -71,8 +71,22 @@ static double toOleDate(const QString& dateStr) {
 static bool jetColCompress(MdbColumn* col) {
     if (!col) return true;
     const char* n = col->name;
-    if (strcmp(n, "CurrentBalance") == 0 || strcmp(n, "DrCr") == 0 ||
-        strcmp(n, "MyStation") == 0 || strcmp(n, "MySTATE") == 0 || strcmp(n, "Bank2") == 0) {
+    // Columns created with UnicodeCompression = False in native Bahi-Khata Jet 4 schema:
+    if (strcasecmp(n, "CurrentBalance") == 0 || strcasecmp(n, "DrCr") == 0 ||
+        strcasecmp(n, "InvoiceNo") == 0 || strcasecmp(n, "TaxInvoiceNo") == 0 ||
+        strcasecmp(n, "SalePurcAgainst") == 0 || strcasecmp(n, "PlaceOfSupply") == 0 ||
+        strcasecmp(n, "TempInv") == 0 || strcasecmp(n, "ECommGSTIN") == 0 ||
+        strcasecmp(n, "LtNo") == 0 ||
+        strcasecmp(n, "TaxType") == 0 || strcasecmp(n, "VoucherType") == 0 ||
+        strcasecmp(n, "TaxIncluding") == 0 ||
+        strcasecmp(n, "TransportMode") == 0 || strcasecmp(n, "EWayOthers") == 0 ||
+        strcasecmp(n, "EInvTransType") == 0 || strcasecmp(n, "ShipFrom_Stcd") == 0 ||
+        strcasecmp(n, "ShipTo_Stcd") == 0 || strcasecmp(n, "BuyerPINCode") == 0 ||
+        strcasecmp(n, "BillItemName") == 0 || strcasecmp(n, "OtherInfo") == 0 ||
+        strcasecmp(n, "ShippingAddress") == 0 || strcasecmp(n, "IRNNo") == 0 ||
+        strcasecmp(n, "EInvStatus") == 0 || strcasecmp(n, "EWayStatus") == 0 ||
+        strcasecmp(n, "MyStation") == 0 || strcasecmp(n, "MySTATE") == 0 ||
+        strcasecmp(n, "Bank2") == 0) {
         return false;
     }
     return true;
