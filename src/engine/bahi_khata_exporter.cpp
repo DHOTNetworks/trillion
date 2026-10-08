@@ -65,9 +65,14 @@ static double toOleDate(const QString& dateStr) {
     return static_cast<double>(base.daysTo(d));
 }
 
-/* Native Jet honors the per-column UnicodeCompression property
- * (Ledgers.CurrentBalance and Transactions.DrCr are "no" -> always UCS-2LE).
- * We determine this safely by column name to avoid uninitialized props pointers. */
+/* Native Jet honors the per-column UnicodeCompression property.
+ * RAW list below is verified byte-for-byte against pristine Data.002
+ * (--audit-enc): every listed column stores len>4 ASCII values as plain
+ * UCS-2LE, while all other text columns store them FF FE-compressed.
+ * NOTE: Ledgers.LedgerName/Prefix/MailingName/MailingAdd/IncomeTaxNo/
+ * SaleTaxNo/VAT/Station/Route/Distt/InventoryChoice are COMPRESSED natively
+ * (do NOT add them here). Short values (UCS-2 <= 4 bytes) are never
+ * compressed by either path, so they are unaffected by this list. */
 static bool jetColCompress(MdbColumn* col) {
     if (!col) return true;
     const char* n = col->name;
@@ -76,7 +81,11 @@ static bool jetColCompress(MdbColumn* col) {
         strcasecmp(n, "InvoiceNo") == 0 || strcasecmp(n, "TaxInvoiceNo") == 0 ||
         strcasecmp(n, "SalePurcAgainst") == 0 || strcasecmp(n, "PlaceOfSupply") == 0 ||
         strcasecmp(n, "TempInv") == 0 || strcasecmp(n, "ECommGSTIN") == 0 ||
-        strcasecmp(n, "LtNo") == 0 ||
+        strcasecmp(n, "LtNo") == 0 || strcasecmp(n, "BrokerName") == 0 ||
+        strcasecmp(n, "FormVAT47No") == 0 || strcasecmp(n, "ZimidarName") == 0 ||
+        strcasecmp(n, "ExpUnit") == 0 || strcasecmp(n, "E1Details1") == 0 ||
+        strcasecmp(n, "E1Details2") == 0 || strcasecmp(n, "Spare1") == 0 ||
+        strcasecmp(n, "DrCrNoteMode") == 0 || strcasecmp(n, "TDS194QChallanTransType") == 0 ||
         strcasecmp(n, "TaxType") == 0 || strcasecmp(n, "VoucherType") == 0 ||
         strcasecmp(n, "TaxIncluding") == 0 ||
         strcasecmp(n, "TransportMode") == 0 || strcasecmp(n, "EWayOthers") == 0 ||
@@ -85,6 +94,28 @@ static bool jetColCompress(MdbColumn* col) {
         strcasecmp(n, "BillItemName") == 0 || strcasecmp(n, "OtherInfo") == 0 ||
         strcasecmp(n, "ShippingAddress") == 0 || strcasecmp(n, "IRNNo") == 0 ||
         strcasecmp(n, "EInvStatus") == 0 || strcasecmp(n, "EWayStatus") == 0 ||
+        strcasecmp(n, "DispatchDate") == 0 || strcasecmp(n, "PurchaseOrderNo") == 0 ||
+        strcasecmp(n, "Grade") == 0 || strcasecmp(n, "ChallanNo") == 0 ||
+        strcasecmp(n, "TransporterGSTIN") == 0 || strcasecmp(n, "Distance") == 0 ||
+        strcasecmp(n, "TransportDocNo") == 0 || strcasecmp(n, "TransportDocDt") == 0 ||
+        strcasecmp(n, "BuyerLocation") == 0 || strcasecmp(n, "ShipFrom_Nm") == 0 ||
+        strcasecmp(n, "ShipFrom_Pin") == 0 || strcasecmp(n, "ShipTo_Gstin") == 0 ||
+        strcasecmp(n, "ShipTo_Loc") == 0 || strcasecmp(n, "ShipTo_Others") == 0 ||
+        strcasecmp(n, "ShippingPortCode") == 0 || strcasecmp(n, "EInvAckNo") == 0 ||
+        strcasecmp(n, "EInvAckDate") == 0 ||
+        strcasecmp(n, "LedgerAlais") == 0 ||
+        strcasecmp(n, "OpeningType") == 0 || strcasecmp(n, "BankAccount") == 0 ||
+        strcasecmp(n, "STATE") == 0 || strcasecmp(n, "PartyTAN") == 0 ||
+        strcasecmp(n, "PartyType") == 0 || strcasecmp(n, "ConcernedPerson") == 0 ||
+        strcasecmp(n, "PartyState") == 0 || strcasecmp(n, "PartyPINcode") == 0 ||
+        strcasecmp(n, "VATDealer") == 0 || strcasecmp(n, "PartyStation") == 0 ||
+        strcasecmp(n, "MobNoForSMS") == 0 || strcasecmp(n, "SpecialPartyType") == 0 ||
+        strcasecmp(n, "ShopNo") == 0 || strcasecmp(n, "CommnCalcOn") == 0 ||
+        strcasecmp(n, "Email") == 0 || strcasecmp(n, "GSTIN") == 0 ||
+        strcasecmp(n, "AadharNo") == 0 || strcasecmp(n, "GSTPartyType") == 0 ||
+        strcasecmp(n, "WhatsappNo") == 0 || strcasecmp(n, "IFSCCode") == 0 ||
+        strcasecmp(n, "BankName") == 0 || strcasecmp(n, "BRN") == 0 ||
+        strcasecmp(n, "URN") == 0 ||
         strcasecmp(n, "MyStation") == 0 || strcasecmp(n, "MySTATE") == 0 ||
         strcasecmp(n, "Bank2") == 0) {
         return false;
@@ -134,15 +165,24 @@ static QByteArray toJet4TextForCol(const QString& str, MdbColumn* col) {
 
 static double round2dbl(double v) { return std::round(v * 100.0) / 100.0; }
 
-/* Shared voucher-type normalization (Jet short codes). Used by both engines. */
 static QString normalizeTxType(const QString& raw) {
     QString t = raw.trimmed();
     if (t.compare("Journal", Qt::CaseInsensitive) == 0) return "Jrnl";
+    if (t.compare("Jrnl", Qt::CaseInsensitive) == 0) return "Jrnl";
+    if (t.compare("TDS", Qt::CaseInsensitive) == 0) return "Jrnl";
     if (t.compare("Payment", Qt::CaseInsensitive) == 0) return "ChPt";
+    if (t.compare("ChPt", Qt::CaseInsensitive) == 0) return "ChPt";
     if (t.compare("Receipt", Qt::CaseInsensitive) == 0) return "ChRt";
+    if (t.compare("ChRt", Qt::CaseInsensitive) == 0) return "ChRt";
     if (t.compare("Sales", Qt::CaseInsensitive) == 0) return "Sale";
+    if (t.compare("Sale", Qt::CaseInsensitive) == 0) return "Sale";
     if (t.compare("Purchase", Qt::CaseInsensitive) == 0) return "Purc";
+    if (t.compare("Purc", Qt::CaseInsensitive) == 0) return "Purc";
     if (t.compare("Contra", Qt::CaseInsensitive) == 0) return "Jrnl";
+    if (t.compare("Pymt", Qt::CaseInsensitive) == 0) return "Pymt";
+    if (t.compare("Rcpt", Qt::CaseInsensitive) == 0) return "Rcpt";
+    if (t.compare("PrRn", Qt::CaseInsensitive) == 0) return "PrRn";
+    if (t.compare("SlRn", Qt::CaseInsensitive) == 0) return "SlRn";
     if (t.length() > 5) return t.left(5);
     return t;
 }
@@ -514,11 +554,14 @@ struct JetInvoiceCtx {
     QString broker;           // broker/transport text or ""
     int invSeq = 0;           // trailing integer of invoice_no
     double tcsRate = 0.0;
+    double tdsRate = 0.0;
+    double goodsAmount = 0.0;
     int dueDays = 0;
     int headerItemCode = 0;
     QString vehicleNo;
     QString grNo;
     QString driverName;
+    QString ewayBillNo;
     QString shippingAddress;
     QString poNo;
     QString challanNo;
@@ -536,6 +579,7 @@ static long long toCents(double v) { return (long long)std::llround(v * 100.0); 
 
 struct JetInvoiceCache {
     std::unordered_map<int, int> stockItemCodes; // sqlite item id -> code
+    std::unordered_map<std::string, int> stockItemCodesByName; // normalized name -> code
     std::unordered_map<std::string, QVariantMap> salesInvoices;
     std::unordered_map<std::string, QVariantMap> purcInvoices;
     std::unordered_map<int, std::vector<QVariantMap>> salesItems;
@@ -544,10 +588,17 @@ struct JetInvoiceCache {
 
 static JetInvoiceCache buildInvoiceCache(DatabaseManager& appDb) {
     JetInvoiceCache cache;
-    QVariantList stkV = appDb.executeQuery("SELECT id, code FROM stock_items;");
+    QVariantList stkV = appDb.executeQuery("SELECT id, code, name FROM stock_items;");
     for (const auto& v : stkV) {
         QVariantMap m = v.toMap();
-        cache.stockItemCodes[m.value("id").toInt()] = m.value("code").toInt();
+        int code = m.value("code").toInt();
+        // Jet ItemCode is SMALLINT: clamp garbage, keep 0 as "unknown".
+        if (code < 0 || code > 32767) code = 0;
+        cache.stockItemCodes[m.value("id").toInt()] = code;
+        QString nm = m.value("name").toString().simplified().toLower();
+        nm.remove(' ');
+        if (!nm.isEmpty() && code > 0)
+            cache.stockItemCodesByName[nm.toStdString()] = code;
     }
     QVariantList sInvV = appDb.executeQuery("SELECT * FROM sales_invoices;");
     for (const auto& v : sInvV) {
@@ -576,9 +627,18 @@ static JetInvoiceCache buildInvoiceCache(DatabaseManager& appDb) {
     return cache;
 }
 
-static int jetItemCodeCached(const JetInvoiceCache& cache, int sqliteItemId) {
+static int jetItemCodeCached(const JetInvoiceCache& cache, int sqliteItemId, const QString& itemName = QString()) {
     auto it = cache.stockItemCodes.find(sqliteItemId);
-    return (it != cache.stockItemCodes.end()) ? it->second : 0;
+    if (it != cache.stockItemCodes.end() && it->second > 0) return it->second;
+    // Fallback: resolve by normalized item name (covers re-created items whose
+    // ids changed but names survived). Returns 0 ("unknown") if unresolvable.
+    if (!itemName.trimmed().isEmpty()) {
+        QString nm = itemName.simplified().toLower();
+        nm.remove(' ');
+        auto jt = cache.stockItemCodesByName.find(nm.toStdString());
+        if (jt != cache.stockItemCodesByName.end() && jt->second > 0) return jt->second;
+    }
+    return 0;
 }
 
 static int parseInvSeq(const QString& invNo) {
@@ -622,12 +682,15 @@ static JetInvoiceCtx fetchInvoiceCtxCached(const JetInvoiceCache& cache, const Q
     if (ctx.broker.isEmpty()) ctx.broker = h.value("transport", h.value("transport_name")).toString().trimmed();
     ctx.invSeq = parseInvSeq(invoiceNo);
     ctx.tcsRate = h.value("tcs_rate", 0.0).toDouble();
+    ctx.tdsRate = h.value("tds_rate", 0.0).toDouble();
+    ctx.goodsAmount = h.value("taxable_amount", h.value("total_amount", 0.0)).toDouble();
     ctx.dueDays = h.value("due_days", 0).toInt();
-    ctx.headerItemCode = jetItemCodeCached(cache, h.value("item_id").toInt());
+    ctx.headerItemCode = jetItemCodeCached(cache, h.value("item_id").toInt(), h.value("item_name").toString());
     ctx.vehicleNo = h.value("vehicle_no").toString();
     ctx.grNo = h.value("gr_no").toString();
     ctx.driverName = h.value("driver_name").toString().trimmed();
     if (ctx.driverName.isEmpty()) ctx.driverName = h.value("driver").toString().trimmed();
+    ctx.ewayBillNo = h.value("eway_bill_no", h.value("eway_bill")).toString().trimmed();
     ctx.kandaWeight = h.value("kanda_weight").toDouble();
     ctx.shippingAddress = h.value("shipping_address").toString();
     ctx.poNo = h.value("po_no").toString();
@@ -660,7 +723,7 @@ static JetInvoiceCtx fetchInvoiceCtxCached(const JetInvoiceCache& cache, const Q
     if (itemIt != itemsMap.end()) {
         for (const auto& m : itemIt->second) {
             JetInvoiceItem item;
-            item.jetCode = jetItemCodeCached(cache, m.value("item_id").toInt());
+            item.jetCode = jetItemCodeCached(cache, m.value("item_id").toInt(), m.value("item_name").toString());
             item.name = m.value("item_name").toString();
             item.grade = m.value("grade").toString();
             item.bags = m.value("bag_count").toInt();
@@ -757,6 +820,8 @@ struct SalePurcLeg {
     bool hasBalAmount = false;
     int invSeq = 0;         // Sale invoice sequence (Purc: 0)
     double tcsRate = 0.0;
+    double tdsRate = 0.0;
+    double goodsAmount = 0.0;
     int dueDays = 0;
 };
 
@@ -815,9 +880,23 @@ static bool insertSalePurcLeg(MdbHandle* mdb, MdbTableDef* txTbl, const SalePurc
     setTextOrNull(9, jfBytes, jfBytes.isEmpty());
     QByteArray itBytes = toJet4TextForCol(L.iformTax, colOf(10));
     setTextOrNull(10, itBytes, itBytes.isEmpty());
+    // NOTE: mfBytes must outlive the function (fields[11] aliases it).
+    // Empty-string sentinel for setEmpty-equivalent (that lambda is defined
+    // below; this block runs before it).
+    static const char kEmpty11 = '\0';
+    QByteArray mfBytes;
     if (!isSale) {
-        QByteArray mfBytes = toJet4TextForCol(L.mfeeStatus, colOf(11));
-        setTextOrNull(11, mfBytes, mfBytes.isEmpty());
+        // Native rice (With Stock) purchase legs carry EMPTY ("") here —
+        // verified on two working natives (Purc 148 and 181); NULL blanks
+        // the purchase item grid. Without-Stock carries 'Paid'/'Unpaid'.
+        if (L.marketType.contains("With Stock", Qt::CaseInsensitive)) {
+            fields[11].is_null = 0; fields[11].value = (void*)&kEmpty11; fields[11].siz = 0;
+        } else {
+            QString mf = L.mfeeStatus.trimmed();
+            if (mf.isEmpty()) mf = "Paid";
+            mfBytes = toJet4TextForCol(mf, colOf(11));
+            setTextOrNull(11, mfBytes, mfBytes.isEmpty());
+        }
     }
     QByteArray ptBytes = toJet4TextForCol(L.marketType, colOf(12));
     setTextOrNull(12, ptBytes, ptBytes.isEmpty());
@@ -853,6 +932,7 @@ static bool insertSalePurcLeg(MdbHandle* mdb, MdbTableDef* txTbl, const SalePurc
     };
     QByteArray zeroStr = toJet4Text("0");
     const double oleZeroDate = 2.0; // 01/01/1900 sentinel ("01/01/00")
+    double balFirst = L.hasBalAmount ? L.balAmount : L.amount; // function-scope: fields[41] aliases it
 
     if (isSale) {
         setText(18, toJet4TextForCol("None", colOf(18)));
@@ -861,8 +941,7 @@ static bool insertSalePurcLeg(MdbHandle* mdb, MdbTableDef* txTbl, const SalePurc
             fields[21].is_null = 0; fields[21].value = &zero32; fields[21].siz = 4;
             fields[23].is_null = 0; fields[23].value = &zero32; fields[23].siz = 4;
             setEmpty(27);
-            double bal = L.hasBalAmount ? L.balAmount : L.amount;
-            fields[41].is_null = 0; fields[41].value = &bal; fields[41].siz = 8;
+            fields[41].is_null = 0; fields[41].value = &balFirst; fields[41].siz = 8;
         }
         // 19/20/21/23/27/41 stay NULL on detail legs
     } else {
@@ -871,8 +950,7 @@ static bool insertSalePurcLeg(MdbHandle* mdb, MdbTableDef* txTbl, const SalePurc
             fields[21].is_null = 0; fields[21].value = &zero32; fields[21].siz = 4;
             fields[23].is_null = 0; fields[23].value = &zero32; fields[23].siz = 4;
             setEmpty(27);
-            double bal = L.hasBalAmount ? L.balAmount : L.amount;
-            fields[41].is_null = 0; fields[41].value = &bal; fields[41].siz = 8;
+            fields[41].is_null = 0; fields[41].value = &balFirst; fields[41].siz = 8;
         } else {
             fields[23].is_null = 0; fields[23].value = &zero32; fields[23].siz = 4;
             setEmpty(28);
@@ -887,9 +965,15 @@ static bool insertSalePurcLeg(MdbHandle* mdb, MdbTableDef* txTbl, const SalePurc
     fields[26].is_null = 0; fields[26].value = &zero32; fields[26].siz = 4; // FormQuery
     fields[31].is_null = 0; fields[31].value = &zero32; fields[31].siz = 4; // DebitCreditNote
     fields[35].is_null = 0; fields[35].value = &zeroDbl; fields[35].siz = 8; // ExpRate
-    setEmpty(37); // ImagePath ""
+    // Native Purc: party/first leg carries empty-string ImagePath, detail
+    // legs NULL (verified on working natives 148 and 182; EMPTY detail
+    // blanks the grid). Sale untouched (currently displays fine).
+    if (isSale || L.isFirstLeg) setEmpty(37); // ImagePath ""
+    else fields[37].is_null = 1;
+    // NOTE: brBytes must outlive the function (fields[38] aliases it).
+    QByteArray brBytes;
     if (isSale) {
-        QByteArray brBytes = toJet4TextForCol(L.broker.left(255), colOf(38));
+        brBytes = toJet4TextForCol(L.broker.left(255), colOf(38));
         if (brBytes.isEmpty()) setEmpty(38); else setText(38, brBytes);
     } else {
         setEmpty(38);
@@ -915,22 +999,34 @@ static bool insertSalePurcLeg(MdbHandle* mdb, MdbTableDef* txTbl, const SalePurc
     fields[58].is_null = 0; fields[58].value = &zero32; fields[58].siz = 4; // ITCNotClaim
     fields[59].is_null = 0; fields[59].value = &zero32; fields[59].siz = 4; // ReverseChargePayable
     fields[60].is_null = 0; fields[60].value = &zero32; fields[60].siz = 4; // GSTOnGoodsAmount
-    float tcsRate = (float)L.tcsRate;
-    fields[62].is_null = 0; fields[62].value = &tcsRate; fields[62].siz = 4; // TCSRate
+    float tcsRate = isSale ? (float)L.tcsRate
+                           : (float)(L.tcsRate > 0.0 ? L.tcsRate : 0.1);
+    fields[62].is_null = 0; fields[62].value = &tcsRate; fields[62].siz = 4; // TCSRate (Sale: invoice rate, Purc native default 0.1)
     double tcsTax = isSale ? L.amount : 0.0;
     fields[63].is_null = 0; fields[63].value = &tcsTax; fields[63].siz = 8; // TCSTaxable
     fields[65].is_null = 0; fields[65].value = &zero32; fields[65].siz = 4; // ChallanVchNo
     if (isSale) {
         fields[66].is_null = 0; fields[66].value = (void*)&oleZeroDate; fields[66].siz = 8;
+        setText(67, toJet4TextForCol("0", colOf(67))); // TempInv "0" on Sale
+    } else {
+        fields[66].is_null = 1; // ChallanVchDATE NULL on Purc
+        // TempInv NULL on Purc (post-1.4.26 native shape verified on all four
+        // purchase modes: Mandi/WithStock/WithoutStock/Other all carry NULL;
+        // Sale keeps "0").
+        fields[67].is_null = 1;
     }
-    setText(67, toJet4TextForCol("0", colOf(67))); // TempInv "0"
     float tdsRate = 0.0f;
-    fields[68].is_null = 0; fields[68].value = &tdsRate; fields[68].siz = 4; // TDSRate194Q
-    fields[69].is_null = 0; fields[69].value = &zeroDbl; fields[69].siz = 8; // Taxable194Q
+    fields[68].is_null = 0; fields[68].value = &tdsRate; fields[68].siz = 4; // TDSRate194Q (0 unless TDS deducted)
+    fields[69].is_null = 0; fields[69].value = &zeroDbl; fields[69].siz = 8; // Taxable194Q (0 unless TDS deducted)
     fields[70].is_null = 0; fields[70].value = &zero32; fields[70].siz = 4; // TDS194QChallanVchNo
-    if (!isSale) {
+    if (!isSale && !L.marketType.contains("With Stock", Qt::CaseInsensitive)) {
+        // Without-Stock Purc carries the 01/01/1900 sentinel + empty trans-type.
         fields[71].is_null = 0; fields[71].value = (void*)&oleZeroDate; fields[71].siz = 8;
         setEmpty(72);
+    } else {
+        // Sale legs and With-Stock Purc legs: both NULL natively.
+        fields[71].is_null = 1;
+        fields[72].is_null = 1;
     }
     fields[73].is_null = 0; fields[73].value = &oleD; fields[73].siz = 8; // TaxInputDate
     fields[74].is_null = 0; fields[74].value = &zero32; fields[74].siz = 4; // PymtDone
@@ -1083,51 +1179,57 @@ static int insertStockLines(MdbHandle* mdb, MdbTableDef* stkTxTbl, const JetInvo
         fields[11].is_null = 1; // DheriPurchaseDate NULL
         guint16 zero16 = 0;
         fields[12].is_null = 0; fields[12].value = &zero16; fields[12].siz = 2;
-        fields[13].is_null = 1; // DheriBillNo NULL for both Sale and Purc
-        fields[14].is_null = 0; fields[14].value = &zero16; fields[14].siz = 2;
+        fields[13].is_null = 1; // DheriBillNo: Sale-only grade text; Purc has no grade field natively (always empty).
+        // NOTE: dhB must outlive the loop iteration (fields[13] aliases it).
+        // Native DheriBillNo carries the paddy grade text on Sale rows only
+        // (e.g. "1509 Steam Wand"); all 5407 pristine Purc rows are empty.
+        QByteArray dhB;
         if (isSale) {
-            fields[15].is_null = 1; fields[16].is_null = 1; // Taxable/Tax NULL
-        } else {
-            double tax = it.taxable;
-            double taxAmt = (it.gstPct > 0 && tax > 0) ? round2dbl(tax * it.gstPct / 100.0) : 0.0;
-            fields[15].is_null = 0; fields[15].value = &tax; fields[15].siz = 8;
-            fields[16].is_null = 0; fields[16].value = &taxAmt; fields[16].siz = 8;
+            QString g = it.grade.trimmed();
+            if (g.isEmpty()) g = ctx.grade.trimmed();
+            if (!g.isEmpty()) dhB = toJet4TextForCol(g.left(100), colOf(13));
         }
+        setTNull(13, dhB, dhB.isEmpty());
+        fields[14].is_null = 0; fields[14].value = &zero16; fields[14].siz = 2;
+        // Native stock rows carry VALUED TaxableAmount/Tax (0.0 when no tax;
+        // current-native 182 stores 0/40). Taxable base only counts when a
+        // GST % applies; exempt rows store 0 (never the goods value, never NULL).
+        double taxBase = (it.gstPct > 0.0 && it.taxable > 0.0) ? it.taxable : 0.0;
+        double taxAmt = (it.gstPct > 0.0 && taxBase > 0.0) ? round2dbl(taxBase * it.gstPct / 100.0) : 0.0;
+        fields[15].is_null = 0; fields[15].value = &taxBase; fields[15].siz = 8; // TaxableAmount
+        fields[16].is_null = 0; fields[16].value = &taxAmt; fields[16].siz = 8; // Tax
         QByteArray txB = toJet4TextForCol(ctx.taxStatus, colOf(17));
         setTNull(17, txB, txB.isEmpty());
-        if (isSale) {
-            fields[18].is_null = 1; // Narration NULL
-        } else {
-            setE(18);
-        }
+        // Native stock Narration is NULL on both Sale and Purc rows (verified
+        // pristine: all NULL, never empty-string).
+        fields[18].is_null = 1; // Narration NULL
         QByteArray vtB = toJet4TextForCol(ctx.saleStatus, colOf(19));
         setTNull(19, vtB, vtB.isEmpty());
         fields[20].is_null = 1; // CommissionPartyCode NULL
-        if (isSale) {
-            guint32 zero32 = 0;
+        guint32 zero32 = 0;
+        // Native correlation (5407 pristine Purc rows): stocked lines carry
+        // GodownCode 0 + TaxIncluding NULL; non-stocked lines carry GodownCode
+        // NULL + TaxIncluding 'Excluding'. Sale lines are always (0, NULL).
+        const bool stocked = isSale || ctx.marketType.contains("With Stock", Qt::CaseInsensitive);
+        if (stocked) {
             fields[21].is_null = 0; fields[21].value = &zero32; fields[21].siz = 4; // GodownCode 0
-            // 22..28 are NULL on Sale rows (0.0 not-null on Purc rows below).
-            fields[22].is_null = 1; fields[23].is_null = 1; fields[24].is_null = 1;
-            fields[25].is_null = 1; fields[26].is_null = 1; fields[27].is_null = 1;
-            fields[28].is_null = 1;
         } else {
-            double z = 0.0;
-            fields[22].is_null = 0; fields[22].value = &z; fields[22].siz = 8;
-            fields[23].is_null = 0; fields[23].value = &z; fields[23].siz = 8;
-            fields[24].is_null = 0; fields[24].value = &z; fields[24].siz = 8;
-            fields[25].is_null = 0; fields[25].value = &z; fields[25].siz = 8;
-            fields[26].is_null = 0; fields[26].value = &z; fields[26].siz = 8;
-            fields[27].is_null = 0; fields[27].value = &z; fields[27].siz = 8;
-            fields[28].is_null = 0; fields[28].value = &z; fields[28].siz = 8;
+            fields[21].is_null = 1;
         }
+        fields[22].is_null = 1; fields[23].is_null = 1; fields[24].is_null = 1;
+        fields[25].is_null = 1; fields[26].is_null = 1; fields[27].is_null = 1;
+        fields[28].is_null = 1;
         fields[29].is_null = 1; // TimberItemRowNo NULL
         double zl = 0.0;
         fields[30].is_null = 0; fields[30].value = &zl; fields[30].siz = 8; // LooseWeight
-        if (isSale) {
+        // NOTE: tiB must outlive the loop iteration (fields[31] aliases it).
+        // Native: stocked lines (Sale always; Purc iff With Stock) carry NULL;
+        // non-stocked Purc lines carry 'Excluding'.
+        QByteArray tiB;
+        if (stocked) {
             fields[31].is_null = 1; // TaxIncluding NULL
         } else {
-            // Native Purc rows carry TaxIncluding text ("Excluding" observed).
-            QByteArray tiB = toJet4TextForCol("Excluding", colOf(31));
+            tiB = toJet4TextForCol("Excluding", colOf(31));
             setTNull(31, tiB, tiB.isEmpty());
         }
         float zf = 0.0f;
@@ -1137,7 +1239,7 @@ static int insertStockLines(MdbHandle* mdb, MdbTableDef* stkTxTbl, const JetInvo
         // ActivationDate: native stores 2.0 (01/01/00), NOT the voucher date.
         fields[35].is_null = 0; fields[35].value = (void*)&oleZero; fields[35].siz = 8;
         fields[36].is_null = 0; fields[36].value = &zl; fields[36].siz = 8;
-        setE(37);
+        fields[37].is_null = 1; // MktCommttCoupNo NULL (current natives; EMPTY also occurs historically)
         double z2 = 0.0;
         fields[38].is_null = 0; fields[38].value = &z2; fields[38].siz = 8;
         fields[39].is_null = 0; fields[39].value = &z2; fields[39].siz = 8;
@@ -1153,7 +1255,10 @@ static int insertStockLines(MdbHandle* mdb, MdbTableDef* stkTxTbl, const JetInvo
         fields[47].is_null = 0; fields[47].value = &z32; fields[47].siz = 4;
         fields[48].is_null = 0; fields[48].value = &z32; fields[48].siz = 4;
         fields[49].is_null = 0; fields[49].value = &z32; fields[49].siz = 4;
-        double ibags = isSale ? 0.0 : it.bags;
+        // Native: IFormBags carries line bags only for IGST (interstate,
+        // I-Form) vouchers; GST/exempt rows store 0. Verified: IGST rice
+        // rows store bags, GST rows (both Sale and Purc) store 0.
+        double ibags = ctx.taxStatus.contains("IGST", Qt::CaseInsensitive) ? it.bags : 0.0;
         fields[50].is_null = 0; fields[50].value = &ibags; fields[50].siz = 8;
         if (insertJet4Row(mdb, stkTxTbl, fields.data(), stkTxTbl->num_cols)) done++;
     }
@@ -1196,12 +1301,20 @@ static bool insertSaleTransportationRow(MdbHandle* mdb, MdbTableDef* trTbl, cons
     setTNull(4, grB, grB.isEmpty());
     QByteArray drvB = toJet4TextForCol(ctx.driverName.left(50), colOf(5));
     setTNull(5, drvB, drvB.isEmpty());
-    setTNull(6, QByteArray(), true); // ST38No
+    QByteArray stB = toJet4TextForCol(ctx.ewayBillNo.left(50), colOf(6));
+    setTNull(6, stB, stB.isEmpty()); // ST38No = ewayBillNo
+
+    // For Purc: Native JetDB leaves ALL fields 7..55 as NULL.
+    if (transType.compare("Purc", Qt::CaseInsensitive) == 0) {
+        return insertJet4Row(mdb, trTbl, fields.data(), trTbl->num_cols);
+    }
+
+    // For Sale: populate Sale transport metadata matching native Bahi-Khata records.
     setTNull(7, QByteArray(), true); // DispatchTime
     setTNull(8, QByteArray(), true); // DispatchDate
     QByteArray poB = toJet4TextForCol(ctx.poNo.left(255), colOf(9));
     setTNull(9, poB, poB.isEmpty());
-    QByteArray itemB = toJet4TextForCol(ctx.broker.left(255), colOf(10));
+    QByteArray itemB = toJet4TextForCol(ctx.transport.left(255), colOf(10)); // BillItemName = Transporter Name
     setTNull(10, itemB, itemB.isEmpty());
     QByteArray gradeB = toJet4TextForCol(ctx.grade.left(255), colOf(11));
     setTNull(11, gradeB, gradeB.isEmpty());
@@ -1210,7 +1323,8 @@ static bool insertSaleTransportationRow(MdbHandle* mdb, MdbTableDef* trTbl, cons
 
     double kw = ctx.kandaWeight;
     fields[13].is_null = 0; fields[13].value = &kw; fields[13].siz = 8; // KandaWeight
-    setTNull(14, QByteArray(), true); // OtherInfo
+    QByteArray otherB = toJet4TextForCol(ctx.broker.left(255), colOf(14)); // OtherInfo = Broker Name & Details
+    setTNull(14, otherB, otherB.isEmpty());
     setTNull(15, QByteArray(), true); // BardanaType
     double z = 0.0;
     fields[16].is_null = 0; fields[16].value = &z; fields[16].siz = 8; // BardanaBags
@@ -1225,9 +1339,8 @@ static bool insertSaleTransportationRow(MdbHandle* mdb, MdbTableDef* trTbl, cons
     fields[22].is_null = 1; // QRCode NULL
     QByteArray irnB = toJet4TextForCol(ctx.irnNo.left(255), colOf(23));
     setTNull(23, irnB, irnB.isEmpty());
-    QByteArray trNmB = toJet4TextForCol(ctx.transport.left(255), colOf(24));
-    setTNull(24, trNmB, trNmB.isEmpty());
-    setTNull(25, QByteArray(), true); // TransporterGSTIN
+    setTNull(24, QByteArray(), true); // TransporterName NULL
+    setTNull(25, QByteArray(), true); // TransporterGSTIN NULL
 
     // Standard dropdown defaults required by VB6 ComboBoxes:
     QByteArray trModB = toJet4TextForCol("By Road", colOf(26));
@@ -1550,13 +1663,24 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaOdbc(const ExportOp
             
             QString txSql =
                 "SELECT t.id, t.voucher_no, t.voucher_date, t.trans_type, t.dr_cr, t.amount, t.narration, "
-                "COALESCE(p.legacy_id, (SELECT legacy_id FROM parties WHERE name = t.party_name), (SELECT legacy_id FROM parties WHERE id = t.account_code), p.id, t.account_code) as ac_code, "
-                "COALESCE(op.legacy_id, op.id, (SELECT legacy_id FROM parties WHERE name = t.opposing_account), 0) as party_code, "
+                "COALESCE("
+                "    (SELECT legacy_id FROM parties WHERE id = t.account_code AND replace(name, ' ', '') = replace(t.party_name, ' ', '')),"
+                "    (SELECT legacy_id FROM parties WHERE legacy_id = t.account_code AND replace(name, ' ', '') = replace(t.party_name, ' ', '')),"
+                "    (SELECT legacy_id FROM parties WHERE replace(name, ' ', '') = replace(t.party_name, ' ', '')),"
+                "    (SELECT legacy_id FROM parties WHERE legacy_id = t.account_code),"
+                "    (SELECT legacy_id FROM parties WHERE id = t.account_code),"
+                "    (SELECT legacy_id FROM parties WHERE id = t.party_id),"
+                "    t.account_code,"
+                "    0"
+                ") as ac_code, "
+                "COALESCE("
+                "    (SELECT legacy_id FROM parties WHERE replace(name, ' ', '') = replace(t.opposing_account, ' ', '')),"
+                "    (SELECT legacy_id FROM parties WHERE id = t.party_id),"
+                "    0"
+                ") as party_code, "
                 "t.party_name, t.opposing_account, "
                 "t.financial_year "
-                "FROM transactions t "
-                "LEFT JOIN parties p ON (t.party_id = p.id OR (t.party_id IS NULL AND t.party_name = p.name)) "
-                "LEFT JOIN parties op ON (t.opposing_account = op.name) ";
+                "FROM transactions t ";
 
             txSql += buildFyWhere(options.financialYear);
             txSql += "ORDER BY t.voucher_date ASC, t.id ASC;";
@@ -1782,18 +1906,19 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
                     return nullptr;
                 };
                 QByteArray nameBytes = toJet4Text(c.value("company_name", "M/S MAHADEV RICE INDUSTRY").toString().left(50));
-                QByteArray busBytes = toJet4Text(c.value("business_type", "RICE MANUFACTURER (FSSAI LIC NO. : 10822019000152)").toString().left(100));
-                QByteArray addBytes = toJet4Text(c.value("address", "BABA SAWAN SINGH THERI ROAD,VPO SIKANDERPUR, SIRSA, HARYANA -125055").toString().left(250));
-                QByteArray phoneBytes = toJet4Text(c.value("phone", "01666-297533").toString().left(50));
-                QByteArray mobBytes = toJet4Text(c.value("mobile", "9416595091").toString().left(50));
-                QByteArray panBytes = toJet4Text(c.value("pan_no", "ABKFM5928Q").toString().left(50));
-                QByteArray gstinBytes = toJet4Text(c.value("gstin", "06ABKFM5928Q1ZG").toString().left(50));
+                // CompanyInfo: only CompanyName is compressed natively; all other text is RAW-UCS2.
+                QByteArray busBytes = toJet4TextForCol(c.value("business_type", "RICE MANUFACTURER (FSSAI LIC NO. : 10822019000152)").toString().left(100), compCol("Business"));
+                QByteArray addBytes = toJet4TextForCol(c.value("address", "BABA SAWAN SINGH THERI ROAD,VPO SIKANDERPUR, SIRSA, HARYANA -125055").toString().left(250), compCol("Address"));
+                QByteArray phoneBytes = toJet4TextForCol(c.value("phone", "01666-297533").toString().left(50), compCol("Phone_O"));
+                QByteArray mobBytes = toJet4TextForCol(c.value("mobile", "9416595091").toString().left(50), compCol("Mobile1"));
+                QByteArray panBytes = toJet4TextForCol(c.value("pan_no", "ABKFM5928Q").toString().left(50), compCol("PAN_No"));
+                QByteArray gstinBytes = toJet4TextForCol(c.value("gstin", "06ABKFM5928Q1ZG").toString().left(50), compCol("GSTIN"));
                 // MyStation/MySTATE/Bank2 are UnicodeCompression=no -> UCS-2LE.
                 QByteArray stnBytes = toJet4TextForCol(c.value("city", "SIRSA").toString().left(50), compCol("MyStation"));
                 QByteArray stateBytes = toJet4TextForCol(c.value("state", "HARYANA").toString().left(50), compCol("MySTATE"));
                 QByteArray b2Bytes = toJet4TextForCol(QString("A/c No:- %1").arg(c.value("bank_account", "128001400717").toString()).left(50), compCol("Bank2"));
-                QByteArray b3Bytes = toJet4Text(QString("IFSC:- %1").arg(c.value("ifsc_code", "CNRB0002058").toString()).left(50));
-                QByteArray firmTypeBytes = toJet4Text("Partnership Firm");
+                QByteArray b3Bytes = toJet4TextForCol(QString("IFSC:- %1").arg(c.value("ifsc_code", "CNRB0002058").toString()).left(50), compCol("Bank3"));
+                QByteArray firmTypeBytes = toJet4TextForCol("Partnership Firm", compCol("FirmType"));
                 guint32 syncVal = 1;
                 guint16 zero16 = 0;
 
@@ -1848,9 +1973,6 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
         std::set<int> existingGroupCodes;
         mdb_rewind_table(grpTbl);
         MdbColumn* colC1 = (MdbColumn*)g_ptr_array_index(grpTbl->columns, 1);
-        MdbColumn* colC2 = (MdbColumn*)g_ptr_array_index(grpTbl->columns, 2);
-        MdbColumn* colC3 = (MdbColumn*)g_ptr_array_index(grpTbl->columns, 3);
-        MdbColumn* colC4 = (MdbColumn*)g_ptr_array_index(grpTbl->columns, 4);
 
         while (mdb_fetch_row(grpTbl)) {
             char* cStr = mdb_col_to_string(mdb, mdb->pg_buf, colC1->cur_value_start, colC1->col_type, colC1->cur_value_len);
@@ -1861,32 +1983,13 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
 
                 auto it = grpMap.find(c1);
                 if (it != grpMap.end()) {
-                    bool modified = false;
-                    guint16 c2Val = (guint16)it->second.value("code2nd").toInt();
-                    guint16 c3Val = (guint16)it->second.value("code3rd").toInt();
-                    guint16 c4Val = (guint16)it->second.value("code4th").toInt();
-
-                    if (colC2->cur_value_start > 0 && colC2->cur_value_len == (int)sizeof(guint16)) {
-                        if (memcmp(mdb->pg_buf + colC2->cur_value_start, &c2Val, sizeof(guint16)) != 0) {
-                            memcpy(mdb->pg_buf + colC2->cur_value_start, &c2Val, sizeof(guint16));
-                            modified = true;
-                        }
-                    }
-                    if (colC3->cur_value_start > 0 && colC3->cur_value_len == (int)sizeof(guint16)) {
-                        if (memcmp(mdb->pg_buf + colC3->cur_value_start, &c3Val, sizeof(guint16)) != 0) {
-                            memcpy(mdb->pg_buf + colC3->cur_value_start, &c3Val, sizeof(guint16));
-                            modified = true;
-                        }
-                    }
-                    if (colC4->cur_value_start > 0 && colC4->cur_value_len == (int)sizeof(guint16)) {
-                        if (memcmp(mdb->pg_buf + colC4->cur_value_start, &c4Val, sizeof(guint16)) != 0) {
-                            memcpy(mdb->pg_buf + colC4->cur_value_start, &c4Val, sizeof(guint16));
-                            modified = true;
-                        }
-                    }
-                    if (modified) {
-                        mdb_write_pg(mdb, grpTbl->cur_phys_pg);
-                    }
+                    // NEVER overwrite hierarchy codes of existing groups.
+                    // Native Bahi-Khata keeps custom groups top-level
+                    // (Code2nd=Code3rd=Code4th=0); nesting them under sqlite's
+                    // hierarchy silently drops those groups from Bahi-Khata's
+                    // balance-sheet grand total (exact 12,415,550.00 gap).
+                    // New groups are still inserted with sqlite codes below.
+                    (void)it;
                 }
             }
         }
@@ -1964,6 +2067,22 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
             if (legId <= 0) legId = p.value("id").toInt();
             partyMap[legId] = p;
         }
+        // Mathematically guaranteed FK safety: only write GroupCode values
+        // that exist in THIS Jet file's Groups table (else keep native value).
+        std::set<int> validGroupCodes;
+        {
+            MdbTableDef* grpTbl = mdb_read_table_by_name(mdb, (char*)"Groups", MDB_TABLE);
+            if (grpTbl) {
+                mdb_read_columns(grpTbl);
+                MdbColumn* gc = (MdbColumn*)g_ptr_array_index(grpTbl->columns, 1);
+                mdb_rewind_table(grpTbl);
+                std::vector<char> gb(64);
+                mdb_bind_column(grpTbl, 2, gb.data(), nullptr);
+                while (mdb_fetch_row(grpTbl)) validGroupCodes.insert(atoi(gb.data()));
+                (void)gc;
+                mdb_free_tabledef(grpTbl);
+            }
+        }
         std::cout << "[EXPORT] Parties fetched from SQLite: " << partyMap.size() << std::endl;
 
         while (mdb_fetch_row(ledgersTbl)) {
@@ -1977,6 +2096,7 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
                 if (it != partyMap.end()) {
                     bool modified = false;
                     int grp = it->second.value("group_code").toInt();
+                    if (!validGroupCodes.empty() && grp > 0 && validGroupCodes.find(grp) == validGroupCodes.end()) grp = 0; // never invent groups
                     if (grp > 0 && colGroup->cur_value_start > 0 &&
                         colGroup->cur_value_len == (int)sizeof(guint16)) {
                         guint16 grpVal = (guint16)grp;
@@ -2038,6 +2158,9 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
                 fields[3].is_null = 0; fields[3].value = &codeVal; fields[3].siz = 2;
 
                 guint16 grpVal = p.value("group_code", 1).toInt();
+                // Guaranteed-valid group: fall back only when we verified the master set.
+                if (!validGroupCodes.empty() && validGroupCodes.find((int)grpVal) == validGroupCodes.end())
+                    grpVal = validGroupCodes.find(1) != validGroupCodes.end() ? 1 : (guint16)*validGroupCodes.begin();
                 fields[4].is_null = 0; fields[4].value = &grpVal; fields[4].siz = 2;
 
                 QByteArray invChoice = toJet4Text("No");
@@ -2097,7 +2220,8 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
                 QByteArray vatDlrBytes = T4C("NON-VAT DEALER", 29);
                 fields[29].is_null = 0; fields[29].value = vatDlrBytes.data(); fields[29].siz = vatDlrBytes.size();
 
-                fields[30].is_null = 0; fields[30].value = stnBytes.data(); fields[30].siz = stnBytes.size(); // PartyStation
+                QByteArray partyStnBytes = T4C(p.value("party_station", p.value("city")).toString().left(50), 30);
+                fields[30].is_null = 0; fields[30].value = partyStnBytes.data(); fields[30].siz = partyStnBytes.size(); // PartyStation (RAW-UCS2 natively)
                 fields[31].is_null = 0; fields[31].value = &zeroDbl; fields[31].siz = 8; // CreditLimit
                 fields[33].is_null = 0; fields[33].value = &zero32; fields[33].siz = 4; // CalculateInJointTrading
 
@@ -2107,19 +2231,19 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
 
                 fields[38].is_null = 0; fields[38].value = &zero32; fields[38].siz = 4; // StockNotCalculateInLedger
 
-                QByteArray gstinBytes = toJet4Text(p.value("gstin").toString().left(50));
-                fields[39].is_null = 0; fields[39].value = gstinBytes.data(); fields[39].siz = gstinBytes.size();
+                QByteArray gstinBytes = T4C(p.value("gstin").toString().left(50), 39);
+                fields[39].is_null = 0; fields[39].value = gstinBytes.data(); fields[39].siz = gstinBytes.size(); // GSTIN (RAW-UCS2 natively)
 
-                QByteArray gstTypeBytes = toJet4Text("Normal Dealer");
-                fields[41].is_null = 0; fields[41].value = gstTypeBytes.data(); fields[41].siz = gstTypeBytes.size();
+                QByteArray gstTypeBytes = T4C("Normal Dealer", 41);
+                fields[41].is_null = 0; fields[41].value = gstTypeBytes.data(); fields[41].siz = gstTypeBytes.size(); // GSTPartyType (RAW-UCS2 natively)
 
                 fields[43].is_null = 0; fields[43].value = &zero32; fields[43].siz = 4; // SyncEnabled
 
-                QByteArray ifscBytes = toJet4Text(p.value("ifsc_code").toString().left(50));
-                fields[44].is_null = 0; fields[44].value = ifscBytes.data(); fields[44].siz = ifscBytes.size();
+                QByteArray ifscBytes = T4C(p.value("ifsc_code").toString().left(50), 44);
+                fields[44].is_null = 0; fields[44].value = ifscBytes.data(); fields[44].siz = ifscBytes.size(); // IFSCCode (RAW-UCS2 natively)
 
-                QByteArray bankBytes = toJet4Text(p.value("bank_name").toString().left(50));
-                fields[45].is_null = 0; fields[45].value = bankBytes.data(); fields[45].siz = bankBytes.size();
+                QByteArray bankBytes = T4C(p.value("bank_name").toString().left(50), 45);
+                fields[45].is_null = 0; fields[45].value = bankBytes.data(); fields[45].siz = bankBytes.size(); // BankName (RAW-UCS2 natively)
 
                 fields[46].is_null = 0; fields[46].value = &zero32; fields[46].siz = 4; // ApplyTCSForParty
                 fields[49].is_null = 0; fields[49].value = &zero32; fields[49].siz = 4; // TCSNotApplyInSale
@@ -2148,11 +2272,12 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
             mdb_read_columns(txTbl);
             mdb_read_indices(txTbl);
 
-            std::set<std::tuple<int, QString, int, int, QString>> existingTxSignatures;
+            std::set<std::tuple<QString, int, QString, int, int, QString>> existingTxSignatures;
             mdb_rewind_table(txTbl);
 
             MdbColumn* colVchNo = (MdbColumn*)g_ptr_array_index(txTbl->columns, 1);
             MdbColumn* colVchDate = (MdbColumn*)g_ptr_array_index(txTbl->columns, 2);
+            MdbColumn* colTransType = (MdbColumn*)g_ptr_array_index(txTbl->columns, 3);
             MdbColumn* colAcCode = (MdbColumn*)g_ptr_array_index(txTbl->columns, 4);
             MdbColumn* colDrCr = (MdbColumn*)g_ptr_array_index(txTbl->columns, 5);
             MdbColumn* colAmt = (MdbColumn*)g_ptr_array_index(txTbl->columns, 6);
@@ -2170,6 +2295,19 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
                     dVal = qd.toString("yyyy-MM-dd");
                 }
 
+                QString tt = "Jrnl";
+                if (colTransType && colTransType->cur_value_len > 0) {
+                    const unsigned char* p = (const unsigned char*)mdb->pg_buf + colTransType->cur_value_start;
+                    if (colTransType->cur_value_len >= 3 && p[0] == 0xFF && p[1] == 0xFE)
+                        tt = QString::fromLatin1((const char*)p + 2, colTransType->cur_value_len - 2);
+                    else {
+                        QString u;
+                        for (int bi = 0; bi + 1 < colTransType->cur_value_len; bi += 2) u += QChar(p[bi]);
+                        tt = u;
+                    }
+                }
+                tt = normalizeTxType(tt);
+
                 QString dc = "Dr";
                 if (colDrCr && colDrCr->cur_value_len > 0) {
                     const unsigned char* p = (const unsigned char*)mdb->pg_buf + colDrCr->cur_value_start;
@@ -2180,20 +2318,31 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
                     }
                 }
 
-                existingTxSignatures.insert(std::make_tuple(vNo, dVal, ac, amtCents, dc));
+                existingTxSignatures.insert(std::make_tuple(tt, vNo, dVal, ac, amtCents, dc));
             }
 
             // --- Match Data.002: export ALL FYs when param empty, else robust FY match ---
             QString txSql =
                 "SELECT t.id, t.voucher_no, t.voucher_date, t.trans_type, t.dr_cr, t.amount, t.narration, "
-                "COALESCE(p.legacy_id, (SELECT legacy_id FROM parties WHERE name = t.party_name), (SELECT legacy_id FROM parties WHERE id = t.account_code), p.id, t.account_code) as ac_code, "
-                "COALESCE(op.legacy_id, op.id, (SELECT legacy_id FROM parties WHERE name = t.opposing_account), 0) as party_code, "
+                "COALESCE("
+                "    (SELECT legacy_id FROM parties WHERE id = t.account_code AND replace(name, ' ', '') = replace(t.party_name, ' ', '')),"
+                "    (SELECT legacy_id FROM parties WHERE legacy_id = t.account_code AND replace(name, ' ', '') = replace(t.party_name, ' ', '')),"
+                "    (SELECT legacy_id FROM parties WHERE replace(name, ' ', '') = replace(t.party_name, ' ', '')),"
+                "    (SELECT legacy_id FROM parties WHERE legacy_id = t.account_code),"
+                "    (SELECT legacy_id FROM parties WHERE id = t.account_code),"
+                "    (SELECT legacy_id FROM parties WHERE id = t.party_id),"
+                "    t.account_code,"
+                "    0"
+                ") as ac_code, "
+                "COALESCE("
+                "    (SELECT legacy_id FROM parties WHERE replace(name, ' ', '') = replace(t.opposing_account, ' ', '')),"
+                "    (SELECT legacy_id FROM parties WHERE id = t.party_id),"
+                "    0"
+                ") as party_code, "
                 "t.party_name, t.opposing_account, "
                 "t.financial_year, t.row_no, t.invoice_no, t.due_days, "
                 "t.tds_amount, t.taxable_amount "
-                "FROM transactions t "
-                "LEFT JOIN parties p ON (t.party_id = p.id OR (t.party_id IS NULL AND t.party_name = p.name)) "
-                "LEFT JOIN parties op ON (t.opposing_account = op.name) ";
+                "FROM transactions t ";
 
             // Shared robust FY filter (same normalization as the ODBC engine).
             txSql += buildFyWhere(options.financialYear);
@@ -2289,7 +2438,8 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
                         else rawVchNo = rowIdx;
                     }
                     QString isoDate = t.value("voucher_date").toString().left(10);
-                    QString vKey = QString("%1|%2|%3").arg(rawVchNo).arg(isoDate).arg(t.value("financial_year").toString());
+                    QString transType = normalizeTxType(t.value("trans_type", "Jrnl").toString());
+                    QString vKey = QString("%1|%2|%3|%4").arg(transType).arg(rawVchNo).arg(isoDate).arg(t.value("financial_year").toString());
                     if (!groups.contains(vKey)) { groups[vKey] = QList<LegRow>(); groupOrder.append(vKey); }
                     LegRow lr;
                     lr.m = t; lr.m["__vch"] = rawVchNo; lr.m["__date"] = isoDate;
@@ -2304,9 +2454,9 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
             static int txDbg = 0;
             long stockLines = 0;
 
-            auto noteInserted = [&](int rawVchNo, const QString& isoDate, int acCode,
+            auto noteInserted = [&](const QString& tType, int rawVchNo, const QString& isoDate, int acCode,
                                     double amt, const QString& drCr,
-                                    const std::tuple<int, QString, int, int, QString>& sig) {
+                                    const std::tuple<QString, int, QString, int, int, QString>& sig) {
                 summary.transactionsExported++;
                 if (drCr == "Dr") summary.totalDebitAmount += amt;
                 else summary.totalCreditAmount += amt;
@@ -2316,8 +2466,8 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
                     balDeltas[acCode] = round2dbl(balDeltas.value(acCode, 0.0) + signedAmt);
                 }
                 if (++txDbg <= 5) {
-                    std::cout << "[TX INSERT] vch=" << rawVchNo << " drCr=" << drCr.toStdString()
-                              << " amt=" << amt << " ok=1" << std::endl;
+                    std::cout << "[TX INSERT] type=" << tType.toStdString() << " vch=" << rawVchNo
+                              << " drCr=" << drCr.toStdString() << " amt=" << amt << " ok=1" << std::endl;
                 }
             };
 
@@ -2325,7 +2475,26 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
 
             for (const QString& vKey : groupOrder) {
                 QList<LegRow> legs = groups[vKey];
-                std::sort(legs.begin(), legs.end(), [](const LegRow& a, const LegRow& b) {
+                QString vType = normalizeTxType(legs.first().m.value("trans_type", "Jrnl").toString());
+                const bool isSale = (vType.compare("Sale", Qt::CaseInsensitive) == 0);
+                const bool isPurc = (vType.compare("Purc", Qt::CaseInsensitive) == 0);
+
+                std::sort(legs.begin(), legs.end(), [&](const LegRow& a, const LegRow& b) {
+                    if (isPurc) {
+                        bool aParty = (a.m.value("dr_cr").toString().compare("Cr", Qt::CaseInsensitive) == 0 &&
+                                       !a.m.value("party_name").toString().contains("TDS", Qt::CaseInsensitive) &&
+                                       !a.m.value("party_name").toString().contains("Round", Qt::CaseInsensitive));
+                        bool bParty = (b.m.value("dr_cr").toString().compare("Cr", Qt::CaseInsensitive) == 0 &&
+                                       !b.m.value("party_name").toString().contains("TDS", Qt::CaseInsensitive) &&
+                                       !b.m.value("party_name").toString().contains("Round", Qt::CaseInsensitive));
+                        if (aParty != bParty) return aParty > bParty;
+                    } else if (isSale) {
+                        bool aParty = (a.m.value("dr_cr").toString().compare("Dr", Qt::CaseInsensitive) == 0 &&
+                                       !a.m.value("party_name").toString().contains("Round", Qt::CaseInsensitive));
+                        bool bParty = (b.m.value("dr_cr").toString().compare("Dr", Qt::CaseInsensitive) == 0 &&
+                                       !b.m.value("party_name").toString().contains("Round", Qt::CaseInsensitive));
+                        if (aParty != bParty) return aParty > bParty;
+                    }
                     int ra = a.rowNo > 0 ? a.rowNo : 1000000 + a.id;
                     int rb = b.rowNo > 0 ? b.rowNo : 1000000 + b.id;
                     if (ra != rb) return ra < rb;
@@ -2349,9 +2518,7 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
                         while (seen.contains(nextFree)) nextFree++;
                     }
                 }
-                QString vType = normalizeTxType(legs.first().m.value("trans_type", "Jrnl").toString());
-                const bool isSalePurc = (vType.compare("Sale", Qt::CaseInsensitive) == 0 ||
-                                         vType.compare("Purc", Qt::CaseInsensitive) == 0);
+                const bool isSalePurc = (isSale || isPurc);
 
                 // Invoice context for Sale/Purc (entry labels, items, stock).
                 JetInvoiceCtx ictx;
@@ -2379,7 +2546,7 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
                     QString invoiceNo = t.value("invoice_no").toString().left(50);
                     int dueDays = t.value("due_days", 0).toInt();
 
-                    auto sig = std::make_tuple(rawVchNo, isoDate, acCode, amtCents, drCr);
+                    auto sig = std::make_tuple(vType, rawVchNo, isoDate, acCode, amtCents, drCr);
                     if (existingTxSignatures.find(sig) != existingTxSignatures.end()) {
                         summary.transactionsExported++;
                         if (drCr == "Dr") summary.totalDebitAmount += amt;
@@ -2429,6 +2596,19 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
                         L.amount = amt;
                         if (vType == "Sale" && narration.startsWith("Sales Invoice", Qt::CaseInsensitive)) {
                             L.narration = "";
+                        } else if (vType == "Purc") {
+                            // Strip our app's auto-composed narration prefix
+                            // ("Purchase Bill <inv> - ...", optionally followed by
+                            // " | <user text>"). Native Purc legs carry EMPTY here
+                            // unless the user typed something; the composer text
+                            // (incl. a literal U+20B9) blanks Bahi-Khata's grid.
+                            L.narration = narration;
+                            const QString compPrefix = QString("Purchase Bill %1 - ").arg(invoiceNo);
+                            if (!invoiceNo.isEmpty() && L.narration.startsWith(compPrefix, Qt::CaseInsensitive)) {
+                                QString rest = L.narration.mid(compPrefix.length());
+                                int pipe = rest.indexOf(" | ");
+                                L.narration = (pipe >= 0) ? rest.mid(pipe + 3).trimmed() : QString();
+                            }
                         } else {
                             L.narration = narration;
                         }
@@ -2462,8 +2642,9 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
                                           << " (fallback)" << std::endl;
                             }
                         }
-                        L.jform = ictx.valid ? ictx.saleStatus
-                                             : (vType == "Sale" ? "Self Sale" : "Self Purchase");
+                        L.jform = (vType == "Sale")
+                            ? ((ictx.valid && ictx.saleStatus != "Self Purchase") ? ictx.saleStatus : "Self Sale")
+                            : ((ictx.valid && ictx.saleStatus != "Self Sale") ? ictx.saleStatus : "Self Purchase");
                         L.iformTax = ictx.valid ? ictx.taxStatus : "GST";
                         L.mfeeStatus = ictx.valid ? ictx.marketFeeStatus
                                                   : (vType == "Purc" ? "Paid" : "");
@@ -2472,6 +2653,8 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
                         L.broker = ictx.valid ? ictx.broker : "";
                         L.invSeq = ictx.valid ? ictx.invSeq : parseInvSeq(invoiceNo);
                         L.tcsRate = ictx.valid ? ictx.tcsRate : 0.0;
+                        L.tdsRate = ictx.valid ? ictx.tdsRate : (isPurc ? 0.1 : 0.0);
+                        L.goodsAmount = ictx.valid ? ictx.goodsAmount : amt;
                         txInsOk = insertSalePurcLeg(mdb, txTbl, L);
                     }
                     if (!txInsOk) {
@@ -2479,7 +2662,7 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
                                   << drCr.toStdString() << " amt=" << amt << std::endl;
                         continue;
                     }
-                    noteInserted(rawVchNo, isoDate, acCode, amt, drCr, sig);
+                    noteInserted(vType, rawVchNo, isoDate, acCode, amt, drCr, sig);
                 }
 
                 // Stock item lines once per Sale/Purc voucher with items.
