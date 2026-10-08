@@ -112,28 +112,69 @@ void BahiKhataExportDialog::keyPressEvent(QKeyEvent* event) {
     QDialog::keyPressEvent(event);
 }
 
+QString BahiKhataExportDialog::bahiKhataDir() {
+    QDir d(QDir::current().filePath("Bahi-Khata"));
+    if (!d.exists()) d.mkpath(".");
+    return d.absolutePath();
+}
+
+QStringList BahiKhataExportDialog::scanDatabaseFiles() {
+    QDir d(bahiKhataDir());
+    static const QRegularExpression dataRegex(R"(^Data\.\d{3}$)", QRegularExpression::CaseInsensitiveOption);
+    QStringList out;
+    const QStringList found = d.entryList({"Data.*"}, QDir::Files, QDir::Name);
+    for (const QString& f : found) {
+        if (dataRegex.match(f).hasMatch()) out << f;
+    }
+    return out;
+}
+
+QString BahiKhataExportDialog::currentTargetDir() const {
+    QString cur = m_pathEdit ? m_pathEdit->text().trimmed() : QString();
+    if (!cur.isEmpty()) {
+        QString dir = QFileInfo(cur).absolutePath();
+        if (!dir.isEmpty()) return dir;
+    }
+    return bahiKhataDir();
+}
+
+void BahiKhataExportDialog::refreshDbList() {
+    if (!m_dbCombo) return;
+    m_dbCombo->blockSignals(true);
+    m_dbCombo->clear();
+    m_dbCombo->addItem("<New file — type name below>", "");
+    const QStringList files = scanDatabaseFiles();
+    for (const QString& f : files) {
+        m_dbCombo->addItem(f, QDir(bahiKhataDir()).filePath(f));
+    }
+    m_dbCombo->blockSignals(false);
+}
+
 QString BahiKhataExportDialog::suggestDefaultFileName() const {
-    QString defName = "Data.002";
     if (m_firmMgr) {
-        QVariantMap info = m_firmMgr->currentFirmInfo();
-        QString src = info.value("source_file").toString();
+        // 1. Explicit per-firm mapping persisted from previous exports.
+        QVariantMap reg = m_firmMgr->currentFirmRegistryEntry();
+        QString mapped = reg.value("bahi_khata_file").toString().trimmed();
+        if (!mapped.isEmpty()) {
+            QFileInfo fi(mapped);
+            return fi.isAbsolute() ? QDir::toNativeSeparators(mapped)
+                                   : QDir(bahiKhataDir()).filePath(fi.fileName());
+        }
+        // 2. Legacy source_file field when it already names a Data.* file.
+        QString src = reg.value("source_file").toString();
         if (!src.isEmpty() && src.startsWith("Data.", Qt::CaseInsensitive)) {
-            defName = src;
-        } else {
-            QString firmId = m_firmMgr->currentFirmId();
-            if (firmId.contains("004")) defName = "Data.004";
-            else if (firmId.contains("001")) defName = "Data.001";
-            else if (firmId.contains("005")) defName = "Data.005";
-            else if (firmId.contains("018")) defName = "Data.018";
+            return QDir(bahiKhataDir()).filePath(QFileInfo(src).fileName());
+        }
+        // 3. Derive from sqlite db name / firm id ("*_data_004.db" -> Data.004).
+        QString derived = FirmManager::deriveBahiKhataFileName(
+            reg.value("db_name").toString(), m_firmMgr->currentFirmId());
+        if (!derived.isEmpty()) {
+            return QDir(bahiKhataDir()).filePath(derived);
         }
     }
-
-    // Default target directory
-    QString targetDir = "Bahi-Khata-Data";
-    if (!QDir(targetDir).exists()) {
-        targetDir = QDir::homePath();
-    }
-    return QDir(targetDir).filePath(defName);
+    // No Data.002 fallback: the user picks an existing database from the
+    // selector or types a new export file name.
+    return "";
 }
 
 bool BahiKhataExportDialog::validateFileName(const QString& path, QString& outError) const {
@@ -190,8 +231,38 @@ void BahiKhataExportDialog::setupUi() {
     formLayout->setContentsMargins(16, 16, 16, 16);
     formLayout->setSpacing(12);
 
-    // Target File Picker
-    QLabel* pathLabel = new QLabel("Target Bahi-Khata Database File (Data.***):", formCard);
+    // Firm Database Selector (existing Data.* files in Bahi-Khata folder)
+    QLabel* dbLabel = new QLabel("Firm Database File (existing):", formCard);
+    dbLabel->setStyleSheet("font-size: 12px; font-weight: 700; color: #334155;");
+    formLayout->addWidget(dbLabel);
+
+    m_dbCombo = new QComboBox(formCard);
+    m_dbCombo->setFixedHeight(36);
+    m_dbCombo->setStyleSheet(
+        "QComboBox { background-color: #F8FAFC; border: 1.5px solid #CBD5D1; border-radius: 6px; padding: 0px 10px; font-size: 12px; font-weight: 700; color: #0F172A; }"
+    );
+    formLayout->addWidget(m_dbCombo);
+    connect(m_dbCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &BahiKhataExportDialog::onDbSelectionChanged);
+
+    // Export File Name (name the file will carry after a successful export)
+    QLabel* nameLabel = new QLabel("Export File Name (Data.NNN):", formCard);
+    nameLabel->setStyleSheet("font-size: 12px; font-weight: 700; color: #334155;");
+    formLayout->addWidget(nameLabel);
+
+    m_nameEdit = new QLineEdit(formCard);
+    m_nameEdit->setFixedHeight(36);
+    m_nameEdit->setPlaceholderText("Data.009");
+    m_nameEdit->setStyleSheet(
+        "QLineEdit { background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 0px 10px; font-size: 12px; font-weight: 600; color: #0F172A; }"
+        "QLineEdit:focus { border-color: #2563EB; background-color: #FFFFFF; }"
+    );
+    formLayout->addWidget(m_nameEdit);
+    connect(m_nameEdit, &QLineEdit::textChanged,
+            this, &BahiKhataExportDialog::onExportNameChanged);
+
+    // Target File Picker (full path; database may live in any folder)
+    QLabel* pathLabel = new QLabel("Target Bahi-Khata Database File (full path):", formCard);
     pathLabel->setStyleSheet("font-size: 12px; font-weight: 700; color: #334155;");
     formLayout->addWidget(pathLabel);
 
@@ -206,6 +277,26 @@ void BahiKhataExportDialog::setupUi() {
         "QLineEdit:focus { border-color: #2563EB; background-color: #FFFFFF; }"
     );
     pathRow->addWidget(m_pathEdit, 1);
+
+    // Pre-select the suggested file in the selector and name field.
+    refreshDbList();
+    {
+        QString suggested = m_pathEdit->text().trimmed();
+        if (!suggested.isEmpty()) {
+            QFileInfo fi(suggested);
+            if (m_nameEdit->text().trimmed().isEmpty())
+                m_nameEdit->setText(fi.fileName());
+            for (int i = 0; i < m_dbCombo->count(); ++i) {
+                if (QFileInfo(m_dbCombo->itemData(i).toString()).fileName()
+                        .compare(fi.fileName(), Qt::CaseInsensitive) == 0) {
+                    m_dbCombo->blockSignals(true);
+                    m_dbCombo->setCurrentIndex(i);
+                    m_dbCombo->blockSignals(false);
+                    break;
+                }
+            }
+        }
+    }
 
     m_browseBtn = new QPushButton("Browse...", formCard);
     m_browseBtn->setFixedHeight(36);
@@ -290,7 +381,30 @@ void BahiKhataExportDialog::setupUi() {
 
     rootLayout->addWidget(progCard);
 
-    // 4. Action Buttons
+    // 4. Interoperability & Legal Compliance Notice
+    QFrame* legalCard = new QFrame(this);
+    legalCard->setStyleSheet("QFrame { background-color: #F8FAFC; border: 1px dashed #CBD5E1; border-radius: 8px; }");
+    QHBoxLayout* legalLayout = new QHBoxLayout(legalCard);
+    legalLayout->setContentsMargins(12, 8, 12, 8);
+    legalLayout->setSpacing(8);
+
+    QLabel* legalIcon = new QLabel("⚖️", legalCard);
+    legalIcon->setStyleSheet("font-size: 14px; border: none; background: transparent;");
+    legalLayout->addWidget(legalIcon);
+
+    QLabel* legalText = new QLabel(
+        "<b>Interoperability Notice:</b> This utility processes accounting records solely for format interoperability "
+        "and data portability as protected under <b>Section 52(1)(ab) & (ac) of the Indian Copyright Act, 1957</b>. "
+        "All exported transactional and ledger data remains the exclusive property of the respective business entity.",
+        legalCard
+    );
+    legalText->setWordWrap(true);
+    legalText->setStyleSheet("font-size: 11px; color: #64748B; border: none; background: transparent;");
+    legalLayout->addWidget(legalText, 1);
+
+    rootLayout->addWidget(legalCard);
+
+    // 5. Action Buttons
     QHBoxLayout* btnRow = new QHBoxLayout();
     btnRow->setSpacing(10);
     btnRow->addStretch(1);
@@ -321,16 +435,49 @@ void BahiKhataExportDialog::setupUi() {
 
 void BahiKhataExportDialog::onBrowseClicked() {
     QString initial = m_pathEdit->text();
-    QString dir = initial.isEmpty() ? QDir::homePath() : QFileInfo(initial).absolutePath();
+    QString dir = initial.isEmpty() ? bahiKhataDir() : QFileInfo(initial).absolutePath();
     QString chosen = QFileDialog::getSaveFileName(
         this,
         "Select Bahi-Khata JetDB Destination File (Data.00x)",
         dir,
-        "Bahi-Khata Files (Data.* *.001 *.002 *.004 *.005 *.018 *.mdb);;All Files (*.*)"
+        "Bahi-Khata Files (Data.* *.mdb);;All Files (*.*)"
     );
     if (!chosen.isEmpty()) {
-        m_pathEdit->setText(QDir::toNativeSeparators(chosen));
+        chosen = QDir::toNativeSeparators(chosen);
+        m_pathEdit->setText(chosen);
+        QFileInfo fi(chosen);
+        if (m_nameEdit) {
+            m_nameEdit->blockSignals(true);
+            m_nameEdit->setText(fi.fileName());
+            m_nameEdit->blockSignals(false);
+        }
     }
+}
+
+void BahiKhataExportDialog::onDbSelectionChanged(int index) {
+    if (!m_dbCombo || !m_pathEdit || !m_nameEdit) return;
+    QString data = m_dbCombo->itemData(index).toString();
+    if (data.isEmpty()) return; // "<New file>" placeholder: keep typed name.
+    m_pathEdit->setText(QDir::toNativeSeparators(data));
+    m_nameEdit->blockSignals(true);
+    m_nameEdit->setText(QFileInfo(data).fileName());
+    m_nameEdit->blockSignals(false);
+}
+
+void BahiKhataExportDialog::onExportNameChanged(const QString& text) {
+    if (!m_pathEdit) return;
+    QString name = text.trimmed();
+    if (name.isEmpty()) return;
+    // Strip any directory part the user may have pasted; the directory comes
+    // from the current target path (or the Bahi-Khata folder).
+    name = QFileInfo(name).fileName();
+    if (name != text) {
+        m_nameEdit->blockSignals(true);
+        m_nameEdit->setText(name);
+        m_nameEdit->blockSignals(false);
+    }
+    QDir dir(currentTargetDir());
+    m_pathEdit->setText(QDir::toNativeSeparators(dir.filePath(name)));
 }
 
 void BahiKhataExportDialog::onExportClicked() {
@@ -395,6 +542,12 @@ void BahiKhataExportDialog::onWorkerFinished(BahiKhataExporter::ExportSummary su
     }
     QString msg = QString("Exported %1 ledgers and %2 transactions to Bahi-Khata JetDB at %3")
         .arg(summary.ledgersExported).arg(summary.transactionsExported).arg(summary.targetFilePath);
+    // Remember this target for the active firm so the next export defaults
+    // to the same Data.NNN file.
+    if (m_firmMgr && !m_firmMgr->currentFirmId().isEmpty()) {
+        m_firmMgr->setFirmBahiKhataFile(m_firmMgr->currentFirmId(),
+                                        QFileInfo(summary.targetFilePath).fileName());
+    }
     if (!verifyText.isEmpty()) {
         if (verifyText.startsWith("Verify FAILED")) {
             m_progressBar->setValue(100);

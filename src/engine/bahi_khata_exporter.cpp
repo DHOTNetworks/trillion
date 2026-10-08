@@ -1413,12 +1413,12 @@ QString BahiKhataExporter::resolveSeedTemplate(const QString& explicitPath) {
         if (QFile::exists(abs)) return abs;
     }
 
+    // Universal blank seed: Bahi-Khata's own seeded-blank database
+    // (default masters, no vouchers). Never seed-copy another firm's live
+    // Data.NNN file: its CompanyInfo/Ledgers/Transactions rows would pollute
+    // the new firm's file (sync only ever adds/skips, never removes).
     QStringList candidates = {
-        "Bahi-Khata-Data/Data.002",
         "Bahi-Khata-Data/Data.001",
-        "Bahi-Khata-Data/Data.004",
-        "Bahi-Khata-Data/Data.005",
-        "Bahi-Khata-Data/Data.018"
     };
 
     for (const auto& c : candidates) {
@@ -1459,7 +1459,7 @@ QString BahiKhataExporter::chooseTargetMdbFile(const QString& startDir) {
         nullptr,
         "Select Target Bahi-Khata File (Data.00x)",
         dir,
-        "Bahi-Khata JetDB (*.001 *.002 *.004 *.005 *.018 *.mdb);;All Files (*.*)"
+        "Bahi-Khata JetDB (Data.* *.mdb);;All Files (*.*)"
     );
 }
 
@@ -1504,7 +1504,9 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportToBahiKhata(const Expo
         QString seedPath = resolveSeedTemplate(options.templateMdbPath);
         if (seedPath.isEmpty()) {
             summary.success = false;
-            summary.errorMessage = "No seed Bahi-Khata template found to construct JetDB schema.";
+            summary.errorMessage =
+                "Target file does not exist and no blank seed template (Bahi-Khata-Data/Data.001) was found. "
+                "Create the company file first in Bahi-Khata (it generates an empty Data.NNN), then export into it.";
             updateProgress(100, summary.errorMessage);
             emit exportFinished(false, summary.errorMessage);
             m_isExporting = false;
@@ -1512,7 +1514,8 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportToBahiKhata(const Expo
             return summary;
         }
 
-        updateProgress(10, QString("Creating target database from seed template: %1").arg(seedPath));
+        updateProgress(10, QString("Creating target database from blank seed template: %1. "
+                                  "Review CompanyInfo masters after the first export (seed carries Bahi-Khata's own default seeding).").arg(seedPath));
         if (!QFile::copy(seedPath, targetPath)) {
             summary.success = false;
             summary.errorMessage = QString("Failed to create target file at %1").arg(targetPath);

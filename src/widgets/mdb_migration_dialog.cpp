@@ -286,7 +286,32 @@ void MdbMigrationDialog::setupUi() {
     root->addWidget(m_progressContainer);
 
     // ========================================================================
-    // 6. Footer Action Buttons
+    // 6. Interoperability & Legal Compliance Notice
+    // ========================================================================
+    QFrame* legalCard = new QFrame(this);
+    legalCard->setStyleSheet("QFrame { background-color: #F8FAFC; border: 1px dashed #CBD5E1; border-radius: 8px; }");
+    QHBoxLayout* legalLayout = new QHBoxLayout(legalCard);
+    legalLayout->setContentsMargins(12, 8, 12, 8);
+    legalLayout->setSpacing(8);
+
+    QLabel* legalIcon = new QLabel("⚖️", legalCard);
+    legalIcon->setStyleSheet("font-size: 14px; border: none; background: transparent;");
+    legalLayout->addWidget(legalIcon);
+
+    QLabel* legalText = new QLabel(
+        "<b>Interoperability Notice:</b> Importing data from Bahi-Khata, Busy Accounting, and Tally ERP is performed solely "
+        "to enable seamless format interoperability and user data portability as recognized under "
+        "<b>Section 52(1)(ab) & (ac) of the Indian Copyright Act, 1957</b>. All proprietary accounting datasets belong to the lawful user.",
+        legalCard
+    );
+    legalText->setWordWrap(true);
+    legalText->setStyleSheet("font-size: 11px; color: #64748B; border: none; background: transparent;");
+    legalLayout->addWidget(legalText, 1);
+
+    root->addWidget(legalCard);
+
+    // ========================================================================
+    // 7. Footer Action Buttons
     // ========================================================================
     QHBoxLayout* footer = new QHBoxLayout();
     footer->setSpacing(12);

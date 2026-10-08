@@ -337,6 +337,70 @@ QVariantMap FirmManager::get_current_firm_info() {
     return currentFirmInfo();
 }
 
+QVariantMap FirmManager::currentFirmRegistryEntry() const {
+    if (m_activeFirmId.isEmpty()) return {};
+    QVariantList firms = const_cast<FirmManager*>(this)->get_registered_firms();
+    for (const auto& f : firms) {
+        QVariantMap m = f.toMap();
+        if (m.value("id").toString() == m_activeFirmId) {
+            m.remove("isActive");
+            return m;
+        }
+    }
+    return {};
+}
+
+bool FirmManager::setFirmBahiKhataFile(const QString& firmId, const QString& fileName) {
+    if (firmId.isEmpty() || fileName.isEmpty()) return false;
+    QFile regFile(registryFilePath());
+    if (!regFile.exists() || !regFile.open(QIODevice::ReadOnly)) return false;
+    QJsonDocument doc = QJsonDocument::fromJson(regFile.readAll());
+    regFile.close();
+    if (!doc.isObject()) return false;
+    QJsonObject root = doc.object();
+    QJsonArray arr = root.value("firms").toArray();
+    bool found = false;
+    for (int i = 0; i < arr.size(); ++i) {
+        QJsonObject o = arr[i].toObject();
+        if (o.value("id").toString() == firmId) {
+            o["bahi_khata_file"] = fileName;
+            arr[i] = o;
+            found = true;
+            break;
+        }
+    }
+    if (!found) return false;
+    root["firms"] = arr;
+    if (!regFile.open(QIODevice::WriteOnly)) return false;
+    regFile.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
+    regFile.close();
+    emit registryUpdated();
+    return true;
+}
+
+QString FirmManager::deriveBahiKhataFileName(const QString& dbName, const QString& firmId) {
+    // "..._data_004.db" / "test_migration_018" -> "Data.004" / "Data.018".
+    static const QRegularExpression dataRe("(?:^|_)data_(\\d{1,3})(?:\\.db)?$",
+                                           QRegularExpression::CaseInsensitiveOption);
+    auto matchDigits = [&](const QString& s) -> QString {
+        QRegularExpressionMatch m = dataRe.match(s);
+        if (m.hasMatch()) {
+            bool ok = false;
+            int n = m.captured(1).toInt(&ok);
+            if (ok && n >= 0 && n <= 999)
+                return QString("Data.%1").arg(n, 3, 10, QChar('0'));
+        }
+        return "";
+    };
+    QString hit = matchDigits(dbName);
+    if (!hit.isEmpty()) return hit;
+    // Fallback: any standalone 3-digit run in the firm id.
+    static const QRegularExpression anyRe("(\\d{3})");
+    QRegularExpressionMatch m = anyRe.match(firmId);
+    if (m.hasMatch()) return QString("Data.%1").arg(m.captured(1));
+    return "";
+}
+
 QVariantList FirmManager::get_registered_firms() {
     QFile regFile(registryFilePath());
     if (regFile.exists() && regFile.open(QIODevice::ReadOnly)) {

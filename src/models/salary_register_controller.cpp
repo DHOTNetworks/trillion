@@ -492,13 +492,23 @@ SalaryRegisterController::PostResult SalaryRegisterController::postSelectedSalar
 int SalaryRegisterController::syncMasterSalariesFromBahiKhata(const QString& explicitMdbPath) {
     QString mdbPath = explicitMdbPath;
     if (mdbPath.isEmpty()) {
-        QStringList candidates = {
-            "Bahi-Khata-Data/Data.002",
-            "Bahi-Khata-Data/Data.001",
-            "Bahi-Khata-Data/Data.004",
-            "Bahi-Khata-Data/Data.005",
-            "Bahi-Khata-Data/Data.018"
-        };
+        // Dynamic: any Bahi-Khata Data.NNN file, Data.002 preferred for
+        // backward compatibility.
+        QStringList candidates;
+        QDir dataDir("Bahi-Khata-Data");
+        if (dataDir.exists()) {
+            static const QRegularExpression dataRe(R"(^Data\.\d{3}$)", QRegularExpression::CaseInsensitiveOption);
+            const QStringList found = dataDir.entryList({"Data.*"}, QDir::Files, QDir::Name);
+            for (const QString& f : found) {
+                if (dataRe.match(f).hasMatch())
+                    candidates << dataDir.filePath(f);
+            }
+            int idx002 = -1;
+            for (int i = 0; i < candidates.size(); ++i) {
+                if (candidates[i].endsWith("Data.002", Qt::CaseInsensitive)) { idx002 = i; break; }
+            }
+            if (idx002 > 0) candidates.move(idx002, 0);
+        }
         for (const auto& c : candidates) {
             if (QFile::exists(c)) {
                 mdbPath = c;

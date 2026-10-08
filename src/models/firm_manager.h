@@ -28,8 +28,16 @@ public:
     Q_INVOKABLE bool import_bahi_khata_firm(const QString& mdbFilePath, const QString& customFirmName = "");
     Q_INVOKABLE bool create_new_firm(const QVariantMap& firmInfo);
     Q_INVOKABLE QVariantMap get_current_firm_info();
-    Q_INVOKABLE QString get_app_data_folder() const;
-    Q_INVOKABLE QString get_active_firm_folder();
+    /// Registry entry (id/db_name/source_file/bahi_khata_file/...) for the
+    /// active firm, or {} if none. Unlike currentFirmInfo() (company_info
+    /// row), this carries file-mapping fields.
+    QVariantMap currentFirmRegistryEntry() const;
+    /// Persist the Bahi-Khata target file name (e.g. "Data.009") for a firm.
+    bool setFirmBahiKhataFile(const QString& firmId, const QString& fileName);
+    /// Derive "Data.NNN" from a sqlite db name / firm id
+    /// ("..._data_004.db" -> "Data.004"). Returns "" when indeterminable.
+    static QString deriveBahiKhataFileName(const QString& dbName, const QString& firmId);
+    Q_INVOKABLE QString get_app_data_folder() const;    Q_INVOKABLE QString get_active_firm_folder();
     Q_INVOKABLE void set_active_firm_folder(const QString& folderPath);
     Q_INVOKABLE QString choose_firm_folder(const QString& currentFolder = "");
     Q_INVOKABLE void refresh_registry();

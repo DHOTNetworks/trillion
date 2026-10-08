@@ -56,6 +56,8 @@ protected:
 
 private slots:
     void onBrowseClicked();
+    void onDbSelectionChanged(int index);
+    void onExportNameChanged(const QString& text);
     void onExportClicked();
     void onExportProgress(int percent, const QString& status);
     void onExportFinished(bool success, const QString& message);
@@ -70,7 +72,14 @@ private:
     FirmManager* m_firmMgr = nullptr;
     BahiKhataExporter* m_exporter = nullptr;
 
+    static QString bahiKhataDir();
+    static QStringList scanDatabaseFiles();
+    void refreshDbList();
+    QString currentTargetDir() const;
+
     QLineEdit* m_pathEdit = nullptr;
+    QLineEdit* m_nameEdit = nullptr;
+    QComboBox* m_dbCombo = nullptr;
     QPushButton* m_browseBtn = nullptr;
     QComboBox* m_fyCombo = nullptr;
     QCheckBox* m_backupCheck = nullptr;
