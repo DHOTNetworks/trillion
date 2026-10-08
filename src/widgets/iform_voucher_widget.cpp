@@ -743,9 +743,13 @@ void IFormVoucherWidget::saveVoucher() {
     bool ok = m_iformModel.save_iform_voucher(headerData, items);
     if (ok) {
         QString savedIf = headerData["iform_no"].toString();
-        emit voucherSaved(savedIf);
         CustomMessageBox::information(this, "Saved", QString("I-Form No. %1 saved successfully.").arg(savedIf));
-        resetForm();
+        bool editMode = isEditMode();
+        emit voucherSaved(savedIf);
+        if (!editMode) {
+            resetForm();
+            if (m_dateEdit) m_dateEdit->setFocus();
+        }
     } else {
         CustomMessageBox::critical(this, "Error", "Failed to save I-Form voucher. Check database logs.");
     }

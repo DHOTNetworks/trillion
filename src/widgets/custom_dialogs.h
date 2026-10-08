@@ -81,3 +81,44 @@ private:
     QPushButton* m_primaryBtn = nullptr;
     QPushButton* m_secondaryBtn = nullptr;
 };
+
+// ============================================================================
+// FreightCalculationDialog: Auto-calculates freight from Kanda Weight / Bags
+// ============================================================================
+class QComboBox;
+
+class FreightCalculationDialog : public QDialog {
+    Q_OBJECT
+
+public:
+    explicit FreightCalculationDialog(double kandaWeight, int totalBags, QWidget* parent = nullptr);
+    ~FreightCalculationDialog() override = default;
+
+    double calculatedFreight() const { return m_calculatedFreight; }
+    double freightRate() const { return m_freightRate; }
+    QString rateUnit() const { return m_rateUnit; }
+
+    static bool promptFreight(QWidget* parent, double kandaWeight, int totalBags,
+                              double* outFreight, double* outRate = nullptr, QString* outUnit = nullptr);
+
+protected:
+    void keyPressEvent(QKeyEvent* event) override;
+    void showEvent(QShowEvent* event) override;
+
+private:
+    void setupUi();
+    void updateCalculations();
+
+    double m_kandaWeight = 0.0;
+    int m_totalBags = 0;
+    double m_freightRate = 0.0;
+    double m_calculatedFreight = 0.0;
+    QString m_rateUnit = "Per Qtl";
+
+    QLineEdit* m_rateInput = nullptr;
+    QComboBox* m_unitCombo = nullptr;
+    QLabel* m_resultLabel = nullptr;
+    QPushButton* m_okBtn = nullptr;
+    QPushButton* m_skipBtn = nullptr;
+};
+

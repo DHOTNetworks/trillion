@@ -715,9 +715,13 @@ void JFormVoucherWidget::saveVoucher() {
     bool ok = m_jformModel.save_jform_voucher(headerData, items);
     if (ok) {
         QString savedJf = headerData["jform_no"].toString();
-        emit voucherSaved(savedJf);
         CustomMessageBox::information(this, "Saved", QString("J-Form No. %1 saved successfully.").arg(savedJf));
-        resetForm();
+        bool editMode = isEditMode();
+        emit voucherSaved(savedJf);
+        if (!editMode) {
+            resetForm();
+            if (m_dateEdit) m_dateEdit->setFocus();
+        }
     } else {
         CustomMessageBox::critical(this, "Error", "Failed to save J-Form voucher. Check database error logs.");
     }

@@ -1525,7 +1525,9 @@ void MainWindow::onSalesVoucherBackRequested() {
 void MainWindow::onSalesVoucherSaved(const QString& invoiceNo) {
     Q_UNUSED(invoiceNo);
     markAllStatementsDirty();
-    navigateBack();
+    if (m_salesVoucherWidget && m_salesVoucherWidget->isEditMode()) {
+        navigateBack();
+    }
 }
 
 void MainWindow::onPurchaseVoucherBackRequested() {
@@ -1535,7 +1537,9 @@ void MainWindow::onPurchaseVoucherBackRequested() {
 void MainWindow::onPurchaseVoucherSaved(const QString& invoiceNo) {
     Q_UNUSED(invoiceNo);
     markAllStatementsDirty();
-    navigateBack();
+    if (m_purchaseVoucherWidget && m_purchaseVoucherWidget->isEditMode()) {
+        navigateBack();
+    }
 }
 
 void MainWindow::onChequeVoucherBackRequested() {
@@ -1545,7 +1549,9 @@ void MainWindow::onChequeVoucherBackRequested() {
 void MainWindow::onChequeVoucherSaved(const QString& voucherNo) {
     Q_UNUSED(voucherNo);
     markAllStatementsDirty();
-    navigateBack();
+    if (m_chequeVoucherWidget && m_chequeVoucherWidget->isEditMode()) {
+        navigateBack();
+    }
 }
 
 void MainWindow::onCashVoucherBackRequested() {
@@ -1555,7 +1561,9 @@ void MainWindow::onCashVoucherBackRequested() {
 void MainWindow::onCashVoucherSaved(const QString& voucherNo) {
     Q_UNUSED(voucherNo);
     markAllStatementsDirty();
-    navigateBack();
+    if (m_cashVoucherWidget && m_cashVoucherWidget->isEditMode()) {
+        navigateBack();
+    }
 }
 
 void MainWindow::onCashBankFlowBackRequested() {
@@ -1569,7 +1577,9 @@ void MainWindow::onJournalVoucherBackRequested() {
 void MainWindow::onJournalVoucherSaved(const QString& voucherNo) {
     Q_UNUSED(voucherNo);
     markAllStatementsDirty();
-    navigateBack();
+    if (m_journalVoucherWidget && m_journalVoucherWidget->isEditMode()) {
+        navigateBack();
+    }
 }
 
 void MainWindow::onNewLedgerBackRequested() {
@@ -1597,7 +1607,9 @@ void MainWindow::onJFormVoucherBackRequested() {
 void MainWindow::onJFormVoucherSaved(const QString& jformNo) {
     Q_UNUSED(jformNo);
     markAllStatementsDirty();
-    navigateBack();
+    if (m_jformVoucherWidget && m_jformVoucherWidget->isEditMode()) {
+        navigateBack();
+    }
 }
 
 void MainWindow::onIFormVoucherBackRequested() {
@@ -1607,7 +1619,9 @@ void MainWindow::onIFormVoucherBackRequested() {
 void MainWindow::onIFormVoucherSaved(const QString& iformNo) {
     Q_UNUSED(iformNo);
     markAllStatementsDirty();
-    navigateBack();
+    if (m_iformVoucherWidget && m_iformVoucherWidget->isEditMode()) {
+        navigateBack();
+    }
 }
 
 void MainWindow::onMandiReportsBackRequested() {

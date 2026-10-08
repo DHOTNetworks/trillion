@@ -314,79 +314,105 @@ bool PurchaseModel::add_purchase_invoice_full(
     );
 
     QString effectivePurcLedger = itemPurchaseLedger.isEmpty() ? "Purchase A/c" : itemPurchaseLedger;
-    // Leg 1: Debit Purchase Ledger for taxable_amount
-    DatabaseManager::instance().executeNonQuery(
-        "INSERT INTO transactions ("
-        "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
-        "party_name, opposing_account, dr_cr, amount, "
-        "invoice_no, narration, taxable_amount, row_no"
-        ") VALUES (?, ?, ?, ?, 'Purchase', 'Purc', ?, ?, 'Dr', ?, ?, ?, ?, 1);",
-        {
-            fyId, fyLabel, vchNo, dt,
-            effectivePurcLedger, party_ledger, taxable_amount,
-            invNo, vchNarr, taxable_amount
-        }
-    );
 
-    int rNo = 2;
-    // Leg 2: Debit CGST Input if > 0
-    if (cgst_amount > 0.001) {
-        DatabaseManager::instance().executeNonQuery(
-            "INSERT INTO transactions ("
-            "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
-            "party_name, opposing_account, dr_cr, amount, "
-            "invoice_no, narration, row_no"
-            ") VALUES (?, ?, ?, ?, 'Purchase', 'Purc', 'CGST Input', ?, 'Dr', ?, ?, ?, ?);",
-            {fyId, fyLabel, vchNo, dt, party_ledger, cgst_amount, invNo, vchNarr, rNo++}
+    auto resolveLedgerCode = [](const QString& name, int fallbackId) -> int {
+        if (name.trimmed().isEmpty()) return fallbackId;
+        QVariantList rows = DatabaseManager::instance().executeQuery(
+            "SELECT id, legacy_id, account_code FROM parties WHERE replace(name, ' ', '') = replace(?, ' ', '') LIMIT 1;",
+            {name.trimmed()}
         );
-    }
-    // Leg 3: Debit SGST Input if > 0
-    if (sgst_amount > 0.001) {
-        DatabaseManager::instance().executeNonQuery(
-            "INSERT INTO transactions ("
-            "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
-            "party_name, opposing_account, dr_cr, amount, "
-            "invoice_no, narration, row_no"
-            ") VALUES (?, ?, ?, ?, 'Purchase', 'Purc', 'SGST Input', ?, 'Dr', ?, ?, ?, ?);",
-            {fyId, fyLabel, vchNo, dt, party_ledger, sgst_amount, invNo, vchNarr, rNo++}
-        );
-    }
-    // Leg 4: Debit IGST Input if > 0
-    if (igst_amount > 0.001) {
-        DatabaseManager::instance().executeNonQuery(
-            "INSERT INTO transactions ("
-            "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
-            "party_name, opposing_account, dr_cr, amount, "
-            "invoice_no, narration, row_no"
-            ") VALUES (?, ?, ?, ?, 'Purchase', 'Purc', 'IGST Input', ?, 'Dr', ?, ?, ?, ?);",
-            {fyId, fyLabel, vchNo, dt, party_ledger, igst_amount, invNo, vchNarr, rNo++}
-        );
-    }
-    // Leg 5: Round Off if != 0
-    if (std::abs(round_off) > 0.001) {
-        QString roDrCr = (round_off > 0) ? "Cr" : "Dr";
-        DatabaseManager::instance().executeNonQuery(
-            "INSERT INTO transactions ("
-            "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
-            "party_name, opposing_account, dr_cr, amount, "
-            "invoice_no, narration, row_no"
-            ") VALUES (?, ?, ?, ?, 'Purchase', 'Purc', 'Round Off', ?, ?, ?, ?, ?, ?);",
-            {fyId, fyLabel, vchNo, dt, party_ledger, roDrCr, std::abs(round_off), invNo, vchNarr, rNo++}
-        );
-    }
-    // Leg 6: Credit Supplier for total_amount
+        if (!rows.isEmpty()) {
+            QVariantMap m = rows.first().toMap();
+            int legId = m.value("legacy_id").toInt();
+            if (legId > 0) return legId;
+            int ac = m.value("account_code").toInt();
+            if (ac > 0) return ac;
+            return m.value("id").toInt();
+        }
+        return fallbackId;
+    };
+
+    int supCode = resolveLedgerCode(party_ledger, supplierId);
+    int purcCode = resolveLedgerCode(effectivePurcLedger, 1050);
+    int cgstCode = resolveLedgerCode("CGST A/c", resolveLedgerCode("CGST Input", 944));
+    int sgstCode = resolveLedgerCode("SGST A/c", resolveLedgerCode("SGST Input", 943));
+    int igstCode = resolveLedgerCode("IGST A/c", resolveLedgerCode("IGST Input", 945));
+    int roundOffCode = resolveLedgerCode("Round Off", resolveLedgerCode("Round Off A/c", 1177));
+
+    // Leg 1: Credit Supplier for total_amount (Row 1 is ALWAYS the Party in Bahi-Khata)
     DatabaseManager::instance().executeNonQuery(
         "INSERT INTO transactions ("
         "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
         "account_code, party_id, party_name, opposing_account, dr_cr, amount, "
         "invoice_no, narration, taxable_amount, row_no"
-        ") VALUES (?, ?, ?, ?, 'Purchase', 'Purc', ?, ?, ?, ?, 'Cr', ?, ?, ?, ?, ?);",
+        ") VALUES (?, ?, ?, ?, 'Purchase', 'Purc', ?, ?, ?, ?, 'Cr', ?, ?, ?, ?, 1);",
         {
             fyId, fyLabel, vchNo, dt,
-            supplierId, supplierId, party_ledger, effectivePurcLedger, total_amount,
+            supCode, supplierId, party_ledger, effectivePurcLedger, total_amount,
+            invNo, vchNarr, taxable_amount
+        }
+    );
+
+    int rNo = 2;
+    // Leg 2: Debit Purchase Ledger for taxable_amount
+    DatabaseManager::instance().executeNonQuery(
+        "INSERT INTO transactions ("
+        "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
+        "account_code, party_name, opposing_account, dr_cr, amount, "
+        "invoice_no, narration, taxable_amount, row_no"
+        ") VALUES (?, ?, ?, ?, 'Purchase', 'Purc', ?, ?, ?, 'Dr', ?, ?, ?, ?, ?);",
+        {
+            fyId, fyLabel, vchNo, dt,
+            purcCode, effectivePurcLedger, party_ledger, taxable_amount,
             invNo, vchNarr, taxable_amount, rNo++
         }
     );
+
+    // Leg 3: Debit CGST Input if > 0
+    if (cgst_amount > 0.001) {
+        DatabaseManager::instance().executeNonQuery(
+            "INSERT INTO transactions ("
+            "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
+            "account_code, party_name, opposing_account, dr_cr, amount, "
+            "invoice_no, narration, row_no"
+            ") VALUES (?, ?, ?, ?, 'Purchase', 'Purc', ?, 'CGST Input', ?, 'Dr', ?, ?, ?, ?);",
+            {fyId, fyLabel, vchNo, dt, cgstCode, party_ledger, cgst_amount, invNo, vchNarr, rNo++}
+        );
+    }
+    // Leg 4: Debit SGST Input if > 0
+    if (sgst_amount > 0.001) {
+        DatabaseManager::instance().executeNonQuery(
+            "INSERT INTO transactions ("
+            "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
+            "account_code, party_name, opposing_account, dr_cr, amount, "
+            "invoice_no, narration, row_no"
+            ") VALUES (?, ?, ?, ?, 'Purchase', 'Purc', ?, 'SGST Input', ?, 'Dr', ?, ?, ?, ?);",
+            {fyId, fyLabel, vchNo, dt, sgstCode, party_ledger, sgst_amount, invNo, vchNarr, rNo++}
+        );
+    }
+    // Leg 5: Debit IGST Input if > 0
+    if (igst_amount > 0.001) {
+        DatabaseManager::instance().executeNonQuery(
+            "INSERT INTO transactions ("
+            "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
+            "account_code, party_name, opposing_account, dr_cr, amount, "
+            "invoice_no, narration, row_no"
+            ") VALUES (?, ?, ?, ?, 'Purchase', 'Purc', ?, 'IGST Input', ?, 'Dr', ?, ?, ?, ?);",
+            {fyId, fyLabel, vchNo, dt, igstCode, party_ledger, igst_amount, invNo, vchNarr, rNo++}
+        );
+    }
+    // Leg 6: Round Off if != 0
+    if (std::abs(round_off) > 0.001) {
+        QString roDrCr = (round_off > 0) ? "Cr" : "Dr";
+        DatabaseManager::instance().executeNonQuery(
+            "INSERT INTO transactions ("
+            "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
+            "account_code, party_name, opposing_account, dr_cr, amount, "
+            "invoice_no, narration, row_no"
+            ") VALUES (?, ?, ?, ?, 'Purchase', 'Purc', ?, 'Round Off', ?, ?, ?, ?, ?, ?);",
+            {fyId, fyLabel, vchNo, dt, roundOffCode, party_ledger, roDrCr, std::abs(round_off), invNo, vchNarr, rNo++}
+        );
+    }
 
     // Commit Transaction (ACID Durability Guarantee)
     DatabaseManager::instance().commit();
@@ -1076,7 +1102,7 @@ bool PurchaseModel::update_purchase_invoice_full(
         {invoice_no, voucher_no}
     );
 
-    QString vchNarr = QString("Purchase Invoice %1 - %2 (%3 Qtl @ ₹%4)").arg(invoice_no, item_name, QString::number(weight_qtl), QString::number(rate_per_qtl));
+    QString vchNarr = narration.trimmed();
     if (!items.isEmpty()) {
         int rIdx = 1;
         for (const QVariant& itmV : items) {
@@ -1085,7 +1111,7 @@ bool PurchaseModel::update_purchase_invoice_full(
                 "INSERT INTO stock_transactions ("
                 "fy_id, financial_year, voucher_no, voucher_date, trans_type, voucher_type, party_id, party_name, bill_no, "
                 "item_id, item_code, item_name, bags, weight_qtl, rate, amount, taxable_amount, narration, row_no"
-                ") VALUES (?, ?, ?, ?, 'Purc', 'Purchase Invoice', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+                ") VALUES (?, ?, ?, ?, 'Purc', 'Purchase', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
                 {
                     fyId, fyLabel, voucher_no, dt, supplierId, party_ledger, invoice_no,
                     itemId, hsn_code, itm.value("item_name").toString(),
@@ -1099,7 +1125,7 @@ bool PurchaseModel::update_purchase_invoice_full(
             "INSERT INTO stock_transactions ("
             "fy_id, financial_year, voucher_no, voucher_date, trans_type, voucher_type, party_id, party_name, bill_no, "
             "item_id, item_code, item_name, bags, weight_qtl, rate, amount, taxable_amount, narration, row_no"
-            ") VALUES (?, ?, ?, ?, 'Purc', 'Purchase Invoice', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1);",
+            ") VALUES (?, ?, ?, ?, 'Purc', 'Purchase', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1);",
             {
                 fyId, fyLabel, voucher_no, dt, supplierId, party_ledger, invoice_no,
                 itemId, hsn_code, item_name, bag_count, weight_qtl, rate_per_qtl, total_amount, taxable_amount, vchNarr
@@ -1123,79 +1149,104 @@ bool PurchaseModel::update_purchase_invoice_full(
     }
     QString effectivePurcLedger = itemPurchaseLedger.isEmpty() ? "Purchase A/c" : itemPurchaseLedger;
 
-    // Leg 1: Debit Purchase Ledger for taxable_amount
-    DatabaseManager::instance().executeNonQuery(
-        "INSERT INTO transactions ("
-        "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
-        "party_name, opposing_account, dr_cr, amount, "
-        "invoice_no, narration, taxable_amount, row_no"
-        ") VALUES (?, ?, ?, ?, 'Purchase', 'Purc', ?, ?, 'Dr', ?, ?, ?, ?, 1);",
-        {
-            fyId, fyLabel, voucher_no, dt,
-            effectivePurcLedger, party_ledger, taxable_amount,
-            invoice_no, vchNarr, taxable_amount
+    auto resolveLedgerCode = [](const QString& name, int fallbackId) -> int {
+        if (name.trimmed().isEmpty()) return fallbackId;
+        QVariantList rows = DatabaseManager::instance().executeQuery(
+            "SELECT id, legacy_id, account_code FROM parties WHERE replace(name, ' ', '') = replace(?, ' ', '') LIMIT 1;",
+            {name.trimmed()}
+        );
+        if (!rows.isEmpty()) {
+            QVariantMap m = rows.first().toMap();
+            int legId = m.value("legacy_id").toInt();
+            if (legId > 0) return legId;
+            int ac = m.value("account_code").toInt();
+            if (ac > 0) return ac;
+            return m.value("id").toInt();
         }
-    );
+        return fallbackId;
+    };
 
-    int tRowNo = 2;
-    // Leg 2: Debit CGST Input if > 0
-    if (cgst_amount > 0.001) {
-        DatabaseManager::instance().executeNonQuery(
-            "INSERT INTO transactions ("
-            "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
-            "party_name, opposing_account, dr_cr, amount, "
-            "invoice_no, narration, row_no"
-            ") VALUES (?, ?, ?, ?, 'Purchase', 'Purc', 'CGST Input', ?, 'Dr', ?, ?, ?, ?);",
-            {fyId, fyLabel, voucher_no, dt, party_ledger, cgst_amount, invoice_no, vchNarr, tRowNo++}
-        );
-    }
-    // Leg 3: Debit SGST Input if > 0
-    if (sgst_amount > 0.001) {
-        DatabaseManager::instance().executeNonQuery(
-            "INSERT INTO transactions ("
-            "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
-            "party_name, opposing_account, dr_cr, amount, "
-            "invoice_no, narration, row_no"
-            ") VALUES (?, ?, ?, ?, 'Purchase', 'Purc', 'SGST Input', ?, 'Dr', ?, ?, ?, ?);",
-            {fyId, fyLabel, voucher_no, dt, party_ledger, sgst_amount, invoice_no, vchNarr, tRowNo++}
-        );
-    }
-    // Leg 4: Debit IGST Input if > 0
-    if (igst_amount > 0.001) {
-        DatabaseManager::instance().executeNonQuery(
-            "INSERT INTO transactions ("
-            "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
-            "party_name, opposing_account, dr_cr, amount, "
-            "invoice_no, narration, row_no"
-            ") VALUES (?, ?, ?, ?, 'Purchase', 'Purc', 'IGST Input', ?, 'Dr', ?, ?, ?, ?);",
-            {fyId, fyLabel, voucher_no, dt, party_ledger, igst_amount, invoice_no, vchNarr, tRowNo++}
-        );
-    }
-    // Leg 5: Round Off if != 0
-    if (std::abs(round_off) > 0.001) {
-        QString roDrCr = (round_off > 0) ? "Cr" : "Dr";
-        DatabaseManager::instance().executeNonQuery(
-            "INSERT INTO transactions ("
-            "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
-            "party_name, opposing_account, dr_cr, amount, "
-            "invoice_no, narration, row_no"
-            ") VALUES (?, ?, ?, ?, 'Purchase', 'Purc', 'Round Off', ?, ?, ?, ?, ?, ?);",
-            {fyId, fyLabel, voucher_no, dt, party_ledger, roDrCr, std::abs(round_off), invoice_no, vchNarr, tRowNo++}
-        );
-    }
-    // Leg 6: Credit Supplier for total_amount
+    int supCode = resolveLedgerCode(party_ledger, supplierId);
+    int purcCode = resolveLedgerCode(effectivePurcLedger, 1050);
+    int cgstCode = resolveLedgerCode("CGST A/c", resolveLedgerCode("CGST Input", 944));
+    int sgstCode = resolveLedgerCode("SGST A/c", resolveLedgerCode("SGST Input", 943));
+    int igstCode = resolveLedgerCode("IGST A/c", resolveLedgerCode("IGST Input", 945));
+    int roundOffCode = resolveLedgerCode("Round Off", resolveLedgerCode("Round Off A/c", 1177));
+
+    // Leg 1: Credit Supplier for total_amount (Row 1 is ALWAYS the Party in Bahi-Khata)
     DatabaseManager::instance().executeNonQuery(
         "INSERT INTO transactions ("
         "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
         "account_code, party_id, party_name, opposing_account, dr_cr, amount, "
         "invoice_no, narration, taxable_amount, row_no"
-        ") VALUES (?, ?, ?, ?, 'Purchase', 'Purc', ?, ?, ?, ?, 'Cr', ?, ?, ?, ?, ?);",
+        ") VALUES (?, ?, ?, ?, 'Purchase', 'Purc', ?, ?, ?, ?, 'Cr', ?, ?, ?, ?, 1);",
         {
             fyId, fyLabel, voucher_no, dt,
-            supplierId, supplierId, party_ledger, effectivePurcLedger, total_amount,
+            supCode, supplierId, party_ledger, effectivePurcLedger, total_amount,
+            invoice_no, vchNarr, taxable_amount
+        }
+    );
+
+    int tRowNo = 2;
+    // Leg 2: Debit Purchase Ledger for taxable_amount
+    DatabaseManager::instance().executeNonQuery(
+        "INSERT INTO transactions ("
+        "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
+        "account_code, party_name, opposing_account, dr_cr, amount, "
+        "invoice_no, narration, taxable_amount, row_no"
+        ") VALUES (?, ?, ?, ?, 'Purchase', 'Purc', ?, ?, ?, 'Dr', ?, ?, ?, ?, ?);",
+        {
+            fyId, fyLabel, voucher_no, dt,
+            purcCode, effectivePurcLedger, party_ledger, taxable_amount,
             invoice_no, vchNarr, taxable_amount, tRowNo++
         }
     );
+
+    // Leg 3: Debit CGST Input if > 0
+    if (cgst_amount > 0.001) {
+        DatabaseManager::instance().executeNonQuery(
+            "INSERT INTO transactions ("
+            "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
+            "account_code, party_name, opposing_account, dr_cr, amount, "
+            "invoice_no, narration, row_no"
+            ") VALUES (?, ?, ?, ?, 'Purchase', 'Purc', ?, 'CGST Input', ?, 'Dr', ?, ?, ?, ?);",
+            {fyId, fyLabel, voucher_no, dt, cgstCode, party_ledger, cgst_amount, invoice_no, vchNarr, tRowNo++}
+        );
+    }
+    // Leg 4: Debit SGST Input if > 0
+    if (sgst_amount > 0.001) {
+        DatabaseManager::instance().executeNonQuery(
+            "INSERT INTO transactions ("
+            "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
+            "account_code, party_name, opposing_account, dr_cr, amount, "
+            "invoice_no, narration, row_no"
+            ") VALUES (?, ?, ?, ?, 'Purchase', 'Purc', ?, 'SGST Input', ?, 'Dr', ?, ?, ?, ?);",
+            {fyId, fyLabel, voucher_no, dt, sgstCode, party_ledger, sgst_amount, invoice_no, vchNarr, tRowNo++}
+        );
+    }
+    // Leg 5: Debit IGST Input if > 0
+    if (igst_amount > 0.001) {
+        DatabaseManager::instance().executeNonQuery(
+            "INSERT INTO transactions ("
+            "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
+            "account_code, party_name, opposing_account, dr_cr, amount, "
+            "invoice_no, narration, row_no"
+            ") VALUES (?, ?, ?, ?, 'Purchase', 'Purc', ?, 'IGST Input', ?, 'Dr', ?, ?, ?, ?);",
+            {fyId, fyLabel, voucher_no, dt, igstCode, party_ledger, igst_amount, invoice_no, vchNarr, tRowNo++}
+        );
+    }
+    // Leg 6: Round Off if != 0
+    if (std::abs(round_off) > 0.001) {
+        QString roDrCr = (round_off > 0) ? "Cr" : "Dr";
+        DatabaseManager::instance().executeNonQuery(
+            "INSERT INTO transactions ("
+            "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
+            "account_code, party_name, opposing_account, dr_cr, amount, "
+            "invoice_no, narration, row_no"
+            ") VALUES (?, ?, ?, ?, 'Purchase', 'Purc', ?, 'Round Off', ?, ?, ?, ?, ?, ?);",
+            {fyId, fyLabel, voucher_no, dt, roundOffCode, party_ledger, roDrCr, std::abs(round_off), invoice_no, vchNarr, tRowNo++}
+        );
+    }
 
     DatabaseManager::instance().commit();
     reload_data();

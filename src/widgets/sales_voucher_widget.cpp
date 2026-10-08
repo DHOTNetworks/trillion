@@ -706,7 +706,13 @@ void SalesVoucherWidget::setupUi() {
 
     m_saveBtn = new QPushButton("Save Voucher (Ctrl+S)", this);
     m_saveBtn->setFixedHeight(30);
-    m_saveBtn->setStyleSheet("QPushButton { background-color: #2563EB; border: 1px solid #1D4ED8; border-radius: 6px; padding: 0px 16px; font-weight: 800; color: #FFFFFF; font-size: 12px; } QPushButton:hover { background-color: #1D4ED8; }");
+    m_saveBtn->setFocusPolicy(Qt::StrongFocus);
+    m_saveBtn->setStyleSheet(
+        "QPushButton { background-color: #2563EB; border: 1px solid #1D4ED8; border-radius: 6px; padding: 0px 16px; font-weight: 800; color: #FFFFFF; font-size: 12px; } "
+        "QPushButton:hover { background-color: #1D4ED8; } "
+        "QPushButton:focus { background-color: #1D4ED8; border: 2.5px solid #F59E0B; outline: none; }"
+    );
+    m_saveBtn->installEventFilter(this);
     connect(m_saveBtn, &QPushButton::clicked, this, &SalesVoucherWidget::saveVoucher);
     footerLayout->addWidget(m_saveBtn);
 
@@ -866,7 +872,29 @@ void SalesVoucherWidget::setupNavigationChains() {
     connect(m_gradeEdit, &QLineEdit::returnPressed, this, [this]() { if (m_transportEdit) { m_transportEdit->setFocus(); m_transportEdit->selectAll(); } });
     connect(m_transportEdit, &QLineEdit::returnPressed, this, [this]() { if (m_challanNoEdit) { m_challanNoEdit->setFocus(); m_challanNoEdit->selectAll(); } });
     connect(m_challanNoEdit, &QLineEdit::returnPressed, this, [this]() { if (m_kandaWeightEdit) { m_kandaWeightEdit->setFocus(); m_kandaWeightEdit->selectAll(); } });
-    connect(m_kandaWeightEdit, &QLineEdit::returnPressed, this, [this]() { if (m_brokerEdit) { m_brokerEdit->setFocus(); m_brokerEdit->selectAll(); } });
+    connect(m_kandaWeightEdit, &QLineEdit::returnPressed, this, [this]() {
+        double kw = m_kandaWeightEdit ? m_kandaWeightEdit->text().trimmed().toDouble() : 0.0;
+        if (kw > 0.0) {
+            int totalBags = 0;
+            if (m_tableWidget) {
+                for (int r = 0; r < m_tableWidget->rowCount(); ++r) {
+                    auto* item = m_tableWidget->item(r, 3); // Bags column
+                    if (item) totalBags += item->text().toInt();
+                }
+            }
+            double calcFreight = 0.0;
+            if (FreightCalculationDialog::promptFreight(this, kw, totalBags, &calcFreight)) {
+                if (m_freightChargesEdit) {
+                    m_freightChargesEdit->setText(QString::number(calcFreight, 'f', 2));
+                    recalculateTotals();
+                }
+            }
+        }
+        if (m_brokerEdit) {
+            m_brokerEdit->setFocus();
+            m_brokerEdit->selectAll();
+        }
+    });
     connect(m_brokerEdit, &QLineEdit::returnPressed, this, [this]() { if (m_narrationEdit) { m_narrationEdit->setFocus(); m_narrationEdit->selectAll(); } });
 
     // Left/Right navigation for logistics
@@ -887,11 +915,35 @@ void SalesVoucherWidget::setupNavigationChains() {
     VoucherCommon::installGridNavigation(m_narrationEdit, m_brokerEdit, nullptr);
 
     // Summary & Save chain
-    connect(m_narrationEdit, &QLineEdit::returnPressed, this, [this]() { if (m_otherExpEdit && m_otherExpEdit->isVisible()) { m_otherExpEdit->setFocus(); m_otherExpEdit->selectAll(); } else if (m_taxAmountEdit) { m_taxAmountEdit->setFocus(); m_taxAmountEdit->selectAll(); } });
-    connect(m_otherExpEdit, &QLineEdit::returnPressed, this, [this]() { if (m_lessAmountEdit) { m_lessAmountEdit->setFocus(); m_lessAmountEdit->selectAll(); } });
-    connect(m_lessAmountEdit, &QLineEdit::returnPressed, this, [this]() { if (m_taxAmountEdit) { m_taxAmountEdit->setFocus(); m_taxAmountEdit->selectAll(); } });
-    connect(m_taxAmountEdit, &QLineEdit::returnPressed, this, [this]() { if (m_freightChargesEdit) { m_freightChargesEdit->setFocus(); m_freightChargesEdit->selectAll(); } });
-    connect(m_freightChargesEdit, &QLineEdit::returnPressed, this, [this]() { if (m_saveBtn) { m_saveBtn->setFocus(); } });
+    connect(m_narrationEdit, &QLineEdit::returnPressed, this, [this]() {
+        if (m_otherExpEdit && m_otherExpEdit->isVisible()) {
+            m_otherExpEdit->setFocus();
+            m_otherExpEdit->selectAll();
+        } else if (m_commissionEdit && m_commissionEdit->isVisible()) {
+            m_commissionEdit->setFocus();
+            m_commissionEdit->selectAll();
+        } else if (m_taxAmountEdit && m_taxAmountEdit->isVisible()) {
+            m_taxAmountEdit->setFocus();
+            m_taxAmountEdit->selectAll();
+        } else if (m_saveBtn) {
+            m_saveBtn->setFocus();
+        }
+    });
+    connect(m_commissionEdit, &QLineEdit::returnPressed, this, [this]() {
+        if (m_freightChargesEdit) { m_freightChargesEdit->setFocus(); m_freightChargesEdit->selectAll(); }
+    });
+    connect(m_otherExpEdit, &QLineEdit::returnPressed, this, [this]() {
+        if (m_lessAmountEdit) { m_lessAmountEdit->setFocus(); m_lessAmountEdit->selectAll(); }
+    });
+    connect(m_lessAmountEdit, &QLineEdit::returnPressed, this, [this]() {
+        if (m_taxAmountEdit) { m_taxAmountEdit->setFocus(); m_taxAmountEdit->selectAll(); }
+    });
+    connect(m_taxAmountEdit, &QLineEdit::returnPressed, this, [this]() {
+        if (m_freightChargesEdit) { m_freightChargesEdit->setFocus(); m_freightChargesEdit->selectAll(); }
+    });
+    connect(m_freightChargesEdit, &QLineEdit::returnPressed, this, [this]() {
+        if (m_saveBtn) { m_saveBtn->setFocus(); }
+    });
 }
 
 void SalesVoucherWidget::setupCompleters() {
@@ -1415,9 +1467,13 @@ void SalesVoucherWidget::saveVoucher() {
     }
 
     if (ok) {
-        emit invoiceSaved(invNo);
         CustomMessageBox::information(this, "Success", QString("Sales Invoice %1 saved successfully.").arg(invNo));
-        resetForm();
+        bool editMode = isEditMode();
+        emit invoiceSaved(invNo);
+        if (!editMode) {
+            resetForm();
+            if (m_invoiceDateEdit) m_invoiceDateEdit->setFocus();
+        }
     } else {
         CustomMessageBox::critical(this, "Error", "Failed to save Sales Invoice. Database error.");
     }
@@ -1656,6 +1712,25 @@ void SalesVoucherWidget::keyPressEvent(QKeyEvent* event) {
 }
 
 bool SalesVoucherWidget::eventFilter(QObject* watched, QEvent* event) {
+    if (event->type() == QEvent::KeyPress) {
+        auto* keyEvent = static_cast<QKeyEvent*>(event);
+        int key = keyEvent->key();
+        if (watched == m_saveBtn) {
+            if (key == Qt::Key_Return || key == Qt::Key_Enter || key == Qt::Key_Space) {
+                saveVoucher();
+                return true;
+            } else if (key == Qt::Key_Left || key == Qt::Key_Up) {
+                if (m_freightChargesEdit && m_freightChargesEdit->isVisible()) {
+                    m_freightChargesEdit->setFocus();
+                    m_freightChargesEdit->selectAll();
+                } else if (m_narrationEdit) {
+                    m_narrationEdit->setFocus();
+                    m_narrationEdit->selectAll();
+                }
+                return true;
+            }
+        }
+    }
     return QWidget::eventFilter(watched, event);
 }
 

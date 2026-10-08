@@ -266,8 +266,7 @@ bool SalesModel::add_sales_invoice_full(
         itemSaleLedger = itemMeta.first().toMap().value("sale_ledger").toString().trimmed();
     }
 
-    QString vchNarr = QString("Sales Invoice %1 - %2 (%3 Qtl @ ₹%4)").arg(invNo, item_name, QString::number(weight_qtl), QString::number(rate_per_qtl));
-    if (!narration.isEmpty()) vchNarr += " | " + narration;
+    QString vchNarr = narration.trimmed();
 
     bool okVch = DatabaseManager::instance().executeNonQuery(
         "INSERT INTO vouchers ("
@@ -294,7 +293,7 @@ bool SalesModel::add_sales_invoice_full(
         "INSERT INTO stock_transactions ("
         "fy_id, financial_year, voucher_no, voucher_date, trans_type, voucher_type, party_id, party_name, bill_no, "
         "item_id, item_code, item_name, bags, weight_qtl, rate, amount, taxable_amount, narration"
-        ") VALUES (?, ?, ?, ?, 'Sale', 'Sales Invoice', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+        ") VALUES (?, ?, ?, ?, 'Sale', 'Sales', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
         {
             fyId, fyLabel, vchNo, dt, customerId, party_ledger, invNo,
             itemId, hsn_code, item_name, bag_count, weight_qtl, rate_per_qtl, total_amount, taxable_amount, vchNarr
@@ -1078,7 +1077,7 @@ bool SalesModel::update_sales_invoice_full(
         {invoice_no, voucher_no}
     );
 
-    QString vchNarr = QString("Sales Invoice %1 - %2 (%3 Qtl @ ₹%4)").arg(invoice_no, item_name, QString::number(weight_qtl), QString::number(rate_per_qtl));
+    QString vchNarr = narration.trimmed();
     if (!items.isEmpty()) {
         int rIdx = 1;
         for (const QVariant& itmV : items) {
@@ -1087,7 +1086,7 @@ bool SalesModel::update_sales_invoice_full(
                 "INSERT INTO stock_transactions ("
                 "fy_id, financial_year, voucher_no, voucher_date, trans_type, voucher_type, party_id, party_name, bill_no, "
                 "item_id, item_code, item_name, bags, weight_qtl, rate, amount, taxable_amount, narration, row_no"
-                ") VALUES (?, ?, ?, ?, 'Sale', 'Sales Invoice', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+                ") VALUES (?, ?, ?, ?, 'Sale', 'Sales', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
                 {
                     fyId, fyLabel, voucher_no, dt, customerId, party_ledger, invoice_no,
                     itemId, hsn_code, itm.value("item_name").toString(),
@@ -1101,7 +1100,7 @@ bool SalesModel::update_sales_invoice_full(
             "INSERT INTO stock_transactions ("
             "fy_id, financial_year, voucher_no, voucher_date, trans_type, voucher_type, party_id, party_name, bill_no, "
             "item_id, item_code, item_name, bags, weight_qtl, rate, amount, taxable_amount, narration, row_no"
-            ") VALUES (?, ?, ?, ?, 'Sale', 'Sales Invoice', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1);",
+            ") VALUES (?, ?, ?, ?, 'Sale', 'Sales', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1);",
             {
                 fyId, fyLabel, voucher_no, dt, customerId, party_ledger, invoice_no,
                 itemId, hsn_code, item_name, bag_count, weight_qtl, rate_per_qtl, total_amount, taxable_amount, vchNarr
@@ -1125,7 +1124,31 @@ bool SalesModel::update_sales_invoice_full(
     }
     QString effectiveSaleLedger = itemSaleLedger.isEmpty() ? "Sale A/c" : itemSaleLedger;
 
-    // Leg 1: Debit Customer for total_amount
+    auto resolveLedgerCode = [](const QString& name, int fallbackId) -> int {
+        if (name.trimmed().isEmpty()) return fallbackId;
+        QVariantList rows = DatabaseManager::instance().executeQuery(
+            "SELECT id, legacy_id, account_code FROM parties WHERE replace(name, ' ', '') = replace(?, ' ', '') LIMIT 1;",
+            {name.trimmed()}
+        );
+        if (!rows.isEmpty()) {
+            QVariantMap m = rows.first().toMap();
+            int legId = m.value("legacy_id").toInt();
+            if (legId > 0) return legId;
+            int ac = m.value("account_code").toInt();
+            if (ac > 0) return ac;
+            return m.value("id").toInt();
+        }
+        return fallbackId;
+    };
+
+    int custCode = resolveLedgerCode(party_ledger, customerId);
+    int saleCode = resolveLedgerCode(effectiveSaleLedger, 1239);
+    int cgstCode = resolveLedgerCode("CGST A/c", resolveLedgerCode("CGST Output", 944));
+    int sgstCode = resolveLedgerCode("SGST A/c", resolveLedgerCode("SGST Output", 943));
+    int igstCode = resolveLedgerCode("IGST A/c", resolveLedgerCode("IGST Output", 945));
+    int roundOffCode = resolveLedgerCode("Round Off", resolveLedgerCode("Round Off A/c", 44));
+
+    // Leg 1: Debit Customer for total_amount (Row 1 is ALWAYS the Party in Bahi-Khata)
     DatabaseManager::instance().executeNonQuery(
         "INSERT INTO transactions ("
         "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
@@ -1134,7 +1157,7 @@ bool SalesModel::update_sales_invoice_full(
         ") VALUES (?, ?, ?, ?, 'Sales', 'Sale', ?, ?, ?, ?, 'Dr', ?, ?, ?, ?, 1);",
         {
             fyId, fyLabel, voucher_no, dt,
-            customerId, customerId, party_ledger, effectiveSaleLedger, total_amount,
+            custCode, customerId, party_ledger, effectiveSaleLedger, total_amount,
             invoice_no, vchNarr, taxable_amount
         }
     );
@@ -1144,12 +1167,12 @@ bool SalesModel::update_sales_invoice_full(
     DatabaseManager::instance().executeNonQuery(
         "INSERT INTO transactions ("
         "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
-        "party_name, opposing_account, dr_cr, amount, "
+        "account_code, party_name, opposing_account, dr_cr, amount, "
         "invoice_no, narration, taxable_amount, row_no"
-        ") VALUES (?, ?, ?, ?, 'Sales', 'Sale', ?, ?, 'Cr', ?, ?, ?, ?, ?);",
+        ") VALUES (?, ?, ?, ?, 'Sales', 'Sale', ?, ?, ?, 'Cr', ?, ?, ?, ?, ?);",
         {
             fyId, fyLabel, voucher_no, dt,
-            effectiveSaleLedger, party_ledger, taxable_amount,
+            saleCode, effectiveSaleLedger, party_ledger, taxable_amount,
             invoice_no, vchNarr, taxable_amount, tRowNo++
         }
     );
@@ -1159,10 +1182,10 @@ bool SalesModel::update_sales_invoice_full(
         DatabaseManager::instance().executeNonQuery(
             "INSERT INTO transactions ("
             "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
-            "party_name, opposing_account, dr_cr, amount, "
+            "account_code, party_name, opposing_account, dr_cr, amount, "
             "invoice_no, narration, row_no"
-            ") VALUES (?, ?, ?, ?, 'Sales', 'Sale', 'CGST Output', ?, 'Cr', ?, ?, ?, ?);",
-            {fyId, fyLabel, voucher_no, dt, party_ledger, cgst_amount, invoice_no, vchNarr, tRowNo++}
+            ") VALUES (?, ?, ?, ?, 'Sales', 'Sale', ?, 'CGST Output', ?, 'Cr', ?, ?, ?, ?);",
+            {fyId, fyLabel, voucher_no, dt, cgstCode, party_ledger, cgst_amount, invoice_no, vchNarr, tRowNo++}
         );
     }
     // Leg 4: Credit SGST Output if > 0
@@ -1170,10 +1193,10 @@ bool SalesModel::update_sales_invoice_full(
         DatabaseManager::instance().executeNonQuery(
             "INSERT INTO transactions ("
             "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
-            "party_name, opposing_account, dr_cr, amount, "
+            "account_code, party_name, opposing_account, dr_cr, amount, "
             "invoice_no, narration, row_no"
-            ") VALUES (?, ?, ?, ?, 'Sales', 'Sale', 'SGST Output', ?, 'Cr', ?, ?, ?, ?);",
-            {fyId, fyLabel, voucher_no, dt, party_ledger, sgst_amount, invoice_no, vchNarr, tRowNo++}
+            ") VALUES (?, ?, ?, ?, 'Sales', 'Sale', ?, 'SGST Output', ?, 'Cr', ?, ?, ?, ?);",
+            {fyId, fyLabel, voucher_no, dt, sgstCode, party_ledger, sgst_amount, invoice_no, vchNarr, tRowNo++}
         );
     }
     // Leg 5: Credit IGST Output if > 0
@@ -1181,10 +1204,10 @@ bool SalesModel::update_sales_invoice_full(
         DatabaseManager::instance().executeNonQuery(
             "INSERT INTO transactions ("
             "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
-            "party_name, opposing_account, dr_cr, amount, "
+            "account_code, party_name, opposing_account, dr_cr, amount, "
             "invoice_no, narration, row_no"
-            ") VALUES (?, ?, ?, ?, 'Sales', 'Sale', 'IGST Output', ?, 'Cr', ?, ?, ?, ?);",
-            {fyId, fyLabel, voucher_no, dt, party_ledger, igst_amount, invoice_no, vchNarr, tRowNo++}
+            ") VALUES (?, ?, ?, ?, 'Sales', 'Sale', ?, 'IGST Output', ?, 'Cr', ?, ?, ?, ?);",
+            {fyId, fyLabel, voucher_no, dt, igstCode, party_ledger, igst_amount, invoice_no, vchNarr, tRowNo++}
         );
     }
     // Leg 6: Round Off if != 0
@@ -1193,10 +1216,10 @@ bool SalesModel::update_sales_invoice_full(
         DatabaseManager::instance().executeNonQuery(
             "INSERT INTO transactions ("
             "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
-            "party_name, opposing_account, dr_cr, amount, "
+            "account_code, party_name, opposing_account, dr_cr, amount, "
             "invoice_no, narration, row_no"
-            ") VALUES (?, ?, ?, ?, 'Sales', 'Sale', 'Round Off', ?, ?, ?, ?, ?, ?);",
-            {fyId, fyLabel, voucher_no, dt, party_ledger, roDrCr, std::abs(round_off), invoice_no, vchNarr, tRowNo++}
+            ") VALUES (?, ?, ?, ?, 'Sales', 'Sale', ?, 'Round Off', ?, ?, ?, ?, ?, ?);",
+            {fyId, fyLabel, voucher_no, dt, roundOffCode, party_ledger, roDrCr, std::abs(round_off), invoice_no, vchNarr, tRowNo++}
         );
     }
 

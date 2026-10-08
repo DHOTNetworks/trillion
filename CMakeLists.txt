@@ -226,6 +226,13 @@ set(SOURCES
     src/engine/bahi_khata_migrator.cpp
     src/engine/bahi_khata_exporter.h
     src/engine/bahi_khata_exporter.cpp
+    src/engine/jet4_types.h
+    src/engine/jet4_codes.h
+    src/engine/jet4_codes.cpp
+    src/engine/jet4_usage_map.h
+    src/engine/jet4_usage_map.cpp
+    src/engine/jet4_btree.h
+    src/engine/jet4_btree.cpp
     src/engine/jet4_writer.h
     src/engine/jet4_writer.cpp
     src/engine/busy_data_migrator.h
@@ -620,6 +627,13 @@ set(TEST_SOURCES
     src/engine/busy_data_migrator.cpp
     src/engine/bahi_khata_exporter.h
     src/engine/bahi_khata_exporter.cpp
+    src/engine/jet4_types.h
+    src/engine/jet4_codes.h
+    src/engine/jet4_codes.cpp
+    src/engine/jet4_usage_map.h
+    src/engine/jet4_usage_map.cpp
+    src/engine/jet4_btree.h
+    src/engine/jet4_btree.cpp
     src/engine/jet4_writer.h
     src/engine/jet4_writer.cpp
     src/models/iform_model.h
@@ -723,6 +737,13 @@ set(ENGINE_TEST_SOURCES
     src/models/mandi_reports_controller.cpp
     src/database_manager.h
     src/database_manager.cpp
+    src/engine/jet4_types.h
+    src/engine/jet4_codes.h
+    src/engine/jet4_codes.cpp
+    src/engine/jet4_usage_map.h
+    src/engine/jet4_usage_map.cpp
+    src/engine/jet4_btree.h
+    src/engine/jet4_btree.cpp
     src/engine/jet4_writer.h
     src/engine/jet4_writer.cpp
 )
@@ -764,6 +785,13 @@ set(CLI_SOURCES
     src/engine/bahi_khata_migrator.cpp
     src/engine/bahi_khata_exporter.h
     src/engine/bahi_khata_exporter.cpp
+    src/engine/jet4_types.h
+    src/engine/jet4_codes.h
+    src/engine/jet4_codes.cpp
+    src/engine/jet4_usage_map.h
+    src/engine/jet4_usage_map.cpp
+    src/engine/jet4_btree.h
+    src/engine/jet4_btree.cpp
     src/engine/jet4_writer.h
     src/engine/jet4_writer.cpp
     src/engine/busy_data_migrator.h

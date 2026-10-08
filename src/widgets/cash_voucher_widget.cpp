@@ -321,11 +321,14 @@ void CashVoucherWidget::setupUi() {
     m_saveBtn = new QPushButton("Ctrl+S: Save Voucher", this);
     m_saveBtn->setFixedHeight(34);
     m_saveBtn->setCursor(Qt::PointingHandCursor);
+    m_saveBtn->setFocusPolicy(Qt::StrongFocus);
     m_saveBtn->setStyleSheet(
         "QPushButton { background-color: #2563EB; color: #FFFFFF; border: 1px solid #1D4ED8; "
         "padding: 0px 20px; border-radius: 6px; font-weight: 800; font-size: 13px; } "
-        "QPushButton:hover { background-color: #1D4ED8; }"
+        "QPushButton:hover { background-color: #1D4ED8; } "
+        "QPushButton:focus { background-color: #1D4ED8; border: 2.5px solid #F59E0B; outline: none; }"
     );
+    m_saveBtn->installEventFilter(this);
     connect(m_saveBtn, &QPushButton::clicked, this, &CashVoucherWidget::saveVoucher);
     actionsRow->addWidget(m_saveBtn);
 
@@ -786,8 +789,12 @@ void CashVoucherWidget::saveVoucher() {
     if (ok) {
         QString savedNo = vchNo;
         CustomMessageBox::information(this, "Success", QString("%1 #%2 saved successfully!").arg(vchType, savedNo));
+        bool editMode = isEditMode();
         emit voucherSaved(savedNo);
-        resetForm();
+        if (!editMode) {
+            resetForm();
+            if (m_dateEdit) m_dateEdit->setFocus();
+        }
     } else {
         setStatusMessage("Failed to save cash voucher in database.", true);
     }
@@ -919,8 +926,10 @@ bool CashVoucherWidget::eventFilter(QObject* watched, QEvent* event) {
 
         // Footer: Narration Input
         if (watched == m_narrationInput) {
-            if (key == Qt::Key_Return || key == Qt::Key_Enter) {
-                saveVoucher();
+            if (key == Qt::Key_Return || key == Qt::Key_Enter || key == Qt::Key_Tab || key == Qt::Key_Down) {
+                if (m_saveBtn) {
+                    m_saveBtn->setFocus();
+                }
                 return true;
             } else if (key == Qt::Key_Up) {
                 if (m_table->rowCount() > 0) {
@@ -930,6 +939,20 @@ bool CashVoucherWidget::eventFilter(QObject* watched, QEvent* event) {
             } else if (key == Qt::Key_Left && (m_narrationInput->cursorPosition() == 0 || m_narrationInput->hasSelectedText() || m_narrationInput->text().isEmpty())) {
                 if (m_table->rowCount() > 0) {
                     focusCell(m_table->rowCount() - 1, 4);
+                }
+                return true;
+            }
+            return QWidget::eventFilter(watched, event);
+        }
+
+        if (watched == m_saveBtn) {
+            if (key == Qt::Key_Return || key == Qt::Key_Enter || key == Qt::Key_Space) {
+                saveVoucher();
+                return true;
+            } else if (key == Qt::Key_Up || key == Qt::Key_Left) {
+                if (m_narrationInput) {
+                    m_narrationInput->setFocus();
+                    m_narrationInput->selectAll();
                 }
                 return true;
             }
