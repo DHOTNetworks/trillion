@@ -40,7 +40,34 @@ int verifyJetDb(const QString& mdbPath) {
     QByteArray pathBytes = QFile::encodeName(mdbPath);
     MdbHandle* mdb = mdb_open(pathBytes.constData(), MDB_NOFLAGS);
     if (!mdb) mdb = mdb_open(mdbPath.toUtf8().constData(), MDB_NOFLAGS);
-    if (!mdb) { std::cerr << "Cannot open " << mdbPath.toStdString() << "\n"; return 1; }
+    if (const char* dpEnv = std::getenv("DUMP_INDEX_PAGE")) {
+        using namespace Jet4Writer;
+        uint32_t pg = static_cast<uint32_t>(std::strtoul(dpEnv, nullptr, 10));
+        if (UsageMapManager::readPage(mdb, pg)) {
+            DecodedPage dp;
+            std::string derr;
+            if (BTreeEngine::decodeEntries(mdb, dp, derr)) {
+                auto* b = static_cast<const uint8_t*>(mdb->pg_buf);
+                uint32_t tail = UsageMapManager::getU32(mdb, kOffChildTailPg);
+                uint32_t prev = UsageMapManager::getU32(mdb, kOffPrevPg);
+                uint32_t next = UsageMapManager::getU32(mdb, kOffNextPg);
+                std::cout << "=== Page " << pg << " type=" << (int)b[0]
+                          << " prev=" << prev << " next=" << next << " tail=" << tail
+                          << " nentries=" << dp.full.size() << " ===\n";
+                for (size_t i = 0; i < dp.full.size(); ++i) {
+                    const auto& e = dp.full[i];
+                    uint32_t cpg = (b[0] == kPageIndex) ? BTreeEngine::childOf(e) : 0;
+                    std::cout << "  [" << i << "] cpg=" << cpg << " len=" << e.size() << " hex: ";
+                    for (size_t j = 0; j < std::min((size_t)16, e.size()); ++j) {
+                        std::cout << std::hex << std::uppercase << (int)e[j] << " ";
+                    }
+                    std::cout << std::dec << "\n";
+                }
+            } else {
+                std::cout << "decodeEntries failed on page " << pg << ": " << derr << "\n";
+            }
+        }
+    }
     Jet4Writer::VerifyReport rep = Jet4Writer::verifyDatabase(mdb);
     mdb_close(mdb);
     if (!rep.error.empty()) {
@@ -71,7 +98,8 @@ int verifyJetDb(const QString& mdbPath) {
     mdb_read_columns(t);
     mdb_read_indices(t);
 
-    std::cout << "TABLE: " << tableName.toStdString() << " (cols: " << t->num_cols << ", rows: " << t->num_rows << ")\n";
+        std::cout << "TABLE: " << tableName.toStdString() << " (cols: " << t->num_cols
+                  << ", rows: " << t->num_rows << ", tdefPg: " << (t->entry ? t->entry->table_pg : 0) << ")\n";
     for (unsigned i = 0; i < t->num_cols; ++i) {
         MdbColumn* col = (MdbColumn*)g_ptr_array_index(t->columns, i);
         std::cout << "  [" << i << "] " << col->name << " type=" << (int)col->col_type << " size=" << col->col_size << " fixed=" << (col->is_fixed ? 1 : 0) << " off=" << col->fixed_offset << "\n";
@@ -117,7 +145,7 @@ int verifyJetDb(const QString& mdbPath) {
         {
             int rs2 = 0; size_t rsz2 = 0;
             if (mdb_find_row(mdb, (int)t->cur_row - 1, &rs2, &rsz2) == 0
-                && mdb_crack_row(t, rs2 & 0x0FFF, rsz2, ck.data()) < 0) {
+                && mdb_crack_row(t, rs2 & 0x1FFF, rsz2, ck.data()) < 0) {
                 for (auto& f : ck) { f.is_null = 1; }
             }
         }
@@ -129,7 +157,7 @@ int verifyJetDb(const QString& mdbPath) {
         {
             int rs = 0; size_t rsz = 0;
             if (mdb_find_row(mdb, (int)t->cur_row - 1, &rs, &rsz) == 0) {
-                int start = rs & 0x0FFF;
+                int start = rs & 0x1FFF;
                 const unsigned char* base = (const unsigned char*)mdb->pg_buf;
                 std::cout << "    [raw] pg=" << t->cur_phys_pg << " start=" << start
                           << " size=" << rsz << " hex=";
@@ -541,7 +569,7 @@ int main(int argc, char* argv[]) {
                     int rs = 0; size_t rsz = 0;
                     if (mdb_find_row(smdb, (int)st->cur_row - 1, &rs, &rsz) != 0) continue;
                     std::vector<MdbField> f2(st->num_cols);
-                    if (mdb_crack_row(st, rs & 0x0FFF, rsz, f2.data()) < 0) continue;
+                    if (mdb_crack_row(st, rs & 0x1FFF, rsz, f2.data()) < 0) continue;
                     RawRow r; r.cols.resize(st->num_cols); r.isNull.resize(st->num_cols);
                     for (unsigned i = 0; i < st->num_cols; ++i) {
                         r.isNull[i] = (char)(f2[i].is_null ? 1 : 0);
@@ -652,17 +680,17 @@ int main(int argc, char* argv[]) {
         if (!t) { std::cerr << "No table\n"; mdb_close(mdb); return 1; }
         mdb_read_columns(t);
         mdb_read_indices(t);
-        // Collect distinct data pages via physical fetch order.
+        // Collect distinct data pages via brute-force snapshot (never usage
+        // maps, never fetch cursors): a map-driven scan can miss pages.
         std::vector<uint32_t> dataPages;
         {
-            std::vector<char*> bound(t->num_cols);
-            for (unsigned i = 0; i < t->num_cols; ++i) { bound[i] = (char*)malloc(4096); mdb_bind_column(t, i + 1, bound[i], nullptr); }
-            mdb_rewind_table(t);
-            uint32_t lastPg = 0;
-            while (mdb_fetch_row(t)) {
-                if (dataPages.empty() || t->cur_phys_pg != lastPg) { dataPages.push_back(t->cur_phys_pg); lastPg = t->cur_phys_pg; }
+            std::vector<Jet4Writer::RowSnapshot> pgSnap;
+            if (Jet4Writer::TableSnapshot::snapshot(mdb, t, pgSnap).ok) {
+                std::set<uint32_t> seen;
+                for (auto& r : pgSnap) {
+                    if (seen.insert(r.pg).second) dataPages.push_back(r.pg);
+                }
             }
-            for (unsigned i = 0; i < t->num_cols; ++i) free(bound[i]);
         }
         std::cout << "Data pages: " << dataPages.size() << "\n";
         int totalMismatch = 0;
@@ -697,8 +725,8 @@ int main(int argc, char* argv[]) {
                         int rs = 0; size_t rsz = 0;
                         if (mdb_find_row(mdb, s, &rs, &rsz) != 0 || rsz == 0) continue;
                         if (rs & 0x4000) continue; // chain-link/overflow slots (libmdb parity): not standalone rows
-                        bool flagged = (rs & 0x8000) != 0;
-                        if (mdb_crack_row(t, rs & 0x0FFF, rsz, fb.data()) < 0) continue;
+                        bool flagged = (rs & 0xC000) != 0; // deleted/overflow: absent from indexes by design
+                        if (mdb_crack_row(t, rs & 0x1FFF, rsz, fb.data()) < 0) continue;
                         std::vector<Jet4Writer::Field> fs;
                         fs.reserve(t->num_cols);
                         for (unsigned i = 0; i < t->num_cols; ++i) {
@@ -1045,16 +1073,17 @@ int main(int argc, char* argv[]) {
                 if (!Jet4Writer::BTreeEngine::walkIndex(mdb, t, mIdx, entries).ok) continue;
                 std::set<uint32_t> covered;
                 for (auto& e : entries) covered.insert((e.dataPg << 8) | (e.rowIdx & 0xFF));
-                // Enumerate data pages fresh (tree may grow during repair).
+                // Enumerate data pages via brute-force snapshot (tree may grow
+                // during repair; fetch cursors would miss pages and dangle).
                 std::vector<uint32_t> dataPages;
                 {
-                    std::vector<char*> bound(t->num_cols);
-                    for (unsigned i = 0; i < t->num_cols; ++i) { bound[i] = (char*)malloc(4096); mdb_bind_column(t, i + 1, bound[i], nullptr); }
-                    mdb_rewind_table(t);
-                    while (mdb_fetch_row(t)) {
-                        if (dataPages.empty() || dataPages.back() != t->cur_phys_pg) dataPages.push_back(t->cur_phys_pg);
+                    std::vector<Jet4Writer::RowSnapshot> pgSnap;
+                    if (Jet4Writer::TableSnapshot::snapshot(mdb, t, pgSnap).ok) {
+                        std::set<uint32_t> seen;
+                        for (auto& r : pgSnap) {
+                            if (seen.insert(r.pg).second) dataPages.push_back(r.pg);
+                        }
                     }
-                    for (unsigned i = 0; i < t->num_cols; ++i) free(bound[i]);
                 }
                 std::vector<MdbField> fb(t->num_cols ? t->num_cols : 1);
                 int rco = mdb->fmt->row_count_offset;
@@ -1072,8 +1101,8 @@ int main(int argc, char* argv[]) {
                         int rs = 0; size_t rsz = 0;
                         if (mdb_find_row(mdb, s, &rs, &rsz) != 0 || rsz == 0) continue;
                         if (rs & 0x4000) continue; // chain-link/overflow slots (libmdb parity)
-                        if (rs & 0x8000) continue; // flagged rows: pre-existing state, never fabricate coverage
-                        if (mdb_crack_row(t, rs & 0x0FFF, rsz, fb.data()) < 0) continue;
+                        if (rs & 0xC000) continue; // flagged rows: pre-existing state, never fabricate coverage
+                        if (mdb_crack_row(t, rs & 0x1FFF, rsz, fb.data()) < 0) continue;
                         std::vector<Jet4Writer::Field> fs;
                         for (unsigned i = 0; i < t->num_cols; ++i) {
                             Jet4Writer::Field f; f.colnum = (int)i; f.isNull = fb[i].is_null != 0;
@@ -1183,7 +1212,7 @@ int main(int argc, char* argv[]) {
         int rs = 0; size_t rsz = 0;
         if (mdb_find_row(mdb, slot, &rs, &rsz) != 0) return 1;
         std::vector<MdbField> fb(t->num_cols);
-        if (mdb_crack_row(t, rs & 0x0FFF, rsz, fb.data()) < 0) return 1;
+        if (mdb_crack_row(t, rs & 0x1FFF, rsz, fb.data()) < 0) return 1;
         std::vector<Jet4Writer::Field> fs;
         for (unsigned i = 0; i < t->num_cols; ++i) {
             Jet4Writer::Field f; f.colnum = (int)i; f.isNull = fb[i].is_null != 0;
@@ -1387,6 +1416,34 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
+    if (args.contains("--repair-maps")) {
+        int idx = args.indexOf("--repair-maps");
+        if (idx + 1 >= args.size()) {
+            std::cerr << "Error: --repair-maps requires <mdb_path> [table_name]\n";
+            return 1;
+        }
+        QString mdbPath = args[idx + 1];
+        QString onlyTable = (idx + 2 < args.size() && !args[idx + 2].startsWith("--")) ? args[idx + 2] : "";
+        QByteArray pb = QFile::encodeName(mdbPath);
+        MdbHandle* mdb = mdb_open(pb.constData(), MDB_WRITABLE);
+        if (!mdb) { std::cerr << "Cannot open writable\n"; return 1; }
+        const char* tables[] = {"Transactions", "StockTransactions", "SaleTransportationDetail", "Ledgers", "Groups", "CompanyInfo", nullptr};
+        int bad = 0;
+        for (int ti = 0; tables[ti]; ++ti) {
+            if (!onlyTable.isEmpty() && onlyTable.compare(tables[ti], Qt::CaseInsensitive) != 0) continue;
+            MdbTableDef* t = mdb_read_table_by_name(mdb, const_cast<char*>(tables[ti]), MDB_TABLE);
+            if (!t) continue;
+            mdb_read_columns(t);
+            mdb_read_indices(t);
+            Jet4Writer::Status st = Jet4Writer::UsageMapManager::ensureReferenceMaps(mdb, t);
+            std::cout << "RepairMaps " << tables[ti] << ": " << (st.ok ? "ok" : ("FAILED: " + st.error)) << "\n";
+            if (!st.ok) bad++;
+            mdb_free_tabledef(t);
+        }
+        mdb_close(mdb);
+        return bad ? 1 : 0;
+    }
+
     if (args.contains("--audit-maps")) {
         int idx = args.indexOf("--audit-maps");
         if (idx + 1 >= args.size()) {
@@ -1549,6 +1606,352 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
+    if (args.contains("--find-bad-rows")) {
+        int idx = args.indexOf("--find-bad-rows");
+        if (idx + 2 >= args.size()) {
+            std::cerr << "Error: --find-bad-rows requires <mdb_path> <table_name>\n";
+            return 1;
+        }
+        QString mdbPath = args[idx + 1], tableName = args[idx + 2];
+        QByteArray pb = QFile::encodeName(mdbPath);
+        MdbHandle* mdb = mdb_open(pb.constData(), MDB_NOFLAGS);
+        if (!mdb) { std::cerr << "Cannot open\n"; return 1; }
+        MdbTableDef* t = mdb_read_table_by_name(mdb, const_cast<char*>(tableName.toUtf8().constData()), MDB_TABLE);
+        if (!t) { std::cerr << "No table\n"; mdb_close(mdb); return 1; }
+        mdb_read_columns(t);
+        fseeko(mdb->f->stream, 0, SEEK_END);
+        int npages = (int)(ftello(mdb->f->stream) / mdb->fmt->pg_size);
+        int tpg = t->entry ? t->entry->table_pg : 0;
+        std::vector<MdbField> fb(t->num_cols ? t->num_cols : 1);
+        int bad = 0, good = 0;
+        for (int p = 0; p < npages; ++p) {
+            if (!mdb_read_pg(mdb, (unsigned)p)) continue;
+            if (mdb->pg_buf[0] != 0x01) continue;
+            if (mdb_get_int32(mdb->pg_buf, 4) != tpg) continue;
+            int nrows = mdb_get_int16(mdb->pg_buf, mdb->fmt->row_count_offset);
+            if (nrows <= 0 || nrows > 1000) continue;
+            for (int s = 0; s < nrows; ++s) {
+                int rs = 0; size_t rsz = 0;
+                if (mdb_find_row(mdb, s, &rs, &rsz) != 0 || rsz == 0) continue;
+                if (rs & 0x4000) continue;
+                if (rs & 0xC000) continue; // deleted/overflow slot
+                if (!Jet4Writer::UsageMapManager::readPage(mdb, (uint32_t)p)) continue;
+                int n = mdb_crack_row(t, rs & 0x1FFF, rsz, fb.data());
+                if (n < 0) {
+                    bad++;
+                    if (bad <= 5) {
+                        std::string hx; char hb[4];
+                        const auto* b = static_cast<const uint8_t*>(mdb->pg_buf);
+                        size_t show = std::min(rsz, (size_t)128);
+                        for (size_t bi = 0; bi < show; ++bi) { snprintf(hb, sizeof(hb), "%02x", b[(rs & 0x1FFF) + bi]); hx += hb; }
+                        std::cout << "BADROW table=" << tableName.toStdString() << " pg=" << p << " slot=" << s
+                                  << " rsz=" << rsz << " hex=" << hx << "\n";
+                    }
+                } else {
+                    good++;
+                }
+            }
+        }
+        mdb_free_tabledef(t);
+        mdb_close(mdb);
+        std::cout << "badrows=" << bad << " goodrows=" << good << "\n";
+        return 0;
+    }
+
+    if (args.contains("--fuzz-packrow")) {
+        int fx = args.indexOf("--fuzz-packrow");
+        if (fx + 1 >= args.size()) {
+            std::cerr << "Error: --fuzz-packrow requires <mdb_path> [table]\n";
+            return 1;
+        }
+        QString mdbPath = args[fx + 1];
+        QString tableName = (fx + 2 < args.size() && !args[fx + 2].startsWith("--")) ? args[fx + 2] : "Ledgers";
+        QByteArray pb = QFile::encodeName(mdbPath);
+        MdbHandle* mdb = mdb_open(pb.constData(), MDB_NOFLAGS);
+        if (!mdb) { std::cerr << "Cannot open\n"; return 1; }
+        MdbTableDef* t = mdb_read_table_by_name(mdb, const_cast<char*>(tableName.toUtf8().constData()), MDB_TABLE);
+        if (!t) { std::cerr << "No table\n"; mdb_close(mdb); return 1; }
+        mdb_read_columns(t);
+        // Deterministic sparse patterns over the table's own columns.
+        unsigned seed = 12345;
+        auto rnd = [&]() -> unsigned { seed = seed * 1103515245 + 12345; return (seed >> 16) & 0x7FFF; };
+        int fails = 0;
+        std::vector<uint8_t> scratch(64, 0xAB);
+        for (int trial = 0; trial < 3000; ++trial) {
+            std::vector<Jet4Writer::Field> fs;
+            for (unsigned i = 0; i < t->num_cols; ++i) {
+                const MdbColumn* c = Jet4Writer::ColumnEncoder::getColumn(t, (int)i);
+                if (!c) continue;
+                Jet4Writer::Field f;
+                f.colnum = (int)i;
+                // Sparse: only ~1/8 columns present; varying sizes incl. empty.
+                bool present = (rnd() % 8 == 0);
+                f.isNull = !present;
+                f.isFixed = c->is_fixed;
+                f.data = present ? scratch.data() : nullptr;
+                f.size = present ? (size_t)(rnd() % (c->col_size > 0 ? (c->col_size + 8) : 24)) : 0;
+                if (present && c->is_fixed && f.size == 0) f.size = 0;
+                fs.push_back(f);
+            }
+            std::vector<uint8_t> packed;
+            Jet4Writer::Status st = Jet4Writer::packRow(t, fs.data(), fs.size(), packed);
+            if (!st.ok) continue;
+            // Crack it back via libmdb on a scratch page.
+            if (!Jet4Writer::UsageMapManager::readPage(mdb, 1)) continue;
+            auto* buf = static_cast<unsigned char*>(mdb->pg_buf);
+            if (packed.size() + 64 > 4096) continue;
+            memcpy(buf + 2048, packed.data(), packed.size());
+            std::vector<MdbField> fb(t->num_cols ? t->num_cols : 1);
+            int n = mdb_crack_row(t, 2048, packed.size(), fb.data());
+            if (n < 0) {
+                fails++;
+                if (fails <= 3) {
+                    std::cout << "FUZZFAIL trial=" << trial << " packed=" << packed.size() << " hex=";
+                    char hb[4];
+                    for (size_t bi = 0; bi < std::min(packed.size(), (size_t)96); ++bi) {
+                        snprintf(hb, sizeof(hb), "%02x", packed[bi]);
+                        std::cout << hb;
+                    }
+                    std::cout << "\n";
+                }
+            }
+        }
+        mdb_free_tabledef(t);
+        mdb_close(mdb);
+        std::cout << "fuzz-packrow fails=" << fails << "\n";
+        return 0;
+    }
+
+    if (args.contains("--repair-table")) {
+        int idx = args.indexOf("--repair-table");
+        if (idx + 2 >= args.size()) {
+            std::cerr << "Error: --repair-table requires <mdb_path> <table_name> [code_col=3]\n";
+            return 1;
+        }
+        QString mdbPath = args[idx + 1], tableName = args[idx + 2];
+        int codeCol = (idx + 3 < args.size() && !args[idx + 3].startsWith("--")) ? args[idx + 3].toInt() : 3;
+        QByteArray pb = QFile::encodeName(mdbPath);
+        MdbHandle* mdb = mdb_open(pb.constData(), MDB_WRITABLE);
+        if (!mdb) { std::cerr << "Cannot open writable\n"; return 1; }
+        MdbTableDef* t = mdb_read_table_by_name(mdb, const_cast<char*>(tableName.toUtf8().constData()), MDB_TABLE);
+        if (!t) { std::cerr << "No table\n"; mdb_close(mdb); return 1; }
+        mdb_read_columns(t);
+        mdb_read_indices(t);
+        const int tpg = t->entry ? t->entry->table_pg : 0;
+        std::vector<MdbField> fb(t->num_cols ? t->num_cols : 1);
+        auto readSlot = [&](uint32_t pg, int slot, std::vector<MdbField>& outFb,
+                            std::vector<uint8_t>& rawBytes, int& flagsOut) -> bool {
+            if (!Jet4Writer::UsageMapManager::readPage(mdb, pg)) return false;
+            const auto* b = static_cast<const uint8_t*>(mdb->pg_buf);
+            if (b[0] != 0x01) return false;
+            if (Jet4Writer::UsageMapManager::getU32(mdb, 4) != (uint32_t)tpg) return false;
+            int nrows = Jet4Writer::UsageMapManager::getU16(mdb, mdb->fmt->row_count_offset);
+            if (slot < 0 || slot >= nrows || nrows > 1000) return false;
+            int rs = 0;
+            size_t rsz = 0;
+            if (mdb_find_row(mdb, slot, &rs, &rsz) != 0 || rsz == 0) return false;
+            flagsOut = rs & 0xC000;
+            if (flagsOut) return false;
+            if (!Jet4Writer::UsageMapManager::readPage(mdb, pg)) return false;
+            if (mdb_crack_row(t, rs & 0x1FFF, rsz, outFb.data()) < 0) return false;
+            const auto* b2 = static_cast<const uint8_t*>(mdb->pg_buf);
+            rawBytes.assign(b2 + (rs & 0x1FFF), b2 + (rs & 0x1FFF) + rsz);
+            return true;
+        };
+        int erasedRefs = 0, retired = 0;
+        // Pass 0: erase index refs that do not resolve to a live crackable row
+        // of this table (dangling rowIds, flagged slots, uncrackable rows).
+        // Also erase byte-identical duplicate entries (same key+row twice).
+        if (t->indices) {
+            for (unsigned ii = 0; ii < t->indices->len; ++ii) {
+                MdbIndex* mIdx = (MdbIndex*)g_ptr_array_index(t->indices, ii);
+                if (!mIdx || mIdx->first_pg == 0 || mIdx->index_type == 2) continue;
+                std::vector<Jet4Writer::IndexEntryInfo> entries;
+                if (!Jet4Writer::BTreeEngine::walkIndex(mdb, t, mIdx, entries).ok) continue;
+                std::set<std::vector<uint8_t>> seen;
+                for (auto& e : entries) {
+                    std::vector<MdbField> probe(t->num_cols ? t->num_cols : 1);
+                    std::vector<uint8_t> raw;
+                    int fl = 0;
+                    std::vector<uint8_t> full = e.fullKey;
+                    uint32_t pgRow = (e.dataPg << 8) | (e.rowIdx & 0xFF);
+                    full.push_back((pgRow >> 24) & 0xFF); full.push_back((pgRow >> 16) & 0xFF);
+                    full.push_back((pgRow >> 8) & 0xFF); full.push_back(pgRow & 0xFF);
+                    if (!seen.insert(full).second) {
+                        // Byte-identical duplicate: erase this extra copy.
+                        if (Jet4Writer::BTreeEngine::eraseEntry(mdb, t, mIdx, full.data(), full.size()).ok)
+                            erasedRefs++;
+                        continue;
+                    }
+                    // Row resolves: rebuild its key and drop the entry if stale.
+                    // (Empty-but-not-null fields keep isNull=false with a
+                    // null data pointer: collapsing "" to NULL would forge
+                    // false "stale" verdicts on native 7F0100 keys.)
+                    {
+                        std::vector<Jet4Writer::Field> fs;
+                        for (unsigned i = 0; i < t->num_cols; ++i) {
+                            const MdbColumn* cc = Jet4Writer::ColumnEncoder::getColumn(t, (int)i);
+                            Jet4Writer::Field ff;
+                            ff.colnum = (int)i;
+                            ff.isNull = probe[i].is_null != 0;
+                            ff.isFixed = cc ? cc->is_fixed != 0 : true;
+                            ff.data = (!ff.isNull && probe[i].value && probe[i].siz > 0)
+                                ? (const uint8_t*)probe[i].value : nullptr;
+                            ff.size = (!ff.isNull && probe[i].value && probe[i].siz > 0)
+                                ? (size_t)probe[i].siz : 0;
+                            fs.push_back(ff);
+                        }
+                        std::vector<uint8_t> want;
+                        if (Jet4Writer::BTreeEngine::buildEntry(t, mIdx, fs.data(), fs.size(),
+                                                               e.dataPg, (uint16_t)(e.rowIdx + 1), want).ok &&
+                            want != full) {
+                            // Stale entry (row changed without index upkeep):
+                            // replace with the current key (insert only if
+                            // the current key is not already indexed).
+                            bool have = false;
+                            {
+                                std::vector<uint32_t> anc;
+                                std::string derr;
+                                uint32_t lp = Jet4Writer::BTreeEngine::findLeaf(
+                                    mdb, mIdx, want.data(), want.size(), anc, derr);
+                                if (lp && Jet4Writer::UsageMapManager::readPage(mdb, lp)) {
+                                    Jet4Writer::DecodedPage dp;
+                                    std::string derr2;
+                                    if (Jet4Writer::BTreeEngine::decodeEntries(mdb, dp, derr2)) {
+                                        for (auto& ee : dp.full) {
+                                            if (ee == want) { have = true; break; }
+                                        }
+                                    }
+                                }
+                            }
+                            if (Jet4Writer::BTreeEngine::eraseEntry(mdb, t, mIdx, full.data(), full.size()).ok)
+                                erasedRefs++;
+                            if (!have) {
+                                std::string ierr;
+                                if (Jet4Writer::updateIndex(t, mIdx, fs.data(), fs.size(),
+                                                           e.dataPg, (uint16_t)(e.rowIdx + 1), ierr) > 0)
+                                    erasedRefs--;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // Pass 1: group live rows by code column; keep exactly one per code
+        // (prefer unflagged, then richest, then lowest page/slot); tombstone
+        // (0xC000) + erase refs for the rest.
+        {
+            fseeko(mdb->f->stream, 0, SEEK_END);
+            int npages = (int)(ftello(mdb->f->stream) / mdb->fmt->pg_size);
+            struct Row { uint32_t pg; int slot; int richness; bool live; };
+            std::map<int, std::vector<Row>> byCode;
+                for (int p = 0; p < npages; ++p) {
+                    if (!Jet4Writer::UsageMapManager::readPage(mdb, (uint32_t)p)) continue;
+                    const auto* b = static_cast<const uint8_t*>(mdb->pg_buf);
+                    if (b[0] != 0x01) continue;
+                    if (Jet4Writer::UsageMapManager::getU32(mdb, 4) != (uint32_t)tpg) continue;
+                    int nrows = Jet4Writer::UsageMapManager::getU16(mdb, mdb->fmt->row_count_offset);
+                    if (nrows <= 0 || nrows > 1000) continue;
+                    for (int s = 0; s < nrows; ++s) {
+                        int rs = 0;
+                        size_t rsz = 0;
+                        if (mdb_find_row(mdb, s, &rs, &rsz) != 0 || rsz == 0) continue;
+                        // Include 0x8000-flagged rows in grouping (libmdb still
+                        // shows them; Jackcess hides them). Only 0x4000-only
+                        // overflow fragments are ungroupable. Unflagged wins.
+                        if (rs & 0x4000) continue;
+                        bool live = !(rs & 0xC000);
+                        if (!Jet4Writer::UsageMapManager::readPage(mdb, (uint32_t)p)) continue;
+                        if (mdb_crack_row(t, rs & 0x1FFF, rsz, fb.data()) < 0) continue;
+                        if (codeCol < 0 || codeCol >= (int)t->num_cols) continue;
+                        if (fb[(size_t)codeCol].is_null || !fb[(size_t)codeCol].value || fb[(size_t)codeCol].siz != 2)
+                            continue;
+                        const auto* vb = static_cast<const uint8_t*>(fb[(size_t)codeCol].value);
+                        int code = (int)vb[0] | ((int)vb[1] << 8);
+                        int rich = 0;
+                        for (unsigned i = 0; i < t->num_cols; ++i)
+                            if (!fb[i].is_null) rich++;
+                        byCode[code].push_back(Row{(uint32_t)p, s, rich, live});
+                    }
+                }
+            for (auto& kv : byCode) {
+                if (kv.second.size() < 2) continue;
+                auto& v = kv.second;
+                std::sort(v.begin(), v.end(), [](const Row& a, const Row& b) {
+                    if (a.live != b.live) return a.live > b.live;
+                    if (a.richness != b.richness) return a.richness > b.richness;
+                    if (a.pg != b.pg) return a.pg < b.pg;
+                    return a.slot < b.slot;
+                });
+                for (size_t i = 1; i < v.size(); ++i) {
+                    if (t->indices) {
+                        for (unsigned ii = 0; ii < t->indices->len; ++ii) {
+                            MdbIndex* m2 = (MdbIndex*)g_ptr_array_index(t->indices, ii);
+                            if (!m2 || m2->first_pg == 0 || m2->index_type == 2) continue;
+                            int rem = 0;
+                            Jet4Writer::BTreeEngine::eraseRowRefs(mdb, t, m2, v[i].pg, (uint16_t)v[i].slot, rem);
+                        }
+                    }
+                    if (Jet4Writer::UsageMapManager::readPage(mdb, v[i].pg)) {
+                        auto* wb = static_cast<uint8_t*>(mdb->pg_buf);
+                        int off = mdb->fmt->row_count_offset + 2 + v[i].slot * 2;
+                        int raw = Jet4Writer::UsageMapManager::getU16(mdb, off);
+                        uint16_t nv = (uint16_t)(raw | 0xC000);
+                        wb[off] = static_cast<uint8_t>(nv & 0xFF);
+                        wb[off + 1] = static_cast<uint8_t>((nv >> 8) & 0xFF);
+                        if (Jet4Writer::UsageMapManager::writePage(mdb, v[i].pg)) retired++;
+                    }
+                }
+            }
+        }
+        // Pass 2: recount table + index cardinalities to walked/crackable truth.
+        {
+            int crackable = 0;
+            fseeko(mdb->f->stream, 0, SEEK_END);
+            int npages = (int)(ftello(mdb->f->stream) / mdb->fmt->pg_size);
+            for (int p = 0; p < npages; ++p) {
+                if (!Jet4Writer::UsageMapManager::readPage(mdb, (uint32_t)p)) continue;
+                const auto* b = static_cast<const uint8_t*>(mdb->pg_buf);
+                if (b[0] != 0x01) continue;
+                if (Jet4Writer::UsageMapManager::getU32(mdb, 4) != (uint32_t)tpg) continue;
+                int nrows = Jet4Writer::UsageMapManager::getU16(mdb, mdb->fmt->row_count_offset);
+                if (nrows <= 0 || nrows > 1000) continue;
+                for (int s = 0; s < nrows; ++s) {
+                    int rs = 0;
+                    size_t rsz = 0;
+                    if (mdb_find_row(mdb, s, &rs, &rsz) != 0 || rsz == 0) continue;
+                    if (rs & 0xC000) continue;
+                    if (!Jet4Writer::UsageMapManager::readPage(mdb, (uint32_t)p)) continue;
+                    if (mdb_crack_row(t, rs & 0x1FFF, rsz, fb.data()) >= 0) crackable++;
+                }
+            }
+            t->num_rows = crackable;
+            if (Jet4Writer::UsageMapManager::readPage(mdb, (uint32_t)tpg)) {
+                mdb_put_int32(mdb->pg_buf, mdb->fmt->tab_num_rows_offset, (guint32)crackable);
+                Jet4Writer::UsageMapManager::writePage(mdb, (uint32_t)tpg);
+            }
+            if (t->indices) {
+                for (unsigned ii = 0; ii < t->indices->len; ++ii) {
+                    MdbIndex* mIdx = (MdbIndex*)g_ptr_array_index(t->indices, ii);
+                    if (!mIdx || mIdx->first_pg == 0 || mIdx->index_type == 2) continue;
+                    std::vector<Jet4Writer::IndexEntryInfo> es;
+                    if (!Jet4Writer::BTreeEngine::walkIndex(mdb, t, mIdx, es).ok) continue;
+                    mIdx->num_rows = (int)es.size();
+                    if (Jet4Writer::UsageMapManager::readPage(mdb, (uint32_t)tpg)) {
+                        const int off = mdb->fmt->tab_cols_start_offset +
+                                        mIdx->index_num * mdb->fmt->tab_ridx_entry_size;
+                        mdb_put_int32(mdb->pg_buf, off, (guint32)es.size());
+                        Jet4Writer::UsageMapManager::writePage(mdb, (uint32_t)tpg);
+                    }
+                }
+            }
+        }
+        mdb_free_tabledef(t);
+        mdb_close(mdb);
+        std::cout << "repair-table: erasedRefs=" << erasedRefs << " retired=" << retired << "\n";
+        return 0;
+    }
+
     if (args.contains("--find-key")) {
         int idx = args.indexOf("--find-key");
         if (idx + 5 >= args.size()) {
@@ -1574,7 +1977,7 @@ int main(int argc, char* argv[]) {
         int rs = 0; size_t rsz = 0;
         if (mdb_find_row(mdb, slot, &rs, &rsz) != 0) return 1;
         std::vector<MdbField> fb(t->num_cols);
-        if (mdb_crack_row(t, rs & 0x0FFF, rsz, fb.data()) < 0) return 1;
+        if (mdb_crack_row(t, rs & 0x1FFF, rsz, fb.data()) < 0) return 1;
         std::vector<Jet4Writer::Field> fs;
         for (unsigned i = 0; i < t->num_cols; ++i) {
             Jet4Writer::Field f; f.colnum = (int)i; f.isNull = fb[i].is_null != 0;

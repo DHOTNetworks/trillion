@@ -1,4 +1,7 @@
 #include "bahi_khata_exporter.h"
+#include "jet4_usage_map.h"
+#include "jet4_writer.h"
+#include <cstdio>
 #include "../database_manager.h"
 #include "fiscal_year_helper.h"
 #include <QCoreApplication>
@@ -63,6 +66,42 @@ static double toOleDate(const QString& dateStr) {
     if (!d.isValid()) return 0.0;
     QDate base(1899, 12, 30);
     return static_cast<double>(base.daysTo(d));
+}
+
+/* ---- TableSnapshot field decoders (owned bytes, no pg_buf) ----
+ * Byte-identical semantics to the old fetch-based signature scans they
+ * replace (same defaults, same date math, same text fallbacks). Snapshot
+ * enumeration is brute-force over data pages: map-driven scans can miss
+ * pages after map churn, and every miss reinserts an existing voucher leg
+ * as a duplicate on the next export. */
+static int snapInt16(const Jet4Writer::Field& f) {
+    if (f.isNull || !f.data || f.size < 2) return 0;
+    return (int)f.data[0] | ((int)f.data[1] << 8);
+}
+static int snapInt32(const Jet4Writer::Field& f) {
+    if (f.isNull || !f.data || f.size < 4) return 0;
+    return (int)f.data[0] | ((int)f.data[1] << 8) |
+           ((int)f.data[2] << 16) | ((int)f.data[3] << 24);
+}
+static double snapDouble(const Jet4Writer::Field& f) {
+    if (f.isNull || !f.data || f.size < 8) return 0.0;
+    double v = 0.0;
+    memcpy(&v, f.data, 8);
+    return v;
+}
+static QString snapJetText(const Jet4Writer::Field& f) {
+    return Jet4Writer::decodeJet4QString(f);
+}
+static QString snapJetDate(const Jet4Writer::Field& f) {
+    if (f.isNull || !f.data || f.size < 8) return QString();
+    double oleDays = snapDouble(f);
+    QDate qd = QDate(1899, 12, 30).addDays(static_cast<qint64>(oleDays));
+    return qd.toString("yyyy-MM-dd");
+}
+static QString snapDrCr(const Jet4Writer::Field& f) {
+    QString s = snapJetText(f).trimmed();
+    if (s.startsWith("C", Qt::CaseInsensitive)) return "Cr";
+    return "Dr";
 }
 
 /* Native Jet honors the per-column UnicodeCompression property.
@@ -252,132 +291,65 @@ static QString formatJetBalance(double signedVal, const QString& zeroSideFallbac
     return QString("%1 %2").arg(num, side);
 }
 
-/* Surgically replaces one data row: same-size edits overwrite in place;
- * growing/shrinking rows shift only the contiguous block at/below them,
- * preserving offset order, flag bits, gaps and every other byte.
- * (mdb_replace_row rebuilds whole pages; this keeps the structural delta
- * minimal for Jet compatibility.) Returns false on any validation failure. */
-static bool surgicalReplaceRow(MdbHandle* mdb, MdbTableDef* tbl, int rowIdx0,
-                               const unsigned char* newRow, int newSize) {
-    if (!mdb || !tbl || !tbl->entry || !newRow || newSize <= 0 || newSize > 4000)
-        return false;
-    const int pgSize = mdb->fmt->pg_size;
-    const int rco = mdb->fmt->row_count_offset;
-    unsigned char* buf = (unsigned char*)mdb->pg_buf;
-    int nrows = mdb_get_int16(buf, rco);
-    if (rowIdx0 < 0 || rowIdx0 >= nrows) return false;
-    std::vector<int> offs(nrows), flags(nrows);
-    for (int i = 0; i < nrows; i++) {
-        int raw = mdb_get_int16(buf, rco + 2 + i * 2);
-        offs[i] = raw & 0x0FFF;
-        flags[i] = raw & ~0x0FFF;
-        if (offs[i] < rco + 2 + nrows * 2 || offs[i] > pgSize) return false;
-    }
-    int oldStart = offs[rowIdx0];
-    // Old size = next higher offset - own (page end if highest).
-    int oldEnd = pgSize;
-    for (int o : offs) if (o > oldStart && o < oldEnd) oldEnd = o;
-    int oldSize = oldEnd - oldStart;
-    // Shared storage (duplicate offsets, e.g. native triplet slots) cannot be
-    // resized per-slot: only allow in-place (delta==0) updates there.
-    int sharers = 0;
-    for (int o : offs) if (o == oldStart) sharers++;
-    if (oldSize <= 0 || oldSize > 4000) return false;
-    int delta = newSize - oldSize;
-    if (sharers > 1 && delta != 0) return false; // shared storage: in-place only
-    int freeNow = mdb_get_int16(buf, 2);
-    if (delta > freeNow) return false; // not enough room
-
-    if (delta == 0) {
-        memcpy(buf + oldStart, newRow, newSize);
-    } else if (delta > 0) {
-        // Growth: move span [spanLo, oldEnd) DOWN by delta into free space.
-        // Target lands at oldStart - delta and ends exactly at oldEnd.
-        int spanLo = oldStart;
-        for (int o : offs) if (o < spanLo) spanLo = o;
-        if (spanLo - delta < rco + 2 + nrows * 2) return false;
-        memmove(buf + spanLo - delta, buf + spanLo, oldEnd - spanLo);
-        int newStart = oldStart - delta;
-        memcpy(buf + newStart, newRow, newSize);
-        for (int i = 0; i < nrows; i++) {
-            if (offs[i] >= spanLo && offs[i] < oldEnd) {
-                int noff = offs[i] - delta;
-                if (noff < rco + 2 + nrows * 2 || noff > pgSize) return false;
-                mdb_put_int16(buf, rco + 2 + i * 2, (guint32)(noff | flags[i]));
-            }
-        }
-    } else {
-        // Shrink: overwrite in place; the freed tail becomes a zeroed interior
-        // gap (exactly like post-delete state: offsets and free count stay).
-        int k = -delta;
-        memcpy(buf + oldStart, newRow, newSize);
-        memset(buf + oldStart + newSize, 0, (size_t)k);
-    }
-    if (delta != 0) {
-        // Exact free-space recompute (native semantics).
-        int minStart = pgSize;
-        for (int i = 0; i < nrows; i++) {
-            int o = mdb_get_int16(buf, rco + 2 + i * 2) & 0x0FFF;
-            if (o < minStart) minStart = o;
-        }
-        mdb_put_int16(buf, 2, (guint32)(minStart - (rco + 2 + nrows * 2)));
-    }
-    return mdb_write_pg(mdb, tbl->cur_phys_pg) != 0;
-}
-
 static void finalizeJet4Table(MdbHandle* mdb, MdbTableDef* table);
 
 /* Applies signed deltas (Dr-positive) to cached CurrentBalance of all
- * modified ledgers in a single pass over the Ledgers table. Mirrors the app's voucher-save. */
+ * modified ledgers in a single snapshot-driven pass over the Ledgers table.
+ * Mirrors the app's voucher-save. Snapshot ownership (not a fetch cursor)
+ * is required: reindexRowData page I/O clobbers pg_buf/cursor state. */
 static bool applyLedgerBalanceDeltas(MdbHandle* mdb, const QMap<int, double>& balDeltas) {
     if (!mdb || balDeltas.isEmpty()) return true;
     MdbTableDef* tbl = mdb_read_table_by_name(mdb, (char*)"Ledgers", MDB_TABLE);
     if (!tbl) return false;
     mdb_read_columns(tbl);
-    mdb_rewind_table(tbl);
+    mdb_read_indices(tbl);
+    std::vector<Jet4Writer::RowSnapshot> balSnap;
+    if (!Jet4Writer::TableSnapshot::snapshot(mdb, tbl, balSnap).ok) {
+        mdb_free_tabledef(tbl);
+        return false;
+    }
+    auto balanceOf = [&](const Jet4Writer::RowSnapshot& r) -> QString {
+        if (r.fields.size() <= 16) return QString();
+        return Jet4Writer::decodeJet4QString(r.fields[16]);
+    };
     int updatedCount = 0;
-    while (mdb_fetch_row(tbl)) {
-        MdbColumn* colCode = (MdbColumn*)g_ptr_array_index(tbl->columns, 3);
-        int code = 0;
-        if (colCode->cur_value_len == 2)
-            code = mdb_get_int16(mdb->pg_buf, colCode->cur_value_start);
-        else {
-            char* s = mdb_col_to_string(mdb, mdb->pg_buf, colCode->cur_value_start,
-                                        colCode->col_type, colCode->cur_value_len);
-            if (s) { code = atoi(s); g_free(s); }
-        }
+    for (auto& r : balSnap) {
+        if (r.flags & 0xC000) continue;
+        if (!r.cracked || r.fields.size() <= 16) continue;
+        const auto& cf = r.fields[3];
+        if (cf.isNull || !cf.data || cf.size != 2) continue;
+        int code = (int)cf.data[0] | ((int)cf.data[1] << 8);
         auto it = balDeltas.constFind(code);
         if (it == balDeltas.constEnd() || std::abs(it.value()) < 0.0005) continue;
         double delta = it.value();
 
-        int rowStart = 0;
-        size_t rowSize = 0;
-        mdb_find_row(mdb, tbl->cur_row - 1, &rowStart, &rowSize);
-        rowStart &= 0x0FFF;
-        MdbField fields[128];
-        memset(fields, 0, sizeof(fields));
-        if (mdb_crack_row(tbl, rowStart, rowSize, fields) < 0) continue;
-
-        MdbColumn* colBal = (MdbColumn*)g_ptr_array_index(tbl->columns, 16);
-        char* curStr = mdb_col_to_string(mdb, mdb->pg_buf, colBal->cur_value_start,
-                                         colBal->col_type, colBal->cur_value_len);
-        QString oldText = curStr ? QString::fromUtf8(curStr) : QString();
-        if (curStr) g_free(curStr);
+        QString oldText = balanceOf(r);
         QString side;
         double cur = parseJetBalance(oldText, side);
         double updated = round2dbl(cur + delta);
         QString newText = formatJetBalance(updated, side);
+        MdbColumn* colBal = (MdbColumn*)g_ptr_array_index(tbl->columns, 16);
         QByteArray newBytes = toJet4TextForCol(newText, colBal);
-        static const char kEmpty = '\0';
-        fields[16].is_null = 0;
-        fields[16].value = newBytes.isEmpty() ? (void*)&kEmpty : (void*)newBytes.data();
-        fields[16].siz = newBytes.size();
 
-        unsigned char rowBuf[4096];
-        int newSize = mdb_pack_row(tbl, rowBuf, tbl->num_cols, fields);
-        if (newSize <= 0 || newSize > 4000) continue;
-        if (surgicalReplaceRow(mdb, tbl, tbl->cur_row - 1, rowBuf, newSize)) {
+        // Safe update: erase old index entries, rebuild the data page
+        // canonically, insert new index entries (no in-place row surgery).
+        // jfs aliases snapshot-owned buffers (kept alive); CB override is
+        // deep-copied inside reindexRowData.
+        std::vector<Jet4Writer::Field> jfs = r.fields;
+        {
+            Jet4Writer::Field& jf = jfs[16];
+            jf.isNull = false;
+            jf.isFixed = colBal ? colBal->is_fixed != 0 : false;
+            static const uint8_t kEmptyByte = 0;
+            jf.data = newBytes.isEmpty() ? &kEmptyByte : (const uint8_t*)newBytes.data();
+            jf.size = (size_t)newBytes.size();
+        }
+        std::string rerr;
+        if (Jet4Writer::reindexRowData(tbl, jfs.data(), jfs.size(),
+                                      r.pg, (uint16_t)(r.slot + 1), rerr)) {
             updatedCount++;
+        } else {
+            fprintf(stderr, "[BAL] !!! reindex failed code %d: %s\n", code, rerr.c_str());
         }
     }
     finalizeJet4Table(mdb, tbl);
@@ -388,23 +360,14 @@ static bool applyLedgerBalanceDeltas(MdbHandle* mdb, const QMap<int, double>& ba
 
 static bool insertJet4Row(MdbHandle* mdb, MdbTableDef* table, MdbField* fields, int num_fields) {
     Q_UNUSED(mdb);
-    return mdb_insert_row(table, num_fields, fields) != 0;
+    return jet4_insert_row(table, fields, static_cast<unsigned>(num_fields)) != 0;
 }
 
 static void finalizeJet4Table(MdbHandle* mdb, MdbTableDef* table) {
-    if (!mdb || !table || !table->entry) return;
-    mdb_read_pg(mdb, table->entry->table_pg);
-    mdb_put_int32(mdb->pg_buf, mdb->fmt->tab_num_rows_offset, table->num_rows);
-    if (table->indices) {
-        for (guint i = 0; i < table->indices->len; i++) {
-            MdbIndex *pidx = (MdbIndex *)g_ptr_array_index(table->indices, i);
-            if (pidx->index_type != 2) {
-                int off = mdb->fmt->tab_cols_start_offset + (pidx->index_num * mdb->fmt->tab_ridx_entry_size);
-                mdb_put_int32(mdb->pg_buf, off, pidx->num_rows);
-            }
-        }
-    }
-    mdb_write_pg(mdb, table->entry->table_pg);
+    // Delegate to the self-sufficient engine helper: bypassed page I/O
+    // (mdb_read_pg serves the stale pg_buf cache when cur_pg matches, so a
+    // direct poke here can persist pre-update bytes over fresh index work).
+    Jet4Writer::finalizeTable(mdb, table);
 }
 
 struct BahiKhataJournalTx {
@@ -517,7 +480,7 @@ static bool insertBahiKhataJournalTx(MdbHandle* mdb, MdbTableDef* txTbl, const B
     fields[76].is_null = 0; fields[76].value = &zeroDbl; fields[76].siz = 8;// tmpSlipNo
     fields[78].is_null = 0; fields[78].value = &zeroDbl; fields[78].siz = 8;// RunningBNo
 
-    return mdb_insert_row(txTbl, txTbl->num_cols, fields.data()) != 0;
+    return insertJet4Row(mdb, txTbl, fields.data(), txTbl->num_cols);
 }
 
 /* ================= Sale / Purchase voucher support =================
@@ -1035,7 +998,7 @@ static bool insertSalePurcLeg(MdbHandle* mdb, MdbTableDef* txTbl, const SalePurc
     double runB = isSale ? (double)L.invSeq : 0.0;
     fields[78].is_null = 0; fields[78].value = &runB; fields[78].siz = 8; // RunningBNo
 
-    return mdb_insert_row(txTbl, txTbl->num_cols, fields.data()) != 0;
+    return insertJet4Row(mdb, txTbl, fields.data(), txTbl->num_cols);
 }
 
 /* Cash-bank family leg (ChPt/ChRt/Pymt/Rcpt): Journal base minus per-type
@@ -1122,7 +1085,7 @@ static bool insertCashLeg(MdbHandle* mdb, MdbTableDef* txTbl, const BahiKhataJou
     fields[76].is_null = 0; fields[76].value = &zeroDbl; fields[76].siz = 8;
     if (kind == "Rcpt") setEmpty(77); // LtNo ""
     fields[78].is_null = 0; fields[78].value = &zeroDbl; fields[78].siz = 8;
-    return mdb_insert_row(txTbl, txTbl->num_cols, fields.data()) != 0;
+    return insertJet4Row(mdb, txTbl, fields.data(), txTbl->num_cols);
 }
 
 /* StockTransactions item lines for one Sale/Purc voucher. */
@@ -1829,6 +1792,25 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
 
     auto& appDb = DatabaseManager::instance();
 
+    // 0a. Ensure reference usage maps (one-time migration per file).
+    // Inline maps address only 512 pages; files grown past that lose map
+    // visibility for new pages (table scans miss rows) until promoted.
+    // Reference maps are permanent, so this is cheap and idempotent.
+    {
+        const char* mapTables[] = {"Transactions", "StockTransactions", "SaleTransportationDetail",
+                                   "Ledgers", "Groups", "CompanyInfo", nullptr};
+        for (int ti = 0; mapTables[ti]; ++ti) {
+            MdbTableDef* mt = mdb_read_table_by_name(mdb, const_cast<char*>(mapTables[ti]), MDB_TABLE);
+            if (!mt) continue;
+            mdb_read_columns(mt);
+            mdb_read_indices(mt);
+            Jet4Writer::Status mst = Jet4Writer::UsageMapManager::ensureReferenceMaps(mdb, mt);
+            if (!mst.ok)
+                std::cout << "[EXPORT] maps " << mapTables[ti] << ": " << mst.error << std::endl;
+            mdb_free_tabledef(mt);
+        }
+    }
+
     // 0. Sync CompanyInfo
     updateProgress(20, "Updating CompanyInfo in Jet 4 database...");
     MdbTableDef* compTbl = mdb_read_table_by_name(mdb, (char*)"CompanyInfo", MDB_TABLE);
@@ -1871,20 +1853,24 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
             }
             double dBooks = toOleDate(booksIso);
 
-            // Cache existing AccYearFrom values to avoid duplicates
+            // Cache existing AccYearFrom values to avoid duplicates.
+            // Snapshot-driven (brute force, owned buffers): the fetch cursor
+            // aliases pg_buf, which later inserts legitimately clobber.
             std::set<long long> existingFromDays;
             {
-                MdbColumn* colFrom = nullptr;
-                for (int i = 0; i < compTbl->num_cols; i++) {
-                    MdbColumn* col = (MdbColumn*)g_ptr_array_index(compTbl->columns, i);
-                    if (QString::fromLatin1(col->name) == "AccYearFrom") { colFrom = col; break; }
-                }
-                if (colFrom && colFrom->col_type == MDB_DATETIME) {
-                    mdb_rewind_table(compTbl);
-                    while (mdb_fetch_row(compTbl)) {
-                        if (colFrom->cur_value_len == sizeof(double)) {
-                            double rowFrom = mdb_get_double(mdb->pg_buf, colFrom->cur_value_start);
-                            existingFromDays.insert((long long)llround(rowFrom));
+                std::vector<Jet4Writer::RowSnapshot> compSnap;
+                if (Jet4Writer::TableSnapshot::snapshot(mdb, compTbl, compSnap).ok) {
+                    for (auto& r : compSnap) {
+                        if (!r.cracked || (r.flags & 0x8000)) continue;
+                        for (auto& f : r.fields) {
+                            const MdbColumn* cc = (const MdbColumn*)g_ptr_array_index(
+                                compTbl->columns, f.colnum);
+                            if (strcmp(cc->name, "AccYearFrom") != 0) continue;
+                            if (!f.isNull && f.data && f.size == sizeof(double)) {
+                                double rowFrom;
+                                memcpy(&rowFrom, f.data, sizeof(double));
+                                existingFromDays.insert((long long)llround(rowFrom));
+                            }
                         }
                     }
                 }
@@ -1923,6 +1909,7 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
                 QByteArray b3Bytes = toJet4TextForCol(QString("IFSC:- %1").arg(c.value("ifsc_code", "CNRB0002058").toString()).left(50), compCol("Bank3"));
                 QByteArray firmTypeBytes = toJet4TextForCol("Partnership Firm", compCol("FirmType"));
                 guint32 syncVal = 1;
+                guint32 zero32 = 0;
                 guint16 zero16 = 0;
 
                 // Reset fields
@@ -1948,10 +1935,22 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
                     else if (cname == "AccYearFrom") { fields[i].is_null = 0; fields[i].value = &dFrom; fields[i].siz = 8; }
                     else if (cname == "AccYearTo") { fields[i].is_null = 0; fields[i].value = &dTo; fields[i].siz = 8; }
                     else if (cname == "BooksBeginingFrom") { fields[i].is_null = 0; fields[i].value = &dBooks; fields[i].siz = 8; }
-                    else if (cname == "CompositionScheme") { fields[i].is_null = 0; fields[i].value = &zero16; fields[i].siz = 2; }
+                    else if (cname == "CompositionScheme") { fields[i].is_null = 0; fields[i].value = &zero32; fields[i].siz = 4; }
                     else if (cname == "SyncEnabled") { fields[i].is_null = 0; fields[i].value = &syncVal; fields[i].siz = 4; }
                 }
-                insertJet4Row(mdb, compTbl, fields, compTbl->num_cols);
+                QByteArray emptyText = toJet4Text("");
+                for (int i = 0; i < compTbl->num_cols; i++) {
+                    MdbColumn* col = (MdbColumn*)g_ptr_array_index(compTbl->columns, i);
+                    if (!col->is_fixed && fields[i].is_null) {
+                        fields[i].is_null = 0; fields[i].value = emptyText.data(); fields[i].siz = emptyText.size();
+                    }
+                }
+                if (!insertJet4Row(mdb, compTbl, fields, compTbl->num_cols)) {
+                    fprintf(stderr, "[COMPANY] !!! insert failed for FY %s\n",
+                            fyStart.toStdString().c_str());
+                    std::cout << "[COMPANY] !!! insert failed for FY "
+                              << fyStart.toStdString() << std::endl;
+                }
                 existingFromDays.insert(key);
             }
         }
@@ -1974,25 +1973,25 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
         }
 
         std::set<int> existingGroupCodes;
-        mdb_rewind_table(grpTbl);
-        MdbColumn* colC1 = (MdbColumn*)g_ptr_array_index(grpTbl->columns, 1);
-
-        while (mdb_fetch_row(grpTbl)) {
-            char* cStr = mdb_col_to_string(mdb, mdb->pg_buf, colC1->cur_value_start, colC1->col_type, colC1->cur_value_len);
-            if (cStr) {
-                int c1 = atoi(cStr);
-                g_free(cStr);
-                existingGroupCodes.insert(c1);
-
-                auto it = grpMap.find(c1);
-                if (it != grpMap.end()) {
+        // Snapshot-driven existence (brute force, owned buffers): a
+        // map-driven scan can miss pages, reinserting existing groups as
+        // duplicates with WRONG hierarchy codes (the B/S gap class).
+        {
+            std::vector<Jet4Writer::RowSnapshot> grpSnap;
+            if (Jet4Writer::TableSnapshot::snapshot(mdb, grpTbl, grpSnap).ok) {
+                for (auto& r : grpSnap) {
+                    if (!r.cracked || (r.flags & 0x8000)) continue;
+                    if (r.fields.size() <= 1) continue;
+                    const auto& f = r.fields[1];
+                    if (f.isNull || !f.data || f.size != 2) continue;
+                    int16_t c1 = (int16_t)(static_cast<uint16_t>(f.data[0]) | (static_cast<uint16_t>(f.data[1]) << 8));
+                    existingGroupCodes.insert((int)c1);
                     // NEVER overwrite hierarchy codes of existing groups.
                     // Native Bahi-Khata keeps custom groups top-level
                     // (Code2nd=Code3rd=Code4th=0); nesting them under sqlite's
                     // hierarchy silently drops those groups from Bahi-Khata's
                     // balance-sheet grand total (exact 12,415,550.00 gap).
                     // New groups are still inserted with sqlite codes below.
-                    (void)it;
                 }
             }
         }
@@ -2049,11 +2048,36 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
         mdb_read_indices(ledgersTbl);
 
         std::map<int, int> ledgerCodeToPhysPg;
-        mdb_rewind_table(ledgersTbl);
-        MdbColumn* colCode = (MdbColumn*)g_ptr_array_index(ledgersTbl->columns, 3);
-        MdbColumn* colGroup = (MdbColumn*)g_ptr_array_index(ledgersTbl->columns, 4);
-        MdbColumn* colOpBal = (MdbColumn*)g_ptr_array_index(ledgersTbl->columns, 6);
-        MdbColumn* colSalary = (MdbColumn*)g_ptr_array_index(ledgersTbl->columns, 19);
+        // Snapshot enumeration (brute force, owned buffers): map-driven
+        // table scans can miss pages after map churn, reinserting existing
+        // ledgers as duplicates. Snapshot sees every row deterministically.
+        // The snapshot is kept alive for the whole sync: update loop below
+        // reads ONLY from owned snapshot buffers, never from a fetch cursor
+        // (page I/O inside reindexRowData legitimately clobbers pg_buf and
+        // cursor state, so a fetch-based update loop skips rows and regrows
+        // duplicates across exports).
+        std::vector<Jet4Writer::RowSnapshot> ledgerSnap;
+        {
+            Jet4Writer::Status sst = Jet4Writer::TableSnapshot::snapshot(mdb, ledgersTbl, ledgerSnap);
+            if (!sst.ok) {
+                summary.success = false;
+                summary.errorMessage = QString("Ledger snapshot failed: %1").arg(sst.error.c_str());
+                return summary;
+            }
+            for (auto& r : ledgerSnap) {
+                if (!r.cracked || (r.flags & 0x8000)) continue;
+                if (r.fields.size() <= 3) continue;
+                const auto& f = r.fields[3];
+                if (f.isNull || !f.data || f.size != 2) continue;
+                int16_t c = (int16_t)(static_cast<uint16_t>(f.data[0]) | (static_cast<uint16_t>(f.data[1]) << 8));
+                if (ledgerCodeToPhysPg.find(c) == ledgerCodeToPhysPg.end())
+                    ledgerCodeToPhysPg[c] = (int)r.pg;
+                else if (std::getenv("JET4_DEBUG")) {
+                    fprintf(stderr, "[LEDGER] duplicate code %d at pg=%u slot=%d\n",
+                            c, r.pg, r.slot);
+                }
+            }
+        }
 
         // In-place updates for existing ledgers
         QVariantList partyRows = appDb.executeQuery(
@@ -2077,59 +2101,67 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
             MdbTableDef* grpTbl = mdb_read_table_by_name(mdb, (char*)"Groups", MDB_TABLE);
             if (grpTbl) {
                 mdb_read_columns(grpTbl);
-                MdbColumn* gc = (MdbColumn*)g_ptr_array_index(grpTbl->columns, 1);
-                mdb_rewind_table(grpTbl);
-                std::vector<char> gb(64);
-                mdb_bind_column(grpTbl, 2, gb.data(), nullptr);
-                while (mdb_fetch_row(grpTbl)) validGroupCodes.insert(atoi(gb.data()));
-                (void)gc;
+                std::vector<Jet4Writer::RowSnapshot> gvs;
+                if (Jet4Writer::TableSnapshot::snapshot(mdb, grpTbl, gvs).ok) {
+                    for (auto& r : gvs) {
+                        if (!r.cracked || (r.flags & 0x8000)) continue;
+                        if (r.fields.size() <= 1) continue;
+                        const auto& f = r.fields[1];
+                        if (f.isNull || !f.data || f.size != 2) continue;
+                        int16_t c1 = (int16_t)(static_cast<uint16_t>(f.data[0]) | (static_cast<uint16_t>(f.data[1]) << 8));
+                        validGroupCodes.insert(c1);
+                    }
+                }
                 mdb_free_tabledef(grpTbl);
             }
         }
         std::cout << "[EXPORT] Parties fetched from SQLite: " << partyMap.size() << std::endl;
 
-        while (mdb_fetch_row(ledgersTbl)) {
-            char* cStr = mdb_col_to_string(mdb, mdb->pg_buf, colCode->cur_value_start, colCode->col_type, colCode->cur_value_len);
-            if (cStr) {
-                int c = atoi(cStr);
-                g_free(cStr);
-                ledgerCodeToPhysPg[c] = ledgersTbl->cur_phys_pg;
-
-                auto it = partyMap.find(c);
-                if (it != partyMap.end()) {
-                    bool modified = false;
-                    int grp = it->second.value("group_code").toInt();
-                    if (!validGroupCodes.empty() && grp > 0 && validGroupCodes.find(grp) == validGroupCodes.end()) grp = 0; // never invent groups
-                    if (grp > 0 && colGroup->cur_value_start > 0 &&
-                        colGroup->cur_value_len == (int)sizeof(guint16)) {
-                        guint16 grpVal = (guint16)grp;
-                        if (memcmp(mdb->pg_buf + colGroup->cur_value_start, &grpVal, sizeof(guint16)) != 0) {
-                            memcpy(mdb->pg_buf + colGroup->cur_value_start, &grpVal, sizeof(guint16));
-                            modified = true;
-                        }
-                    }
-                    double opBal = round2(it->second.value("opening_balance").toDouble());
-                    if (colOpBal->cur_value_start > 0 &&
-                        colOpBal->cur_value_len == (int)sizeof(double)) {
-                        if (memcmp(mdb->pg_buf + colOpBal->cur_value_start, &opBal, sizeof(double)) != 0) {
-                            memcpy(mdb->pg_buf + colOpBal->cur_value_start, &opBal, sizeof(double));
-                            modified = true;
-                        }
-                    }
-                    double sal = round2(it->second.value("salary_per_month").toDouble());
-                    if (colSalary->cur_value_start > 0 &&
-                        colSalary->cur_value_len == (int)sizeof(double)) {
-                        if (memcmp(mdb->pg_buf + colSalary->cur_value_start, &sal, sizeof(double)) != 0) {
-                            memcpy(mdb->pg_buf + colSalary->cur_value_start, &sal, sizeof(double));
-                            modified = true;
-                        }
-                    }
-                    if (modified) {
-                        mdb_write_pg(mdb, ledgersTbl->cur_phys_pg);
-                    }
-                    summary.ledgersExported++;
-                }
+        // Snapshot-driven in-place updates (no fetch cursor anywhere).
+        // Update/index failures are counted LOUDLY (a resurrected or
+        // rewritten row without index entries is a silent data hole).
+        int ledgerUpdateFailures = 0;
+        for (auto& r : ledgerSnap) {
+            if (!r.cracked || (r.flags & 0x8000)) continue;
+            if (r.flags & 0x4000) continue; // cannot reindex overflow row in-place; native seed values kept
+            if (r.fields.size() <= 3) continue;
+            const auto& cf = r.fields[3];
+            if (cf.isNull || !cf.data || cf.size != 2) continue;
+            int16_t c = (int16_t)(static_cast<uint16_t>(cf.data[0]) | (static_cast<uint16_t>(cf.data[1]) << 8));
+            auto it = partyMap.find(c);
+            if (it == partyMap.end()) continue;
+            int grp = it->second.value("group_code").toInt();
+            if (!validGroupCodes.empty() && grp > 0 && validGroupCodes.find(grp) == validGroupCodes.end()) grp = 0; // never invent groups
+            double opBal = round2(it->second.value("opening_balance").toDouble());
+            double sal = round2(it->second.value("salary_per_month").toDouble());
+            // Safe update via erase + canonical page rebuild + insert
+            std::vector<Jet4Writer::Field> jfs = r.fields;
+            guint16 grpVal = (guint16)grp;
+            if (grp > 0 && (int)jfs.size() > 4) {
+                jfs[4].isNull = false; jfs[4].isFixed = true;
+                jfs[4].data = (const uint8_t*)&grpVal; jfs[4].size = 2;
             }
+            if ((int)jfs.size() > 6) {
+                jfs[6].isNull = false; jfs[6].isFixed = true;
+                jfs[6].data = (const uint8_t*)&opBal; jfs[6].size = 8;
+            }
+            if ((int)jfs.size() > 19) {
+                jfs[19].isNull = false; jfs[19].isFixed = true;
+                jfs[19].data = (const uint8_t*)&sal; jfs[19].size = 8;
+            }
+            std::string rerr;
+            if (!Jet4Writer::reindexRowData(ledgersTbl, jfs.data(), jfs.size(),
+                                           r.pg, (uint16_t)(r.slot + 1), rerr)) {
+                ++ledgerUpdateFailures;
+                fprintf(stderr, "[LEDGER] !!! reindex code %d failed: %s\n", c, rerr.c_str());
+            }
+            summary.ledgersExported++;
+        }
+        if (ledgerUpdateFailures > 0) {
+            fprintf(stderr, "[LEDGER] !!! %d ledger update/index failures (see above)\n",
+                    ledgerUpdateFailures);
+            std::cout << "[LEDGER] !!! " << ledgerUpdateFailures
+                      << " ledger update/index failures (see stderr)" << std::endl;
         }
 
         // Insert new ledgers not existing in Jet 4
@@ -2249,7 +2281,7 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
                 fields[45].is_null = 0; fields[45].value = bankBytes.data(); fields[45].siz = bankBytes.size(); // BankName (RAW-UCS2 natively)
 
                 fields[46].is_null = 0; fields[46].value = &zero32; fields[46].siz = 4; // ApplyTCSForParty
-                fields[49].is_null = 0; fields[49].value = &zero32; fields[49].siz = 4; // TCSNotApplyInSale
+                fields[47].is_null = 0; fields[47].value = &zero32; fields[47].siz = 4; // TCSNotApplyInSale
 
                 bool insOk = insertJet4Row(mdb, ledgersTbl, fields, ledgersTbl->num_cols);
                 static int ledgDbg = 0;
@@ -2275,53 +2307,34 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
             mdb_read_columns(txTbl);
             mdb_read_indices(txTbl);
 
-            std::set<std::tuple<QString, int, QString, int, int, QString>> existingTxSignatures;
-            mdb_rewind_table(txTbl);
-
-            MdbColumn* colVchNo = (MdbColumn*)g_ptr_array_index(txTbl->columns, 1);
-            MdbColumn* colVchDate = (MdbColumn*)g_ptr_array_index(txTbl->columns, 2);
-            MdbColumn* colTransType = (MdbColumn*)g_ptr_array_index(txTbl->columns, 3);
-            MdbColumn* colAcCode = (MdbColumn*)g_ptr_array_index(txTbl->columns, 4);
-            MdbColumn* colDrCr = (MdbColumn*)g_ptr_array_index(txTbl->columns, 5);
-            MdbColumn* colAmt = (MdbColumn*)g_ptr_array_index(txTbl->columns, 6);
-
-            while (mdb_fetch_row(txTbl)) {
-                int vNo = (colVchNo && colVchNo->cur_value_len > 0) ? mdb_get_int32(mdb->pg_buf, colVchNo->cur_value_start) : 0;
-                int ac = (colAcCode && colAcCode->cur_value_len > 0) ? mdb_get_int16(mdb->pg_buf, colAcCode->cur_value_start) : 0;
-                double amt = (colAmt && colAmt->cur_value_len > 0) ? mdb_get_double(mdb->pg_buf, colAmt->cur_value_start) : 0.0;
-                int amtCents = static_cast<int>(std::round(amt * 100.0));
-
-                QString dVal;
-                if (colVchDate && colVchDate->cur_value_len > 0) {
-                    double oleDays = mdb_get_double(mdb->pg_buf, colVchDate->cur_value_start);
-                    QDate qd = QDate(1899, 12, 30).addDays(static_cast<qint64>(oleDays));
-                    dVal = qd.toString("yyyy-MM-dd");
-                }
-
-                QString tt = "Jrnl";
-                if (colTransType && colTransType->cur_value_len > 0) {
-                    const unsigned char* p = (const unsigned char*)mdb->pg_buf + colTransType->cur_value_start;
-                    if (colTransType->cur_value_len >= 3 && p[0] == 0xFF && p[1] == 0xFE)
-                        tt = QString::fromLatin1((const char*)p + 2, colTransType->cur_value_len - 2);
-                    else {
-                        QString u;
-                        for (int bi = 0; bi + 1 < colTransType->cur_value_len; bi += 2) u += QChar(p[bi]);
-                        tt = u;
+            std::set<std::tuple<QString, int, QString, int, int, QString, int>> existingTxSignatures;
+            // Snapshot-driven signatures (brute force, owned buffers): a
+            // map-driven scan can miss pages after map churn, and every
+            // miss reinserts an existing leg as a duplicate voucher leg.
+            {
+                std::vector<Jet4Writer::RowSnapshot> txSnap;
+                if (Jet4Writer::TableSnapshot::snapshot(mdb, txTbl, txSnap).ok) {
+                    for (auto& r : txSnap) {
+                        if (!r.cracked || (r.flags & 0x8000)) continue;
+                        auto col = [&](int i) -> const Jet4Writer::Field& {
+                            static const Jet4Writer::Field kNull;
+                            return (i >= 0 && (size_t)i < r.fields.size()) ? r.fields[(size_t)i] : kNull;
+                        };
+                        int vNo = snapInt32(col(1));
+                        int rowNo = snapInt16(col(0));
+                        int ac = snapInt16(col(4));
+                        int amtCents = static_cast<int>(std::round(snapDouble(col(6)) * 100.0));
+                        QString dVal = snapJetDate(col(2));
+                        QString tt = "Jrnl";
+                        {
+                            const auto& f = col(3);
+                            if (!f.isNull && f.data && f.size > 0)
+                                tt = normalizeTxType(snapJetText(f));
+                        }
+                        QString dc = snapDrCr(col(5));
+                        existingTxSignatures.insert(std::make_tuple(tt, vNo, dVal, ac, amtCents, dc, rowNo));
                     }
                 }
-                tt = normalizeTxType(tt);
-
-                QString dc = "Dr";
-                if (colDrCr && colDrCr->cur_value_len > 0) {
-                    const unsigned char* p = (const unsigned char*)mdb->pg_buf + colDrCr->cur_value_start;
-                    if (colDrCr->cur_value_len >= 3 && p[0] == 0xFF && p[1] == 0xFE) {
-                        if (p[2] == 'C' || p[2] == 'c') dc = "Cr";
-                    } else if (p[0] == 'C' || p[0] == 'c' || (colDrCr->cur_value_len >= 2 && p[1] == 'C')) {
-                        dc = "Cr";
-                    }
-                }
-
-                existingTxSignatures.insert(std::make_tuple(tt, vNo, dVal, ac, amtCents, dc));
             }
 
             // --- Match Data.002: export ALL FYs when param empty, else robust FY match ---
@@ -2362,30 +2375,23 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
                 if (stkTxTbl) {
                     mdb_read_columns(stkTxTbl);
                     mdb_read_indices(stkTxTbl);
-                    MdbColumn* scDate = (MdbColumn*)g_ptr_array_index(stkTxTbl->columns, 1);
-                    MdbColumn* scVch = (MdbColumn*)g_ptr_array_index(stkTxTbl->columns, 2);
-                    MdbColumn* scType = (MdbColumn*)g_ptr_array_index(stkTxTbl->columns, 3);
-                    mdb_rewind_table(stkTxTbl);
-                    while (mdb_fetch_row(stkTxTbl)) {
-                        int vn = (scVch && scVch->cur_value_len == 4)
-                            ? mdb_get_int32(mdb->pg_buf, scVch->cur_value_start) : 0;
-                        QString dv;
-                        if (scDate && scDate->cur_value_len == 8) {
-                            double od = mdb_get_double(mdb->pg_buf, scDate->cur_value_start);
-                            dv = QDate(1899, 12, 30).addDays((qint64)od).toString("yyyy-MM-dd");
-                        }
-                        QString tt;
-                        if (scType && scType->cur_value_len > 0) {
-                            const unsigned char* p = (const unsigned char*)mdb->pg_buf + scType->cur_value_start;
-                            if (scType->cur_value_len >= 3 && p[0] == 0xFF && p[1] == 0xFE)
-                                tt = QString::fromLatin1((const char*)p + 2, scType->cur_value_len - 2);
-                            else {
-                                QString u;
-                                for (int bi = 0; bi + 1 < scType->cur_value_len; bi += 2) u += QChar(p[bi]);
-                                tt = u;
+                    std::vector<Jet4Writer::RowSnapshot> stSnap;
+                    if (Jet4Writer::TableSnapshot::snapshot(mdb, stkTxTbl, stSnap).ok) {
+                        for (auto& r : stSnap) {
+                            if (!r.cracked || (r.flags & 0x8000)) continue;
+                            auto col = [&](int i) -> const Jet4Writer::Field& {
+                                static const Jet4Writer::Field kNull;
+                                return (i >= 0 && (size_t)i < r.fields.size()) ? r.fields[(size_t)i] : kNull;
+                            };
+                            int vn = snapInt32(col(2));
+                            QString dv = snapJetDate(col(1));
+                            QString tt;
+                            {
+                                const auto& f = col(3);
+                                if (!f.isNull && f.data && f.size > 0) tt = snapJetText(f);
                             }
+                            existingStockSig.insert(std::make_tuple(vn, dv, tt.trimmed()));
                         }
-                        existingStockSig.insert(std::make_tuple(vn, dv, tt.trimmed()));
                     }
                 }
             }
@@ -2396,30 +2402,23 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
             if (trTbl) {
                 mdb_read_columns(trTbl);
                 mdb_read_indices(trTbl);
-                MdbColumn* trDate = (MdbColumn*)g_ptr_array_index(trTbl->columns, 0);
-                MdbColumn* trVch = (MdbColumn*)g_ptr_array_index(trTbl->columns, 1);
-                MdbColumn* trType = (MdbColumn*)g_ptr_array_index(trTbl->columns, 2);
-                mdb_rewind_table(trTbl);
-                while (mdb_fetch_row(trTbl)) {
-                    int vn = (trVch && trVch->cur_value_len == 4)
-                        ? mdb_get_int32(mdb->pg_buf, trVch->cur_value_start) : 0;
-                    QString dv;
-                    if (trDate && trDate->cur_value_len == 8) {
-                        double od = mdb_get_double(mdb->pg_buf, trDate->cur_value_start);
-                        dv = QDate(1899, 12, 30).addDays((qint64)od).toString("yyyy-MM-dd");
-                    }
-                    QString tt;
-                    if (trType && trType->cur_value_len > 0) {
-                        const unsigned char* p = (const unsigned char*)mdb->pg_buf + trType->cur_value_start;
-                        if (trType->cur_value_len >= 3 && p[0] == 0xFF && p[1] == 0xFE)
-                            tt = QString::fromLatin1((const char*)p + 2, trType->cur_value_len - 2);
-                        else {
-                            QString u;
-                            for (int bi = 0; bi + 1 < trType->cur_value_len; bi += 2) u += QChar(p[bi]);
-                            tt = u;
+                std::vector<Jet4Writer::RowSnapshot> trSnap;
+                if (Jet4Writer::TableSnapshot::snapshot(mdb, trTbl, trSnap).ok) {
+                    for (auto& r : trSnap) {
+                        if (!r.cracked || (r.flags & 0x8000)) continue;
+                        auto col = [&](int i) -> const Jet4Writer::Field& {
+                            static const Jet4Writer::Field kNull;
+                            return (i >= 0 && (size_t)i < r.fields.size()) ? r.fields[(size_t)i] : kNull;
+                        };
+                        int vn = snapInt32(col(1));
+                        QString dv = snapJetDate(col(0));
+                        QString tt;
+                        {
+                            const auto& f = col(2);
+                            if (!f.isNull && f.data && f.size > 0) tt = snapJetText(f);
                         }
+                        existingTransportSig.insert(std::make_tuple(vn, dv, tt.trimmed()));
                     }
-                    existingTransportSig.insert(std::make_tuple(vn, dv, tt.trimmed()));
                 }
             }
 
@@ -2459,7 +2458,7 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
 
             auto noteInserted = [&](const QString& tType, int rawVchNo, const QString& isoDate, int acCode,
                                     double amt, const QString& drCr,
-                                    const std::tuple<QString, int, QString, int, int, QString>& sig) {
+                                    const std::tuple<QString, int, QString, int, int, QString, int>& sig) {
                 summary.transactionsExported++;
                 if (drCr == "Dr") summary.totalDebitAmount += amt;
                 else summary.totalCreditAmount += amt;
@@ -2549,7 +2548,7 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
                     QString invoiceNo = t.value("invoice_no").toString().left(50);
                     int dueDays = t.value("due_days", 0).toInt();
 
-                    auto sig = std::make_tuple(vType, rawVchNo, isoDate, acCode, amtCents, drCr);
+                    auto sig = std::make_tuple(vType, rawVchNo, isoDate, acCode, amtCents, drCr, legs[li].rowNo);
                     if (existingTxSignatures.find(sig) != existingTxSignatures.end()) {
                         summary.transactionsExported++;
                         if (drCr == "Dr") summary.totalDebitAmount += amt;
@@ -2713,65 +2712,76 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
                 mdb_free_tabledef(trTbl);
             }
 
-            // Sync TempLastEnteredVoucher with latest transaction date and FY range
+            // Sync TempLastEnteredVoucher with latest transaction date and FY range.
+            // Safe update via snapshot + reindexRowData (erase + canonical
+            // rebuild + insert): the old code memcpy'd doubles/text straight
+            // into pg_buf at fetch-recorded offsets (stale-buffer hazard, no
+            // index maintenance, silent size mismatches).
             MdbTableDef* lastVchTbl = mdb_read_table_by_name(mdb, (char*)"TempLastEnteredVoucher", MDB_TABLE);
             if (lastVchTbl) {
                 mdb_read_columns(lastVchTbl);
-                mdb_rewind_table(lastVchTbl);
-                if (mdb_fetch_row(lastVchTbl)) {
-                    guint32 data_pg = lastVchTbl->cur_phys_pg;
-                    MdbColumn* colVT = (MdbColumn*)g_ptr_array_index(lastVchTbl->columns, 0);
-                    MdbColumn* colVD = (MdbColumn*)g_ptr_array_index(lastVchTbl->columns, 1);
-                    MdbColumn* colFrom = (MdbColumn*)g_ptr_array_index(lastVchTbl->columns, 2);
-                    MdbColumn* colTo = (MdbColumn*)g_ptr_array_index(lastVchTbl->columns, 3);
+                mdb_read_indices(lastVchTbl);
 
-                    int v_start = colVD->cur_value_start;
-                    int v_len = colVD->cur_value_len;
-                    int from_start = colFrom->cur_value_start;
-                    int from_len = colFrom->cur_value_len;
-                    int to_start = colTo->cur_value_start;
-                    int to_len = colTo->cur_value_len;
-                    int vt_start = colVT->cur_value_start;
-                    int vt_len = colVT->cur_value_len;
+                // Query latest transaction date & FY from SQLite
+                QVariantList maxTx = appDb.executeQuery(
+                    "SELECT t.voucher_date, t.trans_type, f.start_date, f.end_date "
+                    "FROM transactions t "
+                    "LEFT JOIN financial_years f ON t.financial_year = f.year_name "
+                    "ORDER BY t.voucher_date DESC, t.id DESC LIMIT 1;"
+                );
 
-                    // Query latest transaction date & FY from SQLite
-                    QVariantList maxTx = appDb.executeQuery(
-                        "SELECT t.voucher_date, t.trans_type, f.start_date, f.end_date "
-                        "FROM transactions t "
-                        "LEFT JOIN financial_years f ON t.financial_year = f.year_name "
-                        "ORDER BY t.voucher_date DESC, t.id DESC LIMIT 1;"
-                    );
+                if (!maxTx.isEmpty()) {
+                    QVariantMap m = maxTx.first().toMap();
+                    QString maxDate = m.value("voucher_date").toString();
+                    QString tt = normalizeTxType(m.value("trans_type", "Jrnl").toString());
+                    QString fStart = m.value("start_date", "2026-04-01").toString();
+                    QString fEnd = m.value("end_date", "2027-03-31").toString();
 
-                    if (!maxTx.isEmpty()) {
-                        QVariantMap m = maxTx.first().toMap();
-                        QString maxDate = m.value("voucher_date").toString();
-                        QString tt = normalizeTxType(m.value("trans_type", "Jrnl").toString());
-                        QString fStart = m.value("start_date", "2026-04-01").toString();
-                        QString fEnd = m.value("end_date", "2027-03-31").toString();
+                    double oleMaxDate = toOleDate(maxDate);
+                    double oleFrom = toOleDate(fStart);
+                    double oleTo = toOleDate(fEnd);
+                    QByteArray ttBytes = toJet4Text(tt.left(4));
 
-                        double oleMaxDate = toOleDate(maxDate);
-                        double oleFrom = toOleDate(fStart);
-                        double oleTo = toOleDate(fEnd);
-
-                        mdb_read_pg(mdb, data_pg);
-                        if (v_start > 0 && v_len == (int)sizeof(double) && oleMaxDate > 0.0) {
-                            memcpy(mdb->pg_buf + v_start, &oleMaxDate, sizeof(double));
-                        }
-                        if (from_start > 0 && from_len == (int)sizeof(double) && oleFrom > 0.0) {
-                            memcpy(mdb->pg_buf + from_start, &oleFrom, sizeof(double));
-                        }
-                        if (to_start > 0 && to_len == (int)sizeof(double) && oleTo > 0.0) {
-                            memcpy(mdb->pg_buf + to_start, &oleTo, sizeof(double));
-                        }
-                        if (vt_start > 0 && vt_len == 6) {
-                            QByteArray ttBytes = toJet4Text(tt.left(4));
-                            if (ttBytes.size() == 6) {
-                                memcpy(mdb->pg_buf + vt_start, ttBytes.constData(), 6);
+                    std::vector<Jet4Writer::RowSnapshot> lvSnap;
+                    if (Jet4Writer::TableSnapshot::snapshot(mdb, lastVchTbl, lvSnap).ok) {
+                        for (auto& r : lvSnap) {
+                            if (!r.cracked || (r.flags & 0xC000)) continue;
+                            if (r.fields.size() <= 3) continue;
+                            std::vector<Jet4Writer::Field> jfs = r.fields;
+                            if (oleMaxDate > 0.0 && jfs.size() > 1) {
+                                jfs[1].isNull = false; jfs[1].isFixed = true;
+                                jfs[1].data = (const uint8_t*)&oleMaxDate; jfs[1].size = 8;
+                            }
+                            if (oleFrom > 0.0 && jfs.size() > 2) {
+                                jfs[2].isNull = false; jfs[2].isFixed = true;
+                                jfs[2].data = (const uint8_t*)&oleFrom; jfs[2].size = 8;
+                            }
+                            if (oleTo > 0.0 && jfs.size() > 3) {
+                                jfs[3].isNull = false; jfs[3].isFixed = true;
+                                jfs[3].data = (const uint8_t*)&oleTo; jfs[3].size = 8;
+                            }
+                            if (!ttBytes.isEmpty() && jfs.size() > 0) {
+                                jfs[0].isNull = false; jfs[0].isFixed = false;
+                                jfs[0].data = (const uint8_t*)ttBytes.constData();
+                                jfs[0].size = (size_t)ttBytes.size();
+                            }
+                            std::string lverr;
+                            bool lvok;
+                            if (lastVchTbl->indices && lastVchTbl->indices->len > 0) {
+                                lvok = Jet4Writer::reindexRowData(lastVchTbl, jfs.data(), jfs.size(),
+                                                                 r.pg, (uint16_t)(r.slot + 1), lverr);
+                            } else {
+                                // Index-less table: canonical rebuild only.
+                                lvok = Jet4Writer::replaceRowData(lastVchTbl, jfs.data(), jfs.size(),
+                                                                 r.pg, (uint16_t)(r.slot + 1), lverr);
+                            }
+                            if (!lvok) {
+                                fprintf(stderr, "[LASTVCH] !!! update failed pg=%u slot=%d: %s\n",
+                                        r.pg, r.slot, lverr.c_str());
                             }
                         }
-                        mdb_write_pg(mdb, data_pg);
-                        std::cout << "[EXPORT] Updated TempLastEnteredVoucher: date=" << maxDate.toStdString() << " type=" << tt.toStdString() << std::endl;
                     }
+                    std::cout << "[EXPORT] Updated TempLastEnteredVoucher: date=" << maxDate.toStdString() << " type=" << tt.toStdString() << std::endl;
                 }
                 mdb_free_tabledef(lastVchTbl);
             }
@@ -2787,13 +2797,18 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
             mdb_read_indices(stkTbl);
 
             std::set<int> existingStockCodes;
-            mdb_rewind_table(stkTbl);
-            MdbColumn* colCode = (MdbColumn*)g_ptr_array_index(stkTbl->columns, 1);
-            while (mdb_fetch_row(stkTbl)) {
-                char* cStr = mdb_col_to_string(mdb, mdb->pg_buf, colCode->cur_value_start, colCode->col_type, colCode->cur_value_len);
-                if (cStr) {
-                    existingStockCodes.insert(atoi(cStr));
-                    g_free(cStr);
+            // Snapshot-driven existence (brute force, owned buffers).
+            {
+                std::vector<Jet4Writer::RowSnapshot> stkSnap;
+                if (Jet4Writer::TableSnapshot::snapshot(mdb, stkTbl, stkSnap).ok) {
+                    for (auto& r : stkSnap) {
+                        if (!r.cracked || (r.flags & 0x8000)) continue;
+                        if (r.fields.size() <= 1) continue;
+                        const auto& f = r.fields[1];
+                        if (f.isNull || !f.data || f.size != 2) continue;
+                        int16_t c = (int16_t)(static_cast<uint16_t>(f.data[0]) | (static_cast<uint16_t>(f.data[1]) << 8));
+                        existingStockCodes.insert((int)c);
+                    }
                 }
             }
 

@@ -335,6 +335,7 @@ mdb_pack_null_mask(unsigned char *buffer, int num_fields, MdbField *fields)
  * Jackcess TableImpl.createRow. Thin C delegate below. */
 int jet4_pack_row(MdbTableDef *table, MdbField *fields, unsigned num_fields,
                   unsigned char *out, unsigned out_size);
+const char* jet4_last_pack_error(void);
 
 /* fields must be ordered with fixed columns first, then vars, subsorted by
  * column number */
@@ -342,8 +343,10 @@ static int
 mdb_pack_row4(MdbTableDef *table, unsigned char *row_buffer, unsigned int num_fields, MdbField *fields)
 {
 	int len = jet4_pack_row(table, fields, num_fields, row_buffer, 4096);
-	if (len < 0) {
-		fprintf(stderr, "jet4_pack_row failed\n");
+	if (len <= 0) {
+		fprintf(stderr, "jet4_pack_row failed (%s): %s\n",
+			table->name ? table->name : "?",
+			jet4_last_pack_error());
 		return 0;
 	}
 	return len;
@@ -562,6 +565,14 @@ mdb_insert_row(MdbTableDef *table, int num_fields, MdbField *fields)
 		return 0;
 	}
 	new_row_size = mdb_pack_row(table, row_buffer, num_fields, fields);
+	if (new_row_size <= 0) {
+		/* Pack already reported the reason. Refuse loudly: inserting a
+		 * 0-byte row stamps duplicate offset-table slots (phantom rows
+		 * that break Jackcess/UCanAccess readers). */
+		fprintf(stderr, "mdb_insert_row refused: pack failed for table %s\n",
+			table->name ? table->name : "?");
+		return 0;
+	}
 	if (mdb_get_option(MDB_DEBUG_WRITE)) {
 		mdb_buffer_dump(row_buffer, 0, new_row_size);
 	}

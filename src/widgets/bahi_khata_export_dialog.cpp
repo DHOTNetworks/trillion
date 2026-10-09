@@ -129,25 +129,32 @@ QStringList BahiKhataExportDialog::scanDatabaseFiles() {
     return out;
 }
 
-QString BahiKhataExportDialog::currentTargetDir() const {
-    QString cur = m_pathEdit ? m_pathEdit->text().trimmed() : QString();
-    if (!cur.isEmpty()) {
-        QString dir = QFileInfo(cur).absolutePath();
-        if (!dir.isEmpty()) return dir;
+QString BahiKhataExportDialog::resolvedTargetPath() const {
+    QString name = m_nameEdit ? m_nameEdit->text().trimmed() : QString();
+    if (name.isEmpty()) return QString();
+    name = QFileInfo(name).fileName();
+    QString dir;
+    if (m_seedPathEdit && !m_seedPathEdit->text().trimmed().isEmpty()) {
+        dir = QFileInfo(m_seedPathEdit->text().trimmed()).absolutePath();
     }
-    return bahiKhataDir();
+    if (dir.isEmpty() || !QDir(dir).exists()) {
+        dir = bahiKhataDir();
+    }
+    return QDir::toNativeSeparators(QDir(dir).filePath(name));
 }
 
-void BahiKhataExportDialog::refreshDbList() {
-    if (!m_dbCombo) return;
-    m_dbCombo->blockSignals(true);
-    m_dbCombo->clear();
-    m_dbCombo->addItem("<New file — type name below>", "");
-    const QStringList files = scanDatabaseFiles();
-    for (const QString& f : files) {
-        m_dbCombo->addItem(f, QDir(bahiKhataDir()).filePath(f));
+void BahiKhataExportDialog::updateDestinationPreview() {
+    if (!m_destPathLabel) return;
+    QString target = resolvedTargetPath();
+    if (target.isEmpty()) {
+        m_destPathLabel->setText("Destination: <font color='#94A3B8'><i>Enter file name above</i></font>");
+    } else {
+        bool exists = QFile::exists(target);
+        QString statusTag = exists
+            ? "<font color='#D97706'>[Existing file — will update / overwrite]</font>"
+            : "<font color='#16A34A'>[New file — will clone from seed template]</font>";
+        m_destPathLabel->setText(QString("Destination: <b>%1</b> %2").arg(target, statusTag));
     }
-    m_dbCombo->blockSignals(false);
 }
 
 QString BahiKhataExportDialog::suggestDefaultFileName() const {
@@ -165,16 +172,19 @@ QString BahiKhataExportDialog::suggestDefaultFileName() const {
         if (!src.isEmpty() && src.startsWith("Data.", Qt::CaseInsensitive)) {
             return QDir(bahiKhataDir()).filePath(QFileInfo(src).fileName());
         }
-        // 3. Derive from sqlite db name / firm id ("*_data_004.db" -> Data.004).
+        // 3. Derive from sqlite db name / firm id ("*_data_002.db" -> Data.002).
         QString derived = FirmManager::deriveBahiKhataFileName(
             reg.value("db_name").toString(), m_firmMgr->currentFirmId());
         if (!derived.isEmpty()) {
-            return QDir(bahiKhataDir()).filePath(derived);
+            QString p = QDir(bahiKhataDir()).filePath(derived);
+            if (QFile::exists(p)) return p;
         }
     }
-    // No Data.002 fallback: the user picks an existing database from the
-    // selector or types a new export file name.
-    return "";
+    QString p002 = QDir(bahiKhataDir()).filePath("Data.002");
+    if (QFile::exists(p002)) return p002;
+    const QStringList files = scanDatabaseFiles();
+    if (!files.isEmpty()) return QDir(bahiKhataDir()).filePath(files.first());
+    return p002;
 }
 
 bool BahiKhataExportDialog::validateFileName(const QString& path, QString& outError) const {
@@ -231,28 +241,48 @@ void BahiKhataExportDialog::setupUi() {
     formLayout->setContentsMargins(16, 16, 16, 16);
     formLayout->setSpacing(12);
 
-    // Firm Database Selector (existing Data.* files in Bahi-Khata folder)
-    QLabel* dbLabel = new QLabel("Firm Database File (existing):", formCard);
-    dbLabel->setStyleSheet("font-size: 12px; font-weight: 700; color: #334155;");
-    formLayout->addWidget(dbLabel);
+    // 1. Seed / Template Database File Selector (file selector with Browse button)
+    QLabel* seedLabel = new QLabel("Seed / Template Database File:", formCard);
+    seedLabel->setStyleSheet("font-size: 12px; font-weight: 700; color: #334155;");
+    formLayout->addWidget(seedLabel);
 
-    m_dbCombo = new QComboBox(formCard);
-    m_dbCombo->setFixedHeight(36);
-    m_dbCombo->setStyleSheet(
-        "QComboBox { background-color: #F8FAFC; border: 1.5px solid #CBD5D1; border-radius: 6px; padding: 0px 10px; font-size: 12px; font-weight: 700; color: #0F172A; }"
+    QHBoxLayout* seedRow = new QHBoxLayout();
+    seedRow->setSpacing(8);
+
+    m_seedPathEdit = new QLineEdit(formCard);
+    QString defSeed = suggestDefaultFileName();
+    m_seedPathEdit->setText(defSeed);
+    m_seedPathEdit->setFixedHeight(36);
+    m_seedPathEdit->setStyleSheet(
+        "QLineEdit { background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 0px 10px; font-size: 12px; font-weight: 600; color: #0F172A; }"
+        "QLineEdit:focus { border-color: #2563EB; background-color: #FFFFFF; }"
     );
-    formLayout->addWidget(m_dbCombo);
-    connect(m_dbCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, &BahiKhataExportDialog::onDbSelectionChanged);
+    seedRow->addWidget(m_seedPathEdit, 1);
 
-    // Export File Name (name the file will carry after a successful export)
-    QLabel* nameLabel = new QLabel("Export File Name (Data.NNN):", formCard);
+    m_browseSeedBtn = new QPushButton("Browse...", formCard);
+    m_browseSeedBtn->setFixedHeight(36);
+    m_browseSeedBtn->setCursor(Qt::PointingHandCursor);
+    m_browseSeedBtn->setStyleSheet(
+        "QPushButton { background-color: #EFF6FF; border: 1.5px solid #93C5FD; border-radius: 6px; padding: 0px 14px; font-size: 12px; font-weight: 700; color: #1D4ED8; }"
+        "QPushButton:hover { background-color: #DBEAFE; border-color: #3B82F6; }"
+    );
+    connect(m_browseSeedBtn, &QPushButton::clicked, this, &BahiKhataExportDialog::onBrowseSeedClicked);
+    seedRow->addWidget(m_browseSeedBtn);
+    formLayout->addLayout(seedRow);
+
+    // 2. Export File Name Field (just the field to edit the name of the file being exported as)
+    QLabel* nameLabel = new QLabel("Export As File Name (Data.NNN):", formCard);
     nameLabel->setStyleSheet("font-size: 12px; font-weight: 700; color: #334155;");
     formLayout->addWidget(nameLabel);
 
     m_nameEdit = new QLineEdit(formCard);
     m_nameEdit->setFixedHeight(36);
-    m_nameEdit->setPlaceholderText("Data.009");
+    m_nameEdit->setPlaceholderText("Data.002");
+    if (!defSeed.isEmpty()) {
+        m_nameEdit->setText(QFileInfo(defSeed).fileName());
+    } else {
+        m_nameEdit->setText("Data.002");
+    }
     m_nameEdit->setStyleSheet(
         "QLineEdit { background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 0px 10px; font-size: 12px; font-weight: 600; color: #0F172A; }"
         "QLineEdit:focus { border-color: #2563EB; background-color: #FFFFFF; }"
@@ -261,53 +291,12 @@ void BahiKhataExportDialog::setupUi() {
     connect(m_nameEdit, &QLineEdit::textChanged,
             this, &BahiKhataExportDialog::onExportNameChanged);
 
-    // Target File Picker (full path; database may live in any folder)
-    QLabel* pathLabel = new QLabel("Target Bahi-Khata Database File (full path):", formCard);
-    pathLabel->setStyleSheet("font-size: 12px; font-weight: 700; color: #334155;");
-    formLayout->addWidget(pathLabel);
-
-    QHBoxLayout* pathRow = new QHBoxLayout();
-    pathRow->setSpacing(8);
-
-    m_pathEdit = new QLineEdit(formCard);
-    m_pathEdit->setText(suggestDefaultFileName());
-    m_pathEdit->setFixedHeight(36);
-    m_pathEdit->setStyleSheet(
-        "QLineEdit { background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 0px 10px; font-size: 12px; font-weight: 600; color: #0F172A; }"
-        "QLineEdit:focus { border-color: #2563EB; background-color: #FFFFFF; }"
-    );
-    pathRow->addWidget(m_pathEdit, 1);
-
-    // Pre-select the suggested file in the selector and name field.
-    refreshDbList();
-    {
-        QString suggested = m_pathEdit->text().trimmed();
-        if (!suggested.isEmpty()) {
-            QFileInfo fi(suggested);
-            if (m_nameEdit->text().trimmed().isEmpty())
-                m_nameEdit->setText(fi.fileName());
-            for (int i = 0; i < m_dbCombo->count(); ++i) {
-                if (QFileInfo(m_dbCombo->itemData(i).toString()).fileName()
-                        .compare(fi.fileName(), Qt::CaseInsensitive) == 0) {
-                    m_dbCombo->blockSignals(true);
-                    m_dbCombo->setCurrentIndex(i);
-                    m_dbCombo->blockSignals(false);
-                    break;
-                }
-            }
-        }
-    }
-
-    m_browseBtn = new QPushButton("Browse...", formCard);
-    m_browseBtn->setFixedHeight(36);
-    m_browseBtn->setCursor(Qt::PointingHandCursor);
-    m_browseBtn->setStyleSheet(
-        "QPushButton { background-color: #EFF6FF; border: 1.5px solid #93C5FD; border-radius: 6px; padding: 0px 14px; font-size: 12px; font-weight: 700; color: #1D4ED8; }"
-        "QPushButton:hover { background-color: #DBEAFE; border-color: #3B82F6; }"
-    );
-    connect(m_browseBtn, &QPushButton::clicked, this, &BahiKhataExportDialog::onBrowseClicked);
-    pathRow->addWidget(m_browseBtn);
-    formLayout->addLayout(pathRow);
+    // Destination Path Preview
+    m_destPathLabel = new QLabel(formCard);
+    m_destPathLabel->setWordWrap(true);
+    m_destPathLabel->setStyleSheet("font-size: 11px; color: #64748B; margin-top: -2px; margin-bottom: 2px;");
+    formLayout->addWidget(m_destPathLabel);
+    updateDestinationPreview();
 
     // Financial Year Selector
     QHBoxLayout* fyRow = new QHBoxLayout();
@@ -433,72 +422,71 @@ void BahiKhataExportDialog::setupUi() {
     rootLayout->addLayout(btnRow);
 }
 
-void BahiKhataExportDialog::onBrowseClicked() {
-    QString initial = m_pathEdit->text();
+void BahiKhataExportDialog::onBrowseSeedClicked() {
+    QString initial = m_seedPathEdit ? m_seedPathEdit->text().trimmed() : QString();
     QString dir = initial.isEmpty() ? bahiKhataDir() : QFileInfo(initial).absolutePath();
-    QString chosen = QFileDialog::getSaveFileName(
+    QString chosen = QFileDialog::getOpenFileName(
         this,
-        "Select Bahi-Khata JetDB Destination File (Data.00x)",
+        "Select Seed / Template Bahi-Khata Database File (Data.00x)",
         dir,
         "Bahi-Khata Files (Data.* *.mdb);;All Files (*.*)"
     );
     if (!chosen.isEmpty()) {
         chosen = QDir::toNativeSeparators(chosen);
-        m_pathEdit->setText(chosen);
+        m_seedPathEdit->setText(chosen);
         QFileInfo fi(chosen);
         if (m_nameEdit) {
-            m_nameEdit->blockSignals(true);
-            m_nameEdit->setText(fi.fileName());
-            m_nameEdit->blockSignals(false);
+            QString curName = m_nameEdit->text().trimmed();
+            if (curName.isEmpty() || curName.startsWith("Data.")) {
+                m_nameEdit->blockSignals(true);
+                m_nameEdit->setText(fi.fileName());
+                m_nameEdit->blockSignals(false);
+            }
         }
+        updateDestinationPreview();
     }
-}
-
-void BahiKhataExportDialog::onDbSelectionChanged(int index) {
-    if (!m_dbCombo || !m_pathEdit || !m_nameEdit) return;
-    QString data = m_dbCombo->itemData(index).toString();
-    if (data.isEmpty()) return; // "<New file>" placeholder: keep typed name.
-    m_pathEdit->setText(QDir::toNativeSeparators(data));
-    m_nameEdit->blockSignals(true);
-    m_nameEdit->setText(QFileInfo(data).fileName());
-    m_nameEdit->blockSignals(false);
 }
 
 void BahiKhataExportDialog::onExportNameChanged(const QString& text) {
-    if (!m_pathEdit) return;
     QString name = text.trimmed();
-    if (name.isEmpty()) return;
-    // Strip any directory part the user may have pasted; the directory comes
-    // from the current target path (or the Bahi-Khata folder).
-    name = QFileInfo(name).fileName();
-    if (name != text) {
-        m_nameEdit->blockSignals(true);
-        m_nameEdit->setText(name);
-        m_nameEdit->blockSignals(false);
+    if (!name.isEmpty()) {
+        QString base = QFileInfo(name).fileName();
+        if (base != text) {
+            m_nameEdit->blockSignals(true);
+            m_nameEdit->setText(base);
+            m_nameEdit->blockSignals(false);
+        }
     }
-    QDir dir(currentTargetDir());
-    m_pathEdit->setText(QDir::toNativeSeparators(dir.filePath(name)));
+    updateDestinationPreview();
 }
 
 void BahiKhataExportDialog::onExportClicked() {
-    QString targetPath = m_pathEdit->text().trimmed();
+    QString targetPath = resolvedTargetPath();
     QString err;
     if (!validateFileName(targetPath, err)) {
         QMessageBox::warning(this, "Invalid File Name", err);
+        return;
+    }
+    QString seedPath = m_seedPathEdit ? m_seedPathEdit->text().trimmed() : QString();
+    if (!seedPath.isEmpty() && !QFile::exists(seedPath) && !QFile::exists(targetPath)) {
+        QMessageBox::warning(this, "Seed File Not Found",
+            QString("The specified seed file '%1' does not exist.\nPlease select an existing seed/template database file.").arg(seedPath));
         return;
     }
     if (m_isExporting) return;
 
     m_isExporting = true;
     m_exportBtn->setEnabled(false);
-    m_browseBtn->setEnabled(false);
-    m_pathEdit->setEnabled(false);
+    m_browseSeedBtn->setEnabled(false);
+    m_seedPathEdit->setEnabled(false);
+    m_nameEdit->setEnabled(false);
     m_closeBtn->setEnabled(false);
     m_progressBar->setValue(2);
     m_statusLabel->setText("Starting export on background thread...");
 
     BahiKhataExporter::ExportOptions opts;
     opts.targetMdbPath = targetPath;
+    opts.templateMdbPath = seedPath;
     opts.financialYear = m_fyCombo->currentData().toString();
     opts.createBackup = m_backupCheck->isChecked();
     opts.exportTransactions = m_txCheck->isChecked();
@@ -526,9 +514,11 @@ void BahiKhataExportDialog::onWorkerFinished(BahiKhataExporter::ExportSummary su
                                              const QString& verifyText) {
     m_isExporting = false;
     m_exportBtn->setEnabled(true);
-    m_browseBtn->setEnabled(true);
-    m_pathEdit->setEnabled(true);
+    m_browseSeedBtn->setEnabled(true);
+    m_seedPathEdit->setEnabled(true);
+    m_nameEdit->setEnabled(true);
     m_closeBtn->setEnabled(true);
+    updateDestinationPreview();
     m_worker = nullptr;
     if (m_workerThread) {
         m_workerThread->quit();
@@ -572,9 +562,11 @@ void BahiKhataExportDialog::onExportProgress(int percent, const QString& status)
 void BahiKhataExportDialog::onExportFinished(bool success, const QString& message) {
     m_isExporting = false;
     m_exportBtn->setEnabled(true);
-    m_browseBtn->setEnabled(true);
-    m_pathEdit->setEnabled(true);
+    m_browseSeedBtn->setEnabled(true);
+    m_seedPathEdit->setEnabled(true);
+    m_nameEdit->setEnabled(true);
     m_closeBtn->setEnabled(true);
+    updateDestinationPreview();
 
     if (success) {
         m_progressBar->setValue(100);

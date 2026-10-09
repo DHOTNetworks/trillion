@@ -270,7 +270,11 @@ mdb_map_find_next_freepage(MdbTableDef *table, int row_size)
 		mdb_read_pg(mdb, table->cur_phys_pg);
 		if (mdb->pg_buf[0] == MDB_PAGE_DATA && mdb_get_int32(mdb->pg_buf, 4) == (long)entry->table_pg) {
 			free_space = mdb_pg_get_freespace(mdb);
-			if (free_space >= row_size) {
+			/* mdb_add_row_to_pg needs row_size + 2 (new offset-table
+			 * slot); requiring only row_size selects pages the add
+			 * then rejects ("Failed to add row"), dropping the row
+			 * with no retry. Mirror the add's real requirement. */
+			if (free_space >= row_size + 2) {
 				return table->cur_phys_pg;
 			}
 		}
@@ -293,7 +297,8 @@ mdb_map_find_next_freepage(MdbTableDef *table, int row_size)
 
 		mdb_read_pg(mdb, pgnum);
 		free_space = mdb_pg_get_freespace(mdb);
-		if (free_space >= row_size) {
+		/* See above: the add consumes a 2-byte offset-table slot too. */
+		if (free_space >= row_size + 2) {
 			table->cur_phys_pg = pgnum;
 			return pgnum;
 		}

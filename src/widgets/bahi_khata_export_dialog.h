@@ -55,8 +55,7 @@ protected:
     void keyPressEvent(QKeyEvent* event) override;
 
 private slots:
-    void onBrowseClicked();
-    void onDbSelectionChanged(int index);
+    void onBrowseSeedClicked();
     void onExportNameChanged(const QString& text);
     void onExportClicked();
     void onExportProgress(int percent, const QString& status);
@@ -66,6 +65,8 @@ private slots:
 private:
     void setupUi();
     QString suggestDefaultFileName() const;
+    QString resolvedTargetPath() const;
+    void updateDestinationPreview();
     bool validateFileName(const QString& path, QString& outError) const;
     void teardownWorker();
 
@@ -74,13 +75,11 @@ private:
 
     static QString bahiKhataDir();
     static QStringList scanDatabaseFiles();
-    void refreshDbList();
-    QString currentTargetDir() const;
 
-    QLineEdit* m_pathEdit = nullptr;
+    QLineEdit* m_seedPathEdit = nullptr;
+    QPushButton* m_browseSeedBtn = nullptr;
     QLineEdit* m_nameEdit = nullptr;
-    QComboBox* m_dbCombo = nullptr;
-    QPushButton* m_browseBtn = nullptr;
+    QLabel* m_destPathLabel = nullptr;
     QComboBox* m_fyCombo = nullptr;
     QCheckBox* m_backupCheck = nullptr;
     QCheckBox* m_txCheck = nullptr;

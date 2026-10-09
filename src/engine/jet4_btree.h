@@ -27,9 +27,11 @@ public:
      * memcmp with length tiebreak), then rowId (data page, then row).
      * Node child links never participate. isLeaf=false strips the trailing
      * 4-byte child page before comparing. */
+    static int cmpIndexEntries(const std::vector<uint8_t>& a, bool aIsLeaf, const std::vector<uint8_t>& b, bool bIsLeaf);
     static int cmpIndexOrder(const std::vector<uint8_t>& a, const std::vector<uint8_t>& b, bool isLeaf);
     static uint32_t childOf(const std::vector<uint8_t>& divEntry);
     static std::vector<uint8_t> makeDivider(bool wasLeaf, const std::vector<uint8_t>& childMaxEntry, uint32_t childPg);
+    static std::vector<uint8_t> getSubtreeMax(MdbHandle* mdb, uint32_t pg);
 
     static bool decodeEntries(MdbHandle* mdb, DecodedPage& dp, std::string& err);
 
@@ -68,6 +70,20 @@ public:
 
     static Status leafInsert(MdbHandle* mdb, MdbTableDef* table, MdbIndex* idx,
                              const uint8_t* entry, size_t entryLen);
+
+    /* Jackcess updateEntry(REMOVE) mirror: remove one exact [key+rowId]
+     * entry, fixing dividers (replace-with-new-max, or remove the divider;
+     * empty pages are unlinked and their dividers removed recursively; an
+     * emptied root is rewritten as an empty leaf). Fails loudly when the
+     * entry, divider, or peers are not exactly as expected. */
+    static Status eraseEntry(MdbHandle* mdb, MdbTableDef* table, MdbIndex* idx,
+                             const uint8_t* entry, size_t entryLen);
+
+    /* Remove every index entry whose 4-byte rowId trailer matches
+     * (dataPg,rowIdx), regardless of key (used to clean ghost entries that
+     * no longer crack). Returns the number removed. */
+    static Status eraseRowRefs(MdbHandle* mdb, MdbTableDef* table, MdbIndex* idx,
+                               uint32_t dataPg, uint16_t rowIdx, int& removed);
 
     static Status walkIndex(MdbHandle* mdb, MdbTableDef* table, MdbIndex* idx,
                             std::vector<IndexEntryInfo>& out);

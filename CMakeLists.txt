@@ -233,6 +233,8 @@ set(SOURCES
     src/engine/jet4_usage_map.cpp
     src/engine/jet4_btree.h
     src/engine/jet4_btree.cpp
+    src/engine/jet4_table.h
+    src/engine/jet4_table.cpp
     src/engine/jet4_writer.h
     src/engine/jet4_writer.cpp
     src/engine/busy_data_migrator.h
@@ -634,6 +636,8 @@ set(TEST_SOURCES
     src/engine/jet4_usage_map.cpp
     src/engine/jet4_btree.h
     src/engine/jet4_btree.cpp
+    src/engine/jet4_table.h
+    src/engine/jet4_table.cpp
     src/engine/jet4_writer.h
     src/engine/jet4_writer.cpp
     src/models/iform_model.h
@@ -744,6 +748,8 @@ set(ENGINE_TEST_SOURCES
     src/engine/jet4_usage_map.cpp
     src/engine/jet4_btree.h
     src/engine/jet4_btree.cpp
+    src/engine/jet4_table.h
+    src/engine/jet4_table.cpp
     src/engine/jet4_writer.h
     src/engine/jet4_writer.cpp
 )
@@ -792,6 +798,8 @@ set(CLI_SOURCES
     src/engine/jet4_usage_map.cpp
     src/engine/jet4_btree.h
     src/engine/jet4_btree.cpp
+    src/engine/jet4_table.h
+    src/engine/jet4_table.cpp
     src/engine/jet4_writer.h
     src/engine/jet4_writer.cpp
     src/engine/busy_data_migrator.h

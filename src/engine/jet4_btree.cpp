@@ -19,11 +19,13 @@ namespace Jet4Writer {
  * rowId-ordered: dividers use the positional back as the child max, so an
  * unordered duplicate run makes the divider stale-small and descents
  * misroute (keys above the divider but physically on the page). */
-int BTreeEngine::cmpIndexOrder(const std::vector<uint8_t>& a, const std::vector<uint8_t>& b, bool isLeaf) {
+int BTreeEngine::cmpIndexEntries(const std::vector<uint8_t>& a, bool aIsLeaf,
+                                 const std::vector<uint8_t>& b, bool bIsLeaf) {
     size_t alen = a.size(), blen = b.size();
-    if (!isLeaf) {
-        // Strip node divider child links; [key + rowId] remains.
+    if (!aIsLeaf) {
         alen = alen > 4 ? alen - 4 : 0;
+    }
+    if (!bIsLeaf) {
         blen = blen > 4 ? blen - 4 : 0;
     }
     // Key bytes: everything except the trailing 4-byte rowId.
@@ -41,6 +43,10 @@ int BTreeEngine::cmpIndexOrder(const std::vector<uint8_t>& a, const std::vector<
         if (c == 0 && am != bm) c = (am < bm) ? -1 : 1;
     }
     return (c < 0) ? -1 : ((c > 0) ? 1 : 0);
+}
+
+int BTreeEngine::cmpIndexOrder(const std::vector<uint8_t>& a, const std::vector<uint8_t>& b, bool isLeaf) {
+    return cmpIndexEntries(a, isLeaf, b, isLeaf);
 }
 
 uint32_t BTreeEngine::childOf(const std::vector<uint8_t>& divEntry) {
@@ -106,6 +112,35 @@ bool BTreeEngine::decodeEntries(MdbHandle* mdb, DecodedPage& dp, std::string& er
     return true;
 }
 
+std::vector<uint8_t> BTreeEngine::getSubtreeMax(MdbHandle* mdb, uint32_t pg) {
+    if (!mdb || pg == 0) return {};
+    uint32_t cur = pg;
+    for (int d = 0; d < 12 && cur > 0; ++d) {
+        if (!UsageMapManager::readPage(mdb, cur)) return {};
+        const auto* buf = static_cast<const uint8_t*>(mdb->pg_buf);
+        if (buf[0] == kPageLeaf) {
+            DecodedPage dp;
+            std::string err;
+            if (!decodeEntries(mdb, dp, err) || dp.full.empty()) return {};
+            return dp.full.back(); // [key + rowId]
+        }
+        if (buf[0] != kPageIndex) return {};
+        const uint32_t tail = UsageMapManager::getU32(mdb, kOffChildTailPg);
+        if (tail != 0) {
+            cur = tail;
+            continue;
+        }
+        // No tail: last physical divider's [key + rowId]
+        DecodedPage dp;
+        std::string err;
+        if (!decodeEntries(mdb, dp, err) || dp.full.empty()) return {};
+        const auto& last = dp.full.back();
+        if (last.size() < 4) return {};
+        return std::vector<uint8_t>(last.begin(), last.end() - 4);
+    }
+    return {};
+}
+
 Status BTreeEngine::buildEntry(MdbTableDef* table, MdbIndex* idx,
                               const Field* fields, size_t nfields,
                               uint32_t dataPg, uint16_t rownum,
@@ -148,17 +183,12 @@ uint32_t BTreeEngine::findLeaf(MdbHandle* mdb, MdbIndex* idx,
         const uint32_t tail = UsageMapManager::getU32(mdb, kOffChildTailPg);
         uint32_t child = 0;
         bool exhausted = true;
+        const std::vector<uint8_t> keyVec(key, key + keyLen);
         for (size_t i = 0; i < dp.full.size(); ++i) {
             const auto& div = dp.full[i];
             if (div.size() < 4) continue;
-            const size_t dlen = div.size() - 4; /* 4-byte BE child pg trailer */
-            const uint32_t cpg = (static_cast<uint32_t>(div[dlen]) << 24) |
-                                 (static_cast<uint32_t>(div[dlen + 1]) << 16) |
-                                 (static_cast<uint32_t>(div[dlen + 2]) << 8) |
-                                 static_cast<uint32_t>(div[dlen + 3]);
-            const size_t cmpLen = std::min(keyLen, dlen);
-            int cmp = std::memcmp(key, div.data(), cmpLen);
-            if (cmp == 0) cmp = (keyLen < dlen) ? -1 : (keyLen > dlen ? 1 : 0);
+            const uint32_t cpg = childOf(div);
+            int cmp = cmpIndexEntries(keyVec, true, div, false);
             if (cmp <= 0) { child = cpg; exhausted = false; break; }
             if (i + 1 == dp.full.size()) {
                 child = (tail != 0) ? tail : cpg;
@@ -279,7 +309,6 @@ Status BTreeEngine::splitPage(MdbHandle* mdb, MdbTableDef* table, MdbIndex* idx,
     const bool isRoot = ancPath.empty();
     if (std::getenv("JET4_DEBUG")) fprintf(stderr, "[jet4] splitPage pg=%u leaf=%d n=%zu root=%d\n",
                                            pg, (int)wasLeaf, merged.size(), (int)isRoot);
-
     /* 0. Read existing links on pg before allocating (allocation clobbers pg_buf). */
     if (!UsageMapManager::readPage(mdb, pg)) return Status::Fail("splitPage: reread failed");
     const uint32_t oldPrev = UsageMapManager::getU32(mdb, kOffPrevPg);
@@ -288,13 +317,17 @@ Status BTreeEngine::splitPage(MdbHandle* mdb, MdbTableDef* table, MdbIndex* idx,
     /* Jackcess tree level (byte 26): leaves 0, nodes parent = child + 1.
      * Chunk pages inherit pg's level; a promoted root goes one above. */
     const uint8_t oldLevel = wasLeaf ? 0 : static_cast<const uint8_t*>(mdb->pg_buf)[kOffPrefixUnknown];
+    std::vector<uint8_t> oldMax = getSubtreeMax(mdb, pg);
 
     /* 1. Partition merged into page-fitting chunks. Jackcess
-     * IndexPageCache.updatePages loops splits until everything fits instead
-     * of one binary cut: a single divergent key destroys prefix compression
-     * for the whole page, so halves of an overfull page may not fit either.
-     * Greedy maximal chunks, each verified by the same predicate writeLeaf
-     * uses. Every chunk is non-empty, so this always terminates. */
+     * IndexPageCache.splitDataPage naively moves the FIRST HALF to the new
+     * page (orig keeps the second half). Halving leaves both pages half
+     * full, so ~half a page of inserts land before the next split
+     * (amortized O(1)). Greedy-maximal chunks instead leave the first chunk
+     * AT capacity, so the next insert there overflows again: a split per
+     * insert with 1-entry dribbles and runaway page growth. If a half does
+     * not fit (pathological prefix destruction), halve recursively exactly
+     * like Jackcess's updatePages re-split loop. */
     auto chunkFits = [&](size_t begin, size_t end) {
         if (begin >= end || end > merged.size()) return false;
         std::vector<std::vector<uint8_t>> probe(merged.begin() + (ptrdiff_t)begin,
@@ -305,13 +338,28 @@ Status BTreeEngine::splitPage(MdbHandle* mdb, MdbTableDef* table, MdbIndex* idx,
     if (!chunkFits(0, 1)) return Status::Fail("splitPage: entry too large");
     std::vector<std::pair<size_t, size_t>> ranges;
     {
-        size_t begin = 0;
-        while (begin < merged.size()) {
-            size_t end = begin + 1;
-            while (end < merged.size() && chunkFits(begin, end + 1)) ++end;
-            ranges.emplace_back(begin, end);
-            begin = end;
+        std::vector<std::pair<size_t, size_t>> work;
+        work.emplace_back(0, merged.size());
+        for (size_t guard = 0; guard < 64 && !work.empty(); ++guard) {
+            auto [begin, end] = work.back();
+            work.pop_back();
+            if (end - begin < 2) {
+                // Single entry that still overflows: genuinely too large.
+                if (!chunkFits(begin, end))
+                    return Status::Fail("splitPage: entry too large");
+                ranges.emplace_back(begin, end);
+                continue;
+            }
+            if (chunkFits(begin, end)) {
+                ranges.emplace_back(begin, end);
+                continue;
+            }
+            const size_t mid = begin + (end - begin + 1) / 2;
+            work.emplace_back(mid, end);
+            work.emplace_back(begin, mid);
         }
+        if (!work.empty()) return Status::Fail("splitPage: cannot partition");
+        std::sort(ranges.begin(), ranges.end());
     }
     if (ranges.size() < 2) {
         // Fits on one page after all; rewrite in place.
@@ -320,6 +368,11 @@ Status BTreeEngine::splitPage(MdbHandle* mdb, MdbTableDef* table, MdbIndex* idx,
         return Status::Fail("splitPage: cannot partition (" + err + ")");
     }
     const size_t k = ranges.size();
+    if (std::getenv("JET4_DEBUG")) {
+        fprintf(stderr, "[jet4] splitPage pg=%u chunks=%zu sizes:", pg, k);
+        for (auto& rr : ranges) fprintf(stderr, " %zu", rr.second - rr.first);
+        fprintf(stderr, "\n");
+    }
     auto chunkOf = [&](size_t i) {
         return std::vector<std::vector<uint8_t>>(merged.begin() + (ptrdiff_t)ranges[i].first,
                                                   merged.begin() + (ptrdiff_t)ranges[i].second);
@@ -474,30 +527,36 @@ Status BTreeEngine::splitPage(MdbHandle* mdb, MdbTableDef* table, MdbIndex* idx,
         if (!decodeEntries(mdb, pdp, derr))
             return Status::Fail("splitPage: parent decode: " + derr);
     }
-    /* Parent divider maintenance, Jackcess updateParentEntry/ADD semantics
-     * with self-healing: every resulting page gets EXACTLY ONE correct
-     * divider (child max as NodeEntry = full entry + child page) at its
-     * sorted position. Stale dividers pointing at our pages (from ancient
-     * bugs or partial failures) are dropped first. Orig pg needs no special
-     * treatment: head-off splits keep its max, so its divider is either
-     * still correct (deduped) or refreshed here. Tail links are never
-     * modified by splits. Duplicate full-byte dividers are skipped to keep
-     * reruns idempotent. */
-    std::set<uint32_t> ownChildren(pages.begin(), pages.end());
-    std::vector<std::vector<uint8_t>> pmerged;
-    pmerged.reserve(pdp.full.size() + divs.size());
-    for (auto& e : pdp.full) {
-        if (ownChildren.find(childOf(e)) == ownChildren.end()) pmerged.push_back(e);
-    }
-    for (auto& d : divs) {
-        size_t at = pmerged.size();
-        for (size_t i = 0; i < pmerged.size(); ++i) {
-            if (cmpIndexOrder(d, pmerged[i], false) < 0) { at = i; break; }
+    /* Parent divider maintenance (Jackcess updateParentEntry/addParentEntry):
+     * orig pg kept chunk k-1 and kept oldTail, so its max and tail status in
+     * parent remain intact. Only newly created chunk pages [pages[0] .. pages[k-2]]
+     * need fresh dividers added to parent. If pg was a leaf whose max changed,
+     * update pg's divider in parent. */
+    std::vector<std::vector<uint8_t>> pmerged = pdp.full;
+    std::vector<uint8_t> newPgMax = getSubtreeMax(mdb, pg);
+    if (!oldMax.empty() && newPgMax != oldMax) {
+        for (auto& e : pmerged) {
+            if (childOf(e) == pg) {
+                e = makeDivider(true, newPgMax, pg);
+                break;
+            }
         }
-        bool duplicate = (at < pmerged.size() && cmpIndexOrder(d, pmerged[at], false) == 0) ||
-                         (at > 0 && cmpIndexOrder(d, pmerged[at - 1], false) == 0);
-        if (!duplicate)
-            pmerged.insert(pmerged.begin() + (ptrdiff_t)at, d);
+    }
+    for (size_t i = 0; i + 1 < k; ++i) {
+        auto d = makeDivider(wasLeaf, chunkOf(i).back(), pages[i]);
+        size_t at = pmerged.size();
+        for (size_t j = 0; j < pmerged.size(); ++j) {
+            if (cmpIndexOrder(d, pmerged[j], false) < 0) { at = j; break; }
+        }
+        pmerged.insert(pmerged.begin() + (ptrdiff_t)at, d);
+    }
+    for (size_t i = 1; i < pmerged.size(); ++i) {
+        if (cmpIndexOrder(pmerged[i], pmerged[i - 1], false) < 0) {
+            std::sort(pmerged.begin(), pmerged.end(), [](const auto& a, const auto& b) {
+                return cmpIndexOrder(a, b, false) < 0;
+            });
+            break;
+        }
     }
     return insertIntoPage(mdb, table, idx, parent, false, pmerged, ancPath);
 }
@@ -522,28 +581,16 @@ Status BTreeEngine::insertIntoPage(MdbHandle* mdb, MdbTableDef* table, MdbIndex*
     const uint8_t want = isLeaf ? kPageLeaf : kPageIndex;
     if (b[0] != want) return Status::Fail("insertIntoPage: page type changed");
     // Capture the pre-write max for divider maintenance below.
-    std::vector<uint8_t> oldMax;
-    {
-        DecodedPage dp;
-        std::string derr;
-        if (decodeEntries(mdb, dp, derr) && !dp.full.empty()) oldMax = dp.full.back();
-    }
+    std::vector<uint8_t> oldMax = getSubtreeMax(mdb, pg);
 
     if (writeLeaf(mdb, pg, isLeaf, merged, err)) {
         /* Jackcess updateDataPage -> replaceParentEntry: a plain rewrite
          * that changes this page's max must propagate the new max upward,
          * else parent dividers go stale and later descents misroute. Base is
          * the [key+rowId] max (node child links stripped). */
-        if (!ancPath.empty() && !oldMax.empty() && merged.back() != oldMax) {
-            std::vector<uint8_t> base;
-            if (isLeaf) {
-                base = merged.back();
-            } else if (merged.back().size() >= 4) {
-                base.assign(merged.back().begin(), merged.back().end() - 4);
-            } else {
-                return Status::Fail("propagateMaxChange: short node max");
-            }
-            Status ps = propagateMaxChange(mdb, table, idx, pg, base, ancPath);
+        std::vector<uint8_t> newMax = getSubtreeMax(mdb, pg);
+        if (!ancPath.empty() && !oldMax.empty() && newMax != oldMax) {
+            Status ps = propagateMaxChange(mdb, table, idx, pg, newMax, ancPath);
             if (!ps.ok) return ps;
         }
         return Status::Ok();
@@ -596,17 +643,14 @@ Status BTreeEngine::propagateMaxChange(MdbHandle* mdb, MdbTableDef* table, MdbIn
             std::vector<uint32_t> above(ancPath.begin(), ancPath.begin() + (ptrdiff_t)ai);
             Status st = insertIntoPage(mdb, table, idx, parent, false, pmerged, above);
             if (!st.ok) return st;
-            // Only continue upward when this divider is the parent's max.
-            size_t last = 0;
-            for (size_t i = 0; i < pmerged.size(); ++i) {
-                if (cmpIndexOrder(pmerged[i], pmerged[last], false) > 0) last = i;
-            }
-            if (last != at) return Status::Ok();
+            return Status::Ok();
+        }
+        // No divider: true tail child needs nothing in parent (tail link routes it),
+        // but its new max is the parent's new max: continue upward.
+        if (UsageMapManager::getU32(mdb, kOffChildTailPg) == curChild) {
             curChild = parent;
             continue;
         }
-        // No divider: true tail child needs nothing (tail link routes it).
-        if (UsageMapManager::getU32(mdb, kOffChildTailPg) == curChild) return Status::Ok();
         // Otherwise historical damage: heal by inserting at sorted position.
         std::vector<std::vector<uint8_t>> pmerged = pdp.full;
         size_t at = pmerged.size();
@@ -623,8 +667,218 @@ Status BTreeEngine::propagateMaxChange(MdbHandle* mdb, MdbTableDef* table, MdbIn
     return Status::Ok();
 }
 
+/* Remove an emptied index page: unlink peers, drop its divider (or clear a
+ * tail link), recurse when the parent empties. Jackcess removeDataPage
+ * mirror. ancPath is the root-first path to pg (empty for root). */
+static Status removeIndexPage(MdbHandle* mdb, MdbTableDef* table, MdbIndex* idx,
+                              uint32_t pg, std::vector<uint32_t>& ancPath) {
+    using namespace Jet4Writer;
+    if (!UsageMapManager::readPage(mdb, pg)) return Status::Fail("removeIndexPage: read failed");
+    const auto* b0 = static_cast<const uint8_t*>(mdb->pg_buf);
+    const bool wasLeaf = (b0[0] == kPageLeaf);
+    if (!wasLeaf && b0[0] != kPageIndex) return Status::Fail("removeIndexPage: not an index page");
+    const uint32_t oldPrev = UsageMapManager::getU32(mdb, kOffPrevPg);
+    const uint32_t oldNext = UsageMapManager::getU32(mdb, kOffNextPg);
+    const uint32_t oldTail = UsageMapManager::getU32(mdb, kOffChildTailPg);
+    if (!wasLeaf && oldTail != 0)
+        return Status::Fail("removeIndexPage: emptied node still has child tail");
+    if (wasLeaf && oldTail != 0)
+        return Status::Fail("removeIndexPage: emptied leaf has tail link");
+    if (ancPath.empty()) {
+        // Root: rewrite as an empty leaf (native empty-leaf shape).
+        std::vector<uint8_t> page(kPageSize, 0);
+        page[0] = kPageLeaf;
+        page[1] = 0x01;
+        auto put16 = [&](int off, uint16_t v) {
+            page[static_cast<size_t>(off)] = static_cast<uint8_t>(v & 0xFF);
+            page[static_cast<size_t>(off) + 1] = static_cast<uint8_t>((v >> 8) & 0xFF);
+        };
+        auto put32 = [&](int off, uint32_t v) {
+            for (int i = 0; i < 4; ++i)
+                page[static_cast<size_t>(off) + i] = static_cast<uint8_t>((v >> (8 * i)) & 0xFF);
+        };
+        put16(kOffFreeSpace, static_cast<uint16_t>(kPageSize - kEntryAreaStart));
+        put32(kOffTableDefPg, static_cast<uint32_t>(table->entry->table_pg));
+        put32(kOffUnknown, 0);
+        put32(kOffPrevPg, 0);
+        put32(kOffNextPg, 0);
+        put32(kOffChildTailPg, 0);
+        put16(kOffPrefixLen, 0);
+        page[kOffPrefixUnknown] = 0;
+        if (!UsageMapManager::readPage(mdb, pg)) return Status::Fail("removeIndexPage: root reread failed");
+        std::memcpy(mdb->pg_buf, page.data(), kPageSize);
+        if (!UsageMapManager::writePage(mdb, pg)) return Status::Fail("removeIndexPage: root write failed");
+        return Status::Ok();
+    }
+    const uint32_t parent = ancPath.back();
+    std::vector<uint32_t> above(ancPath.begin(), ancPath.end() - 1);
+    if (!UsageMapManager::readPage(mdb, parent)) return Status::Fail("removeIndexPage: parent read failed");
+    {
+        const auto* pb = static_cast<const uint8_t*>(mdb->pg_buf);
+        if (pb[0] != kPageIndex) return Status::Fail("removeIndexPage: parent not node");
+    }
+    const uint32_t parentTail = UsageMapManager::getU32(mdb, kOffChildTailPg);
+    const bool isTail = (parentTail == pg);
+    DecodedPage pdp;
+    {
+        std::string derr;
+        if (!BTreeEngine::decodeEntries(mdb, pdp, derr))
+            return Status::Fail("removeIndexPage: parent decode: " + derr);
+    }
+    // Collect dividers pointing at pg (exactly one expected unless tail).
+    std::vector<size_t> hits;
+    for (size_t i = 0; i < pdp.full.size(); ++i) {
+        if (BTreeEngine::childOf(pdp.full[i]) == pg) hits.push_back(i);
+    }
+    if (hits.empty() && !isTail)
+        return Status::Fail("removeIndexPage: no divider for child");
+    std::vector<std::vector<uint8_t>> pmerged;
+    pmerged.reserve(pdp.full.size());
+    for (size_t i = 0; i < pdp.full.size(); ++i) {
+        if (BTreeEngine::childOf(pdp.full[i]) == pg) continue;
+        pmerged.push_back(pdp.full[i]);
+    }
+    if (isTail) {
+        // Jackcess updateParentTail(REMOVE): tail link cleared.
+        if (!UsageMapManager::readPage(mdb, parent)) return Status::Fail("removeIndexPage: tail reread failed");
+        UsageMapManager::putU32(mdb, kOffChildTailPg, 0);
+        if (!UsageMapManager::writePage(mdb, parent)) return Status::Fail("removeIndexPage: tail write failed");
+    }
+    if (pmerged.empty()) {
+        // Parent emptied too: recurse upward (peers unlinked below).
+        Status st = removeIndexPage(mdb, table, idx, parent, above);
+        if (!st.ok) return st;
+    } else {
+        Status st = BTreeEngine::insertIntoPage(mdb, table, idx, parent, false, pmerged, above);
+        if (!st.ok) return st;
+    }
+    // Unlink from peers (strict: peers must be index pages).
+    if (oldPrev != 0) {
+        if (!UsageMapManager::readPage(mdb, oldPrev)) return Status::Fail("removeIndexPage: prev read failed");
+        const auto* b = static_cast<const uint8_t*>(mdb->pg_buf);
+        if (b[0] != kPageLeaf && b[0] != kPageIndex) return Status::Fail("removeIndexPage: prev not index");
+        UsageMapManager::putU32(mdb, kOffNextPg, oldNext);
+        if (!UsageMapManager::writePage(mdb, oldPrev)) return Status::Fail("removeIndexPage: prev write failed");
+    }
+    if (oldNext != 0) {
+        if (!UsageMapManager::readPage(mdb, oldNext)) return Status::Fail("removeIndexPage: next read failed");
+        const auto* b = static_cast<const uint8_t*>(mdb->pg_buf);
+        if (b[0] != kPageLeaf && b[0] != kPageIndex) return Status::Fail("removeIndexPage: next not index");
+        UsageMapManager::putU32(mdb, kOffPrevPg, oldPrev);
+        if (!UsageMapManager::writePage(mdb, oldNext)) return Status::Fail("removeIndexPage: next write failed");
+    }
+    return Status::Ok();
+}
+
+Status BTreeEngine::eraseEntry(MdbHandle* mdb, MdbTableDef* table, MdbIndex* idx,
+                               const uint8_t* entry, size_t entryLen) {
+    if (!mdb || !table || !table->entry || !idx) return Status::Fail("eraseEntry: null arg");
+    if (!entry || entryLen < 5 || entryLen > 1500) return Status::Fail("eraseEntry: bad entry");
+    if (idx->first_pg == 0) return Status::Fail("eraseEntry: no root");
+    std::vector<uint8_t> key(entry, entry + entryLen);
+    std::string err;
+    std::vector<uint32_t> ancPath;
+    const uint32_t leaf = findLeaf(mdb, idx, key.data(), key.size(), ancPath, err);
+    if (!leaf) return Status::Fail("eraseEntry: descent failed: " + err);
+    if (!UsageMapManager::readPage(mdb, leaf)) return Status::Fail("eraseEntry: leaf reread failed");
+    {
+        const auto* b = static_cast<const uint8_t*>(mdb->pg_buf);
+        if (b[0] != kPageLeaf) return Status::Fail("eraseEntry: target not leaf");
+    }
+    DecodedPage dp;
+    if (!decodeEntries(mdb, dp, err)) return Status::Fail("eraseEntry: decode: " + err);
+    size_t at = dp.full.size();
+    for (size_t i = 0; i < dp.full.size(); ++i) {
+        if (dp.full[i] == key) { at = i; break; }
+    }
+    if (at >= dp.full.size()) return Status::Fail("eraseEntry: entry not on descent page");
+    const std::vector<uint8_t> oldMax = dp.full.back();
+    const bool wasMax = (dp.full[at] == oldMax);
+    std::vector<std::vector<uint8_t>> merged;
+    merged.reserve(dp.full.size() - 1);
+    for (size_t i = 0; i < dp.full.size(); ++i) {
+        if (i != at) merged.push_back(dp.full[i]);
+    }
+    if (merged.empty()) {
+        Status st = removeIndexPage(mdb, table, idx, leaf, ancPath);
+        if (!st.ok) return st;
+    } else {
+        std::string werr;
+        if (!writeLeaf(mdb, leaf, true, merged, werr))
+            return Status::Fail("eraseEntry: rewrite failed: " + werr);
+        if (wasMax && !ancPath.empty()) {
+            Status ps = propagateMaxChange(mdb, table, idx, leaf, merged.back(), ancPath);
+            if (!ps.ok) return ps;
+        }
+    }
+    // Keep cardinality coherent (mirror updateIndex ++).
+    idx->num_rows--;
+    if (table->entry->table_pg > 0) {
+        const int off = mdb->fmt->tab_cols_start_offset +
+                        idx->index_num * mdb->fmt->tab_ridx_entry_size;
+        if (UsageMapManager::readPage(mdb, static_cast<uint32_t>(table->entry->table_pg))) {
+            mdb_put_int32(mdb->pg_buf, off, static_cast<guint32>(idx->num_rows));
+            UsageMapManager::writePage(mdb, static_cast<uint32_t>(table->entry->table_pg));
+        }
+    }
+    return Status::Ok();
+}
+
+Status BTreeEngine::eraseRowRefs(MdbHandle* mdb, MdbTableDef* table, MdbIndex* idx,
+                                 uint32_t dataPg, uint16_t rowIdx, int& removed) {
+    removed = 0;
+    if (!mdb || !table || !table->entry || !idx) return Status::Fail("eraseRowRefs: null arg");
+    if (idx->first_pg == 0) return Status::Fail("eraseRowRefs: no root");
+    // Descend to leftmost leaf, then walk the chain collecting matches.
+    uint32_t pg = idx->first_pg;
+    for (int d = 0; d < 12; ++d) {
+        if (!UsageMapManager::readPage(mdb, pg)) return Status::Fail("eraseRowRefs: read failed");
+        const auto* b = static_cast<const uint8_t*>(mdb->pg_buf);
+        if (b[0] == kPageLeaf) break;
+        if (b[0] != kPageIndex) return Status::Fail("eraseRowRefs: bad node");
+        DecodedPage dp;
+        std::string err;
+        if (!decodeEntries(mdb, dp, err) || dp.full.empty())
+            return Status::Fail("eraseRowRefs: node decode: " + err);
+        const auto& div = dp.full.front();
+        if (div.size() < 4) return Status::Fail("eraseRowRefs: short divider");
+        pg = childOf(div);
+        if (!pg) return Status::Fail("eraseRowRefs: null child");
+        if (d == 11) return Status::Fail("eraseRowRefs: too deep");
+    }
+    // Phase 1: Collect all matching hits across leaves without modifying tree
+    std::vector<std::vector<uint8_t>> allHits;
+    for (int hops = 0; hops < 1000000; ++hops) {
+        if (!UsageMapManager::readPage(mdb, pg)) return Status::Fail("eraseRowRefs: leaf read failed");
+        const auto* b = static_cast<const uint8_t*>(mdb->pg_buf);
+        if (b[0] != kPageLeaf) return Status::Fail("eraseRowRefs: chain hit non-leaf");
+        const uint32_t nextPg = UsageMapManager::getU32(mdb, kOffNextPg);
+        DecodedPage dp;
+        std::string err;
+        if (!decodeEntries(mdb, dp, err)) return Status::Fail("eraseRowRefs: leaf decode: " + err);
+        for (auto& e : dp.full) {
+            if (e.size() < 4) continue;
+            const size_t t = e.size() - 4;
+            const uint32_t epg = (static_cast<uint32_t>(e[t]) << 16) |
+                                 (static_cast<uint32_t>(e[t + 1]) << 8) |
+                                 static_cast<uint32_t>(e[t + 2]);
+            const uint16_t erow = e[t + 3];
+            if (epg == dataPg && erow == (rowIdx & 0xFF)) allHits.push_back(e);
+        }
+        if (!nextPg) break;
+        pg = nextPg;
+    }
+    // Phase 2: Safely erase collected entries
+    for (auto& h : allHits) {
+        Status st = eraseEntry(mdb, table, idx, h.data(), h.size());
+        if (!st.ok) return st;
+        ++removed;
+    }
+    return Status::Ok();
+}
+
 Status BTreeEngine::leafInsert(MdbHandle* mdb, MdbTableDef* table, MdbIndex* idx,
-                              const uint8_t* entry, size_t entryLen) {
+                               const uint8_t* entry, size_t entryLen) {
     if (!mdb || !table || !table->entry || !idx) return Status::Fail("leafInsert: null arg");
     if (!entry || entryLen < 5 || entryLen > 1500) return Status::Fail("leafInsert: bad entry");
     if (idx->first_pg == 0) return Status::Fail("leafInsert: no root");

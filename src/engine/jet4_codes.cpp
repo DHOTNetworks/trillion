@@ -74,10 +74,17 @@ void ColumnEncoder::encodeText(const uint8_t* data, size_t len, bool isDesc, Byt
 }
 
 Status ColumnEncoder::appendSegment(const MdbColumn* col, const Field* f, bool isDesc, ByteVec& out) {
-    if (!f || f->isNull || !f->data) {
+    // Jackcess null rule: NULL-ness is the isNull flag alone. An empty but
+    // NOT NULL text field (data==nullptr/size==0, e.g. EntryType "") must
+    // still encode as [start-flag + 01 00], never as the single null flag
+    // byte. Snapshot rows represent empties exactly this way (owned buffers
+    // hold nothing for them), so testing !f->data here collapses "" to NULL
+    // and breaks native seeks (blank Day Book / missing date ranges).
+    if (!f || f->isNull) {
         out.putU8(isDesc ? kDescNull : kAscNull); /* Jackcess null rule */
         return Status::Ok();
     }
+    if (!f->data && f->size > 0) return Status::Fail("appendSegment: null data");
     if (col->col_type == MDB_INT) {
         if (f->size < 2) return Status::Fail("appendSegment: INT short");
         out.putU8(isDesc ? kDescStart : kAscStart);
