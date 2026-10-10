@@ -830,6 +830,20 @@ static QString gstr1ZipRead(const QString& zipPath, const QString& inner) {
 
 void LogicBoardTestSuite::testGstr1ExcelParity() {
     using namespace MahadevERP;
+    // FY-ordered month math (single source for all month-wise views).
+    QCOMPARE(FiscalYearHelper::fyMonthIndex(4), 0);
+    QCOMPARE(FiscalYearHelper::fyMonthIndex(12), 8);
+    QCOMPARE(FiscalYearHelper::fyMonthIndex(1), 9);
+    QCOMPARE(FiscalYearHelper::fyMonthIndex(3), 11);
+    QCOMPARE(FiscalYearHelper::calendarMonthForFyIndex(0), 4);
+    QCOMPARE(FiscalYearHelper::calendarMonthForFyIndex(9), 1);
+    QCOMPARE(FiscalYearHelper::fyStartYear("FY 2026-27"), 2026);
+    QCOMPARE(FiscalYearHelper::calendarYearForFyMonth("FY 2025-26", 6), 2025); // Oct->2025
+    QCOMPARE(FiscalYearHelper::calendarYearForFyMonth("FY 2025-26", 9), 2026); // Jan rolls
+    QCOMPARE(FiscalYearHelper::fyMonthStart("FY 2025-26", 9), QDate(2026, 1, 1));
+    QCOMPARE(FiscalYearHelper::fyMonthEnd("FY 2025-26", 9), QDate(2026, 1, 31));
+    QCOMPARE(FiscalYearHelper::fyMonthNames().size(), 12);
+    QCOMPARE(FiscalYearHelper::fyMonthNames().first(), QString("April"));
     // Portal rules (reference GSTINs proven checksum-valid).
     QVERIFY(Gstr1Engine::isValidGstin("06AAJFJ1219R1Z0"));
     QVERIFY(Gstr1Engine::isValidGstin("27ABACS0877M1ZW"));

@@ -818,3 +818,48 @@ PartitionedLedgerData FiscalYearHelper::partitionPartyTransactions(
 
     return result;
 }
+
+QStringList FiscalYearHelper::fyMonthNames() {
+    return {"April", "May", "June", "July", "August", "September",
+            "October", "November", "December", "January", "February", "March"};
+}
+
+int FiscalYearHelper::fyMonthIndex(int calendarMonth) {
+    if (calendarMonth < 1 || calendarMonth > 12) return -1;
+    return (calendarMonth >= 4) ? (calendarMonth - 4) : (calendarMonth + 8);
+}
+
+int FiscalYearHelper::calendarMonthForFyIndex(int fyIdx) {
+    if (fyIdx < 0 || fyIdx > 11) return -1;
+    return (fyIdx < 9) ? (fyIdx + 4) : (fyIdx - 8);
+}
+
+int FiscalYearHelper::fyStartYear(const QString& fyName) {
+    // Accepts "FY 2026-27", "2026-27", "2026/27".
+    static const QRegularExpression re(R"(20(\d{2})\D*(\d{2}))");
+    auto m = re.match(fyName.trimmed());
+    if (!m.hasMatch()) return 0;
+    int y1 = m.captured(1).toInt();
+    int y2 = m.captured(2).toInt();
+    if ((y1 + 1) % 100 != y2) return 0;
+    return 2000 + y1;
+}
+
+int FiscalYearHelper::calendarYearForFyMonth(const QString& fyName, int fyIdx) {
+    int start = fyStartYear(fyName);
+    if (start <= 0 || fyIdx < 0 || fyIdx > 11) return 0;
+    return (fyIdx < 9) ? start : (start + 1); // Jan-Mar roll to next year
+}
+
+QDate FiscalYearHelper::fyMonthStart(const QString& fyName, int fyIdx) {
+    int m = calendarMonthForFyIndex(fyIdx);
+    int y = calendarYearForFyMonth(fyName, fyIdx);
+    if (m < 1 || y <= 0) return QDate();
+    return QDate(y, m, 1);
+}
+
+QDate FiscalYearHelper::fyMonthEnd(const QString& fyName, int fyIdx) {
+    QDate s = fyMonthStart(fyName, fyIdx);
+    if (!s.isValid()) return QDate();
+    return QDate(s.year(), s.month(), s.daysInMonth());
+}

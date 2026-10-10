@@ -138,8 +138,11 @@ void GstrReportsWidget::setupUi() {
     connect(periodBtn, &QPushButton::clicked, this, openPeriodDlg);
     filterLayout->addWidget(periodBtn);
 
-    // Month-wise division shortcut (same pattern as Salary register):
-    // Month in FY order (April..March) + calendar year -> full calendar month.
+    // Return period = FY + FY-ordered month (April..March). The FY combo owns
+    // the year: Apr-Dec resolve to the FY's first calendar year, Jan-Mar roll
+    // into the next year automatically (FiscalYearHelper::fyMonthStart/End).
+    // There is deliberately NO free year combo — that is what kept this
+    // header contradicting itself.
     QLabel* monthLbl = new QLabel("Month:", filterCard);
     monthLbl->setStyleSheet("font-size: 12px; font-weight: 700; color: #334155; border: none; background: transparent;");
     filterLayout->addWidget(monthLbl);
@@ -149,36 +152,42 @@ void GstrReportsWidget::setupUi() {
     m_monthCombo->setStyleSheet(
         "QComboBox { background-color: #FFFFFF; color: #0F172A; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 4px 10px; font-weight: 700; font-size: 12px; }"
         "QComboBox:focus { border: 2px solid #2563EB; }");
-    // Calendar order (January..December): this is a MONTHLY return view, so
-    // the FY-ordered April-first list only caused FY confusion. Index == month-1.
-    m_monthCombo->addItems({
-        "January", "February", "March", "April", "May", "June",
-        "July", "August", "September", "October", "November", "December"
-    });
+    m_monthCombo->addItems(FiscalYearHelper::fyMonthNames());
     {
         QSignalBlocker b(m_monthCombo);
-        m_monthCombo->setCurrentIndex(QDate::currentDate().month() - 1);
+        m_monthCombo->setCurrentIndex(FiscalYearHelper::fyMonthIndex(QDate::currentDate().month()));
     }
-    connect(m_monthCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &GstrReportsWidget::onMonthYearChanged);
+    connect(m_monthCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &GstrReportsWidget::onFyMonthChanged);
     filterLayout->addWidget(m_monthCombo);
 
-    QLabel* yearLbl = new QLabel("Year:", filterCard);
-    yearLbl->setStyleSheet("font-size: 12px; font-weight: 700; color: #334155; border: none; background: transparent;");
-    filterLayout->addWidget(yearLbl);
+    QLabel* fyLbl = new QLabel("FY:", filterCard);
+    fyLbl->setStyleSheet("font-size: 12px; font-weight: 700; color: #334155; border: none; background: transparent;");
+    filterLayout->addWidget(fyLbl);
 
-    m_yearCombo = new QComboBox(filterCard);
-    m_yearCombo->setFixedHeight(34);
-    m_yearCombo->setStyleSheet(m_monthCombo->styleSheet());
+    m_fyCombo = new QComboBox(filterCard);
+    m_fyCombo->setFixedHeight(34);
+    m_fyCombo->setStyleSheet(m_monthCombo->styleSheet());
     {
-        int curY = QDate::currentDate().year();
-        for (int y = curY - 2; y <= curY + 2; ++y) {
-            m_yearCombo->addItem(QString::number(y), y);
+        QList<FiscalYearInfo> fys = FiscalYearHelper::getAllFiscalYears();
+        if (fys.isEmpty()) {
+            // No FY master rows (fresh file): synthesize around today.
+            int y = QDate::currentDate().month() >= 4 ? QDate::currentDate().year()
+                                                      : QDate::currentDate().year() - 1;
+            for (int s = y - 2; s <= y + 1; ++s)
+                fys.append({QString("FY %1-%2").arg(s).arg(QString::number((s + 1) % 100).rightJustified(2, '0')), "", "", false, false});
         }
-        QSignalBlocker b(m_yearCombo);
-        m_yearCombo->setCurrentText(QString::number(curY));
+        for (const FiscalYearInfo& f : fys) m_fyCombo->addItem(f.name, f.name);
+        FiscalYearInfo cur = FiscalYearHelper::getFiscalYearForDate(QDate::currentDate().toString("yyyy-MM-dd"));
+        QSignalBlocker b(m_fyCombo);
+        int ci = cur.isValid() ? m_fyCombo->findData(cur.name) : -1;
+        if (ci < 0 && m_fyCombo->count() > 0) {
+            m_fyCombo->addItem(cur.name, cur.name);
+            ci = m_fyCombo->findData(cur.name);
+        }
+        if (ci >= 0) m_fyCombo->setCurrentIndex(ci);
     }
-    connect(m_yearCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &GstrReportsWidget::onMonthYearChanged);
-    filterLayout->addWidget(m_yearCombo);
+    connect(m_fyCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &GstrReportsWidget::onFyMonthChanged);
+    filterLayout->addWidget(m_fyCombo);
 
     filterLayout->addStretch(1);
 
@@ -588,7 +597,7 @@ void GstrReportsWidget::setupUi() {
         m_fromDateEdit->setDate(sDate);
         m_toDateEdit->setDate(eDate);
     }
-    syncMonthYearCombos(sDate, eDate);
+    syncFyMonthCombos(sDate, eDate);
 }
 
 void GstrReportsWidget::applyCustomStyles() {
@@ -696,7 +705,7 @@ void GstrReportsWidget::loadReturns(const QDate& fromDate, const QDate& toDate) 
         QSignalBlocker b(m_toDateEdit);
         m_toDateEdit->setDate(toDate);
     }
-    syncMonthYearCombos(fromDate, toDate);
+    syncFyMonthCombos(fromDate, toDate);
 
     QVariantList compRows = DatabaseManager::instance().executeQuery("SELECT company_name, gstin, state, state_code FROM company_info LIMIT 1;");
     QString legalName = "";
@@ -1063,18 +1072,17 @@ void GstrReportsWidget::onRefreshClicked() {
     loadReturns(m_fromDateEdit->date(), m_toDateEdit->date());
 }
 
-void GstrReportsWidget::onMonthYearChanged() {
-    if (!m_monthCombo || !m_yearCombo) return;
-    // Calendar order: combo index 0..11 == month 1..12.
+void GstrReportsWidget::onFyMonthChanged() {
+    if (!m_monthCombo || !m_fyCombo) return;
+    // FY-ordered index 0..11 (April..March); the FY combo owns the year, so
+    // Jan-Mar automatically land in the next calendar year.
     int idx = m_monthCombo->currentIndex();
     if (idx < 0 || idx > 11) return;
-    int m = idx + 1;
-    int y = m_yearCombo->currentData().toInt();
-    if (y <= 0) y = m_yearCombo->currentText().toInt();
-    if (y <= 0) return;
-    QDate first(y, m, 1);
-    if (!first.isValid()) return;
-    QDate last(y, m, first.daysInMonth());
+    QString fy = m_fyCombo->currentData().toString();
+    if (fy.isEmpty()) fy = m_fyCombo->currentText();
+    QDate first = FiscalYearHelper::fyMonthStart(fy, idx);
+    QDate last = FiscalYearHelper::fyMonthEnd(fy, idx);
+    if (!first.isValid() || !last.isValid()) return;
     {
         QSignalBlocker b1(m_fromDateEdit);
         QSignalBlocker b2(m_toDateEdit);
@@ -1084,29 +1092,29 @@ void GstrReportsWidget::onMonthYearChanged() {
     loadReturns(first, last);
 }
 
-void GstrReportsWidget::syncMonthYearCombos(const QDate& fromDate, const QDate& toDate) {
-    if (!m_monthCombo || !m_yearCombo) return;
+void GstrReportsWidget::syncFyMonthCombos(const QDate& fromDate, const QDate& toDate) {
+    if (!m_monthCombo || !m_fyCombo) return;
     if (!fromDate.isValid() || !toDate.isValid()) return;
-    // Combos ALWAYS follow the selection's start month — no stale shortcuts.
+    // Combos ALWAYS follow the selection: FY + month of the start date.
     // (Custom ranges via Period (F2) are still honored for computation.)
-    int m = fromDate.month();
-    int y = fromDate.year();
+    FiscalYearInfo selFy = FiscalYearHelper::getFiscalYearForDate(fromDate.toString("yyyy-MM-dd"));
     {
         QSignalBlocker b1(m_monthCombo);
-        QSignalBlocker b2(m_yearCombo);
-        m_monthCombo->setCurrentIndex(m - 1);
-        int yi = m_yearCombo->findData(y);
-        if (yi < 0) {
-            m_yearCombo->addItem(QString::number(y), y);
-            yi = m_yearCombo->findData(y);
+        QSignalBlocker b2(m_fyCombo);
+        m_monthCombo->setCurrentIndex(FiscalYearHelper::fyMonthIndex(fromDate.month()));
+        if (selFy.isValid()) {
+            int fi = m_fyCombo->findData(selFy.name);
+            if (fi < 0) {
+                m_fyCombo->addItem(selFy.name, selFy.name);
+                fi = m_fyCombo->findData(selFy.name);
+            }
+            m_fyCombo->setCurrentIndex(fi);
         }
-        m_yearCombo->setCurrentIndex(yi);
     }
-    // FY badge derives from the same selection (never the global active FY,
-    // which is what made the old header contradict itself).
+    // FY badge mirrors the same selection (never the global active FY).
     if (m_fyBadge) {
-        FiscalYearInfo selFy = FiscalYearHelper::getFiscalYearForDate(fromDate.toString("yyyy-MM-dd"));
-        m_fyBadge->setText(selFy.isValid() ? selFy.name : "--");
+        m_fyBadge->setText(selFy.isValid() ? selFy.name
+                                           : m_fyCombo->currentData().toString());
     }
 }
 
@@ -1157,9 +1165,9 @@ void GstrReportsWidget::onExportGstr3BExcelClicked() {
 
     bool ok = Gstr3BEngine::exportToExcelTemplate(m_currentGstr3BSummary, savePath);
     if (ok) {
-        QMessageBox::information(this, "Export Success", QString("Form GSTR-3B (Bahi-Khata / Excel Return) successfully exported to:\n%1").arg(savePath));
+        QMessageBox::information(this, "Export Success", QString("Form GSTR-3B (Govt Format) successfully exported to:\n%1\n\nOpen it in the official Returns Offline Tool, Validate, generate JSON, upload on gst.gov.in.").arg(savePath));
     } else {
-        QMessageBox::warning(this, "Export Failed", "Could not locate the standard GSTR-3B Excel template or write the export file.");
+        QMessageBox::warning(this, "Export Failed", "Could not write the export file to:\n" + savePath);
     }
 }
 

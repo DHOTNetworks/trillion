@@ -35,7 +35,7 @@ protected:
 
 private slots:
     void onRefreshClicked();
-    void onMonthYearChanged();
+    void onFyMonthChanged();
     void onExportGstr1JsonClicked();
     void onExportGstr1ExcelClicked();
     void onImportGstr2AJsonClicked();
@@ -52,9 +52,9 @@ private:
     QTabWidget* m_tabs = nullptr;
     AccountingDateDisplay* m_fromDateEdit = nullptr;
     AccountingDateDisplay* m_toDateEdit = nullptr;
-    QComboBox* m_monthCombo = nullptr; // FY-ordered April..March, like Salary register
-    QComboBox* m_yearCombo = nullptr;  // calendar year of the selected month
-    void syncMonthYearCombos(const QDate& fromDate, const QDate& toDate);
+    QComboBox* m_monthCombo = nullptr; // FY-ordered April..March (index 0..11)
+    QComboBox* m_fyCombo = nullptr;    // selected FY owns the year (Jan-Mar auto-roll)
+    void syncFyMonthCombos(const QDate& fromDate, const QDate& toDate);
     QPushButton* m_refreshBtn = nullptr;
     QPushButton* m_backBtn = nullptr;
 

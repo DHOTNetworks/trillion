@@ -65,3 +65,6 @@ Bahi-Khata-Data/
 CMakeFiles/
 scratch/
 Testing/
+export_test/
+gst*
+Screen*

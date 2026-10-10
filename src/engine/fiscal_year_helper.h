@@ -82,6 +82,18 @@ public:
     static bool parseCanonicalVoucherNo(const QString& vchNo, QString& fyTokenOut, QString& typeOut, QString& rawOut);
     static QString rawVoucherNo(const QString& vchNo); // canonical/app-prefixed -> Bahi-Khata raw ("247"); others unchanged
 
+    // 2c. FY-ordered month selection (single source of truth for every
+    // month-wise view: GSTR pages, registers, statements). Month dropdowns run
+    // April(0)..March(11); Apr-Dec belong to the FY's first calendar year,
+    // Jan-Mar roll into the next year automatically — no free year combo.
+    static QStringList fyMonthNames(); // April..March
+    static int fyMonthIndex(int calendarMonth); // 4->0 .. 12->8, 1->9 .. 3->11
+    static int calendarMonthForFyIndex(int fyIdx); // 0->4 .. 8->12, 9->1 ..
+    static int fyStartYear(const QString& fyName); // "FY 2026-27" -> 2026, else 0
+    static int calendarYearForFyMonth(const QString& fyName, int fyIdx);
+    static QDate fyMonthStart(const QString& fyName, int fyIdx);
+    static QDate fyMonthEnd(const QString& fyName, int fyIdx);
+
     // 3. Clamping & Boundary Guards (The Sorting Machine)
     static void clampDateRangeToFiscalYear(QString& fromIso, QString& toIso, const FiscalYearInfo& fy);
     static bool isDateInFiscalYear(const QString& dateStr, const FiscalYearInfo& fy);
