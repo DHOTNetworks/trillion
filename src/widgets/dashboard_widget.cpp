@@ -385,7 +385,7 @@ QWidget* DashboardWidget::createMiddleSection() {
 
     addCard(0, "1", "1. Ledger Master", "New Ledger, Modify, View Ledger, Groups", "Alt+6", "#DBEAFE", "#2563EB", "#EFF6FF", "#2563EB");
     addCard(1, "2", "2. Stock Master", "Raw Paddy, Rice & By-Product Inventory", "Alt+4", "#DCFCE7", "#16A34A", "#F0FDF4", "#16A34A");
-    addCard(2, "3", "3. Add Vouchers", "Sales Invoices, Paddy Slips, Journal & Milling", "F2", "#FEF3C7", "#D97706", "#FEF3C7", "#D97706");
+    addCard(2, "3", "3. Add Vouchers", "Sales, Purchase, Journal, Cheque, Cash, Milling & GST", "F2", "#FEF3C7", "#D97706", "#FEF3C7", "#D97706");
     addCard(3, "4", "4. Other Vouchers", "J-Form Mandi Procurement & TDS Vouchers", "Alt+5", "#F3E8FF", "#7C3AED", "#F3E8FF", "#7C3AED");
     addCard(4, "5", "5. Books & Registers", "Day Book, Cash & Bank Book, Sales, Purchase & Stock", "Alt+7", "#DCFCE7", "#059669", "#ECFDF5", "#059669");
     addCard(5, "6", "6. Final Accounts & Financials", "Balance Sheet, P&L, Trial Bal, GST & Mandi Returns", "Alt+8", "#E0E7FF", "#4F46E5", "#EEF2FF", "#4F46E5");

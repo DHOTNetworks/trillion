@@ -5,6 +5,8 @@
 #include <QCheckBox>
 #include <QPushButton>
 #include <QLabel>
+#include <QVector>
+#include <QKeyEvent>
 #include "account_search_box.h"
 #include "../models/stock_master_controller.h"
 #include "../models/stock_items_model.h"
@@ -26,6 +28,10 @@ public:
 signals:
     void backRequested();
     void savedSuccess();
+
+protected:
+    void keyPressEvent(QKeyEvent* event) override;
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
 private slots:
     void onRecalculateOpening();
@@ -77,6 +83,9 @@ private:
     AccountSearchBox* m_saleLedgerBox = nullptr;
     AccountSearchBox* m_saleReturnLedgerBox = nullptr;
     AccountSearchBox* m_stockLedgerBox = nullptr;
+
+    // Keyboard navigation order (Enter advances, same as ledger forms)
+    QVector<QWidget*> m_navOrder;
 };
 
 } // namespace MahadevERP

@@ -36,6 +36,17 @@ SalesRegisterWidget::SalesRegisterWidget(SalesRegisterController* controller, Pr
 }
 
 void SalesRegisterWidget::setupUi() {
+    // Seamless slate: pin a light inherited palette so no surface can fall
+    // back to a dark system theme color (same hardening as GSTR dashboard).
+    setAutoFillBackground(true);
+    {
+        QPalette slatePal = palette();
+        slatePal.setColor(QPalette::Window, QColor("#F8FAFC"));
+        slatePal.setColor(QPalette::Base, QColor("#FFFFFF"));
+        slatePal.setColor(QPalette::Button, QColor("#FFFFFF"));
+        slatePal.setColor(QPalette::AlternateBase, QColor("#F8FAFC"));
+        setPalette(slatePal);
+    }
     auto* mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(14, 12, 14, 12);
     mainLayout->setSpacing(10);
@@ -237,6 +248,18 @@ void SalesRegisterWidget::setupUi() {
     connect(new QShortcut(QKeySequence(Qt::Key_Escape), this), &QShortcut::activated, this, &SalesRegisterWidget::backRequested);
     new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_P), this, SLOT(onPrintInvoice()));
     new QShortcut(QKeySequence(Qt::ALT | Qt::Key_P), this, SLOT(onExportPdf()));
+    // Enter opens the focused row's alteration (same as double-click).
+    // Scoped to the grid so search boxes and buttons keep their own keys.
+    auto openFocusedRow = [this]() {
+        if (!m_table || m_table->currentRow() < 0) return;
+        onTableDoubleClicked(m_table->currentRow(), m_table->currentColumn());
+    };
+    auto* enterShortcut = new QShortcut(QKeySequence(Qt::Key_Return), m_table);
+    enterShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+    connect(enterShortcut, &QShortcut::activated, this, openFocusedRow);
+    auto* numEnterShortcut = new QShortcut(QKeySequence(Qt::Key_Enter), m_table);
+    numEnterShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+    connect(numEnterShortcut, &QShortcut::activated, this, openFocusedRow);
 }
 
 void SalesRegisterWidget::loadData(const QDate& fromDate, const QDate& toDate) {
@@ -399,11 +422,16 @@ void SalesRegisterWidget::onTableDoubleClicked(int row, int col) {
     QString vchNo = item->data(Qt::UserRole + 1).toString();
     QString dateVal = item->data(Qt::UserRole + 2).toString();
 
+    FiscalYearInfo fy = FiscalYearHelper::getFiscalYearForDate(dateVal);
+
     QVariantMap map;
     map["invoiceNo"] = invNo;
     map["voucherNo"] = vchNo;
     map["id"] = id;
     map["date"] = dateVal;
+    map["vIso"] = dateVal;
+    map["financialYear"] = fy.name;
+    map["financial_year"] = fy.name;
 
     emit alterInvoiceRequested(14, map);
 }

@@ -3,6 +3,8 @@
 #include <QString>
 #include <QDate>
 #include <QVariantMap>
+#include <QList>
+#include "gstr1_engine.h"
 
 namespace MahadevERP {
 
@@ -33,13 +35,18 @@ struct Gstr3BTable31 {
     double txValE = 0.0;
 };
 
+struct Gstr3BTable32Row {
+    QString desc; // "Supplies made to Unregistered Persons" (composition/UIN: no source data)
+    QString pos;  // "06-Haryana" display form
+    double txVal = 0.0;
+    double iAmt = 0.0;
+};
+
 struct Gstr3BTable32 {
-    double unregisteredVal = 0.0;
-    double unregisteredIgst = 0.0;
-    double compositionVal = 0.0;
-    double compositionIgst = 0.0;
-    double uinVal = 0.0;
-    double uinIgst = 0.0;
+    // POS-wise inter-state supplies to unregistered persons, derived from the
+    // SAME GSTR-1 payload (B2CL + inter-state B2CS) so 3.2 always ties to
+    // GSTR-1 Tables 5/7B (portal keeps 3.2 non-editable since July 2025).
+    QList<Gstr3BTable32Row> rows;
 };
 
 struct Gstr3BTable4ITC {
@@ -178,7 +185,8 @@ public:
         const QString& legalName,
         const QString& stateCode,
         const QDate& fromDate,
-        const QDate& toDate
+        const QDate& toDate,
+        const Gstr1ReturnPayload* gstr1 = nullptr // same-period payload -> Table 3.2
     );
 
     static QString findTemplatePath(const QString& preferredPath = "");

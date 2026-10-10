@@ -10,9 +10,14 @@
 #include <QRegularExpression>
 #include <QDebug>
 #include <cmath>
+#include <map>
+#include <string>
+#include <cstring>
+#include <cctype>
 
 #if defined(HAS_LIBMDB) || __has_include("mdbtools.h")
 #include "mdbtools.h"
+#include "../engine/jet4_reader.h"
 #define USE_LIBMDB 1
 #endif
 
@@ -529,51 +534,43 @@ int SalaryRegisterController::syncMasterSalariesFromBahiKhata(const QString& exp
     if (!mdb) mdb = mdb_open(mdbPath.toUtf8().constData(), MDB_NOFLAGS);
 
     if (mdb) {
-        char ledgersTblName[] = "Ledgers";
-        MdbTableDef* table = mdb_read_table_by_name(mdb, ledgersTblName, MDB_TABLE);
-        if (table) {
-            mdb_read_columns(table);
-            mdb_rewind_table(table);
-
-            char boundValues[256][4096];
-            for (int i = 0; i < table->num_cols && i < 256; ++i) {
-                mdb_bind_column(table, i + 1, boundValues[i], nullptr);
-            }
-
-            int codeCol = -1;
-            int nameCol = -1;
-            int salCol = -1;
-
-            for (int i = 0; i < table->num_cols; ++i) {
-                MdbColumn* col = static_cast<MdbColumn*>(g_ptr_array_index(table->columns, i));
-                if (!col) continue;
-                QString colName = QString::fromUtf8(col->name).trimmed();
-                if (colName.compare("Code1st", Qt::CaseInsensitive) == 0) codeCol = i;
-                else if (colName.compare("LedgerName", Qt::CaseInsensitive) == 0) nameCol = i;
-                else if (colName.compare("SalaryPerMonth", Qt::CaseInsensitive) == 0) salCol = i;
-            }
-
-            if (salCol >= 0 && (nameCol >= 0 || codeCol >= 0)) {
-                db.beginTransaction();
-                while (mdb_fetch_row(table)) {
-                    double sal = 0.0;
-                    if (salCol >= 0) sal = QString::fromUtf8(boundValues[salCol]).trimmed().toDouble();
-                    if (sal > 0.0) {
-                        QString name = nameCol >= 0 ? QString::fromUtf8(boundValues[nameCol]).trimmed() : "";
-                        int code = codeCol >= 0 ? QString::fromUtf8(boundValues[codeCol]).trimmed().toInt() : 0;
-
-                        bool ok = false;
-                        if (code > 0) {
-                            ok = db.executeNonQuery("UPDATE parties SET salary_per_month = ? WHERE legacy_id = ? OR name = ?;", {sal, code, name});
-                        } else if (!name.isEmpty()) {
-                            ok = db.executeNonQuery("UPDATE parties SET salary_per_month = ? WHERE name = ?;", {sal, name});
-                        }
-                        if (ok) updatedCount++;
+        // Jackcess-faithful scan: the old fetch-cursor + cur_row-1 flag peek
+        // lost every ledger row positioned after a deleted entry (same
+        // 0x8000/0x4000 bug class as the migrators), silently skipping salary
+        // updates for those employees.
+        auto ledgerRows = Jet4Reader::readTable(mdb, "Ledgers");
+        auto getCol = [](const std::map<std::string, std::string>& r, const char* key) -> std::string {
+            auto it = r.find(key);
+            if (it != r.end()) return it->second;
+            for (const auto& kv : r) {
+                if (kv.first.size() == strlen(key)) {
+                    bool eq = true;
+                    for (size_t i = 0; i < strlen(key); ++i) {
+                        if (std::tolower((unsigned char)kv.first[i]) != std::tolower((unsigned char)key[i])) { eq = false; break; }
                     }
+                    if (eq) return kv.second;
                 }
-                db.commit();
             }
-            mdb_free_tabledef(table);
+            return "";
+        };
+        if (!ledgerRows.empty()) {
+            db.beginTransaction();
+            for (const auto& row : ledgerRows) {
+                double sal = QString::fromStdString(getCol(row, "SalaryPerMonth")).trimmed().toDouble();
+                if (sal > 0.0) {
+                    QString name = QString::fromStdString(getCol(row, "LedgerName")).trimmed();
+                    int code = QString::fromStdString(getCol(row, "Code1st")).trimmed().toInt();
+
+                    bool ok = false;
+                    if (code > 0) {
+                        ok = db.executeNonQuery("UPDATE parties SET salary_per_month = ? WHERE legacy_id = ? OR name = ?;", {sal, code, name});
+                    } else if (!name.isEmpty()) {
+                        ok = db.executeNonQuery("UPDATE parties SET salary_per_month = ? WHERE name = ?;", {sal, name});
+                    }
+                    if (ok) updatedCount++;
+                }
+            }
+            db.commit();
         }
         mdb_close(mdb);
     }

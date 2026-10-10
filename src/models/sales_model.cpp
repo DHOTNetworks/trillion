@@ -1,6 +1,7 @@
 #include "sales_model.h"
 #include "../database_manager.h"
 #include "../engine/accounting_engine.h"
+#include "../engine/bill_series.h"
 #include "../engine/fiscal_year_helper.h"
 #include <QDate>
 #include <QRegularExpression>
@@ -22,33 +23,10 @@ void SalesModel::reload_data() {
     emit countChanged();
 }
 
-static QString incrementInvoiceStr(const QString& invStr, const QString& defaultPrefix = "") {
-    QString pfx = defaultPrefix;
-    if (pfx.isEmpty()) {
-        FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
-        QString shortFy = activeFy.name.mid(3).remove('-').remove(' ');
-        pfx = "INV/" + shortFy + "-";
-    }
-    if (invStr.trimmed().isEmpty()) return pfx + "1";
-    QString invClean = invStr.trimmed();
-    QRegularExpression re("^(.*?)(\\d+)$");
-    QRegularExpressionMatch m = re.match(invClean);
-    if (m.hasMatch()) {
-        QString prefix = m.captured(1);
-        QString numStr = m.captured(2);
-        long long nextVal = numStr.toLongLong() + 1;
-        QString nextNumStr;
-        if (numStr.startsWith('0') && numStr.length() > 1) {
-            nextNumStr = QString::number(nextVal).rightJustified(numStr.length(), '0');
-        } else {
-            nextNumStr = QString::number(nextVal);
-        }
-        return prefix + nextNumStr;
-    }
-    return invClean + "-1";
-}
-
 QString SalesModel::get_next_voucher_no(const QString& fy) {
+    // Canonical identity: "{yyYY}/Sale-{n}" (e.g. "2627/Sale-248"). The max
+    // counts BOTH shapes (canonical "2627/Sale-247" and legacy "Sale-247" /
+    // Bahi-Khata bare "247") so numbers are never reused within the FY.
     QString targetFy = AccountingEngine::resolveFinancialYear(fy);
     QString fyPattern = "%" + targetFy.mid(3).trimmed() + "%";
 
@@ -58,7 +36,7 @@ QString SalesModel::get_next_voucher_no(const QString& fy) {
     );
 
     QVariantList vRows = DatabaseManager::instance().executeQuery(
-        "SELECT voucher_no FROM vouchers WHERE (voucher_type = 'Sales' OR voucher_no LIKE 'Sale-%') AND (financial_year = ? OR financial_year LIKE ?);",
+        "SELECT voucher_no FROM vouchers WHERE (voucher_type = 'Sales' OR voucher_no LIKE 'Sale-%' OR voucher_no LIKE '%/Sale-%') AND (financial_year = ? OR financial_year LIKE ?);",
         {targetFy, fyPattern}
     );
 
@@ -75,60 +53,16 @@ QString SalesModel::get_next_voucher_no(const QString& fy) {
             }
         }
     }
-    return QString("Sale-%1").arg(maxId + 1);
+    QString next = FiscalYearHelper::canonicalVoucherNo(targetFy, "Sale", QString::number(maxId + 1));
+    if (!next.contains('/')) next = "Sale-" + next; // degenerate fallback: no FY resolvable, keep legacy shape
+    return next;
 }
 
 QString SalesModel::get_next_invoice_no(const QString& fy) {
-    QString targetFy = AccountingEngine::resolveFinancialYear(fy);
-    QString fyPattern = "%" + targetFy.mid(3).trimmed() + "%";
-
-    QVariantList rows = DatabaseManager::instance().executeQuery(
-        "SELECT invoice_no FROM sales_invoices WHERE (financial_year = ? OR financial_year LIKE ?) AND invoice_no IS NOT NULL AND invoice_no != '';",
-        {targetFy, fyPattern}
-    );
-
-    QString defaultPrefix = "MRI/2627-";
-    QRegularExpression fyRe("(\\d{2})(\\d{2})-(\\d{2})");
-    QRegularExpressionMatch mFy = fyRe.match(targetFy);
-    if (mFy.hasMatch()) {
-        defaultPrefix = QString("MRI/%1%2-").arg(mFy.captured(2), mFy.captured(3));
-    }
-
-    QString prefix = "";
-    long long maxNum = 0;
-    int numDigits = 0;
-
-    QRegularExpression re("^(.*?)(\\d+)$");
-    for (const QVariant& r : rows) {
-        QString inv = r.toMap().value("invoice_no").toString().trimmed();
-        if (inv.isEmpty()) continue;
-        QRegularExpressionMatch m = re.match(inv);
-        if (m.hasMatch()) {
-            QString pfx = m.captured(1);
-            QString digits = m.captured(2);
-            long long num = digits.toLongLong();
-            if (num > maxNum) {
-                maxNum = num;
-                prefix = pfx;
-                numDigits = digits.length();
-            }
-        }
-    }
-
-    if (maxNum > 0) {
-        if (prefix.isEmpty()) prefix = defaultPrefix;
-        long long nextNum = maxNum + 1;
-        QString nextNumStr = QString::number(nextNum);
-        if (numDigits > 1 && nextNumStr.length() < numDigits) {
-            nextNumStr = nextNumStr.rightJustified(numDigits, '0');
-        }
-        return prefix + nextNumStr;
-    }
-    return defaultPrefix + "1";
-}
-
-QString SalesModel::increment_invoice(const QString& invStr) {
-    return incrementInvoiceStr(invStr);
+    // Auto-invoice number comes from the user's Bill Series config
+    // (app_settings "bill_series/sale" in this .db file). No prefix is
+    // hardcoded here: unsaved firms adopt their own history's dominant shape.
+    return BillSeriesManager::nextNumber("sale", "sales_invoices", fy);
 }
 
 bool SalesModel::add_sales_invoice_full(
@@ -447,11 +381,34 @@ QVariantList SalesModel::get_sales_register(const QString& param1, const QString
 }
 
 QVariantMap SalesModel::get_previous_sales_invoice(int currentId, const QString& currentInvOrVchNo) {
+    FiscalYearInfo fy;
+    if (currentId > 0) {
+        QVariant curD = DatabaseManager::instance().executeScalar(
+            "SELECT invoice_date FROM sales_invoices WHERE id = ? LIMIT 1;", {currentId}
+        );
+        if (curD.isValid() && !curD.toString().isEmpty()) {
+            fy = FiscalYearHelper::getFiscalYearForDate(curD.toString());
+        }
+    }
+    if (!fy.isValid() && !currentInvOrVchNo.trimmed().isEmpty()) {
+        fy = FiscalYearHelper::resolveFiscalYear(currentInvOrVchNo);
+    }
+    if (!fy.isValid()) {
+        fy = FiscalYearHelper::getActiveFiscalYear();
+    }
+
     QVariant targetId;
     if (currentId > 0) {
-        targetId = DatabaseManager::instance().executeScalar(
-            "SELECT id FROM sales_invoices WHERE id < ? ORDER BY id DESC LIMIT 1;", {currentId}
-        );
+        if (fy.isValid()) {
+            targetId = DatabaseManager::instance().executeScalar(
+                "SELECT id FROM sales_invoices WHERE id < ? AND invoice_date >= ? AND invoice_date <= ? ORDER BY id DESC LIMIT 1;",
+                {currentId, fy.startDate, fy.endDate}
+            );
+        } else {
+            targetId = DatabaseManager::instance().executeScalar(
+                "SELECT id FROM sales_invoices WHERE id < ? ORDER BY id DESC LIMIT 1;", {currentId}
+            );
+        }
     }
     if (!targetId.isValid() && !currentInvOrVchNo.trimmed().isEmpty()) {
         QVariant curRowId = DatabaseManager::instance().executeScalar(
@@ -459,41 +416,57 @@ QVariantMap SalesModel::get_previous_sales_invoice(int currentId, const QString&
             {currentInvOrVchNo, currentInvOrVchNo}
         );
         if (curRowId.isValid()) {
-            targetId = DatabaseManager::instance().executeScalar(
-                "SELECT id FROM sales_invoices WHERE id < ? ORDER BY id DESC LIMIT 1;", {curRowId.toInt()}
-            );
+            if (fy.isValid()) {
+                targetId = DatabaseManager::instance().executeScalar(
+                    "SELECT id FROM sales_invoices WHERE id < ? AND invoice_date >= ? AND invoice_date <= ? ORDER BY id DESC LIMIT 1;",
+                    {curRowId.toInt(), fy.startDate, fy.endDate}
+                );
+            } else {
+                targetId = DatabaseManager::instance().executeScalar(
+                    "SELECT id FROM sales_invoices WHERE id < ? ORDER BY id DESC LIMIT 1;", {curRowId.toInt()}
+                );
+            }
         }
     }
     if (!targetId.isValid()) {
-        targetId = DatabaseManager::instance().executeScalar(
-            "SELECT id FROM sales_invoices ORDER BY id DESC LIMIT 1;"
-        );
+        if (fy.isValid()) {
+            targetId = DatabaseManager::instance().executeScalar(
+                "SELECT id FROM sales_invoices WHERE invoice_date >= ? AND invoice_date <= ? ORDER BY id DESC LIMIT 1;",
+                {fy.startDate, fy.endDate}
+            );
+        } else {
+            targetId = DatabaseManager::instance().executeScalar(
+                "SELECT id FROM sales_invoices ORDER BY id DESC LIMIT 1;"
+            );
+        }
     }
     if (targetId.isValid()) {
         return get_sales_invoice(targetId.toInt());
     }
-
-    // Fallback to vouchers table
-    QVariant vId;
-    if (currentId > 0) {
-        vId = DatabaseManager::instance().executeScalar(
-            "SELECT id FROM vouchers WHERE id < ? AND (voucher_type IN ('Sales', 'Sale') OR legacy_type IN ('Sale', 'Sales')) ORDER BY id DESC LIMIT 1;",
-            {currentId}
-        );
-    }
-    if (!vId.isValid()) {
-        vId = DatabaseManager::instance().executeScalar(
-            "SELECT id FROM vouchers WHERE (voucher_type IN ('Sales', 'Sale') OR legacy_type IN ('Sale', 'Sales')) ORDER BY id DESC LIMIT 1;"
-        );
-    }
-    if (vId.isValid()) {
-        return get_sales_invoice(vId.toInt());
-    }
+    // No vouchers-table fallback: vouchers.id lives in a different id-space
+    // than sales_invoices.id, so resolving one as the other opened unrelated
+    // invoices instead of reporting none.
     return {};
 }
 
 QVariantMap SalesModel::get_next_sales_invoice(int currentId, const QString& currentInvOrVchNo) {
     if (currentId <= 0 && currentInvOrVchNo.trimmed().isEmpty()) return {};
+
+    FiscalYearInfo fy;
+    if (currentId > 0) {
+        QVariant curD = DatabaseManager::instance().executeScalar(
+            "SELECT invoice_date FROM sales_invoices WHERE id = ? LIMIT 1;", {currentId}
+        );
+        if (curD.isValid() && !curD.toString().isEmpty()) {
+            fy = FiscalYearHelper::getFiscalYearForDate(curD.toString());
+        }
+    }
+    if (!fy.isValid() && !currentInvOrVchNo.trimmed().isEmpty()) {
+        fy = FiscalYearHelper::resolveFiscalYear(currentInvOrVchNo);
+    }
+    if (!fy.isValid()) {
+        fy = FiscalYearHelper::getActiveFiscalYear();
+    }
 
     int effId = currentId;
     if (effId <= 0 && !currentInvOrVchNo.trimmed().isEmpty()) {
@@ -505,21 +478,21 @@ QVariantMap SalesModel::get_next_sales_invoice(int currentId, const QString& cur
     }
 
     if (effId > 0) {
-        QVariant targetId = DatabaseManager::instance().executeScalar(
-            "SELECT id FROM sales_invoices WHERE id > ? ORDER BY id ASC LIMIT 1;", {effId}
-        );
+        QVariant targetId;
+        if (fy.isValid()) {
+            targetId = DatabaseManager::instance().executeScalar(
+                "SELECT id FROM sales_invoices WHERE id > ? AND invoice_date >= ? AND invoice_date <= ? ORDER BY id ASC LIMIT 1;",
+                {effId, fy.startDate, fy.endDate}
+            );
+        } else {
+            targetId = DatabaseManager::instance().executeScalar(
+                "SELECT id FROM sales_invoices WHERE id > ? ORDER BY id ASC LIMIT 1;", {effId}
+            );
+        }
         if (targetId.isValid()) {
             return get_sales_invoice(targetId.toInt());
         }
-
-        // Fallback to vouchers table
-        QVariant vId = DatabaseManager::instance().executeScalar(
-            "SELECT id FROM vouchers WHERE id > ? AND (voucher_type IN ('Sales', 'Sale') OR legacy_type IN ('Sale', 'Sales')) ORDER BY id ASC LIMIT 1;",
-            {effId}
-        );
-        if (vId.isValid()) {
-            return get_sales_invoice(vId.toInt());
-        }
+        // No vouchers-table fallback (different id-space; see get_previous).
     }
     return {};
 }
@@ -530,6 +503,7 @@ QVariantMap SalesModel::get_sales_invoice(const QVariant& invoiceNoOrId, const Q
     QString vNo;
     QString dateHint = FiscalYearHelper::normalizeToIso(dateHintParam);
     QString partyHint = partyHintParam.trimmed();
+    QString explicitFy;
 
     if (invoiceNoOrId.typeId() == QMetaType::QVariantMap) {
         QVariantMap m = invoiceNoOrId.toMap();
@@ -538,6 +512,7 @@ QVariantMap SalesModel::get_sales_invoice(const QVariant& invoiceNoOrId, const Q
         vNo = m.value("voucher_no", m.value("voucherNo")).toString().trimmed();
         if (dateHint.isEmpty()) dateHint = FiscalYearHelper::normalizeToIso(m.value("vIso", m.value("invoice_date", m.value("voucher_date", m.value("date")))).toString());
         if (partyHint.isEmpty()) partyHint = m.value("party_name", m.value("partyName", m.value("customer_name", m.value("customerName")))).toString().trimmed();
+        explicitFy = m.value("financialYear", m.value("financial_year")).toString().trimmed();
     } else {
         bool isNum = false;
         int parsedId = invoiceNoOrId.toInt(&isNum);
@@ -553,227 +528,68 @@ QVariantMap SalesModel::get_sales_invoice(const QVariant& invoiceNoOrId, const Q
         }
     }
 
-    qDebug() << "[SALES_MODEL] get_sales_invoice targetId:" << targetId << "q:" << q << "vNo:" << vNo << "dateHint:" << dateHint << "partyHint:" << partyHint;
+    qDebug() << "[SALES_MODEL] get_sales_invoice targetId:" << targetId << "q:" << q << "vNo:" << vNo << "dateHint:" << dateHint << "partyHint:" << partyHint << "explicitFy:" << explicitFy;
     if (targetId <= 0 && q.isEmpty() && vNo.isEmpty() && dateHint.isEmpty() && partyHint.isEmpty()) return {};
 
-    static const QRegularExpression prefixRe(QStringLiteral("^(Sale|Sales|Purc|Purchase|Pur|Jrnl|Journal|ChPt|ChRt|Pymt|Rcpt|TDS|JFrm|J-Form)[-\\s]*"), QRegularExpression::CaseInsensitiveOption);
-    QString cleanQ = q;
-    cleanQ = cleanQ.remove(prefixRe).trimmed();
-    QString cleanVNo = vNo;
-    cleanVNo = cleanVNo.remove(prefixRe).trimmed();
-    if (cleanQ.isEmpty()) cleanQ = cleanVNo;
-    if (cleanVNo.isEmpty()) cleanVNo = cleanQ;
+    FiscalYearInfo targetFy = FiscalYearHelper::resolveFiscalYear(!q.isEmpty() ? q : vNo, dateHint, explicitFy);
+
+    // Canonical identity: voucher/invoice numbers are matched by EXACT
+    // equality only ("2627/Sale-247" is stored and typed verbatim). No prefix
+    // stripping, no type-variant expansion, no substring LIKE — those matched
+    // unrelated FYs/numbers (e.g. voucher "247" hitting "1247").
+    const QString cleanQ = q;
+    const QString cleanVNo = vNo;
 
     QVariantList rows;
 
-    // 1. Direct search by ID if valid in sales_invoices
+    // STRICT IDENTITY RULES (FY-qualified, exact matches only):
+    //  - ids are unique: an id hit is exact; an id miss means deleted/wrong-FY
+    //    and must report not-found, never cascade into fuzzy matching that
+    //    would open a different invoice (e.g. FY25-26 #247 for an FY26-27 row).
+    //  - invoice/voucher numbers match ONLY by exact equality inside one FY
+    //    (2526/2627-style tokens embedded in the number select the FY).
+    //    Substring LIKE is banned: numeric Bahi-Khata voucher "247" must never
+    //    match "1247"/"2470".
+    //  - No synthetic fabrication from vouchers/transactions: a missing
+    //    invoice reports not-found instead of showing invented data.
+
+    // 1. Direct search by ID; FY-verified when the FY is determinable.
     if (targetId > 0) {
-        rows = DatabaseManager::instance().executeQuery("SELECT * FROM sales_invoices WHERE id = ? LIMIT 1;", {targetId});
+        if (targetFy.isValid()) {
+            rows = DatabaseManager::instance().executeQuery("SELECT * FROM sales_invoices WHERE id = ? AND invoice_date >= ? AND invoice_date <= ? LIMIT 1;", {targetId, targetFy.startDate, targetFy.endDate});
+        } else {
+            rows = DatabaseManager::instance().executeQuery("SELECT * FROM sales_invoices WHERE id = ? LIMIT 1;", {targetId});
+        }
+        if (!rows.isEmpty()) {
+            // exact identity hit below via shared hydration
+        } else if (cleanQ.isEmpty() && cleanVNo.isEmpty()) {
+            return {};
+        }
+        // else: bogus id but numbers present (typed input) -> try numbers strictly.
     }
 
-    // 2. Match with dateHint and invoice_no / voucher_no
-    if (rows.isEmpty() && !dateHint.isEmpty() && (!cleanQ.isEmpty() || !cleanVNo.isEmpty())) {
-        rows = DatabaseManager::instance().executeQuery(
-            "SELECT * FROM sales_invoices WHERE (invoice_no = ? OR voucher_no = ? OR invoice_no = ? OR voucher_no = ? OR invoice_no = ? OR voucher_no = ?) AND invoice_date = ? ORDER BY id DESC LIMIT 1;",
-            {q, vNo, cleanQ, cleanVNo, ("Sale-" + cleanVNo), ("Sale-" + cleanQ), dateHint}
-        );
-    }
-
-    // 3. Match with dateHint and partyHint
-    if (rows.isEmpty() && !dateHint.isEmpty() && !partyHint.isEmpty()) {
-        rows = DatabaseManager::instance().executeQuery(
-            "SELECT * FROM sales_invoices WHERE invoice_date = ? AND (customer_name = ? OR customer_name LIKE ?) ORDER BY id DESC LIMIT 1;",
-            {dateHint, partyHint, "%" + partyHint + "%"}
-        );
-    }
-
-    // 4. Exact invoice_no or voucher_no match in sales_invoices
+    // 2. Exact invoice_no / voucher_no on an exact date, else inside exactly
+    // one FY (never cross-FY, never LIKE).
     if (rows.isEmpty() && (!cleanQ.isEmpty() || !cleanVNo.isEmpty())) {
-        rows = DatabaseManager::instance().executeQuery(
-            "SELECT * FROM sales_invoices WHERE invoice_no = ? OR voucher_no = ? OR invoice_no = ? OR voucher_no = ? OR voucher_no = ('Sale-' || ?) OR voucher_no = ('Sale-' || ?) ORDER BY id DESC LIMIT 1;",
-            {q, vNo, cleanQ, cleanVNo, q, cleanVNo}
-        );
-    }
-
-    // 3. Try lookup via vouchers table (if q/cleanQ is in vouchers table)
-    if (rows.isEmpty() && (!q.isEmpty() || !cleanQ.isEmpty())) {
-        QString sql = "SELECT id, voucher_no, instrument_no, voucher_date, party_name, amount, narration "
-                      "FROM vouchers WHERE (id = ? OR voucher_no = ? OR instrument_no = ? OR voucher_no = ? OR instrument_no = ? OR voucher_no = ('Sale-' || ?) OR instrument_no = ('Sale-' || ?)) "
-                      "AND (voucher_type IN ('Sales', 'Sale') OR legacy_type IN ('Sale', 'Sales')) ";
-        QVariantList vParams = {q, q, q, cleanQ, cleanQ, q, q};
         if (!dateHint.isEmpty()) {
-            sql += "AND voucher_date = ? ";
-            vParams.append(dateHint);
-        }
-        sql += "ORDER BY id DESC LIMIT 1;";
-        QVariantList vRows = DatabaseManager::instance().executeQuery(sql, vParams);
-        if (vRows.isEmpty() && !dateHint.isEmpty()) {
-            // Retry vouchers without strict dateHint
-            vRows = DatabaseManager::instance().executeQuery(
-                "SELECT id, voucher_no, instrument_no, voucher_date, party_name, amount, narration "
-                "FROM vouchers WHERE (id = ? OR voucher_no = ? OR instrument_no = ? OR voucher_no = ? OR instrument_no = ? OR voucher_no = ('Sale-' || ?) OR instrument_no = ('Sale-' || ?)) "
-                "AND (voucher_type IN ('Sales', 'Sale') OR legacy_type IN ('Sale', 'Sales')) ORDER BY id DESC LIMIT 1;",
-                {q, q, q, cleanQ, cleanQ, q, q}
+            rows = DatabaseManager::instance().executeQuery(
+                "SELECT * FROM sales_invoices WHERE (invoice_no = ? OR voucher_no = ?) AND invoice_date = ? ORDER BY id DESC LIMIT 1;",
+                {cleanQ, cleanVNo, dateHint}
             );
-        }
-
-        if (!vRows.isEmpty()) {
-            QVariantMap v = vRows.first().toMap();
-            QString vRef = v.value("instrument_no").toString().trimmed();
-            QString vNo = v.value("voucher_no").toString().trimmed();
-            QString vDate = v.value("voucher_date").toString().trimmed();
-            QString vParty = v.value("party_name").toString().trimmed();
-
-            if (!vRef.isEmpty()) {
+        } else {
+            const FiscalYearInfo scopeFy = targetFy.isValid() ? targetFy : FiscalYearHelper::getActiveFiscalYear();
+            if (scopeFy.isValid()) {
                 rows = DatabaseManager::instance().executeQuery(
-                    "SELECT * FROM sales_invoices WHERE invoice_no = ? ORDER BY id DESC LIMIT 1;", {vRef}
+                    "SELECT * FROM sales_invoices WHERE (invoice_no = ? OR voucher_no = ?) "
+                    "AND invoice_date >= ? AND invoice_date <= ? ORDER BY id DESC LIMIT 1;",
+                    {cleanQ, cleanVNo, scopeFy.startDate, scopeFy.endDate}
                 );
-            }
-            if (rows.isEmpty() && !vNo.isEmpty() && !vParty.isEmpty()) {
-                rows = DatabaseManager::instance().executeQuery(
-                    "SELECT * FROM sales_invoices WHERE (voucher_no = ? OR invoice_no = ?) AND customer_name LIKE ? ORDER BY id DESC LIMIT 1;",
-                    {vNo, vNo, "%" + vParty + "%"}
-                );
-            }
-            if (rows.isEmpty() && !vNo.isEmpty()) {
-                rows = DatabaseManager::instance().executeQuery(
-                    "SELECT * FROM sales_invoices WHERE voucher_no = ? OR invoice_no = ? ORDER BY id DESC LIMIT 1;", {vNo, vNo}
-                );
-            }
-            if (rows.isEmpty() && !vDate.isEmpty() && !vParty.isEmpty()) {
-                rows = DatabaseManager::instance().executeQuery(
-                    "SELECT * FROM sales_invoices WHERE invoice_date = ? AND customer_name = ? ORDER BY id DESC LIMIT 1;",
-                    {vDate, vParty}
-                );
-            }
-            if (rows.isEmpty()) {
-                // Construct synthetic sales invoice directly from vouchers and stock_transactions
-                QVariantMap synInv;
-                synInv["id"] = v.value("id");
-                synInv["voucher_no"] = vNo.isEmpty() ? ("Sale-" + v.value("id").toString()) : vNo;
-                synInv["invoice_no"] = vRef.isEmpty() ? synInv["voucher_no"] : vRef;
-                synInv["invoice_date"] = vDate;
-                synInv["customer_name"] = vParty;
-                synInv["party_ledger"] = vParty;
-                synInv["total_amount"] = v.value("amount");
-                synInv["taxable_amount"] = v.value("amount");
-                synInv["narration"] = v.value("narration");
-
-                QVariantList pRows = DatabaseManager::instance().executeQuery(
-                    "SELECT gstin, address FROM parties WHERE name = ? LIMIT 1;", {vParty}
-                );
-                if (!pRows.isEmpty()) {
-                    synInv["gstin"] = pRows.first().toMap().value("gstin");
-                    synInv["shipping_address"] = pRows.first().toMap().value("address");
-                }
-
-                QVariantList stRows = DatabaseManager::instance().executeQuery(
-                    "SELECT item_name, bags AS bag_count, packing, weight_qtl, rate AS rate_per_qtl, amount AS total_amount, taxable_amount, tax AS gst_pct "
-                    "FROM stock_transactions WHERE (voucher_no = ? OR voucher_no = ? OR bill_no = ? OR (voucher_date = ? AND party_name = ?)) AND trans_type IN ('Sale', 'Sales') "
-                    "ORDER BY row_no ASC, id ASC;",
-                    {vNo, cleanQ, vRef, vDate, vParty}
-                );
-                synInv["items"] = stRows;
-                return synInv;
             }
         }
-    }
-
-    // 3.5. Try lookup via transactions table
-    if (rows.isEmpty() && (!q.isEmpty() || !cleanQ.isEmpty())) {
-        QString sql = "SELECT id, voucher_no, invoice_no, voucher_date, party_name, amount, narration "
-                      "FROM transactions WHERE (id = ? OR voucher_no = ? OR invoice_no = ? OR voucher_no = ? OR invoice_no = ? OR voucher_no = ('Sale-' || ?) OR invoice_no = ('Sale-' || ?)) "
-                      "AND (trans_type IN ('Sale', 'Sales') OR voucher_type IN ('Sales', 'Sale')) ";
-        QVariantList tParams = {q, q, q, cleanQ, cleanQ, q, q};
-        if (!dateHint.isEmpty()) {
-            sql += "AND voucher_date = ? ";
-            tParams.append(dateHint);
-        }
-        sql += "ORDER BY id DESC LIMIT 1;";
-        QVariantList tRows = DatabaseManager::instance().executeQuery(sql, tParams);
-        if (tRows.isEmpty() && !dateHint.isEmpty()) {
-            tRows = DatabaseManager::instance().executeQuery(
-                "SELECT id, voucher_no, invoice_no, voucher_date, party_name, amount, narration "
-                "FROM transactions WHERE (id = ? OR voucher_no = ? OR invoice_no = ? OR voucher_no = ? OR invoice_no = ? OR voucher_no = ('Sale-' || ?) OR invoice_no = ('Sale-' || ?)) "
-                "AND (trans_type IN ('Sale', 'Sales') OR voucher_type IN ('Sales', 'Sale')) ORDER BY id DESC LIMIT 1;",
-                {q, q, q, cleanQ, cleanQ, q, q}
-            );
-        }
-
-        if (!tRows.isEmpty()) {
-            QVariantMap t = tRows.first().toMap();
-            QString tInv = t.value("invoice_no").toString().trimmed();
-            QString tVNo = t.value("voucher_no").toString().trimmed();
-            QString tDate = t.value("voucher_date").toString().trimmed();
-            QString tParty = t.value("party_name").toString().trimmed();
-
-            if (!tInv.isEmpty()) {
-                rows = DatabaseManager::instance().executeQuery(
-                    "SELECT * FROM sales_invoices WHERE invoice_no = ? ORDER BY id DESC LIMIT 1;", {tInv}
-                );
-            }
-            if (rows.isEmpty() && !tVNo.isEmpty()) {
-                rows = DatabaseManager::instance().executeQuery(
-                    "SELECT * FROM sales_invoices WHERE voucher_no = ? OR voucher_no = ('Sale-' || ?) OR invoice_no = ? ORDER BY id DESC LIMIT 1;",
-                    {tVNo, tVNo, tVNo}
-                );
-            }
-            if (rows.isEmpty() && !tDate.isEmpty() && !tParty.isEmpty()) {
-                rows = DatabaseManager::instance().executeQuery(
-                    "SELECT * FROM sales_invoices WHERE invoice_date = ? AND customer_name LIKE ? ORDER BY id DESC LIMIT 1;",
-                    {tDate, "%" + tParty + "%"}
-                );
-            }
-            if (rows.isEmpty()) {
-                // Construct synthetic sales invoice directly from transactions and stock_transactions
-                QVariantMap synInv;
-                synInv["id"] = t.value("id");
-                synInv["voucher_no"] = tVNo.isEmpty() ? ("Sale-" + t.value("id").toString()) : tVNo;
-                synInv["invoice_no"] = tInv.isEmpty() ? synInv["voucher_no"] : tInv;
-                synInv["invoice_date"] = tDate;
-                synInv["customer_name"] = tParty;
-                synInv["party_ledger"] = tParty;
-                synInv["total_amount"] = t.value("amount");
-                synInv["taxable_amount"] = t.value("amount");
-                synInv["narration"] = t.value("narration");
-
-                QVariantList pRows = DatabaseManager::instance().executeQuery(
-                    "SELECT gstin, address FROM parties WHERE name = ? LIMIT 1;", {tParty}
-                );
-                if (!pRows.isEmpty()) {
-                    synInv["gstin"] = pRows.first().toMap().value("gstin");
-                    synInv["shipping_address"] = pRows.first().toMap().value("address");
-                }
-
-                QVariantList stRows = DatabaseManager::instance().executeQuery(
-                    "SELECT item_name, bags AS bag_count, packing, weight_qtl, rate AS rate_per_qtl, amount AS total_amount, taxable_amount, tax AS gst_pct "
-                    "FROM stock_transactions WHERE (voucher_no = ? OR voucher_no = ? OR bill_no = ? OR (voucher_date = ? AND party_name = ?)) AND trans_type IN ('Sale', 'Sales') "
-                    "ORDER BY row_no ASC, id ASC;",
-                    {tVNo, cleanQ, tInv, tDate, tParty}
-                );
-                synInv["items"] = stRows;
-                return synInv;
-            }
-        }
-    }
-
-    // 4. Try matching by dateHint and partyHint
-    if (rows.isEmpty() && !dateHint.isEmpty() && !partyHint.isEmpty()) {
-        rows = DatabaseManager::instance().executeQuery(
-            "SELECT * FROM sales_invoices WHERE invoice_date = ? AND customer_name LIKE ? ORDER BY id DESC LIMIT 1;",
-            {dateHint, "%" + partyHint + "%"}
-        );
-    }
-
-    // 5. Loose substring match fallback
-    if (rows.isEmpty() && !cleanQ.isEmpty()) {
-        rows = DatabaseManager::instance().executeQuery(
-            "SELECT * FROM sales_invoices WHERE invoice_no LIKE ? OR voucher_no LIKE ? ORDER BY id DESC LIMIT 1;",
-            {"%" + cleanQ + "%", "%" + cleanQ + "%"}
-        );
     }
 
     if (rows.isEmpty()) return {};
+    Q_UNUSED(partyHint);
     QVariantMap inv = rows.first().toMap();
     int invId = inv.value("id").toInt();
     QString invNo = inv.value("invoice_no").toString().trimmed();
@@ -948,10 +764,12 @@ bool SalesModel::update_sales_invoice_full(
 
     DatabaseManager::instance().beginTransaction();
 
-    // Check if sales_invoices row exists by id, invoice_no, or voucher_no
+    // Check if sales_invoices row exists by id, else by exact invoice/voucher
+    // identity WITHIN this row's financial year (same bare number may legally
+    // exist in another FY: "247" vs "2627/Sale-247").
     QVariant existingId = DatabaseManager::instance().executeScalar(
-        "SELECT id FROM sales_invoices WHERE id = ? OR (invoice_no = ? AND invoice_no != '') OR (voucher_no = ? AND voucher_no != '') LIMIT 1;",
-        {invoice_id, invoice_no, voucher_no}
+        "SELECT id FROM sales_invoices WHERE id = ? OR ((invoice_no = ? AND invoice_no != '') OR (voucher_no = ? AND voucher_no != '')) AND financial_year = ? LIMIT 1;",
+        {invoice_id, invoice_no, voucher_no, fyLabel}
     );
 
     int targetInvId = existingId.isValid() ? existingId.toInt() : invoice_id;

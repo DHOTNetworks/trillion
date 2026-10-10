@@ -2,6 +2,7 @@
 #include <QApplication>
 #include <QComboBox>
 #include <QGraphicsDropShadowEffect>
+#include <QShortcut>
 
 // ============================================================================
 // CustomInputDialog Implementation
@@ -99,10 +100,14 @@ void CustomInputDialog::setupUi(const QString& title, const QString& prompt, con
     m_okBtn->setStyleSheet("background-color: #0284C7; color: #FFFFFF; border: 1px solid #0369A1;");
     m_okBtn->setDefault(true);
     connect(m_okBtn, &QPushButton::clicked, this, &QDialog::accept);
-    btnLayout->addWidget(m_okBtn);
+    bodyLayout->addWidget(m_okBtn);
 
     bodyLayout->addLayout(btnLayout);
     rootLayout->addWidget(bodyWidget);
+
+    // QLineEdit consumes Return internally, so the dialog-level Enter handler
+    // never fires while typing — route it explicitly to OK.
+    connect(m_textInput, &QLineEdit::returnPressed, this, &QDialog::accept);
 }
 
 QString CustomInputDialog::value() const {
@@ -218,30 +223,68 @@ void CustomMessageBox::setupUi(const QString& title, const QString& message, Ico
 
     if (!secondaryBtnText.isEmpty()) {
         m_secondaryBtn = new QPushButton(secondaryBtnText, bodyWidget);
-        m_secondaryBtn->setStyleSheet("background-color: #F1F5F9; color: #334155; border: 1px solid #CBD5E1;");
+        m_secondaryBtn->setStyleSheet("QPushButton { background-color: #F1F5F9; color: #334155; border: 1px solid #CBD5E1; }"
+                                      " QPushButton:focus { border: 2px solid #2563EB; background-color: #DBEAFE; color: #1E40AF; }");
         connect(m_secondaryBtn, &QPushButton::clicked, this, &QDialog::reject);
         btnLayout->addWidget(m_secondaryBtn);
     }
 
     m_primaryBtn = new QPushButton(primaryBtnText, bodyWidget);
-    m_primaryBtn->setStyleSheet(QString("background-color: %1; color: #FFFFFF; border: 1px solid %1;").arg(headerBg));
+    m_primaryBtn->setStyleSheet(QString("QPushButton { background-color: %1; color: #FFFFFF; border: 1px solid %1; }"
+                                        " QPushButton:focus { border: 2px solid #93C5FD; background-color: #1E40AF; }").arg(headerBg));
     m_primaryBtn->setDefault(true);
     connect(m_primaryBtn, &QPushButton::clicked, this, &QDialog::accept);
     btnLayout->addWidget(m_primaryBtn);
 
     bodyLayout->addLayout(btnLayout);
     rootLayout->addWidget(bodyWidget);
+
+    // Full keyboard control: primary focused + visibly marked, Tab cycles
+    // both buttons, arrows move between them.
+    m_primaryBtn->setFocus();
+    setTabOrder(m_secondaryBtn ? m_secondaryBtn : m_primaryBtn, m_primaryBtn);
+    setupKeyboardShortcuts();
 }
 
-void CustomMessageBox::keyPressEvent(QKeyEvent* event) {
-    if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
-        accept();
-        event->accept();
-    } else if (event->key() == Qt::Key_Escape) {
+void CustomMessageBox::setupKeyboardShortcuts() {
+    // QShortcuts fire at window level regardless of which child consumes the
+    // key, so navigation can never get stuck behind a focused widget. This is
+    // the ONLY key mechanism here (no keyPressEvent override) to guarantee a
+    // single action per press — never a toggle-then-toggle-back.
+    auto addKey = [this](int key, auto&& fn) {
+        auto* sc = new QShortcut(QKeySequence(key), this);
+        sc->setContext(Qt::WindowShortcut);
+        connect(sc, &QShortcut::activated, this, fn);
+    };
+    addKey(Qt::Key_Return, [this]() { onConfirmKey(); });
+    addKey(Qt::Key_Enter, [this]() { onConfirmKey(); });
+    addKey(Qt::Key_Escape, [this]() { reject(); });
+    if (m_secondaryBtn) {
+        // Y = Yes/primary, N = No/secondary (Bahi-Khata style confirm keys).
+        addKey(Qt::Key_Y, [this]() { accept(); });
+        addKey(Qt::Key_N, [this]() { reject(); });
+        addKey(Qt::Key_Left, [this]() { onMoveFocus(-1); });
+        addKey(Qt::Key_Right, [this]() { onMoveFocus(1); });
+    }
+}
+
+void CustomMessageBox::onConfirmKey() {
+    // Enter confirms the focused button when one has focus, else primary.
+    if (m_secondaryBtn && m_secondaryBtn->hasFocus()) {
         reject();
-        event->accept();
     } else {
-        QDialog::keyPressEvent(event);
+        accept();
+    }
+}
+
+void CustomMessageBox::onMoveFocus(int direction) {
+    if (!m_secondaryBtn || !m_primaryBtn) return;
+    // direction -1 = Left (toward secondary), +1 = Right (toward primary).
+    bool primaryFocused = m_primaryBtn->hasFocus();
+    if (direction < 0) {
+        (primaryFocused ? m_secondaryBtn : m_primaryBtn)->setFocus();
+    } else {
+        ((m_secondaryBtn->hasFocus()) ? m_primaryBtn : m_secondaryBtn)->setFocus();
     }
 }
 
@@ -375,6 +418,11 @@ void FreightCalculationDialog::setupUi() {
     m_rateInput->setPlaceholderText("Enter freight rate (e.g. 100)");
     m_rateInput->setText("");
     connect(m_rateInput, &QLineEdit::textChanged, this, &FreightCalculationDialog::updateCalculations);
+    // QLineEdit consumes Return internally: route it explicitly to Apply.
+    connect(m_rateInput, &QLineEdit::returnPressed, this, [this]() {
+        updateCalculations();
+        accept();
+    });
     inputGrid->addWidget(m_rateInput, 0, 1);
 
     QLabel* unitLbl = new QLabel("Rate Unit:", bodyWidget);

@@ -1090,3 +1090,34 @@ void reconcileGstr2B(QList<GstInvoiceRecord>& booksRecords,
 | **`Probable Match`** | 🟣 Purple | Same GSTIN & Amount, but typo in invoice number. | One-click manual link button ("*Confirm Link*"). |
 | **`Missing in Books`** | 🔴 Red | In GSTR-2B, but not entered in purchase register. | One-click **"Create Purchase Voucher"** (pre-fills Party, Amount & GST). |
 | **`Missing in Portal`**| ⚪ Gray | In Books, but supplier hasn't filed GSTR-1. | Generate **Supplier Communication / WhatsApp Notice** list. |
+
+
+
+
+Here are the alternative, actively available libraries and wrappers for interacting with Microsoft Access databases (.mdb/.accdb) using C or C++:
+## Windows-Specific Native Interfaces
+
+* Microsoft Data Access Components (MDAC / Windows DAC)
+* OLE DB (Object Linking and Embedding, Database): The low-level COM-based Microsoft interface. You use the Microsoft.ACE.OLEDB provider directly through C++ COM APIs to execute commands and retrieve rowsets.
+   * ADO (ActiveX Data Objects): A high-level COM wrapper over OLE DB. It uses standard smart pointers (_ConnectionPtr, _RecordsetPtr) via the Visual C++ #import directive to handle CRUD operations on Access files.
+* DAO (Data Access Objects) C++ Classes
+* Note on status: Historically encapsulated via MFC (CDaoDatabase, CDaoRecordset), this approach is deprecated. It only supports legacy 32-bit .mdb files and cannot interface with newer .accdb file structures without migrating to OLE DB/ODBC.
+
+## Cross-Platform Open-Source Wrappers
+
+* POCO C++ Libraries (Poco::Data::ODBC)
+* A massive, modern enterprise C++ framework. Its Poco::Data subsystem abstracts database connections, allowing you to interface with Access databases cleanly using native C++ streams and standard types via an under-the-hood ODBC driver setup.
+* SOCI (The C++ Database Access Library)
+* A minimalist database access library for C++ that mimics embedded SQL semantics. It provides an ODBC backend that allows you to target Microsoft Access files cross-platform while keeping your code layout close to standard C++ containers.
+* nanodbc
+* A small, native C++11 wrapper for the raw C ODBC API. It avoids heavy framework overhead while providing RAII bindings for connections, transactions, and statements, making it much safer than writing raw SQLAllocHandle boilerplate on Windows or UnixODBC.
+* sqlpp11-connector-odbc
+* A type-safe SQL template library for C++. By generating C++ types from your Access schema, it lets you construct compiler-verified queries using a C++ DSL rather than passing raw strings, running on top of an ODBC bridge.
+
+## Embedded Alternatives (File Conversion Engines)
+
+* [DuckDB](https://duckdb.org/) (via sqlite_scanner extensions / ODBC)
+* An in-process analytical database. While it cannot write directly to an .accdb file, its C++ API can ingest exported Access formats extremely fast, providing an analytical layer on top of read-only Access data.
+
+Would you like to narrow your focus to cross-platform frameworks like POCO and SOCI, or do you need assistance evaluating performance differences among the Windows native COM options?
+

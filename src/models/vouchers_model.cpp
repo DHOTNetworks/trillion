@@ -53,11 +53,14 @@ QString VouchersModel::get_next_voucher_no(const QString& v_type, const QString&
     aliases << prefix;
     aliases.removeDuplicates();
 
+    // Canonical identity "{yyYY}/{Prefix}-{n}": count legacy ("ChPt-12",
+    // bare Bahi-Khata numerics are a different family and ignored here) and
+    // canonical ("2627/ChPt-12") shapes so numbers are never reused in the FY.
     QStringList whereClauses;
     QVariantList params;
     for (const QString& a : aliases) {
-        whereClauses << "voucher_type = ?" << "legacy_type = ?" << "voucher_no LIKE ?";
-        params << a << a << (a + "-%");
+        whereClauses << "voucher_type = ?" << "legacy_type = ?" << "voucher_no LIKE ?" << "voucher_no LIKE ?";
+        params << a << a << (a + "-%") << ("%/" + a + "-%");
     }
 
     QString sql = QString("SELECT voucher_no FROM vouchers WHERE (%1) AND (financial_year = ? OR financial_year LIKE ?);")
@@ -77,7 +80,9 @@ QString VouchersModel::get_next_voucher_no(const QString& v_type, const QString&
             if (num > maxId) maxId = num;
         }
     }
-    return QString("%1-%2").arg(prefix, QString::number(maxId + 1));
+    QString next = FiscalYearHelper::canonicalVoucherNo(targetFy, prefix, QString::number(maxId + 1));
+    if (!next.contains('/')) next = prefix + "-" + QString::number(maxId + 1); // degenerate fallback
+    return next;
 }
 
 bool VouchersModel::add_voucher(const QString& vch_type, const QString& party_name, const QString& vch_date, const QString& account_type, double amount, const QString& narration) {

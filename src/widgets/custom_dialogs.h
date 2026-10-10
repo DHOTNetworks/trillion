@@ -71,12 +71,14 @@ public:
         return question(parent, title, message, yesText, noText);
     }
 
-protected:
-    void keyPressEvent(QKeyEvent* event) override;
+private slots:
+    void onConfirmKey();
+    void onMoveFocus(int direction);
 
 private:
     void setupUi(const QString& title, const QString& message, IconType iconType,
                  const QString& primaryBtnText, const QString& secondaryBtnText);
+    void setupKeyboardShortcuts();
 
     QPushButton* m_primaryBtn = nullptr;
     QPushButton* m_secondaryBtn = nullptr;

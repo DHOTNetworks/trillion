@@ -319,6 +319,201 @@ FiscalYearInfo FiscalYearHelper::getFiscalYearByName(const QString& fyName) {
     return getActiveFiscalYear();
 }
 
+QString FiscalYearHelper::extractFiscalYearToken(const QString& str) {
+    if (str.isEmpty()) return QString();
+
+    // 1. Matches formats like "2627", "2526", "2425", "2324" (YY(YY+1))
+    // e.g. "MRI/2627-247", "2627-247", "STC2627-01", "2627/Sale-247"
+    static const QRegularExpression yyYyRe(R"((?:^|[^0-9])([2-9][0-9])([0-9]{2})(?:[^0-9]|$))");
+    auto match = yyYyRe.match(str);
+    if (match.hasMatch()) {
+        int y1 = match.captured(1).toInt();
+        int y2 = match.captured(2).toInt();
+        if (y2 == y1 + 1 || (y1 == 99 && y2 == 0)) {
+            int fullY1 = 2000 + y1;
+            int fullY2 = 2000 + y2;
+            return QString("FY %1-%2").arg(fullY1).arg(QString::number(fullY2).right(2));
+        }
+    }
+
+    // 2. Matches formats like "23-24", "24-25", "25-26", "26-27" (YY-YY or YY/YY)
+    // e.g. "MRI/23-24/247"
+    static const QRegularExpression yyDashYyRe(R"((?:^|[^0-9])([2-9][0-9])[-/]([0-9]{2})(?:[^0-9]|$))");
+    match = yyDashYyRe.match(str);
+    if (match.hasMatch()) {
+        int y1 = match.captured(1).toInt();
+        int y2 = match.captured(2).toInt();
+        if (y2 == y1 + 1 || (y1 == 99 && y2 == 0)) {
+            int fullY1 = 2000 + y1;
+            int fullY2 = 2000 + y2;
+            return QString("FY %1-%2").arg(fullY1).arg(QString::number(fullY2).right(2));
+        }
+    }
+
+    // 3. Matches full formats like "2024-25", "2025-26", "2026-27"
+    static const QRegularExpression fullFyRe(R"((?:FY\s*)?(20[2-9][0-9])[-/](20[2-9][0-9]|[0-9]{2}))", QRegularExpression::CaseInsensitiveOption);
+    match = fullFyRe.match(str);
+    if (match.hasMatch()) {
+        int y1 = match.captured(1).toInt();
+        QString y2Str = match.captured(2);
+        int y2 = y2Str.length() == 4 ? y2Str.toInt() : (2000 + y2Str.toInt());
+        if (y2 == y1 + 1) {
+            return QString("FY %1-%2").arg(y1).arg(QString::number(y2).right(2));
+        }
+    }
+
+    return QString();
+}
+
+FiscalYearInfo FiscalYearHelper::resolveFiscalYear(const QString& invOrVchStr, const QString& dateHint, const QString& explicitFy) {
+    // 1. Try explicit FY first if given and valid
+    if (!explicitFy.trimmed().isEmpty()) {
+        FiscalYearInfo fy = getFiscalYearByName(explicitFy.trimmed());
+        if (fy.isValid()) return fy;
+    }
+
+    // 2. Try extracting FY token from the invoice/voucher text (e.g. "MRI/2627-247" -> "FY 2026-27")
+    QString token = extractFiscalYearToken(invOrVchStr);
+    if (!token.isEmpty()) {
+        FiscalYearInfo fy = getFiscalYearByName(token);
+        if (fy.isValid()) return fy;
+    }
+
+    // 3. Try dateHint if valid
+    QString iso = normalizeToIso(dateHint);
+    if (!iso.isEmpty()) {
+        FiscalYearInfo fy = getFiscalYearForDate(iso);
+        if (fy.isValid()) return fy;
+    }
+
+    // 4. Default to currently active fiscal year
+    return getActiveFiscalYear();
+}
+
+QString FiscalYearHelper::fyShortToken(const QString& fyName) {
+    QString s = fyName.trimmed();
+    // Accept "FY 2026-27", "2026-27", "2026/27", "2627", "FY 26-27".
+    static const QRegularExpression fullRe(R"(20(\d{2})\D*(\d{2}))");
+    auto m = fullRe.match(s);
+    if (m.hasMatch()) {
+        int y1 = m.captured(1).toInt();
+        int y2 = m.captured(2).toInt();
+        if ((y1 + 1) % 100 == y2) {
+            return QString("%1%2").arg(y1, 2, 10, QChar('0')).arg(y2, 2, 10, QChar('0'));
+        }
+    }
+    static const QRegularExpression shortRe(R"(^(\d{2})(\d{2})$)");
+    auto m2 = shortRe.match(s.remove(' ').remove('-').remove('/'));
+    if (m2.hasMatch()) {
+        int y1 = m2.captured(1).toInt();
+        int y2 = m2.captured(2).toInt();
+        if ((y1 + 1) % 100 == y2) return m2.captured(1) + m2.captured(2);
+    }
+    return QString();
+}
+
+QString FiscalYearHelper::canonicalTypeToken(const QString& type) {
+    // Must mirror VouchersModel::get_next_voucher_no alias groups exactly:
+    // same family in, same token out, whether the caller is migration or
+    // live voucher generation. Cash/bank families stay distinct
+    // (Pymt vs ChPt, Rcpt vs ChRt) — merging them would collide sequences.
+    QString t = type.trimmed().toLower();
+    t.remove(' ');
+    t.remove('-');
+    if (t.isEmpty() || t == "jv" || t == "j") return "Jrnl";
+    if (t.startsWith("sale") || t.startsWith("slrn") || t == "sl") return "Sale";
+    if (t.startsWith("purc") || t.startsWith("prrn") || t == "pur" || t == "pr" || t == "pu") return "Purc";
+    if (t == "cn" || t == "cntr" || t == "c") return "Contra";
+    if (t == "rc" || t == "r") return "Rcpt";
+    if (t == "p") return "Pymt";
+    if (t.startsWith("jrnl") || t.startsWith("journ")) return "Jrnl";
+    if (t == "cashpayment" || t == "pymt" || t == "pym" || t == "py") return "Pymt";
+    if (t.startsWith("chpt") || t == "chequepayment" || t == "payment" || t.startsWith("paym") || t.startsWith("chqpy")) return "ChPt";
+    if (t == "cashreceipt" || t == "rcpt" || t == "rcp" || t == "rct") return "Rcpt";
+    if (t.startsWith("chrt") || t == "chequereceipt" || t == "receipt" || t.startsWith("rece") || t.startsWith("chqrc")) return "ChRt";
+    if (t.startsWith("jfrm") || t.startsWith("jform")) return "JFrm";
+    if (t.startsWith("ifrm") || t.startsWith("iform")) return "IFrm";
+    if (t.startsWith("contra")) return "Contra";
+    if (t.startsWith("tds")) return "TDS";
+    if (t.startsWith("tcs")) return "TCS";
+    if (t.startsWith("crnt") || t.startsWith("creditnote") || t == "cr") return "CrNt";
+    if (t.startsWith("dbnt") || t.startsWith("debitnote") || t == "db") return "DbNt";
+    if (t.startsWith("mill")) return "Mill";
+    // Unknown family: reuse verbatim (capitalized) so the transform is lossless.
+    QString out = type.trimmed();
+    if (!out.isEmpty()) out[0] = out[0].toUpper();
+    return out;
+}
+
+bool FiscalYearHelper::parseCanonicalVoucherNo(const QString& vchNo, QString& fyTokenOut, QString& typeOut, QString& rawOut) {
+    fyTokenOut.clear();
+    typeOut.clear();
+    rawOut.clear();
+    static const QRegularExpression canonRe(R"(^(\d{4})/([A-Za-z]+)-(.+)$)");
+    auto m = canonRe.match(vchNo.trimmed());
+    if (!m.hasMatch()) return false;
+    QString tok = m.captured(1);
+    int y1 = tok.left(2).toInt();
+    int y2 = tok.right(2).toInt();
+    if ((y1 + 1) % 100 != y2) return false;
+    fyTokenOut = tok;
+    typeOut = m.captured(2);
+    rawOut = m.captured(3).trimmed();
+    if (rawOut.isEmpty()) return false;
+    return true;
+}
+
+QString FiscalYearHelper::canonicalVoucherNo(const QString& fyNameOrToken, const QString& type, const QString& rawNo) {
+    QString raw = rawNo.trimmed();
+    if (raw.isEmpty()) return raw;
+    // Idempotent: canonical input passes through untouched.
+    QString pFy, pType, pRaw;
+    if (parseCanonicalVoucherNo(raw, pFy, pType, pRaw)) return raw;
+    QString typeTok = canonicalTypeToken(type);
+    // Already FY-qualified source numbering (Busy "1/2026-27", firm series
+    // like "MRI/2526-247"): keep byte-identical, never double-prefix.
+    if (raw.contains('/') && !extractFiscalYearToken(raw).isEmpty()) return raw;
+    // Legacy app shape ("Sale-247") with the same family: drop the duplicated
+    // type affix so the result is "2627/Sale-247", not "2627/Sale-Sale-247".
+    if (raw.startsWith(typeTok + "-", Qt::CaseInsensitive)) raw = raw.mid(typeTok.length() + 1).trimmed();
+    if (raw.isEmpty()) return rawNo.trimmed();
+    QString tok = fyShortToken(fyNameOrToken);
+    if (tok.isEmpty()) {
+        // Last resort: derive from embedded token, else active FY.
+        tok = extractFiscalYearToken(raw);
+        if (!tok.isEmpty()) tok = fyShortToken(tok);
+        if (tok.isEmpty()) {
+            FiscalYearInfo afy = getActiveFiscalYear();
+            tok = fyShortToken(afy.name);
+        }
+    }
+    if (tok.isEmpty()) return raw;
+    return QString("%1/%2-%3").arg(tok, typeTok, raw);
+}
+
+QString FiscalYearHelper::rawVoucherNo(const QString& vchNo) {
+    QString s = vchNo.trimmed();
+    if (s.isEmpty()) return s;
+    // Strip canonical "yyYY/" prefix.
+    static const QRegularExpression canonPreRe(R"(^\d{4}/)");
+    s.remove(canonPreRe);
+    // Strip one leading family token ("Sale-"/"Purc-"/...). Longest-first so
+    // "Purchase-" beats "Pur"-style prefixes; canonical tokens are exact.
+    static const QStringList tokens = {
+        "Purchase", "Contra", "Journal", "Payment", "Receipt",
+        "Sale", "Purc", "Jrnl", "ChPt", "ChRt", "Pymt", "Rcpt",
+        "JFrm", "IFrm", "CrNt", "DbNt", "Mill", "TDS", "TCS",
+        "Pur", "Jr", "J"
+    };
+    for (const QString& tk : tokens) {
+        if (s.startsWith(tk + "-", Qt::CaseInsensitive)) {
+            s = s.mid(tk.length() + 1).trimmed();
+            break;
+        }
+    }
+    return s;
+}
+
 QList<FiscalYearInfo> FiscalYearHelper::getAllFiscalYears() {
     ensureFiscalYearsDiscovered();
     QList<FiscalYearInfo> list;

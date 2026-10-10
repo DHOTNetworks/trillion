@@ -171,11 +171,12 @@ void MenuTreeManager::setupDefaultMenus()
     addVoucherMenu.items = {
         MenuItem("1. Sales Voucher Entry (Tax Invoice)", "F8", Qt::Key_1, MenuActionType::OpenView, 14),
         MenuItem("2. Purchase Voucher Entry (Purchase Bill)", "F9", Qt::Key_2, MenuActionType::OpenView, 15),
-        MenuItem("3. Paddy Procurement Slip (Kachha / Mandi)", "F2", Qt::Key_3, MenuActionType::OpenView, 1),
-        MenuItem("4. Milling Production Entry", "", Qt::Key_4, MenuActionType::OpenView, 31),
-        MenuItem("5. Cheque / Bank Payment & Receipt", "F3", Qt::Key_5, MenuActionType::OpenView, 16),
-        MenuItem("6. Cash Payment & Receipt Voucher", "F6", Qt::Key_6, MenuActionType::OpenView, 60),
-        MenuItem("7. Journal Voucher Entry", "F5", Qt::Key_7, MenuActionType::OpenView, 17)
+        MenuItem("3. Journal Voucher Entry", "F5", Qt::Key_3, MenuActionType::OpenView, 17),
+        MenuItem("4. Cheque / Bank Payment & Receipt", "F3", Qt::Key_4, MenuActionType::OpenView, 16),
+        MenuItem("5. Cash Payment & Receipt Voucher", "F6", Qt::Key_5, MenuActionType::OpenView, 60),
+        MenuItem("6. Milling Production Entry", "", Qt::Key_6, MenuActionType::OpenView, 31),
+        MenuItem("7. GST Debit Notes & Credit Notes", "Alt+D", Qt::Key_7, MenuActionType::OpenView, 28),
+        MenuItem("8. Bill Series (Sale Invoice Numbering)", "", Qt::Key_8, MenuActionType::ExecuteCustom)
     };
     registerMenu(addVoucherMenu);
 
@@ -187,9 +188,9 @@ void MenuTreeManager::setupDefaultMenus()
         MenuItem("3. TDS / TCS Vouchers & Challans", "F12", Qt::Key_3, MenuActionType::OpenSubmenu, -1, "tds_tcs_hub"),
         MenuItem("4. Bank Statement Auto-Import & Reconciliation", "Ctrl+B", Qt::Key_4, MenuActionType::OpenView, 26),
         MenuItem("5. Transport Dispatch & Gate Pass Register", "Alt+T", Qt::Key_5, MenuActionType::OpenView, 27),
-        MenuItem("6. GST Debit Notes & Credit Notes", "Alt+D", Qt::Key_6, MenuActionType::OpenView, 28),
-        MenuItem("7. GSTR-2A Matching & ITC Reconciliation", "Alt+G", Qt::Key_7, MenuActionType::OpenView, 34),
-        MenuItem("8. Employee Payroll & Salary Register", "Alt+S", Qt::Key_8, MenuActionType::OpenView, 80)
+        MenuItem("6. GSTR-2A Matching & ITC Reconciliation", "Alt+G", Qt::Key_6, MenuActionType::OpenView, 34),
+        MenuItem("7. Employee Payroll & Salary Register", "Alt+S", Qt::Key_7, MenuActionType::OpenView, 80),
+        MenuItem("8. Paddy Procurement Slip (Kachha / Mandi)", "F2", Qt::Key_8, MenuActionType::OpenView, 1)
     };
     registerMenu(otherVoucherMenu);
 

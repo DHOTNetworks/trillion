@@ -6,6 +6,7 @@
 #include "../engine/fiscal_year_helper.h"
 #include <QHeaderView>
 #include <QKeyEvent>
+#include <QShortcut>
 #include <QMessageBox>
 #include <QFileDialog>
 #include <QFrame>
@@ -220,6 +221,18 @@ void DayBookWidget::setupUi() {
     }
 
     connect(m_table, &QTableWidget::cellDoubleClicked, this, &DayBookWidget::onRowDoubleClicked);
+    // Enter opens the focused row's alteration (same as double-click).
+    // Scoped to the grid so search boxes and buttons keep their own keys.
+    auto openFocusedRow = [this]() {
+        if (!m_table || m_table->currentRow() < 0) return;
+        onRowDoubleClicked(m_table->currentRow(), m_table->currentColumn());
+    };
+    auto* enterShortcut = new QShortcut(QKeySequence(Qt::Key_Return), m_table);
+    enterShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+    connect(enterShortcut, &QShortcut::activated, this, openFocusedRow);
+    auto* numEnterShortcut = new QShortcut(QKeySequence(Qt::Key_Enter), m_table);
+    numEnterShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+    connect(numEnterShortcut, &QShortcut::activated, this, openFocusedRow);
     mainLayout->addWidget(m_table, 1);
 
     // ================= 4. SUMMARY FOOTER BAR CARD =================
@@ -432,6 +445,15 @@ void DayBookWidget::loadDayBookData(const QDate& fromDate, const QDate& toDate, 
     m_totalDrLabel->setText(QString("Total Debit: %1").arg(AccountingEngine::formatIndianCurrency(totalDr)));
     m_totalCrLabel->setText(QString("Total Credit: %1").arg(AccountingEngine::formatIndianCurrency(totalCr)));
     m_isDirty = false;
+}
+
+void DayBookWidget::focusTable() {
+    if (m_table->rowCount() > 0) {
+        m_table->setFocus();
+        m_table->selectRow(0);
+    } else {
+        m_searchBox->setFocus();
+    }
 }
 
 void DayBookWidget::onRefreshClicked() {

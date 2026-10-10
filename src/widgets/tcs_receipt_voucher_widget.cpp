@@ -125,6 +125,9 @@ QWidget *TcsReceiptVoucherWidget::createParamsCard()
     rcBox->setSpacing(4);
     rcBox->addWidget(new QLabel("Receipt No. *", card));
     m_receiptNoEdit = new QLineEdit(card);
+    // Auto-generated and non-editable on both new and alter pages (the
+    // textChanged binding into the controller still fires on programmatic set).
+    m_receiptNoEdit->setReadOnly(true);
     connect(m_receiptNoEdit, &QLineEdit::textChanged, this, [this](const QString &t) {
         m_controller->setReceiptNo(t.toInt());
     });

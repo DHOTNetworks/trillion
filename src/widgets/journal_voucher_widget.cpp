@@ -1,5 +1,6 @@
 #include "journal_voucher_widget.h"
 #include "voucher_date_dialog.h"
+#include "voucher_common.h"
 #include "custom_dialogs.h"
 #include "../engine/fiscal_year_helper.h"
 #include "../services/accounting_date_service.h"
@@ -109,9 +110,13 @@ void JournalVoucherWidget::setupUi() {
     m_voucherNoInput = new QLineEdit(metaCard);
     m_voucherNoInput->setFixedSize(100, 30);
     m_voucherNoInput->setAlignment(Qt::AlignCenter);
+    // Auto-generated and non-editable on both new and alter pages; the save
+    // path always persists this system value, so no uniqueness check on
+    // user input is needed anywhere.
+    m_voucherNoInput->setReadOnly(true);
     m_voucherNoInput->setStyleSheet(
-        "QLineEdit { background-color: #F1F5F9; color: #2563EB; border: 1px solid #CBD5E1; "
-        "border-radius: 6px; font-weight: 800; font-size: 12px; }"
+        "QLineEdit { background-color: #F8FAFC; color: #1D4ED8; border: 1px solid #CBD5E1; "
+        "border-radius: 6px; font-weight: 800; font-size: 12px; font-family: 'Consolas', monospace; }"
     );
     m_voucherNoInput->installEventFilter(this);
     metaLayout->addWidget(m_voucherNoInput);
@@ -796,6 +801,19 @@ bool JournalVoucherWidget::eventFilter(QObject* watched, QEvent* event) {
     if (event->type() == QEvent::KeyPress) {
         auto* keyEvent = static_cast<QKeyEvent*>(event);
         int key = keyEvent->key();
+
+        // Bahi-Khata convention: Backspace deletes word by word; on an
+        // empty field it steps back (via the existing Left branches below).
+        if (key == Qt::Key_Backspace) {
+            QLineEdit* edit = qobject_cast<QLineEdit*>(watched);
+            if (!edit) {
+                if (auto* cb = qobject_cast<QComboBox*>(watched)) edit = cb->lineEdit();
+            }
+            if (VoucherCommon::backspaceWord(edit)) {
+                return true;
+            }
+            key = Qt::Key_Left;
+        }
 
         if (key == Qt::Key_Escape) {
             emit backRequested();

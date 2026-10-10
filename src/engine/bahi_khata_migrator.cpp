@@ -1,6 +1,7 @@
 #include "bahi_khata_migrator.h"
 #include "../database_manager.h"
 #include "../models/account_classifier.h"
+#include "fiscal_year_helper.h"
 #include <QCoreApplication>
 #include <QFileInfo>
 #include <QDir>
@@ -18,6 +19,7 @@
 #include <algorithm>
 
 #include "mdbtools.h"
+#include "jet4_reader.h"
 #define HAS_LIBMDB 1
 
 static QString normalizeMdbPath(const QString& rawPath) {
@@ -204,47 +206,23 @@ static std::string getField(const std::map<std::string, std::string>& m, const s
 }
 
 static std::vector<std::map<std::string, std::string>> readTableRows(MdbHandle* mdb, const char* tableName) {
-    std::vector<std::map<std::string, std::string>> result;
-    if (!mdb || !tableName) return result;
+    // Jackcess-faithful JET4 scan (jet4_reader): brute-force owned data pages
+    // with explicit DELETED (0x8000) skip + OVERFLOW (0x4000) follow.
+    // Replaces the fetch-cursor path whose cur_row-1 flag peek misclassified
+    // rows once a deleted entry existed in the table.
+    return Jet4Reader::readTable(mdb, tableName);
+}
 
-    MdbTableDef* table = mdb_read_table_by_name(mdb, const_cast<char*>(tableName), MDB_TABLE);
-    if (!table) return result;
-
-    mdb_read_columns(table);
-    if (!table->columns || table->num_cols == 0) {
-        mdb_free_tabledef(table);
-        return result;
-    }
-
-    unsigned int numCols = table->num_cols;
-    std::vector<std::string> colNames(numCols);
-    // Buffer size must be >= MDB_BIND_SIZE (16384) to prevent snprintf/strcpy heap buffer overflows
-    const size_t bufSize = MDB_BIND_SIZE + 512;
-    std::vector<std::vector<char>> colBuffers(numCols, std::vector<char>(bufSize, 0));
-
-    for (unsigned int j = 0; j < numCols; j++) {
-        MdbColumn* col = static_cast<MdbColumn*>(g_ptr_array_index(table->columns, j));
-        if (col && col->name[0] != '\0') {
-            colNames[j] = col->name;
-            mdb_bind_column(table, j + 1, colBuffers[j].data(), nullptr);
-        } else {
-            colNames[j] = "";
-        }
-    }
-
-    mdb_rewind_table(table);
-    while (mdb_fetch_row(table)) {
-        std::map<std::string, std::string> row;
-        for (unsigned int j = 0; j < numCols; j++) {
-            if (!colNames[j].empty()) {
-                row[colNames[j]] = colBuffers[j].data();
-            }
-        }
-        result.push_back(std::move(row));
-    }
-
-    mdb_free_tabledef(table);
-    return result;
+/* Canonical voucher identity "{yyYY}/{Type}-{raw}" (Busy-style FY-embedded
+ * numbering) for every voucher_no stored by this migrator. The token comes
+ * from the RAW Bahi-Khata TransType so cash/bank families (Pymt vs ChPt,
+ * Rcpt vs ChRt) never merge. Mandi JFrm/IFrm keep raw numbers: their
+ * lookups are date/id-scoped and stock joins use raw numbers. invoice_no
+ * keeps Bahi-Khata originals byte-identical (export round-trip + GSTR). */
+static QString canonVoucherNo(const QString& fyVal, const std::string& rawTransType, const std::string& rawNo) {
+    QString tok = FiscalYearHelper::canonicalTypeToken(QString::fromStdString(rawTransType));
+    if (tok == "JFrm" || tok == "IFrm") return QString::fromStdString(cleanText(rawNo));
+    return FiscalYearHelper::canonicalVoucherNo(fyVal, tok, QString::fromStdString(rawNo));
 }
 #endif
 
@@ -680,11 +658,32 @@ struct ResolvedVoucherParty {
     std::string opposing_account = "Cash";
 };
 
+/* Ledger display-name lookup: live detail -> live code map -> deleted-ledger
+ * fallback (display only) -> "" when truly unknown. The deleted fallback
+ * covers vouchers referencing ledgers deleted later in Bahi-Khata; without
+ * it the registers show "Party #<code>". Callers apply their own ultimate
+ * fallback ("Party #..." / "Trade Account"). */
+static std::string lookupLedgerName(
+    int acCode,
+    const std::map<int, PartyDetail>& ledgerDetailMap,
+    const std::map<int, std::string>& ledgerCodeMap,
+    const std::map<int, std::string>& ledgerDeletedNameMap
+) {
+    auto it = ledgerDetailMap.find(acCode);
+    if (it != ledgerDetailMap.end() && !it->second.name.empty()) return it->second.name;
+    auto jt = ledgerCodeMap.find(acCode);
+    if (jt != ledgerCodeMap.end() && !jt->second.empty()) return jt->second;
+    auto kt = ledgerDeletedNameMap.find(acCode);
+    if (kt != ledgerDeletedNameMap.end() && !kt->second.empty()) return kt->second;
+    return "";
+}
+
 static ResolvedVoucherParty resolveVoucherParty(
     const QString& vType,
     const std::vector<std::map<std::string, std::string>>& rows,
     const std::map<int, PartyDetail>& ledgerDetailMap,
-    const std::map<int, std::string>& ledgerCodeMap
+    const std::map<int, std::string>& ledgerCodeMap,
+    const std::map<int, std::string>& ledgerDeletedNameMap
 ) {
     ResolvedVoucherParty res;
     std::string bankOrCash;
@@ -695,7 +694,8 @@ static ResolvedVoucherParty resolveVoucherParty(
     for (const auto& r : rows) {
         int acCode = parseIntVal(getField(r, "AccountCode"));
         auto it = ledgerDetailMap.find(acCode);
-        std::string lName = (it != ledgerDetailMap.end()) ? it->second.name : ("Party #" + std::to_string(acCode));
+        std::string lName = lookupLedgerName(acCode, ledgerDetailMap, ledgerCodeMap, ledgerDeletedNameMap);
+        if (lName.empty()) lName = "Party #" + std::to_string(acCode);
         int lId = (it != ledgerDetailMap.end()) ? it->second.id : 0;
         std::string grpName = (it != ledgerDetailMap.end()) ? it->second.group_name : "Sundry Debtors";
         std::string gLower = toLowerStr(grpName);
@@ -745,8 +745,8 @@ static ResolvedVoucherParty resolveVoucherParty(
             res.primary_party_id = tradingOrExpId;
         } else if (!rows.empty()) {
             int firstCode = parseIntVal(getField(rows[0], "AccountCode"));
-            auto itCode = ledgerCodeMap.find(firstCode);
-            res.primary_party = (itCode != ledgerCodeMap.end()) ? itCode->second : "Trade Account";
+            res.primary_party = lookupLedgerName(firstCode, ledgerDetailMap, ledgerCodeMap, ledgerDeletedNameMap);
+            if (res.primary_party.empty()) res.primary_party = "Trade Account";
             auto itDetail = ledgerDetailMap.find(firstCode);
             res.primary_party_id = (itDetail != ledgerDetailMap.end()) ? itDetail->second.id : 0;
             res.primary_party_legacy_code = firstCode;
@@ -1395,6 +1395,21 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
         ledgerDetailMap[legacyId] = {partyDbId, lName, groupName, partyType, legacyId, gstin, address, city, state, phone};
     }
 
+    // Deleted-ledger display fallback: vouchers may reference ledgers that
+    // were later deleted in Bahi-Khata (their slots stay on disk until the
+    // file is compacted). Collect their names for display only — never for
+    // party creation, balances, or counts. Codes present in the live map win.
+    std::map<int, std::string> ledgerDeletedNameMap;
+    {
+        auto delRows = Jet4Reader::readDeletedRows(mdb, "Ledgers");
+        for (const auto& d : delRows) {
+            int dCode = parseIntVal(getField(d, "Code1st"));
+            if (dCode <= 0 || ledgerDetailMap.count(dCode) || ledgerDeletedNameMap.count(dCode)) continue;
+            std::string dName = cleanText(getField(d, "LedgerName"));
+            if (!dName.empty()) ledgerDeletedNameMap[dCode] = dName;
+        }
+    }
+
     // Auto-heal any uncoded or missing groups from imported data
     AccountClassifier::healAllGroups();
 
@@ -1825,8 +1840,10 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
 
         int acCode = parseIntVal(getField(r, "AccountCode"));
         auto itDetail = ledgerDetailMap.find(acCode);
-        std::string partyName = (itDetail != ledgerDetailMap.end()) ? itDetail->second.name : ("Party #" + std::to_string(acCode));
+        std::string partyName = lookupLedgerName(acCode, ledgerDetailMap, ledgerCodeMap, ledgerDeletedNameMap);
+        if (partyName.empty()) partyName = "Party #" + std::to_string(acCode);
         int partyId = (itDetail != ledgerDetailMap.end()) ? itDetail->second.id : 0;
+        QString vchCanon = canonVoucherNo(fyVal, rawType, vNo);
 
         std::string drCr = cleanText(getField(r, "DrCr"));
         double amt = parseDoubleVal(getField(r, "Amount"));
@@ -1892,7 +1909,7 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
             {
                 (fyId > 0 ? QVariant(fyId) : QVariant()),
                 fyVal,
-                QString::fromStdString(vNo),
+                vchCanon,
                 vDate,
                 vType,
                 QString::fromStdString(rawType),
@@ -1935,7 +1952,7 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
         QString fyVal = computeFinancialYear(vDate);
         int fyId = fyNameToId.count(fyVal) ? fyNameToId[fyVal] : 1;
 
-        QString vchNumStr = QString::fromStdString(vNo);
+        QString vchNumStr = canonVoucherNo(fyVal, rawType, vNo);
         std::string narration = cleanText(getField(firstR, "Narration"));
         if (narration.empty()) narration = cleanText(getField(firstR, "Narrtn"));
 
@@ -1943,7 +1960,7 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
         if (invNo.empty()) invNo = cleanText(getField(firstR, "TaxInvoiceNo"));
         if (invNo.empty()) invNo = vNo;
 
-        ResolvedVoucherParty partyRes = resolveVoucherParty(vType, rows, ledgerDetailMap, ledgerCodeMap);
+        ResolvedVoucherParty partyRes = resolveVoucherParty(vType, rows, ledgerDetailMap, ledgerCodeMap, ledgerDeletedNameMap);
 
         double totalAmount = 0.0;
         double partyAmount = 0.0;
@@ -2641,7 +2658,7 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
             {
                 (stFyId > 0 ? QVariant(stFyId) : QVariant()),
                 stFy,
-                QString::fromStdString(stVno),
+                canonVoucherNo(stFy, stTt, stVno),
                 stDate,
                 QString::fromStdString(stTt),
                 QString::fromStdString(stVt),
@@ -3206,7 +3223,11 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
                 partyId = itP->second.id;
                 partyName = QString::fromStdString(itP->second.name);
             }
-            if (partyName.isEmpty()) partyName = QString("Party #%1").arg(acCode);
+            if (partyName.isEmpty()) {
+                std::string delName = lookupLedgerName(acCode, ledgerDetailMap, ledgerCodeMap, ledgerDeletedNameMap);
+                partyName = delName.empty() ? QString("Party #%1").arg(acCode)
+                                            : QString::fromStdString(delName);
+            }
 
             QString bardanaType = QString::fromStdString(cleanText(getField(br, "BardanaType", "Jute 50kg (Pukka)")));
             if (bardanaType.isEmpty()) bardanaType = "Jute 50kg (Pukka)";

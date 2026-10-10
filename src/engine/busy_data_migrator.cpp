@@ -18,7 +18,21 @@
 #include <algorithm>
 
 #include "mdbtools.h"
+#include "jet4_reader.h"
+#include "fiscal_year_helper.h"
 #define HAS_LIBMDB 1
+
+namespace {
+// Canonical voucher identity "{yyYY}/{Type}-{raw}" (Busy-style FY-embedded
+// numbering) for every voucher_no stored by this migrator. Mandi JFrm/IFrm
+// keep raw numbers (date/id-scoped lookups, raw stock joins). invoice_no
+// keeps source originals byte-identical.
+static QString busyCanonVoucherNo(const QString& fyVal, const QString& rawType, const QString& rawNo) {
+    QString tok = FiscalYearHelper::canonicalTypeToken(rawType);
+    if (tok == "JFrm" || tok == "IFrm") return rawNo.trimmed();
+    return FiscalYearHelper::canonicalVoucherNo(fyVal, tok, rawNo);
+}
+} // namespace
 
 namespace MahadevERP {
 
@@ -268,50 +282,16 @@ static BusyGroupMeta mapBusyGroup(int code, const std::string& name, int parentC
 
 #if HAS_LIBMDB
 static std::vector<std::map<std::string, std::string>> readTable(MdbHandle* mdb, const char* tableName) {
-    std::vector<std::map<std::string, std::string>> result;
-    if (!mdb || !tableName) return result;
-
+    // Jackcess-faithful JET4 scan (jet4_reader): explicit DELETED (0x8000)
+    // skip + OVERFLOW (0x4000) follow. The old fetch-cursor path cracked
+    // 0x4000 pointer slots as real rows and mislocated the cur_row-1 flag
+    // peek after page turns, corrupting Busy Tran2/Tran1 splits.
     try {
-        MdbTableDef* table = mdb_read_table_by_name(mdb, const_cast<char*>(tableName), MDB_TABLE);
-        if (!table) return result;
-
-        mdb_read_columns(table);
-        if (!table->columns || table->num_cols == 0) {
-            mdb_free_tabledef(table);
-            return result;
-        }
-
-        unsigned int numCols = table->num_cols;
-        std::vector<std::string> colNames(numCols);
-        const size_t bufSize = MDB_BIND_SIZE + 512;
-        std::vector<std::vector<char>> colBuffers(numCols, std::vector<char>(bufSize, 0));
-
-        for (unsigned int j = 0; j < numCols; j++) {
-            MdbColumn* col = static_cast<MdbColumn*>(g_ptr_array_index(table->columns, j));
-            if (col && col->name[0] != '\0') {
-                colNames[j] = col->name;
-                mdb_bind_column(table, j + 1, colBuffers[j].data(), nullptr);
-            } else {
-                colNames[j] = "";
-            }
-        }
-
-        mdb_rewind_table(table);
-        while (mdb_fetch_row(table)) {
-            std::map<std::string, std::string> row;
-            for (unsigned int j = 0; j < numCols; j++) {
-                if (!colNames[j].empty()) {
-                    row[colNames[j]] = colBuffers[j].data();
-                }
-            }
-            result.push_back(std::move(row));
-        }
-
-        mdb_free_tabledef(table);
+        return Jet4Reader::readTable(mdb, tableName);
     } catch (...) {
         // Suppress any unexpected read errors
     }
-    return result;
+    return {};
 }
 #endif
 
@@ -960,6 +940,8 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
             else if (vType == 12 || vType == 7) { typeStr = "Debit Note"; rawType = "DbNt"; }
 
             QString vFy = computeFy(vDate);
+            // Canonical identity for every voucher_no stored below.
+            QString vchCanon = busyCanonVoucherNo(vFy, rawType, vNo);
 
             // Separate financial GL splits (RecType==1), inventory item rows (RecType==2), and bill sundries (RecType==3)
             std::vector<std::map<std::string, std::string>> glRows;
@@ -1019,7 +1001,7 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
             db.executeNonQuery(
                 "INSERT OR REPLACE INTO vouchers (voucher_no, voucher_type, voucher_date, party_id, party_name, account_type, amount, narration, financial_year) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);",
-                {vNo, typeStr, vDate, (partyCode > 0 ? QVariant(partyCode) : QVariant()), partyName, partyName, totalAmt, narration, vFy}
+                {vchCanon, typeStr, vDate, (partyCode > 0 ? QVariant(partyCode) : QVariant()), partyName, partyName, totalAmt, narration, vFy}
             );
             stats.totalGlVouchers++;
 
@@ -1111,7 +1093,7 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
                         "INSERT OR REPLACE INTO purchase_invoices (invoice_no, voucher_no, invoice_date, supplier_id, supplier_name, "
                         "item_name, bag_count, weight_qtl, rate_per_qtl, taxable_amount, total_amount, narration, financial_year, sale_status, labour, m_fee, hrdf) "
                         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Mandi J-Form', ?, ?, ?);",
-                        {vNo, vNo, vDate, (farmerId > 0 ? QVariant(farmerId) : QVariant()), farmerName, itName, bQty, calcWt, rate, itAmt, grandTotal, narration, vFy, labourSundry, mFeeSundry, hrdfSundry}
+                        {vNo, vchCanon, vDate, (farmerId > 0 ? QVariant(farmerId) : QVariant()), farmerName, itName, bQty, calcWt, rate, itAmt, grandTotal, narration, vFy, labourSundry, mFeeSundry, hrdfSundry}
                     );
 
                     db.executeNonQuery(
@@ -1129,7 +1111,7 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
                         "tax_type, narration, row_no) "
                         "VALUES (?, ?, ?, ?, 'Purc', 'J-Form', ?, ?, ?, ?, ?, ?, ?, 'Loose', ?, ?, ?, ?, 0.0, 'GST', ?, ?);",
                         {
-                            1, vFy, vNo, vDate,
+                            1, vFy, vchCanon, vDate,
                             (farmerId > 0 ? QVariant(farmerId) : QVariant()),
                             farmerName, vNo,
                             (itCode > 0 ? QVariant(itCode) : QVariant()),
@@ -1216,7 +1198,7 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
                         "INSERT OR REPLACE INTO sales_invoices (invoice_no, voucher_no, invoice_date, customer_id, customer_name, "
                         "item_name, bag_count, weight_qtl, rate_per_qtl, taxable_amount, total_amount, narration, financial_year, sale_status, dami, m_fee, hrdf, labour) "
                         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Mandi I-Form', ?, ?, ?, ?);",
-                        {vNo, vNo, vDate, (buyerId > 0 ? QVariant(buyerId) : QVariant()), buyerName, itName, bQty, calcWt, rate, itAmt, grandTotal, narration, vFy, damiSundry, mFeeSundry, hrdfSundry, labourSundry}
+                        {vNo, vchCanon, vDate, (buyerId > 0 ? QVariant(buyerId) : QVariant()), buyerName, itName, bQty, calcWt, rate, itAmt, grandTotal, narration, vFy, damiSundry, mFeeSundry, hrdfSundry, labourSundry}
                     );
 
                     db.executeNonQuery(
@@ -1234,7 +1216,7 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
                         "tax_type, narration, row_no) "
                         "VALUES (?, ?, ?, ?, 'Sale', 'I-Form', ?, ?, ?, ?, ?, ?, ?, 'Loose', ?, ?, ?, ?, 0.0, 'GST', ?, ?);",
                         {
-                            1, vFy, vNo, vDate,
+                            1, vFy, vchCanon, vDate,
                             (buyerId > 0 ? QVariant(buyerId) : QVariant()),
                             buyerName, vNo,
                             (itCode > 0 ? QVariant(itCode) : QVariant()),
@@ -1261,7 +1243,7 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
                             "INSERT OR REPLACE INTO sales_invoices (invoice_no, voucher_no, invoice_date, customer_id, customer_name, "
                             "item_name, bag_count, weight_qtl, rate_per_qtl, taxable_amount, total_amount, narration, financial_year) "
                             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-                            {vNo, vNo, vDate, (partyCode > 0 ? QVariant(partyCode) : QVariant()), partyName, itName, static_cast<int>(qty), qty, rate, taxable, rowTotal, narration, vFy}
+                            {vNo, vchCanon, vDate, (partyCode > 0 ? QVariant(partyCode) : QVariant()), partyName, itName, static_cast<int>(qty), qty, rate, taxable, rowTotal, narration, vFy}
                         );
 
                         db.executeNonQuery(
@@ -1279,7 +1261,7 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
                             "tax_type, narration, row_no) "
                             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
                             {
-                                1, vFy, vNo, vDate, rawType, typeStr,
+                                1, vFy, vchCanon, vDate, rawType, typeStr,
                                 (partyCode > 0 ? QVariant(partyCode) : QVariant()),
                                 partyName, vNo,
                                 (itCode > 0 ? QVariant(itCode) : QVariant()),
@@ -1295,7 +1277,7 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
                         "INSERT OR REPLACE INTO sales_invoices (invoice_no, voucher_no, invoice_date, customer_id, customer_name, "
                         "item_name, bag_count, weight_qtl, rate_per_qtl, taxable_amount, total_amount, narration, financial_year) "
                         "VALUES (?, ?, ?, ?, ?, '', 0, 0, 0, ?, ?, ?, ?);",
-                        {vNo, vNo, vDate, (partyCode > 0 ? QVariant(partyCode) : QVariant()), partyName, totalAmt, totalAmt, narration, vFy}
+                        {vNo, vchCanon, vDate, (partyCode > 0 ? QVariant(partyCode) : QVariant()), partyName, totalAmt, totalAmt, narration, vFy}
                     );
                     stats.totalSalesInvoices++;
                 }
@@ -1315,7 +1297,7 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
                             "INSERT OR REPLACE INTO purchase_invoices (invoice_no, voucher_no, invoice_date, supplier_id, supplier_name, "
                             "item_name, bag_count, weight_qtl, rate_per_qtl, taxable_amount, total_amount, narration, financial_year) "
                             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-                            {vNo, vNo, vDate, (partyCode > 0 ? QVariant(partyCode) : QVariant()), partyName, itName, static_cast<int>(qty), qty, rate, taxable, rowTotal, narration, vFy}
+                            {vNo, vchCanon, vDate, (partyCode > 0 ? QVariant(partyCode) : QVariant()), partyName, itName, static_cast<int>(qty), qty, rate, taxable, rowTotal, narration, vFy}
                         );
 
                         db.executeNonQuery(
@@ -1333,7 +1315,7 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
                             "tax_type, narration, row_no) "
                             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
                             {
-                                1, vFy, vNo, vDate, rawType, typeStr,
+                                1, vFy, vchCanon, vDate, rawType, typeStr,
                                 (partyCode > 0 ? QVariant(partyCode) : QVariant()),
                                 partyName, vNo,
                                 (itCode > 0 ? QVariant(itCode) : QVariant()),
@@ -1349,7 +1331,7 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
                         "INSERT OR REPLACE INTO purchase_invoices (invoice_no, voucher_no, invoice_date, supplier_id, supplier_name, "
                         "item_name, bag_count, weight_qtl, rate_per_qtl, taxable_amount, total_amount, narration, financial_year) "
                         "VALUES (?, ?, ?, ?, ?, '', 0, 0, 0, ?, ?, ?, ?);",
-                        {vNo, vNo, vDate, (partyCode > 0 ? QVariant(partyCode) : QVariant()), partyName, totalAmt, totalAmt, narration, vFy}
+                        {vNo, vchCanon, vDate, (partyCode > 0 ? QVariant(partyCode) : QVariant()), partyName, totalAmt, totalAmt, narration, vFy}
                     );
                     stats.totalPurchaseInvoices++;
                 }
@@ -1394,7 +1376,7 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
                         db.executeNonQuery(
                             "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_type, trans_type, voucher_date, account_code, party_id, party_name, opposing_account, dr_cr, amount, narration, row_no) "
                             "VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-                            {vFy, vNo, typeStr, rawType, vDate, accCode, accCode, accName, oppName, drCr, amt, lineNar, rIdx++}
+                            {vFy, vchCanon, typeStr, rawType, vDate, accCode, accCode, accName, oppName, drCr, amt, lineNar, rIdx++}
                         );
                         stats.totalGlTransactions++;
                         if (drCr == "Dr") stats.totalDebitSum += amt;
@@ -1441,7 +1423,7 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
                         db.executeNonQuery(
                             "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_type, trans_type, voucher_date, account_code, party_id, party_name, opposing_account, dr_cr, amount, narration, row_no) "
                             "VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-                            {vFy, vNo, typeStr, rawType, vDate, accCode, accCode, accName, oppName, drCr, amt, lineNar, rIdx++}
+                            {vFy, vchCanon, typeStr, rawType, vDate, accCode, accCode, accName, oppName, drCr, amt, lineNar, rIdx++}
                         );
                         stats.totalGlTransactions++;
                         if (drCr == "Dr") stats.totalDebitSum += amt;
@@ -1454,12 +1436,12 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
                     db.executeNonQuery(
                         "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_type, trans_type, voucher_date, account_code, party_id, party_name, opposing_account, dr_cr, amount, invoice_no, narration, taxable_amount, row_no) "
                         "VALUES (1, ?, ?, 'Sales', 'Sale', ?, ?, ?, ?, 'Sale A/c', 'Dr', ?, ?, ?, ?, 1);",
-                        {vFy, vNo, vDate, partyCode, partyCode, partyName, totalAmt, vNo, narration, totalAmt}
+                        {vFy, vchCanon, vDate, partyCode, partyCode, partyName, totalAmt, vNo, narration, totalAmt}
                     );
                     db.executeNonQuery(
                         "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_type, trans_type, voucher_date, account_code, party_id, party_name, opposing_account, dr_cr, amount, invoice_no, narration, taxable_amount, row_no) "
                         "VALUES (1, ?, ?, 'Sales', 'Sale', ?, 4, 4, 'Sales', ?, 'Cr', ?, ?, ?, ?, 2);",
-                        {vFy, vNo, vDate, partyName, totalAmt, vNo, narration, totalAmt}
+                        {vFy, vchCanon, vDate, partyName, totalAmt, vNo, narration, totalAmt}
                     );
                     stats.totalGlTransactions += 2;
                     stats.totalDebitSum += totalAmt;
@@ -1468,12 +1450,12 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
                     db.executeNonQuery(
                         "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_type, trans_type, voucher_date, account_code, party_id, party_name, opposing_account, dr_cr, amount, invoice_no, narration, taxable_amount, row_no) "
                         "VALUES (1, ?, ?, 'Purchase', 'Purc', ?, 5, 5, 'Purchase', ?, 'Dr', ?, ?, ?, ?, 1);",
-                        {vFy, vNo, vDate, partyName, totalAmt, vNo, narration, totalAmt}
+                        {vFy, vchCanon, vDate, partyName, totalAmt, vNo, narration, totalAmt}
                     );
                     db.executeNonQuery(
                         "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_type, trans_type, voucher_date, account_code, party_id, party_name, opposing_account, dr_cr, amount, invoice_no, narration, taxable_amount, row_no) "
                         "VALUES (1, ?, ?, 'Purchase', 'Purc', ?, ?, ?, ?, 'Purchase A/c', 'Cr', ?, ?, ?, ?, 2);",
-                        {vFy, vNo, vDate, partyCode, partyCode, partyName, totalAmt, vNo, narration, totalAmt}
+                        {vFy, vchCanon, vDate, partyCode, partyCode, partyName, totalAmt, vNo, narration, totalAmt}
                     );
                     stats.totalGlTransactions += 2;
                     stats.totalDebitSum += totalAmt;

@@ -3,6 +3,7 @@
 #include <QWidget>
 #include <QTabWidget>
 #include <QTableWidget>
+#include <QComboBox>
 #include "accounting_date_edit.h"
 #include <QLineEdit>
 #include <QLabel>
@@ -34,7 +35,9 @@ protected:
 
 private slots:
     void onRefreshClicked();
+    void onMonthYearChanged();
     void onExportGstr1JsonClicked();
+    void onExportGstr1ExcelClicked();
     void onImportGstr2AJsonClicked();
     void onAutoDownloadGstr2Clicked();
     void onExportGstr3BExcelClicked();
@@ -49,6 +52,9 @@ private:
     QTabWidget* m_tabs = nullptr;
     AccountingDateDisplay* m_fromDateEdit = nullptr;
     AccountingDateDisplay* m_toDateEdit = nullptr;
+    QComboBox* m_monthCombo = nullptr; // FY-ordered April..March, like Salary register
+    QComboBox* m_yearCombo = nullptr;  // calendar year of the selected month
+    void syncMonthYearCombos(const QDate& fromDate, const QDate& toDate);
     QPushButton* m_refreshBtn = nullptr;
     QPushButton* m_backBtn = nullptr;
 
@@ -59,7 +65,9 @@ private:
     QLabel* m_gstr1HsnCountLabel = nullptr;
     QLabel* m_gstr1TotalTaxLabel = nullptr;
     QTableWidget* m_gstr1B2BTable = nullptr;
-    QPushButton* m_exportGstr1Btn = nullptr;
+    QLabel* m_gstr1ExemptLabel = nullptr;
+    QLabel* m_gstr1QuarLabel = nullptr;
+    QLabel* m_fyBadge = nullptr;
 
     // GSTR-2A Matching Widgets
     QTableWidget* m_gstr2Table = nullptr;
@@ -73,6 +81,7 @@ private:
     QLabel* m_gstr3bBanner = nullptr;
     QLabel* m_gstr3bNetPayableBanner = nullptr;
     QTableWidget* m_gstr3bTable31 = nullptr;
+    QTableWidget* m_gstr3bTable32 = nullptr;
     QTableWidget* m_gstr3bTable4 = nullptr;
     QTableWidget* m_gstr3bTable5 = nullptr;
     QTableWidget* m_gstr3bTable61 = nullptr;

@@ -1,6 +1,7 @@
 #include "tally_data_migrator.h"
 #include "../database_manager.h"
 #include "../models/account_classifier.h"
+#include "../engine/fiscal_year_helper.h"
 #include <QFile>
 #include <QFileInfo>
 #include <QDir>
@@ -915,6 +916,10 @@ bool TallyDataMigrator::migrate_tally_data(const QString& tallyPath, const QStri
         if (vNo.isEmpty()) vNo = QString("TLY-%1").arg(stats.totalVouchers + 1);
         QString dateStr = v.dateStr.isEmpty() ? "2026-04-01" : v.dateStr;
         QString fy = computeFy(dateStr);
+        // Canonical voucher identity "{yyYY}/{Type}-{raw}" (Busy-style).
+        // invoice_no keeps the Tally original (incl. "TLY-N" fallback marker).
+        QString vchRaw = vNo.startsWith("TLY-") ? vNo.mid(4) : vNo;
+        QString vchCanon = FiscalYearHelper::canonicalVoucherNo(fy, v.vchType, vchRaw);
 
         QVariant fyIdVar = db.executeScalar("SELECT id FROM financial_years WHERE year_name = ?;", {fy});
         int fyId = fyIdVar.toInt();
@@ -971,7 +976,7 @@ bool TallyDataMigrator::migrate_tally_data(const QString& tallyPath, const QStri
         db.executeNonQuery(
             "INSERT OR REPLACE INTO vouchers (voucher_no, voucher_type, voucher_date, party_id, party_name, account_type, amount, narration, financial_year) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);",
-            {vNo, v.vchType, dateStr, partyIdParam, headerParty, v.vchType, totalAmt, v.narration, fy}
+            {vchCanon, v.vchType, dateStr, partyIdParam, headerParty, v.vchType, totalAmt, v.narration, fy}
         );
         stats.totalVouchers++;
 
@@ -989,7 +994,7 @@ bool TallyDataMigrator::migrate_tally_data(const QString& tallyPath, const QStri
                         "INSERT OR REPLACE INTO sales_invoices (invoice_no, voucher_no, invoice_date, customer_id, customer_name, "
                         "item_name, bag_count, weight_qtl, rate_per_qtl, taxable_amount, total_amount, narration, financial_year) "
                         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-                        {vNo, vNo, dateStr, partyIdParam, headerParty, itemName, static_cast<int>(qty), qty, rate, taxAmt, totalAmt, v.narration, fy}
+                        {vNo, vchCanon, dateStr, partyIdParam, headerParty, itemName, static_cast<int>(qty), qty, rate, taxAmt, totalAmt, v.narration, fy}
                     );
 
                     db.executeNonQuery(
@@ -1020,7 +1025,7 @@ bool TallyDataMigrator::migrate_tally_data(const QString& tallyPath, const QStri
                     "INSERT OR REPLACE INTO sales_invoices (invoice_no, voucher_no, invoice_date, customer_id, customer_name, "
                     "item_name, bag_count, weight_qtl, rate_per_qtl, taxable_amount, total_amount, narration, financial_year) "
                     "VALUES (?, ?, ?, ?, ?, '', 0, 0, 0, ?, ?, ?, ?);",
-                    {vNo, vNo, dateStr, partyIdParam, headerParty, totalAmt, totalAmt, v.narration, fy}
+                    {vNo, vchCanon, dateStr, partyIdParam, headerParty, totalAmt, totalAmt, v.narration, fy}
                 );
             }
         } else if (v.vchType.compare("Purchase", Qt::CaseInsensitive) == 0) {
@@ -1036,7 +1041,7 @@ bool TallyDataMigrator::migrate_tally_data(const QString& tallyPath, const QStri
                         "INSERT OR REPLACE INTO purchase_invoices (invoice_no, voucher_no, invoice_date, supplier_id, supplier_name, "
                         "item_name, bag_count, weight_qtl, rate_per_qtl, taxable_amount, total_amount, narration, financial_year) "
                         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-                        {vNo, vNo, dateStr, partyIdParam, headerParty, itemName, static_cast<int>(qty), qty, rate, taxAmt, totalAmt, v.narration, fy}
+                        {vNo, vchCanon, dateStr, partyIdParam, headerParty, itemName, static_cast<int>(qty), qty, rate, taxAmt, totalAmt, v.narration, fy}
                     );
 
                     db.executeNonQuery(
@@ -1067,7 +1072,7 @@ bool TallyDataMigrator::migrate_tally_data(const QString& tallyPath, const QStri
                     "INSERT OR REPLACE INTO purchase_invoices (invoice_no, voucher_no, invoice_date, supplier_id, supplier_name, "
                     "item_name, bag_count, weight_qtl, rate_per_qtl, taxable_amount, total_amount, narration, financial_year) "
                     "VALUES (?, ?, ?, ?, ?, '', 0, 0, 0, ?, ?, ?, ?);",
-                    {vNo, vNo, dateStr, partyIdParam, headerParty, totalAmt, totalAmt, v.narration, fy}
+                    {vNo, vchCanon, dateStr, partyIdParam, headerParty, totalAmt, totalAmt, v.narration, fy}
                 );
             }
         }
@@ -1110,7 +1115,7 @@ bool TallyDataMigrator::migrate_tally_data(const QString& tallyPath, const QStri
                 "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_type, trans_type, voucher_date, "
                 "account_code, party_id, party_name, opposing_account, dr_cr, amount, taxable_amount, narration, row_no) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-                {fyId, fy, vNo, v.vchType, v.vchType, dateStr, accCodeParam, splitPartyIdParam, s.ledger, oppAcc, s.drCr, s.amount, s.amount, s.narration.isEmpty() ? v.narration : s.narration, rowIdx++}
+                {fyId, fy, vchCanon, v.vchType, v.vchType, dateStr, accCodeParam, splitPartyIdParam, s.ledger, oppAcc, s.drCr, s.amount, s.amount, s.narration.isEmpty() ? v.narration : s.narration, rowIdx++}
             );
             stats.totalTransactions++;
             if (s.drCr == "Dr") stats.totalDr += s.amount;

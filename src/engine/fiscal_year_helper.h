@@ -59,6 +59,8 @@ public:
     static FiscalYearInfo getActiveFiscalYear();
     static FiscalYearInfo getFiscalYearForDate(const QString& dateStr);
     static FiscalYearInfo getFiscalYearByName(const QString& fyName);
+    static QString extractFiscalYearToken(const QString& str);
+    static FiscalYearInfo resolveFiscalYear(const QString& invOrVchStr, const QString& dateHint = "", const QString& explicitFy = "");
     static QList<FiscalYearInfo> getAllFiscalYears();
     static void setActiveFiscalYear(const QString& fyNameOrLabel);
     static void setActiveCustomPeriod(const QString& fromIso, const QString& toIso, const QString& label = "");
@@ -66,6 +68,19 @@ public:
     // 2. Normalization & Formatting
     static QString normalizeToIso(const QString& dateStr);
     static QString formatDisplayDate(const QString& dateStr); // Returns DD-MM-YYYY
+
+    // 2b. Canonical voucher identity: "{yyYY}/{Type}-{raw}" e.g. "2627/Sale-247".
+    // Single source of truth for every voucher_no written (migration + all
+    // controllers) so identity is exact-matchable — no prefix stripping,
+    // token guessing, or substring LIKE at read time. Idempotent: canonical
+    // input passes through unchanged. invoice_no is NOT canonicalized here:
+    // Bahi-Khata invoices already embed FY ("MRI/2526-247", byte-identical
+    // round-trip for export) and supplier bills must stay verbatim.
+    static QString fyShortToken(const QString& fyName); // "FY 2026-27" -> "2627"
+    static QString canonicalTypeToken(const QString& type); // Sales/Sale->Sale, Purchase->Purc, ...
+    static QString canonicalVoucherNo(const QString& fyNameOrToken, const QString& type, const QString& rawNo);
+    static bool parseCanonicalVoucherNo(const QString& vchNo, QString& fyTokenOut, QString& typeOut, QString& rawOut);
+    static QString rawVoucherNo(const QString& vchNo); // canonical/app-prefixed -> Bahi-Khata raw ("247"); others unchanged
 
     // 3. Clamping & Boundary Guards (The Sorting Machine)
     static void clampDateRangeToFiscalYear(QString& fromIso, QString& toIso, const FiscalYearInfo& fy);

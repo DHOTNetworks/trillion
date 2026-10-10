@@ -1,4 +1,5 @@
 #include "item_search_delegate.h"
+#include "voucher_common.h"
 #include <QVBoxLayout>
 #include <QKeyEvent>
 #include <QFocusEvent>
@@ -275,21 +276,9 @@ void ItemSearchEditor::keyPressEvent(QKeyEvent* event) {
             event->accept();
             return;
         }
-    } else {
-        if (event->key() == Qt::Key_Down) {
-            openSearchPopup();
-            event->accept();
-            return;
-        } else if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter || event->key() == Qt::Key_Tab) {
-            emit moveNextCell();
-            event->accept();
-            return;
-        } else if (event->key() == Qt::Key_Backtab) {
-            emit movePrevCell();
-            event->accept();
-            return;
-        }
     }
+    // Popup closed: the delegate's event filter owns all editor keys
+    // (commit/close + move). Nothing to do here; fall through to native edit.
     QLineEdit::keyPressEvent(event);
 }
 
@@ -364,11 +353,6 @@ QWidget* ItemSearchDelegate::createEditor(QWidget* parent, const QStyleOptionVie
             emit const_cast<ItemSearchDelegate*>(this)->closeEditor(editor, QAbstractItemDelegate::NoHint);
             emit const_cast<ItemSearchDelegate*>(this)->moveNextRequested();
         });
-        connect(editor, &ItemSearchEditor::movePrevCell, this, [this, editor]() {
-            emit const_cast<ItemSearchDelegate*>(this)->commitData(editor);
-            emit const_cast<ItemSearchDelegate*>(this)->closeEditor(editor, QAbstractItemDelegate::NoHint);
-            emit const_cast<ItemSearchDelegate*>(this)->movePrevRequested();
-        });
         return editor;
     }
 
@@ -426,15 +410,20 @@ bool ItemSearchDelegate::eventFilter(QObject* object, QEvent* event) {
 
         QLineEdit* lineEdit = qobject_cast<QLineEdit*>(editor);
 
-        if (key == Qt::Key_Tab || key == Qt::Key_Return || key == Qt::Key_Enter) {
-            emit commitData(editor);
-            emit closeEditor(editor, QAbstractItemDelegate::NoHint);
-            emit moveNextRequested();
-            return true;
-        } else if (key == Qt::Key_Backtab) {
+        if (key == Qt::Key_Backspace) {
+            // Bahi-Khata convention (numeric cells): delete word by word; on
+            // an empty field commit, close and step back (same as Backtab).
+            if (lineEdit && VoucherCommon::backspaceWord(lineEdit)) {
+                return true;
+            }
             emit commitData(editor);
             emit closeEditor(editor, QAbstractItemDelegate::NoHint);
             emit movePrevRequested();
+            return true;
+        } else if (key == Qt::Key_Tab || key == Qt::Key_Return || key == Qt::Key_Enter) {
+            emit commitData(editor);
+            emit closeEditor(editor, QAbstractItemDelegate::NoHint);
+            emit moveNextRequested();
             return true;
         } else if (key == Qt::Key_Left) {
             if (lineEdit && (lineEdit->cursorPosition() == 0 || lineEdit->hasSelectedText() || lineEdit->text().isEmpty())) {

@@ -3,6 +3,7 @@
 #include <QDate>
 #include <QDir>
 #include <QFile>
+#include <QRegularExpression>
 #include <cmath>
 
 #include "../src/services/accounting_date_service.h"
@@ -19,6 +20,10 @@
 #include "../src/models/stock_master_controller.h"
 #include "../src/models/sales_model.h"
 #include "../src/models/purchase_model.h"
+#include "../src/engine/bill_series.h"
+#include "../src/engine/gstr1_excel_writer.h"
+#include <miniz.h>
+#include <QTemporaryDir>
 #include "../src/models/vouchers_model.h"
 #include "../src/models/parties_model.h"
 #include "../src/models/financial_years_model.h"
@@ -92,6 +97,8 @@ private slots:
     void testMillingBatchYieldDistribution();
     void testPaddyProcurementMoistureDeductions();
     void testPerFinancialYearVoucherNumbering();
+    void testBillSeriesConfig();
+    void testGstr1ExcelParity();
 
     // 5. Masters & Regulatory Validations
     void testGstinValidationAndPanExtraction();
@@ -676,16 +683,16 @@ void LogicBoardTestSuite::testPaddyProcurementMoistureDeductions() {
 void LogicBoardTestSuite::testPerFinancialYearVoucherNumbering() {
     SalesModel salesModel;
     QString vch2627 = salesModel.get_next_voucher_no("FY 2026-27");
-    QVERIFY(vch2627.startsWith("Sale-"));
-    int num2627 = vch2627.mid(5).toInt();
+    QVERIFY(vch2627.startsWith("2627/Sale-"));
+    int num2627 = vch2627.mid(vch2627.lastIndexOf('-') + 1).toInt();
     QVERIFY(num2627 >= 246);
 
     QString inv2627 = salesModel.get_next_invoice_no("FY 2026-27");
     QVERIFY(inv2627.startsWith("MRI/2627-"));
 
-    // For FY 2025-26 (1090 existing invoices, max 1093), next voucher must be Sale-1094
+    // For FY 2025-26 (1090 existing invoices, max 1093), next voucher must be 2526/Sale-1094
     QString vch2526 = salesModel.get_next_voucher_no("FY 2025-26");
-    QCOMPARE(vch2526, QString("Sale-1094"));
+    QCOMPARE(vch2526, QString("2526/Sale-1094"));
 
     // Date string resolution: 01-05-2026 belongs to FY 2026-27
     QString vchByDate = salesModel.get_next_voucher_no("01-05-2026");
@@ -709,6 +716,215 @@ void LogicBoardTestSuite::testPerFinancialYearVoucherNumbering() {
     QVariantMap vch2023 = vchModel.get_cheque_voucher("ChPt 99901", "15-08-2023");
     QCOMPARE(vch2023.value("party_name").toString(), QString("Old FY 23-24 Party"));
     QCOMPARE(vch2023.value("amount").toDouble(), 1000.0);
+
+    // Canonical voucher identity "{yyYY}/{Type}-{raw}": exact, idempotent,
+    // lossless in both directions (Busy-style FY-embedded numbering).
+    QCOMPARE(FiscalYearHelper::fyShortToken("FY 2026-27"), QString("2627"));
+    QCOMPARE(FiscalYearHelper::canonicalVoucherNo("FY 2026-27", "Sales", "247"), QString("2627/Sale-247"));
+    QCOMPARE(FiscalYearHelper::canonicalVoucherNo("FY 2026-27", "Sale", "2627/Sale-247"), QString("2627/Sale-247"));
+    QCOMPARE(FiscalYearHelper::canonicalVoucherNo("FY 2026-27", "Sale", "Sale-247"), QString("2627/Sale-247"));
+    QCOMPARE(FiscalYearHelper::canonicalVoucherNo("FY 2026-27", "Sales", "1/2026-27"), QString("1/2026-27"));
+    QCOMPARE(FiscalYearHelper::canonicalVoucherNo("FY 2025-26", "PU", "476"), QString("2526/Purc-476"));
+    QCOMPARE(FiscalYearHelper::canonicalTypeToken("PY"), QString("Pymt"));
+    QCOMPARE(FiscalYearHelper::canonicalTypeToken("RC"), QString("Rcpt"));
+    QCOMPARE(FiscalYearHelper::canonicalTypeToken("PU"), QString("Purc"));
+    QCOMPARE(FiscalYearHelper::canonicalTypeToken("CN"), QString("Contra"));
+    QCOMPARE(FiscalYearHelper::canonicalTypeToken("Cash Payment"), QString("Pymt"));
+    QCOMPARE(FiscalYearHelper::canonicalTypeToken("Payment"), QString("ChPt"));
+    QString pFy, pType, pRaw;
+    QVERIFY(FiscalYearHelper::parseCanonicalVoucherNo("2627/Purc-397", pFy, pType, pRaw));
+    QCOMPARE(pFy, QString("2627"));
+    QCOMPARE(pType, QString("Purc"));
+    QCOMPARE(pRaw, QString("397"));
+    QVERIFY(!FiscalYearHelper::parseCanonicalVoucherNo("247", pFy, pType, pRaw));
+    QCOMPARE(FiscalYearHelper::rawVoucherNo("2627/Sale-247"), QString("247"));
+    QCOMPARE(FiscalYearHelper::rawVoucherNo("Sale-247"), QString("247"));
+    QCOMPARE(FiscalYearHelper::rawVoucherNo("247"), QString("247"));
+}
+
+void LogicBoardTestSuite::testBillSeriesConfig() {
+    auto& db = DatabaseManager::instance();
+    SalesModel salesModel;
+    const QString key = BillSeriesManager::settingsKey("sale");
+
+    // Start pristine: no config row. The series is ADOPTED from the firm's own
+    // history (no hardcoded prefix anywhere) — fixture bills are MRI/… shaped.
+    db.executeNonQuery("DELETE FROM app_settings WHERE key = ?;", {key});
+    QString adopted = salesModel.get_next_invoice_no("FY 2026-27");
+    QVERIFY(adopted.startsWith("MRI/2627-"));
+
+    // Zero-padding fully customizable: width 4 -> "-0001" style.
+    BillSeriesConfig padded;
+    padded.prefix = "STC";
+    padded.sepAfterPrefix = "/";
+    padded.fyStyle = "yyYY";
+    padded.sepBeforeSeq = "-";
+    padded.seqWidth = 4;
+    padded.startNumber = 101;
+    padded.resetEachFy = true;
+    QVERIFY(padded.validate().isEmpty());
+    QVERIFY(BillSeriesManager::save("sale", padded));
+    // Empty FY 2099-00: no rows, so numbering starts exactly at startNumber.
+    QCOMPARE(salesModel.get_next_invoice_no("FY 2099-00"), QString("STC/9900-0101"));
+
+    // Plain style: width 1 -> "-11" with no padding.
+    padded.seqWidth = 1;
+    padded.startNumber = 11;
+    QVERIFY(BillSeriesManager::save("sale", padded));
+    QCOMPARE(salesModel.get_next_invoice_no("FY 2099-00"), QString("STC/9900-11"));
+
+    // Mid-history series switch inside FY 2026-27: continues past the highest
+    // legacy sequence in that FY instead of restarting at 1.
+    QVariantList rows2627 = db.executeQuery(
+        "SELECT invoice_no FROM sales_invoices WHERE financial_year = 'FY 2026-27' "
+        "AND invoice_no IS NOT NULL AND invoice_no != '';");
+    long long legacyMax = 0;
+    QRegularExpression tailRe("^(.*?)(\\d+)$");
+    for (const QVariant& r : rows2627) {
+        auto m = tailRe.match(r.toMap().value("invoice_no").toString().trimmed());
+        if (m.hasMatch()) legacyMax = qMax(legacyMax, m.captured(2).toLongLong());
+    }
+    QVERIFY(legacyMax > 0);
+    QString continued = salesModel.get_next_invoice_no("FY 2026-27");
+    QVERIFY(continued.startsWith("STC/2627-"));
+    QCOMPARE(continued.mid(QString("STC/2627-").length()).toLongLong(), legacyMax + 1);
+
+    // Invalid configs are rejected, never stored.
+    BillSeriesConfig bad;
+    bad.prefix = "AB1"; // ends with a digit: would merge into the sequence
+    QVERIFY(!bad.validate().isEmpty());
+    QVERIFY(!BillSeriesManager::save("sale", bad));
+    QCOMPARE(salesModel.get_next_invoice_no("FY 2099-00"), QString("STC/9900-11"));
+
+    // Purchase has NO auto-invoice API: the supplier's bill number is typed in.
+    QCOMPARE(PurchaseModel().metaObject()->indexOfMethod("get_next_invoice_no(QString)"), -1);
+    QCOMPARE(PurchaseModel().metaObject()->indexOfMethod("increment_invoice(QString)"), -1);
+
+    // Restore pristine state so other tests see the adopted series.
+    db.executeNonQuery("DELETE FROM app_settings WHERE key = ?;", {key});
+    QCOMPARE(salesModel.get_next_invoice_no("FY 2026-27"), adopted);
+}
+
+static QString gstr1ZipRead(const QString& zipPath, const QString& inner) {
+    mz_zip_archive z;
+    memset(&z, 0, sizeof(z));
+    if (!mz_zip_reader_init_file(&z, zipPath.toUtf8().constData(), 0)) return QString();
+    QString out;
+    mz_uint n = mz_zip_reader_get_num_files(&z);
+    for (mz_uint i = 0; i < n; i++) {
+        mz_zip_archive_file_stat st;
+        if (!mz_zip_reader_file_stat(&z, i, &st)) continue;
+        if (QString::fromUtf8(st.m_filename) == inner) {
+            size_t sz = 0;
+            void* p = mz_zip_reader_extract_to_heap(&z, i, &sz, 0);
+            if (p) {
+                out = QString::fromUtf8((const char*)p, (int)sz);
+                mz_free(p);
+            }
+            break;
+        }
+    }
+    mz_zip_reader_end(&z);
+    return out;
+}
+
+void LogicBoardTestSuite::testGstr1ExcelParity() {
+    using namespace MahadevERP;
+    // Portal rules (reference GSTINs proven checksum-valid).
+    QVERIFY(Gstr1Engine::isValidGstin("06AAJFJ1219R1Z0"));
+    QVERIFY(Gstr1Engine::isValidGstin("27ABACS0877M1ZW"));
+    QVERIFY(Gstr1Engine::isValidGstin("03ABZPG4633M1Z8"));
+    QVERIFY(!Gstr1Engine::isValidGstin("06AAJFJ1219R1Z1")); // mutated checksum
+    QVERIFY(!Gstr1Engine::isValidGstin("123"));
+    QVERIFY(!Gstr1Engine::isValidGstin("28ABCDE1234F1Z5")); // 28 is not a state
+    QVERIFY(Gstr1Engine::isValidInvoiceNo("MRI/2627-1"));
+    QVERIFY(!Gstr1Engine::isValidInvoiceNo("12345678901234567")); // 17 chars
+    QVERIFY(!Gstr1Engine::isValidInvoiceNo("AB#1"));              // bad char
+    QCOMPARE(Gstr1Engine::posDisplayName("06"), QString("06-Haryana"));
+    QVERIFY(Gstr1Engine::isValidGstRate(5.0));
+    QVERIFY(!Gstr1Engine::isValidGstRate(2.5));
+
+    // Hermetic DB: one B2B, one B2CS, two quarantined rows.
+    // NOTE: initDatabase() is a no-op on an open connection — switchDatabase().
+    QString tdb = "data/test_gstr1.db";
+    if (QFile::exists("../data")) tdb = "../data/test_gstr1.db";
+    QFile::remove(tdb);
+    DatabaseManager::instance().switchDatabase(tdb);
+    auto& db = DatabaseManager::instance();
+    db.executeNonQuery("INSERT INTO sales_invoices (invoice_no, invoice_date, customer_name, gstin, place_of_supply, item_name, hsn_code, weight_qtl, taxable_amount, gst_pct, total_amount, financial_year, voucher_no) VALUES "
+        "('TEST-GSTR1-1','2026-10-05','Test Dealer','03ABZPG4633M1Z8','03','Paddy','1006',100.0,200000.0,5.0,210000.0,'FY 2026-27','2627/Sale-1'),"
+        "('TEST-GSTR1-2','2026-10-06','Cash Customer','','06','Rice','1006',10.0,5000.0,5.0,5250.0,'FY 2026-27','2627/Sale-2'),"
+        "('TEST-GSTR1-3','2026-10-07','Bogus Dealer','BOGUS-GSTIN','06','Paddy','1006',5.0,1000.0,5.0,1050.0,'FY 2026-27','2627/Sale-3'),"
+        "('HAS#HASH','2026-10-08','Cash Customer','','06','Rice','1006',2.0,1000.0,5.0,1050.0,'FY 2026-27','2627/Sale-4'),"
+        "('TEST-GSTR1-5','2026-10-09','Exempt Dealer','06AAJFJ1219R1Z0','06','Rice','1006',30.0,3000.0,0.0,3000.0,'FY 2026-27','2627/Sale-5');");
+
+    Gstr1ReturnPayload p = Gstr1Engine::generateFromDatabase("", "Test Mill", "06", QDate(2026, 10, 1), QDate(2026, 10, 31));
+    QCOMPARE(p.b2b.size(), 1);
+    QCOMPARE(p.b2b.first().invoiceNo, QString("TEST-GSTR1-1"));
+    QCOMPARE(p.b2b.first().invoiceValue, 210000.0); // 200000 + 5% IGST (03 vs 06)
+    QCOMPARE(p.b2cs.size(), 1);
+    QCOMPARE(p.b2cs.first().splyTy, QString("INTRA"));
+    QCOMPARE(p.b2cs.first().typ, QString("OE"));
+    QCOMPARE(p.quarantine.size(), 2);
+    QCOMPARE(p.hsnB2B.size(), 2); // 1006@5% filed + 1006@0% exempt (Table 12 keeps both)
+    QCOMPARE(p.hsnB2C.size(), 1);
+    QCOMPARE(p.hsnB2B.first().hsnCode, QString("1006"));
+    QCOMPARE(p.docs.size(), 1);
+    QCOMPARE(p.docs.first().totalCount, 3); // documents issued incl. the exempt bill
+    // Exempt separation: 0-rated reg+intra bill -> Table 8, out of B2B.
+    QCOMPARE(p.b2b.size(), 1);
+    QCOMPARE(p.exemp.size(), 4);
+    QCOMPARE(p.exemp[1].exmpAmt, 3000.0);
+    QCOMPARE(p.exemp[0].exmpAmt, 0.0);
+    QCOMPARE(p.infoNotes.size(), 1);
+
+    // Excel: template parity + determinism.
+    QTemporaryDir tmp;
+    QVERIFY(tmp.isValid());
+    QString x1 = tmp.path() + "/gstr1_a.xlsx";
+    QString x2 = tmp.path() + "/gstr1_b.xlsx";
+    Gstr1ExcelResult r1 = Gstr1ExcelWriter::write(p, x1);
+    QVERIFY2(r1.ok, qPrintable(r1.error));
+    QCOMPARE(r1.stats.b2bRows, 1);
+    QCOMPARE(r1.stats.b2csRows, 1);
+    Gstr1ExcelResult r2 = Gstr1ExcelWriter::write(p, x2);
+    QVERIFY(r2.ok);
+    QFile f1(x1), f2(x2);
+    QVERIFY(f1.open(QIODevice::ReadOnly) && f2.open(QIODevice::ReadOnly));
+    QCOMPARE(f1.readAll(), f2.readAll()); // byte-identical for identical input
+
+    QString wb = gstr1ZipRead(x1, "xl/workbook.xml");
+    QVERIFY(wb.contains("<sheet name=\"b2b\""));
+    QVERIFY(wb.contains("<sheet name=\"hsn(b2b)\""));
+    QVERIFY(wb.contains("<sheet name=\"hsn(b2c)\""));
+    QVERIFY(wb.contains("<sheet name=\"master\""));
+    QVERIFY(wb.contains("<definedName name=\"POS\">master!$G$2:$G$39</definedName>"));
+    QVERIFY(wb.contains("<definedName name=\"CDRNOTE\">master!$D$2:$D$3</definedName>"));
+    QString b2b = gstr1ZipRead(x1, "xl/worksheets/sheet2.xml");
+    QVERIFY(b2b.contains("GSTIN/UIN of Recipient"));
+    QVERIFY(b2b.contains("Invoice Number"));
+    QVERIFY(b2b.contains(">TEST-GSTR1-1<"));
+    QVERIFY(b2b.contains(">03ABZPG4633M1Z8<"));
+    QVERIFY(b2b.contains(">03-Punjab<"));
+    QVERIFY(b2b.contains(">05-Oct-2026<"));
+    QVERIFY(b2b.contains("sqref=\"F5:F1048576\""));
+    QString main = gstr1ZipRead(x1, "xl/worksheets/sheet1.xml");
+    QVERIFY(main.contains(">Test Mill<"));
+
+    // JSON: all sections incl. previously-missing b2cl + split HSN.
+    QJsonDocument doc = Gstr1Engine::exportToGovtOfflineJson(p);
+    QJsonObject root = doc.object();
+    for (const char* k : {"b2b","b2cl","b2cs","cdnr","cdnur","hsn","exemp","doc_issue"})
+        QVERIFY2(root.contains(k), k);
+    QJsonObject hsn = root["hsn"].toObject();
+    QVERIFY(hsn.contains("hsn_b2b") && hsn.contains("hsn_b2c"));
+    QCOMPARE(root["b2b"].toArray().first().toObject()["inv"].toArray().first().toObject()["pos"].toString(), QString("03"));
+    QCOMPARE(root["b2cs"].toArray().first().toObject()["sply_ty"].toString(), QString("INTRA"));
+
+    // Restore the shared unit-suite DB for subsequent tests.
+    QString unitDb = "data/test_unit_suite.db";
+    if (QFile::exists("../data")) unitDb = "../data/test_unit_suite.db";
+    DatabaseManager::instance().switchDatabase(unitDb);
 }
 
 // -------------------------------------------------------------
@@ -1706,8 +1922,8 @@ void LogicBoardTestSuite::testCashBankFlowAndCashVouchers() {
     QString nextRcpt = vchModel.get_next_voucher_no("Cash Receipt");
     QVERIFY(!nextPymt.isEmpty());
     QVERIFY(!nextRcpt.isEmpty());
-    QVERIFY(nextPymt.startsWith("Pymt-"));
-    QVERIFY(nextRcpt.startsWith("Rcpt-"));
+    QVERIFY(nextPymt.contains("/Pymt-"));
+    QVERIFY(nextRcpt.contains("/Rcpt-"));
 
     // 2. Ensure test parties exist
     QVariant p1 = db.executeScalar("SELECT id FROM parties WHERE name = 'FLOW_TEST_SUPPLIER' LIMIT 1;");

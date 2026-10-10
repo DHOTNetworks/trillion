@@ -1679,10 +1679,13 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaOdbc(const ExportOp
             int rowIdx = 1;
             for (const auto& tVar : txRows) {
                 QVariantMap t = tVar.toMap();
-                int vchNum = t.value("voucher_no").toInt();
+                // Canonical app identity ("2627/Sale-247") maps back to the
+                // Bahi-Khata raw number ("247"); legacy shapes pass through.
+                QString rawVchStr = FiscalYearHelper::rawVoucherNo(t.value("voucher_no").toString());
+                int vchNum = rawVchStr.toInt();
                 if (vchNum <= 0) {
                     static QRegularExpression reDigits(R"(\d+)");
-                    QRegularExpressionMatch mm = reDigits.match(t.value("voucher_no").toString());
+                    QRegularExpressionMatch mm = reDigits.match(rawVchStr);
                     vchNum = mm.hasMatch() ? mm.captured(0).toInt() : rowIdx;
                 }
                 QString isoDate = t.value("voucher_date").toString().left(10);
@@ -1704,7 +1707,7 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaOdbc(const ExportOp
                 q.addBindValue(acCode);
                 q.addBindValue(drCr);
                 q.addBindValue(amt);
-                q.addBindValue(t.value("voucher_no").toString().left(50));
+                q.addBindValue(rawVchStr.left(50));
                 q.addBindValue(transType.compare("Jrnl", Qt::CaseInsensitive) == 0
                                ? 0 : t.value("party_code").toInt());
                 q.addBindValue(t.value("narration").toString().left(200));
@@ -2431,11 +2434,12 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
                 int rowIdx = 1;
                 for (const auto& tVar : txRows) {
                     QVariantMap t = tVar.toMap();
-                    int rawVchNo = t.value("voucher_no").toInt();
+                    // Canonical app identity maps back to Bahi-Khata raw numbers.
+                    QString rawVchStr = FiscalYearHelper::rawVoucherNo(t.value("voucher_no").toString());
+                    int rawVchNo = rawVchStr.toInt();
                     if (rawVchNo <= 0) {
-                        QString vStr = t.value("voucher_no").toString();
                         static QRegularExpression reDigits(R"(\d+)");
-                        QRegularExpressionMatch mm = reDigits.match(vStr);
+                        QRegularExpressionMatch mm = reDigits.match(rawVchStr);
                         if (mm.hasMatch()) rawVchNo = mm.captured(0).toInt();
                         else rawVchNo = rowIdx;
                     }

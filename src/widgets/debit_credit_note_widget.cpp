@@ -1,4 +1,5 @@
 #include "debit_credit_note_widget.h"
+#include "voucher_common.h"
 #include "voucher_date_dialog.h"
 #include "kbd_badge_button.h"
 #include "custom_dialogs.h"
@@ -10,6 +11,7 @@
 #include <QGridLayout>
 #include <QHeaderView>
 #include <QFrame>
+#include <QCompleter>
 #include <QDate>
 #include <QKeyEvent>
 #include <cmath>
@@ -420,6 +422,126 @@ void DebitCreditNoteWidget::setupConnections() {
     connect(m_itemsTable, &QTableWidget::cellChanged, this, &DebitCreditNoteWidget::onRecalculateTotals);
     connect(m_posCombo, &QComboBox::currentIndexChanged, this, &DebitCreditNoteWidget::onRecalculateTotals);
     connect(m_newBtn, &QPushButton::clicked, this, &DebitCreditNoteWidget::resetForm);
+
+    // Keyboard navigation order (visual order; table cells keep grid keys).
+    m_navOrder = {
+        m_noteTypeCombo,
+        m_noteNoEdit,
+        m_origInvoiceTypeCombo,
+        m_origInvoiceNoEdit,
+        m_origInvoiceDateEdit,
+        m_partySearch,
+        m_partyGstinEdit,
+        m_reasonCodeCombo,
+        m_posCombo,
+        m_narrationEdit,
+        m_saveBtn
+    };
+    for (QWidget* w : m_navOrder) {
+        if (!w) continue;
+        w->installEventFilter(this);
+        // Typing focus lives in a combo's line edit, not the combo itself.
+        if (auto* cb = qobject_cast<QComboBox*>(w)) {
+            if (cb->lineEdit()) cb->lineEdit()->installEventFilter(this);
+        }
+    }
+}
+
+static void focusDebitNavWidget(QWidget* w) {
+    if (!w) return;
+    w->setFocus();
+    if (auto* le = qobject_cast<QLineEdit*>(w)) {
+        le->selectAll();
+    } else if (auto* cb = qobject_cast<QComboBox*>(w)) {
+        if (cb->lineEdit()) cb->lineEdit()->selectAll();
+    }
+}
+
+bool DebitCreditNoteWidget::eventFilter(QObject* watched, QEvent* event) {
+    if (event->type() == QEvent::KeyPress) {
+        auto* keyEvent = static_cast<QKeyEvent*>(event);
+
+        auto* targetWidget = qobject_cast<QWidget*>(watched);
+        if (targetWidget) {
+            if (auto* parentCombo = qobject_cast<QComboBox*>(targetWidget->parent())) {
+                targetWidget = parentCombo;
+            } else if (auto* parentWidget = targetWidget->parentWidget()) {
+                if (m_navOrder.contains(parentWidget)) {
+                    targetWidget = parentWidget;
+                }
+            }
+        }
+
+        int idx = m_navOrder.indexOf(targetWidget);
+
+        if (keyEvent->key() == Qt::Key_Backspace) {
+            // Bahi-Khata convention: Backspace deletes word by word; on an
+            // empty field it steps back to the previous field.
+            QLineEdit* edit = qobject_cast<QLineEdit*>(watched);
+            if (!edit) {
+                if (auto* cb = qobject_cast<QComboBox*>(watched)) edit = cb->lineEdit();
+            }
+            if (VoucherCommon::backspaceWord(edit)) {
+                return true;
+            }
+            if (idx > 0) {
+                for (int prevIdx = idx - 1; prevIdx >= 0; --prevIdx) {
+                    QWidget* prev = m_navOrder.at(prevIdx);
+                    if (prev && prev->isEnabled() && prev->isVisible()) {
+                        focusDebitNavWidget(prev);
+                        return true;
+                    }
+                }
+            }
+        } else if (keyEvent->key() == Qt::Key_Return || keyEvent->key() == Qt::Key_Enter) {
+            if (targetWidget == m_saveBtn) {
+                onSaveClicked();
+                return true;
+            }
+            // Open completer popup consumes Enter (accept completion).
+            if (auto* cb = qobject_cast<QComboBox*>(targetWidget)) {
+                if (cb->completer() && cb->completer()->popup() && cb->completer()->popup()->isVisible()) {
+                    return QWidget::eventFilter(watched, event);
+                }
+            }
+            if (idx >= 0) {
+                for (int nextIdx = idx + 1; nextIdx < m_navOrder.size(); ++nextIdx) {
+                    QWidget* next = m_navOrder.at(nextIdx);
+                    if (next && next->isEnabled() && next->isVisible()) {
+                        focusDebitNavWidget(next);
+                        return true;
+                    }
+                }
+                onSaveClicked();
+                return true;
+            }
+        } else if (keyEvent->key() == Qt::Key_Left) {
+            if (auto* le = qobject_cast<QLineEdit*>(watched)) {
+                if (le->cursorPosition() == 0 && !le->hasSelectedText() && idx > 0) {
+                    for (int prevIdx = idx - 1; prevIdx >= 0; --prevIdx) {
+                        QWidget* prev = m_navOrder.at(prevIdx);
+                        if (prev && prev->isEnabled() && prev->isVisible()) {
+                            focusDebitNavWidget(prev);
+                            return true;
+                        }
+                    }
+                }
+            }
+        } else if (keyEvent->key() == Qt::Key_Right) {
+            if (auto* le = qobject_cast<QLineEdit*>(watched)) {
+                if (le->cursorPosition() >= le->text().length() && !le->hasSelectedText() && idx >= 0) {
+                    for (int nextIdx = idx + 1; nextIdx < m_navOrder.size(); ++nextIdx) {
+                        QWidget* next = m_navOrder.at(nextIdx);
+                        if (next && next->isEnabled() && next->isVisible()) {
+                            focusDebitNavWidget(next);
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return QWidget::eventFilter(watched, event);
 }
 
 void DebitCreditNoteWidget::populateStates() {

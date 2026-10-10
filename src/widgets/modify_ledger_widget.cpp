@@ -38,7 +38,7 @@ ModifyLedgerWidget::ModifyLedgerWidget(QWidget* parent)
 
 static QString inputStyle() {
     return "QLineEdit { background-color: #FFFFFF; color: #0F172A; border: 1px solid #CBD5E1; "
-           "border-radius: 5px; padding: 3px 7px; font-size: 11px; font-weight: 500; } "
+           "border-radius: 5px; padding: 3px 7px; font-size: 12px; font-weight: 500; } "
            "QLineEdit:focus { border: 1.5px solid #2563EB; background-color: #F8FAFC; }";
 }
 
@@ -49,7 +49,7 @@ static QString comboStyle() {
            "  border: 1px solid #CBD5E1; "
            "  border-radius: 5px; "
            "  padding: 2px 18px 2px 6px; "
-           "  font-size: 11px; "
+           "  font-size: 12px; "
            "  font-weight: 600; "
            "} "
            "QComboBox:focus, QComboBox:on { "
@@ -89,7 +89,7 @@ static QString comboPopupStyle() {
            "  border-radius: 5px; "
            "  padding: 3px; "
            "  outline: none; "
-           "  font-size: 11px; "
+           "  font-size: 12px; "
            "  font-weight: 600; "
            "} "
            "QListView::item { "
@@ -108,7 +108,7 @@ static QString comboPopupStyle() {
 }
 
 static QString checkStyle() {
-    return "QCheckBox { color: #334155; font-size: 11px; font-weight: 600; spacing: 6px; } "
+    return "QCheckBox { color: #334155; font-size: 12px; font-weight: 600; spacing: 6px; } "
            "QCheckBox::indicator { width: 14px; height: 14px; border: 1.5px solid #94A3B8; border-radius: 3px; background: #FFFFFF; } "
            "QCheckBox::indicator:hover { border-color: #2563EB; } "
            "QCheckBox::indicator:checked { background-color: #2563EB; border-color: #1D4ED8; }";
@@ -136,7 +136,7 @@ void ModifyLedgerWidget::setupSearchableCombo(QComboBox* combo, const QStringLis
     combo->setCompleter(completer);
 
     if (combo->lineEdit()) {
-        combo->lineEdit()->setStyleSheet("QLineEdit { background: transparent; border: none; padding: 0px 2px; font-size: 11px; font-weight: 600; color: #0F172A; }");
+        combo->lineEdit()->setStyleSheet("QLineEdit { background: transparent; border: none; padding: 0px 2px; font-size: 12px; font-weight: 600; color: #0F172A; }");
         combo->lineEdit()->installEventFilter(this);
     }
 }
@@ -184,14 +184,14 @@ void ModifyLedgerWidget::setupUi() {
     m_cancelBtn = new QPushButton("Cancel (Esc)", bottomCard);
     m_cancelBtn->setFixedSize(100, 30);
     m_cancelBtn->setCursor(Qt::PointingHandCursor);
-    m_cancelBtn->setStyleSheet("QPushButton { background-color: #F1F5F9; color: #475569; border: 1px solid #CBD5E1; border-radius: 5px; font-weight: 700; font-size: 11px; } QPushButton:hover { background-color: #E2E8F0; }");
+    m_cancelBtn->setStyleSheet("QPushButton { background-color: #F1F5F9; color: #475569; border: 1px solid #CBD5E1; border-radius: 5px; font-weight: 700; font-size: 12px; } QPushButton:hover { background-color: #E2E8F0; }");
     connect(m_cancelBtn, &QPushButton::clicked, this, &ModifyLedgerWidget::backRequested);
     bottomLayout->addWidget(m_cancelBtn);
 
     m_deleteBtn = new QPushButton("Delete Ledger (Alt+D)", bottomCard);
     m_deleteBtn->setFixedSize(150, 30);
     m_deleteBtn->setCursor(Qt::PointingHandCursor);
-    m_deleteBtn->setStyleSheet("QPushButton { background-color: #FEE2E2; color: #DC2626; border: 1px solid #FCA5A5; border-radius: 5px; font-weight: 700; font-size: 11px; } QPushButton:hover { background-color: #FECACA; }");
+    m_deleteBtn->setStyleSheet("QPushButton { background-color: #FEE2E2; color: #DC2626; border: 1px solid #FCA5A5; border-radius: 5px; font-weight: 700; font-size: 12px; } QPushButton:hover { background-color: #FECACA; }");
     connect(m_deleteBtn, &QPushButton::clicked, this, &ModifyLedgerWidget::onDeleteClicked);
     bottomLayout->addWidget(m_deleteBtn);
 
@@ -283,16 +283,16 @@ QWidget* ModifyLedgerWidget::createHeaderSection() {
     auto* pfxRow = new QHBoxLayout();
     pfxRow->setSpacing(4);
     auto* pfxTitle = new QLabel("Prefix :", card);
-    pfxTitle->setStyleSheet("color: #94A3B8; font-size: 10px; font-weight: 700; border: none; background: transparent;");
+    pfxTitle->setStyleSheet("color: #94A3B8; font-size: 12px; font-weight: 700; border: none; background: transparent;");
     pfxRow->addWidget(pfxTitle);
 
     m_prefixCombo = new QComboBox(card);
-    m_prefixCombo->setFixedHeight(26);
+    m_prefixCombo->setFixedHeight(30);
     m_prefixCombo->setFixedWidth(80);
     pfxRow->addWidget(m_prefixCombo);
 
     m_createPrefixBtn = new QPushButton("(Alt+C : Create New)", card);
-    m_createPrefixBtn->setStyleSheet("QPushButton { background: transparent; color: #60A5FA; font-size: 10px; font-weight: 700; border: none; padding: 0px 2px; text-decoration: underline; } QPushButton:hover { color: #93C5FD; }");
+    m_createPrefixBtn->setStyleSheet("QPushButton { background: transparent; color: #60A5FA; font-size: 12px; font-weight: 700; border: none; padding: 0px 2px; text-decoration: underline; } QPushButton:hover { color: #93C5FD; }");
     m_createPrefixBtn->setCursor(Qt::PointingHandCursor);
     connect(m_createPrefixBtn, &QPushButton::clicked, this, [this]() {
         bool ok = false;
@@ -320,16 +320,16 @@ QWidget* ModifyLedgerWidget::createHeaderSection() {
     balCard->setStyleSheet("background-color: #1E293B; border: 1px solid #334155; border-radius: 6px;");
     auto* balLayout = new QVBoxLayout(balCard);
     balLayout->setContentsMargins(10, 2, 10, 2);
-    balLayout->setSpacing(1);
+    balLayout->setSpacing(2);
 
     auto* drCrRow = new QHBoxLayout();
     drCrRow->setSpacing(14);
 
     m_totalDrLbl = new QLabel("Dr: ₹0.00", balCard);
-    m_totalDrLbl->setStyleSheet("color: #93C5FD; font-size: 11px; font-weight: 700; border: none; background: transparent;");
+    m_totalDrLbl->setStyleSheet("color: #93C5FD; font-size: 12px; font-weight: 700; border: none; background: transparent;");
 
     m_totalCrLbl = new QLabel("Cr: ₹0.00", balCard);
-    m_totalCrLbl->setStyleSheet("color: #86EFAC; font-size: 11px; font-weight: 700; border: none; background: transparent;");
+    m_totalCrLbl->setStyleSheet("color: #86EFAC; font-size: 12px; font-weight: 700; border: none; background: transparent;");
     m_totalCrLbl->setAlignment(Qt::AlignRight);
 
     drCrRow->addWidget(m_totalDrLbl);
@@ -337,7 +337,7 @@ QWidget* ModifyLedgerWidget::createHeaderSection() {
     balLayout->addLayout(drCrRow);
 
     m_diffBalLbl = new QLabel("Diff: ₹0.00 (Balanced)", balCard);
-    m_diffBalLbl->setStyleSheet("color: #4ADE80; font-size: 10px; font-weight: 800; border: none; background: transparent;");
+    m_diffBalLbl->setStyleSheet("color: #4ADE80; font-size: 12px; font-weight: 800; border: none; background: transparent;");
     m_diffBalLbl->setAlignment(Qt::AlignCenter);
     balLayout->addWidget(m_diffBalLbl);
 
@@ -355,7 +355,7 @@ QWidget* ModifyLedgerWidget::createSearchCard() {
     layout->setSpacing(8);
 
     auto* searchTitle = new QLabel("SELECT PARTY TO MODIFY (Alt+S) :", card);
-    searchTitle->setStyleSheet("color: #1D4ED8; font-size: 10px; font-weight: 800; border: none;");
+    searchTitle->setStyleSheet("color: #1D4ED8; font-size: 12px; font-weight: 800; border: none;");
     layout->addWidget(searchTitle);
 
     m_partySearchWidget = new AccountSearchBox(card);
@@ -364,7 +364,7 @@ QWidget* ModifyLedgerWidget::createSearchCard() {
     layout->addWidget(m_partySearchWidget, 1);
 
     auto* hintLbl = new QLabel("(↑/↓ Arrows & Enter)", card);
-    hintLbl->setStyleSheet("color: #64748B; font-size: 10px; font-style: italic; border: none;");
+    hintLbl->setStyleSheet("color: #64748B; font-size: 12px; font-style: italic; border: none;");
     layout->addWidget(hintLbl);
 
     return card;
@@ -374,56 +374,56 @@ QWidget* ModifyLedgerWidget::createSlateSection() {
     auto* card = new QFrame(this);
     card->setStyleSheet("QFrame { background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; }");
     auto* layout = new QVBoxLayout(card);
-    layout->setContentsMargins(14, 8, 14, 8);
-    layout->setSpacing(6);
+    layout->setContentsMargins(18, 14, 18, 14);
+    layout->setSpacing(10);
 
     // ==========================================
     // 1. IDENTITY & OPENING BALANCE
     // ==========================================
     auto* sec1Lbl = new QLabel("1. Identity & Opening Balance", card);
-    sec1Lbl->setStyleSheet("color: #1E293B; font-size: 11px; font-weight: 800; border: none;");
+    sec1Lbl->setStyleSheet("color: #1E293B; font-size: 12px; font-weight: 800; border: none;");
     layout->addWidget(sec1Lbl);
 
     // Row 1: Name, Alias, Under (Group)
     auto* row1 = new QHBoxLayout();
-    row1->setSpacing(8);
+    row1->setSpacing(10);
 
     auto* nameBox = new QVBoxLayout();
-    nameBox->setSpacing(1);
+    nameBox->setSpacing(2);
     auto* nameLbl = new QLabel("Ledger Name : *", card);
-    nameLbl->setStyleSheet("color: #0F172A; font-size: 10px; font-weight: 700; border: none;");
+    nameLbl->setStyleSheet("color: #0F172A; font-size: 12px; font-weight: 700; border: none;");
     m_nameInput = new QLineEdit(card);
     m_nameInput->setPlaceholderText("e.g. KRISHNA FOODS");
     m_nameInput->setStyleSheet(inputStyle());
-    m_nameInput->setFixedHeight(26);
+    m_nameInput->setFixedHeight(30);
     nameBox->addWidget(nameLbl);
     nameBox->addWidget(m_nameInput);
     row1->addLayout(nameBox, 3);
 
     auto* aliasBox = new QVBoxLayout();
-    aliasBox->setSpacing(1);
+    aliasBox->setSpacing(2);
     auto* aliasLbl = new QLabel("(In Short) / Alias :", card);
-    aliasLbl->setStyleSheet("color: #475569; font-size: 10px; font-weight: 600; border: none;");
+    aliasLbl->setStyleSheet("color: #475569; font-size: 12px; font-weight: 600; border: none;");
     m_aliasInput = new QLineEdit(card);
     m_aliasInput->setPlaceholderText("Alias / Code");
     m_aliasInput->setStyleSheet(inputStyle());
-    m_aliasInput->setFixedHeight(26);
+    m_aliasInput->setFixedHeight(30);
     aliasBox->addWidget(aliasLbl);
     aliasBox->addWidget(m_aliasInput);
     row1->addLayout(aliasBox, 1);
 
     auto* underBox = new QVBoxLayout();
-    underBox->setSpacing(1);
+    underBox->setSpacing(2);
     auto* underLbl = new QLabel("Under (Group) : *", card);
-    underLbl->setStyleSheet("color: #0F172A; font-size: 10px; font-weight: 700; border: none;");
+    underLbl->setStyleSheet("color: #0F172A; font-size: 12px; font-weight: 700; border: none;");
     auto* underRow = new QHBoxLayout();
     underRow->setSpacing(4);
     m_groupCombo = new QComboBox(card);
-    m_groupCombo->setFixedHeight(26);
+    m_groupCombo->setFixedHeight(30);
     underRow->addWidget(m_groupCombo, 2);
 
     m_parentGroupLbl = new QLabel("(Sundry Debtors)", card);
-    m_parentGroupLbl->setStyleSheet("color: #2563EB; font-size: 10px; font-weight: 800; border: none;");
+    m_parentGroupLbl->setStyleSheet("color: #2563EB; font-size: 12px; font-weight: 800; border: none;");
     underRow->addWidget(m_parentGroupLbl, 1);
     underBox->addWidget(underLbl);
     underBox->addLayout(underRow);
@@ -433,49 +433,49 @@ QWidget* ModifyLedgerWidget::createSlateSection() {
 
     // Row 2: Station, State, State Code, PIN Code, [ ] Use Route
     auto* row2 = new QHBoxLayout();
-    row2->setSpacing(8);
+    row2->setSpacing(10);
 
     auto* stBox = new QVBoxLayout();
-    stBox->setSpacing(1);
+    stBox->setSpacing(2);
     auto* stLbl = new QLabel("Station :", card);
-    stLbl->setStyleSheet("color: #0F172A; font-size: 10px; font-weight: 700; border: none;");
+    stLbl->setStyleSheet("color: #0F172A; font-size: 12px; font-weight: 700; border: none;");
     m_stationCombo = new QComboBox(card);
-    m_stationCombo->setFixedHeight(26);
+    m_stationCombo->setFixedHeight(30);
     stBox->addWidget(stLbl);
     stBox->addWidget(m_stationCombo);
     row2->addLayout(stBox, 2);
 
     auto* stateBox = new QVBoxLayout();
-    stateBox->setSpacing(1);
+    stateBox->setSpacing(2);
     auto* stateLbl = new QLabel("State :", card);
-    stateLbl->setStyleSheet("color: #0F172A; font-size: 10px; font-weight: 700; border: none;");
+    stateLbl->setStyleSheet("color: #0F172A; font-size: 12px; font-weight: 700; border: none;");
     m_stateCombo = new QComboBox(card);
-    m_stateCombo->setFixedHeight(26);
+    m_stateCombo->setFixedHeight(30);
     stateBox->addWidget(stateLbl);
     stateBox->addWidget(m_stateCombo);
     row2->addLayout(stateBox, 2);
 
     auto* scBox = new QVBoxLayout();
-    scBox->setSpacing(1);
+    scBox->setSpacing(2);
     auto* scLbl = new QLabel("State Code :", card);
-    scLbl->setStyleSheet("color: #475569; font-size: 10px; font-weight: 600; border: none;");
+    scLbl->setStyleSheet("color: #475569; font-size: 12px; font-weight: 600; border: none;");
     m_stateCodeInput = new QLineEdit(card);
     m_stateCodeInput->setPlaceholderText("06");
     m_stateCodeInput->setStyleSheet(inputStyle());
-    m_stateCodeInput->setFixedHeight(26);
+    m_stateCodeInput->setFixedHeight(30);
     m_stateCodeInput->setFixedWidth(65);
     scBox->addWidget(scLbl);
     scBox->addWidget(m_stateCodeInput);
     row2->addLayout(scBox);
 
     auto* pinBox = new QVBoxLayout();
-    pinBox->setSpacing(1);
+    pinBox->setSpacing(2);
     auto* pinLbl = new QLabel("PIN Code :", card);
-    pinLbl->setStyleSheet("color: #475569; font-size: 10px; font-weight: 600; border: none;");
+    pinLbl->setStyleSheet("color: #475569; font-size: 12px; font-weight: 600; border: none;");
     m_pincodeInput = new QLineEdit(card);
     m_pincodeInput->setPlaceholderText("125055");
     m_pincodeInput->setStyleSheet(inputStyle());
-    m_pincodeInput->setFixedHeight(26);
+    m_pincodeInput->setFixedHeight(30);
     m_pincodeInput->setFixedWidth(85);
     pinBox->addWidget(pinLbl);
     pinBox->addWidget(m_pincodeInput);
@@ -491,7 +491,7 @@ QWidget* ModifyLedgerWidget::createSlateSection() {
     rcLayout->addWidget(m_useRoutesCheck);
 
     m_routeCombo = new QComboBox(m_routeContainer);
-    m_routeCombo->setFixedHeight(26);
+    m_routeCombo->setFixedHeight(30);
     m_routeCombo->setFixedWidth(120);
     m_routeCombo->setEnabled(false);
     rcLayout->addWidget(m_routeCombo);
@@ -505,24 +505,24 @@ QWidget* ModifyLedgerWidget::createSlateSection() {
 
     // Row 3: Books Start From, Opening Balance, Type (Dr/Cr), Ledger Open Always From
     auto* row3 = new QHBoxLayout();
-    row3->setSpacing(8);
+    row3->setSpacing(10);
 
     auto* booksBox = new QVBoxLayout();
-    booksBox->setSpacing(1);
+    booksBox->setSpacing(2);
     auto* booksLbl = new QLabel("Books Start From (DD-MM-YYYY) :", card);
-    booksLbl->setStyleSheet("color: #0F172A; font-size: 10px; font-weight: 700; border: none;");
+    booksLbl->setStyleSheet("color: #0F172A; font-size: 12px; font-weight: 700; border: none;");
     m_booksFromInput = new QLineEdit(card);
     m_booksFromInput->setPlaceholderText("DD-MM-YYYY");
     m_booksFromInput->setStyleSheet(inputStyle());
-    m_booksFromInput->setFixedHeight(26);
+    m_booksFromInput->setFixedHeight(30);
     booksBox->addWidget(booksLbl);
     booksBox->addWidget(m_booksFromInput);
     row3->addLayout(booksBox, 2);
 
     auto* opBox = new QVBoxLayout();
-    opBox->setSpacing(1);
+    opBox->setSpacing(2);
     auto* opLbl = new QLabel("Opening Balance (₹) :", card);
-    opLbl->setStyleSheet("color: #0F172A; font-size: 10px; font-weight: 700; border: none;");
+    opLbl->setStyleSheet("color: #0F172A; font-size: 12px; font-weight: 700; border: none;");
     auto* opRow = new QHBoxLayout();
     opRow->setSpacing(4);
     m_opBalInput = new QLineEdit(card);
@@ -530,13 +530,13 @@ QWidget* ModifyLedgerWidget::createSlateSection() {
     m_opBalInput->setAlignment(Qt::AlignRight);
     m_opBalInput->setValidator(new QDoubleValidator(0.0, 999999999.0, 2, this));
     m_opBalInput->setStyleSheet(inputStyle());
-    m_opBalInput->setFixedHeight(26);
+    m_opBalInput->setFixedHeight(30);
     opRow->addWidget(m_opBalInput, 2);
 
     m_balTypeCombo = new QComboBox(card);
     m_balTypeCombo->addItems({"Dr", "Cr"});
     m_balTypeCombo->setStyleSheet(comboStyle());
-    m_balTypeCombo->setFixedHeight(26);
+    m_balTypeCombo->setFixedHeight(30);
     m_balTypeCombo->setFixedWidth(55);
     opRow->addWidget(m_balTypeCombo);
 
@@ -545,13 +545,13 @@ QWidget* ModifyLedgerWidget::createSlateSection() {
     row3->addLayout(opBox, 2);
 
     auto* openFromBox = new QVBoxLayout();
-    openFromBox->setSpacing(1);
+    openFromBox->setSpacing(2);
     auto* openFromLbl = new QLabel("Ledger Open Always From :", card);
-    openFromLbl->setStyleSheet("color: #475569; font-size: 10px; font-weight: 600; border: none;");
+    openFromLbl->setStyleSheet("color: #475569; font-size: 12px; font-weight: 600; border: none;");
     m_openFromInput = new QLineEdit(card);
     m_openFromInput->setPlaceholderText("e.g. Sales A/c, Head Office");
     m_openFromInput->setStyleSheet(inputStyle());
-    m_openFromInput->setFixedHeight(26);
+    m_openFromInput->setFixedHeight(30);
     openFromBox->addWidget(openFromLbl);
     openFromBox->addWidget(m_openFromInput);
     row3->addLayout(openFromBox, 2);
@@ -565,26 +565,29 @@ QWidget* ModifyLedgerWidget::createSlateSection() {
     div1->setFixedHeight(1);
     div1->setStyleSheet("background-color: #F1F5F9; border: none; margin: 1px 0px;");
     layout->addWidget(div1);
+    // Expanding gap: leftover slate height spreads between sections instead of
+    // pooling as dead space at the bottom (single slate, no scroll).
+    layout->addStretch(1);
 
     // ==========================================
     // 2. STATUTORY, CONTACT & BANKING DETAILS
     // ==========================================
     auto* sec2Lbl = new QLabel("2. Statutory, Contact & Banking Details", card);
-    sec2Lbl->setStyleSheet("color: #1E293B; font-size: 11px; font-weight: 800; border: none;");
+    sec2Lbl->setStyleSheet("color: #1E293B; font-size: 12px; font-weight: 800; border: none;");
     layout->addWidget(sec2Lbl);
 
     auto* gridLayout = new QHBoxLayout();
-    gridLayout->setSpacing(12);
+    gridLayout->setSpacing(16);
 
     auto createFormField = [](QWidget* parent, const QString& label, QLineEdit*& edit, const QString& placeholder) -> QVBoxLayout* {
         auto* box = new QVBoxLayout();
-        box->setSpacing(1);
+        box->setSpacing(2);
         auto* lbl = new QLabel(label, parent);
-        lbl->setStyleSheet("color: #334155; font-size: 10px; font-weight: 600; border: none;");
+        lbl->setStyleSheet("color: #334155; font-size: 12px; font-weight: 600; border: none;");
         edit = new QLineEdit(parent);
         edit->setPlaceholderText(placeholder);
         edit->setStyleSheet(inputStyle());
-        edit->setFixedHeight(25);
+        edit->setFixedHeight(30);
         box->addWidget(lbl);
         box->addWidget(edit);
         return box;
@@ -592,16 +595,16 @@ QWidget* ModifyLedgerWidget::createSlateSection() {
 
     // COLUMN 1: GST & Tax Identification
     auto* col1 = new QVBoxLayout();
-    col1->setSpacing(3);
+    col1->setSpacing(6);
 
     col1->addLayout(createFormField(card, "GSTIN :", m_gstinInput, "06AAAAA0000A1Z5"));
 
     auto* ptBox = new QVBoxLayout();
-    ptBox->setSpacing(1);
+    ptBox->setSpacing(2);
     auto* ptLbl = new QLabel("Party Type (GST) :", card);
-    ptLbl->setStyleSheet("color: #334155; font-size: 10px; font-weight: 600; border: none;");
+    ptLbl->setStyleSheet("color: #334155; font-size: 12px; font-weight: 600; border: none;");
     m_gstPartyTypeCombo = new QComboBox(card);
-    m_gstPartyTypeCombo->setFixedHeight(25);
+    m_gstPartyTypeCombo->setFixedHeight(30);
     ptBox->addWidget(ptLbl);
     ptBox->addWidget(m_gstPartyTypeCombo);
     col1->addLayout(ptBox);
@@ -613,7 +616,7 @@ QWidget* ModifyLedgerWidget::createSlateSection() {
 
     // COLUMN 2: Address & Contact Details
     auto* col2 = new QVBoxLayout();
-    col2->setSpacing(3);
+    col2->setSpacing(6);
 
     col2->addLayout(createFormField(card, "Address :", m_addressInput, "Shop / Street / Mandi Address"));
     col2->addLayout(createFormField(card, "Phone / Mobile :", m_phoneInput, "Phone / Mobile No."));
@@ -624,7 +627,7 @@ QWidget* ModifyLedgerWidget::createSlateSection() {
 
     // COLUMN 3: Banking & Credit Terms
     auto* col3 = new QVBoxLayout();
-    col3->setSpacing(3);
+    col3->setSpacing(6);
 
     col3->addLayout(createFormField(card, "Bank A/c No. :", m_bankAccountInput, "Account Number"));
     col3->addLayout(createFormField(card, "IFSC Code :", m_ifscInput, "CNRB0002058"));
@@ -642,20 +645,21 @@ QWidget* ModifyLedgerWidget::createSlateSection() {
     div2->setFixedHeight(1);
     div2->setStyleSheet("background-color: #F1F5F9; border: none; margin: 1px 0px;");
     layout->addWidget(div2);
+    layout->addStretch(1);
 
     // ==========================================
     // 3. ACCOUNTING & BUSINESS RULES
     // ==========================================
     auto* sec3Lbl = new QLabel("3. Accounting & Business Rules", card);
-    sec3Lbl->setStyleSheet("color: #1E293B; font-size: 11px; font-weight: 800; border: none;");
+    sec3Lbl->setStyleSheet("color: #1E293B; font-size: 12px; font-weight: 800; border: none;");
     layout->addWidget(sec3Lbl);
 
     auto* rulesLayout = new QHBoxLayout();
-    rulesLayout->setSpacing(12);
+    rulesLayout->setSpacing(16);
 
     // Col 1: TCS rules
     auto* rCol1 = new QVBoxLayout();
-    rCol1->setSpacing(3);
+    rCol1->setSpacing(6);
     m_applyTcsCheck = new QCheckBox("Apply TCS on Purchases (u/s 206C)", card);
     m_applyTcsCheck->setStyleSheet(checkStyle());
     rCol1->addWidget(m_applyTcsCheck);
@@ -667,7 +671,7 @@ QWidget* ModifyLedgerWidget::createSlateSection() {
 
     // Col 2: Ledger calculation behaviors
     auto* rCol2 = new QVBoxLayout();
-    rCol2->setSpacing(3);
+    rCol2->setSpacing(6);
     m_stockNotCalcCheck = new QCheckBox("Stock Not Calculate in Ledger", card);
     m_stockNotCalcCheck->setStyleSheet(checkStyle());
     rCol2->addWidget(m_stockNotCalcCheck);
@@ -683,7 +687,7 @@ QWidget* ModifyLedgerWidget::createSlateSection() {
 
     // Col 3: Credit limit & casing
     auto* rCol3 = new QVBoxLayout();
-    rCol3->setSpacing(3);
+    rCol3->setSpacing(6);
     m_useCreditLimitCheck = new QCheckBox("Use Credit Limit for Ledgers", card);
     m_useCreditLimitCheck->setChecked(true);
     m_useCreditLimitCheck->setStyleSheet(checkStyle());
@@ -794,10 +798,10 @@ void ModifyLedgerWidget::updateTotalOpeningBalDisplay() {
     if (m_diffBalLbl) {
         if (diffType == "Balanced" || diff <= 0.001) {
             m_diffBalLbl->setText("Diff: ₹0.00 (Balanced)");
-            m_diffBalLbl->setStyleSheet("color: #4ADE80; font-size: 10px; font-weight: 800; border: none; background: transparent;");
+            m_diffBalLbl->setStyleSheet("color: #4ADE80; font-size: 12px; font-weight: 800; border: none; background: transparent;");
         } else {
             m_diffBalLbl->setText(QString("Diff: %1 %2").arg(AccountingEngine::formatIndianCurrency(diff, true), diffType));
-            m_diffBalLbl->setStyleSheet("color: #F87171; font-size: 10px; font-weight: 800; border: none; background: transparent;");
+            m_diffBalLbl->setStyleSheet("color: #F87171; font-size: 12px; font-weight: 800; border: none; background: transparent;");
         }
     }
 }

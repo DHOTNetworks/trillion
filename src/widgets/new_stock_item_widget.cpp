@@ -9,6 +9,9 @@
 #include <QInputDialog>
 #include <QListView>
 #include <QCompleter>
+#include <QComboBox>
+#include <QLineEdit>
+#include <QKeyEvent>
 
 namespace MahadevERP {
 
@@ -99,6 +102,7 @@ void NewStockItemWidget::setupSearchableCombo(QComboBox* combo, const QStringLis
 
     if (combo->lineEdit()) {
         combo->lineEdit()->setStyleSheet("QLineEdit { background: transparent; border: none; padding: 0px 2px; font-size: 12px; font-weight: 600; color: #0F172A; }");
+        combo->lineEdit()->installEventFilter(this);
     }
 }
 
@@ -408,6 +412,46 @@ void NewStockItemWidget::setupUi() {
     bottomLayout->addWidget(saveBtn);
     rootLayout->addLayout(bottomLayout);
 
+    // Keyboard navigation order (Enter advances field-to-field, same as ledger forms)
+    m_navOrder = {
+        m_goodsTypeCombo,
+        m_itemTypeCombo,
+        m_nameEdit,
+        m_codeEdit,
+        m_stockGroupCombo,
+        m_unitCombo,
+        m_companyEdit,
+        m_packingKgEdit,
+        m_autoAdjustNameCheck,
+        m_stockCalculateCheck,
+        m_calcInTradingCheck,
+        m_capitalGoodsCheck,
+        m_taxOnQtyCheck,
+        m_purchaseRateEdit,
+        m_saleRateEdit,
+        m_mrpEdit,
+        m_discountEdit,
+        m_hsnEdit,
+        m_gstRateCombo,
+        m_cessRateEdit,
+        m_openingBagsEdit,
+        m_openingQtyEdit,
+        m_openingRateEdit,
+        m_purchaseLedgerBox,
+        m_purcReturnLedgerBox,
+        m_saleLedgerBox,
+        m_saleReturnLedgerBox,
+        m_stockLedgerBox
+    };
+    for (QWidget* w : m_navOrder) {
+        if (!w) continue;
+        w->installEventFilter(this);
+        // Typing focus lives in a combo's line edit, not the combo itself.
+        if (auto* cb = qobject_cast<QComboBox*>(w)) {
+            if (cb->lineEdit()) cb->lineEdit()->installEventFilter(this);
+        }
+    }
+
     connect(new QShortcut(QKeySequence(Qt::Key_Escape), this), &QShortcut::activated, this, &NewStockItemWidget::backRequested);
     connect(new QShortcut(QKeySequence(Qt::Key_F2), this), &QShortcut::activated, this, &NewStockItemWidget::onSaveClicked);
     connect(new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_S), this), &QShortcut::activated, this, &NewStockItemWidget::onSaveClicked);
@@ -520,6 +564,88 @@ void NewStockItemWidget::onCopyAllLedgersFromPurchase() {
         m_saleReturnLedgerBox->setParty(pLedger, pId);
         m_stockLedgerBox->setParty(pLedger, pId);
     }
+}
+
+void NewStockItemWidget::keyPressEvent(QKeyEvent* event) {
+    if (event->key() == Qt::Key_Escape) {
+        emit backRequested();
+        return;
+    }
+    QWidget::keyPressEvent(event);
+}
+
+static void focusNavWidget(QWidget* w) {
+    if (!w) return;
+    w->setFocus();
+    if (auto* le = qobject_cast<QLineEdit*>(w)) {
+        le->selectAll();
+    } else if (auto* cb = qobject_cast<QComboBox*>(w)) {
+        if (cb->lineEdit()) cb->lineEdit()->selectAll();
+    }
+}
+
+bool NewStockItemWidget::eventFilter(QObject* watched, QEvent* event) {
+    if (event->type() == QEvent::KeyPress) {
+        auto* keyEvent = static_cast<QKeyEvent*>(event);
+
+        auto* targetWidget = qobject_cast<QWidget*>(watched);
+        if (targetWidget) {
+            if (auto* parentCombo = qobject_cast<QComboBox*>(targetWidget->parent())) {
+                targetWidget = parentCombo;
+            } else if (auto* parentWidget = targetWidget->parentWidget()) {
+                if (m_navOrder.contains(parentWidget)) {
+                    targetWidget = parentWidget;
+                }
+            }
+        }
+
+        int idx = m_navOrder.indexOf(targetWidget);
+
+        if (keyEvent->key() == Qt::Key_Return || keyEvent->key() == Qt::Key_Enter) {
+            // Open completer popup consumes Enter (accept completion).
+            if (auto* cb = qobject_cast<QComboBox*>(targetWidget)) {
+                if (cb->completer() && cb->completer()->popup() && cb->completer()->popup()->isVisible()) {
+                    return QWidget::eventFilter(watched, event);
+                }
+            }
+            if (idx >= 0) {
+                for (int nextIdx = idx + 1; nextIdx < m_navOrder.size(); ++nextIdx) {
+                    QWidget* next = m_navOrder.at(nextIdx);
+                    if (next && next->isEnabled() && next->isVisible()) {
+                        focusNavWidget(next);
+                        return true;
+                    }
+                }
+                onSaveClicked();
+                return true;
+            }
+        } else if (keyEvent->key() == Qt::Key_Left) {
+            if (auto* le = qobject_cast<QLineEdit*>(watched)) {
+                if (le->cursorPosition() == 0 && !le->hasSelectedText() && idx > 0) {
+                    for (int prevIdx = idx - 1; prevIdx >= 0; --prevIdx) {
+                        QWidget* prev = m_navOrder.at(prevIdx);
+                        if (prev && prev->isEnabled() && prev->isVisible()) {
+                            focusNavWidget(prev);
+                            return true;
+                        }
+                    }
+                }
+            }
+        } else if (keyEvent->key() == Qt::Key_Right) {
+            if (auto* le = qobject_cast<QLineEdit*>(watched)) {
+                if (le->cursorPosition() >= le->text().length() && !le->hasSelectedText() && idx >= 0) {
+                    for (int nextIdx = idx + 1; nextIdx < m_navOrder.size(); ++nextIdx) {
+                        QWidget* next = m_navOrder.at(nextIdx);
+                        if (next && next->isEnabled() && next->isVisible()) {
+                            focusNavWidget(next);
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return QWidget::eventFilter(watched, event);
 }
 
 void NewStockItemWidget::onSaveClicked() {

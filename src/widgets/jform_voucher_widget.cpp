@@ -49,6 +49,8 @@ void JFormVoucherWidget::setupUi() {
     m_jformNoDisplay = new QLabel("J-Form No:", this);
     m_jformNoEdit = new QLineEdit("1", this);
     m_jformNoEdit->setFixedWidth(80);
+    // Auto-generated and non-editable on both new and alter pages.
+    m_jformNoEdit->setReadOnly(true);
 
     auto* dateLabel = new QLabel("Date (F2):", this);
     m_dateEdit = new AccountingDateEdit(this);

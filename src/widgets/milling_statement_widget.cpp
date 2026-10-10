@@ -6,6 +6,7 @@
 #include "../database_manager.h"
 #include <QHeaderView>
 #include <QKeyEvent>
+#include <QShortcut>
 #include <QFrame>
 #include <QGroupBox>
 #include <QFormLayout>
@@ -221,6 +222,19 @@ void MillingStatementWidget::setupUi() {
     m_batchTable->verticalHeader()->setDefaultSectionSize(30);
     m_batchTable->setShowGrid(true);
     connect(m_batchTable, &QTableWidget::itemSelectionChanged, this, &MillingStatementWidget::onBatchSelectionChanged);
+    connect(m_batchTable, &QTableWidget::cellDoubleClicked, this, &MillingStatementWidget::onBatchDoubleClicked);
+    // Enter opens the focused batch's alteration (same as double-click).
+    // Scoped to the grid so search boxes and buttons keep their own keys.
+    auto openFocusedBatch = [this]() {
+        if (!m_batchTable || m_batchTable->currentRow() < 0) return;
+        onBatchDoubleClicked(m_batchTable->currentRow(), m_batchTable->currentColumn());
+    };
+    auto* enterShortcut = new QShortcut(QKeySequence(Qt::Key_Return), m_batchTable);
+    enterShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+    connect(enterShortcut, &QShortcut::activated, this, openFocusedBatch);
+    auto* numEnterShortcut = new QShortcut(QKeySequence(Qt::Key_Enter), m_batchTable);
+    numEnterShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+    connect(numEnterShortcut, &QShortcut::activated, this, openFocusedBatch);
     batchLayout->addWidget(m_batchTable);
     splitter->addWidget(batchWidget);
 
@@ -466,6 +480,29 @@ void MillingStatementWidget::populateBatchTable() {
     if (row > 0) {
         m_batchTable->selectRow(0);
     }
+}
+
+void MillingStatementWidget::focusTable() {
+    if (m_batchTable && m_batchTable->rowCount() > 0) {
+        m_batchTable->setFocus();
+        m_batchTable->selectRow(0);
+    } else if (m_searchBox) {
+        m_searchBox->setFocus();
+    } else if (m_batchTable) {
+        m_batchTable->setFocus();
+    }
+}
+
+void MillingStatementWidget::onBatchDoubleClicked(int row, int col) {
+    Q_UNUSED(col);
+    if (!m_batchTable || row < 0 || row >= m_batchTable->rowCount()) return;
+    auto* idItem = m_batchTable->item(row, 0);
+    if (!idItem) return;
+    int batchId = idItem->text().toInt();
+    if (batchId <= 0) return;
+    QVariantMap map;
+    map["id"] = batchId;
+    emit alterBatchRequested(31, map);
 }
 
 void MillingStatementWidget::onBatchSelectionChanged() {

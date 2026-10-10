@@ -13,6 +13,7 @@
 #include <QDebug>
 
 #include "mdbtools.h"
+#include "../jet4_reader.h"
 #define HAS_LIBMDB 1
 
 namespace MahadevERP {
@@ -35,46 +36,9 @@ static QString normalizePathStr(const QString& rawPath) {
 
 #if HAS_LIBMDB
 static std::vector<std::map<std::string, std::string>> readTableRows(MdbHandle* mdb, const char* tableName) {
-    std::vector<std::map<std::string, std::string>> result;
-    if (!mdb || !tableName) return result;
-
-    MdbTableDef* table = mdb_read_table_by_name(mdb, const_cast<char*>(tableName), MDB_TABLE);
-    if (!table) return result;
-
-    mdb_read_columns(table);
-    if (!table->columns || table->num_cols == 0) {
-        mdb_free_tabledef(table);
-        return result;
-    }
-
-    unsigned int numCols = table->num_cols;
-    std::vector<std::string> colNames(numCols);
-    const size_t bufSize = MDB_BIND_SIZE + 512;
-    std::vector<std::vector<char>> colBuffers(numCols, std::vector<char>(bufSize, 0));
-
-    for (unsigned int j = 0; j < numCols; j++) {
-        MdbColumn* col = static_cast<MdbColumn*>(g_ptr_array_index(table->columns, j));
-        if (col && col->name[0] != '\0') {
-            colNames[j] = col->name;
-            mdb_bind_column(table, j + 1, colBuffers[j].data(), nullptr);
-        } else {
-            colNames[j] = "";
-        }
-    }
-
-    mdb_rewind_table(table);
-    while (mdb_fetch_row(table)) {
-        std::map<std::string, std::string> row;
-        for (unsigned int j = 0; j < numCols; j++) {
-            if (!colNames[j].empty()) {
-                row[colNames[j]] = colBuffers[j].data();
-            }
-        }
-        result.push_back(std::move(row));
-    }
-
-    mdb_free_tabledef(table);
-    return result;
+    // Jackcess-faithful JET4 scan (jet4_reader). See jet4_reader.h for the
+    // 0x8000/0x4000 root-cause analysis.
+    return Jet4Reader::readTable(mdb, tableName);
 }
 #endif
 

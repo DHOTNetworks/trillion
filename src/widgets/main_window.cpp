@@ -190,6 +190,7 @@ MainWindow::MainWindow(const MainWindowDependencies& deps, QWidget* parent)
     m_millingStatementWidget = new MahadevERP::MillingStatementWidget(m_printExportCtrl, this);
     connect(m_millingStatementWidget, &MahadevERP::MillingStatementWidget::backRequested, this, &MainWindow::navigateBack);
     connect(m_millingStatementWidget, &MahadevERP::MillingStatementWidget::newBatchRequested, this, [this]() { navigateToView(31); });
+    connect(m_millingStatementWidget, &MahadevERP::MillingStatementWidget::alterBatchRequested, this, &MainWindow::onLedgerAlterVoucherRequested);
     m_stackedWidget->addWidget(m_millingStatementWidget);
 
     // Index 17: Native C++ Custom Closing Stock & Valuation Register (View 36)
@@ -497,6 +498,11 @@ MainWindow::MainWindow(const MainWindowDependencies& deps, QWidget* parent)
         MahadevERP::TcsConfigDialog cDlg(this);
         cDlg.exec();
     });
+    // Bill Series (index 7 in add_voucher)
+    menuMgr.setItemCallback("add_voucher", 7, [this]() {
+        MahadevERP::BillSeriesDialog dlg(this);
+        dlg.exec();
+    });
 
     // Stock Register Hub - Item Monthly / Daily Stock (index 3 in stock_register_hub)
     menuMgr.setItemCallback("stock_register_hub", 3, [this]() {
@@ -773,10 +779,12 @@ void MainWindow::restoreActiveViewFocus() {
         m_millingVoucherWidget->setFocus(Qt::OtherFocusReason);
     } else if (vIdx == 33 && m_dayBookWidget) {
         m_dayBookWidget->setFocus(Qt::OtherFocusReason);
+        m_dayBookWidget->focusTable();
     } else if (vIdx == 34 && m_gstrReportsWidget) {
         m_gstrReportsWidget->setFocus(Qt::OtherFocusReason);
     } else if (vIdx == 35 && m_millingStatementWidget) {
         m_millingStatementWidget->setFocus(Qt::OtherFocusReason);
+        m_millingStatementWidget->focusTable();
     } else if (vIdx == 36 && m_customClosingStockWidget) {
         m_customClosingStockWidget->setFocus(Qt::OtherFocusReason);
     } else if (vIdx == 5 && m_ledgerDirectoryWidget) {
@@ -869,7 +877,12 @@ void MainWindow::openAccountingPeriodDialog() {
         } else if (vIdx == 33 && m_dayBookWidget) {
             m_dayBookWidget->loadDayBookData(fDate, tDate);
         } else if (vIdx == 34 && m_gstrReportsWidget) {
-            m_gstrReportsWidget->loadReturns(fDate, tDate);
+            // GSTR-1 is a MONTHLY return: always open on the current month,
+            // not the dashboard's full-year period (combos default likewise).
+            QDate today = QDate::currentDate();
+            m_gstrReportsWidget->loadReturns(
+                QDate(today.year(), today.month(), 1),
+                QDate(today.year(), today.month(), today.daysInMonth()));
         } else if (vIdx == 35 && m_millingStatementWidget) {
             m_millingStatementWidget->loadMillingData(fDate, tDate);
         } else if (vIdx == 5 && m_ledgerDirectoryWidget) {
@@ -922,6 +935,10 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
     if (pushToHistory && curIdx != viewIndex && curIdx != 0 && curIdx != 22) {
         m_viewHistoryStack.append(curIdx);
     }
+    // Register views preserve their state across visits and reload only when
+    // dirty — except when coming from the dashboard, which always refreshes
+    // so menu-driven entry shows current data.
+    const bool fromDashboard = (curIdx == 0);
     if (viewIndex == 0 || viewIndex == 22) {
         m_viewHistoryStack.clear();
         m_targetStatementParty.clear();
@@ -971,7 +988,7 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
     } else if (viewIndex == 3) {
         if (m_salesRegisterWidget) {
             m_stackedWidget->setCurrentWidget(m_salesRegisterWidget);
-            if (m_salesRegisterWidget->isDirty()) {
+            if (m_salesRegisterWidget->isDirty() || fromDashboard) {
                 FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
                 m_salesRegisterWidget->loadData(QDate::fromString(activeFy.startDate, "yyyy-MM-dd"), QDate::fromString(activeFy.endDate, "yyyy-MM-dd"));
             }
@@ -981,7 +998,7 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
     } else if (viewIndex == 4 || viewIndex == 21) {
         if (m_purchaseRegisterWidget) {
             m_stackedWidget->setCurrentWidget(m_purchaseRegisterWidget);
-            if (m_purchaseRegisterWidget->isDirty()) {
+            if (m_purchaseRegisterWidget->isDirty() || fromDashboard) {
                 FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
                 m_purchaseRegisterWidget->loadData(QDate::fromString(activeFy.startDate, "yyyy-MM-dd"), QDate::fromString(activeFy.endDate, "yyyy-MM-dd"));
             }
@@ -1068,7 +1085,7 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
     } else if (viewIndex == 13) {
         if (m_stockDetailWidget) {
             m_stackedWidget->setCurrentWidget(m_stockDetailWidget);
-            if (m_stockDetailWidget->isDirty()) {
+            if (m_stockDetailWidget->isDirty() || fromDashboard) {
                 FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
                 m_stockDetailWidget->reloadData(activeFy.startDate, activeFy.endDate);
             }
@@ -1201,7 +1218,7 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
     } else if (viewIndex == 27) {
         if (m_transportDispatchWidget) {
             m_stackedWidget->setCurrentWidget(m_transportDispatchWidget);
-            if (m_transportDispatchWidget->isDirty()) {
+            if (m_transportDispatchWidget->isDirty() || fromDashboard) {
                 FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
                 m_transportDispatchWidget->loadData(QDate::fromString(activeFy.startDate, "yyyy-MM-dd"), QDate::fromString(activeFy.endDate, "yyyy-MM-dd"));
             }
@@ -1255,7 +1272,7 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
     } else if (viewIndex == 33) {
         if (m_dayBookWidget) {
             m_stackedWidget->setCurrentWidget(m_dayBookWidget);
-            if (m_dayBookWidget->isDirty()) {
+            if (m_dayBookWidget->isDirty() || fromDashboard) {
                 FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
                 QDate sDate = QDate::fromString(activeFy.startDate, "yyyy-MM-dd");
                 QDate eDate = QDate::fromString(activeFy.endDate, "yyyy-MM-dd");
@@ -1264,6 +1281,7 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
                 m_dayBookWidget->loadDayBookData(sDate, eDate);
             }
             m_dayBookWidget->setFocus();
+            m_dayBookWidget->focusTable();
         }
     } else if (viewIndex == 34) {
         if (m_gstrReportsWidget) {
@@ -1281,7 +1299,7 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
     } else if (viewIndex == 35) {
         if (m_millingStatementWidget) {
             m_stackedWidget->setCurrentWidget(m_millingStatementWidget);
-            if (m_millingStatementWidget->isDirty()) {
+            if (m_millingStatementWidget->isDirty() || fromDashboard) {
                 FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
                 QDate sDate = QDate::fromString(activeFy.startDate, "yyyy-MM-dd");
                 QDate eDate = QDate::fromString(activeFy.endDate, "yyyy-MM-dd");
@@ -1290,6 +1308,7 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
                 m_millingStatementWidget->loadMillingData(sDate, eDate);
             }
             m_millingStatementWidget->setFocus();
+            m_millingStatementWidget->focusTable();
         }
     } else if (viewIndex == 36) {
         if (m_customClosingStockWidget) {

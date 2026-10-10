@@ -12,6 +12,8 @@
 #include <QInputDialog>
 #include <QScrollBar>
 #include <QKeyEvent>
+#include <QShortcut>
+#include <QComboBox>
 #include <QApplication>
 #include <QCompleter>
 #include <QDate>
@@ -143,8 +145,8 @@ void PurchaseVoucherWidget::setupUi() {
     connect(m_marketTypeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &PurchaseVoucherWidget::onMarketTypeChanged);
     row1->addWidget(m_marketTypeCombo);
 
-    // Bill / Invoice No
-    QLabel* invLbl = new QLabel("Bill No.:", this);
+    // Supplier Invoice No. (typed from the supplier's bill, never prefilled)
+    QLabel* invLbl = new QLabel("Invoice No.:", this);
     row1->addWidget(invLbl);
     m_invoiceNoEdit = new QLineEdit(this);
     m_invoiceNoEdit->setFixedHeight(24);
@@ -792,17 +794,13 @@ void PurchaseVoucherWidget::updateFiscalYearBadge() {
 
 void PurchaseVoucherWidget::updateNextNumbers() {
     if (isEditMode()) return;
-    FiscalYearInfo fy = FiscalYearHelper::getActiveFiscalYear();
+    // The invoice number is the SUPPLIER's bill: typed by hand, never
+    // prefilled (this function no longer touches the invoice field at all).
+    // The voucher badge always shows the real next canonical number.
     QString dt = m_invoiceDateEdit ? m_invoiceDateEdit->formattedDate() : "";
-
-    QString invNo = m_purchaseModel.get_next_invoice_no(dt);
     QString vNo = m_purchaseModel.get_next_voucher_no(dt);
-
-    if (m_invoiceNoEdit && m_invoiceNoEdit->text().trimmed().isEmpty()) {
-        m_invoiceNoEdit->setText(invNo);
-    }
     if (m_voucherNoDisplay) {
-        m_voucherNoDisplay->setText("No. " + vNo.replace("Pur-", ""));
+        m_voucherNoDisplay->setText("No. " + vNo);
     }
 }
 
@@ -826,53 +824,78 @@ void PurchaseVoucherWidget::onPartySelected(const QVariantMap& partyData) {
 }
 
 void PurchaseVoucherWidget::setupNavigationChains() {
+    // Shared helpers for the single-declaration chain below.
+    auto go = [](QWidget* w) {
+        if (!w) return;
+        w->setFocus();
+        if (auto* le = qobject_cast<QLineEdit*>(w)) le->selectAll();
+        else if (auto* cb = qobject_cast<QComboBox*>(w)) { if (cb->lineEdit()) cb->lineEdit()->selectAll(); }
+    };
+    auto stepBackToGrid = [this]() {
+        if (!m_tableWidget || m_tableWidget->rowCount() == 0) return;
+        int r = m_tableWidget->rowCount() - 1, c = 8;
+        while (c > 1 && m_tableWidget->isColumnHidden(c)) --c;
+        m_tableWidget->setCurrentCell(r, c);
+        m_tableWidget->edit(m_tableWidget->currentIndex());
+    };
     // Left/Right arrow navigation across fields
-    VoucherCommon::installGridNavigation(m_invoiceNoEdit, m_marketTypeCombo, m_dueDaysEdit, [this]() {
+    VoucherCommon::installGridNavigation(m_invoiceNoEdit, m_marketTypeCombo, m_partySearchWidget, [this]() {
         QString text = m_invoiceNoEdit ? m_invoiceNoEdit->text().trimmed() : "";
         if (!text.isEmpty()) {
-            QVariantMap existing = m_purchaseModel.get_purchase_invoice(text);
+            QString curDate = m_invoiceDateEdit ? m_invoiceDateEdit->date().toString("yyyy-MM-dd") : "";
+            QVariantMap existing = m_purchaseModel.get_purchase_invoice(text, curDate);
             if (!existing.isEmpty() && existing.value("id").toInt() != m_editingInvoiceId) {
-                loadInvoiceForEditing(existing.value("id"));
+                loadInvoiceForEditing(existing.value("id"), curDate);
                 return;
             }
         }
-        if (m_dueDaysEdit) { m_dueDaysEdit->setFocus(); m_dueDaysEdit->selectAll(); }
+        if (m_partySearchWidget) { m_partySearchWidget->setFocus(); m_partySearchWidget->selectAll(); }
     });
     VoucherCommon::installGridNavigation(m_dueDaysEdit, m_invoiceNoEdit, m_partySearchWidget, [this]() {
         if (m_partySearchWidget) { m_partySearchWidget->setFocus(); m_partySearchWidget->selectAll(); }
     });
-    VoucherCommon::installGridNavigation(m_partySearchWidget, m_dueDaysEdit, m_posCombo, nullptr);
-    connect(m_partySearchWidget, &AccountSearchBox::returnPressed, this, [this]() {
+    VoucherCommon::installGridNavigation(m_partySearchWidget, m_dueDaysEdit, m_posCombo, [this]() {
         focusTableAt(0, 1);
     });
     VoucherCommon::installGridNavigation(m_posCombo, m_partySearchWidget, m_vehicleNoEdit, [this]() {
         focusTableAt(0, 1);
     });
+    // Market-type dropdown: Enter advances instead of opening the list
+    // (list still opens natively with Down/Space).
+    VoucherCommon::installGridNavigation(m_marketTypeCombo, m_invoiceNoEdit, m_dueDaysEdit, [this, go]() { go(m_dueDaysEdit); });
 
-    // Mandi charges chain
-    if (m_damiEdit) connect(m_damiEdit, &QLineEdit::returnPressed, this, [this]() { if (m_labourEdit) { m_labourEdit->setFocus(); m_labourEdit->selectAll(); } });
-    if (m_labourEdit) connect(m_labourEdit, &QLineEdit::returnPressed, this, [this]() { if (m_auctionEdit) { m_auctionEdit->setFocus(); m_auctionEdit->selectAll(); } });
-    if (m_auctionEdit) connect(m_auctionEdit, &QLineEdit::returnPressed, this, [this]() { if (m_mFeeEdit) { m_mFeeEdit->setFocus(); m_mFeeEdit->selectAll(); } });
-    if (m_mFeeEdit) connect(m_mFeeEdit, &QLineEdit::returnPressed, this, [this]() { if (m_hrdfEdit) { m_hrdfEdit->setFocus(); m_hrdfEdit->selectAll(); } });
-    if (m_hrdfEdit) connect(m_hrdfEdit, &QLineEdit::returnPressed, this, [this]() { if (m_mandiOtherExpEdit) { m_mandiOtherExpEdit->setFocus(); m_mandiOtherExpEdit->selectAll(); } });
-    if (m_mandiOtherExpEdit) connect(m_mandiOtherExpEdit, &QLineEdit::returnPressed, this, [this]() { if (m_welfareEdit) { m_welfareEdit->setFocus(); m_welfareEdit->selectAll(); } });
-    if (m_welfareEdit) connect(m_welfareEdit, &QLineEdit::returnPressed, this, [this]() { if (m_dhrmdEdit) { m_dhrmdEdit->setFocus(); m_dhrmdEdit->selectAll(); } });
-    if (m_dhrmdEdit) connect(m_dhrmdEdit, &QLineEdit::returnPressed, this, [this]() { if (m_sutliEdit) { m_sutliEdit->setFocus(); m_sutliEdit->selectAll(); } });
-    if (m_sutliEdit) connect(m_sutliEdit, &QLineEdit::returnPressed, this, [this]() { if (m_mandiLessEdit) { m_mandiLessEdit->setFocus(); m_mandiLessEdit->selectAll(); } });
-    if (m_mandiLessEdit) connect(m_mandiLessEdit, &QLineEdit::returnPressed, this, [this]() { if (m_vehicleNoEdit) { m_vehicleNoEdit->setFocus(); m_vehicleNoEdit->selectAll(); } });
+    // NOTE: no QShortcuts on the grid: a window-context shortcut swallows
+    // grid keys before editors/delegate ever see them. The no-editor-open
+    // case is handled in keyPressEvent below (events only propagate here
+    // when no child consumed them, so open editors are never disturbed).
 
-    // Logistics chain (Enter moves forward, Left/Right moves sideways)
-    connect(m_vehicleNoEdit, &QLineEdit::returnPressed, this, [this]() { if (m_grNoEdit) { m_grNoEdit->setFocus(); m_grNoEdit->selectAll(); } });
-    connect(m_grNoEdit, &QLineEdit::returnPressed, this, [this]() { if (m_driverNameEdit) { m_driverNameEdit->setFocus(); m_driverNameEdit->selectAll(); } });
-    connect(m_driverNameEdit, &QLineEdit::returnPressed, this, [this]() { if (m_ewayBillNoEdit) { m_ewayBillNoEdit->setFocus(); m_ewayBillNoEdit->selectAll(); } });
-    connect(m_ewayBillNoEdit, &QLineEdit::returnPressed, this, [this]() { if (m_billTimeEdit) { m_billTimeEdit->setFocus(); m_billTimeEdit->selectAll(); } });
-    connect(m_billTimeEdit, &QLineEdit::returnPressed, this, [this]() { if (m_saudaDateEdit) { m_saudaDateEdit->setFocus(); m_saudaDateEdit->selectAll(); } });
-    connect(m_saudaDateEdit, &QLineEdit::returnPressed, this, [this]() { if (m_poNoEdit) { m_poNoEdit->setFocus(); m_poNoEdit->selectAll(); } });
-    connect(m_poNoEdit, &QLineEdit::returnPressed, this, [this]() { if (m_gradeEdit) { m_gradeEdit->setFocus(); m_gradeEdit->selectAll(); } });
-    connect(m_gradeEdit, &QLineEdit::returnPressed, this, [this]() { if (m_transportEdit) { m_transportEdit->setFocus(); m_transportEdit->selectAll(); } });
-    connect(m_transportEdit, &QLineEdit::returnPressed, this, [this]() { if (m_challanNoEdit) { m_challanNoEdit->setFocus(); m_challanNoEdit->selectAll(); } });
-    connect(m_challanNoEdit, &QLineEdit::returnPressed, this, [this]() { if (m_kandaWeightEdit) { m_kandaWeightEdit->setFocus(); m_kandaWeightEdit->selectAll(); } });
-    connect(m_kandaWeightEdit, &QLineEdit::returnPressed, this, [this]() {
+    // Single key contract per field (Enter/Left/Right/Backspace): the forward
+    // order lives here once — Backspace/Left derive backward automatically,
+    // so no parallel returnPressed wiring exists to drift apart.
+    // Mandi charges chain.
+    VoucherCommon::installGridNavigation(m_damiEdit, nullptr, nullptr, [this, go]() { go(m_labourEdit); }, stepBackToGrid);
+    VoucherCommon::installGridNavigation(m_labourEdit, m_damiEdit, nullptr, [this, go]() { go(m_auctionEdit); });
+    VoucherCommon::installGridNavigation(m_auctionEdit, m_labourEdit, nullptr, [this, go]() { go(m_mFeeEdit); });
+    VoucherCommon::installGridNavigation(m_mFeeEdit, m_auctionEdit, nullptr, [this, go]() { go(m_hrdfEdit); });
+    VoucherCommon::installGridNavigation(m_hrdfEdit, m_mFeeEdit, nullptr, [this, go]() { go(m_mandiOtherExpEdit); });
+    VoucherCommon::installGridNavigation(m_mandiOtherExpEdit, m_hrdfEdit, nullptr, [this, go]() { go(m_welfareEdit); });
+    VoucherCommon::installGridNavigation(m_welfareEdit, m_mandiOtherExpEdit, nullptr, [this, go]() { go(m_dhrmdEdit); });
+    VoucherCommon::installGridNavigation(m_dhrmdEdit, m_welfareEdit, nullptr, [this, go]() { go(m_sutliEdit); });
+    VoucherCommon::installGridNavigation(m_sutliEdit, m_dhrmdEdit, nullptr, [this, go]() { go(m_mandiLessEdit); });
+    VoucherCommon::installGridNavigation(m_mandiLessEdit, m_sutliEdit, nullptr, [this, go]() { go(m_vehicleNoEdit); });
+
+    // Logistics chain.
+    VoucherCommon::installGridNavigation(m_vehicleNoEdit, m_mandiLessEdit, m_grNoEdit, [this, go]() { go(m_grNoEdit); }, stepBackToGrid);
+    VoucherCommon::installGridNavigation(m_grNoEdit, m_vehicleNoEdit, m_driverNameEdit, [this, go]() { go(m_driverNameEdit); });
+    VoucherCommon::installGridNavigation(m_driverNameEdit, m_grNoEdit, m_ewayBillNoEdit, [this, go]() { go(m_ewayBillNoEdit); });
+    VoucherCommon::installGridNavigation(m_ewayBillNoEdit, m_driverNameEdit, m_billTimeEdit, [this, go]() { go(m_billTimeEdit); });
+    VoucherCommon::installGridNavigation(m_billTimeEdit, m_ewayBillNoEdit, m_saudaDateEdit, [this, go]() { go(m_saudaDateEdit); });
+    VoucherCommon::installGridNavigation(m_saudaDateEdit, m_billTimeEdit, m_poNoEdit, [this, go]() { go(m_poNoEdit); });
+    VoucherCommon::installGridNavigation(m_poNoEdit, m_saudaDateEdit, m_gradeEdit, [this, go]() { go(m_gradeEdit); });
+    VoucherCommon::installGridNavigation(m_gradeEdit, m_poNoEdit, m_transportEdit, [this, go]() { go(m_transportEdit); });
+    VoucherCommon::installGridNavigation(m_transportEdit, m_gradeEdit, m_challanNoEdit, [this, go]() { go(m_challanNoEdit); });
+    VoucherCommon::installGridNavigation(m_challanNoEdit, m_transportEdit, m_kandaWeightEdit, [this, go]() { go(m_kandaWeightEdit); });
+    VoucherCommon::installGridNavigation(m_kandaWeightEdit, m_challanNoEdit, m_brokerEdit, [this]() {
         double kw = m_kandaWeightEdit ? m_kandaWeightEdit->text().trimmed().toDouble() : 0.0;
         if (kw > 0.0) {
             int totalBags = 0;
@@ -895,55 +918,33 @@ void PurchaseVoucherWidget::setupNavigationChains() {
             m_brokerEdit->selectAll();
         }
     });
-    connect(m_brokerEdit, &QLineEdit::returnPressed, this, [this]() { if (m_narrationEdit) { m_narrationEdit->setFocus(); m_narrationEdit->selectAll(); } });
+    VoucherCommon::installGridNavigation(m_brokerEdit, m_kandaWeightEdit, m_narrationEdit, [this, go]() { go(m_narrationEdit); });
 
-    // Left/Right navigation for logistics
-    VoucherCommon::installGridNavigation(m_vehicleNoEdit, nullptr, m_grNoEdit);
-    VoucherCommon::installGridNavigation(m_grNoEdit, m_vehicleNoEdit, m_driverNameEdit);
-    VoucherCommon::installGridNavigation(m_driverNameEdit, m_grNoEdit, m_ewayBillNoEdit);
-    VoucherCommon::installGridNavigation(m_ewayBillNoEdit, m_driverNameEdit, m_billTimeEdit);
+    // (Earlier unified installs above already declare the logistics chain;
+    // stepBackToGrid is defined once at the top with the shared helpers.)
 
-    VoucherCommon::installGridNavigation(m_billTimeEdit, m_ewayBillNoEdit, m_saudaDateEdit);
-    VoucherCommon::installGridNavigation(m_saudaDateEdit, m_billTimeEdit, m_poNoEdit);
-    VoucherCommon::installGridNavigation(m_poNoEdit, m_saudaDateEdit, m_gradeEdit);
-    VoucherCommon::installGridNavigation(m_gradeEdit, m_poNoEdit, m_transportEdit);
-
-    VoucherCommon::installGridNavigation(m_transportEdit, m_gradeEdit, m_challanNoEdit);
-    VoucherCommon::installGridNavigation(m_challanNoEdit, m_transportEdit, m_kandaWeightEdit);
-    VoucherCommon::installGridNavigation(m_kandaWeightEdit, m_challanNoEdit, m_brokerEdit);
-    VoucherCommon::installGridNavigation(m_brokerEdit, m_kandaWeightEdit, m_narrationEdit);
-    VoucherCommon::installGridNavigation(m_narrationEdit, m_brokerEdit, nullptr);
-
-    // Summary & Save chain
-    connect(m_narrationEdit, &QLineEdit::returnPressed, this, [this]() {
+    // Summary & Save chain: single declaration per field (Enter/Left/Right/Backspace).
+    VoucherCommon::installGridNavigation(m_narrationEdit, m_brokerEdit, nullptr, [this, go]() {
         if (m_otherExpEdit && m_otherExpEdit->isVisible()) {
-            m_otherExpEdit->setFocus();
-            m_otherExpEdit->selectAll();
+            go(m_otherExpEdit);
         } else if (m_commissionEdit && m_commissionEdit->isVisible()) {
-            m_commissionEdit->setFocus();
-            m_commissionEdit->selectAll();
+            go(m_commissionEdit);
         } else if (m_taxAmountEdit && m_taxAmountEdit->isVisible()) {
-            m_taxAmountEdit->setFocus();
-            m_taxAmountEdit->selectAll();
+            go(m_taxAmountEdit);
         } else if (m_saveBtn) {
             m_saveBtn->setFocus();
         }
     });
-    connect(m_commissionEdit, &QLineEdit::returnPressed, this, [this]() {
-        if (m_freightChargesEdit) { m_freightChargesEdit->setFocus(); m_freightChargesEdit->selectAll(); }
-    });
-    connect(m_otherExpEdit, &QLineEdit::returnPressed, this, [this]() {
-        if (m_lessAmountEdit) { m_lessAmountEdit->setFocus(); m_lessAmountEdit->selectAll(); }
-    });
-    connect(m_lessAmountEdit, &QLineEdit::returnPressed, this, [this]() {
-        if (m_taxAmountEdit) { m_taxAmountEdit->setFocus(); m_taxAmountEdit->selectAll(); }
-    });
-    connect(m_taxAmountEdit, &QLineEdit::returnPressed, this, [this]() {
-        if (m_freightChargesEdit) { m_freightChargesEdit->setFocus(); m_freightChargesEdit->selectAll(); }
-    });
-    connect(m_freightChargesEdit, &QLineEdit::returnPressed, this, [this]() {
-        if (m_saveBtn) { m_saveBtn->setFocus(); }
-    });
+    VoucherCommon::installGridNavigation(m_commissionEdit, m_narrationEdit, nullptr,
+        [this, go]() { go(m_freightChargesEdit); });
+    VoucherCommon::installGridNavigation(m_otherExpEdit, m_narrationEdit, nullptr,
+        [this, go]() { go(m_lessAmountEdit); });
+    VoucherCommon::installGridNavigation(m_lessAmountEdit, m_otherExpEdit, nullptr,
+        [this, go]() { go(m_taxAmountEdit); });
+    VoucherCommon::installGridNavigation(m_taxAmountEdit, m_lessAmountEdit, nullptr,
+        [this, go]() { go(m_freightChargesEdit); });
+    VoucherCommon::installGridNavigation(m_freightChargesEdit, m_taxAmountEdit, nullptr,
+        [this]() { if (m_saveBtn) m_saveBtn->setFocus(); });
 }
 
 void PurchaseVoucherWidget::setupCompleters() {
@@ -1125,7 +1126,12 @@ void PurchaseVoucherWidget::openDateDialog(bool isInitial) {
         }
         onDateChanged(QDate::fromString(newIso, "yyyy-MM-dd"));
     }
-    if (m_partySearchWidget) {
+    // New voucher lands in the (empty) invoice number field; alteration keeps
+    // the ledger focus it always had.
+    if (!isEditMode() && m_invoiceNoEdit) {
+        m_invoiceNoEdit->setFocus();
+        m_invoiceNoEdit->selectAll();
+    } else if (m_partySearchWidget) {
         m_partySearchWidget->setFocus();
         m_partySearchWidget->selectAll();
     }
@@ -1133,6 +1139,12 @@ void PurchaseVoucherWidget::openDateDialog(bool isInitial) {
 
 void PurchaseVoucherWidget::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
+    // New voucher opens with focus in the (empty) invoice number field, the
+    // next stop after it being the supplier ledger.
+    if (!isEditMode() && m_invoiceNoEdit) {
+        m_invoiceNoEdit->setFocus();
+        m_invoiceNoEdit->selectAll();
+    }
 }
 
 void PurchaseVoucherWidget::resetForm() {
@@ -1303,8 +1315,14 @@ void PurchaseVoucherWidget::onTableCellChanged(int row, int column) {
     m_isUpdatingTable = false;
     recalculateTotals();
 
+    // Auto-append the next blank row only when the user actually typed an
+    // amount here (non-empty new text with an item set). Clearing the cell
+    // (e.g. word-by-word Backspace while stepping back) must never spawn
+    // phantom empty rows.
     if (row == m_tableWidget->rowCount() - 1 && column == 8) {
-        if (m_tableWidget->item(row, 1) && !m_tableWidget->item(row, 1)->text().isEmpty()) {
+        auto* amtIt = m_tableWidget->item(row, 8);
+        if (amtIt && !amtIt->text().trimmed().isEmpty() &&
+            m_tableWidget->item(row, 1) && !m_tableWidget->item(row, 1)->text().isEmpty()) {
             addNewLineRow();
         }
     }
@@ -1387,6 +1405,15 @@ void PurchaseVoucherWidget::saveVoucher() {
         return;
     }
 
+    // The purchase bill number is the SUPPLIER's invoice, typed in by hand —
+    // there is no auto-invoice on the purchase side, so it must be present.
+    QString typedBillNo = m_invoiceNoEdit ? m_invoiceNoEdit->text().trimmed() : QString();
+    if (typedBillNo.isEmpty()) {
+        CustomMessageBox::warning(this, "Validation", "Please enter the Supplier's Bill / Invoice No. (their bill number, not ours).");
+        if (m_invoiceNoEdit) m_invoiceNoEdit->setFocus();
+        return;
+    }
+
     QVariantList items;
     for (int r = 0; r < m_tableWidget->rowCount(); ++r) {
         QString name = m_tableWidget->item(r, 1) ? m_tableWidget->item(r, 1)->text() : "";
@@ -1410,7 +1437,7 @@ void PurchaseVoucherWidget::saveVoucher() {
         return;
     }
 
-    QString invNo = m_invoiceNoEdit->text().trimmed();
+    QString invNo = typedBillNo;
     QString invDate = m_invoiceDateEdit->date().toString("yyyy-MM-dd");
     QString vchNo = isEditMode() ? m_editingVoucherNo : "";
 
@@ -1494,7 +1521,22 @@ bool PurchaseVoucherWidget::loadInvoiceForEditing(const QVariant& invNoOrId, con
     resetForm();
 
     QVariantMap inv = m_purchaseModel.get_purchase_invoice(invNoOrId, dateHint);
-    if (inv.isEmpty()) return false;
+    if (inv.isEmpty()) {
+        QString displayIdent;
+        if (invNoOrId.typeId() == QMetaType::QVariantMap) {
+            QVariantMap m = invNoOrId.toMap();
+            displayIdent = m.value("invoiceNo", m.value("invoice_no", m.value("voucherNo", m.value("voucher_no")))).toString();
+        } else {
+            displayIdent = invNoOrId.toString();
+        }
+        if (displayIdent.isEmpty()) displayIdent = "Requested bill";
+        CustomMessageBox::warning(
+            this,
+            "Bill Not Found",
+            QString("Purchase Bill \"%1\" was not found or has been deleted in this financial year.").arg(displayIdent)
+        );
+        return false;
+    }
 
     m_hasInitialDateOpened = true;
     m_editingInvoiceId = inv.value("id").toInt();
@@ -1503,7 +1545,7 @@ bool PurchaseVoucherWidget::loadInvoiceForEditing(const QVariant& invNoOrId, con
     m_deleteBtn->setVisible(true);
 
     m_titleHeaderLabel->setText(QString("ALTERATION : F9 : Purchase Voucher (%1)").arg(m_editingInvoiceNo));
-    if (m_voucherNoDisplay) m_voucherNoDisplay->setText("No. " + m_editingVoucherNo.replace("Purchase-", "").replace("Pur-", ""));
+    if (m_voucherNoDisplay) m_voucherNoDisplay->setText("No. " + m_editingVoucherNo);
     m_invoiceNoEdit->setText(m_editingInvoiceNo);
 
     QDate dt = QDate::fromString(inv.value("invoice_date").toString(), "yyyy-MM-dd");
@@ -1650,16 +1692,42 @@ void PurchaseVoucherWidget::openAlterVoucherDialog() {
     bool ok = false;
     QString text = CustomInputDialog::getText(this, "Find & Alter Purchase Voucher", "Enter Invoice No or Voucher No to alter:", m_editingInvoiceNo, &ok);
     if (ok && !text.trimmed().isEmpty()) {
-        QVariantMap inv = m_purchaseModel.get_purchase_invoice(text.trimmed());
+        QString curDate = m_invoiceDateEdit ? m_invoiceDateEdit->date().toString("yyyy-MM-dd") : "";
+        QVariantMap inv = m_purchaseModel.get_purchase_invoice(text.trimmed(), curDate);
         if (!inv.isEmpty()) {
-            loadInvoiceForEditing(inv.value("id"));
+            loadInvoiceForEditing(inv.value("id"), inv.value("invoice_date").toString());
         } else {
-            CustomMessageBox::warning(this, "Voucher Not Found", QString("No purchase voucher found matching \"%1\".").arg(text.trimmed()));
+            CustomMessageBox::warning(this, "Voucher Not Found", QString("No purchase voucher found matching \"%1\" in this financial year.").arg(text.trimmed()));
         }
     }
 }
 
 void PurchaseVoucherWidget::keyPressEvent(QKeyEvent* event) {
+    // Grid with focus but no cell editor open (unhandled keys propagate here
+    // only in that state): Enter opens the current cell's editor; Backspace
+    // on a filled cell clears it, on an empty cell steps back.
+    if ((event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter ||
+         event->key() == Qt::Key_Backspace) &&
+        m_tableWidget && QApplication::focusWidget() == m_tableWidget) {
+        int r = m_tableWidget->currentRow(), c = m_tableWidget->currentColumn();
+        if (r >= 0 && c >= 0 && r < m_tableWidget->rowCount() && c < m_tableWidget->columnCount()) {
+            if (event->key() == Qt::Key_Backspace) {
+                if (QTableWidgetItem* it = m_tableWidget->item(r, c)) {
+                    if (!it->text().isEmpty()) {
+                        it->setText("");
+                        recalculateTotals();
+                        event->accept();
+                        return;
+                    }
+                }
+                retreatCell();
+            } else {
+                m_tableWidget->edit(m_tableWidget->currentIndex());
+            }
+            event->accept();
+            return;
+        }
+    }
     if (event->key() == Qt::Key_F4) {
         openAlterVoucherDialog();
         event->accept();

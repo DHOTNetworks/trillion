@@ -376,7 +376,7 @@ QVariantMap IFormModel::get_iform_voucher(const QVariant& voucherIdOrNo) {
     }
     if (siRows.isEmpty() && (!cleanVNo.isEmpty() || !vNo.isEmpty() || !ifNo.isEmpty())) {
         siRows = db.executeQuery(
-            "SELECT * FROM sales_invoices WHERE invoice_no = ? OR invoice_no = ? OR voucher_no = ? OR voucher_no = ? OR ref_no = ? LIMIT 1;",
+            "SELECT * FROM sales_invoices WHERE invoice_no = ? OR invoice_no = ? OR voucher_no = ? OR voucher_no = ? OR invoice_no = ? LIMIT 1;",
             {vNo, cleanVNo, vNo, cleanVNo, ifNo}
         );
     }

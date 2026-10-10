@@ -11,7 +11,6 @@ public:
 
     Q_INVOKABLE QString get_next_voucher_no(const QString& fy = "");
     Q_INVOKABLE QString get_next_invoice_no(const QString& fy = "");
-    Q_INVOKABLE QString increment_invoice(const QString& invStr);
 
     Q_INVOKABLE bool add_sales_invoice_full(
         const QString& invoice_no, const QString& invoice_date, const QString& party_ledger,

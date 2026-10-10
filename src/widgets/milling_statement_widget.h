@@ -25,10 +25,12 @@ public:
     void loadMillingData(const QDate& fromDate, const QDate& toDate, const QString& varietyFilter = "All");
     void markDirty() { m_isDirty = true; }
     bool isDirty() const { return m_isDirty; }
+    void focusTable();
 
 signals:
     void backRequested();
     void newBatchRequested();
+    void alterBatchRequested(int targetViewIndex, const QVariantMap& entry);
 
 protected:
     void keyPressEvent(QKeyEvent* event) override;
@@ -36,6 +38,7 @@ protected:
 private slots:
     void onRefreshClicked();
     void onBatchSelectionChanged();
+    void onBatchDoubleClicked(int row, int col);
     void onNewBatchClicked();
 
 private:

@@ -378,7 +378,7 @@ QVariantMap JFormModel::get_jform_voucher(const QVariant& voucherIdOrNo) {
     }
     if (piRows.isEmpty() && (!cleanVNo.isEmpty() || !vNo.isEmpty() || !jfNo.isEmpty())) {
         piRows = db.executeQuery(
-            "SELECT * FROM purchase_invoices WHERE invoice_no = ? OR invoice_no = ? OR voucher_no = ? OR voucher_no = ? OR ref_no = ? LIMIT 1;",
+            "SELECT * FROM purchase_invoices WHERE invoice_no = ? OR invoice_no = ? OR voucher_no = ? OR voucher_no = ? OR invoice_no = ? LIMIT 1;",
             {vNo, cleanVNo, vNo, cleanVNo, jfNo}
         );
     }

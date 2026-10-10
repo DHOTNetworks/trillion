@@ -48,6 +48,8 @@ void IFormVoucherWidget::setupUi() {
     auto* iformNoLabel = new QLabel("I-Form No:", this);
     m_iformNoEdit = new QLineEdit("1", this);
     m_iformNoEdit->setFixedWidth(80);
+    // Auto-generated and non-editable on both new and alter pages.
+    m_iformNoEdit->setReadOnly(true);
 
     auto* dateLabel = new QLabel("Date (F2):", this);
     m_dateEdit = new AccountingDateEdit(this);

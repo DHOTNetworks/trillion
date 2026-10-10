@@ -6,6 +6,8 @@
 #include "../src/engine/milling_yield_engine.h"
 #include "../src/engine/gstr2_reconciler.h"
 #include "../src/engine/gstr3b_engine.h"
+#include "../src/engine/gstr1_engine.h"
+#include <miniz.h>
 #include "../src/engine/tds_fvu_exporter.h"
 #include "../src/engine/gstr9_engine.h"
 #include "../src/engine/bahi_khata_migrator.h"
@@ -250,15 +252,63 @@ void TestEnginesSuite::testGstr3BEngineCalculationAndExcelExport() {
     QCOMPARE(summary.table4.netSgst, 0.00);
     QCOMPARE(summary.netPayableTotal, 0.00);
 
-    // Test exporting to Excel template
-    QString tplPath = "gst-data/GSTR-3B.xls";
-    if (!QFile::exists(tplPath) && QFile::exists("../" + tplPath)) {
-        tplPath = "../" + tplPath;
-    }
-    QString exportPath = "test_gstr3b_042026.xls";
-    bool exported = Gstr3BEngine::exportToExcelTemplate(summary, exportPath, tplPath);
-    QVERIFY(exported);
-    QVERIFY(QFile::exists(exportPath));
+    // Cross-return tie-out: 3.1(c) == GSTR-1 Table 8, 3.2 == GSTR-1 Tables 5/7B.
+    MahadevERP::Gstr1ReturnPayload g1 = MahadevERP::Gstr1Engine::generateFromDatabase(
+        "06ABKFM5928Q1ZG", "MAHADEV RICE INDUSTRY", "06", QDate(2026, 4, 1), QDate(2026, 4, 30));
+    double t8 = 0.0;
+    for (const auto& e : g1.exemp) t8 += e.nilAmt + e.exmpAmt + e.ngsupAmt;
+    QCOMPARE(summary.table31.txValC, t8);
+    MahadevERP::Gstr3BReturnSummary with32 = MahadevERP::Gstr3BEngine::generateFromDatabase(
+        "06ABKFM5928Q1ZG", "MAHADEV RICE INDUSTRY", "06", QDate(2026, 4, 1), QDate(2026, 4, 30), &g1);
+    double b2clInter = 0.0;
+    for (const auto& c : g1.b2cl) b2clInter += c.taxableValue;
+    for (const auto& cs : g1.b2cs) if (cs.splyTy == "INTER") b2clInter += cs.taxableValue;
+    double t32 = 0.0;
+    for (const auto& r : with32.table32.rows) t32 += r.txVal;
+    QCOMPARE(t32, b2clInter);
+
+    // Export builds the v1.2 workbook from scratch (no template file needed).
+    QString exportPath = "test_gstr3b_042026.xlsx";
+    QString exportPath2 = "test_gstr3b_042026_b.xlsx";
+    QVERIFY(Gstr3BEngine::exportToExcelTemplate(summary, exportPath, ""));
+    QVERIFY(Gstr3BEngine::exportToExcelTemplate(summary, exportPath2, "nonexistent-template.xls"));
+    QFile f1(exportPath), f2(exportPath2);
+    QVERIFY(f1.open(QIODevice::ReadOnly) && f2.open(QIODevice::ReadOnly));
+    QCOMPARE(f1.readAll(), f2.readAll()); // deterministic: identical input -> identical bytes
+    f1.close(); f2.close();
+
+    // Structural parity with Gstr3bTemplate_v1.2.xlsx.
+    auto zipRead = [&](const QString& inner) {
+        mz_zip_archive z;
+        memset(&z, 0, sizeof(z));
+        QString out;
+        if (!mz_zip_reader_init_file(&z, exportPath.toUtf8().constData(), 0)) return out;
+        mz_uint n = mz_zip_reader_get_num_files(&z);
+        for (mz_uint i = 0; i < n; i++) {
+            mz_zip_archive_file_stat st;
+            if (!mz_zip_reader_file_stat(&z, i, &st)) continue;
+            if (QString::fromUtf8(st.m_filename) == inner) {
+                size_t sz = 0;
+                void* p = mz_zip_reader_extract_to_heap(&z, i, &sz, 0);
+                if (p) { out = QString::fromUtf8((const char*)p, (int)sz); mz_free(p); }
+                break;
+            }
+        }
+        mz_zip_reader_end(&z);
+        return out;
+    };
+    QString wb = zipRead("xl/workbook.xml");
+    for (const char* s : {"Master","Index","3.1","3.1.1","3.2","4","5","6.1","6.2"})
+        QVERIFY2(wb.contains(QString("<sheet name=\"%1\"").arg(s)), s);
+    QVERIFY(wb.contains("<definedName name=\"state\">Master!$B$1:$B$36</definedName>"));
+    QVERIFY(wb.contains("<definedName name=\"SuppliesDesc\">Master!$A$1:$A$3</definedName>"));
+    QString s31 = zipRead("xl/worksheets/sheet3.xml");
+    QVERIFY(s31.contains("(c) Other outward supplies (nil rated, exempted)"));
+    QVERIFY(s31.contains(">101886696.00<")); // 3.1(c) value from above
+    QString idx = zipRead("xl/worksheets/sheet2.xml");
+    QVERIFY(idx.contains(">06ABKFM5928Q1ZG<"));
+    QFile::remove(exportPath);
+    QFile::remove(exportPath2);
 }
 
 void TestEnginesSuite::testTdsFvuExporter() {

@@ -385,6 +385,10 @@ Status UsageMapManager::getOwnedPages(MdbHandle* mdb, MdbTableDef* table, std::v
             if (!bmpPg) continue;
             if (!readPage(mdb, bmpPg)) continue;
             const auto* b = static_cast<const uint8_t*>(mdb->pg_buf);
+            /* Jackcess ReferenceHandler rejects non-USAGE_MAP bitmap pages;
+             * for a read scan we skip them instead of throwing, so one bad
+             * bitmap can never hide the table's remaining pages. */
+            if (b[0] != kPageUsageMap) continue;
             for (uint32_t off = 0; off < bitlen; ++off) {
                 if ((b[4 + off / 8] >> (off % 8)) & 1) {
                     outPages.push_back(static_cast<uint32_t>(ind * bitlen + off));

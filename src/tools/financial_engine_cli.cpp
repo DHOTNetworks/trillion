@@ -4,6 +4,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <iostream>
+#include <set>
 #include "../database_manager.h"
 #include "../engine/bahi_khata_migrator.h"
 #include "../engine/bahi_khata_exporter.h"

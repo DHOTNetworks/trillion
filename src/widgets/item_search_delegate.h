@@ -22,7 +22,6 @@ public:
 signals:
     void itemChosen(const QVariantMap& itemData);
     void moveNextCell();
-    void movePrevCell();
     void moveDownCell();
     void moveUpCell();
 

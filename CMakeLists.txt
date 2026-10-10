@@ -109,6 +109,8 @@ set(SOURCES
     src/engine/accounting_engine.h
     src/engine/fiscal_year_helper.h
     src/engine/fiscal_year_helper.cpp
+    src/engine/bill_series.h
+    src/engine/bill_series.cpp
     src/models/base_table_model.h
     src/models/base_table_model.cpp
     src/models/dashboard_controller.h
@@ -237,6 +239,8 @@ set(SOURCES
     src/engine/jet4_table.cpp
     src/engine/jet4_writer.h
     src/engine/jet4_writer.cpp
+    src/engine/jet4_reader.h
+    src/engine/jet4_reader.cpp
     src/engine/busy_data_migrator.h
     src/engine/busy_data_migrator.cpp
     src/engine/tally_data_migrator.h
@@ -384,6 +388,8 @@ set(SOURCES
     src/widgets/tds_acknowledgement_dialog.cpp
     src/widgets/tcs_config_dialog.h
     src/widgets/tcs_config_dialog.cpp
+    src/widgets/bill_series_dialog.h
+    src/widgets/bill_series_dialog.cpp
     src/widgets/navigation_menu_dialog.h
     src/widgets/navigation_menu_dialog.cpp
     src/widgets/interest_calculator_widget.h
@@ -404,6 +410,8 @@ set(SOURCES
     src/engine/milling_yield_engine.cpp
     src/engine/gstr1_engine.h
     src/engine/gstr1_engine.cpp
+    src/engine/gstr1_excel_writer.h
+    src/engine/gstr1_excel_writer.cpp
     src/engine/gstr2_reconciler.h
     src/engine/gstr2_reconciler.cpp
     src/engine/gstr3b_engine.h
@@ -550,6 +558,12 @@ set(TEST_SOURCES
     src/models/purchase_model.cpp
     src/models/vouchers_model.h
     src/models/vouchers_model.cpp
+    src/engine/gst_tax_engine.h
+    src/engine/gst_tax_engine.cpp
+    src/engine/gstr1_engine.h
+    src/engine/gstr1_engine.cpp
+    src/engine/gstr1_excel_writer.h
+    src/engine/gstr1_excel_writer.cpp
     src/models/stock_items_model.h
     src/models/stock_items_model.cpp
     src/models/paddy_arrivals_model.h
@@ -585,6 +599,8 @@ set(TEST_SOURCES
     src/engine/accounting_engine.h
     src/engine/fiscal_year_helper.h
     src/engine/fiscal_year_helper.cpp
+    src/engine/bill_series.h
+    src/engine/bill_series.cpp
     src/services/print_export_controller.h
     src/services/print_export_controller.cpp
     src/services/canara_bank_statement_parser.h
@@ -640,6 +656,8 @@ set(TEST_SOURCES
     src/engine/jet4_table.cpp
     src/engine/jet4_writer.h
     src/engine/jet4_writer.cpp
+    src/engine/jet4_reader.h
+    src/engine/jet4_reader.cpp
     src/models/iform_model.h
     src/models/iform_model.cpp
     src/models/mandi_reports_controller.h
@@ -708,6 +726,8 @@ set(ENGINE_TEST_SOURCES
     src/engine/milling_yield_engine.cpp
     src/engine/gstr1_engine.h
     src/engine/gstr1_engine.cpp
+    src/engine/gstr1_excel_writer.h
+    src/engine/gstr1_excel_writer.cpp
     src/engine/gstr2_reconciler.h
     src/engine/gstr2_reconciler.cpp
     src/engine/gstr3b_engine.h
@@ -752,6 +772,8 @@ set(ENGINE_TEST_SOURCES
     src/engine/jet4_table.cpp
     src/engine/jet4_writer.h
     src/engine/jet4_writer.cpp
+    src/engine/jet4_reader.h
+    src/engine/jet4_reader.cpp
 )
 
 add_executable(EnginesTestSuite ${ENGINE_TEST_SOURCES})
@@ -782,7 +804,8 @@ if(APPLE)
 endif()
 add_test(NAME EnginesTestSuite COMMAND EnginesTestSuite)
 
-# Financial Engine Verification CLI
+# Financial Engine Verification CLI (macOS and Linux only)
+if(NOT WIN32)
 set(CLI_SOURCES
     src/tools/financial_engine_cli.cpp
     src/database_manager.h
@@ -802,6 +825,8 @@ set(CLI_SOURCES
     src/engine/jet4_table.cpp
     src/engine/jet4_writer.h
     src/engine/jet4_writer.cpp
+    src/engine/jet4_reader.h
+    src/engine/jet4_reader.cpp
     src/engine/busy_data_migrator.h
     src/engine/busy_data_migrator.cpp
     src/engine/tally_data_migrator.h
@@ -857,6 +882,7 @@ target_link_libraries(FinancialEngineCLI PRIVATE
 )
 if(APPLE)
     target_link_libraries(FinancialEngineCLI PRIVATE iconv)
+endif()
 endif()
 
 

@@ -5,6 +5,7 @@
 #include "gst_portal_sync_dialog.h"
 #include "../engine/accounting_engine.h"
 #include "../engine/fiscal_year_helper.h"
+#include "../engine/gstr1_excel_writer.h"
 #include "../database_manager.h"
 #include <QHeaderView>
 #include <QKeyEvent>
@@ -15,6 +16,7 @@
 #include <QFormLayout>
 #include <QFrame>
 #include <QScrollArea>
+#include <QStyleFactory>
 
 namespace MahadevERP {
 
@@ -29,7 +31,20 @@ GstrReportsWidget::GstrReportsWidget(PrintExportController* printExportCtrl, QWi
 }
 
 void GstrReportsWidget::setupUi() {
-    setStyleSheet("background-color: #F8FAFC;");
+    setStyleSheet("background-color: #FFFFFF;");
+    // White palette inherited by every child: auto-filled surfaces can never
+    // fall back to a dark system theme color (plain QWidgets + QTabWidget
+    // pages do not reliably paint stylesheet backgrounds undergeath the
+    // native macOS style in dark mode).
+    setAutoFillBackground(true);
+    {
+        QPalette whitePal = palette();
+        whitePal.setColor(QPalette::Window, QColor("#FFFFFF"));
+        whitePal.setColor(QPalette::Base, QColor("#FFFFFF"));
+        whitePal.setColor(QPalette::Button, QColor("#FFFFFF"));
+        whitePal.setColor(QPalette::AlternateBase, QColor("#F8FAFC"));
+        setPalette(whitePal);
+    }
 
     auto* mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(14, 12, 14, 12);
@@ -66,9 +81,8 @@ void GstrReportsWidget::setupUi() {
     connect(m_refreshBtn, &QPushButton::clicked, this, &GstrReportsWidget::onRefreshClicked);
     headerLayout->addWidget(m_refreshBtn);
 
-    m_exportGstr1Btn = new KbdBadgeButton("Export GSTR-1 JSON", "Alt+E", QColor("#059669"), QColor("#047857"), QColor("#FFFFFF"), QColor("#059669"), headerCard);
-    connect(m_exportGstr1Btn, &QPushButton::clicked, this, &GstrReportsWidget::onExportGstr1JsonClicked);
-    headerLayout->addWidget(m_exportGstr1Btn);
+    // NOTE: export actions live on their own tabs (GSTR-1 / GSTR-3B), not here —
+    // the header stays neutral: Compute (F5) + Back (Esc) only.
 
     m_backBtn = new KbdBadgeButton("Back to Dashboard", "Esc", QColor("#EF4444"), QColor("#DC2626"), QColor("#FFFFFF"), QColor("#EF4444"), headerCard);
     connect(m_backBtn, &QPushButton::clicked, this, &GstrReportsWidget::backRequested);
@@ -124,6 +138,48 @@ void GstrReportsWidget::setupUi() {
     connect(periodBtn, &QPushButton::clicked, this, openPeriodDlg);
     filterLayout->addWidget(periodBtn);
 
+    // Month-wise division shortcut (same pattern as Salary register):
+    // Month in FY order (April..March) + calendar year -> full calendar month.
+    QLabel* monthLbl = new QLabel("Month:", filterCard);
+    monthLbl->setStyleSheet("font-size: 12px; font-weight: 700; color: #334155; border: none; background: transparent;");
+    filterLayout->addWidget(monthLbl);
+
+    m_monthCombo = new QComboBox(filterCard);
+    m_monthCombo->setFixedHeight(34);
+    m_monthCombo->setStyleSheet(
+        "QComboBox { background-color: #FFFFFF; color: #0F172A; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 4px 10px; font-weight: 700; font-size: 12px; }"
+        "QComboBox:focus { border: 2px solid #2563EB; }");
+    // Calendar order (January..December): this is a MONTHLY return view, so
+    // the FY-ordered April-first list only caused FY confusion. Index == month-1.
+    m_monthCombo->addItems({
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
+    });
+    {
+        QSignalBlocker b(m_monthCombo);
+        m_monthCombo->setCurrentIndex(QDate::currentDate().month() - 1);
+    }
+    connect(m_monthCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &GstrReportsWidget::onMonthYearChanged);
+    filterLayout->addWidget(m_monthCombo);
+
+    QLabel* yearLbl = new QLabel("Year:", filterCard);
+    yearLbl->setStyleSheet("font-size: 12px; font-weight: 700; color: #334155; border: none; background: transparent;");
+    filterLayout->addWidget(yearLbl);
+
+    m_yearCombo = new QComboBox(filterCard);
+    m_yearCombo->setFixedHeight(34);
+    m_yearCombo->setStyleSheet(m_monthCombo->styleSheet());
+    {
+        int curY = QDate::currentDate().year();
+        for (int y = curY - 2; y <= curY + 2; ++y) {
+            m_yearCombo->addItem(QString::number(y), y);
+        }
+        QSignalBlocker b(m_yearCombo);
+        m_yearCombo->setCurrentText(QString::number(curY));
+    }
+    connect(m_yearCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &GstrReportsWidget::onMonthYearChanged);
+    filterLayout->addWidget(m_yearCombo);
+
     filterLayout->addStretch(1);
 
     QVariantList compRows = DatabaseManager::instance().executeQuery("SELECT company_name, gstin, state, state_code FROM company_info LIMIT 1;");
@@ -144,44 +200,70 @@ void GstrReportsWidget::setupUi() {
     gstinBadge->setStyleSheet("background-color: #EFF6FF; color: #1D4ED8; border: 1.5px solid #93C5FD; border-radius: 6px; padding: 0px 14px; font-weight: 800; font-size: 12px;");
     filterLayout->addWidget(gstinBadge);
 
+    // FY of the SELECTED period (derived label, not a switcher): a monthly
+    // return view must never offer to flip the firm's global active FY — that
+    // is what kept this header contradicting the month combos.
     FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
-    auto* fyBadge = new QPushButton(activeFy.name + " (Active)", filterCard);
-    fyBadge->setFixedHeight(34);
-    fyBadge->setStyleSheet(
-        "QPushButton { background-color: #F0FDF4; color: #16A34A; border: 1.5px solid #86EFAC; border-radius: 6px; padding: 0px 14px; font-weight: 800; font-size: 12px; cursor: pointer; }"
-        "QPushButton:hover { background-color: #DCFCE7; border-color: #4ADE80; }"
-    );
-    connect(fyBadge, &QPushButton::clicked, this, [this, fyBadge]() {
-        QDate f = m_fromDateEdit->date();
-        QDate t = m_toDateEdit->date();
-        QString fIso = f.toString("yyyy-MM-dd");
-        QString tIso = t.toString("yyyy-MM-dd");
-        QString fyLabel;
-        if (AccountingPeriodDialog::selectAndApplyGlobalPeriod(this, &fIso, &tIso, &fyLabel)) {
-            m_fromDateEdit->setDate(QDate::fromString(fIso, "yyyy-MM-dd"));
-            m_toDateEdit->setDate(QDate::fromString(tIso, "yyyy-MM-dd"));
-            FiscalYearInfo newFy = FiscalYearHelper::getActiveFiscalYear();
-            fyBadge->setText(newFy.name + " (Active)");
-            loadReturns(m_fromDateEdit->date(), m_toDateEdit->date());
-        }
-    });
-    filterLayout->addWidget(fyBadge);
+    m_fyBadge = new QLabel(activeFy.isValid() ? activeFy.name : "--", filterCard);
+    m_fyBadge->setAlignment(Qt::AlignCenter);
+    m_fyBadge->setFixedHeight(34);
+    m_fyBadge->setStyleSheet("background-color: #F0FDF4; color: #16A34A; border: 1.5px solid #86EFAC; border-radius: 6px; padding: 0px 14px; font-weight: 800; font-size: 12px;");
+    filterLayout->addWidget(m_fyBadge);
 
     mainLayout->addWidget(filterCard);
 
     // ================= 3. TABS CONTAINER =================
     m_tabs = new QTabWidget(this);
+    // The native macOS tab bar ignores stylesheets/palette in dark mode, so
+    // pin it to Fusion (fully stylesheet-driven) — scoped to this bar only.
+    if (QStyle* fusion = QStyleFactory::create("Fusion")) {
+        fusion->setParent(m_tabs->tabBar());
+        m_tabs->tabBar()->setStyle(fusion);
+    }
+    // Belt-and-suspenders white: stylesheet QTabBar rule plus explicit palette
+    // so the tab strip can never fall back to a dark system theme color.
+    m_tabs->setAutoFillBackground(true);
+    m_tabs->tabBar()->setAutoFillBackground(true);
+    {
+        QPalette whitePal = m_tabs->palette();
+        whitePal.setColor(QPalette::Window, QColor("#FFFFFF"));
+        whitePal.setColor(QPalette::Base, QColor("#FFFFFF"));
+        whitePal.setColor(QPalette::Button, QColor("#FFFFFF"));
+        m_tabs->setPalette(whitePal);
+        m_tabs->tabBar()->setPalette(whitePal);
+    }
 
     // ---------- TAB 1: GSTR-1 OUTWARD SUPPLIES ----------
     auto* gstr1Widget = new QWidget(m_tabs);
+    gstr1Widget->setStyleSheet("background-color: #FFFFFF;");
+    gstr1Widget->setAutoFillBackground(true);
     auto* gstr1Layout = new QVBoxLayout(gstr1Widget);
     gstr1Layout->setContentsMargins(10, 10, 10, 10);
     gstr1Layout->setSpacing(10);
 
+    // GSTR-1 Action Bar (own header: title + its own exports)
+    QFrame* gstr1ActionBar = new QFrame(gstr1Widget);
+    gstr1ActionBar->setFixedHeight(50);
+    gstr1ActionBar->setStyleSheet("background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px;");
+    QHBoxLayout* gstr1ActionLayout = new QHBoxLayout(gstr1ActionBar);
+    gstr1ActionLayout->setContentsMargins(14, 6, 14, 6);
+    gstr1ActionLayout->setSpacing(12);
+    auto* gstr1Banner = new QLabel("GSTR-1: Outward Supplies — B2B / B2CL / B2CS / Notes / HSN / Docs", gstr1ActionBar);
+    gstr1Banner->setStyleSheet("font-weight: 800; color: #0F172A; font-size: 13px; border: none; background: transparent;");
+    gstr1ActionLayout->addWidget(gstr1Banner);
+    gstr1ActionLayout->addStretch(1);
+    auto* expJsonBtn = new KbdBadgeButton("Export JSON", "Alt+E", QColor("#059669"), QColor("#047857"), QColor("#FFFFFF"), QColor("#059669"), gstr1ActionBar);
+    connect(expJsonBtn, &QPushButton::clicked, this, &GstrReportsWidget::onExportGstr1JsonClicked);
+    gstr1ActionLayout->addWidget(expJsonBtn);
+    auto* expExcelBtn = new KbdBadgeButton("Export Excel (Govt Format)", "Alt+G", QColor("#1D4ED8"), QColor("#1E40AF"), QColor("#FFFFFF"), QColor("#1D4ED8"), gstr1ActionBar);
+    connect(expExcelBtn, &QPushButton::clicked, this, &GstrReportsWidget::onExportGstr1ExcelClicked);
+    gstr1ActionLayout->addWidget(expExcelBtn);
+    gstr1Layout->addWidget(gstr1ActionBar);
+
     // GSTR-1 Metrics Bar
     QFrame* gstr1MetricsCard = new QFrame(gstr1Widget);
     gstr1MetricsCard->setFixedHeight(50);
-    gstr1MetricsCard->setStyleSheet("background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px;");
+    gstr1MetricsCard->setStyleSheet("background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 6px;");
     QHBoxLayout* gstr1MetricsLayout = new QHBoxLayout(gstr1MetricsCard);
     gstr1MetricsLayout->setContentsMargins(12, 4, 12, 4);
     gstr1MetricsLayout->setSpacing(16);
@@ -201,6 +283,14 @@ void GstrReportsWidget::setupUi() {
     m_gstr1HsnCountLabel = new QLabel("HSN Summary Lines: 0", gstr1MetricsCard);
     m_gstr1HsnCountLabel->setStyleSheet("font-weight: 700; color: #7C3AED; font-size: 12px;");
     gstr1MetricsLayout->addWidget(m_gstr1HsnCountLabel);
+
+    m_gstr1ExemptLabel = new QLabel("Exempted (T8): ₹0.00", gstr1MetricsCard);
+    m_gstr1ExemptLabel->setStyleSheet("font-weight: 700; color: #0D9488; font-size: 12px;");
+    gstr1MetricsLayout->addWidget(m_gstr1ExemptLabel);
+
+    m_gstr1QuarLabel = new QLabel("Quarantined: 0", gstr1MetricsCard);
+    m_gstr1QuarLabel->setStyleSheet("font-weight: 700; color: #B45309; font-size: 12px;");
+    gstr1MetricsLayout->addWidget(m_gstr1QuarLabel);
 
     gstr1MetricsLayout->addStretch(1);
 
@@ -239,14 +329,29 @@ void GstrReportsWidget::setupUi() {
 
     // ---------- TAB 2: GSTR-2A MATCHING & ITC RECONCILIATION ----------
     auto* gstr2Widget = new QWidget(m_tabs);
+    gstr2Widget->setStyleSheet("background-color: #FFFFFF;");
+    gstr2Widget->setAutoFillBackground(true);
     auto* gstr2Layout = new QVBoxLayout(gstr2Widget);
     gstr2Layout->setContentsMargins(10, 10, 10, 10);
     gstr2Layout->setSpacing(10);
 
+    // GSTR-2A Action Bar (own header, mirrors the other tabs)
+    QFrame* gstr2ActionBar = new QFrame(gstr2Widget);
+    gstr2ActionBar->setFixedHeight(50);
+    gstr2ActionBar->setStyleSheet("background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px;");
+    QHBoxLayout* gstr2ActionLayout = new QHBoxLayout(gstr2ActionBar);
+    gstr2ActionLayout->setContentsMargins(14, 6, 14, 6);
+    gstr2ActionLayout->setSpacing(12);
+    auto* gstr2Banner = new QLabel("GSTR-2A/2B: ITC Matching & Reconciliation with Portal Data", gstr2ActionBar);
+    gstr2Banner->setStyleSheet("font-weight: 800; color: #0F172A; font-size: 13px; border: none; background: transparent;");
+    gstr2ActionLayout->addWidget(gstr2Banner);
+    gstr2ActionLayout->addStretch(1);
+    gstr2Layout->addWidget(gstr2ActionBar);
+
     // GSTR-2A Status Card
     QFrame* gstr2StatusCard = new QFrame(gstr2Widget);
     gstr2StatusCard->setFixedHeight(50);
-    gstr2StatusCard->setStyleSheet("background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px;");
+    gstr2StatusCard->setStyleSheet("background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 6px;");
     QHBoxLayout* gstr2StatusLayout = new QHBoxLayout(gstr2StatusCard);
     gstr2StatusLayout->setContentsMargins(12, 4, 12, 4);
     gstr2StatusLayout->setSpacing(16);
@@ -263,15 +368,13 @@ void GstrReportsWidget::setupUi() {
     m_gstr2NotInPortalLabel->setStyleSheet("color: #DC2626; font-weight: 800; font-size: 12px;");
     gstr2StatusLayout->addWidget(m_gstr2NotInPortalLabel);
 
-    gstr2StatusLayout->addStretch(1);
-
-    m_autoDownloadGstr2Btn = new KbdBadgeButton("Auto-Download Portal", "Alt+D", QColor("#16A34A"), QColor("#15803D"), QColor("#FFFFFF"), QColor("#16A34A"), gstr2StatusCard);
+    m_autoDownloadGstr2Btn = new KbdBadgeButton("Auto-Download Portal", "Alt+D", QColor("#16A34A"), QColor("#15803D"), QColor("#FFFFFF"), QColor("#16A34A"), gstr2ActionBar);
     connect(m_autoDownloadGstr2Btn, &QPushButton::clicked, this, &GstrReportsWidget::onAutoDownloadGstr2Clicked);
-    gstr2StatusLayout->addWidget(m_autoDownloadGstr2Btn);
+    gstr2ActionLayout->addWidget(m_autoDownloadGstr2Btn);
 
-    m_importGstr2Btn = new KbdBadgeButton("Run 4-Way Match Reconciler", "Alt+R", QColor("#7C3AED"), QColor("#6D28D9"), QColor("#FFFFFF"), QColor("#7C3AED"), gstr2StatusCard);
+    m_importGstr2Btn = new KbdBadgeButton("Import GSTR-2B & Match", "Alt+R", QColor("#7C3AED"), QColor("#6D28D9"), QColor("#FFFFFF"), QColor("#7C3AED"), gstr2ActionBar);
     connect(m_importGstr2Btn, &QPushButton::clicked, this, &GstrReportsWidget::onImportGstr2AJsonClicked);
-    gstr2StatusLayout->addWidget(m_importGstr2Btn);
+    gstr2ActionLayout->addWidget(m_importGstr2Btn);
 
     gstr2Layout->addWidget(gstr2StatusCard);
 
@@ -306,9 +409,15 @@ void GstrReportsWidget::setupUi() {
     auto* gstr3bScroll = new QScrollArea(m_tabs);
     gstr3bScroll->setWidgetResizable(true);
     gstr3bScroll->setFrameShape(QFrame::NoFrame);
-    gstr3bScroll->setStyleSheet("background-color: transparent;");
+    gstr3bScroll->setStyleSheet("background-color: #FFFFFF; border: none;");
+    gstr3bScroll->viewport()->setAutoFillBackground(true);
+    QPalette g3pal = gstr3bScroll->viewport()->palette();
+    g3pal.setColor(QPalette::Window, QColor("#FFFFFF"));
+    gstr3bScroll->viewport()->setPalette(g3pal);
 
     auto* gstr3bWidget = new QWidget();
+    gstr3bWidget->setStyleSheet("background-color: #FFFFFF;");
+    gstr3bWidget->setAutoFillBackground(true);
     auto* gstr3bLayout = new QVBoxLayout(gstr3bWidget);
     gstr3bLayout->setContentsMargins(10, 10, 10, 14);
     gstr3bLayout->setSpacing(12);
@@ -331,7 +440,7 @@ void GstrReportsWidget::setupUi() {
     m_gstr3bNetPayableBanner->setStyleSheet("background-color: #FEF2F2; color: #DC2626; border: 1px solid #FCA5A5; border-radius: 6px; padding: 4px 12px; font-weight: 800; font-size: 12px;");
     gstr3bActionLayout->addWidget(m_gstr3bNetPayableBanner);
 
-    m_exportGstr3BBtn = new KbdBadgeButton("Export GSTR-3B Excel (Bahi-Khata)", "Alt+X", QColor("#16A34A"), QColor("#15803D"), QColor("#FFFFFF"), QColor("#16A34A"), gstr3bActionBar);
+    m_exportGstr3BBtn = new KbdBadgeButton("Export GSTR-3B Excel (Govt Format)", "Alt+X", QColor("#16A34A"), QColor("#15803D"), QColor("#FFFFFF"), QColor("#16A34A"), gstr3bActionBar);
     connect(m_exportGstr3BBtn, &QPushButton::clicked, this, &GstrReportsWidget::onExportGstr3BExcelClicked);
     gstr3bActionLayout->addWidget(m_exportGstr3BBtn);
 
@@ -346,8 +455,8 @@ void GstrReportsWidget::setupUi() {
         table->verticalHeader()->setDefaultSectionSize(rowHeight);
         table->setShowGrid(true);
         table->setStyleSheet(
-            "QTableWidget { background-color: #FFFFFF; alternate-background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 6px; gridline-color: #E2E8F0; font-size: 11.5px; color: #0F172A; }"
-            "QHeaderView::section { background-color: #1E293B; color: #FFFFFF; font-weight: 800; font-size: 11.5px; padding: 6px 8px; border: none; border-right: 1px solid #334155; }"
+            "QTableWidget { background-color: #FFFFFF; alternate-background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px; gridline-color: #F1F5F9; font-size: 11.5px; color: #0F172A; }"
+            "QHeaderView::section { background-color: #F1F5F9; color: #1E293B; font-weight: 800; font-size: 11.5px; padding: 6px 8px; border: none; border-bottom: 2px solid #CBD5E1; border-right: 1px solid #E2E8F0; }"
         );
     };
 
@@ -371,6 +480,27 @@ void GstrReportsWidget::setupUi() {
     styleTable(m_gstr3bTable31);
     lay31->addWidget(m_gstr3bTable31);
     gstr3bLayout->addWidget(card31);
+
+    // --- 1b. Table 3.2: POS-wise inter-state supplies (ties to GSTR-1) ---
+    auto* card32 = new QFrame(gstr3bWidget);
+    card32->setStyleSheet("background-color: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 8px;");
+    auto* lay32 = new QVBoxLayout(card32);
+    lay32->setContentsMargins(12, 10, 12, 10);
+    lay32->setSpacing(6);
+    auto* lbl32 = new QLabel("Table 3.2: Inter-State Supplies to Unregistered Persons (from GSTR-1 Tables 5/7B)", card32);
+    lbl32->setStyleSheet("font-size: 12.5px; font-weight: 800; color: #7C3AED; border: none; background: transparent;");
+    lay32->addWidget(lbl32);
+
+    m_gstr3bTable32 = new QTableWidget(0, 4, card32);
+    m_gstr3bTable32->setHorizontalHeaderLabels({
+        "Description", "Place of Supply (State/UT)", "Total Taxable Value (₹)", "Amount of Integrated Tax (₹)"
+    });
+    m_gstr3bTable32->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+    for (int c = 1; c < 4; ++c) m_gstr3bTable32->horizontalHeader()->setSectionResizeMode(c, QHeaderView::ResizeToContents);
+    m_gstr3bTable32->setFixedHeight(92);
+    styleTable(m_gstr3bTable32);
+    lay32->addWidget(m_gstr3bTable32);
+    gstr3bLayout->addWidget(card32);
 
     // --- 2. Table 4: Eligible Input Tax Credit ---
     auto* card4 = new QFrame(gstr3bWidget);
@@ -441,48 +571,58 @@ void GstrReportsWidget::setupUi() {
 
     mainLayout->addWidget(m_tabs, 1);
 
-    // Initialize with active financial year dates
-    QDate sDate = QDate::fromString(activeFy.startDate, "yyyy-MM-dd");
-    QDate eDate = QDate::fromString(activeFy.endDate, "yyyy-MM-dd");
-    if (!sDate.isValid()) {
-        sDate = QDate((QDate::currentDate().month() >= 4 ? QDate::currentDate().year() : QDate::currentDate().year() - 1), 4, 1);
+    // Initialize with the CURRENT MONTH's dates (combos already default to
+    // the current month/year above) — never a full-year range on open.
+    QDate today = QDate::currentDate();
+    QDate sDate(today.year(), today.month(), 1);
+    QDate eDate(today.year(), today.month(), today.daysInMonth());
+    if (!sDate.isValid() || !eDate.isValid()) {
+        sDate = QDate::fromString(activeFy.startDate, "yyyy-MM-dd");
+        eDate = QDate::fromString(activeFy.endDate, "yyyy-MM-dd");
     }
-    if (!eDate.isValid()) eDate = QDate::currentDate();
+    if (!sDate.isValid()) sDate = today;
+    if (!eDate.isValid()) eDate = today;
     {
         QSignalBlocker b1(m_fromDateEdit);
         QSignalBlocker b2(m_toDateEdit);
         m_fromDateEdit->setDate(sDate);
         m_toDateEdit->setDate(eDate);
     }
+    syncMonthYearCombos(sDate, eDate);
 }
 
 void GstrReportsWidget::applyCustomStyles() {
+    // Fully white, seamless: every surface (root, tab bar, pages, cards)
+    // paints white like the other statement views — no dark bands.
     setStyleSheet(
-        "GstrReportsWidget { background-color: #F8FAFC; }"
+        "GstrReportsWidget { background-color: #FFFFFF; }"
+        "QTabWidget { background-color: #FFFFFF; }"
         "QTabWidget::pane {"
-        "  border: 1px solid #CBD5E1;"
+        "  border: 1px solid #E2E8F0;"
         "  background-color: #FFFFFF;"
         "  border-radius: 8px;"
         "  top: -1px;"
         "}"
+        "QTabBar { background-color: #FFFFFF; }"
         "QTabBar::tab {"
-        "  background-color: #E2E8F0;"
-        "  color: #1E293B;"
+        "  background-color: #F1F5F9;"
+        "  color: #475569;"
         "  font-size: 12px;"
         "  font-weight: 700;"
         "  padding: 8px 18px;"
         "  margin-right: 4px;"
         "  border-top-left-radius: 6px;"
         "  border-top-right-radius: 6px;"
-        "  border: 1px solid #CBD5E1;"
+        "  border: 1px solid #E2E8F0;"
         "  border-bottom: none;"
         "}"
         "QTabBar::tab:selected {"
         "  background-color: #2563EB;"
         "  color: #FFFFFF;"
+        "  border-color: #2563EB;"
         "}"
         "QTabBar::tab:hover:!selected {"
-        "  background-color: #CBD5E1;"
+        "  background-color: #E2E8F0;"
         "  color: #0F172A;"
         "}"
         "QTableWidget {"
@@ -556,6 +696,7 @@ void GstrReportsWidget::loadReturns(const QDate& fromDate, const QDate& toDate) 
         QSignalBlocker b(m_toDateEdit);
         m_toDateEdit->setDate(toDate);
     }
+    syncMonthYearCombos(fromDate, toDate);
 
     QVariantList compRows = DatabaseManager::instance().executeQuery("SELECT company_name, gstin, state, state_code FROM company_info LIMIT 1;");
     QString legalName = "";
@@ -575,8 +716,10 @@ void GstrReportsWidget::loadReturns(const QDate& fromDate, const QDate& toDate) 
     m_currentGstr1Payload = Gstr1Engine::generateFromDatabase(gstin, legalName, stateCode, fromDate, toDate);
     populateGstr1Tab(m_currentGstr1Payload);
 
-    // 2. Generate GSTR-3B
-    Gstr3BReturnSummary summary3b = Gstr3BEngine::generateFromDatabase(gstin, legalName, stateCode, fromDate, toDate);
+    // 2. Generate GSTR-3B (same-period GSTR-1 payload feeds Table 3.2,
+    // so 3.2 always ties to GSTR-1 Tables 5/7B).
+    Gstr3BReturnSummary summary3b = Gstr3BEngine::generateFromDatabase(
+        gstin, legalName, stateCode, fromDate, toDate, &m_currentGstr1Payload);
     populateGstr3BTab(summary3b);
 
     // 3. GSTR-2B ITC Matching: Strict filtering to selected date range and user-loaded portal statement
@@ -596,10 +739,19 @@ void GstrReportsWidget::populateGstr1Tab(const Gstr1ReturnPayload& payload) {
     m_gstr1TurnoverLabel->setText(QString("Gross Turnover: %1").arg(AccountingEngine::formatIndianCurrency(payload.grossTurnover)));
     m_gstr1B2bCountLabel->setText(QString("B2B Invoices: %1").arg(payload.b2b.size()));
     m_gstr1B2csCountLabel->setText(QString("B2CS Small: %1").arg(payload.b2cs.size()));
-    m_gstr1HsnCountLabel->setText(QString("HSN Summary Lines: %1").arg(payload.hsn.size()));
+    m_gstr1HsnCountLabel->setText(QString("HSN Summary Lines: %1").arg(payload.hsnB2B.size() + payload.hsnB2C.size()));
+    double exemptTotal = 0.0;
+    for (const auto& e : payload.exemp) exemptTotal += (e.nilAmt + e.exmpAmt + e.ngsupAmt);
+    m_gstr1ExemptLabel->setText(QString("Exempted (T8): %1").arg(AccountingEngine::formatIndianCurrency(exemptTotal)));
+    m_gstr1QuarLabel->setText(QString("Quarantined: %1").arg(payload.quarantine.size()));
+    QStringList quarTip = payload.quarantine.mid(0, 10);
+    m_gstr1QuarLabel->setToolTip(quarTip.isEmpty() ? "No excluded rows." : quarTip.join("\n"));
 
     double totalTax = 0.0;
-    for (const auto& hi : payload.hsn) {
+    for (const auto& hi : payload.hsnB2B) {
+        totalTax += (hi.cgst + hi.sgst + hi.igst);
+    }
+    for (const auto& hi : payload.hsnB2C) {
         totalTax += (hi.cgst + hi.sgst + hi.igst);
     }
     m_gstr1TotalTaxLabel->setText(QString("Total Output Tax: %1").arg(AccountingEngine::formatIndianCurrency(totalTax)));
@@ -743,6 +895,27 @@ void GstrReportsWidget::populateGstr3BTab(const Gstr3BReturnSummary& s) {
         m_gstr3bTable31->setItem(5, 3, createNumItem(tot31Cgst, true, totFg, totBg));
         m_gstr3bTable31->setItem(5, 4, createNumItem(tot31Sgst, true, totFg, totBg));
         m_gstr3bTable31->setItem(5, 5, createNumItem(tot31Cess, true, totFg, totBg));
+    }
+
+    // --- Populate Table 3.2 (POS-wise inter-state, ties to GSTR-1) ---
+    if (m_gstr3bTable32) {
+        m_gstr3bTable32->setRowCount(0);
+        int r32 = 0;
+        for (const auto& row : s.table32.rows) {
+            m_gstr3bTable32->insertRow(r32);
+            m_gstr3bTable32->setItem(r32, 0, createLabelItem(row.desc));
+            m_gstr3bTable32->setItem(r32, 1, createLabelItem(row.pos));
+            m_gstr3bTable32->setItem(r32, 2, createNumItem(row.txVal));
+            m_gstr3bTable32->setItem(r32, 3, createNumItem(row.iAmt));
+            r32++;
+        }
+        if (r32 == 0) {
+            m_gstr3bTable32->insertRow(0);
+            m_gstr3bTable32->setItem(0, 0, createLabelItem("No inter-state supplies to unregistered persons in this period"));
+            m_gstr3bTable32->setItem(0, 1, createLabelItem("—"));
+            m_gstr3bTable32->setItem(0, 2, createNumItem(0.0));
+            m_gstr3bTable32->setItem(0, 3, createNumItem(0.0));
+        }
     }
 
     // --- Populate Table 4 (Eligible ITC) ---
@@ -890,6 +1063,53 @@ void GstrReportsWidget::onRefreshClicked() {
     loadReturns(m_fromDateEdit->date(), m_toDateEdit->date());
 }
 
+void GstrReportsWidget::onMonthYearChanged() {
+    if (!m_monthCombo || !m_yearCombo) return;
+    // Calendar order: combo index 0..11 == month 1..12.
+    int idx = m_monthCombo->currentIndex();
+    if (idx < 0 || idx > 11) return;
+    int m = idx + 1;
+    int y = m_yearCombo->currentData().toInt();
+    if (y <= 0) y = m_yearCombo->currentText().toInt();
+    if (y <= 0) return;
+    QDate first(y, m, 1);
+    if (!first.isValid()) return;
+    QDate last(y, m, first.daysInMonth());
+    {
+        QSignalBlocker b1(m_fromDateEdit);
+        QSignalBlocker b2(m_toDateEdit);
+        m_fromDateEdit->setDate(first);
+        m_toDateEdit->setDate(last);
+    }
+    loadReturns(first, last);
+}
+
+void GstrReportsWidget::syncMonthYearCombos(const QDate& fromDate, const QDate& toDate) {
+    if (!m_monthCombo || !m_yearCombo) return;
+    if (!fromDate.isValid() || !toDate.isValid()) return;
+    // Combos ALWAYS follow the selection's start month — no stale shortcuts.
+    // (Custom ranges via Period (F2) are still honored for computation.)
+    int m = fromDate.month();
+    int y = fromDate.year();
+    {
+        QSignalBlocker b1(m_monthCombo);
+        QSignalBlocker b2(m_yearCombo);
+        m_monthCombo->setCurrentIndex(m - 1);
+        int yi = m_yearCombo->findData(y);
+        if (yi < 0) {
+            m_yearCombo->addItem(QString::number(y), y);
+            yi = m_yearCombo->findData(y);
+        }
+        m_yearCombo->setCurrentIndex(yi);
+    }
+    // FY badge derives from the same selection (never the global active FY,
+    // which is what made the old header contradict itself).
+    if (m_fyBadge) {
+        FiscalYearInfo selFy = FiscalYearHelper::getFiscalYearForDate(fromDate.toString("yyyy-MM-dd"));
+        m_fyBadge->setText(selFy.isValid() ? selFy.name : "--");
+    }
+}
+
 void GstrReportsWidget::onExportGstr1JsonClicked() {
     QString savePath = QFileDialog::getSaveFileName(this, "Save GSTR-1 Offline JSON", QString("GSTR1_%1.json").arg(m_currentGstr1Payload.fp), "JSON Files (*.json)");
     if (savePath.isEmpty()) return;
@@ -901,6 +1121,33 @@ void GstrReportsWidget::onExportGstr1JsonClicked() {
         f.close();
         QMessageBox::information(this, "GSTR-1 Export", "GSTR-1 JSON successfully exported to:\n" + savePath);
     }
+}
+
+void GstrReportsWidget::onExportGstr1ExcelClicked() {
+    QString savePath = QFileDialog::getSaveFileName(this, "Save GSTR-1 Excel (Govt Offline-Tool Format)",
+        QString("GSTR1_%1.xlsx").arg(m_currentGstr1Payload.fp), "Excel Files (*.xlsx)");
+    if (savePath.isEmpty()) return;
+
+    MahadevERP::Gstr1ExcelResult res = MahadevERP::Gstr1ExcelWriter::write(m_currentGstr1Payload, savePath);
+    if (!res.ok) {
+        QMessageBox::warning(this, "GSTR-1 Export Failed", res.error);
+        return;
+    }
+    QString msg = QString("GSTR-1 Excel written to:\n%1\n\nB2B lines: %2 | B2CL lines: %3 | B2CS rows: %4\n"
+        "CDNR lines: %5 | CDNUR lines: %6 | HSN B2B: %7 | HSN B2C: %8 | Docs: %9\n\n"
+        "Open it in the official Returns Offline Tool, Validate, generate JSON, upload on gst.gov.in.")
+        .arg(savePath).arg(res.stats.b2bRows).arg(res.stats.b2clRows).arg(res.stats.b2csRows)
+        .arg(res.stats.cdnrRows).arg(res.stats.cdnurRows)
+        .arg(res.stats.hsnB2BRows).arg(res.stats.hsnB2CRows).arg(res.stats.docRows);
+    if (!m_currentGstr1Payload.quarantine.isEmpty()) {
+        msg += QString("\n\nExcluded %1 row(s) needing fixes:\n- %2")
+            .arg(m_currentGstr1Payload.quarantine.size())
+            .arg(m_currentGstr1Payload.quarantine.join("\n- "));
+    }
+    if (!m_currentGstr1Payload.infoNotes.isEmpty()) {
+        msg += QString("\n\nNotes:\n- %1").arg(m_currentGstr1Payload.infoNotes.join("\n- "));
+    }
+    QMessageBox::information(this, "GSTR-1 Export", msg);
 }
 
 void GstrReportsWidget::onExportGstr3BExcelClicked() {
@@ -972,8 +1219,19 @@ void GstrReportsWidget::keyPressEvent(QKeyEvent* event) {
         onRefreshClicked();
         event->accept();
     } else if (event->modifiers() & Qt::AltModifier && event->key() == Qt::Key_E) {
-        onExportGstr1JsonClicked();
-        event->accept();
+        if (m_tabs && m_tabs->currentIndex() == 0) { // GSTR-1 tab only
+            onExportGstr1JsonClicked();
+            event->accept();
+        } else {
+            QWidget::keyPressEvent(event);
+        }
+    } else if (event->modifiers() & Qt::AltModifier && event->key() == Qt::Key_G) {
+        if (m_tabs && m_tabs->currentIndex() == 0) { // GSTR-1 tab only
+            onExportGstr1ExcelClicked();
+            event->accept();
+        } else {
+            QWidget::keyPressEvent(event);
+        }
     } else if (event->modifiers() & Qt::AltModifier && event->key() == Qt::Key_X) {
         onExportGstr3BExcelClicked();
         event->accept();

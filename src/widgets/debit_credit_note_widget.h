@@ -7,6 +7,8 @@
 #include <QPushButton>
 #include <QLabel>
 #include <QFrame>
+#include <QVector>
+#include <QKeyEvent>
 #include "../models/debit_credit_note_controller.h"
 #include "../services/print_export_controller.h"
 #include "account_search_box.h"
@@ -34,6 +36,7 @@ signals:
 
 protected:
     void keyPressEvent(QKeyEvent* event) override;
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
 private slots:
     void onNoteTypeChanged(int index);
@@ -92,6 +95,10 @@ private:
     KbdBadgeButton* m_deleteBtn = nullptr;
     KbdBadgeButton* m_cancelBtn = nullptr;
     KbdBadgeButton* m_newBtn = nullptr;
+
+    // Keyboard navigation order: Enter advances, Backspace clears-then-steps
+    // back (Bahi-Khata convention, same as ledger/stock forms).
+    QVector<QWidget*> m_navOrder;
 };
 
 } // namespace MahadevERP

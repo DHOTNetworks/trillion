@@ -237,6 +237,18 @@ void PurchaseRegisterWidget::setupUi() {
     connect(new QShortcut(QKeySequence(Qt::Key_Escape), this), &QShortcut::activated, this, &PurchaseRegisterWidget::backRequested);
     new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_P), this, SLOT(onPrintBill()));
     new QShortcut(QKeySequence(Qt::ALT | Qt::Key_P), this, SLOT(onExportPdf()));
+    // Enter opens the focused row's alteration (same as double-click).
+    // Scoped to the grid so search boxes and buttons keep their own keys.
+    auto openFocusedRow = [this]() {
+        if (!m_table || m_table->currentRow() < 0) return;
+        onTableDoubleClicked(m_table->currentRow(), m_table->currentColumn());
+    };
+    auto* enterShortcut = new QShortcut(QKeySequence(Qt::Key_Return), m_table);
+    enterShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+    connect(enterShortcut, &QShortcut::activated, this, openFocusedRow);
+    auto* numEnterShortcut = new QShortcut(QKeySequence(Qt::Key_Enter), m_table);
+    numEnterShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+    connect(numEnterShortcut, &QShortcut::activated, this, openFocusedRow);
 }
 
 void PurchaseRegisterWidget::loadData(const QDate& fromDate, const QDate& toDate) {
@@ -399,11 +411,16 @@ void PurchaseRegisterWidget::onTableDoubleClicked(int row, int col) {
     QString vchNo = item->data(Qt::UserRole + 1).toString();
     QString dateVal = item->data(Qt::UserRole + 2).toString();
 
+    FiscalYearInfo fy = FiscalYearHelper::getFiscalYearForDate(dateVal);
+
     QVariantMap map;
     map["invoiceNo"] = invNo;
     map["voucherNo"] = vchNo;
     map["id"] = id;
     map["date"] = dateVal;
+    map["vIso"] = dateVal;
+    map["financialYear"] = fy.name;
+    map["financial_year"] = fy.name;
 
     emit alterBillRequested(15, map);
 }

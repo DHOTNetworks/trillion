@@ -49,6 +49,7 @@
 #include "form16a_list_widget.h"
 #include "tds_acknowledgement_dialog.h"
 #include "tcs_config_dialog.h"
+#include "bill_series_dialog.h"
 #include "trial_balance_widget.h"
 #include "ledger_directory_widget.h"
 #include "capital_accounts_widget.h"
