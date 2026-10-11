@@ -123,6 +123,7 @@ void CapitalAccountsWidget::setupUi() {
     // ========================================================================
     m_table = new QTableWidget(this);
     m_table->setColumnCount(8);
+    m_table->setEditTriggers(QAbstractItemView::NoEditTriggers); // statement: Enter opens ledger, never inline-edit
     m_table->setHorizontalHeaderLabels({
         "Sr.", "Partner / Proprietor Name", "Opening Capital (₹)",
         "Additions (Cr) (₹)", "Drawings (Dr) (₹)", "Share of Net Profit (₹)", "Interest (₹)", "Closing Capital (₹)"
@@ -131,7 +132,7 @@ void CapitalAccountsWidget::setupUi() {
     m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_table->setSelectionMode(QAbstractItemView::SingleSelection);
     m_table->verticalHeader()->setVisible(false);
-    m_table->verticalHeader()->setDefaultSectionSize(30);
+    m_table->verticalHeader()->setDefaultSectionSize(36);
     m_table->setShowGrid(true);
     m_table->setStyleSheet(
         "QTableWidget {"
@@ -143,8 +144,8 @@ void CapitalAccountsWidget::setupUi() {
         "  font-size: 12.5px;"
         "  color: #0F172A;"
         "}"
-        "QTableWidget::item { padding: 4px 8px; }"
-        "QTableWidget::item:selected { background-color: #EFF6FF; color: #1D4ED8; font-weight: bold; }"
+        "QTableWidget::item { padding: 7px 8px; }"
+        "QTableWidget::item:selected { background-color: #EFF6FF; color: #0F172A; }"
         "QHeaderView::section {"
         "  background-color: #F1F5F9;"
         "  color: #1E293B;"
@@ -195,6 +196,19 @@ void CapitalAccountsWidget::setupUi() {
 
     mainLayout->addLayout(metricsLayout);
 
+    // Enter opens the focused row's ledger entries (same as double-click).
+    // Scoped to the grid so search boxes and buttons keep their own keys.
+    auto openFocusedRow = [this]() {
+        if (!m_table || m_table->currentRow() < 0) return;
+        onTableDoubleClicked(m_table->currentRow(), m_table->currentColumn());
+    };
+    auto* enterShortcut = new QShortcut(QKeySequence(Qt::Key_Return), m_table);
+    enterShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+    connect(enterShortcut, &QShortcut::activated, this, openFocusedRow);
+    auto* numEnterShortcut = new QShortcut(QKeySequence(Qt::Key_Enter), m_table);
+    numEnterShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+    connect(numEnterShortcut, &QShortcut::activated, this, openFocusedRow);
+
     // Shortcuts
     connect(new QShortcut(QKeySequence(Qt::Key_Escape), this), &QShortcut::activated, this, &CapitalAccountsWidget::backRequested);
     new QShortcut(QKeySequence(Qt::ALT | Qt::Key_P), this, SLOT(onPrintPdf()));
@@ -204,7 +218,11 @@ void CapitalAccountsWidget::setupUi() {
 }
 
 void CapitalAccountsWidget::focusTable() {
-    if (m_table) m_table->setFocus();
+    if (!m_table) return;
+    m_table->setFocus();
+    if (m_table->rowCount() > 0 && m_table->currentRow() < 0) {
+        m_table->selectRow(0);
+    }
 }
 
 void CapitalAccountsWidget::reloadData() {
@@ -222,10 +240,9 @@ void CapitalAccountsWidget::populateTable() {
     const auto& items = m_controller->items();
     m_table->setRowCount(items.size() + 1); // +1 for Grand Total
 
-    auto makeNum = [](const QString& txt, bool bold = false, const QString& color = "#0F172A") {
+    auto makeNum = [](const QString& txt, bool = false, const QString& color = "#0F172A") {
         auto* itm = new QTableWidgetItem(txt);
         itm->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        if (bold) itm->setFont(QFont("Segoe UI", 9, QFont::Bold));
         itm->setForeground(QBrush(QColor(color)));
         return itm;
     };
@@ -239,7 +256,6 @@ void CapitalAccountsWidget::populateTable() {
         m_table->setItem(r, 0, srItem);
 
         auto* nameItem = new QTableWidgetItem(itm.partnerName);
-        nameItem->setFont(QFont("Segoe UI", 9, QFont::Bold));
         nameItem->setForeground(QBrush(QColor("#0F172A")));
         m_table->setItem(r, 1, nameItem);
 
@@ -256,7 +272,6 @@ void CapitalAccountsWidget::populateTable() {
     const auto& totals = m_controller->totals();
 
     auto* totLabel = new QTableWidgetItem("Grand Total");
-    totLabel->setFont(QFont("Segoe UI", 9, QFont::Bold));
     totLabel->setForeground(QBrush(QColor("#0F172A")));
     m_table->setItem(totRow, 1, totLabel);
 

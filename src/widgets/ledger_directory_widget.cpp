@@ -599,25 +599,21 @@ void LedgerDirectoryWidget::populateTable() {
         auto* numItem = new QTableWidgetItem(QString::number(r + 1));
         numItem->setTextAlignment(Qt::AlignCenter);
         numItem->setForeground(QBrush(QColor("#64748B")));
-        numItem->setFont(QFont("Segoe UI", 10, QFont::DemiBold));
         m_table->setItem(r, 0, numItem);
 
         // 1: Name
         auto* nameItem = new QTableWidgetItem(item.name);
-        nameItem->setFont(QFont("Segoe UI", 11, QFont::Bold));
         nameItem->setForeground(QBrush(QColor("#0F172A")));
         m_table->setItem(r, 1, nameItem);
 
         // 2: Group
         auto* grpItem = new QTableWidgetItem(item.groupName);
         grpItem->setForeground(QBrush(QColor("#1D4ED8")));
-        grpItem->setFont(QFont("Segoe UI", 10, QFont::DemiBold));
         m_table->setItem(r, 2, grpItem);
 
         // 3: City
         auto* cityItem = new QTableWidgetItem(item.city.isEmpty() ? "-" : item.city);
         cityItem->setForeground(QBrush(QColor("#1E293B")));
-        cityItem->setFont(QFont("Segoe UI", 10));
         m_table->setItem(r, 3, cityItem);
 
         // 4: Phone / Mobile
@@ -626,7 +622,6 @@ void LedgerDirectoryWidget::populateTable() {
         if (phoneDisp.isEmpty()) phoneDisp = "-";
         auto* phoneItem = new QTableWidgetItem(phoneDisp);
         phoneItem->setForeground(QBrush(QColor("#1E293B")));
-        phoneItem->setFont(QFont("Segoe UI", 10));
         m_table->setItem(r, 4, phoneItem);
 
         // 5: GSTIN
@@ -635,13 +630,11 @@ void LedgerDirectoryWidget::populateTable() {
         if (gstinDisp.isEmpty()) gstinDisp = "-";
         auto* gstinItem = new QTableWidgetItem(gstinDisp);
         gstinItem->setForeground(QBrush(QColor("#334155")));
-        gstinItem->setFont(QFont("Segoe UI", 10));
         m_table->setItem(r, 5, gstinItem);
 
         // 6: Opening Balance
         auto* opItem = new QTableWidgetItem(item.opBalFmt);
         opItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        opItem->setFont(QFont("Segoe UI", 11, QFont::Bold));
         if (item.opDebit > 0.001) opItem->setForeground(QBrush(QColor("#1D4ED8")));
         else if (item.opCredit > 0.001) opItem->setForeground(QBrush(QColor("#047857")));
         else opItem->setForeground(QBrush(QColor("#64748B")));
@@ -650,7 +643,6 @@ void LedgerDirectoryWidget::populateTable() {
         // 7: Closing Balance
         auto* clItem = new QTableWidgetItem(item.closeBalFmt);
         clItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        clItem->setFont(QFont("Segoe UI", 11, QFont::Bold));
         if (item.closeDebit > 0.001) {
             clItem->setForeground(QBrush(QColor("#1D4ED8"))); // Royal Blue for Dr
         } else if (item.closeCredit > 0.001) {

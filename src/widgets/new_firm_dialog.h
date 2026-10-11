@@ -27,6 +27,9 @@ private slots:
 private:
     void setupUi();
     void autoDetectFromPan(const QString& panStr);
+    void applyDerivedPan(const QString& gstinUpper);
+    bool m_panAutoFilled = false;
+    QString m_panAutoGstin;
 
     FirmManager* m_firmMgr = nullptr;
 

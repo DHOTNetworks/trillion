@@ -168,10 +168,11 @@ void DepreciationChartWidget::setupUi() {
         "Total Depreciable Base", "Depreciation (₹)", "Closing Balance (WDV)"
     });
     m_table->setAlternatingRowColors(true);
+    m_table->setEditTriggers(QAbstractItemView::NoEditTriggers); // chart: select/act only, never inline-edit
     m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_table->setSelectionMode(QAbstractItemView::SingleSelection);
     m_table->verticalHeader()->setVisible(false);
-    m_table->verticalHeader()->setDefaultSectionSize(30);
+    m_table->verticalHeader()->setDefaultSectionSize(36);
     m_table->setShowGrid(true);
     m_table->setStyleSheet(
         "QTableWidget {"
@@ -183,8 +184,8 @@ void DepreciationChartWidget::setupUi() {
         "  font-size: 12.5px;"
         "  color: #0F172A;"
         "}"
-        "QTableWidget::item { padding: 4px 8px; }"
-        "QTableWidget::item:selected { background-color: #EFF6FF; color: #1D4ED8; font-weight: bold; }"
+        "QTableWidget::item { padding: 7px 8px; }"
+        "QTableWidget::item:selected { background-color: #EFF6FF; color: #0F172A; }"
         "QHeaderView::section {"
         "  background-color: #F1F5F9;"
         "  color: #1E293B;"
@@ -336,10 +337,11 @@ void DepreciationChartWidget::populateTable() {
 
     m_table->setRowCount(m_items.size() + 1); // +1 for Grand Total
 
-    auto makeNum = [](const QString& txt, bool bold = false, const QString& color = "#0F172A") {
+    auto makeNum = [](const QString& txt, bool = false, const QString& color = "#0F172A") {
+        // Same system as the Op/Add/Sales columns: inherit the table font,
+        // never pin a size; only the foreground color varies by meaning.
         auto* itm = new QTableWidgetItem(txt);
         itm->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        if (bold) itm->setFont(QFont("Segoe UI", 9, QFont::Bold));
         itm->setForeground(QBrush(QColor(color)));
         return itm;
     };
@@ -353,7 +355,9 @@ void DepreciationChartWidget::populateTable() {
         m_table->setItem(row, 0, srItem);
 
         auto* nameItem = new QTableWidgetItem(itm.itemName);
-        nameItem->setFont(QFont("Segoe UI", 9, QFont::Bold));
+        QFont nameFont(m_table->font());
+        nameFont.setBold(true);
+        nameItem->setFont(nameFont);
         nameItem->setForeground(QBrush(QColor("#0F172A")));
         m_table->setItem(row, 1, nameItem);
 
@@ -372,7 +376,9 @@ void DepreciationChartWidget::populateTable() {
     auto totals = m_calculator.calculateTotals(m_items);
 
     auto* totLabel = new QTableWidgetItem("Grand Total");
-    totLabel->setFont(QFont("Segoe UI", 9, QFont::Bold));
+    QFont totFont(m_table->font());
+    totFont.setBold(true);
+    totLabel->setFont(totFont);
     totLabel->setForeground(QBrush(QColor("#0F172A")));
     m_table->setItem(totRow, 1, totLabel);
 

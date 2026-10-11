@@ -204,6 +204,7 @@ void SalaryRegisterWidget::setupUi() {
     // ========================================================================
     m_table = new QTableWidget(this);
     m_table->setColumnCount(ColCount);
+    m_table->setEditTriggers(QAbstractItemView::NoEditTriggers); // register: select/drill only, never inline-edit
     m_table->setHorizontalHeaderLabels({
         "Select",
         "Sr.",
@@ -227,11 +228,11 @@ void SalaryRegisterWidget::setupUi() {
     m_table->setStyleSheet(
         "QTableWidget { background-color: #FFFFFF; gridline-color: #E2E8F0; border: 1px solid #CBD5E1; border-radius: 8px; font-size: 12px; color: #1E293B; selection-background-color: #EFF6FF; selection-color: #1E293B; }"
         "QHeaderView::section { background-color: #F8FAFC; color: #475569; font-weight: 800; font-size: 11.5px; border: none; border-bottom: 1.5px solid #CBD5E1; border-right: 1px solid #E2E8F0; padding: 6px 4px; }"
-        "QTableWidget::item { padding: 4px; border-bottom: 1px solid #F1F5F9; }"
+        "QTableWidget::item { padding: 7px; border-bottom: 1px solid #F1F5F9; }"
         "QTableWidget::item:focus { background-color: #FEF3C7; color: #92400E; }"
     );
     m_table->verticalHeader()->setVisible(false);
-    m_table->verticalHeader()->setDefaultSectionSize(36);
+    m_table->verticalHeader()->setDefaultSectionSize(40);
     m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_table->setSelectionMode(QAbstractItemView::SingleSelection);
     m_table->setAlternatingRowColors(true);

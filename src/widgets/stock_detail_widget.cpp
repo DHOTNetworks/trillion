@@ -199,7 +199,7 @@ void StockDetailWidget::setupUi() {
     // ========================================================================
     m_table = new QTableWidget(this);
     m_table->verticalHeader()->setVisible(false);
-    m_table->verticalHeader()->setDefaultSectionSize(30);
+    m_table->verticalHeader()->setDefaultSectionSize(36);
     m_table->horizontalHeader()->setFixedHeight(36);
     m_table->horizontalHeader()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     m_table->setShowGrid(true);
@@ -217,8 +217,8 @@ void StockDetailWidget::setupUi() {
         "  font-size: 12.5px;"
         "  color: #0F172A;"
         "}"
-        "QTableWidget::item { padding: 5px 12px; }"
-        "QTableWidget::item:selected { background-color: #EFF6FF; color: #1D4ED8; font-weight: bold; }"
+        "QTableWidget::item { padding: 8px 12px; }"
+        "QTableWidget::item:selected { background-color: #EFF6FF; color: #0F172A; }"
         "QHeaderView::section {"
         "  background-color: #F1F5F9;"
         "  color: #1E293B;"
@@ -493,7 +493,6 @@ void StockDetailWidget::populateTable() {
 
         if (mode == StockViewMode::OnlyStock) {
             auto* nameItem = new QTableWidgetItem(e.nameVal);
-            nameItem->setFont(QFont("Segoe UI", 9, QFont::Bold));
             nameItem->setForeground(QBrush(QColor("#0F172A")));
             m_table->setItem(row, 0, nameItem);
 
@@ -516,13 +515,11 @@ void StockDetailWidget::populateTable() {
             m_table->setItem(row, 9, makeNum(e.outQtyVal));
 
             auto* closeItem = makeNum(e.closeQtyVal);
-            closeItem->setFont(QFont("Segoe UI", 9, QFont::Bold));
             closeItem->setForeground(QBrush(QColor("#16A34A")));
             m_table->setItem(row, 10, closeItem);
 
         } else if (mode == StockViewMode::StockWithAmount) {
             auto* nameItem = new QTableWidgetItem(e.nameVal);
-            nameItem->setFont(QFont("Segoe UI", 9, QFont::Bold));
             nameItem->setForeground(QBrush(QColor("#0F172A")));
             m_table->setItem(row, 0, nameItem);
 
@@ -545,19 +542,16 @@ void StockDetailWidget::populateTable() {
             m_table->setItem(row, 9, makeNum(QString::number(e.closeBags)));
 
             auto* closeQtyItem = makeNum(e.closeQtyVal);
-            closeQtyItem->setFont(QFont("Segoe UI", 9, QFont::Bold));
             m_table->setItem(row, 10, closeQtyItem);
 
             m_table->setItem(row, 11, makeNum(e.rateVal));
 
             auto* closeValItem = makeNum(e.closeValVal);
-            closeValItem->setFont(QFont("Segoe UI", 9, QFont::Bold));
             closeValItem->setForeground(QBrush(QColor("#16A34A")));
             m_table->setItem(row, 12, closeValItem);
 
         } else if (mode == StockViewMode::ProfitLoss) {
             auto* nameItem = new QTableWidgetItem(e.nameVal);
-            nameItem->setFont(QFont("Segoe UI", 9, QFont::Bold));
             nameItem->setForeground(QBrush(QColor("#0F172A")));
             m_table->setItem(row, 0, nameItem);
 
@@ -577,7 +571,6 @@ void StockDetailWidget::populateTable() {
             m_table->setItem(row, 6, makeNum(e.cogsVal));
 
             auto* gpItem = makeNum(e.grossProfitVal);
-            gpItem->setFont(QFont("Segoe UI", 9, QFont::Bold));
             if (e.grossProfit >= 0.0) {
                 gpItem->setForeground(QBrush(QColor("#16A34A")));
             } else {
@@ -586,7 +579,6 @@ void StockDetailWidget::populateTable() {
             m_table->setItem(row, 7, gpItem);
 
             auto* marginItem = makeNum(e.gpMarginPctVal);
-            marginItem->setFont(QFont("Segoe UI", 9, QFont::Bold));
             if (e.grossProfit >= 0.0) {
                 marginItem->setForeground(QBrush(QColor("#16A34A")));
             } else {
@@ -596,7 +588,6 @@ void StockDetailWidget::populateTable() {
 
         } else if (mode == StockViewMode::MonthlyDaily) {
             auto* pItem = new QTableWidgetItem(e.periodDate);
-            pItem->setFont(QFont("Segoe UI", 9, QFont::Bold));
             pItem->setForeground(QBrush(QColor("#0F172A")));
             m_table->setItem(row, 0, pItem);
 
@@ -619,7 +610,6 @@ void StockDetailWidget::populateTable() {
             m_table->setItem(row, 9, makeNum(e.outValVal));
 
             auto* balItem = makeNum(e.runningBalanceVal);
-            balItem->setFont(QFont("Segoe UI", 9, QFont::Bold));
             balItem->setForeground(QBrush(QColor("#16A34A")));
             m_table->setItem(row, 10, balItem);
 

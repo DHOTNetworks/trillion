@@ -19,6 +19,10 @@ struct BusyMigrationStats {
     int totalGlTransactions = 0;
     int totalMandiRecords = 0;
     int totalTdsVouchers = 0;
+    int totalCancelledSkipped = 0;
+    int totalBillRefs = 0;
+    int totalBardanaSlips = 0;
+    int totalStockTransfers = 0;
     double totalDebitSum = 0.0;
     double totalCreditSum = 0.0;
     double glDiscrepancy = 0.0;

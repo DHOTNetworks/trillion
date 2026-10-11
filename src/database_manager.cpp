@@ -206,6 +206,15 @@ void DatabaseManager::ensureTablesExist() {
         ");"
     );
 
+    // -0. GSTIN lookup response cache (one fetch per GSTIN per database, ever).
+    executeNonQuery(
+        "CREATE TABLE IF NOT EXISTS gstin_lookup_cache ("
+        "gstin TEXT PRIMARY KEY,"
+        "payload TEXT NOT NULL,"
+        "fetched_at TEXT DEFAULT CURRENT_TIMESTAMP"
+        ");"
+    );
+
     // 0. Company Info
     executeNonQuery(
         "CREATE TABLE IF NOT EXISTS company_info ("
@@ -883,6 +892,7 @@ void DatabaseManager::ensureTablesExist() {
         "round_off REAL DEFAULT 0.0,"
         "grand_total REAL DEFAULT 0.0,"
         "narration TEXT,"
+        "lot_no TEXT,"
         "created_at DATETIME DEFAULT CURRENT_TIMESTAMP,"
         "FOREIGN KEY (buyer_id) REFERENCES parties(id),"
         "FOREIGN KEY (fy_id) REFERENCES financial_years(id)"
@@ -1563,6 +1573,8 @@ void DatabaseManager::ensureTablesExist() {
     addColumnIfNotExists("vouchers", "tax_status", "TEXT");
     addColumnIfNotExists("vouchers", "place_of_supply", "TEXT");
     addColumnIfNotExists("vouchers", "challan_no", "TEXT");
+    addColumnIfNotExists("iform_vouchers", "lot_no", "TEXT");
+    addColumnIfNotExists("jform_vouchers", "lot_no", "TEXT");
 
     addColumnIfNotExists("transactions", "due_days", "INTEGER DEFAULT 0");
     addColumnIfNotExists("transactions", "place_of_supply", "TEXT");

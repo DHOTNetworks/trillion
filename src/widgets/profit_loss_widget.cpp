@@ -255,8 +255,7 @@ void ProfitLossWidget::applyCustomStyles() {
         "}"
         "QTreeWidget::item:selected {"
         "    background-color: #EFF6FF;"
-        "    color: #1D4ED8;"
-        "    font-weight: bold;"
+        "    color: #0F172A;"
         "}"
         "QHeaderView::section {"
         "    background-color: #F1F5F9;"
@@ -316,21 +315,9 @@ void ProfitLossWidget::populateTrees() {
     m_expensesTree->clear();
     m_incomesTree->clear();
 
-    QFont secFont;
-    secFont.setBold(true);
-    secFont.setPixelSize(13);
 
-    QFont grpFont;
-    grpFont.setBold(true);
-    grpFont.setPixelSize(13);
-    grpFont.setUnderline(true);
 
-    QFont subFont;
-    subFont.setPixelSize(12);
 
-    QFont amtFont;
-    amtFont.setBold(true);
-    amtFont.setPixelSize(12);
 
     // -------------------------------------------------------------
     // POPULATE EXPENSES (DR) TREE
@@ -345,22 +332,16 @@ void ProfitLossWidget::populateTrees() {
         row->setData(0, Qt::UserRole + 2, item.groupName);
 
         if (item.isSectionHeader) {
-            row->setFont(0, secFont);
-            row->setFont(1, secFont);
             row->setBackground(0, QBrush(QColor("#F1F5F9")));
             row->setBackground(1, QBrush(QColor("#F1F5F9")));
             row->setForeground(0, QBrush(QColor("#0F172A")));
             row->setForeground(1, QBrush(QColor("#0F172A")));
             row->setFlags(Qt::ItemIsEnabled);
         } else if (item.isCalculated) {
-            row->setFont(0, grpFont);
-            row->setFont(1, amtFont);
             QColor clr = item.name.contains("Loss", Qt::CaseInsensitive) ? QColor("#DC2626") : QColor("#16A34A");
             row->setForeground(0, QBrush(clr));
             row->setForeground(1, QBrush(clr));
         } else if (item.isGroup) {
-            row->setFont(0, grpFont);
-            row->setFont(1, amtFont);
             row->setForeground(0, QBrush(QColor("#0F172A")));
             row->setForeground(1, QBrush(QColor("#0F172A")));
 
@@ -369,8 +350,6 @@ void ProfitLossWidget::populateTrees() {
                 childRow->setText(0, "   " + child.name);
                 childRow->setText(1, child.amountFmt);
                 childRow->setTextAlignment(1, Qt::AlignRight | Qt::AlignVCenter);
-                childRow->setFont(0, subFont);
-                childRow->setFont(1, amtFont);
                 childRow->setForeground(0, QBrush(QColor("#334155")));
                 childRow->setForeground(1, QBrush(QColor("#0F172A")));
                 childRow->setData(0, Qt::UserRole, child.partyId);
@@ -378,8 +357,6 @@ void ProfitLossWidget::populateTrees() {
                 childRow->setData(0, Qt::UserRole + 2, child.groupName);
             }
         } else {
-            row->setFont(0, subFont);
-            row->setFont(1, amtFont);
             row->setForeground(0, QBrush(QColor("#334155")));
             row->setForeground(1, QBrush(QColor("#0F172A")));
         }
@@ -398,22 +375,16 @@ void ProfitLossWidget::populateTrees() {
         row->setData(0, Qt::UserRole + 2, item.groupName);
 
         if (item.isSectionHeader) {
-            row->setFont(0, secFont);
-            row->setFont(1, secFont);
             row->setBackground(0, QBrush(QColor("#F1F5F9")));
             row->setBackground(1, QBrush(QColor("#F1F5F9")));
             row->setForeground(0, QBrush(QColor("#0F172A")));
             row->setForeground(1, QBrush(QColor("#0F172A")));
             row->setFlags(Qt::ItemIsEnabled);
         } else if (item.isCalculated) {
-            row->setFont(0, grpFont);
-            row->setFont(1, amtFont);
             QColor clr = item.name.contains("Loss", Qt::CaseInsensitive) ? QColor("#DC2626") : QColor("#16A34A");
             row->setForeground(0, QBrush(clr));
             row->setForeground(1, QBrush(clr));
         } else if (item.isGroup) {
-            row->setFont(0, grpFont);
-            row->setFont(1, amtFont);
             row->setForeground(0, QBrush(QColor("#0F172A")));
             row->setForeground(1, QBrush(QColor("#0F172A")));
 
@@ -422,8 +393,6 @@ void ProfitLossWidget::populateTrees() {
                 childRow->setText(0, "   " + child.name);
                 childRow->setText(1, child.amountFmt);
                 childRow->setTextAlignment(1, Qt::AlignRight | Qt::AlignVCenter);
-                childRow->setFont(0, subFont);
-                childRow->setFont(1, amtFont);
                 childRow->setForeground(0, QBrush(QColor("#334155")));
                 childRow->setForeground(1, QBrush(QColor("#0F172A")));
                 childRow->setData(0, Qt::UserRole, child.partyId);
@@ -431,8 +400,6 @@ void ProfitLossWidget::populateTrees() {
                 childRow->setData(0, Qt::UserRole + 2, child.groupName);
             }
         } else {
-            row->setFont(0, subFont);
-            row->setFont(1, amtFont);
             row->setForeground(0, QBrush(QColor("#334155")));
             row->setForeground(1, QBrush(QColor("#0F172A")));
         }

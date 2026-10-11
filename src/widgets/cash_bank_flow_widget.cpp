@@ -414,7 +414,6 @@ void CashBankFlowWidget::updateTableData() {
 
         auto* nameItem = new QTableWidgetItem(b.ledgerName);
         nameItem->setForeground(QBrush(QColor("#2563EB")));
-        nameItem->setFont(QFont(m_table->font().family(), 10, QFont::Bold));
         nameItem->setData(Qt::UserRole, b.ledgerName);
         nameItem->setData(Qt::UserRole + 1, b.partyId);
         m_table->setItem(row, 0, nameItem);
@@ -431,7 +430,6 @@ void CashBankFlowWidget::updateTableData() {
         auto* clItem = new QTableWidgetItem(AccountingEngine::formatCurrency(b.clBalance));
         clItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         clItem->setForeground(QBrush(QColor("#2563EB")));
-        clItem->setFont(QFont(m_table->font().family(), 10, QFont::Bold));
         m_table->setItem(row, 4, clItem);
 
         for (int c = 0; c < 5; ++c) {
@@ -447,31 +445,26 @@ void CashBankFlowWidget::updateTableData() {
 
     auto* totName = new QTableWidgetItem("Grand Total");
     totName->setForeground(QBrush(QColor("#0F172A")));
-    totName->setFont(QFont(m_table->font().family(), 10, QFont::Bold));
     m_table->setItem(row, 0, totName);
 
     auto* totOp = new QTableWidgetItem(QString::number(summary.totalOpBalance, 'f', 2));
     totOp->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
     totOp->setForeground(QBrush(QColor("#0F172A")));
-    totOp->setFont(QFont(m_table->font().family(), 10, QFont::Bold));
     m_table->setItem(row, 1, totOp);
 
     auto* totRec = new QTableWidgetItem(AccountingEngine::formatCurrency(summary.totalReceipts));
     totRec->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
     totRec->setForeground(QBrush(QColor("#16A34A")));
-    totRec->setFont(QFont(m_table->font().family(), 10, QFont::Bold));
     m_table->setItem(row, 2, totRec);
 
     auto* totPay = new QTableWidgetItem(AccountingEngine::formatCurrency(summary.totalPayments));
     totPay->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
     totPay->setForeground(QBrush(QColor("#0F172A")));
-    totPay->setFont(QFont(m_table->font().family(), 10, QFont::Bold));
     m_table->setItem(row, 3, totPay);
 
     auto* totCl = new QTableWidgetItem(AccountingEngine::formatCurrency(summary.totalClBalance));
     totCl->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
     totCl->setForeground(QBrush(QColor("#16A34A")));
-    totCl->setFont(QFont(m_table->font().family(), 10, QFont::Bold));
     m_table->setItem(row, 4, totCl);
 
     for (int c = 0; c < 5; ++c) {

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(MahadevRiceMillERP VERSION 0.2.5 LANGUAGES C CXX)
+project(MahadevRiceMillERP VERSION 0.3.1 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -458,6 +458,8 @@ set(SOURCES
     src/services/scale_manager.cpp
     src/services/gst_portal_service.h
     src/services/gst_portal_service.cpp
+    src/services/gstin_autofill_service.h
+    src/services/gstin_autofill_service.cpp
     src/widgets/scale_settings_dialog.h
     src/widgets/scale_settings_dialog.cpp
     src/widgets/gst_portal_sync_dialog.h

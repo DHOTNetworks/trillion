@@ -52,6 +52,17 @@ private:
     void filterTableRows();
     QWidget* createMetricCard(const QString& title, QLabel*& valueLabel, const QString& accentColor);
 
+public:
+    // Cell traversal 3(Bags)->4(Weight)->5(Rate)->6(Total, select-only)->
+    // next visible row's 3. Enter commits+advances (auto-edits 3/4/5);
+    // Left/Right move at text boundaries, skipping hidden filter rows.
+    // row/col < 0 means "from the table's current cell".
+    void advanceStockCell(int row, int col, int dir, bool editTarget);
+    int nextVisibleRow(int row, int dir) const;
+    QTableWidget* stockTable() const { return m_table; }
+
+private:
+
     PrintExportController* m_printCtrl = nullptr;
     AccountingDateDisplay* m_dateEdit = nullptr;
     QLineEdit* m_searchBox = nullptr;

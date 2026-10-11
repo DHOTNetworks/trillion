@@ -345,11 +345,10 @@ void ItemMovementDialog::loadMovements(const QString& itemName, const QDate& fro
         int row = targetTable->rowCount();
         targetTable->insertRow(row);
 
-        auto createItem = [](const QString& text, Qt::Alignment align = Qt::AlignLeft | Qt::AlignVCenter, bool bold = false) {
+        auto createItem = [](const QString& text, Qt::Alignment align = Qt::AlignLeft | Qt::AlignVCenter, bool = false) {
             QTableWidgetItem* item = new QTableWidgetItem(text);
             item->setTextAlignment(align);
             item->setForeground(QBrush(QColor("#0F172A")));
-            if (bold) item->setFont(QFont("Segoe UI", 10, QFont::Bold));
             return item;
         };
 

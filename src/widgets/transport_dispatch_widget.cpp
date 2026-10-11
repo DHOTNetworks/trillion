@@ -147,7 +147,7 @@ void TransportDispatchWidget::setupUi() {
         m_table->horizontalHeader()->setSectionResizeMode(c, QHeaderView::ResizeToContents);
     }
     m_table->verticalHeader()->setVisible(false);
-    m_table->verticalHeader()->setDefaultSectionSize(30);
+    m_table->verticalHeader()->setDefaultSectionSize(36);
     m_table->setShowGrid(true);
     m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_table->setSelectionMode(QAbstractItemView::SingleSelection);
@@ -155,8 +155,8 @@ void TransportDispatchWidget::setupUi() {
     m_table->setAlternatingRowColors(true);
     m_table->setStyleSheet(
         "QTableWidget { background-color: #FFFFFF; alternate-background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 8px; gridline-color: #F1F5F9; font-size: 12.5px; color: #0F172A; }"
-        "QTableWidget::item { padding: 4px 8px; }"
-        "QTableWidget::item:selected { background-color: #EFF6FF; color: #1D4ED8; font-weight: bold; }"
+        "QTableWidget::item { padding: 7px 8px; }"
+        "QTableWidget::item:selected { background-color: #EFF6FF; color: #0F172A; }"
         "QHeaderView::section { background-color: #F1F5F9; color: #1E293B; font-weight: 800; font-size: 12px; padding: 8px 10px; border: none; border-bottom: 2px solid #CBD5E1; border-right: 1px solid #E2E8F0; }"
     );
     connect(m_table, &QTableWidget::cellDoubleClicked, this, &TransportDispatchWidget::onTableDoubleClicked);
@@ -268,14 +268,14 @@ void TransportDispatchWidget::populateTable() {
 
         auto* itemSlip = new QTableWidgetItem(slipNo);
         itemSlip->setData(Qt::UserRole, id);
-        itemSlip->setFont(QFont("Segoe UI", 9, QFont::Bold));
+        { QFont f = m_table->font(); f.setBold(true); itemSlip->setFont(f); }
         itemSlip->setForeground(QBrush(QColor("#1D4ED8")));
         m_table->setItem(row, 0, itemSlip);
 
         m_table->setItem(row, 1, new QTableWidgetItem(FiscalYearHelper::formatDisplayDate(dateVal)));
 
         auto* itemVeh = new QTableWidgetItem(veh);
-        itemVeh->setFont(QFont("Segoe UI", 9, QFont::Bold));
+        { QFont f = m_table->font(); f.setBold(true); itemVeh->setFont(f); }
         m_table->setItem(row, 2, itemVeh);
 
         m_table->setItem(row, 3, new QTableWidgetItem(party));
@@ -287,7 +287,7 @@ void TransportDispatchWidget::populateTable() {
 
         auto* itemWt = new QTableWidgetItem(QString::number(weight, 'f', 2));
         itemWt->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        itemWt->setFont(QFont("Segoe UI", 9, QFont::Bold));
+        { QFont f = m_table->font(); f.setBold(true); itemWt->setFont(f); }
         itemWt->setForeground(QBrush(QColor("#16A34A")));
         m_table->setItem(row, 6, itemWt);
 
@@ -300,7 +300,7 @@ void TransportDispatchWidget::populateTable() {
 
         auto* itemBal = new QTableWidgetItem(QString::number(bal, 'f', 2));
         itemBal->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        itemBal->setFont(QFont("Segoe UI", 9, QFont::Bold));
+        { QFont f = m_table->font(); f.setBold(true); itemBal->setFont(f); }
         itemBal->setForeground(QBrush(QColor("#DC2626")));
         m_table->setItem(row, 10, itemBal);
 
@@ -344,9 +344,16 @@ void TransportDispatchWidget::onTableDoubleClicked(int row, int col) {
 
     int id = item->data(Qt::UserRole).toInt();
     if (id > 0) {
+        const QString slipNo = item->text();
         bool ok = WeighbridgeKandaDialog::openKandaSlip(m_controller, id, this);
         if (ok) {
             loadData(m_fromDateEdit->date(), m_toDateEdit->date());
+            // Restore selection onto the saved slip; focus back to the grid.
+            for (int r = 0; r < m_table->rowCount(); ++r) {
+                QTableWidgetItem* it = m_table->item(r, 0);
+                if (it && it->text() == slipNo) { m_table->setCurrentCell(r, 0); break; }
+            }
+            m_table->setFocus();
         }
     }
 }

@@ -1,4 +1,5 @@
 #include "new_firm_dialog.h"
+#include "../services/gstin_autofill_service.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGridLayout>
@@ -279,15 +280,40 @@ void NewFirmDialog::setupUi() {
 
     connect(m_gstinEdit, &QLineEdit::textChanged, this, &NewFirmDialog::onGstinChanged);
     connect(m_panEdit, &QLineEdit::textChanged, this, &NewFirmDialog::onPanChanged);
+    connect(m_panEdit, &QLineEdit::textEdited, this, [this]() { m_panAutoFilled = false; });
+
+    // Silent background autofill: a finished, valid GSTIN fills name/address.
+    MahadevERP::GstinAutofillService::instance().watch(m_gstinEdit, [this](const MahadevERP::GstinProfile& p) {
+        if (!p.valid) {
+            if (!p.error.isEmpty() && p.error != "Invalid GSTIN checksum.")
+                m_errorLabel->setText("GSTIN lookup: " + p.error);
+            return;
+        }
+        const QString bestName = !p.tradeName.isEmpty() ? p.tradeName : p.legalName;
+        if (!bestName.isEmpty() && m_compNameEdit->text().trimmed().isEmpty())
+            m_compNameEdit->setText(bestName);
+        if (!p.address.isEmpty() && m_addressEdit->text().trimmed().isEmpty())
+            m_addressEdit->setText(p.address);
+        if (!p.city.isEmpty() && m_cityEdit->text().trimmed().isEmpty())
+            m_cityEdit->setText(p.city);
+        if (!p.pincode.isEmpty() && m_pinEdit->text().trimmed().isEmpty())
+            m_pinEdit->setText(p.pincode);
+        if (p.gstin.length() == 15 && m_gstinEdit->text().trimmed().toUpper() == p.gstin)
+            applyDerivedPan(p.gstin);
+        if (!p.legalName.isEmpty() && m_businessEdit->text().trimmed().isEmpty())
+            m_businessEdit->setText(p.legalName);
+        if (p.status.compare("Cancelled", Qt::CaseInsensitive) == 0)
+            m_errorLabel->setText("Warning: this GSTIN is Cancelled — invoices under it carry no ITC.");
+        else if (m_errorLabel->text().startsWith("GSTIN lookup:"))
+            m_errorLabel->setText("");
+    });
 
     m_compNameEdit->setFocus();
 }
 
 void NewFirmDialog::onGstinChanged(const QString& text) {
     QString g = text.trimmed().toUpper();
-    if (g.length() >= 12 && m_panEdit->text().trimmed().length() < 10) {
-        m_panEdit->setText(g.mid(2, 10));
-    }
+    applyDerivedPan(g);
     if (g.length() >= 2) {
         QString code = g.left(2);
         if (code == "06") m_stateEdit->setText("Haryana");
@@ -300,6 +326,27 @@ void NewFirmDialog::onGstinChanged(const QString& text) {
 
 void NewFirmDialog::onPanChanged(const QString& text) {
     autoDetectFromPan(text);
+}
+
+void NewFirmDialog::applyDerivedPan(const QString& gstinUpper) {
+    if (gstinUpper.length() < 12) return;
+    const QString expected = gstinUpper.mid(2, 10);
+    const QString cur = m_panEdit->text().trimmed().toUpper();
+    if (cur.isEmpty()) {
+        m_panEdit->setText(expected);
+        m_panAutoFilled = true;
+        m_panAutoGstin = gstinUpper;
+        return;
+    }
+    if (cur == expected) {
+        m_panAutoFilled = true;
+        m_panAutoGstin = gstinUpper;
+        return;
+    }
+    if (m_panAutoFilled && m_panAutoGstin != gstinUpper) {
+        m_panEdit->setText(expected);
+        m_panAutoGstin = gstinUpper;
+    }
 }
 
 void NewFirmDialog::autoDetectFromPan(const QString& panStr) {

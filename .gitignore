@@ -66,5 +66,6 @@ CMakeFiles/
 scratch/
 Testing/
 export_test/
-gst*
+gstr*
 Screen*
+busy-data/*

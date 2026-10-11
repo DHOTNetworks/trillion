@@ -204,7 +204,7 @@ void BankStatementImportWidget::setupUi() {
     m_table->setStyleSheet(
         "QTableWidget { background-color: #FFFFFF; alternate-background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 8px; gridline-color: #F1F5F9; font-size: 12.5px; color: #0F172A; }"
         "QTableWidget::item { padding: 4px 6px; }"
-        "QTableWidget::item:selected { background-color: #EFF6FF; color: #1D4ED8; font-weight: bold; }"
+        "QTableWidget::item:selected { background-color: #EFF6FF; color: #0F172A; }"
         "QHeaderView::section { background-color: #F1F5F9; color: #1E293B; font-weight: 800; font-size: 12px; padding: 8px 10px; border: none; border-bottom: 2px solid #CBD5E1; border-right: 1px solid #E2E8F0; }"
     );
     connect(m_table, &QTableWidget::itemChanged, this, &BankStatementImportWidget::onTableItemChanged);
@@ -386,7 +386,7 @@ void BankStatementImportWidget::refreshTable() {
         auto* dateItem = new QTableWidgetItem(dateStr);
         dateItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
         dateItem->setForeground(QBrush(QColor("#1E293B")));
-        dateItem->setFont(QFont("Segoe UI", 9, QFont::Bold));
+        { QFont f = m_table->font(); f.setBold(true); dateItem->setFont(f); }
         m_table->setItem(i, 2, dateItem);
 
         // 3. Type (Receipt / Payment)
@@ -401,7 +401,7 @@ void BankStatementImportWidget::refreshTable() {
             typeItem->setForeground(QBrush(QColor("#B91C1C")));
             typeItem->setBackground(QBrush(QColor("#FEF2F2")));
         }
-        typeItem->setFont(QFont("Segoe UI", 9, QFont::Bold));
+        { QFont f = m_table->font(); f.setBold(true); typeItem->setFont(f); }
         m_table->setItem(i, 3, typeItem);
 
         // 4. Narration & UTR
@@ -421,7 +421,7 @@ void BankStatementImportWidget::refreshTable() {
         auto* drItem = new QTableWidgetItem(drAcc.isEmpty() ? "Select Dr..." : drAcc);
         drItem->setFlags(Qt::ItemIsEditable | Qt::ItemIsEnabled | Qt::ItemIsSelectable);
         drItem->setForeground(QBrush(drAcc.isEmpty() ? QColor("#DC2626") : QColor("#1D4ED8")));
-        drItem->setFont(QFont("Segoe UI", 9, QFont::Bold));
+        { QFont f = m_table->font(); f.setBold(true); drItem->setFont(f); }
         m_table->setItem(i, 5, drItem);
 
         // 6. Credit Leg (Cr Account)
@@ -429,7 +429,7 @@ void BankStatementImportWidget::refreshTable() {
         auto* crItem = new QTableWidgetItem(crAcc.isEmpty() ? "Select Cr..." : crAcc);
         crItem->setFlags(Qt::ItemIsEditable | Qt::ItemIsEnabled | Qt::ItemIsSelectable);
         crItem->setForeground(QBrush(crAcc.isEmpty() ? QColor("#DC2626") : QColor("#C2410C")));
-        crItem->setFont(QFont("Segoe UI", 9, QFont::Bold));
+        { QFont f = m_table->font(); f.setBold(true); crItem->setFont(f); }
         m_table->setItem(i, 6, crItem);
 
         // 7. Amount
@@ -437,7 +437,7 @@ void BankStatementImportWidget::refreshTable() {
         amtItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
         amtItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         amtItem->setForeground(QBrush(dVal > 0.001 ? QColor("#16A34A") : QColor("#DC2626")));
-        amtItem->setFont(QFont("Segoe UI", 9, QFont::Bold));
+        { QFont f = m_table->font(); f.setBold(true); amtItem->setFont(f); }
         m_table->setItem(i, 7, amtItem);
 
         // 8. Balance
@@ -468,7 +468,7 @@ void BankStatementImportWidget::refreshTable() {
         dupItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
         dupItem->setTextAlignment(Qt::AlignCenter);
         dupItem->setForeground(QBrush(statusColor));
-        dupItem->setFont(QFont("Segoe UI", 9, QFont::Bold));
+        { QFont f = m_table->font(); f.setBold(true); dupItem->setFont(f); }
         m_table->setItem(i, 9, dupItem);
     }
 

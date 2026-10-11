@@ -5,6 +5,7 @@
 #include <QGridLayout>
 #include <QFrame>
 #include <QShortcut>
+#include <QTimer>
 
 namespace MahadevERP {
 
@@ -33,6 +34,8 @@ WeighbridgeKandaDialog::WeighbridgeKandaDialog(TransportDispatchController* cont
 
 bool WeighbridgeKandaDialog::openKandaSlip(TransportDispatchController* controller, int editDispatchId, QWidget* parent) {
     WeighbridgeKandaDialog dlg(controller, editDispatchId, parent);
+    // First editable field (slip no. is read-only); singleShot so it lands after exec() shows.
+    QTimer::singleShot(0, &dlg, [&dlg]() { dlg.m_vehicleNoEdit->setFocus(); });
     return (dlg.exec() == QDialog::Accepted);
 }
 
@@ -344,6 +347,7 @@ void WeighbridgeKandaDialog::setupUi() {
         "QPushButton:hover { background-color: #15803D; }"
     );
     connect(saveBtn, &QPushButton::clicked, this, &WeighbridgeKandaDialog::onSaveClicked);
+    saveBtn->setDefault(true); // Enter anywhere (no popup open) saves — matches the button label
     bottomLayout->addWidget(saveBtn);
 
     rootLayout->addLayout(bottomLayout);

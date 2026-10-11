@@ -174,27 +174,20 @@ void LedgerTableDelegate::paint(QPainter* painter, const QStyleOptionViewItem& o
         QString text = index.data(Qt::DisplayRole).toString();
         QFont font = QApplication::font();
         font.setStyleHint(QFont::SansSerif);
+        // One system everywhere: same size, no weight games; only color varies.
+        font.setPointSize(11);
+        font.setBold(false);
 
         if (col == 1) { // Date
-            font.setPointSize(10);
-            font.setBold(true);
             painter->setPen(QColor("#1E293B"));
         } else if (col == 2) { // Ref No
-            font.setPointSize(10);
-            font.setBold(true);
             painter->setPen((m_side == "Cr") ? QColor("#047857") : QColor("#1D4ED8"));
         } else if (col == 3) { // Particulars
-            font.setPointSize(11);
-            font.setBold(false);
             painter->setPen(QColor("#0F172A"));
         } else if (col == 4) { // Amount
-            font.setPointSize(12);
-            font.setBold(true);
             // High vivid contrast emerald green for Cr, royal blue for Dr
             painter->setPen((m_side == "Cr") ? QColor("#047857") : QColor("#1D4ED8"));
         } else {
-            font.setPointSize(10);
-            font.setBold(false);
             painter->setPen(QColor("#0F172A"));
         }
 
@@ -238,6 +231,7 @@ LedgerTableView::LedgerTableView(const QString& side, LedgerStatementSideModel* 
     setModel(m_adapter);
     setItemDelegate(m_delegate);
 
+    setEditTriggers(QAbstractItemView::NoEditTriggers); // statement view: paint-only, never inline-edit
     setSelectionBehavior(QAbstractItemView::SelectRows);
     setSelectionMode(QAbstractItemView::SingleSelection);
     setShowGrid(false);

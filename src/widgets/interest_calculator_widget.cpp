@@ -12,6 +12,7 @@
 #include <QFileDialog>
 #include <QFile>
 #include <QTextStream>
+#include <algorithm>
 
 namespace MahadevERP {
 
@@ -157,7 +158,7 @@ void InterestCalculatorWidget::setupUi() {
         m_table->horizontalHeader()->setSectionResizeMode(c, QHeaderView::ResizeToContents);
     }
     m_table->verticalHeader()->setVisible(false);
-    m_table->verticalHeader()->setDefaultSectionSize(30);
+    m_table->verticalHeader()->setDefaultSectionSize(36);
     m_table->setShowGrid(true);
     m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_table->setSelectionMode(QAbstractItemView::SingleSelection);
@@ -165,8 +166,8 @@ void InterestCalculatorWidget::setupUi() {
     m_table->setAlternatingRowColors(true);
     m_table->setStyleSheet(
         "QTableWidget { background-color: #FFFFFF; alternate-background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 8px; gridline-color: #F1F5F9; font-size: 12.5px; color: #0F172A; }"
-        "QTableWidget::item { padding: 4px 8px; }"
-        "QTableWidget::item:selected { background-color: #EFF6FF; color: #1D4ED8; font-weight: bold; }"
+        "QTableWidget::item { padding: 7px 8px; }"
+        "QTableWidget::item:selected { background-color: #EFF6FF; color: #0F172A; }"
         "QHeaderView::section { background-color: #F1F5F9; color: #1E293B; font-weight: 800; font-size: 12px; padding: 8px 10px; border: none; border-bottom: 2px solid #CBD5E1; border-right: 1px solid #E2E8F0; }"
     );
     rootLayout->addWidget(m_table, 1);
@@ -231,6 +232,11 @@ void InterestCalculatorWidget::onPartySelected(const QString& partyName) {
 }
 
 void InterestCalculatorWidget::onCalculateClicked() {
+    if (m_partySearch->text().trimmed().isEmpty()) {
+        CustomMessageBox::showWarning(this, "Select Account", "Please select a Party / Ledger Account first.");
+        m_partySearch->setFocus();
+        return;
+    }
     calculateInterest();
 }
 
@@ -257,47 +263,79 @@ void InterestCalculatorWidget::calculateInterest() {
 void InterestCalculatorWidget::populateTable(const QVariantMap& data) {
     m_table->setRowCount(0);
 
-    QVariantList rows = data.value("rows").toList();
-    for (int r = 0; r < rows.size(); ++r) {
-        auto map = rows[r].toMap();
+    // The model returns dr_items / cr_items (each: vIso, vDate, refNo,
+    // particulars, amount, days). Merge by date, run the balance here.
+    struct Row {
+        QDate iso;
+        QString dateFmt, part, ref;
+        double dr = 0.0, cr = 0.0;
+        int days = 0;
+    };
+    QVector<Row> merged;
+    for (const QVariant& v : data.value("dr_items").toList()) {
+        QVariantMap m = v.toMap();
+        Row r;
+        r.iso = QDate::fromString(m.value("vIso").toString(), "yyyy-MM-dd");
+        r.dateFmt = m.value("vDate").toString();
+        r.part = m.value("particulars").toString();
+        r.ref = m.value("refNo").toString();
+        r.dr = m.value("amount").toDouble();
+        r.days = m.value("days").toInt();
+        merged.append(r);
+    }
+    for (const QVariant& v : data.value("cr_items").toList()) {
+        QVariantMap m = v.toMap();
+        Row r;
+        r.iso = QDate::fromString(m.value("vIso").toString(), "yyyy-MM-dd");
+        r.dateFmt = m.value("vDate").toString();
+        r.part = m.value("particulars").toString();
+        r.ref = m.value("refNo").toString();
+        r.cr = m.value("amount").toDouble();
+        r.days = m.value("days").toInt();
+        merged.append(r);
+    }
+    std::stable_sort(merged.begin(), merged.end(),
+                     [](const Row& a, const Row& b) { return a.iso < b.iso; });
+
+    double running = 0.0, totDrProd = 0.0, totCrProd = 0.0;
+    int r = 0;
+    for (const Row& row : merged) {
+        running += (row.dr - row.cr);
+        double product = running * row.days;
+        totDrProd += row.dr * row.days;
+        totCrProd += row.cr * row.days;
+
         m_table->insertRow(r);
+        m_table->setItem(r, 0, new QTableWidgetItem(row.dateFmt));
+        m_table->setItem(r, 1, new QTableWidgetItem(row.part));
+        m_table->setItem(r, 2, new QTableWidgetItem(row.ref));
 
-        m_table->setItem(r, 0, new QTableWidgetItem(FiscalYearHelper::formatDisplayDate(map.value("date").toString())));
-        m_table->setItem(r, 1, new QTableWidgetItem(map.value("particulars").toString()));
-        m_table->setItem(r, 2, new QTableWidgetItem(map.value("vchNo").toString()));
-
-        double dr = map.value("debit").toDouble();
-        auto* drItem = new QTableWidgetItem(dr > 0.0 ? QString::number(dr, 'f', 2) : "");
+        auto* drItem = new QTableWidgetItem(row.dr > 0.0 ? QString::number(row.dr, 'f', 2) : "");
         drItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         m_table->setItem(r, 3, drItem);
 
-        double cr = map.value("credit").toDouble();
-        auto* crItem = new QTableWidgetItem(cr > 0.0 ? QString::number(cr, 'f', 2) : "");
+        auto* crItem = new QTableWidgetItem(row.cr > 0.0 ? QString::number(row.cr, 'f', 2) : "");
         crItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         m_table->setItem(r, 4, crItem);
 
-        double bal = map.value("balance").toDouble();
-        QString balSide = map.value("balanceSide", "Dr").toString();
-        auto* balItem = new QTableWidgetItem(QString("%1 %2").arg(QString::number(std::abs(bal), 'f', 2), balSide));
+        QString side = (running >= 0.0) ? "Dr" : "Cr";
+        auto* balItem = new QTableWidgetItem(QString("%1 %2").arg(QString::number(std::abs(running), 'f', 2), side));
         balItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        balItem->setFont(QFont("Segoe UI", 9, QFont::Bold));
         m_table->setItem(r, 5, balItem);
 
-        auto* daysItem = new QTableWidgetItem(QString::number(map.value("days").toInt()));
+        auto* daysItem = new QTableWidgetItem(QString::number(row.days));
         daysItem->setTextAlignment(Qt::AlignCenter);
         m_table->setItem(r, 6, daysItem);
 
-        double prod = map.value("product").toDouble();
-        auto* prodItem = new QTableWidgetItem(QString::number(prod, 'f', 2));
+        auto* prodItem = new QTableWidgetItem(QString::number(product, 'f', 2));
         prodItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         m_table->setItem(r, 7, prodItem);
+        r++;
     }
 
-    double totDrProd = data.value("totalDrProduct").toDouble();
-    double totCrProd = data.value("totalCrProduct").toDouble();
-    double netInterest = data.value("netInterest").toDouble();
-    m_lastCalculatedInterest = std::abs(netInterest);
-    m_isReceivable = (netInterest >= 0.0);
+    double netRaw = data.value("net_interest_raw", 0.0).toDouble();
+    m_lastCalculatedInterest = data.value("net_interest", 0.0).toDouble();
+    m_isReceivable = (netRaw >= 0.0);
 
     m_totalDrProductLabel->setText(QString::number(totDrProd, 'f', 2));
     m_totalCrProductLabel->setText(QString::number(totCrProd, 'f', 2));

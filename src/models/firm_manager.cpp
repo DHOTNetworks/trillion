@@ -774,6 +774,9 @@ bool FirmManager::create_new_firm(const QVariantMap& firmInfo) {
     QString slug = sanitizeSlug(compName);
     QString targetDbPath = "data/" + slug + ".db";
 
+    // Carry the GSTIN lookup key into the new file so autofill works there too.
+    QString carriedGstinKey = DatabaseManager::instance().getSetting("gstin_lookup/api_key").trimmed();
+
     DatabaseManager::instance().switchDatabase(targetDbPath);
 
     // Flexible date parsing for books_from (e.g., "1.4.24", "01/04/2024", "2024-04-01", "1-4-24", "01.04.2024")
@@ -844,6 +847,11 @@ bool FirmManager::create_new_firm(const QVariantMap& firmInfo) {
             QString("%1-03-31").arg(targetEndYear + 1)
         }
     );
+
+    if (!carriedGstinKey.isEmpty() &&
+        DatabaseManager::instance().getSetting("gstin_lookup/api_key").trimmed().isEmpty()) {
+        DatabaseManager::instance().setSetting("gstin_lookup/api_key", carriedGstinKey);
+    }
 
     // Create all Financial Years from fyStartYear to targetEndYear (e.g. 2024 -> FY 2024-25, FY 2025-26, FY 2026-27, FY 2027-28)
     DatabaseManager::instance().executeNonQuery("DELETE FROM financial_years;");

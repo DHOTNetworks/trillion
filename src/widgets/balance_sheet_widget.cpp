@@ -250,8 +250,7 @@ void BalanceSheetWidget::applyCustomStyles() {
         "}"
         "QTreeWidget::item:selected {"
         "    background-color: #EFF6FF;"
-        "    color: #1D4ED8;"
-        "    font-weight: bold;"
+        "    color: #0F172A;"
         "}"
         "QHeaderView::section {"
         "    background-color: #F1F5F9;"
@@ -324,18 +323,8 @@ void BalanceSheetWidget::populateTrees() {
     m_liabilitiesTree->setHeaderLabels({QString("Liabilities (%1)").arg(liabItemCount), "Amount"});
     m_assetsTree->setHeaderLabels({QString("Assets (%1)").arg(assetItemCount), "Amount"});
 
-    QFont groupFont;
-    groupFont.setBold(true);
-    groupFont.setPixelSize(13);
-    groupFont.setUnderline(false);
 
-    QFont itemFont;
-    itemFont.setPixelSize(12);
-    itemFont.setBold(false);
 
-    QFont amtFont;
-    amtFont.setBold(true);
-    amtFont.setPixelSize(13);
 
     // 1. Populate Liabilities
     for (const auto& g : d.liabilitiesGroups) {
@@ -343,8 +332,6 @@ void BalanceSheetWidget::populateTrees() {
         gItem->setText(0, g.name.toUpper());
         gItem->setText(1, g.amountFmt);
         gItem->setTextAlignment(1, Qt::AlignRight | Qt::AlignVCenter);
-        gItem->setFont(0, groupFont);
-        gItem->setFont(1, amtFont);
         gItem->setForeground(0, QBrush(QColor("#0F172A")));
         gItem->setForeground(1, QBrush(QColor("#0F172A")));
         gItem->setData(0, Qt::UserRole, "GROUP");
@@ -354,8 +341,6 @@ void BalanceSheetWidget::populateTrees() {
             cItem->setText(0, "   " + c.name);
             cItem->setText(1, c.amountFmt);
             cItem->setTextAlignment(1, Qt::AlignRight | Qt::AlignVCenter);
-            cItem->setFont(0, itemFont);
-            cItem->setFont(1, amtFont);
             cItem->setForeground(0, QBrush(QColor("#334155")));
             cItem->setForeground(1, QBrush(QColor("#0F172A")));
             cItem->setData(0, Qt::UserRole, c.isCalculated ? "CALCULATED" : "PARTY");
@@ -366,7 +351,6 @@ void BalanceSheetWidget::populateTrees() {
             if (c.isCalculated || c.name.contains("Profit", Qt::CaseInsensitive)) {
                 cItem->setForeground(0, QBrush(QColor("#16A34A"))); // Green for Net Profit
                 cItem->setForeground(1, QBrush(QColor("#16A34A")));
-                cItem->setFont(0, groupFont);
             }
         }
     }
@@ -377,8 +361,6 @@ void BalanceSheetWidget::populateTrees() {
         gItem->setText(0, g.name.toUpper());
         gItem->setText(1, g.amountFmt);
         gItem->setTextAlignment(1, Qt::AlignRight | Qt::AlignVCenter);
-        gItem->setFont(0, groupFont);
-        gItem->setFont(1, amtFont);
         gItem->setForeground(0, QBrush(QColor("#0F172A")));
         gItem->setForeground(1, QBrush(QColor("#0F172A")));
         gItem->setData(0, Qt::UserRole, "GROUP");
@@ -389,8 +371,6 @@ void BalanceSheetWidget::populateTrees() {
             cItem->setText(0, "   " + c.name);
             cItem->setText(1, c.amountFmt);
             cItem->setTextAlignment(1, Qt::AlignRight | Qt::AlignVCenter);
-            cItem->setFont(0, itemFont);
-            cItem->setFont(1, amtFont);
             cItem->setForeground(0, QBrush(QColor("#334155")));
             cItem->setForeground(1, QBrush(QColor("#0F172A")));
             cItem->setData(0, Qt::UserRole, c.isCalculated ? "CALCULATED" : "PARTY");

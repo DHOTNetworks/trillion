@@ -115,6 +115,8 @@ void MandiReportsWidget::setupFormMTab() {
 
     // Form M Table
     m_formMTable = new QTableWidget(0, 8, this);
+    m_formMTable->verticalHeader()->setDefaultSectionSize(36);
+    m_formMTable->setEditTriggers(QAbstractItemView::NoEditTriggers); // report: never inline-edit
     m_formMTable->setHorizontalHeaderLabels({
         "Commodity / Item", "Total Bags", "Weight (Qtl)", "Gross Value (₹)",
         "M.Fee Rate (%)", "Market Fee (₹)", "HRDF Rate (%)", "HRDF Amount (₹)"
@@ -202,6 +204,8 @@ void MandiReportsWidget::setupJFormRegisterTab() {
     layout->addLayout(filterLayout);
 
     m_jfTable = new QTableWidget(0, 9, this);
+    m_jfTable->verticalHeader()->setDefaultSectionSize(36);
+    m_jfTable->setEditTriggers(QAbstractItemView::NoEditTriggers); // report: never inline-edit
     m_jfTable->setHorizontalHeaderLabels({
         "Vch No", "J-Form No", "Date", "Farmer (Zimidar) Name", "Crop Description",
         "Bags", "Weight (Qtl)", "Goods Value (₹)", "Net Payable (₹)"
@@ -257,6 +261,8 @@ void MandiReportsWidget::setupIFormRegisterTab() {
     layout->addLayout(filterLayout);
 
     m_ifTable = new QTableWidget(0, 11, this);
+    m_ifTable->verticalHeader()->setDefaultSectionSize(36);
+    m_ifTable->setEditTriggers(QAbstractItemView::NoEditTriggers); // report: never inline-edit
     m_ifTable->setHorizontalHeaderLabels({
         "Vch No", "I-Form No", "Date", "Buyer Name", "Broker", "Crop Description",
         "Bags", "Weight (Qtl)", "Goods Value (₹)", "Dami (₹)", "Grand Total (₹)"
@@ -299,6 +305,8 @@ void MandiReportsWidget::setupFarmerStatementTab() {
     auto* dheriBox = new QGroupBox("Crop Dheries Delivered (J-Forms Credit to Farmer)", this);
     auto* dheriLayout = new QVBoxLayout(dheriBox);
     m_stmtDheriesTable = new QTableWidget(0, 7, this);
+    m_stmtDheriesTable->verticalHeader()->setDefaultSectionSize(36);
+    m_stmtDheriesTable->setEditTriggers(QAbstractItemView::NoEditTriggers); // report: never inline-edit
     m_stmtDheriesTable->setHorizontalHeaderLabels({
         "J-Form No", "Date", "Crop Item", "Bags", "Weight (Qtl)", "Rate (₹/Qtl)", "Net Credit (₹)"
     });
@@ -310,6 +318,8 @@ void MandiReportsWidget::setupFarmerStatementTab() {
     auto* payBox = new QGroupBox("Payments & Disbursements (Debits to Farmer)", this);
     auto* payLayout = new QVBoxLayout(payBox);
     m_stmtPaymentsTable = new QTableWidget(0, 5, this);
+    m_stmtPaymentsTable->verticalHeader()->setDefaultSectionSize(36);
+    m_stmtPaymentsTable->setEditTriggers(QAbstractItemView::NoEditTriggers); // report: never inline-edit
     m_stmtPaymentsTable->setHorizontalHeaderLabels({
         "Voucher No", "Date", "Voucher Type", "Amount (₹)", "Narration"
     });
@@ -378,6 +388,8 @@ void MandiReportsWidget::setupDamiRegisterTab() {
     layout->addLayout(filterLayout);
 
     m_damiTable = new QTableWidget(0, 7, this);
+    m_damiTable->verticalHeader()->setDefaultSectionSize(36);
+    m_damiTable->setEditTriggers(QAbstractItemView::NoEditTriggers); // report: never inline-edit
     m_damiTable->setHorizontalHeaderLabels({
         "Vch No", "I-Form No", "Date", "Buyer Name", "Weight (Qtl)", "Goods Value (₹)", "Dami Earned (₹)"
     });

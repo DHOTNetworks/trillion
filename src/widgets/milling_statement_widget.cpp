@@ -219,7 +219,7 @@ void MillingStatementWidget::setupUi() {
     m_batchTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_batchTable->setAlternatingRowColors(true);
     m_batchTable->verticalHeader()->setVisible(false);
-    m_batchTable->verticalHeader()->setDefaultSectionSize(30);
+    m_batchTable->verticalHeader()->setDefaultSectionSize(36);
     m_batchTable->setShowGrid(true);
     connect(m_batchTable, &QTableWidget::itemSelectionChanged, this, &MillingStatementWidget::onBatchSelectionChanged);
     connect(m_batchTable, &QTableWidget::cellDoubleClicked, this, &MillingStatementWidget::onBatchDoubleClicked);
@@ -292,7 +292,7 @@ void MillingStatementWidget::setupUi() {
     m_detailTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_detailTable->setAlternatingRowColors(true);
     m_detailTable->verticalHeader()->setVisible(false);
-    m_detailTable->verticalHeader()->setDefaultSectionSize(28);
+    m_detailTable->verticalHeader()->setDefaultSectionSize(34);
     m_detailTable->setShowGrid(true);
     detailLayout->addWidget(m_detailTable);
 
@@ -328,12 +328,11 @@ void MillingStatementWidget::applyCustomStyles() {
         "  color: #0F172A;"
         "}"
         "QTableWidget::item {"
-        "  padding: 4px 8px;"
+        "  padding: 7px 8px;"
         "}"
         "QTableWidget::item:selected {"
         "  background-color: #EFF6FF;"
-        "  color: #1D4ED8;"
-        "  font-weight: bold;"
+        "  color: #0F172A;"
         "}"
         "QHeaderView::section {"
         "  background-color: #F1F5F9;"

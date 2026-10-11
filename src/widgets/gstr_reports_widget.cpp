@@ -223,6 +223,11 @@ void GstrReportsWidget::setupUi() {
 
     // ================= 3. TABS CONTAINER =================
     m_tabs = new QTabWidget(this);
+    // Tab switch focuses that tab's table (GSTR-1 / GSTR-2 rows are keyboard-first).
+    connect(m_tabs, &QTabWidget::currentChanged, this, [this](int idx) {
+        if (idx == 0) focusGstr1Table();
+        else if (idx == 1) focusGstr2Table();
+    });
     // The native macOS tab bar ignores stylesheets/palette in dark mode, so
     // pin it to Fusion (fully stylesheet-driven) — scoped to this bar only.
     if (QStyle* fusion = QStyleFactory::create("Fusion")) {
@@ -694,6 +699,31 @@ void GstrReportsWidget::applyCustomStyles() {
         "  color: #1D4ED8;"
         "}"
     );
+}
+
+void GstrReportsWidget::enterView(const QDate& fromDate, const QDate& toDate) {
+    if (m_tabs) m_tabs->setCurrentIndex(0);
+    loadReturns(fromDate, toDate);
+    if (m_gstr1B2BTable && m_gstr1B2BTable->rowCount() > 0) {
+        m_gstr1B2BTable->selectRow(0);
+    }
+    focusGstr1Table();
+}
+
+void GstrReportsWidget::focusGstr1Table() {
+    if (!m_gstr1B2BTable) return;
+    m_gstr1B2BTable->setFocus();
+    if (m_gstr1B2BTable->rowCount() > 0 && m_gstr1B2BTable->currentRow() < 0) {
+        m_gstr1B2BTable->selectRow(0);
+    }
+}
+
+void GstrReportsWidget::focusGstr2Table() {
+    if (!m_gstr2Table) return;
+    m_gstr2Table->setFocus();
+    if (m_gstr2Table->rowCount() > 0 && m_gstr2Table->currentRow() < 0) {
+        m_gstr2Table->selectRow(0);
+    }
 }
 
 void GstrReportsWidget::loadReturns(const QDate& fromDate, const QDate& toDate) {

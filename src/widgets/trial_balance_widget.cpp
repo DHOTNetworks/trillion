@@ -171,10 +171,11 @@ void TrialBalanceWidget::setupUi() {
     // ========================================================================
     m_table = new QTableWidget(this);
     m_table->setAlternatingRowColors(true);
+    m_table->setEditTriggers(QAbstractItemView::NoEditTriggers); // statement: select/drill only, never inline-edit
     m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_table->setSelectionMode(QAbstractItemView::SingleSelection);
     m_table->verticalHeader()->setVisible(false);
-    m_table->verticalHeader()->setDefaultSectionSize(30);
+    m_table->verticalHeader()->setDefaultSectionSize(36);
     m_table->horizontalHeader()->setFixedHeight(36);
     m_table->horizontalHeader()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     m_table->setShowGrid(true);
@@ -188,8 +189,8 @@ void TrialBalanceWidget::setupUi() {
         "  font-size: 12.5px;"
         "  color: #0F172A;"
         "}"
-        "QTableWidget::item { padding: 5px 12px; }"
-        "QTableWidget::item:selected { background-color: #EFF6FF; color: #1D4ED8; font-weight: bold; }"
+        "QTableWidget::item { padding: 8px 12px; }"
+        "QTableWidget::item:selected { background-color: #EFF6FF; color: #0F172A; }"
         "QHeaderView::section {"
         "  background-color: #F1F5F9;"
         "  color: #1E293B;"
@@ -337,12 +338,9 @@ void TrialBalanceWidget::populateTable() {
     TrialBalanceMode mode = m_controller->mode();
     m_table->setRowCount(rows.size() + 1); // +1 for Grand Total
 
-    auto makeNum = [](const QString& txt, bool bold = false, const QString& color = "#0F172A") {
+    auto makeNum = [](const QString& txt, bool = false, const QString& color = "#0F172A") {
         auto* itm = new QTableWidgetItem(txt);
         itm->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        QFont f("Segoe UI", 10);
-        if (bold) f.setBold(true);
-        itm->setFont(f);
         itm->setForeground(QBrush(QColor(color)));
         return itm;
     };
@@ -353,18 +351,13 @@ void TrialBalanceWidget::populateTable() {
         QString prefix = (row.depth > 0) ? "    ↳ " : "";
         auto* nameItem = new QTableWidgetItem(prefix + row.accountName);
         if (row.isGroupHeader) {
-            QFont gf("Segoe UI", 10, QFont::Bold);
-            nameItem->setFont(gf);
             nameItem->setForeground(QBrush(QColor("#2563EB")));
         } else {
-            QFont nf("Segoe UI", 10);
-            nameItem->setFont(nf);
             nameItem->setForeground(QBrush(QColor("#0F172A")));
         }
         m_table->setItem(r, 0, nameItem);
 
         auto* grpItem = new QTableWidgetItem(row.groupName);
-        grpItem->setFont(QFont("Segoe UI", 9));
         grpItem->setForeground(QBrush(QColor("#64748B")));
         m_table->setItem(r, 1, grpItem);
 
@@ -400,7 +393,6 @@ void TrialBalanceWidget::populateTable() {
     const auto& totals = m_controller->totals();
 
     auto* totLabel = new QTableWidgetItem("Grand Total");
-    totLabel->setFont(QFont("Segoe UI", 9, QFont::Bold));
     totLabel->setForeground(QBrush(QColor("#0F172A")));
     m_table->setItem(totRow, 0, totLabel);
 

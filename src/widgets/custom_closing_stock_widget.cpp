@@ -10,8 +10,82 @@
 #include <QBrush>
 #include <QColor>
 #include <QFont>
+#include <QStyledItemDelegate>
+#include <QLineEdit>
+#include <QTimer>
 
 namespace MahadevERP {
+
+namespace {
+
+// Commits the open editor on Enter / boundary arrows and drives traversal.
+class StockCellDelegate : public QStyledItemDelegate {
+public:
+    explicit StockCellDelegate(CustomClosingStockWidget* view, QObject* parent = nullptr)
+        : QStyledItemDelegate(parent), m_view(view) {}
+
+    bool eventFilter(QObject* editor, QEvent* event) override {
+        if (event->type() == QEvent::KeyPress) {
+            auto* ke = static_cast<QKeyEvent*>(event);
+            auto* le = qobject_cast<QLineEdit*>(editor);
+            int key = ke->key();
+            if (key == Qt::Key_Return || key == Qt::Key_Enter) {
+                emit commitData(qobject_cast<QWidget*>(editor));
+                emit closeEditor(qobject_cast<QWidget*>(editor), QAbstractItemDelegate::NoHint);
+                if (m_view) m_view->advanceStockCell(-1, -1, +1, true);
+                return true;
+            }
+            if (le && (key == Qt::Key_Left || key == Qt::Key_Right)) {
+                // Active selection counts as an edge: one press leaves the cell.
+                bool atEdge = le->hasSelectedText()
+                    || ((key == Qt::Key_Left) ? (le->cursorPosition() == 0)
+                                              : (le->cursorPosition() == le->text().length()));
+                if (atEdge) {
+                    emit commitData(qobject_cast<QWidget*>(editor));
+                    emit closeEditor(qobject_cast<QWidget*>(editor), QAbstractItemDelegate::NoHint);
+                    if (m_view) m_view->advanceStockCell(-1, -1, (key == Qt::Key_Right) ? +1 : -1, true);
+                    return true;
+                }
+            }
+        }
+        return QStyledItemDelegate::eventFilter(editor, event);
+    }
+
+private:
+    CustomClosingStockWidget* m_view = nullptr;
+};
+
+// Table-level keys when no editor is open: Enter edits/opens-or-steps,
+// Left/Right walk the 3..6 loop (default elsewhere).
+class StockGridNav : public QObject {
+public:
+    explicit StockGridNav(CustomClosingStockWidget* view, QObject* parent = nullptr)
+        : QObject(parent), m_view(view) {}
+
+    bool eventFilter(QObject* obj, QEvent* event) override {
+        Q_UNUSED(obj);
+        if (event->type() != QEvent::KeyPress || !m_view || !m_view->stockTable()) return false;
+        auto* ke = static_cast<QKeyEvent*>(event);
+        QTableWidget* t = m_view->stockTable();
+        int row = t->currentRow(), col = t->currentColumn();
+        bool inLoop = (row >= 0 && col >= 3 && col <= 6);
+        int key = ke->key();
+        if ((key == Qt::Key_Return || key == Qt::Key_Enter) && inLoop) {
+            m_view->advanceStockCell(row, col, +1, true);
+            return true;
+        }
+        if ((key == Qt::Key_Left || key == Qt::Key_Right) && inLoop) {
+            m_view->advanceStockCell(row, col, (key == Qt::Key_Right) ? +1 : -1, true);
+            return true;
+        }
+        return false;
+    }
+
+private:
+    CustomClosingStockWidget* m_view = nullptr;
+};
+
+} // namespace
 
 CustomClosingStockWidget::CustomClosingStockWidget(PrintExportController* printCtrl, QWidget* parent)
     : QWidget(parent), m_printCtrl(printCtrl)
@@ -208,6 +282,8 @@ void CustomClosingStockWidget::setupUi() {
     m_table->setAlternatingRowColors(true);
     m_table->verticalHeader()->setVisible(false);
     m_table->verticalHeader()->setDefaultSectionSize(30);
+    m_table->setItemDelegate(new StockCellDelegate(this, m_table));
+    m_table->installEventFilter(new StockGridNav(this, m_table));
     connect(m_table, &QTableWidget::itemChanged, this, &CustomClosingStockWidget::onTableItemChanged);
     mainLayout->addWidget(m_table, 1);
 
@@ -426,6 +502,66 @@ void CustomClosingStockWidget::populateTable(const StockValuationReport& report)
     m_isUpdatingTable = false;
     filterTableRows();
     updateSummaryCards();
+}
+
+int CustomClosingStockWidget::nextVisibleRow(int row, int dir) const {
+    if (!m_table) return -1;
+    int r = row + dir;
+    while (r >= 0 && r < m_table->rowCount()) {
+        if (!m_table->isRowHidden(r)) return r;
+        r += dir;
+    }
+    return -1;
+}
+
+void CustomClosingStockWidget::advanceStockCell(int row, int col, int dir, bool editTarget) {
+    if (!m_table || m_table->rowCount() == 0) return;
+    if (row < 0 || col < 0) {
+        row = m_table->currentRow();
+        col = m_table->currentColumn();
+    }
+    if (row < 0) row = 0;
+    // Loop order within a row: 3 -> 4 -> 5 -> 6 -> (next row) 3 ...
+    int targetRow = row, targetCol = col;
+    if (col < 3) {
+        targetCol = (dir > 0) ? 3 : 3;
+    } else if (col > 6) {
+        targetCol = (dir > 0) ? 3 : 6;
+        if (dir > 0) {
+            int nr = nextVisibleRow(row, +1);
+            if (nr >= 0) { targetRow = nr; targetCol = 3; }
+        }
+    } else if (dir > 0) {
+        if (col < 6) {
+            targetCol = col + 1;
+        } else {
+            int nr = nextVisibleRow(row, +1);
+            if (nr < 0) return; // last visible row: stay
+            targetRow = nr;
+            targetCol = 3;
+        }
+    } else {
+        if (col > 3) {
+            targetCol = col - 1;
+        } else {
+            int nr = nextVisibleRow(row, -1);
+            if (nr < 0) return; // first visible row: stay
+            targetRow = nr;
+            targetCol = 6;
+        }
+    }
+    if (!m_table->item(targetRow, targetCol)) return;
+    m_table->setFocus();
+    m_table->setCurrentCell(targetRow, targetCol);
+    if (editTarget && (targetCol == 3 || targetCol == 4 || targetCol == 5)) {
+        m_table->editItem(m_table->item(targetRow, targetCol));
+        // Select-all for fast overwrite entry.
+        if (QWidget* ed = m_table->viewport()->findChild<QLineEdit*>()) {
+            QTimer::singleShot(0, ed, [ed]() {
+                if (auto* le = qobject_cast<QLineEdit*>(ed)) le->selectAll();
+            });
+        }
+    }
 }
 
 void CustomClosingStockWidget::onTableItemChanged(QTableWidgetItem* item) {

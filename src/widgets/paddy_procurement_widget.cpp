@@ -285,7 +285,6 @@ void PaddyProcurementWidget::populateTable() {
         m_table->insertRow(row);
         auto* itemSlip = new QTableWidgetItem(slipNo);
         itemSlip->setData(Qt::UserRole, id);
-        itemSlip->setFont(QFont("Segoe UI", 9, QFont::Bold));
         itemSlip->setForeground(QBrush(QColor("#1D4ED8")));
         m_table->setItem(row, 0, itemSlip);
 
@@ -312,7 +311,6 @@ void PaddyProcurementWidget::populateTable() {
 
         auto* itemNet = new QTableWidgetItem(QString::number(net, 'f', 2));
         itemNet->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        itemNet->setFont(QFont("Segoe UI", 9, QFont::Bold));
         itemNet->setForeground(QBrush(QColor("#16A34A")));
         m_table->setItem(row, 8, itemNet);
 
@@ -322,7 +320,6 @@ void PaddyProcurementWidget::populateTable() {
 
         auto* itemTot = new QTableWidgetItem(QString::number(netAmt, 'f', 2));
         itemTot->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        itemTot->setFont(QFont("Segoe UI", 9, QFont::Bold));
         itemTot->setForeground(QBrush(QColor("#15803D")));
         m_table->setItem(row, 10, itemTot);
 

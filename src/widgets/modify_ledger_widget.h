@@ -54,6 +54,11 @@ private:
     void setupSearchableCombo(QComboBox* combo, const QStringList& items);
     void setComboText(QComboBox* combo, const QString& text);
     QString getComboText(const QComboBox* combo) const;
+    // PAN autofill tracking: a PAN derived from a GSTIN refreshes when the
+    // GSTIN is corrected; a user-typed PAN is never overwritten.
+    void applyDerivedPan(const QString& gstinUpper);
+    bool m_panAutoFilled = false;
+    QString m_panAutoGstin;
 
     PartiesModel m_partiesModel;
     int m_selectedPartyId = -1;

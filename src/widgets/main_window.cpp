@@ -878,9 +878,9 @@ void MainWindow::openAccountingPeriodDialog() {
             m_dayBookWidget->loadDayBookData(fDate, tDate);
         } else if (vIdx == 34 && m_gstrReportsWidget) {
             // GSTR-1 is a MONTHLY return: always open on the current month,
-            // not the dashboard's full-year period (combos default likewise).
+            // on the GSTR-1 tab with row 0 focused (combos default likewise).
             QDate today = QDate::currentDate();
-            m_gstrReportsWidget->loadReturns(
+            m_gstrReportsWidget->enterView(
                 QDate(today.year(), today.month(), 1),
                 QDate(today.year(), today.month(), today.daysInMonth()));
         } else if (vIdx == 35 && m_millingStatementWidget) {

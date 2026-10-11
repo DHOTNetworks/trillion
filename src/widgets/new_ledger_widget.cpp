@@ -2,6 +2,7 @@
 #include "custom_dialogs.h"
 #include "../models/account_classifier.h"
 #include "../engine/accounting_engine.h"
+#include "../services/gstin_autofill_service.h"
 #include <QKeyEvent>
 #include <QMessageBox>
 #include <QDoubleValidator>
@@ -231,6 +232,25 @@ void NewLedgerWidget::setupUi() {
     connect(m_balTypeCombo, &QComboBox::currentTextChanged, this, &NewLedgerWidget::updateTotalOpeningBalDisplay);
     connect(m_gstinInput, &QLineEdit::textChanged, this, &NewLedgerWidget::onGstinChanged);
     connect(m_stateCombo, &QComboBox::currentTextChanged, this, &NewLedgerWidget::onStateChanged);
+    // User keystrokes in PAN revoke the autofill tracking (programmatic
+    // setText does not emit textEdited, so autofills stay tracked).
+    connect(m_panInput, &QLineEdit::textEdited, this, [this]() { m_panAutoFilled = false; });
+
+    // Silent background autofill: a finished, valid GSTIN fills name/address.
+    MahadevERP::GstinAutofillService::instance().watch(m_gstinInput, [this](const MahadevERP::GstinProfile& p) {
+        if (!p.valid) return; // invalid checksum / no key / offline: stay silent, manual entry wins
+        const QString bestName = !p.tradeName.isEmpty() ? p.tradeName : p.legalName;
+        if (!bestName.isEmpty() && m_nameInput->text().trimmed().isEmpty())
+            m_nameInput->setText(bestName);
+        if (!p.address.isEmpty() && m_addressInput->text().trimmed().isEmpty())
+            m_addressInput->setText(p.address);
+        if (!p.pincode.isEmpty() && m_pincodeInput->text().trimmed().isEmpty())
+            m_pincodeInput->setText(p.pincode);
+        if (p.gstin.length() == 15 && m_gstinInput->text().trimmed().toUpper() == p.gstin)
+            applyDerivedPan(p.gstin);
+        if (p.taxpayerType.compare("Composition", Qt::CaseInsensitive) == 0)
+            setComboText(m_gstPartyTypeCombo, "Composition Dealer");
+    });
 
     // Group Selection -> Parent Group Hint
     connect(m_groupCombo, &QComboBox::currentTextChanged, this, [this](const QString& gText) {
@@ -697,6 +717,8 @@ void NewLedgerWidget::resetForm() {
     m_gstinInput->clear();
     setComboText(m_gstPartyTypeCombo, "Normal Dealer");
     m_panInput->clear();
+    m_panAutoFilled = false;
+    m_panAutoGstin.clear();
     m_tinInput->clear();
     m_urnInput->clear();
 
@@ -815,11 +837,32 @@ void NewLedgerWidget::onGstinChanged(const QString& text) {
         }
     }
     if (clean.length() >= 10) {
-        QString extractedPan = clean.mid(2, 10);
-        if (m_panInput->text().isEmpty()) {
-            m_panInput->setText(extractedPan);
-        }
+        applyDerivedPan(clean);
         setComboText(m_gstPartyTypeCombo, "Normal Dealer");
+    }
+}
+
+void NewLedgerWidget::applyDerivedPan(const QString& gstinUpper) {
+    if (gstinUpper.length() < 12) return;
+    const QString expected = gstinUpper.mid(2, 10);
+    const QString cur = m_panInput->text().trimmed().toUpper();
+    if (cur.isEmpty()) {
+        m_panInput->setText(expected);
+        m_panAutoFilled = true;
+        m_panAutoGstin = gstinUpper;
+        return;
+    }
+    if (cur == expected) {
+        // Already correct (typed or filled) — adopt tracking silently.
+        m_panAutoFilled = true;
+        m_panAutoGstin = gstinUpper;
+        return;
+    }
+    // Non-empty and different: refresh only if the current value is our own
+    // stale autofill from another GSTIN; a user-typed PAN is sacred.
+    if (m_panAutoFilled && m_panAutoGstin != gstinUpper) {
+        m_panInput->setText(expected);
+        m_panAutoGstin = gstinUpper;
     }
 }
 
