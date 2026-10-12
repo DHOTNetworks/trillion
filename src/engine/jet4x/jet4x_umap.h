@@ -42,7 +42,7 @@ struct UmapTableMaps {
         std::vector<uint32_t> owned;
         std::vector<uint32_t> free;
     };
-    /* Per LVAL column (spec order): owned + free maps. */
+    /* Per LVAL column IN COLUMN-NUMBER ORDER (matches tdef R refs). */
     std::vector<LvalMaps> lvals;
 };
 

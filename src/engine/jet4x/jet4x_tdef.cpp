@@ -10,6 +10,8 @@
 
 #include "jet4x_tdef.h"
 
+#include <algorithm>
+
 #include "jet4x_core.h"
 #include "jet4x_layout.h"
 
@@ -210,14 +212,30 @@ bool buildTdef(const TableSpec& spec, uint32_t tdefPageNo, uint32_t umapPageNo,
     for (size_t i = 0; i < spec.indexes.size(); i++)
         putName(b, spec.indexes[i].name);
 
-    /* LVAL column usage-map refs (10 bytes each, spec column order). */
+    /* LVAL column usage-map refs (10 bytes each) in COLUMN NUMBER order
+     * (ground truth: MSysObjects R cols 8,9,12..16 with rows 2,4,6..14).
+     * lvalUmaps[] must arrive in the same number order; the umap writer
+     * emits rows in vector order, so both agree. */
     {
-        size_t li = 0;
+        std::vector<size_t> lvals;
         for (size_t i = 0; i < n; i++) {
-            if (!isLongValue(spec.columns[i].type))
-                continue;
+            if (isLongValue(spec.columns[i].type))
+                lvals.push_back(i);
+        }
+        std::sort(lvals.begin(), lvals.end(), [&](size_t a, size_t b) {
+            int na = spec.columns[a].num < 0 ? (int)a : spec.columns[a].num;
+            int nb = spec.columns[b].num < 0 ? (int)b : spec.columns[b].num;
+            return na < nb;
+        });
+        if (lvals.size() != lvalUmaps.size()) {
+            error = "lval umap count mismatch for " + spec.name;
+            return false;
+        }
+        size_t li = 0;
+        for (size_t i : lvals) {
             const LvalUmap& u = lvalUmaps[li++];
-            putU16(b, (uint16_t)i);
+            int num = spec.columns[i].num < 0 ? (int)i : spec.columns[i].num;
+            putU16(b, (uint16_t)num);
             b.push_back(u.ownedRow);
             put3(b, u.page);
             b.push_back(u.freeRow);

@@ -57,6 +57,10 @@ bool addPageRow(DatabaseImage& img, uint32_t pg, const uint8_t* row,
         return false;
     }
     uint16_t nrows = (uint16_t)(p[kDpRows] | ((uint16_t)p[kDpRows + 1] << 8));
+    if (nrows > 512) {
+        error = "addPageRow: insane row count";
+        return false;
+    }
     /* Lowest live row start (page end when empty). */
     uint16_t low = kPageSize;
     for (uint16_t s = 0; s < nrows; s++) {
@@ -66,11 +70,17 @@ bool addPageRow(DatabaseImage& img, uint32_t pg, const uint8_t* row,
         if ((so & 0xC000) == 0 && off < low)
             low = off;
     }
-    if (len > (size_t)(low - (kDpSlots + 2 * (nrows + 1)))) {
+    /* Consistency + fit, overflow-proof (all unsigned-widened). */
+    uint32_t slotsEnd = (uint32_t)kDpSlots + 2u * (uint32_t)nrows;
+    if ((uint32_t)low < slotsEnd + 2u) {
+        error = "addPageRow: page inconsistent";
+        return false;
+    }
+    if ((uint32_t)len > (uint32_t)low - slotsEnd - 2u) {
         error = "addPageRow: row does not fit";
         return false;
     }
-    uint16_t start = (uint16_t)(low - len);
+    uint16_t start = (uint16_t)((uint32_t)low - (uint32_t)len);
     memcpy(p + start, row, len);
     p[kDpSlots + 2 * nrows] = (uint8_t)(start & 0xFF);
     p[kDpSlots + 2 * nrows + 1] = (uint8_t)((start >> 8) & 0xFF);

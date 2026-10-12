@@ -3,8 +3,8 @@
  * @description jet4x table-definition page writer.
  * Byte layout mirrors jackcess TableImpl.writeTableDefinition (+ColumnImpl /
  * IndexData / IndexImpl writeDefinitions) for Jet4; values are canonical
- * little-endian (fixes Bahi-Khata's own quirks, e.g. AuditTrail.c1's
- * byte-flipped number/id — structurally identical, cleaner bytes).
+ * little-endian. Column numbers/ids, varoffs, fixoffs and flags follow the
+ * Bahi-Khata ground-truth rules (number-semantic, flag-driven placement).
  */
 
 #pragma once
@@ -33,7 +33,8 @@ inline constexpr uint32_t kSortGeneral = 0x00000409;
  * Builds one table's complete definition image.
  * tdefPageNo/umapPageNo are the reserved pages for this table; indexRoots[i]
  * is the reserved empty root page for indexes[i]; lvalUmaps[j] places the
- * j-th long-value column (spec order). Unused index key slots are FF FF 00.
+ * j-th long-value column in COLUMN-NUMBER order (ground truth: MSys R
+ * refs run in num order). Unused index key slots are FF FF 00.
  * Output is the logical byte stream; use placeTdef() to paginate it.
  */
 bool buildTdef(const TableSpec& spec, uint32_t tdefPageNo, uint32_t umapPageNo,
