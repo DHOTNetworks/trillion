@@ -11,6 +11,7 @@
 #include "jet4x_tdef.h"
 
 #include "jet4x_core.h"
+#include "jet4x_layout.h"
 
 namespace jet4x {
 
@@ -88,24 +89,10 @@ bool buildTdef(const TableSpec& spec, uint32_t tdefPageNo, uint32_t umapPageNo,
         }
     }
 
-    /* Shared var-slot counter: TEXT and LVAL consume in column order;
-     * FIXED and BOOL peek without consuming (Bahi-Khata ground truth). */
+    /* Canonical layout shared with the row packer (jet4x_layout.h). */
     const size_t n = spec.columns.size();
-    std::vector<uint16_t> varOff(n, 0), fixOff(n, 0);
-    uint16_t nextVar = 0, nextFix = 0, nVar = 0;
-    for (size_t i = 0; i < n; i++) {
-        int fs = fixedSize(spec.columns[i].type, spec.columns[i].length);
-        if (fs == -1 || fs == -2) {
-            varOff[i] = nextVar++;
-        } else if (spec.columns[i].type == DataType::Boolean) {
-            varOff[i] = nextVar;
-        } else {
-            varOff[i] = nextVar;
-            fixOff[i] = nextFix;
-            nextFix = (uint16_t)(nextFix + fs);
-        }
-    }
-    nVar = nextVar;
+    TableLayout L = computeLayout(spec);
+    uint16_t nVar = L.nVar;
 
     std::vector<uint8_t> b;
     b.reserve(8192);
@@ -149,7 +136,7 @@ bool buildTdef(const TableSpec& spec, uint32_t tdefPageNo, uint32_t umapPageNo,
         b.push_back((uint8_t)c.type);
         putU32(b, kMagicTable);
         putU16(b, (uint16_t)i);
-        putU16(b, varOff[i]); /* TEXT/LVAL consume; FIXED/BOOL peek */
+        putU16(b, L.cols[i].varOff);
         putU16(b, (uint16_t)i);
         putU32(b, kSortGeneral);
         uint8_t flags = kFlagUpdatable;
@@ -162,7 +149,7 @@ bool buildTdef(const TableSpec& spec, uint32_t tdefPageNo, uint32_t umapPageNo,
         b.push_back(flags);
         b.push_back(c.extFlags);
         putU32(b, 0);
-        putU16(b, fs > 0 ? fixOff[i] : 0);
+        putU16(b, fs > 0 ? L.cols[i].fixOff : 0);
         uint16_t len = 0;
         if (fs > 0)
             len = (uint16_t)fs;
