@@ -29,6 +29,7 @@ enum class DataType : uint8_t {
     Memo = 0x0C,
     Guid = 0x0F,
     Numeric = 0x10,
+    BigBinary = 0x11, /* variable-length (MSys binary blobs) */
 };
 
 /** Fixed storage size; -1 = variable length, -2 = long value (LVAL). */
@@ -52,11 +53,12 @@ inline int fixedSize(DataType t, uint16_t len) {
         case DataType::Numeric:
             return 17;
         case DataType::Binary:
-            return (int)len;
+            return -1; /* variable-length (MSys SID/Owner pattern) */
         default:
             break;
     }
-    if (t == DataType::Text)
+    if (t == DataType::Text || t == DataType::Binary ||
+        t == DataType::BigBinary)
         return -1;
     return -2; /* Memo / Ole */
 }
@@ -65,12 +67,26 @@ inline bool isLongValue(DataType t) {
     return t == DataType::Memo || t == DataType::Ole;
 }
 
+/** Variable-length types (content-sized; always var-placed). */
+inline bool isVarType(DataType t) {
+    return t == DataType::Text || t == DataType::Binary ||
+           t == DataType::BigBinary || t == DataType::Memo ||
+           t == DataType::Ole;
+}
+
 struct ColumnSpec {
     std::string name;
     DataType type = DataType::Text;
     uint16_t length = 0; /* TEXT: max bytes (510 = 255 UCS-2); BINARY: bytes */
     uint8_t extFlags = 0; /* 0x01 = compressed unicode (mirrored per column) */
     bool autoNumber = false; /* LONG autonumber: adds flag bit 0x04 */
+    /* Catalog identity (default -1 = positional, i.e. canonical tables).
+     * System tables carry alien numbers which are SEMANTIC (fixed placement
+     * and nullmask follow column number, not tdef position). */
+    int num = -1; /* column number (tdef field @5, single byte for Jet4) */
+    int id = -1;  /* column id (tdef field @9) */
+    bool hasFlags = false; /* true: use flags verbatim (system tables) */
+    uint8_t flags = 0;
 };
 
 struct IndexKeySpec {
@@ -101,5 +117,45 @@ struct LvalUmap {
     uint8_t ownedRow = 0;
     uint8_t freeRow = 0;
 };
+
+/** Canonical flags for fresh tables (mirrors use tdef-verbatim flags). */
+inline uint8_t defaultFlags(DataType t, int fs, bool autoNumber) {
+    uint8_t f = 0x02; /* UPDATABLE */
+    if (fs > 0)
+        f |= 0x01; /* FIXED_LEN */
+    if (t == DataType::Boolean)
+        f = (uint8_t)(0x02 | 0x01); /* 0x03, nullmask-stored */
+    if (autoNumber)
+        f |= 0x04;
+    return f;
+}
+
+/**
+ * Fixed-vs-variable PLACEMENT (not storage size!). Ground truth:
+ * placement follows the flags FIXED bit for fixed-size types; variable-
+ * length types are always var-placed (a FIXED bit on TEXT is a fossil
+ * lie — NewTable c2 proof); Booleans live in the nullmask. Fresh-table
+ * defaults make this identical to the old type-driven rule.
+ */
+inline bool isFixedPlaced(const ColumnSpec& c) {
+    if (c.type == DataType::Boolean)
+        return false;
+    if (isVarType(c.type))
+        return false;
+    int fs = fixedSize(c.type, c.length);
+    if (fs <= 0)
+        return false;
+    if (c.hasFlags)
+        return (c.flags & 0x01) != 0;
+    return true;
+}
+
+/** Var-placed columns (occupy a var slot): everything not fixed-placed
+ * and not Boolean (nullmask). */
+inline bool isVarPlaced(const ColumnSpec& c) {
+    if (c.type == DataType::Boolean)
+        return false;
+    return !isFixedPlaced(c);
+}
 
 } /* namespace jet4x */

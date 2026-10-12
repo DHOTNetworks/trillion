@@ -28,6 +28,12 @@ inline constexpr uint32_t kDpSlots = 14;
 /** LVAL page magic at [4..7]. */
 inline constexpr uint8_t kLvalMagic[4] = {'L', 'V', 'A', 'L'};
 
+/* Empty index-root layout (INDEX_LEAF, level 0, 453B entry mask). */
+inline constexpr uint32_t kIndexRootUsed = 480;
+
+/** Allocates an empty index root bound to tdefPg (free=3616). */
+uint32_t newIndexRoot(DatabaseImage& img, uint32_t tdefPg);
+
 /** Allocates a table data page bound to tdefPg (free=4082, rows=0). */
 uint32_t newDataPage(DatabaseImage& img, uint32_t tdefPg);
 

@@ -28,6 +28,15 @@ uint32_t newDataPage(DatabaseImage& img, uint32_t tdefPg) {
     return pg;
 }
 
+uint32_t newIndexRoot(DatabaseImage& img, uint32_t tdefPg) {
+    uint32_t pg = img.allocPage(kPgIndexLeaf);
+    uint8_t* p = img.page(pg);
+    p[1] = 0x01;
+    putU16(p + kDpFree, (uint16_t)(kPageSize - kIndexRootUsed));
+    putU32(p + kDpTdef, tdefPg);
+    return pg;
+}
+
 uint32_t newLvalPage(DatabaseImage& img) {
     uint32_t pg = img.allocPage(kPgData);
     uint8_t* p = img.page(pg);

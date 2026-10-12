@@ -129,23 +129,20 @@ bool buildTdef(const TableSpec& spec, uint32_t tdefPageNo, uint32_t umapPageNo,
         putU32(b, 0);
     }
 
-    /* Column definitions (25 bytes each). */
+    /* Column definitions (25 bytes each, tdef position order). */
     for (size_t i = 0; i < n; i++) {
         const ColumnSpec& c = spec.columns[i];
         int fs = fixedSize(c.type, c.length);
         b.push_back((uint8_t)c.type);
         putU32(b, kMagicTable);
-        putU16(b, (uint16_t)i);
+        int num = c.num < 0 ? (int)i : c.num;
+        putU16(b, (uint16_t)num);
         putU16(b, L.cols[i].varOff);
-        putU16(b, (uint16_t)i);
+        int cid = c.id < 0 ? (int)i : c.id;
+        putU16(b, (uint16_t)cid);
         putU32(b, kSortGeneral);
-        uint8_t flags = kFlagUpdatable;
-        if (fs > 0)
-            flags |= kFlagFixedLen;
-        if (c.type == DataType::Boolean)
-            flags = (uint8_t)(kFlagUpdatable | kFlagFixedLen); /* 0x03 */
-        if (c.autoNumber)
-            flags |= 0x04;
+        uint8_t flags =
+            c.hasFlags ? c.flags : defaultFlags(c.type, fs, c.autoNumber);
         b.push_back(flags);
         b.push_back(c.extFlags);
         putU32(b, 0);

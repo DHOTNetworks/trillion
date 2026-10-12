@@ -80,8 +80,20 @@ bool packRow(PackCtx& ctx, const std::vector<CellValue>& cells,
     /* Fixed block (always full fixedLen; nulls stay zero). */
     const size_t fixedStart = b.size();
     b.insert(b.end(), L.fixedLen, 0);
-    std::vector<uint8_t> mask((n + 7) / 8, 0);
-    auto mark = [&](size_t col) { mask[col / 8] |= (uint8_t)(1 << (col % 8)); };
+    size_t maxNum = n;
+    for (size_t i = 0; i < n; i++) {
+        int num = spec.columns[i].num < 0 ? (int)i : spec.columns[i].num;
+        if ((size_t)num + 1 > maxNum)
+            maxNum = (size_t)num + 1;
+    }
+    std::vector<uint8_t> mask((maxNum + 7) / 8, 0);
+    /* Null-mask bits follow COLUMN NUMBER (not tdef position) — invisible
+     * on canonical tables, critical on alien system tables. */
+    auto mark = [&](size_t col) {
+        int num = spec.columns[col].num < 0 ? (int)col
+                                            : spec.columns[col].num;
+        mask[(size_t)num / 8] |= (uint8_t)(1 << ((size_t)num % 8));
+    };
 
     struct VarPiece {
         size_t col = 0;
@@ -98,10 +110,15 @@ bool packRow(PackCtx& ctx, const std::vector<CellValue>& cells,
                 mark(i); /* true; false/null share the clear bit */
             continue;
         }
-        if (fs >= 0) {
+        if (isFixedPlaced(c)) {
+            int fs = fixedSize(c.type, c.length);
             if (!v.isNull) {
                 if ((int)v.fixed.size() != fs) {
                     error = "packRow: fixed size mismatch col " + c.name;
+                    return false;
+                }
+                if ((size_t)L.cols[i].fixOff + (size_t)fs > L.fixedLen) {
+                    error = "packRow: fixed span out of block col " + c.name;
                     return false;
                 }
                 mark(i);
@@ -110,16 +127,32 @@ bool packRow(PackCtx& ctx, const std::vector<CellValue>& cells,
             }
             continue;
         }
-        /* Variable-length (TEXT, BINARY) and long-value (MEMO, OLE). */
+        /* Variable-placed (TEXT/BINARY/LVAL, or fixed-size types without
+         * the FIXED bit): content bytes as one var piece. */
         if (v.isNull)
             continue;
         mark(i);
-        if (c.type == DataType::Binary) {
+        if (c.type == DataType::Binary || c.type == DataType::BigBinary) {
             VarPiece p;
             p.col = i;
             p.data = v.blob;
             varPieces.push_back(std::move(p));
-        } else if (c.type == DataType::Text) {
+            continue;
+        }
+        if (!isVarType(c.type)) {
+            /* Var-placed fixed-size content (NavPane pattern): verbatim. */
+            int fs = fixedSize(c.type, c.length);
+            if ((int)v.fixed.size() != fs) {
+                error = "packRow: var-fixed size mismatch col " + c.name;
+                return false;
+            }
+            VarPiece p;
+            p.col = i;
+            p.data = v.fixed;
+            varPieces.push_back(std::move(p));
+            continue;
+        }
+        if (c.type == DataType::Text) {
             VarPiece p;
             p.col = i;
             p.data = encodeText(v.text, c.extFlags == 0x01);
@@ -197,26 +230,34 @@ bool packRow(PackCtx& ctx, const std::vector<CellValue>& cells,
     std::vector<uint16_t> slotOff(L.nVar, 0);
     std::vector<size_t> varCols;
     for (size_t i = 0; i < n; i++) {
-        int fs = fixedSize(spec.columns[i].type, spec.columns[i].length);
-        if (fs == -1 || fs == -2)
+        if (isVarPlaced(spec.columns[i]))
             varCols.push_back(i);
     }
     std::sort(varCols.begin(), varCols.end(), [&](size_t a, size_t b) {
-        return L.cols[a].varOff < L.cols[b].varOff;
+        if (L.cols[a].varOff != L.cols[b].varOff)
+            return L.cols[a].varOff < L.cols[b].varOff;
+        return a < b;
     });
     std::map<size_t, const std::vector<uint8_t>*> pieceByCol;
     for (const auto& p : varPieces)
         pieceByCol[p.col] = &p.data;
-    for (size_t col : varCols) {
-        uint16_t slot = L.cols[col].varOff;
-        if (slot >= L.nVar) {
-            error = "packRow: var slot out of range";
-            return false;
+    /* Forward fill: every slot (claimed or hole) gets the running
+     * position, so offsets stay monotonic and slot-order spans read
+     * correctly. Trailing holes land on EOD naturally. */
+    {
+        size_t vi = 0;
+        for (uint16_t s = 0; s < L.nVar; s++) {
+            slotOff[s] = (uint16_t)b.size();
+            while (vi < varCols.size() &&
+                   L.cols[varCols[vi]].varOff == s) {
+                auto it = pieceByCol.find(varCols[vi]);
+                if (it != pieceByCol.end())
+                    b.insert(b.end(), it->second->begin(), it->second->end());
+                vi++;
+            }
         }
-        slotOff[slot] = (uint16_t)b.size(); /* visit time, null or not */
-        auto it = pieceByCol.find(col);
-        if (it != pieceByCol.end())
-            b.insert(b.end(), it->second->begin(), it->second->end());
+        /* Columns claiming out-of-range slots were validated earlier;
+         * any var column beyond nVar is a spec error (already rejected). */
     }
     uint16_t eod = (uint16_t)b.size();
     putU16(b, eod);
