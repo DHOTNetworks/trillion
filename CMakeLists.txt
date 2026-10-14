@@ -531,6 +531,13 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
 # ==============================================================================
 # Native LogicBoard Automated Test Suite
 # ==============================================================================
+if(WIN32)
+    option(BUILD_TESTS "Build test suites" OFF)
+else()
+    option(BUILD_TESTS "Build test suites" ON)
+endif()
+
+if(BUILD_TESTS)
 enable_testing()
 
 set(TEST_SOURCES
@@ -999,6 +1006,7 @@ if(APPLE)
 endif()
 add_test(NAME TestTdsVoucher COMMAND TestTdsVoucher)
 endif()
+endif() # BUILD_TESTS
 
 
 

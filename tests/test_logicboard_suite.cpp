@@ -1401,7 +1401,7 @@ void LogicBoardTestSuite::testInvoiceAuditWiring() {
         "AUDIT-S-1", "2099-08-15", "Audit Wire Customer", "", "Audit Wire Item", "1001",
         10, 10.0, 100.0, 1000.0, 5.0, 25.0, 25.0, 0.0, 0.0, 1050.0, "Credit",
         "", "", "audit probe sale", "Self Sale", "Paid", 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-        0.0, 0.0, 0.0, 0.0, "", "", "", "", "", "", "", "", "", "", "", "",
+        0.0, 0.0, 0.0, 0.0, "", "", "", "", "", "", "", "", "", "", "",
         QVariantList(), "Market", 0, "", 0.0, 0.0, 0.0, "", ""));
     QVariant saleAudit = db.executeScalar(
         "SELECT after_json FROM audit_log WHERE action = 'INSERT' AND table_name = 'sales_invoices' "
@@ -1413,7 +1413,7 @@ void LogicBoardTestSuite::testInvoiceAuditWiring() {
         "SUP-AUDIT-1", "2099-08-15", "Audit Wire Supplier", "", "Audit Wire Item", "1001",
         10, 10.0, 100.0, 1000.0, 5.0, 25.0, 25.0, 0.0, 0.0, 1050.0, "Credit",
         "", "", "audit probe purchase", "Self Purchase", "Paid", 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-        0.0, 0.0, 0.0, 0.0, "", "", "", "", "", "", "", "", "", "", "", "",
+        0.0, 0.0, 0.0, 0.0, "", "", "", "", "", "", "", "", "", "", "",
         QVariantList(), "Market", 0, "", 0.0, 0.0, 0.0, "", ""));
     QVariant purchAudit = db.executeScalar(
         "SELECT after_json FROM audit_log WHERE action = 'INSERT' AND table_name = 'purchase_invoices' "

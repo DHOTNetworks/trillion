@@ -32,11 +32,11 @@ jobs:
 
       - name: Configure CMake
         run: |
-          cmake -B build -G "Ninja" -DCMAKE_BUILD_TYPE=Release
+          cmake -B build -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF
 
       - name: Build Application
         run: |
-          cmake --build build --config Release
+          cmake --build build --config Release --target MahadevRiceMillERP
 
       - name: Deploy Windows Binary with windeployqt
         shell: cmd
