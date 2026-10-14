@@ -363,7 +363,7 @@ void MillingBatchController::recalculateTotals() {
     }
 
     m_totalConsumedBags = cBags;
-    m_totalConsumedWeight = std::round(cWt * 1000.0) / 1000.0;
+    m_totalConsumedWeight = FinancialMathService::instance().round3(cWt);
     m_totalConsumedAmount = FinancialMathService::instance().round2(cAmt);
 
     double pPct = 0.0;
@@ -388,13 +388,13 @@ void MillingBatchController::recalculateTotals() {
         pAmt += pa;
     }
 
-    m_totalProducedYieldPct = std::round(pPct * 1000.0) / 1000.0;
+    m_totalProducedYieldPct = FinancialMathService::instance().round3(pPct);
     m_totalProducedBags = pBags;
-    m_totalProducedWeight = std::round(pWt * 1000.0) / 1000.0;
+    m_totalProducedWeight = FinancialMathService::instance().round3(pWt);
     m_totalProducedAmount = FinancialMathService::instance().round2(pAmt);
 
-    m_shortagePct = std::max(0.0, std::round((100.0 - m_totalProducedYieldPct) * 1000.0) / 1000.0);
-    m_shortageWeight = std::max(0.0, std::round((m_totalConsumedWeight - m_totalProducedWeight) * 1000.0) / 1000.0);
+    m_shortagePct = std::max(0.0, FinancialMathService::instance().round3((100.0 - m_totalProducedYieldPct)));
+    m_shortageWeight = std::max(0.0, FinancialMathService::instance().round3((m_totalConsumedWeight - m_totalProducedWeight)));
     m_shortageBags = std::max(0, m_totalConsumedBags - m_totalProducedBags);
 
     emit totalsChanged();

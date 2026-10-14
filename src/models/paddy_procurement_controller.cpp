@@ -66,9 +66,9 @@ void PaddyProcurementController::recalculateDeductions() {
     // Moisture deduction standard: benchmark 17.0%
     double moistDed = (m_grossWeightQtl * (m_moisturePct - 17.0) * 0.01);
     if (moistDed < 0.0) moistDed = 0.0;
-    m_moistureDeductionQtl = std::round(moistDed * 1000.0) / 1000.0;
+    m_moistureDeductionQtl = FinancialMathService::instance().round3(moistDed);
 
-    m_netWeightQtl = std::max(0.0, std::round((m_grossWeightQtl - m_moistureDeductionQtl) * 1000.0) / 1000.0);
+    m_netWeightQtl = std::max(0.0, FinancialMathService::instance().round3((m_grossWeightQtl - m_moistureDeductionQtl)));
     m_hamaliTotal = FinancialMathService::instance().round2(m_bagCount * m_hamaliPerBag);
 
     double grossAmt = m_netWeightQtl * m_ratePerQtl;

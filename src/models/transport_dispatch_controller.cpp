@@ -381,7 +381,7 @@ double TransportDispatchController::calculateNetWeight(double grossQtl, double t
     double bagDeductionQtl = (bagCount * bagTareKg) / 100.0;
     double net = grossQtl - tareQtl - bagDeductionQtl;
     if (net < 0.0) net = 0.0;
-    return std::round(net * 100.0) / 100.0;
+    return FinancialMathService::instance().round2(net);
 }
 
 QVariantMap TransportDispatchController::calculateFreight(const QString &calcType, double rate, double netWeightQtl, int bagCount, double advancePaid) {
@@ -394,10 +394,10 @@ QVariantMap TransportDispatchController::calculateFreight(const QString &calcTyp
         total = rate;
     }
 
-    total = std::round(total * 100.0) / 100.0;
+    total = FinancialMathService::instance().round2(total);
     double balance = total - advancePaid;
     if (balance < 0.0) balance = 0.0;
-    balance = std::round(balance * 100.0) / 100.0;
+    balance = FinancialMathService::instance().round2(balance);
 
     QString status = "Unpaid";
     if (advancePaid >= total && total > 0.0) {
@@ -470,7 +470,7 @@ QVariantMap TransportDispatchController::saveDispatch(const QVariantMap &data) {
     if (netWeightQtl <= 0.0) {
         netWeightQtl = calculateNetWeight(grossWeightQtl, tareWeightQtl, bagCount, bagTareKg);
         if (netWeightQtl <= 0.0 && bagCount > 0 && packingKg > 0.0) {
-            netWeightQtl = std::round((bagCount * packingKg / 100.0) * 100.0) / 100.0;
+            netWeightQtl = FinancialMathService::instance().round2((bagCount * packingKg / 100.0));
         }
     }
 

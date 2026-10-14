@@ -10,6 +10,7 @@
 #include <iostream>
 
 #include "database_manager.h"
+#include "services/db_service.h"
 #include "models/dashboard_controller.h"
 #include "models/paddy_arrivals_model.h"
 #include "models/sales_model.h"
@@ -254,6 +255,13 @@ int main(int argc, char* argv[]) {
         dbTimer.start();
         bool dbOk = DatabaseManager::instance().initDatabase(resolvedDbPath);
         std::cout << "[PERF-TIMER] DatabaseManager initDatabase: " << dbTimer.elapsed() << " ms (Total: " << startupTimer.elapsed() << " ms)" << std::endl;
+        if (dbOk) {
+            // Isolate the UI thread: heavy reads move to the DB worker from here on.
+            QElapsedTimer workerTimer;
+            workerTimer.start();
+            const bool workerOk = MahadevERP::DbService::instance().start(resolvedDbPath);
+            std::cout << "[PERF-TIMER] DbService worker start: " << workerTimer.elapsed() << " ms (ok=" << workerOk << ")" << std::endl;
+        }
         if (!dbOk) {
             std::cerr << "[ERROR] Failed to initialize SQLite database at: " << resolvedDbPath.toStdString() << std::endl << std::flush;
         }

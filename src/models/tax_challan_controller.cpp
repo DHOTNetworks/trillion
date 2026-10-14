@@ -1,4 +1,5 @@
 #include "tax_challan_controller.h"
+#include "../services/financial_math_service.h"
 #include "account_classifier.h"
 #include "../database_manager.h"
 #include <QDate>
@@ -379,7 +380,7 @@ void TaxChallanController::recalculate()
     m_totalTax = m_basicTax + m_surcharge + m_cess;
 
     m_totalChallanAmount = m_totalTax + m_interestAmount + m_penaltyAmount + m_otherAmount;
-    m_totalChallanAmount = std::round(m_totalChallanAmount * 100.0) / 100.0;
+    m_totalChallanAmount = FinancialMathService::round2(m_totalChallanAmount);
 
     emit totalsChanged();
 }

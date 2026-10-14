@@ -1,4 +1,5 @@
 #include "sauda_controller.h"
+#include "../services/financial_math_service.h"
 #include "../database_manager.h"
 #include "../engine/accounting_engine.h"
 #include <QDate>
@@ -127,13 +128,13 @@ bool SaudaController::createDalaliSettlement(
     int nextId = (maxVal.isValid() && !maxVal.isNull()) ? (maxVal.toInt() + 1) : 1;
     QString settNo = QString("DL-%1").arg(nextId, 5, 10, QChar('0'));
 
-    double dalaliAmount = std::round((weightQtl * dalaliRate) * 100.0) / 100.0;
+    double dalaliAmount = FinancialMathService::round2((weightQtl * dalaliRate));
     if (dalaliAmount == 0.0 && ratePerQtl > 0) {
         // If dalali rate was percentage
-        dalaliAmount = std::round(((weightQtl * ratePerQtl) * (dalaliRate / 100.0)) * 100.0) / 100.0;
+        dalaliAmount = FinancialMathService::round2(((weightQtl * ratePerQtl) * (dalaliRate / 100.0)));
     }
 
-    double tdsAmount = std::round((dalaliAmount * (tdsPct / 100.0)) * 100.0) / 100.0;
+    double tdsAmount = FinancialMathService::round2((dalaliAmount * (tdsPct / 100.0)));
     double netDalali = dalaliAmount - tdsAmount;
 
     QVariant finalBrokerId;

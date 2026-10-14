@@ -1,4 +1,5 @@
 #include "tcs_receipt_voucher_controller.h"
+#include "../services/financial_math_service.h"
 #include "account_classifier.h"
 #include "../database_manager.h"
 #include <QDate>
@@ -88,7 +89,7 @@ void TcsReceiptVoucherController::setBankAmount(double amt)
     m_bankAmount = std::max(0.0, amt);
     if (m_withoutTcsAmount == 0.0 && m_bankAmount > 0.0) {
         // Estimate without TCS
-        m_withoutTcsAmount = std::round((m_bankAmount / (1.0 + (m_tcsRate / 100.0))) * 100.0) / 100.0;
+        m_withoutTcsAmount = FinancialMathService::round2((m_bankAmount / (1.0 + (m_tcsRate / 100.0))));
     }
     recalculate();
 }
@@ -268,7 +269,7 @@ void TcsReceiptVoucherController::ensureDefaultLedgers()
 void TcsReceiptVoucherController::recalculate()
 {
     // Calculate TCS Amount
-    m_tcsAmount = std::round((m_withoutTcsAmount * (m_tcsRate / 100.0)) * 100.0) / 100.0;
+    m_tcsAmount = FinancialMathService::round2((m_withoutTcsAmount * (m_tcsRate / 100.0)));
 
     // Net Bank Receipt
     if (m_tcsReceived) {
@@ -280,7 +281,7 @@ void TcsReceiptVoucherController::recalculate()
 
     // Net Amount Credit to Party = Without TCS + Discount Allowed - Interest Received + Other
     m_netCreditToParty = m_withoutTcsAmount + m_discountAllowed - m_interestReceived + m_otherAmount;
-    m_netCreditToParty = std::round(m_netCreditToParty * 100.0) / 100.0;
+    m_netCreditToParty = FinancialMathService::round2(m_netCreditToParty);
 
     emit totalsChanged();
 }

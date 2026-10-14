@@ -3,6 +3,7 @@
 #include <QWidget>
 #include <QTableWidget>
 #include <QTimer>
+#include <QFutureWatcher>
 #include <QScrollBar>
 #include "accounting_date_edit.h"
 #include <QComboBox>
@@ -37,6 +38,7 @@ protected:
 
 private slots:
     void onRefreshClicked();
+    void onDayBookQueryReady();
     void onRowDoubleClicked(int row, int column);
     void deleteFocusedRow();
     void onExportPdfClicked();
@@ -66,6 +68,11 @@ private:
     QVariantList m_records;
     bool m_isDirty = true;
     QTimer* m_searchDebounce = nullptr;
+    // Isolated read flight: the worker thread owns the SQL, the UI thread
+    // only renders watcher results. QFutureWatcher auto-discards superseded
+    // flights (setFuture unwatches the old future), so debounced keystrokes
+    // can never render out of order.
+    QFutureWatcher<QVariantList> m_queryWatcher;
 };
 
 } // namespace MahadevERP

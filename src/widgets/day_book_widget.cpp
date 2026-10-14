@@ -5,6 +5,7 @@
 #include "custom_dialogs.h"
 #include "voucher_ops.h"
 #include "../database_manager.h"
+#include "../services/db_service.h"
 #include "../engine/accounting_engine.h"
 #include "../engine/fiscal_year_helper.h"
 #include <QHeaderView>
@@ -88,6 +89,10 @@ void DayBookWidget::setupUi() {
 
     m_backBtn = new KbdBadgeButton("Back to Dashboard", "Esc", QColor("#EF4444"), QColor("#DC2626"), QColor("#FFFFFF"), QColor("#EF4444"), headerCard);
     connect(m_backBtn, &QPushButton::clicked, this, &DayBookWidget::backRequested);
+    // Worker-thread reads resolve here; only the newest flight renders
+    // (QFutureWatcher drops superseded futures on setFuture).
+    connect(&m_queryWatcher, &QFutureWatcher<QVariantList>::finished,
+            this, &DayBookWidget::onDayBookQueryReady);
     headerLayout->addWidget(m_backBtn);
 
     mainLayout->addWidget(headerCard);
@@ -376,7 +381,16 @@ void DayBookWidget::loadDayBookData(const QDate& fromDate, const QDate& toDate, 
         "ORDER BY voucher_date ASC, id ASC;"
     ).arg(fromStr, toStr);
 
-    m_records = DatabaseManager::instance().executeQuery(sql);
+    m_records.clear(); // stale rows stay hidden until the fresh flight lands
+    // Isolated read: this scan runs on the DB worker thread. The UI thread
+    // returns immediately and renders in onDayBookQueryReady — keystrokes,
+    // paints and scrolls never wait on SQLite again.
+    m_queryWatcher.setFuture(DbService::instance().query(sql, {}));
+}
+
+void DayBookWidget::onDayBookQueryReady() {
+    if (m_queryWatcher.future().resultCount() == 0) return; // SQL error or worker down: keep last-good rows
+    m_records = m_queryWatcher.result();
 
     // Populate Table
     QString filterQuery = m_searchBox ? m_searchBox->text().trimmed().toLower() : "";

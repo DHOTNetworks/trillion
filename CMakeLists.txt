@@ -164,6 +164,10 @@ set(SOURCES
     src/services/accounting_date_service.cpp
     src/services/financial_math_service.h
     src/services/financial_math_service.cpp
+    src/services/db_worker.h
+    src/services/db_worker.cpp
+    src/services/db_service.h
+    src/services/db_service.cpp
     src/models/sales_voucher_controller.h
     src/models/sales_voucher_controller.cpp
     src/models/purchase_voucher_controller.h
@@ -548,6 +552,10 @@ set(TEST_SOURCES
     src/services/accounting_date_service.cpp
     src/services/financial_math_service.h
     src/services/financial_math_service.cpp
+    src/services/db_worker.h
+    src/services/db_worker.cpp
+    src/services/db_service.h
+    src/services/db_service.cpp
     src/models/base_table_model.h
     src/models/base_table_model.cpp
     src/models/sales_voucher_controller.h
@@ -781,6 +789,10 @@ set(ENGINE_TEST_SOURCES
     src/services/accounting_date_service.cpp
     src/services/financial_math_service.h
     src/services/financial_math_service.cpp
+    src/services/db_worker.h
+    src/services/db_worker.cpp
+    src/services/db_service.h
+    src/services/db_service.cpp
     src/models/account_classifier.h
     src/models/account_classifier.cpp
     src/models/mandi_reports_controller.h

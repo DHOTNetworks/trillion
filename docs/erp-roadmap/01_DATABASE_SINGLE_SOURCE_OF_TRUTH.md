@@ -89,3 +89,35 @@ on that table); `voucher_no TEXT` (never `voucher_number`); `fy_id`
 6. **Add `audit_log` table** (see Doc 05) and `migration_log` (source-row hash,
    see Doc 08). Never `DELETE FROM parties/account_groups` in migrators again —
    upsert by `(legacy_id)` instead.
+
+## Thread isolation (2026-10-14, Mac rebuild required — not compile-verified here)
+
+UI thread never executes SQL on the migrated paths. New files (single
+responsibility, no DDL, `[[nodiscard]]` throughout):
+
+- `src/services/db_worker.h/.cpp` — owns one `QThread` + one private
+  `sqlite3*` (same pragmas as the main connection: WAL, busy 5 s, FK).
+  Tasks arrive as queued functors, resolve as `QFuture`s; failures resolve
+  empty instead of hanging. `asyncTransact(fn)` runs `BEGIN IMMEDIATE` →
+  functor → `COMMIT`, rolling back on false/exception. Blocking handshake
+  on start (no spin-wait), drain-and-join on stop/restart.
+- `src/services/db_service.h/.cpp` — UI-thread facade singleton. Falls back
+  to sync `DatabaseManager` when the worker is down (tests, early boot),
+  refuses `transact` without atomicity instead of faking it.
+  `nextGeneration()` supplies stale-result discard tokens.
+- Wiring: `main.cpp` starts the worker after `initDatabase`; all three
+  `firm_manager.cpp` firm-switch sites call `restart()` so reader and
+  writer stay on the same file.
+- Pilot: `DayBookWidget::loadDayBookData` posts its transactions scan to
+  the worker and renders in `onDayBookQueryReady`; superseded flights
+  auto-discard via `QFutureWatcher::setFuture`, empty futures keep
+  last-good rows (same as legacy failed-query behavior).
+- Rounding dedupe (bit-identical, impls verified): 19 hand-rolled
+  `std::round(x*100)/100` → `round2`, `*1000/1000` → `round3` across
+  tcs/sauda/challan/transport/paddy/milling. Deliberately untouched:
+  integer rounds (bag counts, `round(rawTotalTax)`) and int-cents display
+  extraction (`static_cast<int>(round(frac*100))` — different truncation
+  path, would change figures).
+
+Next: migrate write paths per voucher via `transact()` (TDS/TCS first —
+freshest code), then CI-grep `DatabaseManager` out of `src/widgets/`.
