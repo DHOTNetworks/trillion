@@ -251,11 +251,15 @@ QString TransportDispatchController::totalBalancePayableFmt() const {
 }
 
 void TransportDispatchController::reload() {
-    // Sync any sales/purchase dispatches into transport_dispatches
+    // Sync any sales/purchase dispatches into transport_dispatches.
+    // IDEMPOTENT by voucher identity (safe to call on every view entry):
+    // guards match (voucher_type, financial_year, voucher_no), falling back
+    // to the (invoice_no, supplier, date) natural key for supplier bills
+    // without our voucher_no. Rows identifiable by neither are skipped.
     DatabaseManager::instance().executeNonQuery(
         "INSERT INTO transport_dispatches ("
         "  fy_id, financial_year, dispatch_date, dispatch_time, slip_no, voucher_no, invoice_no, "
-        "  voucher_type, party_id, party_name, item_id, item_name, grade, vehicle_no, driver_name, transporter_name, "
+        "  voucher_type, party_id, party_name, item_id, item_name, grade, vehicle_no, driver_name, transport, "
         "  gr_no, destination, distance_km, bag_count, net_weight_qtl, total_freight, "
         "  advance_freight, balance_freight, freight_payment_status, eway_bill_no, irn_no, notes"
         ") "
@@ -269,15 +273,17 @@ void TransportDispatchController::reload() {
         "  si.eway_bill_no, si.irn_no, si.narration "
         "FROM sales_invoices si "
         "WHERE (si.vehicle_no IS NOT NULL AND si.vehicle_no != '') "
+        "  AND si.voucher_no IS NOT NULL AND si.voucher_no != '' "
         "  AND NOT EXISTS ("
-        "    SELECT 1 FROM transport_dispatches td WHERE td.invoice_no = si.invoice_no AND td.voucher_type = 'Sale'"
+        "    SELECT 1 FROM transport_dispatches td WHERE td.voucher_type = 'Sale' "
+        "      AND td.financial_year = si.financial_year AND td.voucher_no = si.voucher_no"
         "  );"
     );
 
     DatabaseManager::instance().executeNonQuery(
         "INSERT INTO transport_dispatches ("
         "  fy_id, financial_year, dispatch_date, slip_no, voucher_no, invoice_no, "
-        "  voucher_type, party_id, party_name, item_id, item_name, vehicle_no, driver_name, transporter_name, "
+        "  voucher_type, party_id, party_name, item_id, item_name, vehicle_no, driver_name, transport, "
         "  gr_no, bag_count, net_weight_qtl, total_freight, "
         "  advance_freight, balance_freight, freight_payment_status, eway_bill_no, notes"
         ") "
@@ -291,8 +297,12 @@ void TransportDispatchController::reload() {
         "  pi.eway_bill_no, pi.narration "
         "FROM purchase_invoices pi "
         "WHERE (pi.vehicle_no IS NOT NULL AND pi.vehicle_no != '') "
+        "  AND ((pi.voucher_no IS NOT NULL AND pi.voucher_no != '') OR (pi.invoice_no IS NOT NULL AND pi.invoice_no != '')) "
         "  AND NOT EXISTS ("
-        "    SELECT 1 FROM transport_dispatches td WHERE td.invoice_no = pi.invoice_no AND td.voucher_type = 'Purchase'"
+        "    SELECT 1 FROM transport_dispatches td WHERE td.voucher_type = 'Purchase' "
+        "      AND ((pi.voucher_no != '' AND td.voucher_no = pi.voucher_no AND td.financial_year = pi.financial_year) "
+        "        OR (pi.voucher_no = '' AND td.invoice_no = pi.invoice_no "
+        "            AND td.party_name = pi.supplier_name AND td.dispatch_date = pi.invoice_date))"
         "  );"
     );
 
@@ -321,7 +331,7 @@ void TransportDispatchController::reload() {
         r.vehicleNo = map.value("vehicle_no").toString();
         r.driverName = map.value("driver_name").toString();
         r.driverPhone = map.value("driver_phone").toString();
-        r.transporterName = map.value("transporter_name").toString();
+        r.transporterName = map.value("transport").toString();
         r.transporterGstin = map.value("transporter_gstin").toString();
         r.grNo = map.value("gr_no").toString();
         r.grDate = map.value("gr_date").toString();
@@ -436,7 +446,7 @@ QVariantMap TransportDispatchController::saveDispatch(const QVariantMap &data) {
         dispatchTime = QTime::currentTime().toString("hh:mm AP");
     }
 
-    QString vehicleNo = data.value("vehicleNo").toString().trimmed().toUpper();
+    QString vehicleNo = data.value("vehicle_no", data.value("vehicleNo")).toString().trimmed().toUpper();
     QString partyName = data.value("partyName").toString().trimmed();
     QString invoiceNo = data.value("invoiceNo").toString().trimmed();
     QString itemName = data.value("itemName").toString().trimmed();
@@ -515,7 +525,7 @@ QVariantMap TransportDispatchController::saveDispatch(const QVariantMap &data) {
             "INSERT INTO transport_dispatches ("
             "  dispatch_date, dispatch_time, slip_no, voucher_no, invoice_no, voucher_type, "
             "  party_id, party_name, item_id, item_name, grade, vehicle_no, driver_name, "
-            "  driver_phone, transporter_name, transporter_gstin, gr_no, gr_date, destination, "
+            "  driver_phone, transport, transporter_gstin, gr_no, gr_date, destination, "
             "  distance_km, bag_count, packing_kg, gross_weight_qtl, tare_weight_qtl, bag_tare_kg, "
             "  net_weight_qtl, freight_calc_type, freight_rate, total_freight, advance_freight, "
             "  balance_freight, freight_payment_status, eway_bill_no, irn_no, notes"
@@ -544,7 +554,7 @@ QVariantMap TransportDispatchController::saveDispatch(const QVariantMap &data) {
             "UPDATE transport_dispatches SET "
             "  dispatch_date = ?, dispatch_time = ?, slip_no = ?, invoice_no = ?, "
             "  party_name = ?, item_name = ?, grade = ?, vehicle_no = ?, driver_name = ?, "
-            "  driver_phone = ?, transporter_name = ?, transporter_gstin = ?, gr_no = ?, "
+            "  driver_phone = ?, transport = ?, transporter_gstin = ?, gr_no = ?, "
             "  gr_date = ?, destination = ?, distance_km = ?, bag_count = ?, packing_kg = ?, "
             "  gross_weight_qtl = ?, tare_weight_qtl = ?, bag_tare_kg = ?, net_weight_qtl = ?, "
             "  freight_calc_type = ?, freight_rate = ?, total_freight = ?, advance_freight = ?, "
@@ -573,11 +583,11 @@ QVariantMap TransportDispatchController::saveDispatch(const QVariantMap &data) {
     if (!invoiceNo.isEmpty()) {
         DatabaseManager::instance().executeNonQuery(
             "UPDATE sales_invoices SET "
-            "  vehicle_no = ?, gr_no = ?, driver_name = ?, driver = ?, "
+            "  vehicle_no = ?, gr_no = ?, driver_name = ?, "
             "  kanda_weight = ?, transport = ?, eway_bill_no = ?, irn_no = ? "
             "WHERE invoice_no = ?;",
             {
-                vehicleNo, grNo, driverName, driverPhone,
+                vehicleNo, grNo, driverName,
                 QString("%1 Qtl").arg(QString::number(netWeightQtl, 'f', 2)),
                 transporterName, ewayBillNo, irnNo,
                 invoiceNo
@@ -624,10 +634,12 @@ QVariantMap TransportDispatchController::getDispatch(int id) {
     map["partyName"] = raw.value("party_name").toString();
     map["itemName"] = raw.value("item_name").toString();
     map["grade"] = raw.value("grade").toString();
-    map["vehicleNo"] = raw.value("vehicle_no").toString();
+    map["vehicleNo"] = raw.value("vehicle_no").toString().trimmed().toUpper();
+    map["vehicle_no"] = map["vehicleNo"];
     map["driverName"] = raw.value("driver_name").toString();
     map["driverPhone"] = raw.value("driver_phone").toString();
-    map["transporterName"] = raw.value("transporter_name").toString();
+    map["transporterName"] = raw.value("transport").toString();
+    map["transport"] = raw.value("transport").toString();
     map["transporterGstin"] = raw.value("transporter_gstin").toString();
     map["grNo"] = raw.value("gr_no").toString();
     map["grDate"] = raw.value("gr_date").toString();

@@ -28,9 +28,36 @@ public:
     qint64 lastInsertedId();
     void ensureTablesExist();
 
+    // Last SQLite error text (e.g. "UNIQUE constraint failed …"). Set on
+    // every failed executeNonQuery/executeScalar, cleared on entry. Read it
+    // immediately after a false return — any later call may overwrite it.
+    QString lastErrorText();
+
+    // Deterministic Document Metadata Resolver (Unifies transport, broker, vehicle, driver)
+    struct DocumentMetadata {
+        QString transport;
+        QString brokerName;
+        QString vehicleNo;
+        QString driverName;
+    };
+    DocumentMetadata resolveDocumentMetadata(const QString& voucherNo, const QString& invoiceNo,
+                                            const QString& existingTransport = QString(),
+                                            const QString& existingBroker = QString(),
+                                            const QString& existingVehicle = QString(),
+                                            const QString& existingDriver = QString());
+
     // App Settings Key-Value Store
     QString getSetting(const QString& key, const QString& defaultVal = "");
     bool setSetting(const QString& key, const QString& val);
+
+    // Audit trail (Tally Edit-Log parity foundation). Best-effort: returns
+    // false on DB error but never throws — callers must not fail a posting
+    // because the audit row failed. Rows written inside the caller's
+    // transaction roll back with it; BLOCKED rows are logged outside any txn.
+    bool logAudit(const QString& action, const QString& tableName,
+                  const QString& rowId, const QString& beforeJson,
+                  const QString& afterJson, const QString& voucherNo = "",
+                  const QString& fyName = "");
 
 private:
     DatabaseManager();
@@ -41,4 +68,5 @@ private:
     sqlite3* m_db = nullptr;
     QRecursiveMutex m_mutex;
     QString m_dbPath;
+    QString m_lastError;
 };

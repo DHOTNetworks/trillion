@@ -22,6 +22,7 @@ public:
     explicit BardanaWidget(BardanaController* controller, PrintExportController* printCtrl, QWidget* parent = nullptr);
 
     void refreshData();
+    void focusTable();
     void markDirty() { m_isDirty = true; }
     bool isDirty() const { return m_isDirty; }
 
@@ -47,6 +48,7 @@ private:
     void populateGodownSummary();
     void populatePartySummary();
     void updateSummaryKpis();
+    void loadDynamicGodowns();
 
     BardanaController* m_controller = nullptr;
     PrintExportController* m_printCtrl = nullptr;

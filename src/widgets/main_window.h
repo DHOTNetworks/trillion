@@ -61,6 +61,7 @@
 #include "gate_register_widget.h"
 #include "sauda_contract_widget.h"
 #include "salary_register_widget.h"
+#include "audit_register_widget.h"
 #include "../models/salary_register_controller.h"
 #include "../models/bardana_controller.h"
 #include "../models/gate_register_controller.h"
@@ -166,6 +167,7 @@ public:
     GateRegisterWidget* gateRegisterWidget() const { return m_gateRegisterWidget; }
     SaudaContractWidget* saudaContractWidget() const { return m_saudaContractWidget; }
     MahadevERP::SalaryRegisterWidget* salaryRegisterWidget() const { return m_salaryRegisterWidget; }
+    MahadevERP::AuditRegisterWidget* auditRegisterWidget() const { return m_auditRegisterWidget; }
 
     QStackedWidget* stackedWidget() const { return m_stackedWidget; }
 
@@ -263,6 +265,7 @@ private:
     GateRegisterWidget* m_gateRegisterWidget = nullptr;
     SaudaContractWidget* m_saudaContractWidget = nullptr;
     MahadevERP::SalaryRegisterWidget* m_salaryRegisterWidget = nullptr;
+    MahadevERP::AuditRegisterWidget* m_auditRegisterWidget = nullptr;
 
     BardanaController* m_bardanaCtrl = nullptr;
     GateRegisterController* m_gateRegisterCtrl = nullptr;

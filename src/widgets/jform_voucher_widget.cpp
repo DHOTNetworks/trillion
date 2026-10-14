@@ -1,4 +1,7 @@
 #include "jform_voucher_widget.h"
+#include "kbd_badge_button.h"
+#include "erp_theme.h"
+#include "voucher_common.h"
 #include "voucher_date_dialog.h"
 #include "custom_dialogs.h"
 #include "engine/accounting_engine.h"
@@ -48,7 +51,7 @@ void JFormVoucherWidget::setupUi() {
 
     m_jformNoDisplay = new QLabel("J-Form No:", this);
     m_jformNoEdit = new QLineEdit("1", this);
-    m_jformNoEdit->setFixedWidth(80);
+    m_jformNoEdit->setMinimumWidth(80);
     // Auto-generated and non-editable on both new and alter pages.
     m_jformNoEdit->setReadOnly(true);
 
@@ -96,16 +99,18 @@ void JFormVoucherWidget::setupUi() {
 
     headerLayout->addWidget(new QLabel("Due Days:", this), 1, 2);
     m_dueDaysEdit = new QLineEdit("0", this);
-    m_dueDaysEdit->setFixedWidth(60);
+    m_dueDaysEdit->setMinimumWidth(60);
     headerLayout->addWidget(m_dueDaysEdit, 1, 3);
 
     // Row 2: Vehicle & Broker
     headerLayout->addWidget(new QLabel("Vehicle No:", this), 2, 0);
     m_vehicleNoEdit = new QLineEdit(this);
+    VoucherCommon::setupUppercaseInput(m_vehicleNoEdit);
     headerLayout->addWidget(m_vehicleNoEdit, 2, 1);
 
     headerLayout->addWidget(new QLabel("Broker / Munim:", this), 2, 2);
-    m_brokerNameEdit = new QLineEdit(this);
+    m_brokerNameEdit = new AccountSearchBox(this);
+    m_brokerNameEdit->configureForBrokerSearch();
     headerLayout->addWidget(m_brokerNameEdit, 2, 3);
 
     mainLayout->addWidget(headerBox);
@@ -183,14 +188,16 @@ void JFormVoucherWidget::setupUi() {
     actionLayout->addWidget(m_statusLabel);
     actionLayout->addStretch();
 
-    m_dateButton = new QPushButton("F2 - Change Date", this);
-    m_saveButton = new QPushButton("Ctrl+S - Save J-Form", this);
-    m_saveButton->setObjectName("primaryButton");
-    m_deleteButton = new QPushButton("Ctrl+D - Delete", this);
-    m_deleteButton->setObjectName("dangerButton");
+    m_dateButton = new KbdBadgeButton("Change Date", "F2", this);
+    m_saveButton = new KbdBadgeButton("Save J-Form", "Ctrl+S", this);
+    m_saveButton->setPrimaryColor(ErpTheme::kBlue, ErpTheme::kBlueDark);
+    m_saveButton->setTextColor(ErpTheme::kPaper);
+    m_deleteButton = new KbdBadgeButton("Delete", "Ctrl+D", this);
+    m_deleteButton->setPrimaryColor(ErpTheme::kRedBg, ErpTheme::kRedBorder);
+    m_deleteButton->setTextColor(ErpTheme::kRed);
     m_deleteButton->setEnabled(false);
-    m_printButton = new QPushButton("Ctrl+P - Print", this);
-    m_cancelButton = new QPushButton("Esc - Cancel", this);
+    m_printButton = new KbdBadgeButton("Print", "Ctrl+P", this);
+    m_cancelButton = new KbdBadgeButton("Cancel", "Esc", this);
 
     actionLayout->addWidget(m_dateButton);
     actionLayout->addWidget(m_saveButton);
@@ -341,13 +348,13 @@ void JFormVoucherWidget::applyCustomStyles() {
         "  gridline-color: #E2E8F0;"
         "  border: 1px solid #CBD5E1;"
         "  border-radius: 6px;"
-        "  selection-background-color: #E0F2FE;"
-        "  selection-color: #0369A1;"
+        "  selection-background-color: #2563EB;"
+        "  selection-color: #FFFFFF;"
         "  font-size: 12px;"
         "}"
         "QHeaderView::section {"
-        "  background-color: #F1F5F9;"
-        "  color: #334155;"
+        "  background-color: #0F172A;"
+        "  color: #FFFFFF;"
         "  font-weight: 700;"
         "  font-size: 11px;"
         "  padding: 6px 4px;"
@@ -404,24 +411,6 @@ void JFormVoucherWidget::applyCustomStyles() {
         "}"
         "QPushButton:pressed {"
         "  background-color: #E2E8F0;"
-        "}"
-        "#primaryButton {"
-        "  background-color: #0284C7;"
-        "  color: #FFFFFF;"
-        "  border: 1px solid #0369A1;"
-        "  font-weight: 800;"
-        "}"
-        "#primaryButton:hover {"
-        "  background-color: #0369A1;"
-        "}"
-        "#dangerButton {"
-        "  background-color: #FEE2E2;"
-        "  color: #DC2626;"
-        "  border: 1px solid #FCA5A5;"
-        "  font-weight: 700;"
-        "}"
-        "#dangerButton:hover {"
-        "  background-color: #FECACA;"
         "}"
         "#voucherBadge {"
         "  background-color: #0284C7;"
@@ -687,7 +676,7 @@ void JFormVoucherWidget::saveVoucher() {
     headerData["zimidar_name"] = m_selectedFarmerName;
     headerData["auction_sale_status"] = m_saleStatusCombo->currentText();
     headerData["due_days"] = m_dueDaysEdit->text().toInt();
-    headerData["vehicle_no"] = m_vehicleNoEdit->text().trimmed();
+    headerData["vehicle_no"] = m_vehicleNoEdit->text().trimmed().toUpper();
     headerData["broker_name"] = m_brokerNameEdit->text().trimmed();
     headerData["narration"] = m_narrationEdit->text().trimmed();
 
@@ -798,7 +787,10 @@ void JFormVoucherWidget::openDateDialog(bool isInitial) {
     Q_UNUSED(isInitial);
     QString curDate = m_dateEdit ? m_dateEdit->date().toString("dd-MM-yyyy") : "";
     QString curIso = m_dateEdit ? m_dateEdit->date().toString("yyyy-MM-dd") : "";
-    FiscalYearInfo fyCtx = FiscalYearHelper::getFiscalYearForDate(curIso);
+    FiscalYearInfo fyCtx = isEditMode()
+        ? FiscalYearHelper::getFiscalYearForDate(curIso)
+        : FiscalYearHelper::getActiveFiscalYear();
+    if (!fyCtx.isValid()) fyCtx = FiscalYearHelper::getActiveFiscalYear();
     QString newDisp, newIso;
     if (VoucherDateDialog::getVoucherDate(this, curDate, &newDisp, &newIso, fyCtx)) {
         if (m_dateEdit) {

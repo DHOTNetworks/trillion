@@ -38,7 +38,7 @@ void ItemMovementDialog::keyPressEvent(QKeyEvent* event) {
         close();
         return;
     }
-    if (event->key() == Qt::Key_F2 || (event->modifiers() & Qt::AltModifier && event->key() == Qt::Key_F2)) {
+    if (event->key() == Qt::Key_F2 && !(event->modifiers() & Qt::AltModifier)) {
         event->accept();
         onPeriodClicked();
         return;
@@ -70,7 +70,7 @@ void ItemMovementDialog::setupUi() {
     // 1. TOP HEADER BAR CARD
     // ========================================================================
     QFrame* headerCard = new QFrame(this);
-    headerCard->setFixedHeight(58);
+    headerCard->setMinimumHeight(58);
     headerCard->setStyleSheet("background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px;");
     QHBoxLayout* headerLayout = new QHBoxLayout(headerCard);
     headerLayout->setContentsMargins(14, 6, 14, 6);
@@ -110,7 +110,7 @@ void ItemMovementDialog::setupUi() {
     // 2. FILTER CARD
     // ========================================================================
     QFrame* filterCard = new QFrame(this);
-    filterCard->setFixedHeight(52);
+    filterCard->setMinimumHeight(52);
     filterCard->setStyleSheet("background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px;");
     QHBoxLayout* filterLayout = new QHBoxLayout(filterCard);
     filterLayout->setContentsMargins(14, 6, 14, 6);
@@ -121,7 +121,7 @@ void ItemMovementDialog::setupUi() {
     filterLayout->addWidget(lblFrom);
 
     m_fromDateEdit = new AccountingDateDisplay(filterCard);
-    m_fromDateEdit->setFixedHeight(34);
+    m_fromDateEdit->setMinimumHeight(34);
     m_fromDateEdit->setMinimumWidth(115);
     connect(m_fromDateEdit, &AccountingDateDisplay::clicked, this, &ItemMovementDialog::onPeriodClicked);
     filterLayout->addWidget(m_fromDateEdit);
@@ -131,13 +131,13 @@ void ItemMovementDialog::setupUi() {
     filterLayout->addWidget(lblTo);
 
     m_toDateEdit = new AccountingDateDisplay(filterCard);
-    m_toDateEdit->setFixedHeight(34);
+    m_toDateEdit->setMinimumHeight(34);
     m_toDateEdit->setMinimumWidth(115);
     connect(m_toDateEdit, &AccountingDateDisplay::clicked, this, &ItemMovementDialog::onPeriodClicked);
     filterLayout->addWidget(m_toDateEdit);
 
     m_btnPeriod = new QPushButton(" Period (F2)", filterCard);
-    m_btnPeriod->setFixedHeight(34);
+    m_btnPeriod->setMinimumHeight(34);
     m_btnPeriod->setCursor(Qt::PointingHandCursor);
     m_btnPeriod->setStyleSheet(
         "QPushButton { background-color: #EFF6FF; color: #1D4ED8; border: 1px solid #BFDBFE; border-radius: 6px; padding: 4px 10px; font-weight: 700; font-size: 11.5px; }"
@@ -151,7 +151,7 @@ void ItemMovementDialog::setupUi() {
     FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
     QLabel* fyBadge = new QLabel(activeFy.name + " (Active FY)", filterCard);
     fyBadge->setAlignment(Qt::AlignCenter);
-    fyBadge->setFixedHeight(34);
+    fyBadge->setMinimumHeight(34);
     fyBadge->setStyleSheet("background-color: #F8FAFC; color: #475569; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 0px 14px; font-weight: 700; font-size: 12px;");
     filterLayout->addWidget(fyBadge);
 
@@ -259,19 +259,19 @@ void ItemMovementDialog::applyCustomStyles() {
         "  color: #0F172A;"
         "}"
         "QTableWidget::item:selected {"
-        "  background-color: #EFF6FF;"
-        "  color: #1D4ED8;"
+        "  background-color: #2563EB;"
+        "  color: #FFFFFF;"
         "  font-weight: bold;"
         "}"
         "QHeaderView::section {"
-        "  background-color: #F1F5F9;"
-        "  color: #1E293B;"
+        "  background-color: #0F172A;"
+        "  color: #FFFFFF;"
         "  font-weight: 800;"
         "  font-size: 11.5px;"
         "  padding: 7px 8px;"
         "  border: none;"
-        "  border-bottom: 2px solid #CBD5E1;"
-        "  border-right: 1px solid #E2E8F0;"
+        "  "
+        "  border-right: 1px solid #334155;"
         "}"
         "AccountingDateEdit, QDateEdit {"
         "  background-color: #FFFFFF;"
@@ -291,7 +291,7 @@ void ItemMovementDialog::applyCustomStyles() {
 
 QWidget* ItemMovementDialog::createMetricCard(const QString& title, QLabel*& valueLabel, const QString& accentColor) {
     QFrame* card = new QFrame(this);
-    card->setFixedHeight(58);
+    card->setMinimumHeight(58);
     card->setStyleSheet(QString(
         "QFrame { background-color: #FFFFFF; border: 1.5px solid #E2E8F0; border-left: 4px solid %1; border-radius: 8px; } QLabel { border: none; background: transparent; }"
     ).arg(accentColor));

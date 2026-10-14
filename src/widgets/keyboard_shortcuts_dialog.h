@@ -3,10 +3,10 @@
 #include <QDialog>
 #include <QLineEdit>
 #include <QTableWidget>
-#include <QPushButton>
 #include <QLabel>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
+#include "kbd_badge_button.h"
 
 namespace MahadevERP {
 
@@ -27,7 +27,7 @@ private:
 
     QLineEdit* m_searchEdit = nullptr;
     QTableWidget* m_table = nullptr;
-    QPushButton* m_closeBtn = nullptr;
+    KbdBadgeButton* m_closeBtn = nullptr;
 };
 
 } // namespace MahadevERP

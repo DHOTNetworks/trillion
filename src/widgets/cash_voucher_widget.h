@@ -11,6 +11,7 @@
 #include <QVariantList>
 #include "account_search_box.h"
 #include "accounting_date_edit.h"
+#include "kbd_badge_button.h"
 #include "../models/vouchers_model.h"
 #include "../services/print_export_controller.h"
 
@@ -96,11 +97,11 @@ private:
     QLabel* m_statusLabel = nullptr;
 
     // Action Buttons
-    QPushButton* m_dateBtn = nullptr;
-    QPushButton* m_addRowBtn = nullptr;
-    QPushButton* m_saveBtn = nullptr;
-    QPushButton* m_deleteBtn = nullptr;
-    QPushButton* m_backBtn = nullptr;
+    KbdBadgeButton* m_dateBtn = nullptr;
+    KbdBadgeButton* m_addRowBtn = nullptr;
+    KbdBadgeButton* m_saveBtn = nullptr;
+    KbdBadgeButton* m_deleteBtn = nullptr;
+    KbdBadgeButton* m_backBtn = nullptr;
 };
 
 } // namespace MahadevERP

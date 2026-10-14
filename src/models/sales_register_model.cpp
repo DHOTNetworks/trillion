@@ -1,6 +1,7 @@
 #include "sales_register_model.h"
 #include "../database_manager.h"
 #include "../engine/accounting_engine.h"
+#include "../engine/fiscal_year_helper.h"
 #include <QDate>
 #include <cmath>
 
@@ -34,14 +35,6 @@ static QString formatINR(double val) {
     return (neg ? "-₹" : "₹") + res + "." + decStr;
 }
 
-static QString formatDisplayDate(const QString& iso) {
-    if (iso.isEmpty()) return "";
-    QStringList p = iso.split("-");
-    if (p.size() == 3 && p[0].length() == 4) {
-        return p[2] + "-" + p[1] + "-" + p[0];
-    }
-    return iso;
-}
 
 SalesRegisterModel::SalesRegisterModel(QObject* parent)
     : QAbstractListModel(parent)
@@ -202,7 +195,7 @@ void SalesRegisterController::reload(const QString& fromDate, const QString& toD
         e.vchNoVal = r.value("voucher_no").toString();
         if (e.vchNoVal.isEmpty()) e.vchNoVal = QString("Sale-%1").arg(i + 1);
         e.invNoVal = r.value("invoice_no").toString();
-        e.dateVal = formatDisplayDate(r.value("invoice_date").toString());
+        e.dateVal = FiscalYearHelper::formatDisplayDate(r.value("invoice_date").toString());
         e.custVal = r.value("customer_name").toString();
         e.itemVal = r.value("item_name").toString();
         e.bagsVal = r.value("bag_count").toLongLong();

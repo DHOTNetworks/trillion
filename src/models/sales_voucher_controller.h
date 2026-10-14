@@ -253,7 +253,7 @@ public:
     Q_INVOKABLE void setLessAmount(double v) { if (std::abs(m_lessAmount - v) > 0.001) { m_lessAmount = v; recalculateTotals(); } }
 
     QString vehicleNo() const { return m_vehicleNo; }
-    void setVehicleNo(const QString &v) { if (m_vehicleNo != v) { m_vehicleNo = v; emit vehicleNoChanged(); } }
+    void setVehicleNo(const QString &v) { QString u = v.trimmed().toUpper(); if (m_vehicleNo != u) { m_vehicleNo = u; emit vehicleNoChanged(); } }
 
     QString ewayBillNo() const { return m_ewayBillNo; }
     void setEwayBillNo(const QString &v) { if (m_ewayBillNo != v) { m_ewayBillNo = v; emit ewayBillNoChanged(); } }

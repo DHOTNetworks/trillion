@@ -27,7 +27,7 @@ PartySearchWidget::~PartySearchWidget() {
 
 void PartySearchWidget::setupUi() {
     setPlaceholderText("Search Party Account... (Type & press ↓ / Enter)");
-    setFixedHeight(28);
+    setMinimumHeight(28);
     setStyleSheet(
         "QLineEdit {"
         "  background-color: #FFFFFF;"

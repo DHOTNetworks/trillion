@@ -102,6 +102,12 @@ target_compile_definitions(libxls_embedded PRIVATE
 )
 
 # Application Sources
+# Per-report print modules — one report file + one Excel file per item
+# (see docs/erp-roadmap/10_UI_REPORTING_OVERHAUL.md §C). GLOB keeps this
+# list fresh as reports are added; no per-file edits needed.
+file(GLOB PRINTING_REPORT_SOURCES CONFIGURE_DEPENDS
+    src/printing/reports/*.cpp
+)
 set(SOURCES
     src/main.cpp
     src/database_manager.h
@@ -111,6 +117,7 @@ set(SOURCES
     src/engine/fiscal_year_helper.cpp
     src/engine/bill_series.h
     src/engine/bill_series.cpp
+    src/engine/voucher_numbering.h
     src/models/base_table_model.h
     src/models/base_table_model.cpp
     src/models/dashboard_controller.h
@@ -185,7 +192,10 @@ set(SOURCES
     src/models/stock_master_controller.cpp
     src/services/print_export_controller.h
     src/services/print_export_controller.cpp
-    src/models/global_key_filter.h
+    ${PRINTING_REPORT_SOURCES}
+    src/services/keymap.h
+    src/services/gst_state_codes.h
+    src/services/audit_helper.h
     src/services/app_keyboard_controller.h
     src/services/app_keyboard_controller.cpp
     src/services/canara_bank_statement_parser.h
@@ -263,6 +273,11 @@ set(SOURCES
     src/models/salary_register_controller.cpp
     src/widgets/salary_register_widget.h
     src/widgets/salary_register_widget.cpp
+    src/widgets/audit_register_widget.h
+    src/widgets/audit_register_widget.cpp
+    src/widgets/erp_theme.h
+    src/widgets/numbering_repair_dialog.h
+    src/widgets/numbering_repair_dialog.cpp
     src/widgets/accounting_period_dialog.h
     src/widgets/accounting_period_dialog.cpp
     src/widgets/bahi_khata_export_dialog.h
@@ -603,8 +618,10 @@ set(TEST_SOURCES
     src/engine/fiscal_year_helper.cpp
     src/engine/bill_series.h
     src/engine/bill_series.cpp
+    src/engine/voucher_numbering.h
     src/services/print_export_controller.h
     src/services/print_export_controller.cpp
+    ${PRINTING_REPORT_SOURCES}
     src/services/canara_bank_statement_parser.h
     src/services/canara_bank_statement_parser.cpp
     src/services/bank_statement_excel_parser.h
@@ -885,6 +902,102 @@ target_link_libraries(FinancialEngineCLI PRIVATE
 if(APPLE)
     target_link_libraries(FinancialEngineCLI PRIVATE iconv)
 endif()
+
+add_executable(TestFirmEnter
+    tests/test_firm_enter.cpp
+    src/widgets/account_search_box.cpp
+    src/widgets/account_search_box.h
+    src/widgets/voucher_common.h
+    src/engine/ledger_pipeline.cpp
+    src/engine/group_hierarchy_pipeline.cpp
+    src/models/account_classifier.cpp
+    src/database_manager.cpp
+)
+target_include_directories(TestFirmEnter PRIVATE
+    src
+    src/engine
+    src/widgets
+    src/models
+    src/services
+    third_party/sqlite
+    third_party/libmdb
+    third_party/miniz
+    third_party/libxls/include
+)
+target_link_libraries(TestFirmEnter PRIVATE
+    sqlite3_embedded
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Sql
+    Qt6::Widgets
+    Qt6::Test
+)
+if(APPLE)
+    target_link_libraries(TestFirmEnter PRIVATE iconv)
+endif()
+add_test(NAME TestFirmEnter COMMAND TestFirmEnter)
+
+add_executable(TestTdsVoucher
+    tests/test_tds_voucher.cpp
+    src/database_manager.cpp
+    src/models/tds_model.cpp
+    src/models/tds_voucher_controller.cpp
+    src/models/parties_model.cpp
+    src/models/financial_years_model.cpp
+    src/models/purchase_model.cpp
+    src/models/base_table_model.cpp
+    src/models/account_classifier.cpp
+    src/engine/fiscal_year_helper.cpp
+    src/engine/accounting_engine.h
+    src/services/accounting_date_service.cpp
+    src/services/financial_math_service.cpp
+    src/engine/bahi_khata_exporter.cpp
+    src/engine/jet4_codes.cpp
+    src/engine/jet4_usage_map.cpp
+    src/engine/jet4_btree.cpp
+    src/engine/jet4_table.cpp
+    src/engine/jet4_writer.cpp
+    src/engine/jet4_reader.cpp
+    src/engine/bahi_khata_migrator.cpp
+    src/engine/busy_data_migrator.cpp
+    src/engine/tally_data_migrator.cpp
+    src/engine/balance_sheet_calculator.cpp
+    src/engine/profit_loss_calculator.cpp
+    src/engine/stock_valuation_engine.cpp
+    src/engine/data_preprocessor.cpp
+    src/services/master_data_provider.cpp
+    src/engine/group_hierarchy_pipeline.cpp
+    src/engine/ledger_pipeline.cpp
+    src/engine/stock_pipeline.cpp
+    src/engine/voucher_pipeline.cpp
+)
+target_include_directories(TestTdsVoucher PRIVATE
+    src
+    src/engine
+    src/widgets
+    src/models
+    src/services
+    third_party/sqlite
+    third_party/libmdb
+    third_party/miniz
+    third_party/libxls/include
+)
+target_compile_definitions(TestTdsVoucher PRIVATE HAS_LIBMDB=1)
+target_link_libraries(TestTdsVoucher PRIVATE
+    sqlite3_embedded
+    libmdb_embedded
+    miniz_embedded
+    libxls_embedded
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Sql
+    Qt6::Widgets
+    Qt6::Test
+)
+if(APPLE)
+    target_link_libraries(TestTdsVoucher PRIVATE iconv)
+endif()
+add_test(NAME TestTdsVoucher COMMAND TestTdsVoucher)
 endif()
 
 

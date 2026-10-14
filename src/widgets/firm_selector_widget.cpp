@@ -42,7 +42,7 @@ void FirmSelectorWidget::setupUi() {
     // 1. TOP HEADER CARD
     // ========================================================================
     QFrame* headerCard = new QFrame(this);
-    headerCard->setFixedHeight(64);
+    headerCard->setMinimumHeight(64);
     headerCard->setStyleSheet("background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 10px;");
     QHBoxLayout* headerLayout = new QHBoxLayout(headerCard);
     headerLayout->setContentsMargins(18, 0, 18, 0);
@@ -70,13 +70,7 @@ void FirmSelectorWidget::setupUi() {
 
     headerLayout->addStretch(1);
 
-    m_backBtn = new QPushButton("← Back to Dashboard (Esc)", headerCard);
-    m_backBtn->setFixedHeight(32);
-    m_backBtn->setCursor(Qt::PointingHandCursor);
-    m_backBtn->setStyleSheet(
-        "QPushButton { background-color: #F1F5F9; border: 1px solid #CBD5E1; border-radius: 6px; padding: 0px 14px; font-weight: 700; color: #475569; font-size: 12px; }"
-        "QPushButton:hover { background-color: #E2E8F0; }"
-    );
+    m_backBtn = new KbdBadgeButton("Back", "Esc", headerCard);
     connect(m_backBtn, &QPushButton::clicked, this, &FirmSelectorWidget::backRequested);
     headerLayout->addWidget(m_backBtn);
 
@@ -86,7 +80,7 @@ void FirmSelectorWidget::setupUi() {
     // 2. DIRECTORY CONTROLS & IMPORT BAR
     // ========================================================================
     m_folderBarFrame = new QFrame(this);
-    m_folderBarFrame->setFixedHeight(52);
+    m_folderBarFrame->setMinimumHeight(52);
     m_folderBarFrame->setStyleSheet("background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px;");
     QHBoxLayout* folderLayout = new QHBoxLayout(m_folderBarFrame);
     folderLayout->setContentsMargins(16, 0, 16, 0);
@@ -97,7 +91,7 @@ void FirmSelectorWidget::setupUi() {
     folderLayout->addWidget(m_folderDirLabel);
 
     m_folderInput = new QLineEdit(m_folderBarFrame);
-    m_folderInput->setFixedHeight(34);
+    m_folderInput->setMinimumHeight(34);
     m_folderInput->setText(m_currentFolder);
     m_folderInput->setStyleSheet(
         "QLineEdit {"
@@ -117,43 +111,19 @@ void FirmSelectorWidget::setupUi() {
     connect(m_folderInput, &QLineEdit::returnPressed, this, &FirmSelectorWidget::onFolderAccepted);
     folderLayout->addWidget(m_folderInput, 1);
 
-    m_appDataBtn = new QPushButton("App Data Folder", m_folderBarFrame);
-    m_appDataBtn->setFixedHeight(34);
-    m_appDataBtn->setCursor(Qt::PointingHandCursor);
-    m_appDataBtn->setStyleSheet(
-        "QPushButton { background-color: #F1F5F9; border: 1px solid #CBD5E1; border-radius: 6px; padding: 0px 14px; font-weight: 700; color: #1E293B; font-size: 12px; }"
-        "QPushButton:hover { background-color: #E2E8F0; }"
-    );
+    m_appDataBtn = new KbdBadgeButton("App Data Folder", "", m_folderBarFrame);
     connect(m_appDataBtn, &QPushButton::clicked, this, &FirmSelectorWidget::resetToAppData);
     folderLayout->addWidget(m_appDataBtn);
 
-    m_importMdbBtn = new QPushButton("Import External MDB (F4)", m_folderBarFrame);
-    m_importMdbBtn->setFixedHeight(34);
-    m_importMdbBtn->setCursor(Qt::PointingHandCursor);
-    m_importMdbBtn->setStyleSheet(
-        "QPushButton { background-color: #EFF6FF; border: 1px solid #BFDBFE; border-radius: 6px; padding: 0px 14px; font-weight: 700; color: #1D4ED8; font-size: 12px; }"
-        "QPushButton:hover { background-color: #DBEAFE; }"
-    );
+    m_importMdbBtn = new KbdBadgeButton("Import External MDB", "F4", m_folderBarFrame);
     connect(m_importMdbBtn, &QPushButton::clicked, this, &FirmSelectorWidget::pickFolder);
     folderLayout->addWidget(m_importMdbBtn);
 
-    m_browseBtn = new QPushButton("Browse (F3)", m_folderBarFrame);
-    m_browseBtn->setFixedHeight(34);
-    m_browseBtn->setCursor(Qt::PointingHandCursor);
-    m_browseBtn->setStyleSheet(
-        "QPushButton { background-color: #F1F5F9; border: 1px solid #CBD5E1; border-radius: 6px; padding: 0px 14px; font-weight: 700; color: #334155; font-size: 12px; }"
-        "QPushButton:hover { background-color: #E2E8F0; }"
-    );
+    m_browseBtn = new KbdBadgeButton("Browse", "F3", m_folderBarFrame);
     connect(m_browseBtn, &QPushButton::clicked, this, &FirmSelectorWidget::pickFolder);
     folderLayout->addWidget(m_browseBtn);
 
-    m_rescanBtn = new QPushButton("Rescan (F5)", m_folderBarFrame);
-    m_rescanBtn->setFixedHeight(34);
-    m_rescanBtn->setCursor(Qt::PointingHandCursor);
-    m_rescanBtn->setStyleSheet(
-        "QPushButton { background-color: #F1F5F9; border: 1px solid #CBD5E1; border-radius: 6px; padding: 0px 14px; font-weight: 700; color: #334155; font-size: 12px; }"
-        "QPushButton:hover { background-color: #E2E8F0; }"
-    );
+    m_rescanBtn = new KbdBadgeButton("Rescan", "F5", m_folderBarFrame);
     connect(m_rescanBtn, &QPushButton::clicked, this, &FirmSelectorWidget::refreshFirms);
     folderLayout->addWidget(m_rescanBtn);
 
@@ -222,16 +192,16 @@ void FirmSelectorWidget::setupUi() {
         "  outline: 0;"
         "}"
         "QTableWidget::item:selected {"
-        "  background-color: #EFF6FF;"
-        "  color: #1D4ED8;"
+        "  background-color: #2563EB;"
+        "  color: #FFFFFF;"
         "  outline: 0;"
         "}"
         "QTableWidget::item:hover:!selected {"
         "  background-color: #F8FAFC;"
         "}"
         "QHeaderView::section {"
-        "  background-color: #F8FAFC;"
-        "  color: #475569;"
+        "  background-color: #0F172A;"
+        "  color: #FFFFFF;"
         "  font-weight: 800;"
         "  font-size: 11px;"
         "  padding: 8px 12px;"
@@ -264,23 +234,15 @@ void FirmSelectorWidget::setupUi() {
     emptyBtnRow->setSpacing(12);
     emptyBtnRow->setAlignment(Qt::AlignCenter);
 
-    QPushButton* createBtn = new QPushButton("Create New Firm", m_emptyStateWidget);
-    createBtn->setFixedSize(190, 38);
-    createBtn->setCursor(Qt::PointingHandCursor);
-    createBtn->setStyleSheet(
-        "QPushButton { background-color: #16A34A; border: none; border-radius: 6px; font-weight: 700; color: #FFFFFF; font-size: 13px; }"
-        "QPushButton:hover { background-color: #15803D; }"
-    );
+    KbdBadgeButton* createBtn = new KbdBadgeButton("Create New Firm", "Ctrl+N", m_emptyStateWidget);
+    createBtn->setPrimaryColor(ErpTheme::kGreen, ErpTheme::kGreenDark);
+    createBtn->setTextColor(ErpTheme::kPaper);
+    createBtn->setMinimumSize(190, 38);
     connect(createBtn, &QPushButton::clicked, this, &FirmSelectorWidget::openNewFirmDialog);
     emptyBtnRow->addWidget(createBtn);
 
-    m_emptyStateBtn = new QPushButton("Import External Data", m_emptyStateWidget);
-    m_emptyStateBtn->setFixedSize(190, 38);
-    m_emptyStateBtn->setCursor(Qt::PointingHandCursor);
-    m_emptyStateBtn->setStyleSheet(
-        "QPushButton { background-color: #EFF6FF; border: 1.5px solid #BFDBFE; border-radius: 6px; font-weight: 700; color: #1D4ED8; font-size: 13px; }"
-        "QPushButton:hover { background-color: #DBEAFE; }"
-    );
+    m_emptyStateBtn = new KbdBadgeButton("Import External Data", "F4", m_emptyStateWidget);
+    m_emptyStateBtn->setMinimumSize(190, 38);
     connect(m_emptyStateBtn, &QPushButton::clicked, this, [this]() {
         if (isViewingAppData()) {
             pickFolder();
@@ -302,25 +264,19 @@ void FirmSelectorWidget::setupUi() {
     QHBoxLayout* footerLayout = new QHBoxLayout();
     footerLayout->setSpacing(12);
 
-    m_newFirmBtn = new QPushButton("+ Create New Firm (F2)", this);
-    m_newFirmBtn->setFixedHeight(36);
-    m_newFirmBtn->setCursor(Qt::PointingHandCursor);
-    m_newFirmBtn->setStyleSheet(
-        "QPushButton { background-color: #16A34A; border: none; border-radius: 6px; padding: 0px 18px; font-weight: 700; color: #FFFFFF; font-size: 12px; }"
-        "QPushButton:hover { background-color: #15803D; }"
-    );
+    m_newFirmBtn = new KbdBadgeButton("+ Create New Firm", "Ctrl+N", this);
+    m_newFirmBtn->setPrimaryColor(ErpTheme::kGreen, ErpTheme::kGreenDark);
+    m_newFirmBtn->setTextColor(ErpTheme::kPaper);
+    m_newFirmBtn->setMinimumHeight(36);
     connect(m_newFirmBtn, &QPushButton::clicked, this, &FirmSelectorWidget::openNewFirmDialog);
     footerLayout->addWidget(m_newFirmBtn);
 
     footerLayout->addStretch(1);
 
-    m_openFirmBtn = new QPushButton("Open Selected Firm (Enter)", this);
-    m_openFirmBtn->setFixedHeight(36);
-    m_openFirmBtn->setCursor(Qt::PointingHandCursor);
-    m_openFirmBtn->setStyleSheet(
-        "QPushButton { background-color: #2563EB; border: none; border-radius: 6px; padding: 0px 22px; font-weight: 700; color: #FFFFFF; font-size: 12px; }"
-        "QPushButton:hover { background-color: #1D4ED8; }"
-    );
+    m_openFirmBtn = new KbdBadgeButton("Open Selected Firm", "Enter", this);
+    m_openFirmBtn->setPrimaryColor(ErpTheme::kBlue, ErpTheme::kBlueDark);
+    m_openFirmBtn->setTextColor(ErpTheme::kPaper);
+    m_openFirmBtn->setMinimumHeight(36);
     connect(m_openFirmBtn, &QPushButton::clicked, this, &FirmSelectorWidget::openSelectedFirm);
     footerLayout->addWidget(m_openFirmBtn);
 
@@ -592,7 +548,7 @@ void FirmSelectorWidget::keyPressEvent(QKeyEvent* event) {
         }
         event->accept();
         return;
-    } else if (event->key() == Qt::Key_F2) {
+    } else if (event->modifiers() & Qt::ControlModifier && event->key() == Qt::Key_N) {
         openNewFirmDialog();
         event->accept();
         return;

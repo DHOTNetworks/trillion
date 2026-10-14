@@ -265,7 +265,7 @@ bool VoucherMigrator::migrate_vouchers_bahikhata(
             db.executeNonQuery(
                 "INSERT INTO sales_invoices ("
                 "invoice_number, invoice_date, customer_id, customer_name, total_amount, "
-                "lr_no, vehicle_no, transport_name, station, eway_bill_no, voucher_id, financial_year_id"
+                "gr_no, vehicle_no, transport, station, eway_bill_no, voucher_id, financial_year_id"
                 ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
                 {
                     formattedVchNo,

@@ -1,4 +1,6 @@
 #include "tax_challan_creation_widget.h"
+#include "kbd_badge_button.h"
+#include "erp_theme.h"
 #include "voucher_date_dialog.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -97,8 +99,8 @@ void TaxChallanCreationWidget::setupUi()
     m_vouchersTable->setStyleSheet(
         "QTableWidget { background-color: #FFFFFF; alternate-background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 8px; gridline-color: #F1F5F9; font-size: 12.5px; color: #0F172A; }"
         "QTableWidget::item { padding: 4px 8px; }"
-        "QTableWidget::item:selected { background-color: #EFF6FF; color: #1D4ED8; font-weight: bold; }"
-        "QHeaderView::section { background-color: #F1F5F9; color: #1E293B; font-weight: 800; font-size: 12px; padding: 8px 10px; border: none; border-bottom: 2px solid #CBD5E1; border-right: 1px solid #E2E8F0; }"
+        "QTableWidget::item:selected { background-color: #2563EB; color: #FFFFFF; font-weight: bold; }"
+        "QHeaderView::section { background-color: #0F172A; color: #FFFFFF; font-weight: 800; font-size: 12px; padding: 8px 10px; border: none;  border-right: 1px solid #334155; }"
     );
     connect(m_vouchersTable, &QTableWidget::itemChanged, this, &TaxChallanCreationWidget::onTableItemChanged);
     tableLayout->addWidget(m_vouchersTable, 1);
@@ -119,9 +121,18 @@ void TaxChallanCreationWidget::setupUi()
     mainLayout->addLayout(bottomLayout);
 
     // Shortcuts
-    new QShortcut(QKeySequence("F2"), this, SLOT(onSaveClicked()));
-    new QShortcut(QKeySequence("Ctrl+S"), this, SLOT(onSaveClicked()));
-    new QShortcut(QKeySequence("Escape"), this, SIGNAL(backRequested()));
+    new QShortcut(QKeySequence(Qt::ALT | Qt::Key_S), this, SLOT(onSaveClicked()));
+    new QShortcut(QKeySequence(Qt::Key_Escape), this, SIGNAL(backRequested()));
+    auto* f2Shortcut = new QShortcut(QKeySequence(Qt::Key_F2), this);
+    connect(f2Shortcut, &QShortcut::activated, this, [this]() {
+        QDate cur = QDate::fromString(m_controller->challanDate(), "yyyy-MM-dd");
+        if (!cur.isValid()) cur = QDate::currentDate();
+        QDate chosen = VoucherDateDialog::selectDate(this, cur);
+        if (chosen.isValid()) {
+            m_controller->setChallanDate(chosen.toString("yyyy-MM-dd"));
+            m_challanDateEdit->setText(chosen.toString("dd-MM-yyyy"));
+        }
+    });
 }
 
 QWidget *TaxChallanCreationWidget::createHeaderBar()
@@ -145,21 +156,13 @@ QWidget *TaxChallanCreationWidget::createHeaderBar()
     m_statusLabel->setStyleSheet("margin-left: 15px; border: none; background: transparent;");
     layout->addWidget(m_statusLabel, 1);
 
-    auto *btnSave = new QPushButton("[F2] Save Challan", headerCard);
-    btnSave->setCursor(Qt::PointingHandCursor);
-    btnSave->setStyleSheet(
-        "QPushButton { background-color: #16A34A; color: #FFFFFF; border: none; border-radius: 6px; padding: 6px 18px; font-weight: 800; font-size: 12px; }"
-        "QPushButton:hover { background-color: #15803D; }"
-    );
+    auto *btnSave = new KbdBadgeButton("Save Challan", "Ctrl+S", headerCard);
+    btnSave->setPrimaryColor(ErpTheme::kGreen, ErpTheme::kGreenDark);
+    btnSave->setTextColor(ErpTheme::kPaper);
     connect(btnSave, &QPushButton::clicked, this, &TaxChallanCreationWidget::onSaveClicked);
     layout->addWidget(btnSave);
 
-    auto *btnBack = new QPushButton("← [Esc] Back", headerCard);
-    btnBack->setCursor(Qt::PointingHandCursor);
-    btnBack->setStyleSheet(
-        "QPushButton { background-color: #F1F5F9; border: 1px solid #CBD5E1; border-radius: 6px; padding: 6px 12px; font-weight: 700; color: #475569; font-size: 11.5px; }"
-        "QPushButton:hover { background-color: #E2E8F0; }"
-    );
+    auto *btnBack = new KbdBadgeButton("Back", "Esc", headerCard);
     connect(btnBack, &QPushButton::clicked, this, &TaxChallanCreationWidget::backRequested);
     layout->addWidget(btnBack);
 
@@ -198,7 +201,7 @@ QWidget *TaxChallanCreationWidget::createParamsCard()
     m_challanDateEdit->setReadOnly(true);
     dtRow->addWidget(m_challanDateEdit);
     auto *btnDate = new QPushButton("", card);
-    btnDate->setFixedWidth(28);
+    btnDate->setMinimumWidth(28);
     btnDate->setStyleSheet("QPushButton { background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 4px; }");
     connect(btnDate, &QPushButton::clicked, this, [this]() {
         QDate cur = QDate::fromString(m_controller->challanDate(), "yyyy-MM-dd");
@@ -234,7 +237,7 @@ QWidget *TaxChallanCreationWidget::createParamsCard()
     m_periodFromEdit->setReadOnly(true);
     pfRow->addWidget(m_periodFromEdit);
     auto *btnPf = new QPushButton("", card);
-    btnPf->setFixedWidth(28);
+    btnPf->setMinimumWidth(28);
     btnPf->setStyleSheet("QPushButton { background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 4px; }");
     connect(btnPf, &QPushButton::clicked, this, [this]() {
         QDate cur = QDate::fromString(m_controller->periodFrom(), "yyyy-MM-dd");
@@ -258,7 +261,7 @@ QWidget *TaxChallanCreationWidget::createParamsCard()
     m_periodToEdit->setReadOnly(true);
     ptRow->addWidget(m_periodToEdit);
     auto *btnPt = new QPushButton("", card);
-    btnPt->setFixedWidth(28);
+    btnPt->setMinimumWidth(28);
     btnPt->setStyleSheet("QPushButton { background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 4px; }");
     connect(btnPt, &QPushButton::clicked, this, [this]() {
         QDate cur = QDate::fromString(m_controller->periodTo(), "yyyy-MM-dd");
@@ -275,7 +278,7 @@ QWidget *TaxChallanCreationWidget::createParamsCard()
 
     // Fetch Button
     auto *btnFetch = new QPushButton("Fetch Vouchers", card);
-    btnFetch->setFixedHeight(30);
+    btnFetch->setMinimumHeight(30);
     btnFetch->setCursor(Qt::PointingHandCursor);
     btnFetch->setStyleSheet(
         "QPushButton { background-color: #2563EB; color: #FFFFFF; font-weight: 700; font-size: 11.5px; padding: 0 16px; border-radius: 6px; border: none; }"
@@ -413,7 +416,7 @@ QWidget *TaxChallanCreationWidget::createBankDetailsCard()
     m_chequeDateEdit->setReadOnly(true);
     chqDateRow->addWidget(m_chequeDateEdit);
     auto *btnChqDate = new QPushButton("", card);
-    btnChqDate->setFixedWidth(28);
+    btnChqDate->setMinimumWidth(28);
     btnChqDate->setStyleSheet("QPushButton { background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 4px; }");
     connect(btnChqDate, &QPushButton::clicked, this, [this]() {
         QDate cur = QDate::fromString(m_controller->chequeDate(), "yyyy-MM-dd");

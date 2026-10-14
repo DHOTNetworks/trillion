@@ -5,6 +5,37 @@
 #include <QMutexLocker>
 #include <cmath>
 #include <QDebug>
+#include <QRegularExpression>
+
+namespace {
+QVariantMap ledgerNodeToMap(const LedgerNode& node) {
+    QVariantMap m;
+    m["id"] = node.id;
+    m["legacy_id"] = node.legacyId;
+    m["name"] = node.name;
+    m["party_name"] = node.name;
+    m["print_name"] = node.printName;
+    m["alias"] = node.alias;
+    m["group_id"] = node.groupId;
+    m["group_name"] = node.groupName;
+    m["party_type"] = node.nature;
+    m["nature"] = node.nature;
+    m["city"] = node.city;
+    m["state"] = node.state;
+    m["state_code"] = node.stateCode;
+    m["station"] = node.station;
+    m["mobile"] = node.mobile;
+    m["phone"] = node.mobile;
+    m["gstin"] = node.gstin;
+    m["pan"] = node.pan;
+    m["opening_balance"] = node.openingBalance;
+    m["balance_type"] = node.openingBalanceType;
+    m["current_balance"] = node.openingBalance;
+    m["credit_limit"] = node.creditLimit;
+    m["credit_days"] = node.creditDays;
+    return m;
+}
+} // namespace
 
 LedgerPipeline::LedgerPipeline(QObject* parent)
     : QObject(parent)
@@ -271,46 +302,187 @@ LedgerPipeline::BalanceSheetPartition LedgerPipeline::partitionForBalanceSheet(c
     return partition;
 }
 
-QVariantList LedgerPipeline::searchLedgers(const QString& query, const QString& filterGroup, int limit) {
+QVariantList LedgerPipeline::searchLedgersInternal(const QString& query, const QString& filterGroup, int filterGroupId, int limit) {
     QMutexLocker locker(&m_mutex);
     ensureLoaded();
 
     QString q = query.trimmed().toLower();
     QString fg = filterGroup.trimmed().toLower();
-    QVariantList results;
+    QVector<int> validGroupIds;
+    if (filterGroupId > 0) {
+        validGroupIds = GroupHierarchyPipeline::instance().getSubtreeGroupIds(filterGroupId);
+        validGroupIds.append(filterGroupId);
+    }
+
+    static const QRegularExpression splitRegex(QStringLiteral("[\\s\\-\\/\\.\\[\\]\\(\\)\\,\\&\\_\\+]+"));
+    QStringList queryTokens = q.split(splitRegex, Qt::SkipEmptyParts);
+
+    // When query is empty, return up to limit nodes sorted alphabetically A-Z by name
+    if (queryTokens.isEmpty()) {
+        QVector<const LedgerNode*> allNodes;
+        allNodes.reserve(m_byId.size());
+        for (const auto& node : m_byId) {
+            if (!fg.isEmpty() && node.groupName.toLower() != fg) continue;
+            if (filterGroupId > 0 && !validGroupIds.contains(node.groupId)) continue;
+            allNodes.append(&node);
+        }
+        std::sort(allNodes.begin(), allNodes.end(), [](const LedgerNode* a, const LedgerNode* b) {
+            int cmp = QString::compare(a->name, b->name, Qt::CaseInsensitive);
+            if (cmp != 0) return cmp < 0;
+            return a->id < b->id;
+        });
+
+        QVariantList results;
+        int count = (limit > 0) ? qMin(allNodes.size(), limit) : allNodes.size();
+        results.reserve(count);
+        for (int i = 0; i < count; ++i) {
+            results.append(ledgerNodeToMap(*allNodes[i]));
+        }
+        return results;
+    }
+
+    struct RankedItem {
+        const LedgerNode* node = nullptr;
+        int tier = 999;        // 0: exact full name, 1: 1st word prefix, 2: 2nd word prefix, 3: 3rd+ word prefix, 4: location prefix, 5: substring, 6: other attribute
+        int wordIndex = 999;   // matching word index in name
+        bool exactWord = false;// exact full word match vs prefix
+        int nameLength = 0;
+    };
+
+    QVector<RankedItem> matches;
+    matches.reserve(qMin(m_byId.size(), 256));
 
     for (const auto& node : m_byId) {
-        if (!fg.isEmpty() && node.groupName.toLower() != fg) {
-            continue;
-        }
-        if (!q.isEmpty()) {
-            bool matches = node.name.toLower().contains(q) ||
-                            node.city.toLower().contains(q) ||
-                            node.station.toLower().contains(q) ||
-                            node.mobile.contains(q) ||
-                            node.gstin.toLower().contains(q);
-            if (!matches) continue;
+        if (!fg.isEmpty() && node.groupName.toLower() != fg) continue;
+        if (filterGroupId > 0 && !validGroupIds.contains(node.groupId)) continue;
+
+        QString nameLower = node.name.toLower().trimmed();
+        int bStart = nameLower.indexOf('[');
+        int bEnd = nameLower.indexOf(']', bStart);
+        QString bracketLoc;
+        QString cleanNamePart = nameLower;
+        if (bStart != -1 && bEnd > bStart) {
+            bracketLoc = nameLower.mid(bStart + 1, bEnd - bStart - 1).trimmed();
+            cleanNamePart = nameLower.left(bStart).trimmed();
         }
 
-        QVariantMap m;
-        m["id"] = node.id;
-        m["legacy_id"] = node.legacyId;
-        m["name"] = node.name;
-        m["group_name"] = node.groupName;
-        m["city"] = node.city;
-        m["station"] = node.station;
-        m["mobile"] = node.mobile;
-        m["gstin"] = node.gstin;
-        m["pan"] = node.pan;
-        m["opening_balance"] = node.openingBalance;
-        m["balance_type"] = node.openingBalanceType;
-        m["credit_limit"] = node.creditLimit;
-        m["credit_days"] = node.creditDays;
-        results.append(m);
+        QStringList nameWords = cleanNamePart.split(splitRegex, Qt::SkipEmptyParts);
+        QStringList locWords = bracketLoc.split(splitRegex, Qt::SkipEmptyParts);
+        if (!node.city.isEmpty()) {
+            locWords.append(node.city.toLower().split(splitRegex, Qt::SkipEmptyParts));
+        }
+        if (!node.station.isEmpty()) {
+            locWords.append(node.station.toLower().split(splitRegex, Qt::SkipEmptyParts));
+        }
+        QString groupLower = node.groupName.toLower();
+        QString mobile = node.mobile;
+        QString gstinLower = node.gstin.toLower();
 
-        if (limit > 0 && results.size() >= limit) break;
+        bool allMatched = true;
+        int firstTokenTier = 999;
+        int firstTokenWordIdx = 999;
+        bool firstTokenExact = false;
+
+        for (int t = 0; t < queryTokens.size(); ++t) {
+            const QString& tok = queryTokens.at(t);
+            bool tokFound = false;
+            int curTier = 999;
+            int curWordIdx = 999;
+            bool curExact = false;
+
+            // 1. Check Name words (prefix matching: 1st word -> tier 1, 2nd word -> tier 2, 3rd+ word -> tier 3)
+            for (int w = 0; w < nameWords.size(); ++w) {
+                const QString& nw = nameWords.at(w);
+                if (nw.startsWith(tok)) {
+                    tokFound = true;
+                    curWordIdx = w;
+                    curExact = (nw == tok);
+                    if (w == 0) curTier = 1;
+                    else if (w == 1) curTier = 2;
+                    else curTier = 3;
+                    break;
+                }
+            }
+
+            // 2. Check Location words (city, station, bracket)
+            if (!tokFound) {
+                for (int lw = 0; lw < locWords.size(); ++lw) {
+                    const QString& lwWord = locWords.at(lw);
+                    if (lwWord.startsWith(tok)) {
+                        tokFound = true;
+                        curTier = 4;
+                        curWordIdx = 100 + lw;
+                        curExact = (lwWord == tok);
+                        break;
+                    }
+                }
+            }
+
+            // 3. Check Substring inside Name
+            if (!tokFound && cleanNamePart.contains(tok)) {
+                tokFound = true;
+                curTier = 5;
+                curWordIdx = 200;
+            }
+
+            // 4. Check other attributes (group, mobile, gstin, alias)
+            if (!tokFound) {
+                if (groupLower.contains(tok) || mobile.contains(tok) || gstinLower.contains(tok) || node.alias.toLower().contains(tok)) {
+                    tokFound = true;
+                    curTier = 6;
+                    curWordIdx = 300;
+                }
+            }
+
+            if (!tokFound) {
+                allMatched = false;
+                break;
+            }
+
+            if (t == 0) {
+                firstTokenTier = curTier;
+                firstTokenWordIdx = curWordIdx;
+                firstTokenExact = curExact;
+            }
+        }
+
+        if (!allMatched) continue;
+
+        int finalTier = firstTokenTier;
+        if (cleanNamePart == q || nameLower == q) {
+            finalTier = 0; // Exact match
+        }
+
+        RankedItem item;
+        item.node = &node;
+        item.tier = finalTier;
+        item.wordIndex = firstTokenWordIdx;
+        item.exactWord = firstTokenExact;
+        item.nameLength = cleanNamePart.length();
+        matches.append(item);
+    }
+
+    std::sort(matches.begin(), matches.end(), [](const RankedItem& a, const RankedItem& b) {
+        if (a.tier != b.tier) return a.tier < b.tier;
+        if (a.wordIndex != b.wordIndex) return a.wordIndex < b.wordIndex;
+        if (a.exactWord != b.exactWord) return a.exactWord > b.exactWord;
+        if (a.nameLength != b.nameLength) return a.nameLength < b.nameLength;
+        int nameCmp = QString::compare(a.node->name, b.node->name, Qt::CaseInsensitive);
+        if (nameCmp != 0) return nameCmp < 0;
+        return a.node->id < b.node->id;
+    });
+
+    QVariantList results;
+    int count = (limit > 0) ? qMin(matches.size(), limit) : matches.size();
+    results.reserve(count);
+    for (int i = 0; i < count; ++i) {
+        results.append(ledgerNodeToMap(*matches[i].node));
     }
     return results;
+}
+
+QVariantList LedgerPipeline::searchLedgers(const QString& query, const QString& filterGroup, int limit) {
+    return searchLedgersInternal(query, filterGroup, 0, limit);
 }
 
 QStringList LedgerPipeline::getLedgerNames(const QString& filterGroup) {
@@ -329,50 +501,7 @@ QStringList LedgerPipeline::getLedgerNames(const QString& filterGroup) {
 }
 
 QVariantList LedgerPipeline::searchLedgers(const QString& query, int filterGroupId, int limit) {
-    QMutexLocker locker(&m_mutex);
-    ensureLoaded();
-
-    QString q = query.trimmed().toLower();
-    QVariantList results;
-    QVector<int> validGroupIds;
-    if (filterGroupId > 0) {
-        validGroupIds = GroupHierarchyPipeline::instance().getSubtreeGroupIds(filterGroupId);
-        validGroupIds.append(filterGroupId);
-    }
-
-    for (const auto& node : m_byId) {
-        if (filterGroupId > 0 && !validGroupIds.contains(node.groupId)) {
-            continue;
-        }
-        if (!q.isEmpty()) {
-            bool matches = node.name.toLower().contains(q) ||
-                            node.city.toLower().contains(q) ||
-                            node.station.toLower().contains(q) ||
-                            node.mobile.contains(q) ||
-                            node.gstin.toLower().contains(q);
-            if (!matches) continue;
-        }
-
-        QVariantMap m;
-        m["id"] = node.id;
-        m["legacy_id"] = node.legacyId;
-        m["name"] = node.name;
-        m["group_id"] = node.groupId;
-        m["group_name"] = node.groupName;
-        m["city"] = node.city;
-        m["station"] = node.station;
-        m["mobile"] = node.mobile;
-        m["gstin"] = node.gstin;
-        m["pan"] = node.pan;
-        m["opening_balance"] = node.openingBalance;
-        m["balance_type"] = node.openingBalanceType;
-        m["credit_limit"] = node.creditLimit;
-        m["credit_days"] = node.creditDays;
-        results.append(m);
-
-        if (limit > 0 && results.size() >= limit) break;
-    }
-    return results;
+    return searchLedgersInternal(query, "", filterGroupId, limit);
 }
 
 QVariantList LedgerPipeline::searchLedgersByRootCode(const QString& query, int rootCode, int limit) {

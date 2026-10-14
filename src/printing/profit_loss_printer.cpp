@@ -1,4 +1,5 @@
 #include "profit_loss_printer.h"
+#include "reports/report_html_chrome.h"
 #include "../engine/accounting_engine.h"
 #include <QPrinter>
 #include <QPrintDialog>
@@ -15,37 +16,46 @@
 #include <algorithm>
 
 QString ProfitLossPrinter::generateHtml(const ProfitLossData& data) {
+    QVariantMap firmMap;
+    firmMap["firm_name"] = data.firmName;
+    firmMap["address"] = data.firmAddress;
+    firmMap["gstin"] = data.firmGstin;
+    const QString headerHtml = ErpPrint::letterheadHtml(firmMap)
+        + ErpPrint::titleBlockHtml("TRADING AND PROFIT & LOSS ACCOUNT",
+            QString("Period: %1 to %2 (%3)").arg(data.displayFromDate, data.displayToDate, data.financialYear));
+    const QString signHtml = ErpPrint::signatoryHtml(data.firmName)
+        + ErpPrint::generatedFooterHtml();
     auto formatGroupList = [](const QVector<ProfitLossItem>& groups) -> QString {
         QString outHtml = "";
         bool first = true;
         for (const auto& g : groups) {
             if (!first) {
-                outHtml += "<tr height='8'><td colspan='2' style='height: 8px; font-size: 1px;'>&nbsp;</td></tr>";
+                outHtml += "<tr><td colspan='2' bgcolor='#FFFFFF'>&nbsp;</td></tr>";
             }
             first = false;
 
             if (g.children.isEmpty()) {
                 outHtml += QString(
                     "<tr>"
-                    "<td align='left' class='%1'>%2</td>"
-                    "<td align='right' class='num-amt %1'>%3</td>"
+                    "<td align='left' valign='top' bgcolor='#FFFFFF'>%1</td>"
+                    "<td align='right' nowrap style='white-space:nowrap;' bgcolor='#FFFFFF'>%2</td>"
                     "</tr>"
-                ).arg(g.isCalculated || g.isGroup ? "group-title" : "child-item", g.name, g.amountFmt);
+                ).arg((g.isCalculated || g.isGroup ? "<b>" + g.name.toHtmlEscaped() + "</b>" : g.name.toHtmlEscaped()), g.amountFmt);
             } else {
                 outHtml += QString(
                     "<tr>"
-                    "<td align='left' class='group-title'><b>%1</b></td>"
-                    "<td align='right' class='num-amt group-title'><b>%2</b></td>"
+                    "<td align='left' valign='top' bgcolor='#FFFFFF'><b>%1</b></td>"
+                    "<td align='right' nowrap style='white-space:nowrap;' bgcolor='#FFFFFF'><b>%2</b></td>"
                     "</tr>"
-                ).arg(g.name.toUpper(), g.amountFmt);
+                ).arg(g.name.toUpper().toHtmlEscaped(), g.amountFmt);
 
                 for (const auto& c : g.children) {
                     outHtml += QString(
                         "<tr>"
-                        "<td align='left' class='child-item'>- %1</td>"
-                        "<td align='right' class='num-amt'>%2</td>"
+                        "<td align='left' valign='top' bgcolor='#FFFFFF'>&nbsp;&nbsp;- %1</td>"
+                        "<td align='right' nowrap style='white-space:nowrap;' bgcolor='#FFFFFF'>%2</td>"
                         "</tr>"
-                    ).arg(c.name, c.amountFmt);
+                    ).arg(c.name.toHtmlEscaped(), c.amountFmt);
                 }
             }
         }
@@ -61,50 +71,38 @@ QString ProfitLossPrinter::generateHtml(const ProfitLossData& data) {
         "<!DOCTYPE html><html><head><meta charset='utf-8'><style>"
         "  body { font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', Arial, 'Liberation Sans', 'DejaVu Sans', sans-serif; font-size: 8.5pt; color: #000000; margin: 0; padding: 0; background-color: #ffffff; }"
         "  table { border-collapse: collapse; }"
-        "  .main-table { width: 100%; border-collapse: collapse; margin-top: 4pt; }"
-        "  .col-hdr-left { border-top: 1.5pt solid #000000; border-bottom: 1.5pt solid #000000; border-right: 1pt solid #000000; font-weight: bold; font-size: 8.5pt; padding: 4pt 8pt 4pt 4pt; background-color: #f8f8f8; }"
-        "  .col-hdr-right { border-top: 1.5pt solid #000000; border-bottom: 1.5pt solid #000000; font-weight: bold; font-size: 8.5pt; padding: 4pt 4pt 4pt 8pt; background-color: #f8f8f8; }"
-        "  .side-cell-left { width: 50%; vertical-align: top; border-right: 1pt solid #000000; padding-right: 8pt; padding-top: 4pt; }"
-        "  .side-cell-right { width: 50%; vertical-align: top; padding-left: 8pt; padding-top: 4pt; }"
-        "  .items-table { width: 100%; border-collapse: collapse; border: none; }"
-        "  .items-table td { border: none; padding: 1.5pt 2pt; font-size: 8pt; }"
-        "  .section-hdr { background-color: #eaeaea; font-weight: bold; text-align: center; font-size: 8pt; padding: 2.5pt 0; margin: 4pt 0 3pt 0; }"
-        "  .group-title { font-weight: bold; padding-top: 2pt !important; text-decoration: underline; }"
-        "  .child-item { padding-left: 10pt !important; }"
-        "  .num-amt { font-family: 'Consolas', 'Menlo', 'Monaco', 'DejaVu Sans Mono', 'Liberation Mono', 'Courier New', monospace; font-weight: bold; text-align: right; white-space: nowrap; }"
-        "  .subtotal-table { width: 100%; border-collapse: collapse; margin: 4pt 0; border-top: 1pt solid #000000; border-bottom: 2pt double #000000; background-color: #f4f4f4; }"
-        "  .subtotal-table td { padding: 3pt 4pt; font-weight: bold; font-size: 8pt; }"
-        "  .summary-box { width: 100%; margin-top: 8pt; border: 1.5pt solid #000000; background-color: #f8f8f8; border-collapse: collapse; }"
-        "  .summary-box td { padding: 4pt 8pt; font-weight: bold; font-size: 8.5pt; }"
-        "  .sign-table { width: 100%; margin-top: 20pt; border-collapse: collapse; border: none; }"
-        "  .sign-box { border-top: 1pt solid #000000; padding-top: 3pt; min-width: 170px; text-align: center; font-size: 8.5pt; font-weight: bold; }"
+        "  .lh{text-align:center;margin:0 0 2px 0;}"
+        "  .lh-name{font-size:17pt;font-weight:800;}"
+        "  .lh-line{font-size:9pt;color:#334155;}"
+        "  .rule{border:none;border-top:2px solid #0F172A;margin:4px 0 1px 0;}"
+        "  .rule2{border:none;border-top:1px solid #0F172A;margin:0 0 8px 0;}"
+        "  .title{text-align:center;font-size:13pt;font-weight:800;margin:6px 0 1px 0;}"
+        "  .period{text-align:center;font-size:9.5pt;color:#334155;margin:0 0 8px 0;}"
+        "  .notes{font-size:8.5pt;color:#334155;margin:6px 0;}"
+        "  .sign{width:100%;margin-top:18px;border-collapse:collapse;}"
+        "  .sign td{width:33%;text-align:center;font-size:9pt;vertical-align:bottom;"
+        "padding-top:28px;border:none;border-top:0.5pt solid #0F172A;}"
+        "  .genfoot{margin-top:10px;font-size:7.5pt;color:#94A3B8;text-align:right;}"
         "</style></head><body>"
         ""
-        "<div align='center' style='margin-bottom: 4pt;'>"
-        "  <font size='4'><b>%1</b></font><br>"
-        "  <font size='1'>%2 &nbsp;|&nbsp; <b>GSTIN:</b> %3</font><br>"
-        "  <table border='1' cellspacing='0' cellpadding='2' style='margin-top: 3pt; display: inline-table;'>"
-        "    <tr><td align='center'><b>TRADING AND PROFIT & LOSS ACCOUNT</b></td></tr>"
-        "  </table><br>"
-        "  <font size='1'><b>Period: %4 To %5 (Financial Year: %6)</b></font>"
-        "</div>"
+        "%1"
         ""
-        "<table class='main-table' border='0' cellspacing='0' cellpadding='0'>"
+        "<table width='100%' border='0' cellspacing='0' cellpadding='0'>"
         "  <thead>"
         "    <tr>"
-        "      <th class='col-hdr-left' width='50%'>"
+        "      <th width='50%' bgcolor='#0F172A' align='left'>"
         "        <table width='100%' border='0' cellspacing='0' cellpadding='0'>"
         "          <tr>"
-        "            <td align='left' style='font-weight: bold;'>EXPENSES / Dr PARTICULARS</td>"
-        "            <td align='right' style='font-weight: bold;'>AMOUNT (₹)</td>"
+        "            <td align='left'><font color='#FFFFFF'><b>EXPENSES / Dr PARTICULARS</b></font></td>"
+        "            <td align='right'><font color='#FFFFFF'><b>AMOUNT (Rs.)</b></font></td>"
         "          </tr>"
         "        </table>"
         "      </th>"
-        "      <th class='col-hdr-right' width='50%'>"
+        "      <th width='50%' bgcolor='#0F172A' align='left'>"
         "        <table width='100%' border='0' cellspacing='0' cellpadding='0'>"
         "          <tr>"
-        "            <td align='left' style='font-weight: bold;'>INCOMES / Cr PARTICULARS</td>"
-        "            <td align='right' style='font-weight: bold;'>AMOUNT (₹)</td>"
+        "            <td align='left'><font color='#FFFFFF'><b>INCOMES / Cr PARTICULARS</b></font></td>"
+        "            <td align='right'><font color='#FFFFFF'><b>AMOUNT (Rs.)</b></font></td>"
         "          </tr>"
         "        </table>"
         "      </th>"
@@ -113,49 +111,49 @@ QString ProfitLossPrinter::generateHtml(const ProfitLossData& data) {
         "  <tbody>"
         "    <tr>"
         "      <!-- EXPENSES SIDE (Left) -->"
-        "      <td class='side-cell-left'>"
-        "        <div class='section-hdr'>TRADING ACCOUNT (EXPENSES)</div>"
-        "        <table class='items-table' border='0' cellspacing='0' cellpadding='0'>"
-        "          %7"
+        "      <td width='50%' valign='top'>"
+        "        <table width='100%' border='0' cellspacing='1' cellpadding='4' bgcolor='#94A3B8'><tr><td align='center' bgcolor='#0F172A'><font color='#FFFFFF'><b>TRADING ACCOUNT (EXPENSES)</b></font></td></tr></table>"
+        "        <table width='100%' border='0' cellspacing='1' cellpadding='4' bgcolor='#94A3B8'>"
+        "          %2"
         "        </table>"
-        "        <table class='subtotal-table' border='0' cellspacing='0' cellpadding='0'>"
+        "        <table width='100%' border='0' cellspacing='1' cellpadding='4' bgcolor='#94A3B8'>"
         "          <tr>"
-        "            <td align='left'>TRADING A/C TOTAL:</td>"
-        "            <td align='right' class='num-amt'>₹ %8</td>"
+        "            <td align='left' bgcolor='#F1F5F9'><b>TRADING A/C TOTAL:</b></td>"
+        "            <td align='right' nowrap style='white-space:nowrap;' bgcolor='#F1F5F9'><b>%3</b></td>"
         "          </tr>"
         "        </table>"
-        "        <div class='section-hdr' style='margin-top: 8pt;'>PROFIT & LOSS ACCOUNT (EXPENSES)</div>"
-        "        <table class='items-table' border='0' cellspacing='0' cellpadding='0'>"
-        "          %9"
+        "        <table width='100%' border='0' cellspacing='1' cellpadding='4' bgcolor='#94A3B8'><tr><td align='center' bgcolor='#0F172A'><font color='#FFFFFF'><b>PROFIT &amp; LOSS ACCOUNT (EXPENSES)</b></font></td></tr></table>"
+        "        <table width='100%' border='0' cellspacing='1' cellpadding='4' bgcolor='#94A3B8'>"
+        "          %4"
         "        </table>"
-        "        <table class='subtotal-table' border='0' cellspacing='0' cellpadding='0'>"
+        "        <table width='100%' border='0' cellspacing='1' cellpadding='4' bgcolor='#94A3B8'>"
         "          <tr>"
-        "            <td align='left'>PROFIT & LOSS A/C TOTAL:</td>"
-        "            <td align='right' class='num-amt'>₹ %10</td>"
+        "            <td align='left' bgcolor='#F1F5F9'><b>PROFIT &amp; LOSS A/C TOTAL:</b></td>"
+        "            <td align='right' nowrap style='white-space:nowrap;' bgcolor='#F1F5F9'><b>%5</b></td>"
         "          </tr>"
         "        </table>"
         "      </td>"
         ""
         "      <!-- INCOMES SIDE (Right) -->"
-        "      <td class='side-cell-right'>"
-        "        <div class='section-hdr'>TRADING ACCOUNT (INCOMES)</div>"
-        "        <table class='items-table' border='0' cellspacing='0' cellpadding='0'>"
-        "          %11"
+        "      <td width='50%' valign='top'>"
+        "        <table width='100%' border='0' cellspacing='1' cellpadding='4' bgcolor='#94A3B8'><tr><td align='center' bgcolor='#0F172A'><font color='#FFFFFF'><b>TRADING ACCOUNT (INCOMES)</b></font></td></tr></table>"
+        "        <table width='100%' border='0' cellspacing='1' cellpadding='4' bgcolor='#94A3B8'>"
+        "          %6"
         "        </table>"
-        "        <table class='subtotal-table' border='0' cellspacing='0' cellpadding='0'>"
+        "        <table width='100%' border='0' cellspacing='1' cellpadding='4' bgcolor='#94A3B8'>"
         "          <tr>"
-        "            <td align='left'>TRADING A/C TOTAL:</td>"
-        "            <td align='right' class='num-amt'>₹ %12</td>"
+        "            <td align='left' bgcolor='#F1F5F9'><b>TRADING A/C TOTAL:</b></td>"
+        "            <td align='right' nowrap style='white-space:nowrap;' bgcolor='#F1F5F9'><b>%7</b></td>"
         "          </tr>"
         "        </table>"
-        "        <div class='section-hdr' style='margin-top: 8pt;'>PROFIT & LOSS ACCOUNT (INCOMES)</div>"
-        "        <table class='items-table' border='0' cellspacing='0' cellpadding='0'>"
-        "          %13"
+        "        <table width='100%' border='0' cellspacing='1' cellpadding='4' bgcolor='#94A3B8'><tr><td align='center' bgcolor='#0F172A'><font color='#FFFFFF'><b>PROFIT &amp; LOSS ACCOUNT (INCOMES)</b></font></td></tr></table>"
+        "        <table width='100%' border='0' cellspacing='1' cellpadding='4' bgcolor='#94A3B8'>"
+        "          %8"
         "        </table>"
-        "        <table class='subtotal-table' border='0' cellspacing='0' cellpadding='0'>"
+        "        <table width='100%' border='0' cellspacing='1' cellpadding='4' bgcolor='#94A3B8'>"
         "          <tr>"
-        "            <td align='left'>PROFIT & LOSS A/C TOTAL:</td>"
-        "            <td align='right' class='num-amt'>₹ %14</td>"
+        "            <td align='left' bgcolor='#F1F5F9'><b>PROFIT &amp; LOSS A/C TOTAL:</b></td>"
+        "            <td align='right' nowrap style='white-space:nowrap;' bgcolor='#F1F5F9'><b>%9</b></td>"
         "          </tr>"
         "        </table>"
         "      </td>"
@@ -163,53 +161,32 @@ QString ProfitLossPrinter::generateHtml(const ProfitLossData& data) {
         "  </tbody>"
         "</table>"
         ""
-        "<table class='summary-box' border='0' cellspacing='0' cellpadding='0'>"
+        "<table width='100%' border='0' cellspacing='1' cellpadding='6' bgcolor='#94A3B8'>"
         "  <tr>"
-        "    <td width='50%' align='left' style='border-right: 1.5pt solid #000000;'>"
+        "    <td width='50%' align='left' bgcolor='#F1F5F9'>"
         "      <table width='100%' border='0' cellspacing='0' cellpadding='0'>"
         "        <tr>"
-        "          <td align='left' style='font-weight: bold;'>GROSS PROFIT:</td>"
-        "          <td align='right' class='num-amt'>₹ %15</td>"
+        "          <td align='left'><b>GROSS PROFIT:</b></td>"
+        "          <td align='right' nowrap style='white-space:nowrap;' bgcolor='#F1F5F9'><b>%10</b></td>"
         "        </tr>"
         "      </table>"
         "    </td>"
-        "    <td width='50%' align='right'>"
+        "    <td width='50%' align='right' bgcolor='#F1F5F9'>"
         "      <table width='100%' border='0' cellspacing='0' cellpadding='0'>"
         "        <tr>"
-        "          <td align='left' style='font-weight: bold; padding-left: 8pt;'>NET PROFIT:</td>"
-        "          <td align='right' class='num-amt'>₹ %16</td>"
+        "          <td align='left'><b>NET PROFIT:</b></td>"
+        "          <td align='right' nowrap style='white-space:nowrap;' bgcolor='#F1F5F9'><b>%11</b></td>"
         "        </tr>"
         "      </table>"
         "    </td>"
         "  </tr>"
         "</table>"
         ""
-        "<table class='sign-table' border='0' cellspacing='0' cellpadding='0'>"
-        "  <tr>"
-        "    <td width='50%' valign='bottom' align='left'>"
-        "      <font size='1'>Note: Prepared from books of account produced &amp; maintained.<br>Generated on: %17 &nbsp;|&nbsp; E. &amp; O.E.</font>"
-        "    </td>"
-        "    <td width='50%' align='right' valign='bottom'>"
-        "      <table border='0' cellspacing='0' cellpadding='0' align='right'>"
-        "        <tr><td align='center' style='font-size: 8.5pt; font-weight: bold;'>For %1</td></tr>"
-        "        <tr><td height='60' style='height: 60px; font-size: 1px;'>&nbsp;</td></tr>"
-        "        <tr>"
-        "          <td align='center' class='sign-box'>"
-        "            Authorised Signatory"
-        "          </td>"
-        "        </tr>"
-        "      </table>"
-        "    </td>"
-        "  </tr>"
-        "</table>"
+        "<div class='notes'>Note: Prepared from books of account produced &amp; maintained. %12</div>"
+        "%13"
         "</body></html>"
     )
-    .arg(data.firmName)
-    .arg(data.firmAddress)
-    .arg(data.firmGstin)
-    .arg(data.displayFromDate)
-    .arg(data.displayToDate)
-    .arg(data.financialYear)
+    .arg(headerHtml)
     .arg(trDrHtml)
     .arg(data.totalTradingDrFmt)
     .arg(plDrHtml)
@@ -220,7 +197,8 @@ QString ProfitLossPrinter::generateHtml(const ProfitLossData& data) {
     .arg(data.totalPlCrFmt)
     .arg(AccountingEngine::formatIndianCurrency(data.grossProfit, true))
     .arg(AccountingEngine::formatIndianCurrency(data.netProfit, true))
-    .arg(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm AP"));
+    .arg(QString())
+    .arg(signHtml);
 
     return html;
 }

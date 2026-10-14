@@ -97,15 +97,16 @@ bool IFormModel::save_iform_voucher(const QVariantMap& data, const QVariantList&
 
     int buyerId = data.value("buyer_id").toInt();
     if (buyerId <= 0) {
-        QVariant foundId = db.executeScalar("SELECT id FROM parties WHERE party_name = ? LIMIT 1;", {buyerName});
+        QVariant foundId = db.executeScalar("SELECT id FROM parties WHERE name = ? COLLATE NOCASE LIMIT 1;", {buyerName});
         if (foundId.isValid() && !foundId.isNull()) {
             buyerId = foundId.toInt();
         }
     }
 
     QString brokerName = data.value("broker_name").toString().trimmed();
+    QString transport = data.value("transport").toString().trimmed();
     int dueDays = data.value("due_days").toInt();
-    QString vehicleNo = data.value("vehicle_no").toString().trimmed();
+    QString vehicleNo = data.value("vehicle_no", data.value("vehicleNo")).toString().trimmed().toUpper();
     QString driverName = data.value("driver_name").toString().trimmed();
     QString grNo = data.value("gr_no").toString().trimmed();
     QString gatePassNo = data.value("gate_pass_no").toString().trimmed();
@@ -134,14 +135,14 @@ bool IFormModel::save_iform_voucher(const QVariantMap& data, const QVariantList&
         bool ok = db.executeNonQuery(
             "UPDATE iform_vouchers SET "
             "voucher_no = ?, voucher_date = ?, financial_year = ?, iform_no = ?, buyer_id = ?, buyer_name = ?, "
-            "broker_name = ?, due_days = ?, vehicle_no = ?, driver_name = ?, gr_no = ?, gate_pass_no = ?, "
+            "broker_name = ?, transport = ?, due_days = ?, vehicle_no = ?, driver_name = ?, gr_no = ?, gate_pass_no = ?, "
             "total_bags = ?, total_weight = ?, goods_amount = ?, dami_rate = ?, dami_amount = ?, "
             "mandi_fee_rate = ?, mandi_fee_amount = ?, hrdf_rate = ?, hrdf_amount = ?, labour_amount = ?, "
             "taxable_amount = ?, tax_amount = ?, round_off = ?, grand_total = ?, narration = ? "
             "WHERE id = ?;",
             {
                 vchNo, vchDate, fy, iformNo, (buyerId > 0 ? QVariant(buyerId) : QVariant()), buyerName,
-                brokerName, dueDays, vehicleNo, driverName, grNo, gatePassNo,
+                brokerName, transport, dueDays, vehicleNo, driverName, grNo, gatePassNo,
                 totalBags, totalWeight, goodsAmount, damiRate, damiAmount,
                 mandiFeeRate, mandiFeeAmount, hrdfRate, hrdfAmount, labourAmount,
                 taxableAmount, taxAmount, roundOff, grandTotal, narration, voucherId
@@ -157,14 +158,14 @@ bool IFormModel::save_iform_voucher(const QVariantMap& data, const QVariantList&
         bool ok = db.executeNonQuery(
             "INSERT INTO iform_vouchers ("
             "financial_year, voucher_no, voucher_date, iform_no, buyer_id, buyer_name, "
-            "broker_name, due_days, vehicle_no, driver_name, gr_no, gate_pass_no, "
+            "broker_name, transport, due_days, vehicle_no, driver_name, gr_no, gate_pass_no, "
             "total_bags, total_weight, goods_amount, dami_rate, dami_amount, "
             "mandi_fee_rate, mandi_fee_amount, hrdf_rate, hrdf_amount, labour_amount, "
             "taxable_amount, tax_amount, round_off, grand_total, narration) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
             {
                 fy, vchNo, vchDate, iformNo, (buyerId > 0 ? QVariant(buyerId) : QVariant()), buyerName,
-                brokerName, dueDays, vehicleNo, driverName, grNo, gatePassNo,
+                brokerName, transport, dueDays, vehicleNo, driverName, grNo, gatePassNo,
                 totalBags, totalWeight, goodsAmount, damiRate, damiAmount,
                 mandiFeeRate, mandiFeeAmount, hrdfRate, hrdfAmount, labourAmount,
                 taxableAmount, taxAmount, roundOff, grandTotal, narration
@@ -224,7 +225,7 @@ bool IFormModel::save_iform_voucher(const QVariantMap& data, const QVariantList&
     }
 
     // 2. Credit Maal Khata / Sale with Goods Amount
-    QVariant maalKhataId = db.executeScalar("SELECT id FROM parties WHERE party_name = 'Maal Khata A/c' OR party_name LIKE '%Maal Khata%' LIMIT 1;");
+    QVariant maalKhataId = db.executeScalar("SELECT id FROM parties WHERE name = 'Maal Khata A/c' OR name LIKE '%Maal Khata%' LIMIT 1;");
     if (maalKhataId.isValid() && !maalKhataId.isNull() && goodsAmount > 0.001) {
         db.executeNonQuery(
             "INSERT INTO vouchers (financial_year, voucher_no, voucher_date, voucher_type, ledger_id, ledger_name, drcr, amount, narration) "
@@ -235,7 +236,7 @@ bool IFormModel::save_iform_voucher(const QVariantMap& data, const QVariantList&
 
     // 3. Credit Dami A/c
     if (damiAmount > 0.001) {
-        QVariant damiId = db.executeScalar("SELECT id FROM parties WHERE party_name = 'Dami A/c' OR party_name LIKE '%Commission%' LIMIT 1;");
+        QVariant damiId = db.executeScalar("SELECT id FROM parties WHERE name = 'Dami A/c' OR name LIKE '%Commission%' LIMIT 1;");
         if (damiId.isValid() && !damiId.isNull()) {
             db.executeNonQuery(
                 "INSERT INTO vouchers (financial_year, voucher_no, voucher_date, voucher_type, ledger_id, ledger_name, drcr, amount, narration) "
@@ -247,7 +248,7 @@ bool IFormModel::save_iform_voucher(const QVariantMap& data, const QVariantList&
 
     // 4. Credit Market Fee A/c
     if (mandiFeeAmount > 0.001) {
-        QVariant mfId = db.executeScalar("SELECT id FROM parties WHERE party_name = 'Market Fee A/c' OR party_name LIKE '%Market Fee%' LIMIT 1;");
+        QVariant mfId = db.executeScalar("SELECT id FROM parties WHERE name = 'Market Fee A/c' OR name LIKE '%Market Fee%' LIMIT 1;");
         if (mfId.isValid() && !mfId.isNull()) {
             db.executeNonQuery(
                 "INSERT INTO vouchers (financial_year, voucher_no, voucher_date, voucher_type, ledger_id, ledger_name, drcr, amount, narration) "
@@ -259,7 +260,7 @@ bool IFormModel::save_iform_voucher(const QVariantMap& data, const QVariantList&
 
     // 5. Credit H.R.D.F. A/c
     if (hrdfAmount > 0.001) {
-        QVariant hrdfId = db.executeScalar("SELECT id FROM parties WHERE party_name = 'H.R.D.F. A/c' OR party_name LIKE '%HRDF%' LIMIT 1;");
+        QVariant hrdfId = db.executeScalar("SELECT id FROM parties WHERE name = 'H.R.D.F. A/c' OR name LIKE '%HRDF%' LIMIT 1;");
         if (hrdfId.isValid() && !hrdfId.isNull()) {
             db.executeNonQuery(
                 "INSERT INTO vouchers (financial_year, voucher_no, voucher_date, voucher_type, ledger_id, ledger_name, drcr, amount, narration) "
@@ -271,7 +272,7 @@ bool IFormModel::save_iform_voucher(const QVariantMap& data, const QVariantList&
 
     // 6. Credit Labour A/c
     if (labourAmount > 0.001) {
-        QVariant labourId = db.executeScalar("SELECT id FROM parties WHERE party_name = 'Labour A/c' OR party_name LIKE '%Labour%' LIMIT 1;");
+        QVariant labourId = db.executeScalar("SELECT id FROM parties WHERE name = 'Labour A/c' OR name LIKE '%Labour%' LIMIT 1;");
         if (labourId.isValid() && !labourId.isNull()) {
             db.executeNonQuery(
                 "INSERT INTO vouchers (financial_year, voucher_no, voucher_date, voucher_type, ledger_id, ledger_name, drcr, amount, narration) "

@@ -1,4 +1,5 @@
 #include "print_copy_options_dialog.h"
+#include "kbd_badge_button.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QKeyEvent>
@@ -13,12 +14,12 @@ PrintCopyOptionsDialog::PrintCopyOptionsDialog(Mode mode, const QString& invoice
 {
     setWindowTitle(m_mode == Mode::Print ? "Select Invoice Copy to Print" : "Select Invoice Copy to Save as PDF");
     setModal(true);
-    setFixedWidth(540);
+    setMinimumWidth(540);
     setStyleSheet(
         "QDialog { background-color: #FFFFFF; border: 2px solid " + QString(m_mode == Mode::Print ? "#059669" : "#0284C7") + "; border-radius: 12px; }"
         "QPushButton.optionBtn { background-color: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 8px; padding: 12px 16px; text-align: left; }"
         "QPushButton.optionBtn:hover { background-color: #F8FAFC; border-color: #0284C7; }"
-        "QPushButton.optionBtn:focus { background-color: #EFF6FF; border: 2px solid #2563EB; }"
+        "QPushButton.optionBtn:focus { background-color: #FFFFF0; border: 2px solid #2563EB; }"
         "QPushButton.cancelBtn { background-color: #F1F5F9; color: #475569; font-weight: bold; border-radius: 6px; padding: 8px 16px; border: 1px solid #CBD5E1; }"
         "QPushButton.cancelBtn:hover { background-color: #E2E8F0; }"
     );
@@ -127,8 +128,7 @@ void PrintCopyOptionsDialog::setupUi() {
     bottomLayout->addWidget(hintLabel);
     bottomLayout->addStretch();
 
-    auto* cancelBtn = new QPushButton("Cancel (Esc)", this);
-    cancelBtn->setProperty("class", "cancelBtn");
+    auto* cancelBtn = new KbdBadgeButton("Cancel", "Esc", this);
     connect(cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
     bottomLayout->addWidget(cancelBtn);
     mainLayout->addLayout(bottomLayout);

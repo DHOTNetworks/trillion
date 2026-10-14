@@ -4,6 +4,8 @@
 #include <QTableWidget>
 #include <QLineEdit>
 #include <QPushButton>
+#include "kbd_badge_button.h"
+#include "erp_theme.h"
 #include <QLabel>
 #include <QStackedWidget>
 #include <QVariantList>
@@ -56,25 +58,25 @@ private:
 
     // Header
     QLabel* m_subtitleLabel = nullptr;
-    QPushButton* m_backBtn = nullptr;
+    KbdBadgeButton* m_backBtn = nullptr;
 
     // Folder controls
     QFrame* m_folderBarFrame = nullptr;
     QLabel* m_folderDirLabel = nullptr;
     QLineEdit* m_folderInput = nullptr;
-    QPushButton* m_appDataBtn = nullptr;
-    QPushButton* m_importMdbBtn = nullptr;
-    QPushButton* m_browseBtn = nullptr;
-    QPushButton* m_rescanBtn = nullptr;
+    KbdBadgeButton* m_appDataBtn = nullptr;
+    KbdBadgeButton* m_importMdbBtn = nullptr;
+    KbdBadgeButton* m_browseBtn = nullptr;
+    KbdBadgeButton* m_rescanBtn = nullptr;
 
     // Central stack (Table vs Empty State)
     QStackedWidget* m_centerStack = nullptr;
     QTableWidget* m_table = nullptr;
     QWidget* m_emptyStateWidget = nullptr;
     QLabel* m_emptyStateLabel = nullptr;
-    QPushButton* m_emptyStateBtn = nullptr;
+    KbdBadgeButton* m_emptyStateBtn = nullptr;
 
     // Footer
-    QPushButton* m_newFirmBtn = nullptr;
-    QPushButton* m_openFirmBtn = nullptr;
+    KbdBadgeButton* m_newFirmBtn = nullptr;
+    KbdBadgeButton* m_openFirmBtn = nullptr;
 };

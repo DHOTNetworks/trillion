@@ -26,7 +26,14 @@ public:
     void openSearchPopup();
     void closeSearchPopup();
     void selectCurrentListItem();
+    void resolveCurrentText();
     bool isPopupVisible() const { return m_popupFrame && m_popupFrame->isVisible(); }
+
+    static QVariantList searchBrokers(const QString& query, int limit = 50);
+    static QVariantList searchTransporters(const QString& query, int limit = 50);
+
+    void configureForBrokerSearch();
+    void configureForTransportSearch();
 
 signals:
     void partySelected(const QString& partyName);

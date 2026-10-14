@@ -1,10 +1,12 @@
 #include "milling_yield_engine.h"
+#include "../services/financial_math_service.h"
 #include <algorithm>
 
 namespace MahadevERP {
 
-static double round2(double val) {
-    return std::round(val * 100.0) / 100.0;
+namespace {
+// Single-implementation alias: all milling rounding is FinancialMathService::round2.
+inline double round2(double val) { return FinancialMathService::round2(val); }
 }
 
 MillingBatchResult MillingYieldEngine::calculateBatchYield(

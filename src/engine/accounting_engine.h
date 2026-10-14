@@ -4,6 +4,7 @@
 #include <QVariantMap>
 #include <cmath>
 #include "../database_manager.h"
+#include "../services/financial_math_service.h"
 #include <QRegularExpression>
 #include <QDate>
 
@@ -81,18 +82,18 @@ public:
     static double calculateMoistureDeduction(double grossWeightQtl, double moisturePct, double baseMoistureLimit = 14.0) {
         if (moisturePct <= baseMoistureLimit) return 0.0;
         double excess = moisturePct - baseMoistureLimit;
-        return std::round((grossWeightQtl * (excess / 100.0)) * 100.0) / 100.0;
+        return FinancialMathService::round2(grossWeightQtl * (excess / 100.0));
     }
 
     static double calculatePaddyNetAmount(double netWeightQtl, double ratePerQtl, double hamaliCharges = 0.0) {
         double baseAmt = netWeightQtl * ratePerQtl;
-        return std::round((baseAmt + hamaliCharges) * 100.0) / 100.0;
+        return FinancialMathService::round2(baseAmt + hamaliCharges);
     }
 
     static QVariantMap calculateMillingYield(double paddyInputQtl, double headRiceQtl, double brokenRiceQtl, double branQtl, double huskQtl) {
         double totalOutput = headRiceQtl + brokenRiceQtl + branQtl + huskQtl;
-        double wastageQtl = std::max(0.0, std::round((paddyInputQtl - totalOutput) * 100.0) / 100.0);
-        double yieldPct = paddyInputQtl > 0 ? (std::round(((headRiceQtl / paddyInputQtl) * 100.0) * 100.0) / 100.0) : 0.0;
+        double wastageQtl = std::max(0.0, FinancialMathService::round2(paddyInputQtl - totalOutput));
+        double yieldPct = paddyInputQtl > 0 ? FinancialMathService::round2((headRiceQtl / paddyInputQtl) * 100.0) : 0.0;
         
         QVariantMap res;
         res["total_output_qtl"] = totalOutput;
@@ -102,8 +103,8 @@ public:
     }
 
     static QVariantMap calculateSalesTax(double taxableAmount, double gstPct = 5.0) {
-        double gstAmount = std::round((taxableAmount * (gstPct / 100.0)) * 100.0) / 100.0;
-        double totalAmount = std::round((taxableAmount + gstAmount) * 100.0) / 100.0;
+        double gstAmount = FinancialMathService::round2(taxableAmount * (gstPct / 100.0));
+        double totalAmount = FinancialMathService::round2(taxableAmount + gstAmount);
         
         QVariantMap res;
         res["gst_amount"] = gstAmount;

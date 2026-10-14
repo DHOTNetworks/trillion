@@ -47,7 +47,7 @@ AccountingDateEdit::AccountingDateEdit(QWidget* parent)
     setPlaceholderText("DD-MM-YYYY");
     m_lastDate = QDate::currentDate();
     setText(m_lastDate.toString("dd-MM-yyyy"));
-    setFixedHeight(34);
+    setMinimumHeight(34);
     setAlignment(Qt::AlignCenter);
     setStyleSheet(
         "QLineEdit {"
@@ -88,8 +88,7 @@ void AccountingDateEdit::openDateDialog() {
     QDate cur = date();
     if (!cur.isValid()) cur = QDate::currentDate();
 
-    FiscalYearInfo fyContext = FiscalYearHelper::getFiscalYearForDate(cur.toString("yyyy-MM-dd"));
-    if (!fyContext.isValid()) fyContext = FiscalYearHelper::getActiveFiscalYear();
+    FiscalYearInfo fyContext = FiscalYearHelper::getActiveFiscalYear();
     QDate chosen = VoucherDateDialog::selectDate(this, cur, fyContext);
     if (chosen.isValid() && chosen != date()) {
         setDate(chosen);
@@ -207,7 +206,7 @@ AccountingDateDisplay::AccountingDateDisplay(QWidget* parent)
     : QLabel(parent)
 {
     m_date = QDate::currentDate();
-    setFixedHeight(34);
+    setMinimumHeight(34);
     setMinimumWidth(110);
     setAlignment(Qt::AlignCenter);
     setCursor(Qt::PointingHandCursor);

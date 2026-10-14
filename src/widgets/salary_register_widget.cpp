@@ -59,7 +59,7 @@ SalaryRegisterWidget::SalaryRegisterWidget(SalaryRegisterController* controller,
     new QShortcut(QKeySequence(Qt::Key_Escape), this, [this]() {
         emit backRequested();
     });
-    new QShortcut(QKeySequence(Qt::Key_F8), this, [this]() {
+    new QShortcut(QKeySequence(Qt::ALT | Qt::Key_V), this, [this]() {
         onPostSalariesClicked();
     });
     new QShortcut(QKeySequence(Qt::Key_F5), this, [this]() {
@@ -91,13 +91,13 @@ void SalaryRegisterWidget::setupUi() {
     headerLayout->addLayout(titleCol);
     headerLayout->addStretch();
 
-    auto* postBtn = new KbdBadgeButton("Post Selected Salaries", "F8", headerCard);
+    auto* postBtn = new KbdBadgeButton("Post Selected Salaries", "ALT+V", headerCard);
     postBtn->setPrimaryColor("#16A34A", "#15803D");
     postBtn->setTextColor("#FFFFFF");
     connect(postBtn, &QPushButton::clicked, this, &SalaryRegisterWidget::onPostSalariesClicked);
     headerLayout->addWidget(postBtn);
 
-    auto* syncBtn = new KbdBadgeButton("Sync Master Salaries", "Alt+M", headerCard);
+    auto* syncBtn = new KbdBadgeButton("Sync Master Salaries", "F5", headerCard);
     syncBtn->setPrimaryColor("#2563EB", "#1D4ED8");
     syncBtn->setTextColor("#FFFFFF");
     connect(syncBtn, &QPushButton::clicked, this, &SalaryRegisterWidget::onSyncMasterClicked);
@@ -226,8 +226,8 @@ void SalaryRegisterWidget::setupUi() {
     });
 
     m_table->setStyleSheet(
-        "QTableWidget { background-color: #FFFFFF; gridline-color: #E2E8F0; border: 1px solid #CBD5E1; border-radius: 8px; font-size: 12px; color: #1E293B; selection-background-color: #EFF6FF; selection-color: #1E293B; }"
-        "QHeaderView::section { background-color: #F8FAFC; color: #475569; font-weight: 800; font-size: 11.5px; border: none; border-bottom: 1.5px solid #CBD5E1; border-right: 1px solid #E2E8F0; padding: 6px 4px; }"
+        "QTableWidget { background-color: #FFFFFF; gridline-color: #E2E8F0; border: 1px solid #CBD5E1; border-radius: 8px; font-size: 12px; color: #1E293B; selection-background-color: #2563EB; selection-color: #FFFFFF; }"
+        "QHeaderView::section { background-color: #0F172A; color: #FFFFFF; font-weight: 800; font-size: 11.5px; border: none; border-right: 1px solid #334155; padding: 6px 4px; }"
         "QTableWidget::item { padding: 7px; border-bottom: 1px solid #F1F5F9; }"
         "QTableWidget::item:focus { background-color: #FEF3C7; color: #92400E; }"
     );
@@ -261,6 +261,17 @@ void SalaryRegisterWidget::setupUi() {
 
     connect(m_table, &QTableWidget::cellChanged, this, &SalaryRegisterWidget::onCellChanged);
     connect(m_table, &QTableWidget::cellDoubleClicked, this, &SalaryRegisterWidget::onCellDoubleClicked);
+    // Enter opens the focused row's party statement (same as double-click).
+    auto openFocusedRow = [this]() {
+        if (!m_table || m_table->currentRow() < 0) return;
+        onCellDoubleClicked(m_table->currentRow(), m_table->currentColumn());
+    };
+    auto* enterShortcut = new QShortcut(QKeySequence(Qt::Key_Return), m_table);
+    enterShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+    connect(enterShortcut, &QShortcut::activated, this, openFocusedRow);
+    auto* numEnterShortcut = new QShortcut(QKeySequence(Qt::Key_Enter), m_table);
+    numEnterShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+    connect(numEnterShortcut, &QShortcut::activated, this, openFocusedRow);
 
     mainLayout->addWidget(m_table, 1);
 

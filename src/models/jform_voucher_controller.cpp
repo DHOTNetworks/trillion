@@ -379,7 +379,7 @@ bool JFormVoucherController::saveVoucher() {
     headerData["procurement_mode"] = m_procurementMode;
     headerData["lot_no"] = m_lotNo;
     headerData["grade"] = m_grade;
-    headerData["transport_name"] = m_transportName;
+    headerData["transport"] = m_transportName;
     headerData["broker_name"] = m_brokerName;
     headerData["challan_no"] = m_challanNo;
     headerData["kanda_weight"] = m_kandaWeight;

@@ -46,6 +46,7 @@
 #include "../src/engine/ledger_pipeline.h"
 #include "../src/database_manager.h"
 #include "../src/engine/fiscal_year_helper.h"
+#include "../src/engine/voucher_numbering.h"
 #include "../src/engine/balance_sheet_calculator.h"
 #include "../src/models/balance_sheet_controller.h"
 #include "../src/engine/profit_loss_calculator.h"
@@ -85,6 +86,9 @@ private slots:
 
     // 3. Fiscal Year Partitioning & Clamping
     void testFiscalYearPartitioningAndClamping();
+    void testFyWriteLockGuard();
+    void testVoucherNumberingAtomicityAndReports();
+    void testVoucherFamilyTokens();
     void testZeroLeakagePartyPartitioning();
 
     // 4. Voucher Controllers & ViewModels Tests
@@ -106,6 +110,8 @@ private slots:
 
     // 6. Weighbridge & Transport Logistics
     void testTransportDispatchController();
+    void testTransportSyncIdempotent();
+    void testInvoiceAuditWiring();
 
     // 7. GST Debit & Credit Notes
     void testDebitCreditNoteController();
@@ -432,6 +438,133 @@ void LogicBoardTestSuite::testFiscalYearPartitioningAndClamping() {
         QVERIFY(fy.startDate < fy.endDate);
         QVERIFY(fy.name.startsWith("FY "));
     }
+}
+
+void LogicBoardTestSuite::testFyWriteLockGuard() {
+    auto& db = DatabaseManager::instance();
+
+    // Seed one locked and one open year with fixed, seed-independent names.
+    db.executeNonQuery(
+        "INSERT OR IGNORE INTO financial_years (year_name, start_date, end_date, is_active, is_locked) "
+        "VALUES ('FY 1999-00', '1999-04-01', '2000-03-31', 0, 1);");
+    db.executeNonQuery(
+        "INSERT OR IGNORE INTO financial_years (year_name, start_date, end_date, is_active, is_locked) "
+        "VALUES ('FY 2099-00', '2099-04-01', '2100-03-31', 0, 0);");
+
+    // Locked year blocks with an explicit reason naming the year.
+    QString blocked = FiscalYearHelper::writeBlockReason("15-08-1999");
+    QVERIFY(!blocked.isEmpty());
+    QVERIFY(blocked.contains("FY 1999-00"));
+
+    // Open year passes clean.
+    QVERIFY(FiscalYearHelper::writeBlockReason("15-08-2099").isEmpty());
+
+    // Garbage dates block explicitly instead of posting into a wrong year.
+    QVERIFY(!FiscalYearHelper::writeBlockReason("not-a-date").isEmpty());
+    QVERIFY(!FiscalYearHelper::writeBlockReason("").isEmpty());
+
+    // Guarded writers refuse locked dates and leave the DB untouched.
+    qint64 before = db.executeScalar("SELECT COUNT(*) FROM vouchers;").toLongLong();
+    VouchersModel vm;
+    QVariantList legs;
+    QVariantMap dr; dr["drcr"] = "Dr"; dr["ledgerName"] = "Cash Lock Test"; dr["debitAmt"] = 100.0; legs.append(dr);
+    QVariantMap cr; cr["drcr"] = "Cr"; cr["ledgerName"] = "Capital Lock Test"; cr["creditAmt"] = 100.0; legs.append(cr);
+    QVERIFY(!vm.save_multi_row_voucher(0, "Jrnl", "LOCK-1", "15-08-1999", "must be blocked", legs));
+    QVERIFY(!vm.delete_voucher(-1)); // invalid id still rejected
+    QCOMPARE(db.executeScalar("SELECT COUNT(*) FROM vouchers;").toLongLong(), before);
+
+    // Audit: the refused write leaves exactly one BLOCKED row, nothing else.
+    QCOMPARE(db.executeScalar("SELECT COUNT(*) FROM audit_log WHERE action='BLOCKED';").toLongLong(), 1);
+
+    // A successful save in the open year writes voucher + one INSERT audit row.
+    QVERIFY(vm.save_multi_row_voucher(0, "Jrnl", "OPEN-1", "15-08-2099", "audit probe", legs));
+    QCOMPARE(db.executeScalar("SELECT COUNT(*) FROM vouchers WHERE voucher_no='OPEN-1';").toLongLong(), 1);
+    QVariant auditRow = db.executeScalar(
+        "SELECT after_json FROM audit_log WHERE action='INSERT' AND voucher_no='OPEN-1' LIMIT 1;");
+    QVERIFY(auditRow.isValid() && auditRow.toString().contains("OPEN-1"));
+
+    // Hermetic cleanup: probe must not leak into later tests.
+    db.executeNonQuery("DELETE FROM transactions WHERE voucher_no='OPEN-1';");
+    db.executeNonQuery("DELETE FROM vouchers WHERE voucher_no='OPEN-1';");
+    db.executeNonQuery("DELETE FROM audit_log WHERE voucher_no IN ('OPEN-1','LOCK-1');");
+    QCOMPARE(db.executeScalar("SELECT COUNT(*) FROM vouchers;").toLongLong(), before);
+}
+
+void LogicBoardTestSuite::testVoucherFamilyTokens() {
+    // Cash/bank families must never mix: Pymt≠ChPt, Rcpt≠ChRt.
+    QCOMPARE(VoucherNumbering::familyTokenFor("Payment", "2425/Pymt-31"), QString("Pymt"));
+    QCOMPARE(VoucherNumbering::familyTokenFor("Payment", "2425/ChPt-31"), QString("ChPt"));
+    QCOMPARE(VoucherNumbering::familyTokenFor("Receipt", "2425/Rcpt-7"), QString("Rcpt"));
+    QCOMPARE(VoucherNumbering::familyTokenFor("Receipt", "2425/ChRt-7"), QString("ChRt"));
+    QCOMPARE(VoucherNumbering::familyTokenFor("Journal", "2627/Jrnl-4"), QString("Jrnl"));
+    QCOMPARE(VoucherNumbering::familyTokenFor("Sales", "2627/Sale-247"), QString("Sale"));
+    // Bare Bahi numerics carry no token: fall back to the voucher type.
+    QCOMPARE(VoucherNumbering::familyTokenFor("Payment", "247"), QString("Payment"));
+}
+
+void LogicBoardTestSuite::testVoucherNumberingAtomicityAndReports() {
+    auto& db = DatabaseManager::instance();
+    VouchersModel vm;
+
+    // 1. claimVoucherNo never hands out a taken number twice in a row.
+    QString c1 = vm.claimVoucherNo("Jrnl", "Jrnl", "FY 2099-00");
+    QVERIFY(!c1.isEmpty());
+    QVERIFY(db.executeNonQuery(
+        "INSERT INTO vouchers (financial_year, voucher_no, voucher_date, voucher_type, legacy_type, party_name, account_type, amount, narration) "
+        "VALUES ('FY 2099-00', ?, '2099-08-15', 'Jrnl', 'Jrnl', 'Claim Probe', 'Capital', 10.0, 'claim probe');",
+        {c1}));
+    QString c2 = vm.claimVoucherNo("Jrnl", "Jrnl", "FY 2099-00");
+    QVERIFY(!c2.isEmpty());
+    QVERIFY(c1 != c2);
+
+    // 2. A seeded double-post is reported, never silently tolerated.
+    QVERIFY(db.executeNonQuery(
+        "INSERT INTO vouchers (financial_year, voucher_no, voucher_date, voucher_type, legacy_type, party_name, account_type, amount, narration) "
+        "VALUES ('FY 2099-00','DUP-1','2099-08-15','Jrnl','Jrnl','Seed A','Capital',10.0,'dupe probe a');"));
+    // Bypass the guard exactly like a legacy migration would (dupes predate it).
+    DatabaseManager::instance().executeNonQuery("DROP INDEX IF EXISTS uq_vouchers_type_fy_no;");
+    QVERIFY(db.executeNonQuery(
+        "INSERT INTO vouchers (financial_year, voucher_no, voucher_date, voucher_type, legacy_type, party_name, account_type, amount, narration) "
+        "VALUES ('FY 2099-00','DUP-1','2099-08-15','Jrnl','Jrnl','Seed B','Capital',10.0,'dupe probe b');"));
+    bool found = false;
+    for (const QVariant& d : VoucherNumbering::findDuplicateVoucherNos()) {
+        QVariantMap m = d.toMap();
+        if (m.value("voucher_no").toString() == "DUP-1"
+            && m.value("voucher_type").toString() == "Jrnl"
+            && m.value("postings").toLongLong() == 2) {
+            found = true;
+            break;
+        }
+    }
+    QVERIFY(found);
+
+    // 3. Gap report: TST/1, TST/2, TST/4 in one FY -> exactly TST/3.
+    BillSeriesConfig tcfg;
+    tcfg.prefix = "TST"; tcfg.sepAfterPrefix = "/"; tcfg.fyStyle = "none";
+    tcfg.sepBeforeSeq = ""; tcfg.seqWidth = 1; tcfg.startNumber = 1; tcfg.resetEachFy = true;
+    for (const QString& n : QStringList({"TST/1", "TST/2", "TST/4"})) {
+        QVERIFY(db.executeNonQuery(
+            "INSERT INTO sales_invoices (financial_year, invoice_no, invoice_date, customer_name, item_name, voucher_no) "
+            "VALUES ('FY 2099-00', ?, '2099-08-15', 'Gap Probe', 'Gap Item', ?);",
+            {n, n}));
+    }
+    QCOMPARE(VoucherNumbering::findInvoiceGapsForConfig(tcfg, "sales_invoices", "FY 2099-00"),
+             QStringList({"TST/3"}));
+
+    // 4. UNIQUE backstop: a verbatim duplicate sales bill is refused explicitly.
+    bool dupOk = db.executeNonQuery(
+        "INSERT INTO sales_invoices (financial_year, invoice_no, invoice_date, customer_name, item_name) "
+        "VALUES ('FY 2099-00','TST/1','2099-08-15','Gap Probe','Gap Item');");
+    QVERIFY(!dupOk);
+    QVERIFY(db.lastErrorText().contains("UNIQUE", Qt::CaseInsensitive));
+
+    // Hermetic cleanup (also restores the guard dropped for the dupe seed).
+    db.executeNonQuery("DELETE FROM vouchers WHERE financial_year='FY 2099-00' AND voucher_no IN ('DUP-1', '" + c1 + "');");
+    db.executeNonQuery("DELETE FROM sales_invoices WHERE financial_year='FY 2099-00' AND invoice_no LIKE 'TST/%';");
+    db.executeNonQuery("DELETE FROM audit_log WHERE voucher_no IN ('DUP-1', '" + c1 + "');");
+    db.executeNonQuery(
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_vouchers_type_fy_no "
+        "ON vouchers(voucher_type, financial_year, voucher_no);");
 }
 
 void LogicBoardTestSuite::testZeroLeakagePartyPartitioning() {
@@ -1215,6 +1348,89 @@ void LogicBoardTestSuite::testTransportDispatchController() {
     // Clean up
     bool delOk = ctrl.deleteDispatch(recId);
     QVERIFY(delOk);
+}
+
+void LogicBoardTestSuite::testTransportSyncIdempotent() {
+    auto& db = DatabaseManager::instance();
+    TransportDispatchController ctrl;
+
+    // Seed one sale + one purchase carrying vehicles (FY 2099 sandbox).
+    QVERIFY(db.executeNonQuery(
+        "INSERT INTO sales_invoices (financial_year, voucher_no, invoice_no, invoice_date, customer_name, item_name, vehicle_no) "
+        "VALUES ('FY 2099-00','SYNC-S-1','SYNC-S-1','2099-08-15','Sync Customer','Sync Item','HR38SYNC1');"));
+    QVERIFY(db.executeNonQuery(
+        "INSERT INTO purchase_invoices (financial_year, voucher_no, invoice_no, invoice_date, supplier_name, item_name, vehicle_no) "
+        "VALUES ('FY 2099-00','SYNC-P-1','SUP-1','2099-08-15','Sync Supplier','Sync Item','HR38SYNC2');"));
+
+    const qint64 before = db.executeScalar("SELECT COUNT(*) FROM transport_dispatches;").toLongLong();
+    ctrl.reload();
+    const qint64 afterFirst = db.executeScalar("SELECT COUNT(*) FROM transport_dispatches;").toLongLong();
+    // Both seeds synced (plus possibly other pending rows — sync also drains those).
+    QVERIFY(afterFirst >= before + 2);
+    QCOMPARE(db.executeScalar(
+                 "SELECT COUNT(*) FROM transport_dispatches WHERE invoice_no IN ('SYNC-S-1','SUP-1');").toLongLong(), 2);
+
+    // Repeat reloads must not insert anything further (old guard re-inserted
+    // NULL-invoice rows on every call — unbounded growth).
+    ctrl.reload();
+    ctrl.reload();
+    QCOMPARE(db.executeScalar("SELECT COUNT(*) FROM transport_dispatches;").toLongLong(), afterFirst);
+
+    // Hermetic cleanup.
+    db.executeNonQuery("DELETE FROM transport_dispatches WHERE invoice_no IN ('SYNC-S-1','SUP-1');");
+    db.executeNonQuery("DELETE FROM sales_invoices WHERE invoice_no = 'SYNC-S-1';");
+    db.executeNonQuery("DELETE FROM purchase_invoices WHERE invoice_no = 'SUP-1';");
+}
+
+void LogicBoardTestSuite::testInvoiceAuditWiring() {
+    auto& db = DatabaseManager::instance();
+    db.executeNonQuery(
+        "INSERT OR IGNORE INTO financial_years (year_name, start_date, end_date, is_active, is_locked) "
+        "VALUES ('FY 2099-00', '2099-04-01', '2100-03-31', 0, 0);");
+    db.executeNonQuery(
+        "INSERT INTO parties (name, group_name, opening_balance, balance_type) "
+        "VALUES ('Audit Wire Customer', 'Sundry Debtors', 0.0, 'Dr');");
+    db.executeNonQuery(
+        "INSERT INTO parties (name, group_name, opening_balance, balance_type) "
+        "VALUES ('Audit Wire Supplier', 'Sundry Creditors', 0.0, 'Cr');");
+    db.executeNonQuery(
+        "INSERT INTO stock_items (name, code) VALUES ('Audit Wire Item', 'AUDIT-WIRE-1');");
+
+    SalesModel sales;
+    QVERIFY(sales.add_sales_invoice_full(
+        "AUDIT-S-1", "2099-08-15", "Audit Wire Customer", "", "Audit Wire Item", "1001",
+        10, 10.0, 100.0, 1000.0, 5.0, 25.0, 25.0, 0.0, 0.0, 1050.0, "Credit",
+        "", "", "audit probe sale", "Self Sale", "Paid", 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0, "", "", "", "", "", "", "", "", "", "", "", "",
+        QVariantList(), "Market", 0, "", 0.0, 0.0, 0.0, "", ""));
+    QVariant saleAudit = db.executeScalar(
+        "SELECT after_json FROM audit_log WHERE action = 'INSERT' AND table_name = 'sales_invoices' "
+        "AND voucher_no = 'AUDIT-S-1' LIMIT 1;");
+    QVERIFY(saleAudit.isValid() && saleAudit.toString().contains("Audit Wire Customer"));
+
+    PurchaseModel purch;
+    QVERIFY(purch.add_purchase_invoice_full(
+        "SUP-AUDIT-1", "2099-08-15", "Audit Wire Supplier", "", "Audit Wire Item", "1001",
+        10, 10.0, 100.0, 1000.0, 5.0, 25.0, 25.0, 0.0, 0.0, 1050.0, "Credit",
+        "", "", "audit probe purchase", "Self Purchase", "Paid", 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0, "", "", "", "", "", "", "", "", "", "", "", "",
+        QVariantList(), "Market", 0, "", 0.0, 0.0, 0.0, "", ""));
+    QVariant purchAudit = db.executeScalar(
+        "SELECT after_json FROM audit_log WHERE action = 'INSERT' AND table_name = 'purchase_invoices' "
+        "AND voucher_no = 'SUP-AUDIT-1' LIMIT 1;");
+    QVERIFY(purchAudit.isValid() && purchAudit.toString().contains("Audit Wire Supplier"));
+
+    QVERIFY(sales.delete_sales_invoice(0, "AUDIT-S-1"));
+    QVERIFY(purch.delete_purchase_invoice(0, "SUP-AUDIT-1"));
+    QCOMPARE(db.executeScalar(
+                 "SELECT COUNT(*) FROM audit_log WHERE action = 'DELETE' AND "
+                 "((table_name = 'sales_invoices' AND voucher_no = 'AUDIT-S-1') OR "
+                 " (table_name = 'purchase_invoices' AND voucher_no = 'SUP-AUDIT-1'));").toLongLong(), 2);
+
+    // Hermetic cleanup (invoices already deleted; drop seeds + probe audit).
+    db.executeNonQuery("DELETE FROM audit_log WHERE voucher_no IN ('AUDIT-S-1', 'SUP-AUDIT-1');");
+    db.executeNonQuery("DELETE FROM parties WHERE name IN ('Audit Wire Customer', 'Audit Wire Supplier');");
+    db.executeNonQuery("DELETE FROM stock_items WHERE code = 'AUDIT-WIRE-1';");
 }
 
 void LogicBoardTestSuite::testDebitCreditNoteController() {

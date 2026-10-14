@@ -15,6 +15,9 @@ public:
     explicit AdvancePayment194QListWidget(QWidget *parent = nullptr);
 
     void reloadData();
+    void markDirty() { m_isDirty = true; }
+    bool isDirty() const { return m_isDirty; }
+    void focusTable();
 
 signals:
     void backRequested();
@@ -42,6 +45,7 @@ private:
     QLabel *m_totalNetVal = nullptr;
 
     QVariantList m_currentVouchers;
+    bool m_isDirty = true;
 };
 
 } // namespace MahadevERP

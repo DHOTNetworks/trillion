@@ -77,7 +77,7 @@ BahiKhataExportDialog::BahiKhataExportDialog(FirmManager* firmMgr, QWidget* pare
 {
     qRegisterMetaType<BahiKhataExporter::ExportSummary>();
     setWindowTitle("Export Database to Bahi-Khata (Data.00x)");
-    setFixedWidth(640);
+    setMinimumWidth(640);
     setModal(true);
     setStyleSheet("QDialog { background-color: #F8FAFC; } QLabel { border: none; background: transparent; }");
 
@@ -252,7 +252,7 @@ void BahiKhataExportDialog::setupUi() {
     m_seedPathEdit = new QLineEdit(formCard);
     QString defSeed = suggestDefaultFileName();
     m_seedPathEdit->setText(defSeed);
-    m_seedPathEdit->setFixedHeight(36);
+    m_seedPathEdit->setMinimumHeight(36);
     m_seedPathEdit->setStyleSheet(
         "QLineEdit { background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 0px 10px; font-size: 12px; font-weight: 600; color: #0F172A; }"
         "QLineEdit:focus { border-color: #2563EB; background-color: #FFFFFF; }"
@@ -260,7 +260,7 @@ void BahiKhataExportDialog::setupUi() {
     seedRow->addWidget(m_seedPathEdit, 1);
 
     m_browseSeedBtn = new QPushButton("Browse...", formCard);
-    m_browseSeedBtn->setFixedHeight(36);
+    m_browseSeedBtn->setMinimumHeight(36);
     m_browseSeedBtn->setCursor(Qt::PointingHandCursor);
     m_browseSeedBtn->setStyleSheet(
         "QPushButton { background-color: #EFF6FF; border: 1.5px solid #93C5FD; border-radius: 6px; padding: 0px 14px; font-size: 12px; font-weight: 700; color: #1D4ED8; }"
@@ -276,7 +276,7 @@ void BahiKhataExportDialog::setupUi() {
     formLayout->addWidget(nameLabel);
 
     m_nameEdit = new QLineEdit(formCard);
-    m_nameEdit->setFixedHeight(36);
+    m_nameEdit->setMinimumHeight(36);
     m_nameEdit->setPlaceholderText("Data.002");
     if (!defSeed.isEmpty()) {
         m_nameEdit->setText(QFileInfo(defSeed).fileName());
@@ -307,7 +307,7 @@ void BahiKhataExportDialog::setupUi() {
     fyRow->addWidget(fyLabel);
 
     m_fyCombo = new QComboBox(formCard);
-    m_fyCombo->setFixedHeight(32);
+    m_fyCombo->setMinimumHeight(32);
     m_fyCombo->setStyleSheet(
         "QComboBox { background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 0px 10px; font-size: 12px; font-weight: 700; color: #0F172A; }"
     );
@@ -354,7 +354,7 @@ void BahiKhataExportDialog::setupUi() {
     progLayout->setSpacing(8);
 
     m_progressBar = new QProgressBar(progCard);
-    m_progressBar->setFixedHeight(12);
+    m_progressBar->setMinimumHeight(12);
     m_progressBar->setRange(0, 100);
     m_progressBar->setValue(0);
     m_progressBar->setTextVisible(false);
@@ -399,7 +399,7 @@ void BahiKhataExportDialog::setupUi() {
     btnRow->addStretch(1);
 
     m_closeBtn = new QPushButton("Cancel", this);
-    m_closeBtn->setFixedHeight(36);
+    m_closeBtn->setMinimumHeight(36);
     m_closeBtn->setCursor(Qt::PointingHandCursor);
     m_closeBtn->setStyleSheet(
         "QPushButton { background-color: #FFFFFF; border: 1.5px solid #CBD5E1; border-radius: 8px; padding: 0px 16px; font-size: 12px; font-weight: 700; color: #475569; }"
@@ -409,7 +409,7 @@ void BahiKhataExportDialog::setupUi() {
     btnRow->addWidget(m_closeBtn);
 
     m_exportBtn = new QPushButton("Export to Bahi-Khata", this);
-    m_exportBtn->setFixedHeight(36);
+    m_exportBtn->setMinimumHeight(36);
     m_exportBtn->setCursor(Qt::PointingHandCursor);
     m_exportBtn->setStyleSheet(
         "QPushButton { background-color: #2563EB; border: 1.5px solid #1D4ED8; border-radius: 8px; padding: 0px 20px; font-size: 12px; font-weight: 800; color: #FFFFFF; }"

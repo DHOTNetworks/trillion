@@ -32,7 +32,7 @@ void MillingStatementWidget::setupUi() {
 
     // ================= 1. TOP HEADER BAR CARD =================
     QFrame* headerCard = new QFrame(this);
-    headerCard->setFixedHeight(58);
+    headerCard->setMinimumHeight(58);
     headerCard->setStyleSheet("background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px;");
     QHBoxLayout* headerLayout = new QHBoxLayout(headerCard);
     headerLayout->setContentsMargins(14, 6, 14, 6);
@@ -57,7 +57,7 @@ void MillingStatementWidget::setupUi() {
 
     headerLayout->addStretch(1);
 
-    m_newBatchBtn = new KbdBadgeButton("New Batch", "F2", QColor("#059669"), QColor("#047857"), QColor("#FFFFFF"), QColor("#059669"), headerCard);
+    m_newBatchBtn = new KbdBadgeButton("New Batch", "Ctrl+N", QColor("#059669"), QColor("#047857"), QColor("#FFFFFF"), QColor("#059669"), headerCard);
     connect(m_newBatchBtn, &QPushButton::clicked, this, &MillingStatementWidget::onNewBatchClicked);
     headerLayout->addWidget(m_newBatchBtn);
 
@@ -73,7 +73,7 @@ void MillingStatementWidget::setupUi() {
 
     // ================= 2. FILTER & CONTROL BAR CARD =================
     QFrame* filterCard = new QFrame(this);
-    filterCard->setFixedHeight(54);
+    filterCard->setMinimumHeight(54);
     filterCard->setStyleSheet("background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px;");
     QHBoxLayout* filterLayout = new QHBoxLayout(filterCard);
     filterLayout->setContentsMargins(12, 6, 12, 6);
@@ -84,8 +84,8 @@ void MillingStatementWidget::setupUi() {
     filterLayout->addWidget(fromLbl);
 
     m_fromDateEdit = new AccountingDateDisplay(filterCard);
-    m_fromDateEdit->setFixedHeight(34);
-    m_fromDateEdit->setFixedWidth(115);
+    m_fromDateEdit->setMinimumHeight(34);
+    m_fromDateEdit->setMinimumWidth(115);
     connect(m_fromDateEdit, &AccountingDateDisplay::dateChanged, this, &MillingStatementWidget::onRefreshClicked);
     filterLayout->addWidget(m_fromDateEdit);
 
@@ -94,8 +94,8 @@ void MillingStatementWidget::setupUi() {
     filterLayout->addWidget(toLbl);
 
     m_toDateEdit = new AccountingDateDisplay(filterCard);
-    m_toDateEdit->setFixedHeight(34);
-    m_toDateEdit->setFixedWidth(115);
+    m_toDateEdit->setMinimumHeight(34);
+    m_toDateEdit->setMinimumWidth(115);
     connect(m_toDateEdit, &AccountingDateDisplay::dateChanged, this, &MillingStatementWidget::onRefreshClicked);
     filterLayout->addWidget(m_toDateEdit);
 
@@ -123,7 +123,7 @@ void MillingStatementWidget::setupUi() {
     filterLayout->addWidget(varLbl);
 
     m_varietyCombo = new QComboBox(filterCard);
-    m_varietyCombo->setFixedHeight(34);
+    m_varietyCombo->setMinimumHeight(34);
     m_varietyCombo->setMinimumWidth(160);
     m_varietyCombo->addItem("All Varieties");
     QVariantList stockItems = DatabaseManager::instance().executeQuery(
@@ -140,7 +140,7 @@ void MillingStatementWidget::setupUi() {
 
     m_searchBox = new QLineEdit(filterCard);
     m_searchBox->setPlaceholderText("Search Batch No, Variety, Remarks...");
-    m_searchBox->setFixedHeight(34);
+    m_searchBox->setMinimumHeight(34);
     m_searchBox->setMinimumWidth(220);
     connect(m_searchBox, &QLineEdit::textChanged, this, &MillingStatementWidget::onRefreshClicked);
     filterLayout->addWidget(m_searchBox);
@@ -150,7 +150,7 @@ void MillingStatementWidget::setupUi() {
     FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
     QLabel* fyBadge = new QLabel(activeFy.name + " (Active)", filterCard);
     fyBadge->setAlignment(Qt::AlignCenter);
-    fyBadge->setFixedHeight(34);
+    fyBadge->setMinimumHeight(34);
     fyBadge->setStyleSheet("background-color: #F0FDF4; color: #16A34A; border: 1.5px solid #86EFAC; border-radius: 6px; padding: 0px 14px; font-weight: 800; font-size: 12px;");
     filterLayout->addWidget(fyBadge);
 
@@ -158,7 +158,7 @@ void MillingStatementWidget::setupUi() {
 
     // ================= 3. SUMMARY KPI CARDS =================
     QFrame* kpiCard = new QFrame(this);
-    kpiCard->setFixedHeight(50);
+    kpiCard->setMinimumHeight(50);
     kpiCard->setStyleSheet("background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px;");
     QHBoxLayout* kpiLayout = new QHBoxLayout(kpiCard);
     kpiLayout->setContentsMargins(14, 4, 14, 4);
@@ -244,7 +244,7 @@ void MillingStatementWidget::setupUi() {
     detailLayout->setContentsMargins(0, 0, 0, 0);
 
     QFrame* detailHeaderCard = new QFrame(detailWidget);
-    detailHeaderCard->setFixedHeight(40);
+    detailHeaderCard->setMinimumHeight(40);
     detailHeaderCard->setStyleSheet("background-color: #F1F5F9; border: 1px solid #CBD5E1; border-radius: 6px;");
     QHBoxLayout* detailHeaderLayout = new QHBoxLayout(detailHeaderCard);
     detailHeaderLayout->setContentsMargins(12, 2, 12, 2);
@@ -323,7 +323,7 @@ void MillingStatementWidget::applyCustomStyles() {
         "  alternate-background-color: #F8FAFC;"
         "  border: 1px solid #CBD5E1;"
         "  border-radius: 8px;"
-        "  gridline-color: #F1F5F9;"
+        "  gridline-color: #E2E8F0;"
         "  font-size: 12.5px;"
         "  color: #0F172A;"
         "}"
@@ -331,18 +331,18 @@ void MillingStatementWidget::applyCustomStyles() {
         "  padding: 7px 8px;"
         "}"
         "QTableWidget::item:selected {"
-        "  background-color: #EFF6FF;"
-        "  color: #0F172A;"
+        "  background-color: #2563EB;"
+        "  color: #FFFFFF;"
         "}"
         "QHeaderView::section {"
-        "  background-color: #F1F5F9;"
-        "  color: #1E293B;"
+        "  background-color: #0F172A;"
+        "  color: #FFFFFF;"
         "  font-weight: 800;"
         "  font-size: 12px;"
         "  padding: 8px 10px;"
         "  border: none;"
-        "  border-bottom: 2px solid #CBD5E1;"
-        "  border-right: 1px solid #E2E8F0;"
+        "  "
+        "  border-right: 1px solid #334155;"
         "}"
         "QDateEdit, QComboBox, QLineEdit {"
         "  background-color: #FFFFFF;"
@@ -399,19 +399,14 @@ void MillingStatementWidget::populateBatchTable() {
     QString selectedVar = m_varietyCombo ? m_varietyCombo->currentText() : "All Varieties";
     QString query = m_searchBox ? m_searchBox->text().trimmed().toLower() : "";
 
-    int row = 0;
-    for (const auto& var : m_rawBatches) {
-        QVariantMap r = var.toMap();
+    QVector<int> matchedIndices;
+    matchedIndices.reserve(m_rawBatches.size());
+
+    for (int i = 0; i < m_rawBatches.size(); ++i) {
+        QVariantMap r = m_rawBatches.at(i).toMap();
         QString bNo = r.value("batch_no").toString();
-        QString bDate = r.value("batch_date").toString();
         QString variety = r.value("paddy_variety").toString();
         QString narr = r.value("narration").toString();
-        double pInput = r.value("paddy_input_qtl").toDouble();
-        double hRice = r.value("head_rice_qtl").toDouble();
-        double bRice = r.value("broken_rice_qtl").toDouble();
-        double bran = r.value("bran_qtl").toDouble();
-        double husk = r.value("husk_qtl").toDouble();
-        double yieldPct = r.value("yield_pct").toDouble();
 
         if (selectedVar != "All Varieties" && !variety.contains(selectedVar, Qt::CaseInsensitive)) {
             continue;
@@ -423,10 +418,36 @@ void MillingStatementWidget::populateBatchTable() {
             }
         }
 
-        m_batchTable->insertRow(row);
+        matchedIndices.append(i);
+        totalPaddy += r.value("paddy_input_qtl").toDouble();
+        totalHead += r.value("head_rice_qtl").toDouble();
+        totalBroken += r.value("broken_rice_qtl").toDouble();
+        totalBran += r.value("bran_qtl").toDouble();
+        totalHusk += r.value("husk_qtl").toDouble();
+    }
+
+    m_batchTable->setUpdatesEnabled(false);
+    m_batchTable->setRowCount(matchedIndices.size());
+
+    QColor greenColor("#16A34A");
+    QColor amberColor("#D97706");
+    QColor redColor("#DC2626");
+
+    for (int row = 0; row < matchedIndices.size(); ++row) {
+        QVariantMap r = m_rawBatches.at(matchedIndices.at(row)).toMap();
+        QString bNo = r.value("batch_no").toString();
+        QString bDate = r.value("batch_date").toString();
+        QString variety = r.value("paddy_variety").toString();
+        double pInput = r.value("paddy_input_qtl").toDouble();
+        double hRice = r.value("head_rice_qtl").toDouble();
+        double bRice = r.value("broken_rice_qtl").toDouble();
+        double bran = r.value("bran_qtl").toDouble();
+        double husk = r.value("husk_qtl").toDouble();
+        double yieldPct = r.value("yield_pct").toDouble();
+
         m_batchTable->setItem(row, 0, new QTableWidgetItem(r.value("id").toString()));
         m_batchTable->setItem(row, 1, new QTableWidgetItem(bNo));
-        m_batchTable->setItem(row, 2, new QTableWidgetItem(bDate));
+        m_batchTable->setItem(row, 2, new QTableWidgetItem(FiscalYearHelper::formatDisplayDate(bDate)));
         m_batchTable->setItem(row, 3, new QTableWidgetItem(variety));
 
         auto* inItem = new QTableWidgetItem(QString::number(pInput, 'f', 2));
@@ -435,7 +456,7 @@ void MillingStatementWidget::populateBatchTable() {
 
         auto* hrItem = new QTableWidgetItem(QString::number(hRice, 'f', 2));
         hrItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        hrItem->setForeground(QColor("#16A34A"));
+        hrItem->setForeground(greenColor);
         m_batchTable->setItem(row, 5, hrItem);
 
         auto* brItem = new QTableWidgetItem(QString::number(bRice, 'f', 2));
@@ -452,31 +473,26 @@ void MillingStatementWidget::populateBatchTable() {
 
         auto* yldItem = new QTableWidgetItem(QString("%1%").arg(QString::number(yieldPct, 'f', 2)));
         yldItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        yldItem->setForeground(yieldPct >= 66.0 ? QColor("#16A34A") : QColor("#D97706"));
+        yldItem->setForeground(yieldPct >= 66.0 ? greenColor : amberColor);
         m_batchTable->setItem(row, 9, yldItem);
 
         QString status = (yieldPct >= 67.0) ? "Optimal (>=67%)" : (yieldPct >= 65.0 ? "Normal" : "Low Recovery (<65%)");
         auto* statusItem = new QTableWidgetItem(status);
         statusItem->setTextAlignment(Qt::AlignCenter);
-        statusItem->setForeground(yieldPct >= 66.0 ? QColor("#16A34A") : QColor("#DC2626"));
+        statusItem->setForeground(yieldPct >= 66.0 ? greenColor : redColor);
         m_batchTable->setItem(row, 10, statusItem);
-
-        totalPaddy += pInput;
-        totalHead += hRice;
-        totalBroken += bRice;
-        totalBran += bran;
-        totalHusk += husk;
-        row++;
     }
 
+    m_batchTable->setUpdatesEnabled(true);
+
     double avgYield = (totalPaddy > 0.0) ? (totalHead / totalPaddy) * 100.0 : 0.0;
-    m_totalBatchesLabel->setText(QString("Total Batches: %1").arg(row));
+    m_totalBatchesLabel->setText(QString("Total Batches: %1").arg(matchedIndices.size()));
     m_totalPaddyInputLabel->setText(QString("Paddy Milled: %1 Qtl").arg(QString::number(totalPaddy, 'f', 2)));
     m_totalHeadRiceLabel->setText(QString("Head Rice: %1 Qtl").arg(QString::number(totalHead, 'f', 2)));
     m_avgYieldLabel->setText(QString("Avg Yield: %1%").arg(QString::number(avgYield, 'f', 2)));
     m_totalByProductsLabel->setText(QString("Bran & Husk: %1 Qtl").arg(QString::number(totalBran + totalHusk, 'f', 2)));
 
-    if (row > 0) {
+    if (!matchedIndices.isEmpty()) {
         m_batchTable->selectRow(0);
     }
 }
@@ -600,8 +616,16 @@ void MillingStatementWidget::keyPressEvent(QKeyEvent* event) {
     } else if (event->key() == Qt::Key_F5) {
         onRefreshClicked();
         event->accept();
-    } else if (event->key() == Qt::Key_F2) {
+    } else if (event->modifiers() & Qt::ControlModifier && event->key() == Qt::Key_N) {
         onNewBatchClicked();
+        event->accept();
+    } else if (event->key() == Qt::Key_F2) {
+        QDate f = m_fromDateEdit->date();
+        QDate t = m_toDateEdit->date();
+        if (VoucherDateDialog::selectDateRange(this, &f, &t, f, t)) {
+            m_fromDateEdit->setDate(f);
+            m_toDateEdit->setDate(t);
+        }
         event->accept();
     } else {
         QWidget::keyPressEvent(event);

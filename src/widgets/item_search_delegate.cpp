@@ -196,6 +196,14 @@ void ItemSearchEditor::selectCurrentListItem() {
     }
 }
 
+void ItemSearchEditor::resolveCurrentText() {
+    if (m_listWidget && m_listWidget->count() > 0) {
+        int row = m_listWidget->currentRow();
+        if (row < 0) row = 0;
+        onListItemClicked(m_listWidget->item(row));
+    }
+}
+
 void ItemSearchEditor::onListItemClicked(QListWidgetItem* item) {
     if (!item) return;
     QString itemName = item->data(Qt::UserRole).toString();

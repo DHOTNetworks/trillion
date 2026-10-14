@@ -96,7 +96,7 @@ bool JFormModel::save_jform_voucher(const QVariantMap& data, const QVariantList&
 
     int zimidarId = data.value("zimidar_id").toInt();
     if (zimidarId <= 0) {
-        QVariant foundId = db.executeScalar("SELECT id FROM parties WHERE party_name = ? LIMIT 1;", {zimidarName});
+        QVariant foundId = db.executeScalar("SELECT id FROM parties WHERE name = ? COLLATE NOCASE LIMIT 1;", {zimidarName});
         if (foundId.isValid() && !foundId.isNull()) {
             zimidarId = foundId.toInt();
         }
@@ -106,7 +106,7 @@ bool JFormModel::save_jform_voucher(const QVariantMap& data, const QVariantList&
     QString partyName = data.value("party_name").toString().trimmed();
     if (partyName.isEmpty()) partyName = "Self Purchase";
     if (partyId <= 0) {
-        QVariant foundPId = db.executeScalar("SELECT id FROM parties WHERE party_name = ? LIMIT 1;", {partyName});
+        QVariant foundPId = db.executeScalar("SELECT id FROM parties WHERE name = ? COLLATE NOCASE LIMIT 1;", {partyName});
         if (foundPId.isValid() && !foundPId.isNull()) {
             partyId = foundPId.toInt();
         }
@@ -127,7 +127,7 @@ bool JFormModel::save_jform_voucher(const QVariantMap& data, const QVariantList&
     double grandTotal = data.value("grand_total").toDouble();
     QString narration = data.value("narration").toString().trimmed();
 
-    QString vehicleNo = data.value("vehicle_no").toString().trimmed();
+    QString vehicleNo = data.value("vehicle_no", data.value("vehicleNo")).toString().trimmed().toUpper();
     QString driverName = data.value("driver_name").toString().trimmed();
     QString gatePassNo = data.value("gate_pass_no").toString().trimmed();
     QString ewayBillNo = data.value("eway_bill_no").toString().trimmed();
@@ -137,7 +137,7 @@ bool JFormModel::save_jform_voucher(const QVariantMap& data, const QVariantList&
     QString procurementMode = data.value("procurement_mode").toString().trimmed();
     QString lotNo = data.value("lot_no").toString().trimmed();
     QString grade = data.value("grade").toString().trimmed();
-    QString transportName = data.value("transport_name").toString().trimmed();
+    QString transport = data.value("transport").toString().trimmed();
     QString brokerName = data.value("broker_name").toString().trimmed();
     QString challanNo = data.value("challan_no").toString().trimmed();
     QString kandaWeight = data.value("kanda_weight").toString().trimmed();
@@ -150,14 +150,14 @@ bool JFormModel::save_jform_voucher(const QVariantMap& data, const QVariantList&
             "UPDATE jform_vouchers SET "
             "voucher_no = ?, voucher_date = ?, financial_year = ?, jform_no = ?, zimidar_id = ?, zimidar_name = ?, party_id = ?, party_name = ?, "
             "auction_sale_status = ?, due_days = ?, vehicle_no = ?, driver_name = ?, gate_pass_no = ?, eway_bill_no = ?, "
-            "bill_time = ?, sauda_date = ?, mandi_place = ?, procurement_mode = ?, lot_no = ?, grade = ?, transport_name = ?, "
+            "bill_time = ?, sauda_date = ?, mandi_place = ?, procurement_mode = ?, lot_no = ?, grade = ?, transport = ?, "
             "broker_name = ?, challan_no = ?, kanda_weight = ?, total_bags = ?, total_weight = ?, goods_amount = ?, bonus_amount = ?, "
             "relief_amount = ?, subtotal_amount = ?, labour_amount = ?, round_off = ?, grand_total = ?, narration = ? "
             "WHERE id = ?;",
             {
                 vchNo, vchDate, fy, jformNo, zimidarId, zimidarName, partyId, partyName,
                 auctionSaleStatus, dueDays, vehicleNo, driverName, gatePassNo, ewayBillNo,
-                billTime, saudaDate, mandiPlace, procurementMode, lotNo, grade, transportName,
+                billTime, saudaDate, mandiPlace, procurementMode, lotNo, grade, transport,
                 brokerName, challanNo, kandaWeight, totalBags, totalWeight, goodsAmount, bonusAmount,
                 reliefAmount, subtotalAmount, labourAmount, roundOff, grandTotal, narration, editId
             }
@@ -177,14 +177,14 @@ bool JFormModel::save_jform_voucher(const QVariantMap& data, const QVariantList&
             "INSERT INTO jform_vouchers ("
             "voucher_no, voucher_date, financial_year, jform_no, zimidar_id, zimidar_name, party_id, party_name, "
             "auction_sale_status, due_days, vehicle_no, driver_name, gate_pass_no, eway_bill_no, "
-            "bill_time, sauda_date, mandi_place, procurement_mode, lot_no, grade, transport_name, "
+            "bill_time, sauda_date, mandi_place, procurement_mode, lot_no, grade, transport, "
             "broker_name, challan_no, kanda_weight, total_bags, total_weight, goods_amount, bonus_amount, "
             "relief_amount, subtotal_amount, labour_amount, round_off, grand_total, narration"
             ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
             {
                 vchNo, vchDate, fy, jformNo, zimidarId, zimidarName, partyId, partyName,
                 auctionSaleStatus, dueDays, vehicleNo, driverName, gatePassNo, ewayBillNo,
-                billTime, saudaDate, mandiPlace, procurementMode, lotNo, grade, transportName,
+                billTime, saudaDate, mandiPlace, procurementMode, lotNo, grade, transport,
                 brokerName, challanNo, kandaWeight, totalBags, totalWeight, goodsAmount, bonusAmount,
                 reliefAmount, subtotalAmount, labourAmount, roundOff, grandTotal, narration
             }
@@ -254,7 +254,7 @@ bool JFormModel::save_jform_voucher(const QVariantMap& data, const QVariantList&
     // C. Credit Labour deduction if > 0
     if (labourAmount > 0.001) {
         QVariant labourLedgerId = db.executeScalar(
-            "SELECT id FROM parties WHERE party_name LIKE '%Labour%' OR party_name LIKE '%Majduri%' LIMIT 1;"
+            "SELECT id FROM parties WHERE name LIKE '%Labour%' OR name LIKE '%Majduri%' LIMIT 1;"
         );
         int lId = labourLedgerId.isValid() && !labourLedgerId.isNull() ? labourLedgerId.toInt() : 0;
         db.executeNonQuery(
@@ -270,7 +270,7 @@ bool JFormModel::save_jform_voucher(const QVariantMap& data, const QVariantList&
     if (std::abs(roundOff) > 0.001) {
         QString rDrcr = roundOff > 0 ? "Dr" : "Cr";
         QVariant roundLedgerId = db.executeScalar(
-            "SELECT id FROM parties WHERE party_name LIKE '%Round Off%' LIMIT 1;"
+            "SELECT id FROM parties WHERE name LIKE '%Round Off%' LIMIT 1;"
         );
         int rId = roundLedgerId.isValid() && !roundLedgerId.isNull() ? roundLedgerId.toInt() : 0;
         db.executeNonQuery(

@@ -1,10 +1,12 @@
 #include "trial_balance_widget.h"
 #include "voucher_date_dialog.h"
 #include "kbd_badge_button.h"
+#include "erp_theme.h"
 #include "custom_dialogs.h"
 #include "../engine/fiscal_year_helper.h"
 #include "../services/financial_math_service.h"
 #include "../models/menu_tree_manager.h"
+#include "reports/specs/trial_balance_report.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGridLayout>
@@ -39,38 +41,17 @@ TrialBalanceWidget::TrialBalanceWidget(TrialBalanceController* controller, Print
 }
 
 void TrialBalanceWidget::setupUi() {
-    setAttribute(Qt::WA_StyledBackground, true);
-    setStyleSheet("background-color: #F8FAFC;");
+    // Standard page scaffold (ErpTheme): slate palette + T1-T4 margins/spacing.
+    auto* mainLayout = ErpTheme::makePageLayout(this);
 
-    auto* mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(16, 12, 16, 12);
-    mainLayout->setSpacing(10);
-
-    // ========================================================================
-    // TIER 1: HEADER BAR CARD
-    // ========================================================================
-    auto* headerCard = new QFrame(this);
-    headerCard->setStyleSheet(
-        "QFrame { background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; }"
-        "QLabel, QWidget { border: none; background: transparent; }"
-    );
-    auto* headerLayout = new QHBoxLayout(headerCard);
-    headerLayout->setContentsMargins(14, 10, 14, 10);
-
-    auto* titleCol = new QVBoxLayout();
-    titleCol->setSpacing(2);
-    m_titleLabel = new QLabel("Trial Balance Sheet", headerCard);
-    m_titleLabel->setStyleSheet("font-size: 16px; font-weight: 800; color: #0F172A;");
-    m_subtitleLabel = new QLabel("General ledger mathematical balancing verification • Press F4 for View Options", headerCard);
-    m_subtitleLabel->setStyleSheet("font-size: 11px; color: #64748B; font-weight: 600;");
-    titleCol->addWidget(m_titleLabel);
-    titleCol->addWidget(m_subtitleLabel);
-    headerLayout->addLayout(titleCol, 1);
+    // TIER 1: HEADER BAR CARD (ErpTheme builder; title contract from ReportSpec)
+    auto* headerCard = ErpTheme::makeHeaderCard(this,
+        ErpReports::trialBalanceSpec()->title, ErpReports::trialBalanceSpec()->subtitle,
+        &m_titleLabel, &m_subtitleLabel);
+    auto* headerLayout = qobject_cast<QHBoxLayout*>(headerCard->layout());
 
     m_modeBadge = new QLabel("Normal View", headerCard);
-    m_modeBadge->setStyleSheet(
-        "QLabel { background-color: #EFF6FF; color: #2563EB; border: 1.5px solid #BFDBFE; border-radius: 6px; padding: 4px 10px; font-weight: 800; font-size: 11.5px; }"
-    );
+    m_modeBadge->setStyleSheet(ErpTheme::badgeStyle("info"));
     headerLayout->addWidget(m_modeBadge);
 
     auto* optionsBtn = new KbdBadgeButton("View Options", "F4", headerCard);
@@ -91,29 +72,19 @@ void TrialBalanceWidget::setupUi() {
 
     mainLayout->addWidget(headerCard);
 
-    // ========================================================================
-    // TIER 2: FILTER & CONTROL BAR CARD
-    // ========================================================================
-    auto* filterCard = new QFrame(this);
-    filterCard->setStyleSheet(
-        "QFrame { background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; }"
-        "QLabel { border: none; background: transparent; font-size: 11.5px; font-weight: 700; color: #475569; }"
-        "QDateEdit, QComboBox, QLineEdit { background-color: #FFFFFF; color: #0F172A; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 4px 8px; font-weight: 700; font-size: 11.5px; }"
-        "QDateEdit:focus, QComboBox:focus, QLineEdit:focus { border: 2px solid #2563EB; background-color: #FFFFF0; }"
-    );
-    auto* filterLayout = new QHBoxLayout(filterCard);
-    filterLayout->setContentsMargins(12, 6, 12, 6);
-    filterLayout->setSpacing(10);
+    // TIER 2: FILTER & CONTROL BAR CARD (ErpTheme builder, spec height 52)
+    QHBoxLayout* filterLayout = nullptr;
+    auto* filterCard = ErpTheme::makeFilterBar(this, &filterLayout);
 
     filterLayout->addWidget(new QLabel("From Date:", filterCard));
     m_fromDateEdit = new AccountingDateDisplay(filterCard);
-    m_fromDateEdit->setFixedWidth(115);
+    m_fromDateEdit->setMinimumWidth(105);
     connect(m_fromDateEdit, &AccountingDateDisplay::dateChanged, this, &TrialBalanceWidget::onDateFilterChanged);
     filterLayout->addWidget(m_fromDateEdit);
 
     filterLayout->addWidget(new QLabel("To Date:", filterCard));
     m_toDateEdit = new AccountingDateDisplay(filterCard);
-    m_toDateEdit->setFixedWidth(115);
+    m_toDateEdit->setMinimumWidth(105);
     connect(m_toDateEdit, &AccountingDateDisplay::dateChanged, this, &TrialBalanceWidget::onDateFilterChanged);
     filterLayout->addWidget(m_toDateEdit);
 
@@ -129,10 +100,7 @@ void TrialBalanceWidget::setupUi() {
     connect(m_toDateEdit, &AccountingDateDisplay::clicked, this, openPeriodDlg);
 
     auto* periodBtn = new QPushButton("Period (F2)", filterCard);
-    periodBtn->setStyleSheet(
-        "QPushButton { background-color: #EFF6FF; color: #1D4ED8; border: 1px solid #BFDBFE; font-weight: 700; font-size: 11px; border-radius: 6px; padding: 4px 10px; }"
-        "QPushButton:hover { background-color: #DBEAFE; color: #1E40AF; }"
-    );
+    periodBtn->setStyleSheet(ErpTheme::secondaryButtonStyle());
     connect(periodBtn, &QPushButton::clicked, this, openPeriodDlg);
     filterLayout->addWidget(periodBtn);
 
@@ -159,90 +127,48 @@ void TrialBalanceWidget::setupUi() {
     filterLayout->addStretch(1);
 
     m_balanceStatusBadge = new QLabel("● Balanced (₹0.00)", filterCard);
-    m_balanceStatusBadge->setStyleSheet(
-        "QLabel { background-color: #F0FDF4; color: #16A34A; border: 1px solid #BBF7D0; border-radius: 6px; padding: 4px 10px; font-weight: 700; font-size: 11.5px; }"
-    );
+    m_balanceStatusBadge->setStyleSheet(ErpTheme::badgeStyle("ok"));
     filterLayout->addWidget(m_balanceStatusBadge);
 
     mainLayout->addWidget(filterCard);
 
-    // ========================================================================
-    // TIER 3: HIGH-PERFORMANCE DATA SURFACE
-    // ========================================================================
+    // TIER 3: HIGH-PERFORMANCE DATA SURFACE (ErpTheme: navy header, 29px rows,
+    // SelectRows/Single, explicit foregrounds per cell in populateTable)
     m_table = new QTableWidget(this);
-    m_table->setAlternatingRowColors(true);
-    m_table->setEditTriggers(QAbstractItemView::NoEditTriggers); // statement: select/drill only, never inline-edit
-    m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
-    m_table->setSelectionMode(QAbstractItemView::SingleSelection);
-    m_table->verticalHeader()->setVisible(false);
-    m_table->verticalHeader()->setDefaultSectionSize(36);
-    m_table->horizontalHeader()->setFixedHeight(36);
+    ErpTheme::styleTable(m_table);
     m_table->horizontalHeader()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     m_table->setShowGrid(true);
-    m_table->setStyleSheet(
-        "QTableWidget {"
-        "  background-color: #FFFFFF;"
-        "  alternate-background-color: #F8FAFC;"
-        "  border: 1px solid #CBD5E1;"
-        "  border-radius: 8px;"
-        "  gridline-color: #F1F5F9;"
-        "  font-size: 12.5px;"
-        "  color: #0F172A;"
-        "}"
-        "QTableWidget::item { padding: 8px 12px; }"
-        "QTableWidget::item:selected { background-color: #EFF6FF; color: #0F172A; }"
-        "QHeaderView::section {"
-        "  background-color: #F1F5F9;"
-        "  color: #1E293B;"
-        "  font-weight: 800;"
-        "  font-size: 12px;"
-        "  min-height: 28px;"
-        "  height: 34px;"
-        "  padding: 6px 12px;"
-        "  border: none;"
-        "  border-bottom: 2px solid #CBD5E1;"
-        "  border-right: 1px solid #E2E8F0;"
-        "}"
-    );
     connect(m_table, &QTableWidget::cellDoubleClicked, this, &TrialBalanceWidget::onTableDoubleClicked);
+    // Enter opens the focused row's ledger (same as double-click).
+    // Scoped to the grid so search boxes and buttons keep their own keys.
+    auto openFocusedRow = [this]() {
+        if (!m_table || m_table->currentRow() < 0) return;
+        onTableDoubleClicked(m_table->currentRow(), m_table->currentColumn());
+    };
+    auto* enterShortcut = new QShortcut(QKeySequence(Qt::Key_Return), m_table);
+    enterShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+    connect(enterShortcut, &QShortcut::activated, this, openFocusedRow);
+    auto* numEnterShortcut = new QShortcut(QKeySequence(Qt::Key_Enter), m_table);
+    numEnterShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+    connect(numEnterShortcut, &QShortcut::activated, this, openFocusedRow);
     mainLayout->addWidget(m_table, 1);
 
-    // ========================================================================
-    // TIER 4: SUMMARY METRICS FOOTER CARDS
-    // ========================================================================
+    // TIER 4: SUMMARY METRICS FOOTER CARDS (ErpTheme builders, 4px accent stripe)
     auto* metricsLayout = new QHBoxLayout();
     metricsLayout->setSpacing(10);
 
-    auto createMetricCard = [this, metricsLayout](QFrame*& cardOut, QLabel*& tLabelOut, QLabel*& vLabelOut, const QString& title, const QString& initVal, const QString& color) {
-        cardOut = new QFrame(this);
-        cardOut->setStyleSheet(
-            "QFrame { background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; border-left: 4px solid " + color + "; }"
-            "QLabel, QWidget { border: none; background: transparent; }"
-        );
-        auto* cLayout = new QVBoxLayout(cardOut);
-        cLayout->setContentsMargins(10, 6, 10, 6);
-        cLayout->setSpacing(2);
-
-        tLabelOut = new QLabel(title, cardOut);
-        tLabelOut->setStyleSheet("font-size: 9.5px; font-weight: 800; color: #64748B; letter-spacing: 0.5px; border: none; background: transparent;");
-        vLabelOut = new QLabel(initVal, cardOut);
-        vLabelOut->setStyleSheet("font-size: 14px; font-weight: 800; color: #0F172A; border: none; background: transparent;");
-        cLayout->addWidget(tLabelOut);
-        cLayout->addWidget(vLabelOut);
-        metricsLayout->addWidget(cardOut);
-    };
-
-    createMetricCard(m_card1, m_card1Title, m_card1Val, "TOTAL ACCOUNTS / ENTRIES", "0", "#2563EB");
-    createMetricCard(m_card2, m_card2Title, m_card2Val, "TOTAL DEBIT BALANCES", "₹0.00", "#0284C7");
-    createMetricCard(m_card3, m_card3Title, m_card3Val, "TOTAL CREDIT BALANCES", "₹0.00", "#16A34A");
-    createMetricCard(m_card4, m_card4Title, m_card4Val, "TRIAL BALANCE DIFFERENCE", "₹0.00 (Balanced)", "#16A34A");
+    m_card1Val = ErpTheme::makeMetricCard(this, metricsLayout, "TOTAL ACCOUNTS / ENTRIES", "0", ErpTheme::kBlue, &m_card1, &m_card1Title);
+    m_card2Val = ErpTheme::makeMetricCard(this, metricsLayout, "TOTAL DEBIT BALANCES", "₹0.00", ErpTheme::kSky, &m_card2, &m_card2Title);
+    m_card3Val = ErpTheme::makeMetricCard(this, metricsLayout, "TOTAL CREDIT BALANCES", "₹0.00", ErpTheme::kGreen, &m_card3, &m_card3Title);
+    m_card4Val = ErpTheme::makeMetricCard(this, metricsLayout, "TRIAL BALANCE DIFFERENCE", "₹0.00 (Balanced)", ErpTheme::kGreen, &m_card4, &m_card4Title);
 
     mainLayout->addLayout(metricsLayout);
 
     // Shortcuts
     connect(new QShortcut(QKeySequence(Qt::Key_Escape), this), &QShortcut::activated, this, &TrialBalanceWidget::backRequested);
-    connect(new QShortcut(QKeySequence(Qt::Key_F4), this), &QShortcut::activated, this, &TrialBalanceWidget::onOpenViewOptions);
-    connect(new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_F), this), &QShortcut::activated, this, [this]() {
+    connect(new QShortcut(QKeySequence(Qt::Key_F2), this), &QShortcut::activated, this, openPeriodDlg);
+    connect(new QShortcut(QKeySequence(Qt::ALT | Qt::Key_X), this), &QShortcut::activated, this, &TrialBalanceWidget::onOpenViewOptions);
+    connect(new QShortcut(QKeySequence(Qt::ALT | Qt::Key_Q), this), &QShortcut::activated, this, [this]() {
         m_searchEdit->setFocus();
         m_searchEdit->selectAll();
     });
@@ -319,7 +245,9 @@ void TrialBalanceWidget::setMode(TrialBalanceMode mode) {
 }
 
 void TrialBalanceWidget::focusTable() {
-    if (m_table) m_table->setFocus();
+    if (!m_table) return;
+    if (m_table->rowCount() > 0 && m_table->currentRow() < 0) m_table->selectRow(0);
+    m_table->setFocus();
 }
 
 void TrialBalanceWidget::reloadData() {
@@ -428,15 +356,15 @@ void TrialBalanceWidget::updateSummaryMetrics() {
     if (totals.isBalanced) {
         m_card4Title->setText("TRIAL BALANCE STATUS");
         m_card4Val->setText("₹0.00 (Balanced)");
-        m_card4->setStyleSheet("QFrame { background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; border-left: 4px solid #16A34A; } QLabel, QWidget { border: none; background: transparent; }");
+        ErpTheme::restripeCard(m_card4, ErpTheme::kGreen);
         m_balanceStatusBadge->setText("● Balanced (₹0.00)");
-        m_balanceStatusBadge->setStyleSheet("QLabel { background-color: #F0FDF4; color: #16A34A; border: 1.5px solid #86EFAC; border-radius: 6px; padding: 3px 8px; font-weight: 800; font-size: 11px; }");
+        m_balanceStatusBadge->setStyleSheet(ErpTheme::badgeStyle("ok"));
     } else {
         m_card4Title->setText("DISCREPANCY / DIFFERENCE");
         m_card4Val->setText(totals.differenceFmt);
-        m_card4->setStyleSheet("QFrame { background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; border-left: 4px solid #DC2626; } QLabel, QWidget { border: none; background: transparent; }");
+        ErpTheme::restripeCard(m_card4, ErpTheme::kRed);
         m_balanceStatusBadge->setText("● Difference: " + totals.differenceFmt);
-        m_balanceStatusBadge->setStyleSheet("QLabel { background-color: #FEF2F2; color: #DC2626; border: 1.5px solid #FECACA; border-radius: 6px; padding: 3px 8px; font-weight: 800; font-size: 11px; }");
+        m_balanceStatusBadge->setStyleSheet(ErpTheme::badgeStyle("danger"));
     }
 }
 

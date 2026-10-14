@@ -1,13 +1,14 @@
 #include "mandi_calculator.h"
+#include "../services/financial_math_service.h"
 
 namespace MahadevERP {
 
 double MandiCalculator::round2(double val) {
-    return std::round(val * 100.0) / 100.0;
+    return FinancialMathService::round2(val);
 }
 
 double MandiCalculator::roundToRupee(double val) {
-    return std::round(val);
+    return FinancialMathService::instance().calculateGrandTotal(val);
 }
 
 double MandiCalculator::calculateMoistureDeduction(double grossWeightQtl, double moisturePct, double baseMoistureLimit) {

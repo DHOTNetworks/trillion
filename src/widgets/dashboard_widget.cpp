@@ -140,22 +140,16 @@ void DashboardWidget::setupUi() {
     btnBox->setSpacing(10);
     btnBox->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
 
-    // Open Firm Button (Alt+F1)
-    m_openFirmBtn = new QPushButton("Open Firm  [Alt+F1]", this);
-    m_openFirmBtn->setFixedHeight(36);
+    // Open Firm Button (Alt+F1 — wired globally in AppKeyboardController)
+    m_openFirmBtn = new KbdBadgeButton("Open Firm", "Alt+F1", this);
+    m_openFirmBtn->setMinimumHeight(36);
     m_openFirmBtn->setFocusPolicy(Qt::NoFocus);
-    m_openFirmBtn->setCursor(Qt::PointingHandCursor);
-    m_openFirmBtn->setStyleSheet(
-        "QPushButton { background-color: #FFFFFF; border: 1.5px solid #CBD5E1; border-radius: 8px; padding: 0px 14px; font-weight: 700; color: #334155; font-size: 12px; }"
-        "QPushButton:hover { background-color: #F8FAFC; border-color: #94A3B8; color: #0F172A; }"
-        "QPushButton:pressed { background-color: #E2E8F0; }"
-    );
     connect(m_openFirmBtn, &QPushButton::clicked, this, [this]() { emit openViewRequested(22); });
     btnBox->addWidget(m_openFirmBtn);
 
     // Sync Bahi-Khata / Busy Data Button
     m_syncBtn = new QPushButton("Sync Data", this);
-    m_syncBtn->setFixedHeight(36);
+    m_syncBtn->setMinimumHeight(36);
     m_syncBtn->setFocusPolicy(Qt::NoFocus);
     m_syncBtn->setCursor(Qt::PointingHandCursor);
     m_syncBtn->setStyleSheet(
@@ -168,7 +162,7 @@ void DashboardWidget::setupUi() {
 
     // Period Button
     m_periodBtn = new QPushButton(this);
-    m_periodBtn->setFixedHeight(36);
+    m_periodBtn->setMinimumHeight(36);
     m_periodBtn->setFocusPolicy(Qt::NoFocus);
     m_periodBtn->setCursor(Qt::PointingHandCursor);
     m_periodBtn->setStyleSheet(
@@ -181,7 +175,7 @@ void DashboardWidget::setupUi() {
 
     // Display Scale / Zoom Button
     m_scaleBtn = new QPushButton(this);
-    m_scaleBtn->setFixedHeight(36);
+    m_scaleBtn->setMinimumHeight(36);
     m_scaleBtn->setFocusPolicy(Qt::NoFocus);
     m_scaleBtn->setCursor(Qt::PointingHandCursor);
     m_scaleBtn->setStyleSheet(
@@ -257,14 +251,14 @@ QWidget* DashboardWidget::createLeftSection() {
 
     // Divider
     QFrame* div = new QFrame(card);
-    div->setFixedHeight(1);
+    div->setMinimumHeight(1);
     div->setStyleSheet("background-color: #F1F5F9; border: none;");
     layout->addWidget(div);
 
     // Financial Year Selected Badge
     QFrame* fyBox = new QFrame(card);
     fyBox->setObjectName("fyBadgeBox");
-    fyBox->setFixedHeight(46);
+    fyBox->setMinimumHeight(46);
     fyBox->setStyleSheet(
         "#fyBadgeBox { background-color: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 8px; }"
         "QLabel { border: none; background: transparent; }"
@@ -308,7 +302,7 @@ QWidget* DashboardWidget::createLeftSection() {
     // Export to Bahi-Khata Button (Above GST Registered with green dot)
     m_exportBahiKhataBtn = new QPushButton("Export to Bahi-Khata", card);
     m_exportBahiKhataBtn->setObjectName("exportBahiKhataBtn");
-    m_exportBahiKhataBtn->setFixedHeight(36);
+    m_exportBahiKhataBtn->setMinimumHeight(36);
     m_exportBahiKhataBtn->setCursor(Qt::PointingHandCursor);
     m_exportBahiKhataBtn->setStyleSheet(
         "#exportBahiKhataBtn { background-color: #EEF2FF; border: 1.5px solid #C7D2FE; border-radius: 8px; font-weight: 800; color: #4338CA; font-size: 12px; }"
@@ -321,7 +315,7 @@ QWidget* DashboardWidget::createLeftSection() {
     // Bottom Status Badge
     QFrame* statusCard = new QFrame(card);
     statusCard->setObjectName("statusBadgeCard");
-    statusCard->setFixedHeight(30);
+    statusCard->setMinimumHeight(30);
     statusCard->setStyleSheet(
         "#statusBadgeCard { background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px; }"
         "QLabel { border: none; background: transparent; }"
@@ -399,7 +393,7 @@ QWidget* DashboardWidget::createMiddleSection() {
 QWidget* DashboardWidget::createStatCard(const QString& title, QLabel** outValLabel, const QString& subtext, const QString& accentColor) {
     QFrame* card = new QFrame(this);
     card->setObjectName("statCard");
-    card->setFixedHeight(95);
+    card->setMinimumHeight(95);
     card->setStyleSheet(
         "#statCard { background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; }"
         "QLabel { border: none; background: transparent; }"
@@ -412,7 +406,7 @@ QWidget* DashboardWidget::createStatCard(const QString& title, QLabel** outValLa
     // Left accent bar
     QFrame* bar = new QFrame(card);
     bar->setObjectName("accentBar");
-    bar->setFixedWidth(4);
+    bar->setMinimumWidth(4);
     bar->setStyleSheet(QString("#accentBar { background-color: %1; border-radius: 2px; border: none; }").arg(accentColor));
     root->addWidget(bar);
 
@@ -457,22 +451,41 @@ QWidget* DashboardWidget::createRightSection() {
     layout->addWidget(title);
 
     QFrame* div = new QFrame(card);
-    div->setFixedHeight(1);
+    div->setMinimumHeight(1);
     div->setStyleSheet("background-color: #F1F5F9; border: none;");
     layout->addWidget(div);
 
     layout->addStretch(1);
 
-    QVBoxLayout* centerBox = new QVBoxLayout();
-    centerBox->setSpacing(8);
-    centerBox->setAlignment(Qt::AlignCenter);
+    // Audit trail quick widget (replaces the reserved placeholder): live
+    // counts + one-key jump to the register (Books & Registers → 10).
+    QFrame* auditCard = new QFrame(card);
+    auditCard->setStyleSheet(
+        "#auditCard { background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; }"
+        "QLabel { border: none; background: transparent; }");
+    auditCard->setObjectName("auditCard");
+    QVBoxLayout* auditLayout = new QVBoxLayout(auditCard);
+    auditLayout->setContentsMargins(12, 10, 12, 10);
+    auditLayout->setSpacing(4);
+    QLabel* auditTitle = new QLabel("AUDIT TRAIL", auditCard);
+    auditTitle->setStyleSheet("color: #4F46E5; font-size: 10px; font-weight: 800; letter-spacing: 1px;");
+    auditLayout->addWidget(auditTitle);
+    m_auditRowsLabel = new QLabel("— entries", auditCard);
+    m_auditRowsLabel->setStyleSheet("color: #0F172A; font-size: 16px; font-weight: 800;");
+    auditLayout->addWidget(m_auditRowsLabel);
+    m_auditBlockedLabel = new QLabel("— refused", auditCard);
+    m_auditBlockedLabel->setStyleSheet("color: #DC2626; font-size: 11px; font-weight: 700;");
+    auditLayout->addWidget(m_auditBlockedLabel);
+    QPushButton* auditBtn = new QPushButton("Open Audit Register", auditCard);
+    auditBtn->setCursor(Qt::PointingHandCursor);
+    auditBtn->setStyleSheet(
+        "QPushButton { background-color: #4F46E5; color: #FFFFFF; border: none; border-radius: 6px; padding: 6px 12px; font-weight: 700; font-size: 12px; }"
+        "QPushButton:hover { background-color: #4338CA; }"
+        "QPushButton:focus { border: 2px solid #2563EB; }");
+    connect(auditBtn, &QPushButton::clicked, this, [this]() { emit openViewRequested(64); });
+    auditLayout->addWidget(auditBtn);
+    layout->addWidget(auditCard);
 
-    QLabel* resLabel = new QLabel("Reserved Section", card);
-    resLabel->setAlignment(Qt::AlignCenter);
-    resLabel->setStyleSheet("color: #94A3B8; font-size: 12px; font-weight: 700; border: none; background: transparent;");
-    centerBox->addWidget(resLabel);
-
-    layout->addLayout(centerBox);
     layout->addStretch(1);
 
     return card;
@@ -575,11 +588,22 @@ void DashboardWidget::refreshStats() {
         if (m_riceStockLabel) m_riceStockLabel->setText(m_dashCtrl->riceStock());
         if (m_totalSalesLabel) m_totalSalesLabel->setText(m_dashCtrl->totalSales());
     } else {
-        // Direct Database fallback
-        QVariant vSales = DatabaseManager::instance().executeScalar("SELECT COALESCE(SUM(grand_total), 0) FROM sales_vouchers WHERE is_cancelled = 0");
+        // Direct Database fallback (same grain as the controller path above).
+        QVariant vSales = DatabaseManager::instance().executeScalar("SELECT COALESCE(SUM(total_amount), 0) FROM sales_invoices");
         if (vSales.isValid() && m_totalSalesLabel) {
             m_totalSalesLabel->setText(AccountingEngine::formatCurrency(vSales.toDouble()));
         }
+    }
+
+    // 3. Audit trail quick counts (cheap aggregates, always live).
+    QVariant auditTotal = DatabaseManager::instance().executeScalar("SELECT COUNT(*) FROM audit_log;");
+    if (m_auditRowsLabel) {
+        m_auditRowsLabel->setText(QString("%1 entries").arg(auditTotal.isValid() ? auditTotal.toLongLong() : 0));
+    }
+    QVariant auditBlocked = DatabaseManager::instance().executeScalar("SELECT COUNT(*) FROM audit_log WHERE action = 'BLOCKED';");
+    if (m_auditBlockedLabel) {
+        const qint64 n = auditBlocked.isValid() ? auditBlocked.toLongLong() : 0;
+        m_auditBlockedLabel->setText(n > 0 ? QString("%1 refused").arg(n) : QString("no refused writes"));
     }
 }
 
@@ -623,7 +647,7 @@ void DashboardWidget::showEvent(QShowEvent* event) {
     if (lastMenu == "ledger_master") m_selectedMenuIndex = 0;
     else if (lastMenu == "stock_master") m_selectedMenuIndex = 1;
     else if (lastMenu == "add_voucher") m_selectedMenuIndex = 2;
-    else if (lastMenu == "other_voucher" || lastMenu == "tds_tcs_hub" || lastMenu == "tds_options" || lastMenu == "tcs_options") m_selectedMenuIndex = 3;
+    else if (lastMenu == "other_voucher" || lastMenu == "tds_tcs_hub" || lastMenu == "tds_options" || lastMenu == "tcs_options" || lastMenu == "mandi_trading_hub") m_selectedMenuIndex = 3;
     else if (lastMenu == "reports_register" || lastMenu == "cash_book_hub" || lastMenu == "stock_register_hub") m_selectedMenuIndex = 4;
     else if (lastMenu == "final_accounts" || lastMenu == "final_reports_hub" || lastMenu == "trading_reports_hub" || lastMenu == "trial_balance_options_hub" || lastMenu == "depreciation_options_hub") m_selectedMenuIndex = 5;
     else m_selectedMenuIndex = 0;
@@ -676,10 +700,6 @@ void DashboardWidget::keyPressEvent(QKeyEvent* event) {
         triggerMenuIndex(5);
         event->accept();
         return;
-    } else if (event->key() == Qt::Key_F2) {
-        emit requestAccountingPeriodDialog();
-        event->accept();
-        return;
     } else if (event->key() == Qt::Key_F8) {
         emit openViewRequested(14);
         event->accept();
@@ -705,7 +725,7 @@ DashboardMenuCard::DashboardMenuCard(int index, const QString& numStr, const QSt
     , m_activeBorder(activeBorder)
 {
     setObjectName("dashboardMenuCard");
-    setFixedHeight(54);
+    setMinimumHeight(54);
     setCursor(Qt::PointingHandCursor);
     setStyleSheet(
         "#dashboardMenuCard { background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; }"
@@ -743,7 +763,7 @@ DashboardMenuCard::DashboardMenuCard(int index, const QString& numStr, const QSt
     if (!shortcutKey.isEmpty()) {
         QLabel* scBadge = new QLabel(shortcutKey, this);
         scBadge->setObjectName("scBadge");
-        scBadge->setFixedHeight(24);
+        scBadge->setMinimumHeight(24);
         scBadge->setAlignment(Qt::AlignCenter);
         scBadge->setStyleSheet(QString("#scBadge { background-color: %1; border: 1px solid %2; border-radius: 4px; padding: 2px 8px; color: %2; font-size: 11px; font-weight: 700; }").arg(badgeBg, badgeText));
         layout->addWidget(scBadge);
@@ -789,7 +809,7 @@ DashboardSubmenuDialog::DashboardSubmenuDialog(const QString& menuTitle, const Q
 {
     setAttribute(Qt::WA_StyledBackground, true);
     setObjectName("submenuDialog");
-    setFixedWidth(460);
+    setMinimumWidth(460);
     setStyleSheet(QString(
         "#submenuDialog { background-color: #FFFFFF; border: 2.5px solid %1; border-radius: 12px; }"
         "QLabel { border: none; background: transparent; }"
@@ -816,7 +836,7 @@ DashboardSubmenuDialog::DashboardSubmenuDialog(const QString& menuTitle, const Q
         const SubmenuItem& itm = m_items[i];
         QFrame* row = new QFrame(this);
         row->setObjectName("submenuRow");
-        row->setFixedHeight(46);
+        row->setMinimumHeight(46);
         row->setCursor(Qt::PointingHandCursor);
         row->installEventFilter(this);
 

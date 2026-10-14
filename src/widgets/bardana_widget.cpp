@@ -1,4 +1,5 @@
 #include "bardana_widget.h"
+#include "voucher_common.h"
 #include "voucher_date_dialog.h"
 #include "kbd_badge_button.h"
 #include "custom_dialogs.h"
@@ -51,9 +52,9 @@ void BardanaWidget::applyCustomStyles() {
         "QLabel.fieldLabel { font-size: 11px; font-weight: 700; color: #475569; border: none; background: transparent; }"
         "QLineEdit, QComboBox, AccountingDateEdit, QDateEdit { background-color: #FFFFFF; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 5px 8px; font-size: 12px; color: #0F172A; font-weight: 600; }"
         "QLineEdit:focus, QComboBox:focus, AccountingDateEdit:focus, QDateEdit:focus { border-color: #2563EB; background-color: #F8FAFC; }"
-        "QTableWidget { background-color: #FFFFFF; alternate-background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 8px; gridline-color: #F1F5F9; font-size: 12.5px; color: #0F172A; selection-background-color: #EFF6FF; selection-color: #1D4ED8; }"
+        "QTableWidget { background-color: #FFFFFF; alternate-background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 8px; gridline-color: #F1F5F9; font-size: 12.5px; color: #0F172A; selection-background-color: #2563EB; selection-color: #FFFFFF; }"
         "QTableWidget::item { padding: 4px 8px; }"
-        "QHeaderView::section { background-color: #F1F5F9; color: #1E293B; font-weight: 800; font-size: 12px; padding: 8px 10px; border: none; border-bottom: 2px solid #CBD5E1; border-right: 1px solid #E2E8F0; }"
+        "QHeaderView::section { background-color: #0F172A; color: #FFFFFF; font-weight: 800; font-size: 12px; padding: 8px 10px; border: none;  border-right: 1px solid #334155; }"
         "QTabWidget::pane { border: 1px solid #CBD5E1; background: #FFFFFF; border-radius: 8px; top: -1px; }"
         "QTabBar::tab { background: #F1F5F9; color: #475569; padding: 8px 18px; font-weight: 700; font-size: 12px; border-top-left-radius: 6px; border-top-right-radius: 6px; margin-right: 4px; border: 1px solid #CBD5E1; border-bottom: none; }"
         "QTabBar::tab:selected { background: #2563EB; color: #FFFFFF; border-color: #2563EB; }"
@@ -81,7 +82,7 @@ void BardanaWidget::setupUi() {
     headerLayout->addLayout(titleCol);
     headerLayout->addStretch();
 
-    auto* btnNewEntry = new KbdBadgeButton("+ New Bag Entry", "F2", this);
+    auto* btnNewEntry = new KbdBadgeButton("+ New Bag Entry", "Ctrl+N", this);
     btnNewEntry->setPrimaryColor("#16A34A", "#15803D");
     btnNewEntry->setTextColor("#FFFFFF");
     connect(btnNewEntry, &QPushButton::clicked, this, &BardanaWidget::toggleEntryForm);
@@ -190,10 +191,10 @@ void BardanaWidget::setupUi() {
     // Row 1
     m_bardanaItemEdit = new ItemSearchEditor(m_entryCard);
     m_bardanaItemEdit->setPlaceholderText("Search Bardana / Bag Item...");
-    m_bardanaItemEdit->setText("Jute 50kg (Pukka)");
 
     m_godownCombo = new QComboBox(m_entryCard);
-    m_godownCombo->addItems({"Main Godown", "Godown No. 1", "Godown No. 2", "Mill Yard", "Shed A"});
+    m_godownCombo->setEditable(true);
+    loadDynamicGodowns();
 
     m_drCrCombo = new QComboBox(m_entryCard);
     m_drCrCombo->addItems({"Dr (Issue / Party Owes)", "Cr (Receive / Party Returned)"});
@@ -217,6 +218,7 @@ void BardanaWidget::setupUi() {
 
     m_vehicleEdit = new QLineEdit(m_entryCard);
     m_vehicleEdit->setPlaceholderText("e.g. HR-57-A-1234");
+    VoucherCommon::setupUppercaseInput(m_vehicleEdit);
 
     m_billNoEdit = new QLineEdit(m_entryCard);
     m_billNoEdit->setPlaceholderText("Ref Bill / Challan No");
@@ -264,6 +266,32 @@ void BardanaWidget::setupUi() {
     formLayout->addLayout(grid);
     formLayout->addLayout(r3Lay);
 
+    // Keyboard Flow Setup (Tally/Busy ERP Standards)
+    auto focusWidget = [](QWidget* w) {
+        if (!w) return;
+        w->setFocus();
+        if (auto* le = qobject_cast<QLineEdit*>(w)) le->selectAll();
+        else if (auto* cb = qobject_cast<QComboBox*>(w)) {
+            if (cb->lineEdit()) cb->lineEdit()->selectAll();
+        }
+    };
+
+    VoucherCommon::installGridNavigation(m_vchTypeCombo, nullptr, m_dateEdit, [this, focusWidget]() { focusWidget(m_dateEdit); });
+    VoucherCommon::installGridNavigation(m_dateEdit, m_vchTypeCombo, m_vchNoEdit, [this, focusWidget]() { focusWidget(m_vchNoEdit); });
+    VoucherCommon::installGridNavigation(m_vchNoEdit, m_dateEdit, m_partySearchBox, [this, focusWidget]() { focusWidget(m_partySearchBox); });
+    VoucherCommon::installGridNavigation(m_partySearchBox, m_vchNoEdit, m_bardanaItemEdit, [this, focusWidget]() { focusWidget(m_bardanaItemEdit); });
+
+    VoucherCommon::installGridNavigation(m_bardanaItemEdit, m_partySearchBox, m_godownCombo, [this, focusWidget]() { focusWidget(m_godownCombo); });
+    VoucherCommon::installGridNavigation(m_godownCombo, m_bardanaItemEdit, m_drCrCombo, [this, focusWidget]() { focusWidget(m_drCrCombo); });
+    VoucherCommon::installGridNavigation(m_drCrCombo, m_godownCombo, m_qtyEdit, [this, focusWidget]() { focusWidget(m_qtyEdit); });
+    VoucherCommon::installGridNavigation(m_qtyEdit, m_drCrCombo, m_rateEdit, [this, focusWidget]() { focusWidget(m_rateEdit); });
+
+    VoucherCommon::installGridNavigation(m_rateEdit, m_qtyEdit, m_vehicleEdit, [this, focusWidget]() { focusWidget(m_vehicleEdit); });
+    VoucherCommon::installGridNavigation(m_vehicleEdit, m_rateEdit, m_billNoEdit, [this, focusWidget]() { focusWidget(m_billNoEdit); });
+    VoucherCommon::installGridNavigation(m_billNoEdit, m_vehicleEdit, m_narrationEdit, [this, focusWidget]() { focusWidget(m_narrationEdit); });
+    VoucherCommon::installGridNavigation(m_narrationEdit, m_billNoEdit, m_btnSave, [this, focusWidget]() { focusWidget(m_btnSave); });
+    VoucherCommon::installGridNavigation(m_btnSave, m_narrationEdit, nullptr, [this]() { onSaveTransaction(); });
+
     m_entryCard->setVisible(false); // Initially hidden, toggled by F2
     mainLayout->addWidget(m_entryCard);
 
@@ -306,7 +334,7 @@ void BardanaWidget::setupUi() {
     filterLayout->addWidget(m_filterToDate);
 
     auto* periodBtn = new QPushButton("Period (F2)", filterCard);
-    periodBtn->setFixedHeight(32);
+    periodBtn->setMinimumHeight(32);
     periodBtn->setCursor(Qt::PointingHandCursor);
     periodBtn->setStyleSheet("QPushButton { background-color: #F1F5F9; color: #0F172A; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 0 10px; font-weight: 700; font-size: 11.5px; } QPushButton:hover { background-color: #E2E8F0; }");
     connect(periodBtn, &QPushButton::clicked, this, [this]() {
@@ -446,14 +474,56 @@ void BardanaWidget::setupUi() {
     mainLayout->addWidget(m_tabWidget, 1);
 }
 
+void BardanaWidget::loadDynamicGodowns() {
+    if (!m_godownCombo) return;
+    QString current = m_godownCombo->currentText();
+    m_godownCombo->clear();
+
+    QStringList godowns;
+    QVariantList rows = DatabaseManager::instance().executeQuery(
+        "SELECT DISTINCT godown_name FROM bardana_transactions WHERE godown_name IS NOT NULL AND godown_name != '' "
+        "UNION "
+        "SELECT DISTINCT godown FROM vouchers WHERE godown IS NOT NULL AND godown != '' "
+        "ORDER BY godown_name ASC;"
+    );
+
+    for (const auto& r : rows) {
+        QString g = r.toMap().value("godown_name").toString().trimmed();
+        if (!g.isEmpty() && !godowns.contains(g)) {
+            godowns << g;
+        }
+    }
+
+    if (godowns.isEmpty()) {
+        godowns << "Main Godown" << "Godown No. 1" << "Godown No. 2" << "Mill Yard" << "Shed A";
+    } else if (!godowns.contains("Main Godown")) {
+        godowns.prepend("Main Godown");
+    }
+
+    m_godownCombo->addItems(godowns);
+    if (!current.isEmpty()) {
+        int idx = m_godownCombo->findText(current);
+        if (idx >= 0) m_godownCombo->setCurrentIndex(idx);
+        else m_godownCombo->setEditText(current);
+    }
+}
+
 void BardanaWidget::toggleEntryForm() {
     if (m_entryCard) {
         bool nowVisible = !m_entryCard->isVisible();
         m_entryCard->setVisible(nowVisible);
         if (nowVisible) {
-            m_partySearchBox->setFocus();
+            loadDynamicGodowns();
+            m_vchTypeCombo->setFocus();
         }
     }
+}
+
+void BardanaWidget::focusTable()
+{
+    if (!m_registerTable) return;
+    if (m_registerTable->rowCount() > 0 && m_registerTable->currentRow() < 0) m_registerTable->selectRow(0);
+    m_registerTable->setFocus();
 }
 
 void BardanaWidget::keyPressEvent(QKeyEvent* event) {
@@ -463,8 +533,20 @@ void BardanaWidget::keyPressEvent(QKeyEvent* event) {
             return;
         }
         emit backRequested();
-    } else if (event->key() == Qt::Key_F2) {
+    } else if ((event->modifiers() & (Qt::ControlModifier | Qt::MetaModifier)) && event->key() == Qt::Key_N) {
         toggleEntryForm();
+    } else if (event->key() == Qt::Key_F2) {
+        if (m_entryCard && m_entryCard->isVisible()) {
+            if (m_dateEdit) m_dateEdit->openDateDialog();
+        } else {
+            QDate f = m_filterFromDate->date();
+            QDate t = m_filterToDate->date();
+            if (VoucherDateDialog::selectDateRange(this, &f, &t, f, t)) {
+                m_filterFromDate->setDate(f);
+                m_filterToDate->setDate(t);
+                onFilterChanged();
+            }
+        }
     } else if (event->key() == Qt::Key_F12) {
         if (m_entryCard && m_entryCard->isVisible()) {
             onSaveTransaction();
@@ -549,7 +631,7 @@ void BardanaWidget::populateRegisterTable() {
         }
 
         m_registerTable->setItem(r, 0, createItem(row.value("id").toString(), Qt::AlignCenter));
-        m_registerTable->setItem(r, 1, createItem(row.value("voucher_date").toString(), Qt::AlignCenter));
+        m_registerTable->setItem(r, 1, createItem(FiscalYearHelper::formatDisplayDate(row.value("voucher_date").toString()), Qt::AlignCenter));
         m_registerTable->setItem(r, 2, createItem(row.value("voucher_no").toString(), Qt::AlignCenter));
         m_registerTable->setItem(r, 3, createItem(row.value("vch_type").toString(), Qt::AlignCenter));
         m_registerTable->setItem(r, 4, createItem(party));
@@ -670,10 +752,14 @@ void BardanaWidget::onSaveTransaction() {
     }
 
     QString bardanaType = m_bardanaItemEdit ? m_bardanaItemEdit->text().trimmed() : "";
-    if (bardanaType.isEmpty()) bardanaType = "Jute 50kg (Pukka)";
+    if (bardanaType.isEmpty()) {
+        CustomMessageBox::critical(this, "Validation Error", "Please select or enter Bardana packaging item.");
+        if (m_bardanaItemEdit) m_bardanaItemEdit->setFocus();
+        return;
+    }
     QString godown = m_godownCombo->currentText();
     QString drCr = m_drCrCombo->currentText().startsWith("Dr") ? "Dr" : "Cr";
-    QString veh = m_vehicleEdit->text().trimmed();
+    QString veh = m_vehicleEdit->text().trimmed().toUpper();
     QString bill = m_billNoEdit->text().trimmed();
     QString narr = m_narrationEdit->text().trimmed();
 

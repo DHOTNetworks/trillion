@@ -3,6 +3,7 @@
 #include "print_copy_options_dialog.h"
 #include "kbd_badge_button.h"
 #include "custom_dialogs.h"
+#include "voucher_ops.h"
 #include "../engine/fiscal_year_helper.h"
 #include "../database_manager.h"
 #include <QVBoxLayout>
@@ -65,7 +66,7 @@ void PurchaseRegisterWidget::setupUi() {
     connect(newBillBtn, &QPushButton::clicked, this, &PurchaseRegisterWidget::newBillRequested);
     headerLayout->addWidget(newBillBtn);
 
-    auto* printBtn = new KbdBadgeButton("Print Bill", "Ctrl+P", headerCard);
+    auto* printBtn = new KbdBadgeButton("Print Register", "Ctrl+P", headerCard);
     printBtn->setPrimaryColor("#059669", "#047857");
     printBtn->setTextColor("#FFFFFF");
     connect(printBtn, &QPushButton::clicked, this, &PurchaseRegisterWidget::onPrintBill);
@@ -110,13 +111,13 @@ void PurchaseRegisterWidget::setupUi() {
     QDate initSDate = QDate::fromString(initFy.startDate, "yyyy-MM-dd");
     if (!initSDate.isValid()) initSDate = QDate(QDate::currentDate().month() < 4 ? QDate::currentDate().year() - 1 : QDate::currentDate().year(), 4, 1);
     m_fromDateEdit = new AccountingDateDisplay(initSDate, filterCard);
-    m_fromDateEdit->setFixedWidth(115);
+    m_fromDateEdit->setMinimumWidth(115);
     connect(m_fromDateEdit, &AccountingDateDisplay::dateChanged, this, &PurchaseRegisterWidget::onDateFilterChanged);
     filterLayout->addWidget(m_fromDateEdit);
 
     filterLayout->addWidget(new QLabel("To Date:", filterCard));
     m_toDateEdit = new AccountingDateDisplay(QDate::currentDate(), filterCard);
-    m_toDateEdit->setFixedWidth(115);
+    m_toDateEdit->setMinimumWidth(115);
     connect(m_toDateEdit, &AccountingDateDisplay::dateChanged, this, &PurchaseRegisterWidget::onDateFilterChanged);
     filterLayout->addWidget(m_toDateEdit);
 
@@ -159,7 +160,7 @@ void PurchaseRegisterWidget::setupUi() {
         "Bill No", "Date", "Supplier / Farmer", "Item / Commodity",
         "Bags", "Weight (Qtl)", "Rate (₹)", "Taxable (₹)", "GST (₹)", "Total (₹)", "Vehicle No"
     });
-    m_table->horizontalHeader()->setFixedHeight(36);
+    m_table->horizontalHeader()->setMinimumHeight(36);
     m_table->horizontalHeader()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     m_table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
     m_table->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
@@ -182,8 +183,8 @@ void PurchaseRegisterWidget::setupUi() {
     m_table->setStyleSheet(
         "QTableWidget { background-color: #FFFFFF; alternate-background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 8px; gridline-color: #F1F5F9; font-size: 12.5px; color: #0F172A; }"
         "QTableWidget::item { padding: 8px 12px; }"
-        "QTableWidget::item:selected { background-color: #EFF6FF; color: #0F172A; }"
-        "QHeaderView::section { background-color: #F1F5F9; color: #1E293B; font-weight: 800; font-size: 12px; min-height: 28px; height: 34px; padding: 6px 12px; border: none; border-bottom: 2px solid #CBD5E1; border-right: 1px solid #E2E8F0; }"
+        "QTableWidget::item:selected { background-color: #2563EB; color: #FFFFFF; }"
+        "QHeaderView::section { background-color: #0F172A; color: #FFFFFF; font-weight: 800; font-size: 12px; min-height: 28px; height: 34px; padding: 6px 12px; border: none;  border-right: 1px solid #334155; }"
     );
 
     // Align header items
@@ -235,6 +236,7 @@ void PurchaseRegisterWidget::setupUi() {
 
     // Keyboard Shortcuts
     connect(new QShortcut(QKeySequence(Qt::Key_Escape), this), &QShortcut::activated, this, &PurchaseRegisterWidget::backRequested);
+    connect(new QShortcut(QKeySequence(Qt::Key_F2), this), &QShortcut::activated, this, openPeriodDlg);
     new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_P), this, SLOT(onPrintBill()));
     new QShortcut(QKeySequence(Qt::ALT | Qt::Key_P), this, SLOT(onExportPdf()));
     // Enter opens the focused row's alteration (same as double-click).
@@ -249,11 +251,20 @@ void PurchaseRegisterWidget::setupUi() {
     auto* numEnterShortcut = new QShortcut(QKeySequence(Qt::Key_Enter), m_table);
     numEnterShortcut->setContext(Qt::WidgetWithChildrenShortcut);
     connect(numEnterShortcut, &QShortcut::activated, this, openFocusedRow);
+    // Alt+D deletes the focused bill (same confirm + model path as the
+    // voucher screen). Scoped to the grid; filters/search keep their keys.
+    auto* delShortcut = new QShortcut(QKeySequence(Qt::ALT | Qt::Key_D), m_table);
+    delShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+    connect(delShortcut, &QShortcut::activated, this, &PurchaseRegisterWidget::deleteFocusedRow);
 }
 
 void PurchaseRegisterWidget::loadData(const QDate& fromDate, const QDate& toDate) {
-    if (fromDate.isValid()) m_fromDateEdit->setDate(fromDate);
-    if (toDate.isValid()) m_toDateEdit->setDate(toDate);
+    {
+        QSignalBlocker b1(m_fromDateEdit);
+        QSignalBlocker b2(m_toDateEdit);
+        if (fromDate.isValid()) m_fromDateEdit->setDate(fromDate);
+        if (toDate.isValid()) m_toDateEdit->setDate(toDate);
+    }
 
     if (m_controller) {
         m_controller->model()->clear();
@@ -268,7 +279,7 @@ void PurchaseRegisterWidget::populateTable() {
 
     QString sDate = m_fromDateEdit->date().toString("yyyy-MM-dd");
     QString eDate = m_toDateEdit->date().toString("yyyy-MM-dd");
-    QString q = m_searchEdit->text();
+    QString q = m_searchEdit->text().trimmed().toLower();
 
     QString sql = "SELECT id, voucher_no, invoice_no, invoice_date, supplier_name, item_name, "
                   "bag_count AS total_bags, weight_qtl AS total_weight_qtl, rate_per_qtl, "
@@ -277,7 +288,9 @@ void PurchaseRegisterWidget::populateTable() {
                   "ORDER BY invoice_date DESC, invoice_no DESC;";
     QVariantList rows = DatabaseManager::instance().executeQuery(sql);
 
-    int row = 0;
+    QVector<int> matchedIndices;
+    matchedIndices.reserve(rows.size());
+
     int totBills = 0;
     long long totBags = 0;
     double totWeight = 0.0;
@@ -285,8 +298,38 @@ void PurchaseRegisterWidget::populateTable() {
     double totGst = 0.0;
     double totGross = 0.0;
 
-    for (const QVariant& itemValRow : rows) {
-        QVariantMap rowMap = itemValRow.toMap();
+    for (int i = 0; i < rows.size(); ++i) {
+        QVariantMap rowMap = rows.at(i).toMap();
+        QString invNo = rowMap.value("invoice_no").toString();
+        QString vchNo = rowMap.value("voucher_no").toString();
+        QString suppVal = rowMap.value("supplier_name").toString();
+        QString itemVal = rowMap.value("item_name").toString();
+        QString veh = rowMap.value("vehicle_no").toString();
+
+        if (!q.isEmpty()) {
+            QString searchTarget = (invNo + " " + vchNo + " " + suppVal + " " + itemVal + " " + veh).toLower();
+            if (!searchTarget.contains(q)) continue;
+        }
+
+        matchedIndices.append(i);
+        totBills++;
+        totBags += rowMap.value("total_bags").toLongLong();
+        totWeight += rowMap.value("total_weight_qtl").toDouble();
+        totTaxable += rowMap.value("taxable_amount").toDouble();
+        totGst += rowMap.value("gst_amount").toDouble();
+        totGross += rowMap.value("grand_total").toDouble();
+    }
+
+    m_table->setUpdatesEnabled(false);
+    m_table->setRowCount(matchedIndices.size());
+
+    QBrush blueBrush(QColor("#1D4ED8"));
+    QBrush darkBrush(QColor("#0F172A"));
+    QBrush greenBrush(QColor("#15803D"));
+    QBrush grayBrush(QColor("#64748B"));
+
+    for (int row = 0; row < matchedIndices.size(); ++row) {
+        QVariantMap rowMap = rows.at(matchedIndices.at(row)).toMap();
         QString invNo = rowMap.value("invoice_no").toString();
         QString vchNo = rowMap.value("voucher_no").toString();
         QString dateVal = rowMap.value("invoice_date").toString();
@@ -301,35 +344,20 @@ void PurchaseRegisterWidget::populateTable() {
         QString veh = rowMap.value("vehicle_no").toString();
         int id = rowMap.value("id").toInt();
 
-        if (!q.isEmpty()) {
-            QString searchTarget = (invNo + " " + vchNo + " " + suppVal + " " + itemVal + " " + veh).toLower();
-            if (!searchTarget.contains(q.toLower())) continue;
-        }
-
-        totBills++;
-        totBags += bags;
-        totWeight += weight;
-        totTaxable += taxable;
-        totGst += gst;
-        totGross += gross;
-
-        m_table->insertRow(row);
         auto* itemInv = new QTableWidgetItem(invNo.isEmpty() ? vchNo : invNo);
         itemInv->setData(Qt::UserRole, id);
         itemInv->setData(Qt::UserRole + 1, vchNo);
         itemInv->setData(Qt::UserRole + 2, dateVal);
-        itemInv->setForeground(QBrush(QColor("#1D4ED8")));
+        itemInv->setForeground(blueBrush);
         m_table->setItem(row, 0, itemInv);
 
-        auto* itemDate = new QTableWidgetItem(FiscalYearHelper::formatDisplayDate(dateVal));
-        m_table->setItem(row, 1, itemDate);
+        m_table->setItem(row, 1, new QTableWidgetItem(FiscalYearHelper::formatDisplayDate(dateVal)));
 
         auto* itemSupp = new QTableWidgetItem(suppVal);
-        itemSupp->setForeground(QBrush(QColor("#0F172A")));
+        itemSupp->setForeground(darkBrush);
         m_table->setItem(row, 2, itemSupp);
 
-        auto* itemCommodity = new QTableWidgetItem(itemVal);
-        m_table->setItem(row, 3, itemCommodity);
+        m_table->setItem(row, 3, new QTableWidgetItem(itemVal));
 
         auto* itemBags = new QTableWidgetItem(QString::number(bags));
         itemBags->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
@@ -353,14 +381,15 @@ void PurchaseRegisterWidget::populateTable() {
 
         auto* itemTot = new QTableWidgetItem(QString::number(gross, 'f', 2));
         itemTot->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        itemTot->setForeground(QBrush(QColor("#15803D")));
+        itemTot->setForeground(greenBrush);
         m_table->setItem(row, 9, itemTot);
 
         auto* itemVeh = new QTableWidgetItem(veh);
-        itemVeh->setForeground(QBrush(QColor("#64748B")));
+        itemVeh->setForeground(grayBrush);
         m_table->setItem(row, 10, itemVeh);
-        row++;
     }
+
+    m_table->setUpdatesEnabled(true);
 
     m_totalBillsLabel->setText(QString::number(totBills));
     m_totalBagsLabel->setText(QString::number(totBags));
@@ -385,6 +414,33 @@ void PurchaseRegisterWidget::focusTable() {
         m_table->selectRow(0);
     } else {
         m_searchEdit->setFocus();
+    }
+}
+
+// Alt+D: delete the focused bill through the shared VoucherOps path
+// (same confirm dialog + owning-model delete as the voucher screen),
+// then invalidate every statement and reload in place (filters preserved).
+void PurchaseRegisterWidget::deleteFocusedRow() {
+    const int row = m_table ? m_table->currentRow() : -1;
+    if (row < 0 || row >= m_table->rowCount()) return;
+    auto* item = m_table->item(row, 0);
+    if (!item) return;
+
+    QVariantMap entry;
+    entry["id"] = item->data(Qt::UserRole).toInt();
+    entry["invoiceNo"] = item->text();
+    entry["voucherNo"] = item->data(Qt::UserRole + 1).toString();
+    entry["voucher_type"] = "PURCHASE";
+    entry["date"] = item->data(Qt::UserRole + 2).toString();
+    entry["vIso"] = entry["date"];
+
+    QString error;
+    if (VoucherOps::deleteEntry(this, entry, &error)) {
+        emit entriesChanged();
+        populateTable();
+        focusTable();
+    } else if (!error.isEmpty()) {
+        CustomMessageBox::showCritical(this, "Delete Failed", error);
     }
 }
 
@@ -415,35 +471,19 @@ void PurchaseRegisterWidget::onTableDoubleClicked(int row, int col) {
 }
 
 void PurchaseRegisterWidget::onPrintBill() {
-    int row = m_table->currentRow();
-    if (row < 0 || row >= m_table->rowCount()) {
-        CustomMessageBox::showWarning(this, "Select Bill", "Please select a purchase bill from the table to print.");
-        return;
-    }
-
-    QString invNo = m_table->item(row, 0)->text();
-    QString supp = m_table->item(row, 2)->text();
-
-    QString copyType = PrintCopyOptionsDialog::selectCopyType(PrintCopyOptionsDialog::Mode::Print, invNo, supp, this);
-    if (!copyType.isEmpty() && m_printExportCtrl) {
-        m_printExportCtrl->print_purchase_invoice(invNo);
-    }
+    if (!m_printExportCtrl) return;
+    // Register screen prints the REGISTER report for the filtered period
+    // (single-bill printing lives on the purchase voucher page).
+    QString fDate = m_fromDateEdit ? m_fromDateEdit->date().toString("yyyy-MM-dd") : "";
+    QString tDate = m_toDateEdit ? m_toDateEdit->date().toString("yyyy-MM-dd") : "";
+    m_printExportCtrl->print_purchase_register(fDate, tDate);
 }
 
 void PurchaseRegisterWidget::onExportPdf() {
-    int row = m_table->currentRow();
-    if (row < 0 || row >= m_table->rowCount()) {
-        CustomMessageBox::showWarning(this, "Select Bill", "Please select a purchase bill from the table to export as PDF.");
-        return;
-    }
-
-    QString invNo = m_table->item(row, 0)->text();
-    QString supp = m_table->item(row, 2)->text();
-
-    QString copyType = PrintCopyOptionsDialog::selectCopyType(PrintCopyOptionsDialog::Mode::Pdf, invNo, supp, this);
-    if (!copyType.isEmpty() && m_printExportCtrl) {
-        m_printExportCtrl->export_purchase_invoice_pdf(invNo, "");
-    }
+    if (!m_printExportCtrl) return;
+    QString fDate = m_fromDateEdit ? m_fromDateEdit->date().toString("yyyy-MM-dd") : "";
+    QString tDate = m_toDateEdit ? m_toDateEdit->date().toString("yyyy-MM-dd") : "";
+    m_printExportCtrl->export_purchase_register_pdf(fDate, tDate);
 }
 
 void PurchaseRegisterWidget::onExportCsv() {

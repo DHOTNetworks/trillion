@@ -1,4 +1,5 @@
 #include "advance_payment_194q_list_widget.h"
+#include "../engine/fiscal_year_helper.h"
 #include "../database_manager.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -122,8 +123,8 @@ void AdvancePayment194QListWidget::setupUi()
     m_table->setStyleSheet(
         "QTableWidget { background-color: #FFFFFF; alternate-background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 8px; gridline-color: #F1F5F9; font-size: 12.5px; color: #0F172A; }"
         "QTableWidget::item { padding: 4px 8px; }"
-        "QTableWidget::item:selected { background-color: #EFF6FF; color: #1D4ED8; font-weight: bold; }"
-        "QHeaderView::section { background-color: #F1F5F9; color: #1E293B; font-weight: 800; font-size: 12px; padding: 8px 10px; border: none; border-bottom: 2px solid #CBD5E1; border-right: 1px solid #E2E8F0; }"
+        "QTableWidget::item:selected { background-color: #2563EB; color: #FFFFFF; font-weight: bold; }"
+        "QHeaderView::section { background-color: #0F172A; color: #FFFFFF; font-weight: 800; font-size: 12px; padding: 8px 10px; border: none;  border-right: 1px solid #334155; }"
     );
     mainLayout->addWidget(m_table, 1);
 
@@ -161,9 +162,9 @@ void AdvancePayment194QListWidget::setupUi()
     mainLayout->addLayout(metricsLayout);
 
     // Shortcuts
-    new QShortcut(QKeySequence(Qt::Key_Insert), this, SLOT(onNewClicked()));
+    new QShortcut(QKeySequence(Qt::ALT | Qt::Key_N), this, SLOT(onNewClicked()));
     new QShortcut(QKeySequence("F5"), this, SLOT(onRefreshClicked()));
-    new QShortcut(QKeySequence(Qt::Key_Delete), this, SLOT(onDeleteClicked()));
+    new QShortcut(QKeySequence(Qt::ALT | Qt::Key_D), this, SLOT(onDeleteClicked()));
     new QShortcut(QKeySequence("Escape"), this, SIGNAL(backRequested()));
 }
 
@@ -179,6 +180,7 @@ void AdvancePayment194QListWidget::reloadData()
         "ORDER BY a.voucher_no DESC;"
     );
     populateTable();
+    m_isDirty = false;
 }
 
 void AdvancePayment194QListWidget::populateTable()
@@ -217,7 +219,7 @@ void AdvancePayment194QListWidget::populateTable()
         m_table->setItem(i, 1, new QTableWidgetItem(QString("#%1").arg(m.value("voucher_no").toInt())));
 
         QDate dt = QDate::fromString(m.value("voucher_date").toString(), "yyyy-MM-dd");
-        m_table->setItem(i, 2, new QTableWidgetItem(dt.isValid() ? dt.toString("dd-MM-yyyy") : m.value("voucher_date").toString()));
+        m_table->setItem(i, 2, new QTableWidgetItem(dt.isValid() ? dt.toString("dd-MM-yyyy") : FiscalYearHelper::formatDisplayDate(m.value("voucher_date").toString())));
 
         m_table->setItem(i, 3, new QTableWidgetItem(m.value("supplier_name").toString()));
         m_table->setItem(i, 4, new QTableWidgetItem(m.value("bank_name").toString()));
@@ -294,6 +296,13 @@ void AdvancePayment194QListWidget::onRefreshClicked()
 void AdvancePayment194QListWidget::onFilterChanged()
 {
     populateTable();
+}
+
+void AdvancePayment194QListWidget::focusTable()
+{
+    if (!m_table) return;
+    if (m_table->rowCount() > 0 && m_table->currentRow() < 0) m_table->selectRow(0);
+    m_table->setFocus();
 }
 
 void AdvancePayment194QListWidget::keyPressEvent(QKeyEvent *event)

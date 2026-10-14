@@ -51,7 +51,7 @@ void StockDetailWidget::setupUi() {
     // TIER 1: STICKY HEADER CARD
     // ========================================================================
     auto* headerCard = new QFrame(this);
-    headerCard->setFixedHeight(50);
+    headerCard->setMinimumHeight(50);
     headerCard->setStyleSheet(
         "QFrame { background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; }"
     );
@@ -120,13 +120,13 @@ void StockDetailWidget::setupUi() {
     // Date Range
     filterLayout->addWidget(new QLabel("From Date:", filterCard));
     m_fromDateEdit = new AccountingDateDisplay(filterCard);
-    m_fromDateEdit->setFixedWidth(115);
+    m_fromDateEdit->setMinimumWidth(115);
     connect(m_fromDateEdit, &AccountingDateDisplay::dateChanged, this, &StockDetailWidget::onDateFilterChanged);
     filterLayout->addWidget(m_fromDateEdit);
 
     filterLayout->addWidget(new QLabel("To Date:", filterCard));
     m_toDateEdit = new AccountingDateDisplay(filterCard);
-    m_toDateEdit->setFixedWidth(115);
+    m_toDateEdit->setMinimumWidth(115);
     connect(m_toDateEdit, &AccountingDateDisplay::dateChanged, this, &StockDetailWidget::onDateFilterChanged);
     filterLayout->addWidget(m_toDateEdit);
 
@@ -200,7 +200,7 @@ void StockDetailWidget::setupUi() {
     m_table = new QTableWidget(this);
     m_table->verticalHeader()->setVisible(false);
     m_table->verticalHeader()->setDefaultSectionSize(36);
-    m_table->horizontalHeader()->setFixedHeight(36);
+    m_table->horizontalHeader()->setMinimumHeight(36);
     m_table->horizontalHeader()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     m_table->setShowGrid(true);
     m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
@@ -213,23 +213,23 @@ void StockDetailWidget::setupUi() {
         "  alternate-background-color: #F8FAFC;"
         "  border: 1px solid #CBD5E1;"
         "  border-radius: 8px;"
-        "  gridline-color: #F1F5F9;"
+        "  gridline-color: #E2E8F0;"
         "  font-size: 12.5px;"
         "  color: #0F172A;"
         "}"
         "QTableWidget::item { padding: 8px 12px; }"
-        "QTableWidget::item:selected { background-color: #EFF6FF; color: #0F172A; }"
+        "QTableWidget::item:selected { background-color: #2563EB; color: #FFFFFF; }"
         "QHeaderView::section {"
-        "  background-color: #F1F5F9;"
-        "  color: #1E293B;"
+        "  background-color: #0F172A;"
+        "  color: #FFFFFF;"
         "  font-weight: 800;"
         "  font-size: 12px;"
         "  min-height: 28px;"
         "  height: 34px;"
         "  padding: 6px 12px;"
         "  border: none;"
-        "  border-bottom: 2px solid #CBD5E1;"
-        "  border-right: 1px solid #E2E8F0;"
+        "  "
+        "  border-right: 1px solid #334155;"
         "}"
     );
     connect(m_table, &QTableWidget::cellDoubleClicked, this, &StockDetailWidget::onTableDoubleClicked);
@@ -269,7 +269,7 @@ void StockDetailWidget::setupUi() {
 
     // Shortcuts
     connect(new QShortcut(QKeySequence(Qt::Key_Escape), this), &QShortcut::activated, this, &StockDetailWidget::backRequested);
-    connect(new QShortcut(QKeySequence(Qt::Key_F4), this), &QShortcut::activated, this, &StockDetailWidget::onOpenOptionsDialog);
+    connect(new QShortcut(QKeySequence(Qt::ALT | Qt::Key_X), this), &QShortcut::activated, this, &StockDetailWidget::onOpenOptionsDialog);
     // Enter opens the focused row (same as double-click).
     // Scoped to the grid so search boxes and buttons keep their own keys.
     auto openFocusedRow = [this]() {
@@ -283,7 +283,7 @@ void StockDetailWidget::setupUi() {
     numEnterShortcut->setContext(Qt::WidgetWithChildrenShortcut);
     connect(numEnterShortcut, &QShortcut::activated, this, openFocusedRow);
     new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_P), this, SLOT(onPrintRegister()));
-    new QShortcut(QKeySequence(Qt::ALT | Qt::Key_P), this, SLOT(onExportPdf()));
+    new QShortcut(QKeySequence(Qt::ALT | Qt::Key_E), this, SLOT(onExportPdf()));
 
     configureTableColumns();
 }
@@ -459,8 +459,12 @@ void StockDetailWidget::configureTableColumns()
 }
 
 void StockDetailWidget::reloadData(const QString& fromDate, const QString& toDate) {
-    if (!fromDate.isEmpty()) m_fromDateEdit->setDate(QDate::fromString(fromDate, "yyyy-MM-dd"));
-    if (!toDate.isEmpty()) m_toDateEdit->setDate(QDate::fromString(toDate, "yyyy-MM-dd"));
+    {
+        QSignalBlocker b1(m_fromDateEdit);
+        QSignalBlocker b2(m_toDateEdit);
+        if (!fromDate.isEmpty()) m_fromDateEdit->setDate(QDate::fromString(fromDate, "yyyy-MM-dd"));
+        if (!toDate.isEmpty()) m_toDateEdit->setDate(QDate::fromString(toDate, "yyyy-MM-dd"));
+    }
 
     // Always repopulate — ensures new firm's items appear after DB switch / import
     populateItemDropdown();
@@ -486,6 +490,7 @@ void StockDetailWidget::populateTable() {
     const auto& entries = mdl->entries();
     StockViewMode mode = m_controller->viewMode();
 
+    m_table->setUpdatesEnabled(false);
     m_table->setRowCount(entries.size());
 
     for (int row = 0; row < entries.size(); ++row) {
@@ -587,7 +592,7 @@ void StockDetailWidget::populateTable() {
             m_table->setItem(row, 8, marginItem);
 
         } else if (mode == StockViewMode::MonthlyDaily) {
-            auto* pItem = new QTableWidgetItem(e.periodDate);
+            auto* pItem = new QTableWidgetItem(FiscalYearHelper::formatDisplayDate(e.periodDate));
             pItem->setForeground(QBrush(QColor("#0F172A")));
             m_table->setItem(row, 0, pItem);
 
@@ -616,6 +621,7 @@ void StockDetailWidget::populateTable() {
             m_table->setItem(row, 11, makeNum(e.closeValVal));
         }
     }
+    m_table->setUpdatesEnabled(true);
 }
 
 void StockDetailWidget::updateSummaryMetrics()
@@ -834,10 +840,11 @@ void StockDetailWidget::keyPressEvent(QKeyEvent* event) {
         return;
     }
     if (event->key() == Qt::Key_F2) {
-        QDate cur = m_fromDateEdit->date();
-        QDate sel = VoucherDateDialog::selectDate(this, cur);
-        if (sel.isValid()) {
-            m_fromDateEdit->setDate(sel);
+        QDate f = m_fromDateEdit->date();
+        QDate t = m_toDateEdit->date();
+        if (VoucherDateDialog::selectDateRange(this, &f, &t, f, t)) {
+            m_fromDateEdit->setDate(f);
+            m_toDateEdit->setDate(t);
         }
         return;
     }

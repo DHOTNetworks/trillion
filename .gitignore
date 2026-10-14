@@ -37,12 +37,13 @@ data/
 *.md
 !README.md
 !THIRD_PARTY_NOTICES.md
-!docs/*.md
-!docs/**/*.md
+docs/*.md
+docs/**/*.md
 !decompiled-data/*.md
 !impl*.md
 !SCRATCH.md
 !TOOL-USAGE.md
+!AGENTS.md
 *.db
 *.db-shm
 *.db-wal
@@ -58,6 +59,10 @@ data/
 *.json
 *.ods
 *.odt
+*.png
+
+
+# Files
 aqtinstall.log
 debug_log.txt
 generated_cpp/
@@ -66,6 +71,12 @@ CMakeFiles/
 scratch/
 Testing/
 export_test/
-gstr*
-Screen*
+
+# GSTR portal downloads (root drops only — never ignore sources under src/)
+/gstr*
+/GSTR*
+
+# Unncessary Files
+
+#Screen*
 busy-data/*

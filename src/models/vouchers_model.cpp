@@ -2,7 +2,11 @@
 #include "../database_manager.h"
 #include "../engine/accounting_engine.h"
 #include "../engine/fiscal_year_helper.h"
+#include "../services/audit_helper.h"
 #include <QDate>
+#include <QDebug>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QRegularExpression>
 
 VouchersModel::VouchersModel(QObject* parent)
@@ -85,6 +89,20 @@ QString VouchersModel::get_next_voucher_no(const QString& v_type, const QString&
     return next;
 }
 
+QString VouchersModel::claimVoucherNo(const QString& insertType, const QString& genType, const QString& fyLabel) {
+    const QString wantGen = genType.trimmed().isEmpty() ? insertType : genType;
+    for (int i = 0; i < 8; ++i) {
+        const QString cand = get_next_voucher_no(wantGen, fyLabel);
+        if (cand.isEmpty()) return QString();
+        QVariant taken = DatabaseManager::instance().executeScalar(
+            "SELECT 1 FROM vouchers WHERE voucher_type = ? AND financial_year = ? AND voucher_no = ? LIMIT 1;",
+            {insertType, fyLabel, cand});
+        if (!taken.isValid() || taken.isNull()) return cand;
+    }
+    qWarning() << "[VouchersModel] claimVoucherNo exhausted for" << insertType << fyLabel;
+    return QString();
+}
+
 bool VouchersModel::add_voucher(const QString& vch_type, const QString& party_name, const QString& vch_date, const QString& account_type, double amount, const QString& narration) {
     QString dt = vch_date.isEmpty() ? QDate::currentDate().toString("yyyy-MM-dd") : vch_date;
     FiscalYearInfo fy = FiscalYearHelper::getFiscalYearForDate(dt);
@@ -101,7 +119,11 @@ bool VouchersModel::add_voucher(const QString& vch_type, const QString& party_na
         if (anyFy.isValid() && !anyFy.isNull()) fyId = anyFy.toInt();
     }
 
-    QString vchNo = get_next_voucher_no(vch_type, fyLabel);
+    QString vchNo = claimVoucherNo(vch_type, vch_type, fyLabel);
+    if (vchNo.isEmpty()) {
+        qWarning() << "[VouchersModel] add blocked: no free voucher number for" << vch_type << fyLabel;
+        return false;
+    }
 
     QVariant partyRow = DatabaseManager::instance().executeScalar("SELECT id FROM parties WHERE name = ? LIMIT 1;", {party_name});
     int partyId = partyRow.isValid() ? partyRow.toInt() : 1;
@@ -117,15 +139,19 @@ bool VouchersModel::add_voucher(const QString& vch_type, const QString& party_na
         // Insert into transactions
         QString rawType = (vch_type == "Payment" ? "ChPt" : (vch_type == "Receipt" ? "ChRt" : vch_type));
         QString drCr = (vch_type == "Payment" ? "Dr" : "Cr");
-        DatabaseManager::instance().executeNonQuery(
+        ok = DatabaseManager::instance().executeNonQuery(
             "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, party_id, party_name, opposing_account, dr_cr, amount, narration) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
             {fyId, fyLabel, vchNo, dt, vch_type, rawType, partyId, party_name, account_type, drCr, amount, narration}
         );
+    }
+    if (ok) {
         DatabaseManager::instance().commit();
         reload_data();
     } else {
+        const QString err = DatabaseManager::instance().lastErrorText();
         DatabaseManager::instance().rollback();
+        if (!err.isEmpty()) qWarning() << "[VouchersModel] add_voucher rolled back:" << err;
     }
     return ok;
 }
@@ -146,7 +172,11 @@ bool VouchersModel::add_cheque_voucher(const QString& vch_type, const QString& d
         if (anyFy.isValid() && !anyFy.isNull()) fyId = anyFy.toInt();
     }
 
-    QString vchNo = get_next_voucher_no(vch_type, fyLabel);
+    QString vchNo = claimVoucherNo(vch_type, vch_type, fyLabel);
+    if (vchNo.isEmpty()) {
+        qWarning() << "[VouchersModel] add blocked: no free voucher number for" << vch_type << fyLabel;
+        return false;
+    }
     QString fullNarr = chq_no.isEmpty() ? "" : ("Ch. No. " + chq_no);
     if (!narration.isEmpty()) {
         fullNarr += fullNarr.isEmpty() ? narration : (" | " + narration);
@@ -167,20 +197,26 @@ bool VouchersModel::add_cheque_voucher(const QString& vch_type, const QString& d
 
     if (ok) {
         // Multi-leg transaction entries
-        DatabaseManager::instance().executeNonQuery(
+        ok = DatabaseManager::instance().executeNonQuery(
             "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, party_id, party_name, opposing_account, dr_cr, amount, narration) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Dr', ?, ?);",
             {fyId, fyLabel, vchNo, dt, vch_type, vch_type, partyId, dr_party, cr_party, amount, fullNarr}
         );
-        DatabaseManager::instance().executeNonQuery(
+    }
+    if (ok) {
+        ok = DatabaseManager::instance().executeNonQuery(
             "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, party_id, party_name, opposing_account, dr_cr, amount, narration) "
             "VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, 'Cr', ?, ?);",
             {fyId, fyLabel, vchNo, dt, vch_type, vch_type, cr_party, dr_party, amount, fullNarr}
         );
+    }
+    if (ok) {
         DatabaseManager::instance().commit();
         reload_data();
     } else {
+        const QString err = DatabaseManager::instance().lastErrorText();
         DatabaseManager::instance().rollback();
+        if (!err.isEmpty()) qWarning() << "[VouchersModel] add_cheque_voucher rolled back:" << err;
     }
     return ok;
 }
@@ -201,7 +237,11 @@ bool VouchersModel::add_journal_voucher(const QString& dr_party, const QString& 
         if (anyFy.isValid() && !anyFy.isNull()) fyId = anyFy.toInt();
     }
 
-    QString vchNo = get_next_voucher_no("Jrnl", fyLabel);
+    QString vchNo = claimVoucherNo(vch_type, "Jrnl", fyLabel);
+    if (vchNo.isEmpty()) {
+        qWarning() << "[VouchersModel] add blocked: no free voucher number for" << vch_type << fyLabel;
+        return false;
+    }
     QString fullNarr = ref_no.isEmpty() ? "" : ("Ref: " + ref_no);
     if (!narration.isEmpty()) {
         fullNarr += fullNarr.isEmpty() ? narration : (" | " + narration);
@@ -222,20 +262,26 @@ bool VouchersModel::add_journal_voucher(const QString& dr_party, const QString& 
 
     if (ok) {
         // Multi-leg transaction entries
-        DatabaseManager::instance().executeNonQuery(
+        ok = DatabaseManager::instance().executeNonQuery(
             "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, party_id, party_name, opposing_account, dr_cr, amount, narration) "
             "VALUES (?, ?, ?, ?, 'Journal', 'Jrnl', ?, ?, ?, 'Dr', ?, ?);",
             {fyId, fyLabel, vchNo, dt, partyId, dr_party, cr_party, amount, fullNarr}
         );
-        DatabaseManager::instance().executeNonQuery(
+    }
+    if (ok) {
+        ok = DatabaseManager::instance().executeNonQuery(
             "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, party_id, party_name, opposing_account, dr_cr, amount, narration) "
             "VALUES (?, ?, ?, ?, 'Journal', 'Jrnl', 0, ?, ?, 'Cr', ?, ?);",
             {fyId, fyLabel, vchNo, dt, cr_party, dr_party, amount, fullNarr}
         );
+    }
+    if (ok) {
         DatabaseManager::instance().commit();
         reload_data();
     } else {
+        const QString err = DatabaseManager::instance().lastErrorText();
         DatabaseManager::instance().rollback();
+        if (!err.isEmpty()) qWarning() << "[VouchersModel] add_journal_voucher rolled back:" << err;
     }
     return ok;
 }
@@ -783,6 +829,17 @@ bool VouchersModel::save_multi_row_voucher(
     QString dt = FiscalYearHelper::normalizeToIso(vch_date.trimmed());
     if (dt.isEmpty()) dt = QDate::currentDate().toString("yyyy-MM-dd");
 
+    // FY lock: audited/closed years reject writes before any mutation.
+    const QString blockReason = FiscalYearHelper::writeBlockReason(dt);
+    if (!blockReason.isEmpty()) {
+        qWarning() << "[VouchersModel] save blocked:" << blockReason;
+        DatabaseManager::instance().logAudit(
+            "BLOCKED", "vouchers", "",
+            AuditJson::voucher(vch_no.trimmed(), vch_type, dt, 0.0, "", ""), "",
+            vch_no.trimmed(), "");
+        return false;
+    }
+
     FiscalYearInfo fy = FiscalYearHelper::getFiscalYearForDate(dt);
     QString fyLabel = fy.name;
     QVariant fyIdVar = DatabaseManager::instance().executeScalar(
@@ -851,18 +908,31 @@ bool VouchersModel::save_multi_row_voucher(
     );
     QVariant pIdParam = (pRow.isValid() && !pRow.isNull() && pRow.toInt() > 0) ? pRow.toInt() : QVariant();
 
+    // Atomicity: auto numbers are claimed (fresh MAX + existence check per
+    // attempt) so a taken number is never inserted; user-supplied numbers
+    // keep verbatim semantics and fail explicitly on conflict (UNIQUE backstop).
+    if (vch_no.trimmed().isEmpty()) {
+        activeVchNo = claimVoucherNo(normalizedVType, vch_type, fyLabel);
+        if (activeVchNo.isEmpty()) {
+            qWarning() << "[VouchersModel] save blocked: no free voucher number for" << normalizedVType << fyLabel;
+            return false;
+        }
+    }
+
     DatabaseManager::instance().beginTransaction();
 
+    QString oldVchNo = activeVchNo;
+    bool okHead = false;
     if (editId > 0) {
         // Fetch previous voucher number to clean up old transactions
         QVariant oldVchNoVar = DatabaseManager::instance().executeScalar(
             "SELECT voucher_no FROM vouchers WHERE id = ? LIMIT 1;",
             {editId}
         );
-        QString oldVchNo = oldVchNoVar.isValid() ? oldVchNoVar.toString() : activeVchNo;
+        if (oldVchNoVar.isValid() && !oldVchNoVar.toString().isEmpty()) oldVchNo = oldVchNoVar.toString();
 
         // Update vouchers record
-        DatabaseManager::instance().executeNonQuery(
+        okHead = DatabaseManager::instance().executeNonQuery(
             "UPDATE vouchers SET fy_id = ?, financial_year = ?, voucher_no = ?, instrument_no = ?, "
             "voucher_date = ?, voucher_type = ?, legacy_type = ?, party_id = ?, ledger_id = ?, party_name = ?, "
             "account_type = ?, amount = ?, narration = ? WHERE id = ?;",
@@ -870,20 +940,30 @@ bool VouchersModel::save_multi_row_voucher(
         );
 
         // Delete old transactions for this voucher
-        DatabaseManager::instance().executeNonQuery(
-            "DELETE FROM transactions WHERE (voucher_no = ? OR voucher_no = ?) AND (voucher_type = ? OR trans_type = ?);",
-            {oldVchNo, activeVchNo, normalizedVType, rawType}
-        );
+        if (okHead) {
+            okHead = DatabaseManager::instance().executeNonQuery(
+                "DELETE FROM transactions WHERE (voucher_no = ? OR voucher_no = ?) AND (voucher_type = ? OR trans_type = ?);",
+                {oldVchNo, activeVchNo, normalizedVType, rawType}
+            );
+        }
     } else {
         // Insert new voucher
-        DatabaseManager::instance().executeNonQuery(
+        okHead = DatabaseManager::instance().executeNonQuery(
             "INSERT INTO vouchers (fy_id, financial_year, voucher_no, instrument_no, voucher_date, voucher_type, legacy_type, party_id, ledger_id, party_name, account_type, amount, narration) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
             {fyIdParam, fyLabel, activeVchNo, primaryRef, dt, normalizedVType, rawType, pIdParam, pIdParam, primaryDrParty, primaryCrParty, totalAmount, narration}
         );
     }
+    if (!okHead) {
+        // Capture BEFORE rollback: rollback() itself clears lastErrorText().
+        const QString err = DatabaseManager::instance().lastErrorText();
+        DatabaseManager::instance().rollback();
+        qWarning() << "[VouchersModel] save rolled back (voucher header not written):" << err;
+        return false;
+    }
 
     // Insert all Dr and Cr legs into transactions
+    bool okLegs = true;
     for (int i = 0; i < rows.size(); ++i) {
         QVariantMap r = rows.at(i).toMap();
         QString drcr = r.value("drcr").toString();
@@ -909,12 +989,31 @@ bool VouchersModel::save_multi_row_voucher(
             if (lId > 0) accCodeParam = lId;
         }
 
-        DatabaseManager::instance().executeNonQuery(
-            "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, account_code, party_id, party_name, opposing_account, dr_cr, amount, invoice_no, narration, row_no) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-            {fyIdParam, fyLabel, activeVchNo, dt, normalizedVType, rawType, accCodeParam, partyIdParam, party, opposing, drcr, amt, ref, narration, (i + 1)}
-        );
+        if (!DatabaseManager::instance().executeNonQuery(
+                "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, account_code, party_id, party_name, opposing_account, dr_cr, amount, invoice_no, narration, row_no) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+                {fyIdParam, fyLabel, activeVchNo, dt, normalizedVType, rawType, accCodeParam, partyIdParam, party, opposing, drcr, amt, ref, narration, (i + 1)})) {
+            okLegs = false;
+        }
     }
+    if (!okLegs) {
+        // Capture BEFORE rollback: rollback() itself clears lastErrorText().
+        const QString err = DatabaseManager::instance().lastErrorText();
+        DatabaseManager::instance().rollback();
+        qWarning() << "[VouchersModel] save rolled back (legs not written):" << err;
+        return false;
+    }
+
+    // Audit inside the transaction: a rolled-back posting leaves no audit row.
+    const QString afterJson = AuditJson::voucher(activeVchNo, normalizedVType, dt, totalAmount, primaryDrParty, fyLabel);
+    QString beforeJson;
+    QString auditRowId = activeVchNo;
+    if (editId > 0) {
+        beforeJson = AuditJson::voucher(oldVchNo, normalizedVType, dt, 0.0, primaryDrParty, fyLabel);
+        auditRowId = QString::number(editId);
+    }
+    DatabaseManager::instance().logAudit(editId > 0 ? "UPDATE" : "INSERT", "vouchers",
+                                         auditRowId, beforeJson, afterJson, activeVchNo, fyLabel);
 
     DatabaseManager::instance().commit();
     reload_data();
@@ -926,14 +1025,28 @@ bool VouchersModel::delete_voucher(int voucherId) {
     auto& db = DatabaseManager::instance();
 
     QVariantList rows = db.executeQuery(
-        "SELECT voucher_no, voucher_type, legacy_type FROM vouchers WHERE id = ? LIMIT 1;",
+        "SELECT voucher_no, voucher_type, legacy_type, voucher_date FROM vouchers WHERE id = ? LIMIT 1;",
         {voucherId}
     );
     if (rows.isEmpty()) return false;
 
+    const QString vDate = rows.first().toMap().value("voucher_date").toString();
+    const QString blockReason = FiscalYearHelper::writeBlockReason(vDate);
+    if (!blockReason.isEmpty()) {
+        qWarning() << "[VouchersModel] delete blocked:" << blockReason;
+        db.logAudit("BLOCKED", "vouchers", QString::number(voucherId),
+                    AuditJson::voucher(rows.first().toMap().value("voucher_no").toString(),
+                                     rows.first().toMap().value("voucher_type").toString(),
+                                     vDate, 0.0, "", ""), "", "", "");
+        return false;
+    }
+
     QString vNo = rows.first().toMap().value("voucher_no").toString();
     QString vType = rows.first().toMap().value("voucher_type").toString();
     QString lType = rows.first().toMap().value("legacy_type").toString();
+    QVariant amountVar = db.executeScalar("SELECT amount FROM vouchers WHERE id = ? LIMIT 1;", {voucherId});
+    const double vAmount = amountVar.isValid() ? amountVar.toDouble() : 0.0;
+    const QString beforeJson = AuditJson::voucher(vNo, vType, vDate, vAmount, "", "");
 
     db.beginTransaction();
     db.executeNonQuery("DELETE FROM vouchers WHERE id = ?;", {voucherId});
@@ -941,6 +1054,7 @@ bool VouchersModel::delete_voucher(int voucherId) {
         "DELETE FROM transactions WHERE voucher_no = ? AND (voucher_type = ? OR trans_type = ?);",
         {vNo, vType, lType}
     );
+    db.logAudit("DELETE", "vouchers", QString::number(voucherId), beforeJson, "", vNo, "");
     db.commit();
 
     reload_data();

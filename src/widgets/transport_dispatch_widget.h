@@ -27,6 +27,7 @@ public:
 signals:
     void backRequested();
     void newDispatchRequested();
+    void entriesChanged();
 
 public slots:
     void openNewDispatchDialog();
@@ -36,6 +37,7 @@ private slots:
     void onDateFilterChanged();
     void onTableDoubleClicked(int row, int col);
     void onExportCsv();
+    void deleteFocusedRow();
 
 private:
     void setupUi();

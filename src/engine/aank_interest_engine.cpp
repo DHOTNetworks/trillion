@@ -1,4 +1,5 @@
 #include "aank_interest_engine.h"
+#include "../services/financial_math_service.h"
 #include <algorithm>
 
 namespace MahadevERP {
@@ -6,7 +7,7 @@ namespace MahadevERP {
 double AankInterestEngine::computeInterest(double productSum, double annualRate, bool isLeapYear) {
     if (annualRate == 0.0 || productSum == 0.0) return 0.0;
     double divisor = isLeapYear ? 36600.0 : 36500.0;
-    return std::round((productSum * annualRate / divisor) * 100.0) / 100.0;
+    return FinancialMathService::round2(productSum * annualRate / divisor);
 }
 
 AankInterestStatement AankInterestEngine::calculateStatement(
@@ -92,7 +93,7 @@ AankInterestStatement AankInterestEngine::calculateStatement(
         entry.narration = it.narr;
         entry.debitAmount = it.dr;
         entry.creditAmount = it.cr;
-        entry.runningBalance = std::round(currentBal * 100.0) / 100.0;
+        entry.runningBalance = FinancialMathService::round2(currentBal);
         stmt.entries.append(entry);
     }
 
@@ -111,7 +112,7 @@ AankInterestStatement AankInterestEngine::calculateStatement(
         
         stmt.entries[i].days = days;
         double bal = stmt.entries[i].runningBalance;
-        double aank = std::round((bal * days) * 100.0) / 100.0;
+        double aank = FinancialMathService::round2(bal * days);
         stmt.entries[i].productAank = aank;
 
         if (bal >= 0) {
@@ -127,7 +128,7 @@ AankInterestStatement AankInterestEngine::calculateStatement(
 
     stmt.totalDrInterest = computeInterest(stmt.totalDrAank, drInterestRate, isLeapYearDivisor);
     stmt.totalCrInterest = computeInterest(stmt.totalCrAank, crInterestRate, isLeapYearDivisor);
-    stmt.netInterest = std::round((stmt.totalDrInterest - stmt.totalCrInterest) * 100.0) / 100.0;
+    stmt.netInterest = FinancialMathService::round2(stmt.totalDrInterest - stmt.totalCrInterest);
 
     return stmt;
 }

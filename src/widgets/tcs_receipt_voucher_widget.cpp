@@ -1,4 +1,6 @@
 #include "tcs_receipt_voucher_widget.h"
+#include "kbd_badge_button.h"
+#include "erp_theme.h"
 #include "voucher_date_dialog.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -30,10 +32,10 @@ void TcsReceiptVoucherWidget::setupUi()
 {
     setAttribute(Qt::WA_StyledBackground, true);
     setStyleSheet(
-        "TcsReceiptVoucherWidget { background-color: #FFF3EA; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif; }"
+        "TcsReceiptVoucherWidget { background-color: #F8FAFC; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif; }"
         "QLabel { border: none; background: transparent; color: #1E293B; font-size: 11px; font-weight: 700; }"
         "QLineEdit { background-color: #FFFFFF; color: #0F172A; border: 1px solid #CBD5E1; border-radius: 5px; padding: 2px 6px; font-size: 11.5px; font-weight: 700; }"
-        "QLineEdit:focus { border: 1.5px solid #2563EB; background-color: #EFF6FF; color: #0F172A; }"
+        "QLineEdit:focus { border: 1.5px solid #2563EB; background-color: #FFFFF0; color: #0F172A; }"
     );
 
     auto *mainLayout = new QVBoxLayout(this);
@@ -50,16 +52,25 @@ void TcsReceiptVoucherWidget::setupUi()
     mainLayout->addWidget(createMainFormCard(), 1);
 
     // Shortcuts
-    new QShortcut(QKeySequence("F2"), this, SLOT(onSaveClicked()));
-    new QShortcut(QKeySequence("Ctrl+S"), this, SLOT(onSaveClicked()));
-    new QShortcut(QKeySequence("F3"), this, SLOT(onNewClicked()));
-    new QShortcut(QKeySequence("Escape"), this, SIGNAL(backRequested()));
+    new QShortcut(QKeySequence(Qt::ALT | Qt::Key_S), this, SLOT(onSaveClicked()));
+    new QShortcut(QKeySequence(Qt::ALT | Qt::Key_N), this, SLOT(onNewClicked()));
+    new QShortcut(QKeySequence(Qt::Key_Escape), this, SIGNAL(backRequested()));
+    auto* f2Shortcut = new QShortcut(QKeySequence(Qt::Key_F2), this);
+    connect(f2Shortcut, &QShortcut::activated, this, [this]() {
+        QDate cur = QDate::fromString(m_controller->receiptDate(), "yyyy-MM-dd");
+        if (!cur.isValid()) cur = QDate::currentDate();
+        QDate chosen = VoucherDateDialog::selectDate(this, cur);
+        if (chosen.isValid()) {
+            m_controller->setReceiptDate(chosen.toString("yyyy-MM-dd"));
+            m_receiptDateEdit->setText(chosen.toString("dd-MM-yyyy"));
+        }
+    });
 }
 
 QWidget *TcsReceiptVoucherWidget::createHeaderBar()
 {
     auto *headerCard = new QFrame(this);
-    headerCard->setStyleSheet("QFrame { background-color: #FFF8F3; border: 1px solid #E2D5C8; border-radius: 6px; }");
+    headerCard->setStyleSheet("QFrame { background-color: #FFFFFF; border: 1px solid #E2D5C8; border-radius: 6px; }");
     auto *layout = new QHBoxLayout(headerCard);
     layout->setContentsMargins(12, 4, 12, 4);
 
@@ -77,30 +88,17 @@ QWidget *TcsReceiptVoucherWidget::createHeaderBar()
     m_statusLabel->setStyleSheet("margin-left: 15px; border: none; background: transparent;");
     layout->addWidget(m_statusLabel, 1);
 
-    auto *btnNew = new QPushButton("[F3] New", headerCard);
-    btnNew->setCursor(Qt::PointingHandCursor);
-    btnNew->setStyleSheet(
-        "QPushButton { background-color: #FFFFFF; border: 1.5px solid #CBD5E1; padding: 6px 14px; border-radius: 6px; font-weight: 700; font-size: 11.5px; color: #334155; }"
-        "QPushButton:hover { background-color: #F8FAFC; }"
-    );
+    auto *btnNew = new KbdBadgeButton("New", "F3", headerCard);
     connect(btnNew, &QPushButton::clicked, this, &TcsReceiptVoucherWidget::onNewClicked);
     layout->addWidget(btnNew);
 
-    auto *btnSave = new QPushButton("[F2] Save Voucher", headerCard);
-    btnSave->setCursor(Qt::PointingHandCursor);
-    btnSave->setStyleSheet(
-        "QPushButton { background-color: #16A34A; color: #FFFFFF; border: none; padding: 6px 18px; border-radius: 6px; font-weight: 800; font-size: 12px; }"
-        "QPushButton:hover { background-color: #15803D; }"
-    );
+    auto *btnSave = new KbdBadgeButton("Save Voucher", "Ctrl+S", headerCard);
+    btnSave->setPrimaryColor(ErpTheme::kGreen, ErpTheme::kGreenDark);
+    btnSave->setTextColor(ErpTheme::kPaper);
     connect(btnSave, &QPushButton::clicked, this, &TcsReceiptVoucherWidget::onSaveClicked);
     layout->addWidget(btnSave);
 
-    auto *btnBack = new QPushButton("← [Esc] Back", headerCard);
-    btnBack->setCursor(Qt::PointingHandCursor);
-    btnBack->setStyleSheet(
-        "QPushButton { background-color: #F1F5F9; border: 1px solid #CBD5E1; border-radius: 6px; padding: 6px 12px; font-weight: 700; color: #475569; font-size: 11.5px; }"
-        "QPushButton:hover { background-color: #E2E8F0; }"
-    );
+    auto *btnBack = new KbdBadgeButton("Back", "Esc", headerCard);
     connect(btnBack, &QPushButton::clicked, this, &TcsReceiptVoucherWidget::backRequested);
     layout->addWidget(btnBack);
 
@@ -143,7 +141,7 @@ QWidget *TcsReceiptVoucherWidget::createParamsCard()
     m_receiptDateEdit->setReadOnly(true);
     dtRow->addWidget(m_receiptDateEdit);
     auto *btnDate = new QPushButton("", card);
-    btnDate->setFixedWidth(28);
+    btnDate->setMinimumWidth(28);
     btnDate->setStyleSheet("QPushButton { background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 4px; }");
     connect(btnDate, &QPushButton::clicked, this, [this]() {
         QDate cur = QDate::fromString(m_controller->receiptDate(), "yyyy-MM-dd");
@@ -223,7 +221,7 @@ QWidget *TcsReceiptVoucherWidget::createMainFormCard()
     grid->addWidget(new QLabel("T.C.S. Rate (%):", card), 2, 2);
     auto *rateRow = new QHBoxLayout();
     m_tcsRateEdit = new QLineEdit("0.100", card);
-    m_tcsRateEdit->setFixedWidth(70);
+    m_tcsRateEdit->setMinimumWidth(70);
     connect(m_tcsRateEdit, &QLineEdit::textChanged, this, [this](const QString &t) {
         if (!m_isSyncing) m_controller->setTcsRate(t.toDouble());
     });
@@ -396,6 +394,14 @@ void TcsReceiptVoucherWidget::keyPressEvent(QKeyEvent *event)
 {
     if (event->key() == Qt::Key_Escape) {
         emit backRequested();
+        return;
+    }
+    if (event->key() == Qt::Key_F3) {
+        onNewClicked();
+        return;
+    }
+    if (event->key() == Qt::Key_S && (event->modifiers() & Qt::ControlModifier)) {
+        onSaveClicked();
         return;
     }
     QWidget::keyPressEvent(event);

@@ -1,4 +1,6 @@
 #include "form16a_entry_dialog.h"
+#include "kbd_badge_button.h"
+#include "erp_theme.h"
 #include "../database_manager.h"
 #include "voucher_date_dialog.h"
 #include <QVBoxLayout>
@@ -20,7 +22,7 @@ Form16AEntryDialog::Form16AEntryDialog(QWidget *parent)
 
 void Form16AEntryDialog::setupUi()
 {
-    setFixedWidth(540);
+    setMinimumWidth(540);
     setStyleSheet(
         "QDialog {"
         "  background-color: #FFFFFF;"
@@ -52,7 +54,7 @@ void Form16AEntryDialog::setupUi()
         "QComboBox QAbstractItemView {"
         "  background-color: #FFFFFF;"
         "  color: #0F172A;"
-        "  selection-background-color: #EFF6FF;"
+        "  selection-background-color: #2563EB;"
         "  selection-color: #1E3A8A;"
         "}"
     );
@@ -89,7 +91,7 @@ void Form16AEntryDialog::setupUi()
     m_dateEdit->setText(QDate::currentDate().toString("dd-MM-yyyy"));
     dtRow->addWidget(m_dateEdit);
     auto *btnDt = new QPushButton("", formWidget);
-    btnDt->setFixedWidth(32);
+    btnDt->setMinimumWidth(32);
     btnDt->setStyleSheet("background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 4px; font-size: 13px;");
     btnDt->setCursor(Qt::PointingHandCursor);
     connect(btnDt, &QPushButton::clicked, this, [this]() {
@@ -156,17 +158,15 @@ void Form16AEntryDialog::setupUi()
     btnRow->setContentsMargins(20, 0, 20, 0);
     btnRow->setSpacing(12);
 
-    auto *btnCancel = new QPushButton("Cancel [Esc]", this);
-    btnCancel->setStyleSheet("QPushButton { background-color: #F1F5F9; border: 1px solid #CBD5E1; color: #475569; padding: 7px 18px; border-radius: 6px; font-weight: 600; font-size: 13px; } QPushButton:hover { background-color: #E2E8F0; }");
-    btnCancel->setCursor(Qt::PointingHandCursor);
+    auto *btnCancel = new KbdBadgeButton("Cancel", "Esc", this);
     connect(btnCancel, &QPushButton::clicked, this, &QDialog::reject);
     btnRow->addWidget(btnCancel);
 
     btnRow->addStretch(1);
 
-    auto *btnSave = new QPushButton("Save Certificate", this);
-    btnSave->setStyleSheet("QPushButton { background-color: #16A34A; color: white; border: none; padding: 7px 20px; border-radius: 6px; font-weight: 700; font-size: 13px; } QPushButton:hover { background-color: #15803D; }");
-    btnSave->setCursor(Qt::PointingHandCursor);
+    auto *btnSave = new KbdBadgeButton("Save Certificate", "", this);
+    btnSave->setPrimaryColor(ErpTheme::kGreen, ErpTheme::kGreenDark);
+    btnSave->setTextColor(ErpTheme::kPaper);
     connect(btnSave, &QPushButton::clicked, this, &Form16AEntryDialog::onSaveClicked);
     btnRow->addWidget(btnSave);
 

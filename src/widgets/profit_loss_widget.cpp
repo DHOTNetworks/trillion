@@ -1,4 +1,6 @@
 #include "profit_loss_widget.h"
+#include "erp_theme.h"
+#include "voucher_date_dialog.h"
 #include "../engine/fiscal_year_helper.h"
 #include "../engine/accounting_engine.h"
 #include <QVBoxLayout>
@@ -37,7 +39,7 @@ void ProfitLossWidget::setupUi() {
     // 1. TOP FIRM & TITLE BANNER
     // ==========================================
     QLabel* compBanner = new QLabel(this);
-    compBanner->setFixedHeight(32);
+    compBanner->setMinimumHeight(32);
     compBanner->setAlignment(Qt::AlignCenter);
     compBanner->setStyleSheet(
         "background-color: #F0FDF4; color: #166534; font-size: 14.5px; font-weight: 800; "
@@ -49,7 +51,7 @@ void ProfitLossWidget::setupUi() {
 
     // Sub-header Bar (Modern White Card)
     QFrame* subHeaderCard = new QFrame(this);
-    subHeaderCard->setFixedHeight(48);
+    subHeaderCard->setMinimumHeight(48);
     subHeaderCard->setStyleSheet(
         "QFrame { background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; }"
         "QLabel { border: none; background: transparent; }"
@@ -81,15 +83,23 @@ void ProfitLossWidget::setupUi() {
     btnBox->setSpacing(5);
 
     m_fromDateEdit = new AccountingDateDisplay(subHeaderCard);
-    m_fromDateEdit->setFixedWidth(105);
-    m_fromDateEdit->setFixedHeight(30);
+    m_fromDateEdit->setMinimumWidth(105);
+    m_fromDateEdit->setMinimumHeight(30);
     m_fromDateEdit->setStyleSheet(
         "QLabel { background: #FFFFFF; border: 1.5px solid #CBD5E1; border-radius: 6px; "
         "padding: 2px 6px; font-size: 12px; font-weight: 700; color: #0F172A; } "
         "QLabel:hover { border: 1.5px solid #2563EB; background: #F8FAFC; }"
     );
+    auto openPeriodDlg = [this]() {
+        QDate f = m_fromDateEdit ? m_fromDateEdit->date() : QDate::currentDate();
+        QDate t = m_toDateEdit ? m_toDateEdit->date() : QDate::currentDate();
+        if (VoucherDateDialog::selectDateRange(this, &f, &t, f, t)) {
+            if (m_fromDateEdit) m_fromDateEdit->setDate(f);
+            if (m_toDateEdit) m_toDateEdit->setDate(t);
+        }
+    };
     connect(m_fromDateEdit, &AccountingDateDisplay::dateChanged, this, &ProfitLossWidget::onDateFilterChanged);
-    connect(m_fromDateEdit, &AccountingDateDisplay::clicked, this, &ProfitLossWidget::requestAccountingPeriodDialog);
+    connect(m_fromDateEdit, &AccountingDateDisplay::clicked, this, openPeriodDlg);
     btnBox->addWidget(m_fromDateEdit);
 
     QLabel* toSep = new QLabel("to", subHeaderCard);
@@ -97,44 +107,44 @@ void ProfitLossWidget::setupUi() {
     btnBox->addWidget(toSep);
 
     m_toDateEdit = new AccountingDateDisplay(subHeaderCard);
-    m_toDateEdit->setFixedWidth(105);
-    m_toDateEdit->setFixedHeight(30);
+    m_toDateEdit->setMinimumWidth(105);
+    m_toDateEdit->setMinimumHeight(30);
     m_toDateEdit->setStyleSheet(
         "QLabel { background: #FFFFFF; border: 1.5px solid #CBD5E1; border-radius: 6px; "
         "padding: 2px 6px; font-size: 12px; font-weight: 700; color: #0F172A; } "
         "QLabel:hover { border: 1.5px solid #2563EB; background: #F8FAFC; }"
     );
     connect(m_toDateEdit, &AccountingDateDisplay::dateChanged, this, &ProfitLossWidget::onDateFilterChanged);
-    connect(m_toDateEdit, &AccountingDateDisplay::clicked, this, &ProfitLossWidget::requestAccountingPeriodDialog);
+    connect(m_toDateEdit, &AccountingDateDisplay::clicked, this, openPeriodDlg);
     btnBox->addWidget(m_toDateEdit);
 
     m_periodBtn = new KbdBadgeButton("Period", "F2", QColor("#F8FAFC"), QColor("#F1F5F9"), QColor("#0F172A"), QColor("#CBD5E1"), subHeaderCard);
-    m_periodBtn->setFixedHeight(30);
-    connect(m_periodBtn, &QPushButton::clicked, this, &ProfitLossWidget::requestAccountingPeriodDialog);
+    m_periodBtn->setMinimumHeight(30);
+    connect(m_periodBtn, &QPushButton::clicked, this, openPeriodDlg);
     btnBox->addWidget(m_periodBtn);
 
     m_expandBtn = new KbdBadgeButton("Expand", "F5", QColor("#F8FAFC"), QColor("#F1F5F9"), QColor("#0F172A"), QColor("#CBD5E1"), subHeaderCard);
-    m_expandBtn->setFixedHeight(30);
+    m_expandBtn->setMinimumHeight(30);
     connect(m_expandBtn, &QPushButton::clicked, this, &ProfitLossWidget::expandAllGroups);
     btnBox->addWidget(m_expandBtn);
 
     m_collapseBtn = new KbdBadgeButton("Collapse", "F6", QColor("#F8FAFC"), QColor("#F1F5F9"), QColor("#0F172A"), QColor("#CBD5E1"), subHeaderCard);
-    m_collapseBtn->setFixedHeight(30);
+    m_collapseBtn->setMinimumHeight(30);
     connect(m_collapseBtn, &QPushButton::clicked, this, &ProfitLossWidget::collapseAllGroups);
     btnBox->addWidget(m_collapseBtn);
 
     m_printBtn = new KbdBadgeButton("Print", "Ctrl+P", QColor("#2563EB"), QColor("#1D4ED8"), QColor("#FFFFFF"), QColor("#2563EB"), subHeaderCard);
-    m_printBtn->setFixedHeight(30);
+    m_printBtn->setMinimumHeight(30);
     connect(m_printBtn, &QPushButton::clicked, this, &ProfitLossWidget::printReport);
     btnBox->addWidget(m_printBtn);
 
     m_pdfBtn = new KbdBadgeButton("PDF", "Ctrl+E", QColor("#059669"), QColor("#047857"), QColor("#FFFFFF"), QColor("#059669"), subHeaderCard);
-    m_pdfBtn->setFixedHeight(30);
+    m_pdfBtn->setMinimumHeight(30);
     connect(m_pdfBtn, &QPushButton::clicked, this, &ProfitLossWidget::exportPdf);
     btnBox->addWidget(m_pdfBtn);
 
     m_backBtn = new KbdBadgeButton("Back", "Esc", QColor("#EF4444"), QColor("#DC2626"), QColor("#FFFFFF"), QColor("#EF4444"), subHeaderCard);
-    m_backBtn->setFixedHeight(30);
+    m_backBtn->setMinimumHeight(30);
     connect(m_backBtn, &QPushButton::clicked, this, &ProfitLossWidget::backRequested);
     btnBox->addWidget(m_backBtn);
 
@@ -199,7 +209,7 @@ void ProfitLossWidget::setupUi() {
     // 3. FOOTER SUMMARY
     // ==========================================
     QFrame* footerCard = new QFrame(this);
-    footerCard->setFixedHeight(40);
+    footerCard->setMinimumHeight(40);
     footerCard->setStyleSheet(
         "QFrame { background-color: #FFFFFF; border: 1.5px solid #CBD5E1; border-radius: 8px; }"
         "QLabel { border: none; background: transparent; }"
@@ -225,7 +235,7 @@ void ProfitLossWidget::setupUi() {
     // 4. BOTTOM COMMAND KEY STRIP
     // ==========================================
     m_keyLegendLbl = new QLabel("Alt+B: Balance Sheet  •  Alt+M: Ledger Alteration  •  F2: Period  •  Ctrl+P: Print  •  Esc: Back", this);
-    m_keyLegendLbl->setFixedHeight(26);
+    m_keyLegendLbl->setMinimumHeight(26);
     m_keyLegendLbl->setAlignment(Qt::AlignCenter);
     m_keyLegendLbl->setStyleSheet(
         "background-color: #1E293B; color: #94A3B8; font-size: 11.5px; font-weight: 600; "
@@ -235,41 +245,9 @@ void ProfitLossWidget::setupUi() {
 }
 
 void ProfitLossWidget::applyCustomStyles() {
-    QString treeStyle =
-        "QTreeWidget {"
-        "    background-color: #FFFFFF;"
-        "    alternate-background-color: #F8FAFC;"
-        "    border: 1px solid #CBD5E1;"
-        "    border-radius: 8px;"
-        "    font-size: 12.5px;"
-        "    color: #0F172A;"
-        "    outline: none;"
-        "}"
-        "QTreeWidget::item {"
-        "    padding: 5px 8px;"
-        "    min-height: 26px;"
-        "    border-bottom: 1px solid #F1F5F9;"
-        "}"
-        "QTreeWidget::item:hover {"
-        "    background-color: #F1F5F9;"
-        "}"
-        "QTreeWidget::item:selected {"
-        "    background-color: #EFF6FF;"
-        "    color: #0F172A;"
-        "}"
-        "QHeaderView::section {"
-        "    background-color: #F1F5F9;"
-        "    color: #1E293B;"
-        "    font-size: 12px;"
-        "    font-weight: 800;"
-        "    padding: 8px 10px;"
-        "    border: none;"
-        "    border-bottom: 2px solid #CBD5E1;"
-        "    border-right: 1px solid #E2E8F0;"
-        "}";
-
-    m_expensesTree->setStyleSheet(treeStyle);
-    m_incomesTree->setStyleSheet(treeStyle);
+    // Single navy-header contract shared with every statement grid.
+    m_expensesTree->setStyleSheet(ErpTheme::treeStyle());
+    m_incomesTree->setStyleSheet(ErpTheme::treeStyle());
 }
 
 void ProfitLossWidget::refreshData(const QString& fromDateIso, const QString& toDateIso) {
@@ -597,8 +575,13 @@ void ProfitLossWidget::keyPressEvent(QKeyEvent* event) {
     }
 
     if (event->key() == Qt::Key_F2) {
-        emit requestAccountingPeriodDialog();
         event->accept();
+        QDate f = m_fromDateEdit ? m_fromDateEdit->date() : QDate::currentDate();
+        QDate t = m_toDateEdit ? m_toDateEdit->date() : QDate::currentDate();
+        if (VoucherDateDialog::selectDateRange(this, &f, &t, f, t)) {
+            if (m_fromDateEdit) m_fromDateEdit->setDate(f);
+            if (m_toDateEdit) m_toDateEdit->setDate(t);
+        }
         return;
     }
 

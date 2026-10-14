@@ -17,6 +17,8 @@ public:
 
     void openSearchPopup();
     void closeSearchPopup();
+    void selectCurrentListItem();
+    void resolveCurrentText();
     bool isPopupVisible() const { return m_popupFrame && m_popupFrame->isVisible(); }
 
 signals:
@@ -41,7 +43,6 @@ private slots:
 private:
     void positionPopup();
     void updateResults();
-    void selectCurrentListItem();
 
     QFrame* m_popupFrame = nullptr;
     QListWidget* m_listWidget = nullptr;

@@ -13,7 +13,7 @@ JointReportsDialog::JointReportsDialog(QWidget* parent)
 }
 
 void JointReportsDialog::setupUi() {
-    setFixedWidth(380);
+    setMinimumWidth(380);
     setStyleSheet(
         "#jointReportsDialog { background-color: #FFFFFF; border: 2.5px solid #059669; border-radius: 12px; }"
         "QLabel { border: none; background: transparent; }"

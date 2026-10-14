@@ -5,6 +5,7 @@
 #include "sales_model.h"
 #include "parties_model.h"
 #include "financial_years_model.h"
+#include "../engine/fiscal_year_helper.h"
 #include <QDebug>
 
 // ============================================================================
@@ -513,7 +514,7 @@ bool SalesVoucherController::loadInvoiceForEditing(const QVariant &invNoOrId, co
     setVehicleNo(inv.value("vehicle_no").toString());
     setEwayBillNo(inv.value("eway_bill_no").toString());
     setGrNo(inv.value("gr_no").toString());
-    setDriverName(inv.value("driver").toString());
+    setDriverName(inv.value("driver_name").toString());
     setBillTime(inv.value("bill_time").toString());
     setSaudaDate(inv.value("sauda_date").toString());
     setGrade(inv.value("grade").toString());
@@ -661,6 +662,15 @@ bool SalesVoucherController::saveVoucher()
     QString errorMsg = AccountingDateService::instance().getValidationErrorMessage(m_invoiceDate, currentFy, activeFy.value("year_name").toString());
     if (!errorMsg.isEmpty()) {
         m_statusMessage = errorMsg;
+        m_isError = true;
+        emit statusChanged();
+        return false;
+    }
+
+    // FY lock: audited/closed years reject new and edited invoices alike.
+    const QString lockReason = FiscalYearHelper::writeBlockReason(m_invoiceDate);
+    if (!lockReason.isEmpty()) {
+        m_statusMessage = lockReason;
         m_isError = true;
         emit statusChanged();
         return false;

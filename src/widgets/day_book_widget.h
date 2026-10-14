@@ -2,6 +2,8 @@
 
 #include <QWidget>
 #include <QTableWidget>
+#include <QTimer>
+#include <QScrollBar>
 #include "accounting_date_edit.h"
 #include <QComboBox>
 #include <QLineEdit>
@@ -27,6 +29,7 @@ public:
 signals:
     void backRequested();
     void alterVoucherRequested(int targetViewIndex, const QVariantMap& entry);
+    void entriesChanged();
 
 protected:
     void keyPressEvent(QKeyEvent* event) override;
@@ -35,6 +38,7 @@ protected:
 private slots:
     void onRefreshClicked();
     void onRowDoubleClicked(int row, int column);
+    void deleteFocusedRow();
     void onExportPdfClicked();
     void onExportOdfClicked();
     void onExportExcelClicked();
@@ -61,6 +65,7 @@ private:
     PrintExportController* m_printExportCtrl = nullptr;
     QVariantList m_records;
     bool m_isDirty = true;
+    QTimer* m_searchDebounce = nullptr;
 };
 
 } // namespace MahadevERP

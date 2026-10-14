@@ -1,4 +1,5 @@
 #include "milling_voucher_widget.h"
+#include "erp_theme.h"
 #include "item_search_delegate.h"
 #include "voucher_date_dialog.h"
 #include "kbd_badge_button.h"
@@ -35,7 +36,7 @@ MillingVoucherWidget::MillingVoucherWidget(MillingBatchController* batchCtrl,
 void MillingVoucherWidget::setupUi() {
     setAttribute(Qt::WA_StyledBackground, true);
     setStyleSheet(
-        "MillingVoucherWidget { background-color: #FFF3EA; font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'Segoe UI', Arial, sans-serif; }"
+        "MillingVoucherWidget { background-color: #F8FAFC; font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'Segoe UI', Arial, sans-serif; }"
         "QLabel { border: none; background: transparent; color: #1E293B; font-size: 11px; font-weight: 700; }"
         "QLineEdit { background-color: #FFFFFF; color: #0F172A; border: 1px solid #CBD5E1; border-radius: 5px; padding: 2px 6px; font-size: 11.5px; font-weight: 700; }"
         "QLineEdit:focus { border: 1.5px solid #7E22CE; background-color: #FAF5FF; color: #0F172A; }"
@@ -58,7 +59,7 @@ void MillingVoucherWidget::setupUi() {
 
     auto* badge = new QLabel("Milling / Out-Turn", this);
     badge->setAlignment(Qt::AlignCenter);
-    badge->setFixedHeight(22);
+    badge->setMinimumHeight(22);
     badge->setStyleSheet("background-color: #FAF5FF; color: #7E22CE; font-weight: 900; font-size: 12px; padding: 1px 10px; border: 1px solid #E9D5FF; border-radius: 5px;");
     topHeaderLayout->addWidget(badge);
 
@@ -68,8 +69,8 @@ void MillingVoucherWidget::setupUi() {
 
     m_batchNoEdit = new QLineEdit(this);
     m_batchNoEdit->setReadOnly(true);
-    m_batchNoEdit->setFixedWidth(120);
-    m_batchNoEdit->setFixedHeight(22);
+    m_batchNoEdit->setMinimumWidth(120);
+    m_batchNoEdit->setMinimumHeight(22);
     m_batchNoEdit->setStyleSheet("background-color: #FFFFFF; color: #7E22CE; font-size: 12px; font-weight: 900; border: 1px solid #E9D5FF; border-radius: 5px; padding: 1px 6px;");
     topHeaderLayout->addWidget(m_batchNoEdit);
 
@@ -77,7 +78,7 @@ void MillingVoucherWidget::setupUi() {
 
     auto* titleHeaderLabel = new QLabel("F7 : Milling & Rice Out-Turn Production Voucher", this);
     titleHeaderLabel->setAlignment(Qt::AlignCenter);
-    titleHeaderLabel->setStyleSheet("font-size: 15px; font-weight: 900; color: #7E22CE; font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'Segoe UI', Arial, sans-serif;");
+    titleHeaderLabel->setStyleSheet(ErpTheme::headerTitleStyle(15));
     topHeaderLayout->addWidget(titleHeaderLabel);
 
     topHeaderLayout->addStretch(1);
@@ -89,8 +90,8 @@ void MillingVoucherWidget::setupUi() {
 
     m_batchDateEdit = new QLineEdit(this);
     m_batchDateEdit->setReadOnly(true);
-    m_batchDateEdit->setFixedHeight(22);
-    m_batchDateEdit->setFixedWidth(95);
+    m_batchDateEdit->setMinimumHeight(22);
+    m_batchDateEdit->setMinimumWidth(95);
     m_batchDateEdit->setStyleSheet("background-color: #FFFFFF; color: #0F172A; font-size: 12px; font-weight: 800; border: 1px solid #CBD5E1; border-radius: 5px;");
     topHeaderLayout->addWidget(m_batchDateEdit);
 
@@ -105,7 +106,7 @@ void MillingVoucherWidget::setupUi() {
     topHeaderLayout->addWidget(m_dayLabel);
 
     auto* backTopBtn = new KbdBadgeButton("Back", "Esc", this);
-    backTopBtn->setFixedHeight(22);
+    backTopBtn->setMinimumHeight(22);
     backTopBtn->setPrimaryColor("#64748B", "#475569");
     backTopBtn->setTextColor("#FFFFFF");
     connect(backTopBtn, &QPushButton::clicked, this, &MillingVoucherWidget::backRequested);
@@ -117,7 +118,7 @@ void MillingVoucherWidget::setupUi() {
     // 2. VOUCHER META CARD (Peach Container)
     // ========================================================================
     auto* metaCard = new QFrame(this);
-    metaCard->setStyleSheet("QFrame { background-color: #FFF8F3; border: 1px solid #E2D5C8; border-radius: 6px; }");
+    metaCard->setStyleSheet("QFrame { background-color: #FFFFFF; border: 1px solid #E2D5C8; border-radius: 6px; }");
     auto* metaLayout = new QHBoxLayout(metaCard);
     metaLayout->setContentsMargins(8, 4, 8, 4);
     metaLayout->setSpacing(8);
@@ -128,7 +129,7 @@ void MillingVoucherWidget::setupUi() {
 
     m_narrationEdit = new QLineEdit(metaCard);
     m_narrationEdit->setPlaceholderText("Batch process shift notes, Paddy lot info, Moisture %, Out-turn recovery remarks...");
-    m_narrationEdit->setFixedHeight(24);
+    m_narrationEdit->setMinimumHeight(24);
     m_narrationEdit->setStyleSheet("background-color: #FFFFFF; color: #0F172A; border: 1px solid #CBD5E1; border-radius: 4px; padding: 2px 6px; font-size: 11.5px; font-weight: 600;");
     metaLayout->addWidget(m_narrationEdit, 1);
 
@@ -143,14 +144,14 @@ void MillingVoucherWidget::setupUi() {
     const QString tableStyle =
         "QTableWidget { background-color: #FFFFFF; color: #0F172A; border: 1px solid #CBD5E1; border-radius: 4px; gridline-color: #E2E8F0; font-size: 11.5px; font-weight: 700; }"
         "QTableWidget::item { color: #0F172A; padding: 3px 5px; background-color: #FFFFFF; }"
-        "QTableWidget::item:selected { background-color: #EFF6FF; color: #1D4ED8; font-weight: 800; }"
-        "QHeaderView::section { background-color: #334155; color: #FFFFFF; font-weight: 800; font-size: 10.5px; padding: 3px; border: none; }";
+        "QTableWidget::item:selected { background-color: #2563EB; color: #FFFFFF; font-weight: 800; }"
+        "QHeaderView::section { background-color: #0F172A; color: #FFFFFF; font-weight: 800; font-size: 10.5px; padding: 3px; border: none; }";
 
     // Left: Consumed Paddy
     auto* consumedGroup = new QGroupBox("RAW PADDY INPUT / CONSUMPTION", this);
     consumedGroup->setStyleSheet(
         "QGroupBox { font-size: 10.5px; font-weight: 800; color: #DC2626; border: 1px solid #FECACA; border-radius: 6px; margin-top: 10px; padding: 6px 6px 4px 6px; background-color: #FFF8F8; }"
-        "QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top left; padding: 0 4px; left: 8px; top: 0px; color: #DC2626; font-weight: 800; background-color: #FFF3EA; }"
+        "QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top left; padding: 0 4px; left: 8px; top: 0px; color: #DC2626; font-weight: 800; background-color: #F8FAFC; }"
     );
     auto* cLayout = new QVBoxLayout(consumedGroup);
     cLayout->setContentsMargins(4, 4, 4, 4);
@@ -176,13 +177,13 @@ void MillingVoucherWidget::setupUi() {
 
     auto* cBtnRow = new QHBoxLayout();
     auto* addCBtn = new QPushButton("+ Add Input Row", consumedGroup);
-    addCBtn->setFixedHeight(22);
+    addCBtn->setMinimumHeight(22);
     addCBtn->setStyleSheet("background-color: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 4px; padding: 2px 8px; font-weight: 800; font-size: 10.5px; color: #DC2626;");
     connect(addCBtn, &QPushButton::clicked, this, &MillingVoucherWidget::onAddConsumedRow);
     cBtnRow->addWidget(addCBtn);
 
     auto* remCBtn = new QPushButton("- Remove Row", consumedGroup);
-    remCBtn->setFixedHeight(22);
+    remCBtn->setMinimumHeight(22);
     remCBtn->setStyleSheet("background-color: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 4px; padding: 2px 8px; font-weight: 700; font-size: 10.5px; color: #64748B;");
     connect(remCBtn, &QPushButton::clicked, this, &MillingVoucherWidget::onRemoveConsumedRow);
     cBtnRow->addWidget(remCBtn);
@@ -195,7 +196,7 @@ void MillingVoucherWidget::setupUi() {
     auto* producedGroup = new QGroupBox("RICE & BY-PRODUCTS OUTPUT RECOVERY", this);
     producedGroup->setStyleSheet(
         "QGroupBox { font-size: 10.5px; font-weight: 800; color: #16A34A; border: 1px solid #BBF7D0; border-radius: 6px; margin-top: 10px; padding: 6px 6px 4px 6px; background-color: #F8FFF9; }"
-        "QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top left; padding: 0 4px; left: 8px; top: 0px; color: #16A34A; font-weight: 800; background-color: #FFF3EA; }"
+        "QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top left; padding: 0 4px; left: 8px; top: 0px; color: #16A34A; font-weight: 800; background-color: #F8FAFC; }"
     );
     auto* pLayout = new QVBoxLayout(producedGroup);
     pLayout->setContentsMargins(4, 4, 4, 4);
@@ -222,13 +223,13 @@ void MillingVoucherWidget::setupUi() {
 
     auto* pBtnRow = new QHBoxLayout();
     auto* addPBtn = new QPushButton("+ Add Output Row", producedGroup);
-    addPBtn->setFixedHeight(22);
+    addPBtn->setMinimumHeight(22);
     addPBtn->setStyleSheet("background-color: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 4px; padding: 2px 8px; font-weight: 800; font-size: 10.5px; color: #16A34A;");
     connect(addPBtn, &QPushButton::clicked, this, &MillingVoucherWidget::onAddProducedRow);
     pBtnRow->addWidget(addPBtn);
 
     auto* remPBtn = new QPushButton("- Remove Row", producedGroup);
-    remPBtn->setFixedHeight(22);
+    remPBtn->setMinimumHeight(22);
     remPBtn->setStyleSheet("background-color: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 4px; padding: 2px 8px; font-weight: 700; font-size: 10.5px; color: #64748B;");
     connect(remPBtn, &QPushButton::clicked, this, &MillingVoucherWidget::onRemoveProducedRow);
     pBtnRow->addWidget(remPBtn);
@@ -278,7 +279,7 @@ void MillingVoucherWidget::setupUi() {
     bottomLayout->setSpacing(6);
 
     auto* cancelBottomBtn = new KbdBadgeButton("Cancel", "Esc", this);
-    cancelBottomBtn->setFixedHeight(28);
+    cancelBottomBtn->setMinimumHeight(28);
     cancelBottomBtn->setPrimaryColor("#F1F5F9", "#E2E8F0");
     cancelBottomBtn->setTextColor("#475569");
     connect(cancelBottomBtn, &QPushButton::clicked, this, &MillingVoucherWidget::backRequested);
@@ -287,7 +288,7 @@ void MillingVoucherWidget::setupUi() {
     bottomLayout->addStretch();
 
     auto* saveBtn = new KbdBadgeButton("Save Production Batch", "Ctrl+S", this);
-    saveBtn->setFixedHeight(28);
+    saveBtn->setMinimumHeight(28);
     saveBtn->setPrimaryColor("#16A34A", "#15803D");
     saveBtn->setTextColor("#FFFFFF");
     saveBtn->setMinimumWidth(200);
@@ -299,7 +300,7 @@ void MillingVoucherWidget::setupUi() {
     connect(m_producedTable, &QTableWidget::cellChanged, this, &MillingVoucherWidget::onRecalculate);
 
     connect(new QShortcut(QKeySequence(Qt::Key_Escape), this), &QShortcut::activated, this, &MillingVoucherWidget::backRequested);
-    connect(new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_S), this), &QShortcut::activated, this, &MillingVoucherWidget::onSaveClicked);
+    connect(new QShortcut(QKeySequence(Qt::ALT | Qt::Key_S), this), &QShortcut::activated, this, &MillingVoucherWidget::onSaveClicked);
 }
 
 void MillingVoucherWidget::resetForm() {

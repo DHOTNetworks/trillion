@@ -3,6 +3,7 @@
 #include "jet4_writer.h"
 #include <cstdio>
 #include "../database_manager.h"
+#include "../services/financial_math_service.h"
 #include "fiscal_year_helper.h"
 #include <QCoreApplication>
 #include <QDir>
@@ -47,7 +48,7 @@ void BahiKhataExporter::updateProgress(int percent, const QString& status) {
 }
 
 double BahiKhataExporter::round2(double val) {
-    return std::round(val * 100.0) / 100.0;
+    return FinancialMathService::round2(val);
 }
 
 QString BahiKhataExporter::formatMdbDate(const QString& isoDate) {
@@ -202,8 +203,6 @@ static QByteArray toJet4TextForCol(const QString& str, MdbColumn* col) {
     return toJet4TextRaw(str, jetColCompress(col));
 }
 
-static double round2dbl(double v) { return std::round(v * 100.0) / 100.0; }
-
 static QString normalizeTxType(const QString& raw) {
     QString t = raw.trimmed();
     if (t.compare("Journal", Qt::CaseInsensitive) == 0) return "Jrnl";
@@ -278,7 +277,7 @@ static double parseJetBalance(const QString& txt, QString& sideOut) {
 }
 
 static QString formatJetBalance(double signedVal, const QString& zeroSideFallback) {
-    double v = round2dbl(signedVal);
+    double v = FinancialMathService::round2(signedVal);
     if (std::abs(v) < 0.005) {
         // Preserve a zero-with-side residue ("0.00 Dr") when present natively.
         return zeroSideFallback.isEmpty() ? QString("0.00")
@@ -326,7 +325,7 @@ static bool applyLedgerBalanceDeltas(MdbHandle* mdb, const QMap<int, double>& ba
         QString oldText = balanceOf(r);
         QString side;
         double cur = parseJetBalance(oldText, side);
-        double updated = round2dbl(cur + delta);
+        double updated = FinancialMathService::round2(cur + delta);
         QString newText = formatJetBalance(updated, side);
         MdbColumn* colBal = (MdbColumn*)g_ptr_array_index(tbl->columns, 16);
         QByteArray newBytes = toJet4TextForCol(newText, colBal);
@@ -380,6 +379,9 @@ struct BahiKhataJournalTx {
     double amount = 0.0;
     QString narration;
     guint16 partyCode = 0;
+    QString purchaseType;
+    QString entryType;
+    guint32 voucherReconcile = 0;
 };
 
 static bool insertBahiKhataJournalTx(MdbHandle* mdb, MdbTableDef* txTbl, const BahiKhataJournalTx& tx) {
@@ -425,6 +427,18 @@ static bool insertBahiKhataJournalTx(MdbHandle* mdb, MdbTableDef* txTbl, const B
     guint16 ptVal = tx.partyCode;
     fields[8].is_null = 0; fields[8].value = &ptVal; fields[8].siz = 2;
 
+    static const char kEmpty = '\0'; // 0-length but NOT NULL (pristine mask 7f c1... bit 15 set)
+
+    // Col 12: PurchaseType (e.g. "TDSRENT", "TDSCOMMISSION" for TDS Journal)
+    QByteArray ptBytes;
+    if (!tx.purchaseType.isEmpty()) {
+        MdbColumn* colPT = (MdbColumn*)g_ptr_array_index(txTbl->columns, 12);
+        ptBytes = toJet4TextForCol(tx.purchaseType.left(30), colPT);
+        fields[12].is_null = 0; fields[12].value = ptBytes.data(); fields[12].siz = ptBytes.size();
+    } else {
+        fields[12].is_null = 0; fields[12].value = (void*)&kEmpty; fields[12].siz = 0;
+    }
+
     QByteArray narrBytes = toJet4TextForCol(tx.narration.left(200), colNarr);
     fields[14].is_null = 0; fields[14].value = narrBytes.data(); fields[14].siz = narrBytes.size();
 
@@ -435,12 +449,16 @@ static bool insertBahiKhataJournalTx(MdbHandle* mdb, MdbTableDef* txTbl, const B
     double zeroDbl = 0.0;
     float zeroFlt = 0.0f;
     QByteArray zeroStr = toJet4Text("0");
-    static const char kEmpty = '\0'; // 0-length but NOT NULL (pristine mask 7f c1... bit 15 set)
 
-    // Col 15: EntryType = empty (not null, 0-length) for Journal — pristine Jrnl 472 mask
-    // has bit 15 SET. NULL would emit single 0x00 in Idx_DateTransVchWise (5th key EntryType)
-    // instead of 7F 01 00, breaking Bahi-Khata date-wise seeks and max-date lookup.
-    fields[15].is_null = 0; fields[15].value = (void*)&kEmpty; fields[15].siz = 0;
+    // Col 15: EntryType (e.g. "Exp.", "Party", "PartyTDS", "TDS" for TDS Journal)
+    QByteArray etBytes;
+    if (!tx.entryType.isEmpty()) {
+        MdbColumn* colET = (MdbColumn*)g_ptr_array_index(txTbl->columns, 15);
+        etBytes = toJet4TextForCol(tx.entryType.left(25), colET);
+        fields[15].is_null = 0; fields[15].value = etBytes.data(); fields[15].siz = etBytes.size();
+    } else {
+        fields[15].is_null = 0; fields[15].value = (void*)&kEmpty; fields[15].siz = 0;
+    }
 
     fields[16].is_null = 0; fields[16].value = &zero16; fields[16].siz = 2; // DueDays
     fields[17].is_null = 0; fields[17].value = &zero16; fields[17].siz = 2; // ItemCode
@@ -448,8 +466,9 @@ static bool insertBahiKhataJournalTx(MdbHandle* mdb, MdbTableDef* txTbl, const B
     // Col 29: BankDate = same as VoucherDate for Journal (matches authentic Data.002)
     fields[29].is_null = 0; fields[29].value = &oleD; fields[29].siz = 8;
 
-    // Col 30: VoucherReconcile = 0 for Journal (matches authentic Data.002)
-    fields[30].is_null = 0; fields[30].value = &zero32; fields[30].siz = 4;
+    // Col 30: VoucherReconcile (1 for TDS Journal, 0 for standard Journal)
+    guint32 vReconcile = tx.voucherReconcile;
+    fields[30].is_null = 0; fields[30].value = &vReconcile; fields[30].siz = 4;
 
     fields[35].is_null = 0; fields[35].value = &zeroDbl; fields[35].siz = 8;// ExpRate
     fields[37].is_null = 0; fields[37].value = (void*)&kEmpty; fields[37].siz = 0; // ImagePath = "" (not null empty, pristine Jrnl 472)
@@ -642,7 +661,6 @@ static JetInvoiceCtx fetchInvoiceCtxCached(const JetInvoiceCache& cache, const Q
     ctx.payMode = h.value("payment_mode", "Credit").toString();
     if (ctx.payMode.isEmpty()) ctx.payMode = "Credit";
     ctx.broker = h.value("broker_name").toString().trimmed();
-    if (ctx.broker.isEmpty()) ctx.broker = h.value("transport", h.value("transport_name")).toString().trimmed();
     ctx.invSeq = parseInvSeq(invoiceNo);
     ctx.tcsRate = h.value("tcs_rate", 0.0).toDouble();
     ctx.tdsRate = h.value("tds_rate", 0.0).toDouble();
@@ -652,7 +670,6 @@ static JetInvoiceCtx fetchInvoiceCtxCached(const JetInvoiceCache& cache, const Q
     ctx.vehicleNo = h.value("vehicle_no").toString();
     ctx.grNo = h.value("gr_no").toString();
     ctx.driverName = h.value("driver_name").toString().trimmed();
-    if (ctx.driverName.isEmpty()) ctx.driverName = h.value("driver").toString().trimmed();
     ctx.ewayBillNo = h.value("eway_bill_no", h.value("eway_bill")).toString().trimmed();
     ctx.kandaWeight = h.value("kanda_weight").toDouble();
     ctx.shippingAddress = h.value("shipping_address").toString();
@@ -660,7 +677,7 @@ static JetInvoiceCtx fetchInvoiceCtxCached(const JetInvoiceCache& cache, const Q
     ctx.challanNo = h.value("challan_no").toString();
     ctx.buyerPin = h.value("pincode", h.value("buyer_pin")).toString();
     ctx.irnNo = h.value("irn_no").toString();
-    ctx.transport = h.value("transport", h.value("transport_name")).toString();
+    ctx.transport = h.value("transport").toString();
     ctx.grade = h.value("grade").toString();
 
     auto addCharge = [&](const QString& label, double amt) {
@@ -1158,7 +1175,7 @@ static int insertStockLines(MdbHandle* mdb, MdbTableDef* stkTxTbl, const JetInvo
         // current-native 182 stores 0/40). Taxable base only counts when a
         // GST % applies; exempt rows store 0 (never the goods value, never NULL).
         double taxBase = (it.gstPct > 0.0 && it.taxable > 0.0) ? it.taxable : 0.0;
-        double taxAmt = (it.gstPct > 0.0 && taxBase > 0.0) ? round2dbl(taxBase * it.gstPct / 100.0) : 0.0;
+        double taxAmt = (it.gstPct > 0.0 && taxBase > 0.0) ? FinancialMathService::round2(taxBase * it.gstPct / 100.0) : 0.0;
         fields[15].is_null = 0; fields[15].value = &taxBase; fields[15].siz = 8; // TaxableAmount
         fields[16].is_null = 0; fields[16].value = &taxAmt; fields[16].siz = 8; // Tax
         QByteArray txB = toJet4TextForCol(ctx.taxStatus, colOf(17));
@@ -1717,7 +1734,7 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaOdbc(const ExportOp
                     rowIdx++;
                     if (acCode > 0 && std::abs(amt) >= 0.0005) {
                         double signedAmt = (drCr == "Dr") ? amt : -amt;
-                        balDeltas[acCode] = round2dbl(balDeltas.value(acCode, 0.0) + signedAmt);
+                        balDeltas[acCode] = round2(balDeltas.value(acCode, 0.0) + signedAmt);
                     }
                 }
             }
@@ -1731,7 +1748,7 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaOdbc(const ExportOp
                 if (std::abs(it.value()) < 0.0005) continue;
                 QString side;
                 double cur = parseJetBalance(nativeBalances.value(it.key(), "0.00"), side);
-                QString newText = formatJetBalance(round2dbl(cur + it.value()), side);
+                QString newText = formatJetBalance(round2(cur + it.value()), side);
                 qBalUpd.addBindValue(newText);
                 qBalUpd.addBindValue(it.key());
                 qBalUpd.exec();
@@ -2360,7 +2377,10 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
                 ") as party_code, "
                 "t.party_name, t.opposing_account, "
                 "t.financial_year, t.row_no, t.invoice_no, t.due_days, "
-                "t.tds_amount, t.taxable_amount "
+                "t.tds_amount, t.taxable_amount, "
+                "COALESCE(t.purchase_type, '') as purchase_type, "
+                "COALESCE(t.entry_type, '') as entry_type, "
+                "COALESCE(t.voucher_reconcile, 0) as voucher_reconcile "
                 "FROM transactions t ";
 
             // Shared robust FY filter (same normalization as the ODBC engine).
@@ -2469,7 +2489,7 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
                 existingTxSignatures.insert(sig);
                 if (acCode > 0 && std::abs(amt) >= 0.0005) {
                     double signedAmt = (drCr == "Dr") ? amt : -amt;
-                    balDeltas[acCode] = round2dbl(balDeltas.value(acCode, 0.0) + signedAmt);
+                    balDeltas[acCode] = round2(balDeltas.value(acCode, 0.0) + signedAmt);
                 }
                 if (++txDbg <= 5) {
                     std::cout << "[TX INSERT] type=" << tType.toStdString() << " vch=" << rawVchNo
@@ -2576,6 +2596,13 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
                         tx.amount = amt;
                         tx.narration = narration;
                         tx.partyCode = 0;
+                        tx.purchaseType = t.value("purchase_type").toString().trimmed();
+                        tx.entryType = t.value("entry_type").toString().trimmed();
+                        if (tx.purchaseType.startsWith("TDS", Qt::CaseInsensitive)) {
+                            tx.voucherReconcile = 1;
+                        } else {
+                            tx.voucherReconcile = t.value("voucher_reconcile", 0).toInt();
+                        }
                         txInsOk = insertBahiKhataJournalTx(mdb, txTbl, tx);
                     } else if (vType == "ChPt" || vType == "ChRt" ||
                                vType == "Pymt" || vType == "Rcpt") {
@@ -2714,6 +2741,141 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
             if (trTbl) {
                 finalizeJet4Table(mdb, trTbl);
                 mdb_free_tabledef(trTbl);
+            }
+
+            // Export TDSDeductions table to native JetDB MDB
+            MdbTableDef* tdsTbl = mdb_read_table_by_name(mdb, (char*)"TDSDeductions", MDB_TABLE);
+            if (tdsTbl) {
+                mdb_read_columns(tdsTbl);
+                mdb_read_indices(tdsTbl);
+
+                std::set<std::tuple<int, QString, QString, int>> existingTdsSig;
+                std::vector<Jet4Writer::RowSnapshot> tdsSnap;
+                if (Jet4Writer::TableSnapshot::snapshot(mdb, tdsTbl, tdsSnap).ok) {
+                    for (auto& r : tdsSnap) {
+                        if (!r.cracked || (r.flags & 0x8000)) continue;
+                        auto col = [&](int i) -> const Jet4Writer::Field& {
+                            static const Jet4Writer::Field kNull;
+                            return (i >= 0 && (size_t)i < r.fields.size()) ? r.fields[(size_t)i] : kNull;
+                        };
+                        int vn = (int)snapDouble(col(1));
+                        QString dv = snapJetDate(col(0));
+                        QString tt;
+                        {
+                            const auto& f = col(2);
+                            if (!f.isNull && f.data && f.size > 0) tt = snapJetText(f);
+                        }
+                        int ac = (int)snapDouble(col(3));
+                        existingTdsSig.insert(std::make_tuple(vn, dv, tt.trimmed(), ac));
+                    }
+                }
+
+                // Query SQLite TDSDeductions table
+                QVariantList tdsRows = appDb.executeQuery(
+                    "SELECT d.voucher_date, d.voucher_number, d.trans_type, "
+                    "COALESCE(p.legacy_id, d.account_code) as account_code, "
+                    "d.income_amount, d.tds, d.surcharge, d.education, d.tds_rate, "
+                    "d.income_type, d.reason_for_non_deduction, d.rate_tds, d.rate_surcharge, d.rate_education, "
+                    "d.post_in_books, d.challan_voucher_date, d.challan_voucher_number, d.income_narration, d.prev_income_amount "
+                    "FROM TDSDeductions d "
+                    "LEFT JOIN parties p ON d.account_code = p.id "
+                    "ORDER BY d.voucher_date ASC, d.voucher_number ASC;"
+                );
+
+                long tdsExported = 0;
+                for (const auto& rowVar : tdsRows) {
+                    QVariantMap r = rowVar.toMap();
+                    int vn = r.value("voucher_number").toInt();
+                    QString dv = r.value("voucher_date").toString().left(10);
+                    QString tt = r.value("trans_type", "Jrnl").toString().trimmed();
+                    int ac = r.value("account_code").toInt();
+
+                    if (existingTdsSig.find(std::make_tuple(vn, dv, tt, ac)) != existingTdsSig.end()) {
+                        continue;
+                    }
+
+                    std::vector<MdbField> f(tdsTbl->num_cols);
+                    for (int i = 0; i < tdsTbl->num_cols; i++) {
+                        MdbColumn* c = (MdbColumn*)g_ptr_array_index(tdsTbl->columns, i);
+                        f[i].colnum = i;
+                        f[i].is_fixed = c->is_fixed;
+                        f[i].is_null = 1;
+                        f[i].value = nullptr;
+                        f[i].siz = 0;
+                    }
+
+                    double oleDate = toOleDate(dv);
+                    double vNumDbl = (double)vn;
+                    double acCodeDbl = (double)ac;
+                    double incAmt = r.value("income_amount").toDouble();
+                    double tdsAmt = r.value("tds").toDouble();
+                    double surAmt = r.value("surcharge", 0.0).toDouble();
+                    double eduAmt = r.value("education", 0.0).toDouble();
+                    double tdsRate = r.value("tds_rate").toDouble();
+                    double rTds = r.value("rate_tds", tdsRate).toDouble();
+                    double rSur = r.value("rate_surcharge", 0.0).toDouble();
+                    double rEdu = r.value("rate_education", 0.0).toDouble();
+                    guint32 postBooks = (guint32)r.value("post_in_books", 1).toInt();
+                    double chDateOle = toOleDate(r.value("challan_voucher_date").toString());
+                    guint32 chVchNo = (guint32)r.value("challan_voucher_number", 0).toInt();
+                    double prevAmt = r.value("prev_income_amount", 0.0).toDouble();
+
+                    // Col 0: VoucherDate (DateTime)
+                    f[0].is_null = 0; f[0].value = &oleDate; f[0].siz = 8;
+                    // Col 1: VoucherNumber (Double)
+                    f[1].is_null = 0; f[1].value = &vNumDbl; f[1].siz = 8;
+                    // Col 2: TransType (Text 255)
+                    MdbColumn* cTT = (MdbColumn*)g_ptr_array_index(tdsTbl->columns, 2);
+                    QByteArray ttB = toJet4TextForCol(tt, cTT);
+                    f[2].is_null = 0; f[2].value = ttB.data(); f[2].siz = ttB.size();
+                    // Col 3: AccountCode (Double)
+                    f[3].is_null = 0; f[3].value = &acCodeDbl; f[3].siz = 8;
+                    // Col 4: IncomeAmount (Double)
+                    f[4].is_null = 0; f[4].value = &incAmt; f[4].siz = 8;
+                    // Col 5: TDS (Double)
+                    f[5].is_null = 0; f[5].value = &tdsAmt; f[5].siz = 8;
+                    // Col 6: Surcharge (Double)
+                    f[6].is_null = 0; f[6].value = &surAmt; f[6].siz = 8;
+                    // Col 7: Education (Double)
+                    f[7].is_null = 0; f[7].value = &eduAmt; f[7].siz = 8;
+                    // Col 8: TDSRate (Double)
+                    f[8].is_null = 0; f[8].value = &tdsRate; f[8].siz = 8;
+                    // Col 9: IncomeType (Text 255)
+                    MdbColumn* cIT = (MdbColumn*)g_ptr_array_index(tdsTbl->columns, 9);
+                    QByteArray itB = toJet4TextForCol(r.value("income_type").toString().left(50), cIT);
+                    f[9].is_null = 0; f[9].value = itB.data(); f[9].siz = itB.size();
+                    // Col 10: ReasonForNonDeduction (Text 255)
+                    MdbColumn* cND = (MdbColumn*)g_ptr_array_index(tdsTbl->columns, 10);
+                    QByteArray ndB = toJet4TextForCol(r.value("reason_for_non_deduction").toString().left(255), cND);
+                    f[10].is_null = 0; f[10].value = ndB.data(); f[10].siz = ndB.size();
+                    // Col 11: RateTDS (Double)
+                    f[11].is_null = 0; f[11].value = &rTds; f[11].siz = 8;
+                    // Col 12: RateSurcharge (Double)
+                    f[12].is_null = 0; f[12].value = &rSur; f[12].siz = 8;
+                    // Col 13: RateEducation (Double)
+                    f[13].is_null = 0; f[13].value = &rEdu; f[13].siz = 8;
+                    // Col 14: PostInBooks (Long Integer 4)
+                    f[14].is_null = 0; f[14].value = &postBooks; f[14].siz = 4;
+                    // Col 15: ChallanVoucherDate (DateTime)
+                    f[15].is_null = 0; f[15].value = &chDateOle; f[15].siz = 8;
+                    // Col 16: ChallanVoucherNumber (Long Integer 4)
+                    f[16].is_null = 0; f[16].value = &chVchNo; f[16].siz = 4;
+                    // Col 17: IncomeNarration (Text 255)
+                    MdbColumn* cIN = (MdbColumn*)g_ptr_array_index(tdsTbl->columns, 17);
+                    QByteArray inB = toJet4TextForCol(r.value("income_narration").toString().left(255), cIN);
+                    f[17].is_null = 0; f[17].value = inB.data(); f[17].siz = inB.size();
+                    // Col 18: PrevIncomeAmount (Double)
+                    f[18].is_null = 0; f[18].value = &prevAmt; f[18].siz = 8;
+
+                    if (insertJet4Row(mdb, tdsTbl, f.data(), tdsTbl->num_cols)) {
+                        tdsExported++;
+                        existingTdsSig.insert(std::make_tuple(vn, dv, tt, ac));
+                    }
+                }
+
+                finalizeJet4Table(mdb, tdsTbl);
+                mdb_free_tabledef(tdsTbl);
+                std::cout << "[EXPORT] TDSDeductions Exported: " << tdsExported << std::endl;
             }
 
             // Sync TempLastEnteredVoucher with latest transaction date and FY range.

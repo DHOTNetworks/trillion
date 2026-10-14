@@ -16,6 +16,9 @@ public:
     explicit TcsReceiptListWidget(TcsReceiptVoucherController *controller, QWidget *parent = nullptr);
 
     void reloadData();
+    void markDirty() { m_isDirty = true; }
+    bool isDirty() const { return m_isDirty; }
+    void focusTable();
 
 signals:
     void backRequested();
@@ -45,6 +48,7 @@ private:
     QLabel *m_totalCreditPartyVal = nullptr;
 
     QVariantList m_currentReceipts;
+    bool m_isDirty = true;
 };
 
 } // namespace MahadevERP

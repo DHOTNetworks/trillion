@@ -2,6 +2,7 @@
 #include "weighbridge_kanda_dialog.h"
 #include "voucher_date_dialog.h"
 #include "kbd_badge_button.h"
+#include "erp_theme.h"
 #include "custom_dialogs.h"
 #include "account_search_box.h"
 #include "../engine/fiscal_year_helper.h"
@@ -60,21 +61,21 @@ void PaddyProcurementWidget::setupUi() {
     headerLayout->addLayout(titleCol);
     headerLayout->addStretch();
 
-    auto* newArrivalBtn = new KbdBadgeButton("+ New Paddy Arrival Slip", "F2", this);
+    auto* newArrivalBtn = new KbdBadgeButton("+ New Paddy Arrival Slip", "Ctrl+N", this);
     newArrivalBtn->setPrimaryColor("#16A34A", "#15803D");
     newArrivalBtn->setTextColor("#FFFFFF");
     connect(newArrivalBtn, &QPushButton::clicked, this, &PaddyProcurementWidget::openNewArrivalDialog);
     headerLayout->addWidget(newArrivalBtn);
 
     auto* kandaBtn = new QPushButton("Weighbridge (Kanda)", this);
-    kandaBtn->setStyleSheet("background-color: #EFF6FF; border: 1.5px solid #93C5FD; border-radius: 6px; padding: 6px 12px; font-weight: bold; color: #1D4ED8;");
+    kandaBtn->setStyleSheet(ErpTheme::secondaryButtonStyle());
     connect(kandaBtn, &QPushButton::clicked, this, [this]() {
         WeighbridgeKandaDialog::openKandaSlip(nullptr, 0, this);
     });
     headerLayout->addWidget(kandaBtn);
 
     auto* csvBtn = new QPushButton("Export CSV", this);
-    csvBtn->setStyleSheet("background-color: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 6px; padding: 6px 12px; font-weight: bold; color: #334155;");
+    csvBtn->setStyleSheet(ErpTheme::secondaryButtonStyle());
     connect(csvBtn, &QPushButton::clicked, this, &PaddyProcurementWidget::onExportCsv);
     headerLayout->addWidget(csvBtn);
 
@@ -104,13 +105,13 @@ void PaddyProcurementWidget::setupUi() {
     QDate initSDate = QDate::fromString(initFy.startDate, "yyyy-MM-dd");
     if (!initSDate.isValid()) initSDate = QDate(QDate::currentDate().month() < 4 ? QDate::currentDate().year() - 1 : QDate::currentDate().year(), 4, 1);
     m_fromDateEdit = new AccountingDateDisplay(initSDate, filterCard);
-    m_fromDateEdit->setFixedWidth(115);
+    m_fromDateEdit->setMinimumWidth(115);
     connect(m_fromDateEdit, &AccountingDateDisplay::dateChanged, this, &PaddyProcurementWidget::onDateFilterChanged);
     filterLayout->addWidget(m_fromDateEdit);
 
     filterLayout->addWidget(new QLabel("To Date:", filterCard));
     m_toDateEdit = new AccountingDateDisplay(QDate::currentDate(), filterCard);
-    m_toDateEdit->setFixedWidth(115);
+    m_toDateEdit->setMinimumWidth(115);
     connect(m_toDateEdit, &AccountingDateDisplay::dateChanged, this, &PaddyProcurementWidget::onDateFilterChanged);
     filterLayout->addWidget(m_toDateEdit);
 
@@ -126,10 +127,7 @@ void PaddyProcurementWidget::setupUi() {
     connect(m_toDateEdit, &AccountingDateDisplay::clicked, this, openPeriodDlg);
 
     auto* periodBtn = new QPushButton("Period (F2)", filterCard);
-    periodBtn->setStyleSheet(
-        "QPushButton { background-color: #EFF6FF; color: #1D4ED8; border: 1px solid #BFDBFE; font-weight: 700; font-size: 11px; border-radius: 6px; padding: 4px 10px; }"
-        "QPushButton:hover { background-color: #DBEAFE; color: #1E40AF; }"
-    );
+    periodBtn->setStyleSheet(ErpTheme::secondaryButtonStyle());
     connect(periodBtn, &QPushButton::clicked, this, openPeriodDlg);
     filterLayout->addWidget(periodBtn);
 
@@ -170,10 +168,21 @@ void PaddyProcurementWidget::setupUi() {
     m_table->setStyleSheet(
         "QTableWidget { background-color: #FFFFFF; alternate-background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 8px; gridline-color: #F1F5F9; font-size: 12.5px; color: #0F172A; }"
         "QTableWidget::item { padding: 4px 8px; }"
-        "QTableWidget::item:selected { background-color: #EFF6FF; color: #1D4ED8; font-weight: bold; }"
-        "QHeaderView::section { background-color: #F1F5F9; color: #1E293B; font-weight: 800; font-size: 12px; padding: 8px 10px; border: none; border-bottom: 2px solid #CBD5E1; border-right: 1px solid #E2E8F0; }"
+        "QTableWidget::item:selected { background-color: #2563EB; color: #FFFFFF; font-weight: bold; }"
+        "QHeaderView::section { background-color: #0F172A; color: #FFFFFF; font-weight: 800; font-size: 12px; padding: 8px 10px; border: none;  border-right: 1px solid #334155; }"
     );
     connect(m_table, &QTableWidget::cellDoubleClicked, this, &PaddyProcurementWidget::onTableDoubleClicked);
+    // Enter opens the focused row (same as double-click), scoped to the grid.
+    auto openFocusedRow = [this]() {
+        if (!m_table || m_table->currentRow() < 0) return;
+        onTableDoubleClicked(m_table->currentRow(), m_table->currentColumn());
+    };
+    auto* enterShortcut = new QShortcut(QKeySequence(Qt::Key_Return), m_table);
+    enterShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+    connect(enterShortcut, &QShortcut::activated, this, openFocusedRow);
+    auto* numEnterShortcut = new QShortcut(QKeySequence(Qt::Key_Enter), m_table);
+    numEnterShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+    connect(numEnterShortcut, &QShortcut::activated, this, openFocusedRow);
     mainLayout->addWidget(m_table, 1);
 
     // ========================================================================
@@ -213,7 +222,8 @@ void PaddyProcurementWidget::setupUi() {
 
     // Keyboard Shortcuts
     connect(new QShortcut(QKeySequence(Qt::Key_Escape), this), &QShortcut::activated, this, &PaddyProcurementWidget::backRequested);
-    connect(new QShortcut(QKeySequence(Qt::Key_F2), this), &QShortcut::activated, this, &PaddyProcurementWidget::openNewArrivalDialog);
+    connect(new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_N), this), &QShortcut::activated, this, &PaddyProcurementWidget::openNewArrivalDialog);
+    connect(new QShortcut(QKeySequence(Qt::Key_F2), this), &QShortcut::activated, this, openPeriodDlg);
 }
 
 void PaddyProcurementWidget::loadArrivals(const QDate& fromDate, const QDate& toDate) {

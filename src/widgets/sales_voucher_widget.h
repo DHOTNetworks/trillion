@@ -14,6 +14,7 @@
 #include "accounting_date_edit.h"
 #include "account_search_box.h"
 #include "item_search_delegate.h"
+#include "kbd_badge_button.h"
 #include "../models/sales_voucher_controller.h"
 #include "../models/sales_model.h"
 #include "../models/parties_model.h"
@@ -71,6 +72,7 @@ private slots:
     void onMarketFeeStatusChanged();
     void onTableCellChanged(int row, int column);
     void onStockItemConfigured(int row, const QVariantMap& itemData);
+    void openTcsCalculationDialog();
 
 private:
     void setupUi();
@@ -81,6 +83,7 @@ private:
     void updateFiscalYearBadge();
     void updateDayOfWeek(const QDate& date);
     void populateRow(int row, const QString& itemName, const QString& grade, int bags, double packing, double weight, double rate, double amount, double gstPct);
+    double calculateRawTotal() const;
     void syncModelFromTable();
     void syncTableFromModel();
     void setStatusMessage(const QString& message, bool isError);
@@ -177,10 +180,10 @@ private:
     QLineEdit* m_shippingAddressEdit = nullptr;
     QLineEdit* m_poNoEdit = nullptr;
     QLineEdit* m_gradeEdit = nullptr;
-    QLineEdit* m_transportEdit = nullptr;
+    AccountSearchBox* m_transportEdit = nullptr;
     QLineEdit* m_challanNoEdit = nullptr;
     QLineEdit* m_kandaWeightEdit = nullptr;
-    QLineEdit* m_brokerEdit = nullptr;
+    AccountSearchBox* m_brokerEdit = nullptr;
 
     // Financial Summary Panel (Right)
     QFrame* m_summaryFrame = nullptr;
@@ -197,20 +200,23 @@ private:
     QLabel* m_freightTitleLabel = nullptr;
     QLineEdit* m_freightChargesEdit = nullptr;
     QLabel* m_roundOffTitleLabel = nullptr;
-    QLabel* m_roundOffLabel = nullptr;
+    QLineEdit* m_roundOffEdit = nullptr;
     QLabel* m_tcsTitleLabel = nullptr;
-    QLabel* m_tcsAmountLabel = nullptr;
+    QPushButton* m_tcsCalcBtn = nullptr;
+    QLineEdit* m_tcsAmountEdit = nullptr;
     QLineEdit* m_tcsRateEdit = nullptr;
 
     // Footer Bar
     QLineEdit* m_narrationEdit = nullptr;
-    QLabel* m_grandTotalLabel = nullptr;
+    QLineEdit* m_grandTotalEdit = nullptr;
+    bool m_isUpdatingTotals = false;
 
-    // Actions
-    QPushButton* m_saveBtn = nullptr;
-    QPushButton* m_deleteBtn = nullptr;
-    QPushButton* m_printBtn = nullptr;
-    QPushButton* m_pdfBtn = nullptr;
-    QPushButton* m_newBtn = nullptr;
-    QPushButton* m_backBtn = nullptr;
+    // Actions (badge buttons: shortcut text is always truthful — Esc/F8/Ctrl+S
+    // owned by keyPressEvent, Ctrl+P/Ctrl+E wired there in the UI overhaul)
+    KbdBadgeButton* m_saveBtn = nullptr;
+    KbdBadgeButton* m_deleteBtn = nullptr;
+    KbdBadgeButton* m_printBtn = nullptr;
+    KbdBadgeButton* m_pdfBtn = nullptr;
+    KbdBadgeButton* m_newBtn = nullptr;
+    KbdBadgeButton* m_backBtn = nullptr;
 };

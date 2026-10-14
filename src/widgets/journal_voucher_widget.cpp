@@ -2,6 +2,8 @@
 #include "voucher_date_dialog.h"
 #include "voucher_common.h"
 #include "custom_dialogs.h"
+#include "erp_theme.h"
+#include "kbd_badge_button.h"
 #include "../engine/fiscal_year_helper.h"
 #include "../services/accounting_date_service.h"
 #include "../services/financial_math_service.h"
@@ -27,24 +29,24 @@ JournalVoucherWidget::JournalVoucherWidget(PrintExportController* printExportCtr
 }
 
 void JournalVoucherWidget::setupUi() {
-    setAttribute(Qt::WA_StyledBackground, true);
+    ErpTheme::applySlate(this);
     setStyleSheet(
-        "JournalVoucherWidget { background-color: #FFF3EA; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif; }"
+        "JournalVoucherWidget { background-color: #F8FAFC; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif; }"
         "QLabel { border: none; background: transparent; color: #1E293B; font-size: 11px; font-weight: 700; }"
-        "QLineEdit { background-color: #FFFFFF; color: #0F172A; border: 1px solid #CBD5E1; border-radius: 5px; padding: 2px 6px; font-size: 11.5px; font-weight: 700; }"
-        "QLineEdit:focus { border: 1.5px solid #2563EB; background-color: #EFF6FF; color: #0F172A; }"
+        "QLineEdit, QComboBox { background-color: #FFFFFF; color: #0F172A; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 4px 8px; font-size: 12px; font-weight: 700; }"
+        "QLineEdit:focus, QComboBox:focus { border: 2px solid #2563EB; background-color: #FFFFF0; color: #0F172A; }"
     );
 
     auto* mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(10, 6, 10, 6);
-    mainLayout->setSpacing(6);
+    mainLayout->setContentsMargins(12, 10, 12, 10);
+    mainLayout->setSpacing(8);
 
     // ========================================================================
     // 1. TOP HEADER CARD
     // ========================================================================
     auto* headerCard = new QFrame(this);
-    headerCard->setFixedHeight(50);
-    headerCard->setStyleSheet("background-color: #FFF8F3; border: 1px solid #E2D5C8; border-radius: 6px;");
+    headerCard->setMinimumHeight(50);
+    headerCard->setStyleSheet(ErpTheme::headerCardStyle());
     auto* headerLayout = new QHBoxLayout(headerCard);
     headerLayout->setContentsMargins(12, 0, 12, 0);
     headerLayout->setSpacing(10);
@@ -52,31 +54,22 @@ void JournalVoucherWidget::setupUi() {
     auto* titleBox = new QVBoxLayout();
     titleBox->setSpacing(1);
     m_modeBadge = new QLabel("JOURNAL VOUCHER", headerCard);
-    m_modeBadge->setStyleSheet("color: #0F172A; font-size: 15px; font-weight: 800; border: none; background: transparent;");
+    m_modeBadge->setStyleSheet(ErpTheme::headerTitleStyle(15));
     titleBox->addWidget(m_modeBadge);
 
     auto* subTitleLabel = new QLabel("General journal • Multi-leg adjustment & transfer entries (Dr = Cr)", headerCard);
-    subTitleLabel->setStyleSheet("color: #64748B; font-size: 11px; border: none; background: transparent;");
+    subTitleLabel->setStyleSheet(ErpTheme::mutedLabelStyle(11));
     titleBox->addWidget(subTitleLabel);
     headerLayout->addLayout(titleBox);
 
     headerLayout->addStretch(1);
 
     m_alterBadge = new QLabel("", headerCard);
-    m_alterBadge->setStyleSheet(
-        "background-color: #FEE2E2; color: #DC2626; border: 1px solid #FCA5A5; "
-        "padding: 4px 10px; border-radius: 6px; font-weight: 800; font-size: 11px;"
-    );
+    m_alterBadge->setStyleSheet(ErpTheme::badgeStyle("danger"));
     m_alterBadge->hide();
     headerLayout->addWidget(m_alterBadge);
 
-    m_backBtn = new QPushButton("← Back to Dashboard (Esc)", headerCard);
-    m_backBtn->setFixedHeight(32);
-    m_backBtn->setCursor(Qt::PointingHandCursor);
-    m_backBtn->setStyleSheet(
-        "QPushButton { background-color: #F1F5F9; border: 1px solid #CBD5E1; border-radius: 6px; padding: 0px 14px; font-weight: 700; color: #475569; font-size: 12px; }"
-        "QPushButton:hover { background-color: #E2E8F0; }"
-    );
+    m_backBtn = new KbdBadgeButton("Back", "Esc", headerCard);
     connect(m_backBtn, &QPushButton::clicked, this, &JournalVoucherWidget::backRequested);
     headerLayout->addWidget(m_backBtn);
 
@@ -86,7 +79,7 @@ void JournalVoucherWidget::setupUi() {
     // 2. VOUCHER META / CONTROLS CARD
     // ========================================================================
     auto* metaCard = new QFrame(this);
-    metaCard->setFixedHeight(52);
+    metaCard->setMinimumHeight(52);
     metaCard->setStyleSheet("background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px;");
     auto* metaLayout = new QHBoxLayout(metaCard);
     metaLayout->setContentsMargins(16, 0, 16, 0);
@@ -130,7 +123,7 @@ void JournalVoucherWidget::setupUi() {
     m_dateEdit->setStyleSheet(
         "QLineEdit { background-color: #FFFFFF; color: #0F172A; border: 1px solid #CBD5E1; "
         "border-radius: 6px; padding: 2px 6px; font-weight: 700; font-size: 12px; }"
-        "QLineEdit:focus { border: 1.5px solid #2563EB; background-color: #EFF6FF; }"
+        "QLineEdit:focus { border: 1.5px solid #2563EB; background-color: #FFFFF0; }"
     );
     m_dateEdit->installEventFilter(this);
     connect(m_dateEdit, &AccountingDateEdit::dateChanged, this, &JournalVoucherWidget::onDateChanged);
@@ -175,9 +168,10 @@ void JournalVoucherWidget::setupUi() {
     m_table->setColumnWidth(5, 40);
 
     m_table->setStyleSheet(
-        "QTableWidget { background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; gridline-color: #F1F5F9; }"
-        "QHeaderView::section { background-color: #F1F5F9; color: #334155; font-weight: 800; font-size: 11px; padding: 6px; border: none; border-bottom: 2px solid #CBD5E1; }"
+        "QTableWidget { background-color: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 8px; gridline-color: #E2E8F0; font-size: 12px; color: #0F172A; }"
+        "QHeaderView::section { background-color: #0F172A; color: #FFFFFF; font-weight: 700; font-size: 12px; padding: 8px 8px; border: none; border-right: 1px solid #334155; }"
         "QTableWidget::item { padding: 2px; }"
+        "QTableWidget::item:selected { background-color: #2563EB; color: #FFFFFF; }"
     );
 
     mainLayout->addWidget(m_table, 1);
@@ -199,11 +193,11 @@ void JournalVoucherWidget::setupUi() {
 
     m_narrationInput = new QLineEdit(bottomCard);
     m_narrationInput->setPlaceholderText("Enter journal narration / remarks...");
-    m_narrationInput->setFixedHeight(32);
+    m_narrationInput->setMinimumHeight(32);
     m_narrationInput->setStyleSheet(
         "QLineEdit { background-color: #FFFFFF; color: #0F172A; border: 1px solid #CBD5E1; "
         "border-radius: 6px; padding: 4px 10px; font-size: 12px; }"
-        "QLineEdit:focus { border: 1.5px solid #2563EB; background-color: #EFF6FF; }"
+        "QLineEdit:focus { border: 1.5px solid #2563EB; background-color: #FFFFF0; }"
     );
     m_narrationInput->installEventFilter(this);
     narrRow->addWidget(m_narrationInput, 1);
@@ -250,63 +244,31 @@ void JournalVoucherWidget::setupUi() {
     auto* actionsRow = new QHBoxLayout();
     actionsRow->setSpacing(8);
 
-    m_dateBtn = new QPushButton("F2: Date", this);
-    m_dateBtn->setFixedHeight(34);
-    m_dateBtn->setCursor(Qt::PointingHandCursor);
-    m_dateBtn->setStyleSheet(
-        "QPushButton { background-color: #F1F5F9; color: #334155; border: 1px solid #CBD5E1; "
-        "padding: 0px 14px; border-radius: 6px; font-weight: 700; font-size: 12px; } "
-        "QPushButton:hover { background-color: #E2E8F0; }"
-    );
+    m_dateBtn = new KbdBadgeButton("Date", "F2", this);
     connect(m_dateBtn, &QPushButton::clicked, this, &JournalVoucherWidget::openDateDialog);
     actionsRow->addWidget(m_dateBtn);
 
-    m_addRowBtn = new QPushButton("+ Add Row (Insert)", this);
-    m_addRowBtn->setFixedHeight(34);
-    m_addRowBtn->setCursor(Qt::PointingHandCursor);
-    m_addRowBtn->setStyleSheet(
-        "QPushButton { background-color: #EFF6FF; color: #2563EB; border: 1px solid #BFDBFE; "
-        "padding: 0px 14px; border-radius: 6px; font-weight: 700; font-size: 12px; } "
-        "QPushButton:hover { background-color: #DBEAFE; }"
-    );
+    m_addRowBtn = new KbdBadgeButton("+ Add Row", "Insert", this);
     connect(m_addRowBtn, &QPushButton::clicked, this, [this]() { addNewRow(); });
     actionsRow->addWidget(m_addRowBtn);
 
     actionsRow->addStretch();
 
-    m_deleteBtn = new QPushButton("Delete Voucher (Ctrl+D)", this);
-    m_deleteBtn->setFixedHeight(34);
-    m_deleteBtn->setCursor(Qt::PointingHandCursor);
-    m_deleteBtn->setStyleSheet(
-        "QPushButton { background-color: #FEE2E2; color: #DC2626; border: 1px solid #FCA5A5; "
-        "padding: 0px 14px; border-radius: 6px; font-weight: 700; font-size: 12px; } "
-        "QPushButton:hover { background-color: #FECACA; }"
-    );
+    m_deleteBtn = new KbdBadgeButton("Delete Voucher", "Ctrl+D", this);
+    m_deleteBtn->setPrimaryColor(ErpTheme::kRedBg, ErpTheme::kRedBorder);
+    m_deleteBtn->setTextColor(ErpTheme::kRed);
     m_deleteBtn->hide();
     connect(m_deleteBtn, &QPushButton::clicked, this, &JournalVoucherWidget::deleteVoucher);
     actionsRow->addWidget(m_deleteBtn);
 
-    m_backBtn = new QPushButton("Esc: Back", this);
-    m_backBtn->setFixedHeight(34);
-    m_backBtn->setCursor(Qt::PointingHandCursor);
-    m_backBtn->setStyleSheet(
-        "QPushButton { background-color: #F1F5F9; color: #475569; border: 1px solid #CBD5E1; "
-        "padding: 0px 14px; border-radius: 6px; font-weight: 700; font-size: 12px; } "
-        "QPushButton:hover { background-color: #E2E8F0; }"
-    );
+    m_backBtn = new KbdBadgeButton("Back", "Esc", this);
     connect(m_backBtn, &QPushButton::clicked, this, &JournalVoucherWidget::backRequested);
     actionsRow->addWidget(m_backBtn);
 
-    m_saveBtn = new QPushButton("Ctrl+S: Save Voucher", this);
-    m_saveBtn->setFixedHeight(34);
-    m_saveBtn->setCursor(Qt::PointingHandCursor);
+    m_saveBtn = new KbdBadgeButton("Save Voucher", "Ctrl+S", this);
+    m_saveBtn->setPrimaryColor(ErpTheme::kBlue, ErpTheme::kBlueDark);
+    m_saveBtn->setTextColor(ErpTheme::kPaper);
     m_saveBtn->setFocusPolicy(Qt::StrongFocus);
-    m_saveBtn->setStyleSheet(
-        "QPushButton { background-color: #2563EB; color: #FFFFFF; border: 1px solid #1D4ED8; "
-        "padding: 0px 20px; border-radius: 6px; font-weight: 800; font-size: 13px; } "
-        "QPushButton:hover { background-color: #1D4ED8; } "
-        "QPushButton:focus { background-color: #1D4ED8; border: 2.5px solid #F59E0B; outline: none; }"
-    );
     m_saveBtn->installEventFilter(this);
     connect(m_saveBtn, &QPushButton::clicked, this, &JournalVoucherWidget::saveVoucher);
     actionsRow->addWidget(m_saveBtn);
@@ -415,7 +377,7 @@ void JournalVoucherWidget::setupRowWidgets(int row, const QString& drcr, const Q
     typeCombo->setStyleSheet(
         "QComboBox { background-color: #FFFFFF; color: #0F172A; border: 1px solid #CBD5E1; "
         "border-radius: 4px; padding: 2px 6px; font-weight: 800; font-size: 11px; }"
-        "QComboBox:focus { border: 1.5px solid #2563EB; background-color: #EFF6FF; }"
+        "QComboBox:focus { border: 1.5px solid #2563EB; background-color: #FFFFF0; }"
     );
     typeCombo->installEventFilter(this);
     m_table->setCellWidget(row, 0, typeCombo);
@@ -446,7 +408,7 @@ void JournalVoucherWidget::setupRowWidgets(int row, const QString& drcr, const Q
     debitInput->setStyleSheet(
         "QLineEdit { background-color: #FFFFFF; color: #0F172A; border: 1px solid #CBD5E1; "
         "border-radius: 4px; padding: 2px 8px; font-size: 12px; font-weight: 700; }"
-        "QLineEdit:focus { border: 1.5px solid #2563EB; background-color: #EFF6FF; }"
+        "QLineEdit:focus { border: 1.5px solid #2563EB; background-color: #FFFFF0; }"
     );
     debitInput->installEventFilter(this);
     connect(debitInput, &QLineEdit::textChanged, this, &JournalVoucherWidget::onTableRowChanged);
@@ -460,7 +422,7 @@ void JournalVoucherWidget::setupRowWidgets(int row, const QString& drcr, const Q
     creditInput->setStyleSheet(
         "QLineEdit { background-color: #FFFFFF; color: #0F172A; border: 1px solid #CBD5E1; "
         "border-radius: 4px; padding: 2px 8px; font-size: 12px; font-weight: 700; }"
-        "QLineEdit:focus { border: 1.5px solid #2563EB; background-color: #EFF6FF; }"
+        "QLineEdit:focus { border: 1.5px solid #2563EB; background-color: #FFFFF0; }"
     );
     creditInput->installEventFilter(this);
     connect(creditInput, &QLineEdit::textChanged, this, &JournalVoucherWidget::onTableRowChanged);
@@ -473,7 +435,7 @@ void JournalVoucherWidget::setupRowWidgets(int row, const QString& drcr, const Q
     refInput->setStyleSheet(
         "QLineEdit { background-color: #FFFFFF; color: #0F172A; border: 1px solid #CBD5E1; "
         "border-radius: 4px; padding: 2px 8px; font-size: 12px; }"
-        "QLineEdit:focus { border: 1.5px solid #2563EB; background-color: #EFF6FF; }"
+        "QLineEdit:focus { border: 1.5px solid #2563EB; background-color: #FFFFF0; }"
     );
     refInput->installEventFilter(this);
     m_table->setCellWidget(row, 4, refInput);
@@ -505,7 +467,7 @@ void JournalVoucherWidget::setupRowWidgets(int row, const QString& drcr, const Q
             debitInput->setStyleSheet(
                 "QLineEdit { background-color: #FFFFFF; color: #0F172A; border: 1px solid #CBD5E1; "
                 "border-radius: 4px; padding: 2px 8px; font-size: 12px; font-weight: 700; }"
-                "QLineEdit:focus { border: 1.5px solid #2563EB; background-color: #EFF6FF; }"
+                "QLineEdit:focus { border: 1.5px solid #2563EB; background-color: #FFFFF0; }"
             );
             creditInput->setStyleSheet(
                 "QLineEdit { background-color: #F8FAFC; color: #94A3B8; border: 1px solid #E2E8F0; "
@@ -516,7 +478,7 @@ void JournalVoucherWidget::setupRowWidgets(int row, const QString& drcr, const Q
             creditInput->setStyleSheet(
                 "QLineEdit { background-color: #FFFFFF; color: #0F172A; border: 1px solid #CBD5E1; "
                 "border-radius: 4px; padding: 2px 8px; font-size: 12px; font-weight: 700; }"
-                "QLineEdit:focus { border: 1.5px solid #2563EB; background-color: #EFF6FF; }"
+                "QLineEdit:focus { border: 1.5px solid #2563EB; background-color: #FFFFF0; }"
             );
             debitInput->setStyleSheet(
                 "QLineEdit { background-color: #F8FAFC; color: #94A3B8; border: 1px solid #E2E8F0; "

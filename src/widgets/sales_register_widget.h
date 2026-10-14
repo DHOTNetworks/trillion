@@ -26,6 +26,7 @@ signals:
     void backRequested();
     void alterInvoiceRequested(int targetViewIndex, const QVariantMap& entry);
     void newInvoiceRequested();
+    void entriesChanged();
 
 private slots:
     void onSearchChanged(const QString& query);
@@ -34,6 +35,7 @@ private slots:
     void onPrintInvoice();
     void onExportPdf();
     void onExportCsv();
+    void deleteFocusedRow();
 
 private:
     void setupUi();

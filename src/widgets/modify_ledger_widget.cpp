@@ -5,6 +5,7 @@
 #include "../engine/accounting_engine.h"
 #include "../engine/ledger_pipeline.h"
 #include "../engine/fiscal_year_helper.h"
+#include "../services/master_data_provider.h"
 #include <QKeyEvent>
 #include <QMessageBox>
 #include <QDoubleValidator>
@@ -23,16 +24,10 @@ ModifyLedgerWidget::ModifyLedgerWidget(QWidget* parent)
     setupUi();
 
     // Global focus shortcuts for search
-    auto* altS = new QShortcut(QKeySequence("Alt+S"), this);
+    auto* altS = new QShortcut(QKeySequence(Qt::ALT | Qt::Key_Q), this);
     connect(altS, &QShortcut::activated, this, &ModifyLedgerWidget::focusSearch);
 
-    auto* altL = new QShortcut(QKeySequence("Alt+L"), this);
-    connect(altL, &QShortcut::activated, this, &ModifyLedgerWidget::focusSearch);
-
-    auto* altP = new QShortcut(QKeySequence("Alt+P"), this);
-    connect(altP, &QShortcut::activated, this, &ModifyLedgerWidget::focusSearch);
-
-    auto* altD = new QShortcut(QKeySequence("Alt+D"), this);
+    auto* altD = new QShortcut(QKeySequence(Qt::ALT | Qt::Key_D), this);
     connect(altD, &QShortcut::activated, this, &ModifyLedgerWidget::onDeleteClicked);
 }
 
@@ -175,32 +170,27 @@ void ModifyLedgerWidget::setupUi() {
 
     // 4. BOTTOM ACTION BAR
     auto* bottomCard = new QFrame(this);
-    bottomCard->setFixedHeight(42);
+    bottomCard->setMinimumHeight(42);
     bottomCard->setStyleSheet("background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px;");
     auto* bottomLayout = new QHBoxLayout(bottomCard);
     bottomLayout->setContentsMargins(12, 0, 12, 0);
     bottomLayout->setSpacing(10);
 
-    m_cancelBtn = new QPushButton("Cancel (Esc)", bottomCard);
-    m_cancelBtn->setFixedSize(100, 30);
-    m_cancelBtn->setCursor(Qt::PointingHandCursor);
-    m_cancelBtn->setStyleSheet("QPushButton { background-color: #F1F5F9; color: #475569; border: 1px solid #CBD5E1; border-radius: 5px; font-weight: 700; font-size: 12px; } QPushButton:hover { background-color: #E2E8F0; }");
+    m_cancelBtn = new KbdBadgeButton("Cancel", "Esc", bottomCard);
     connect(m_cancelBtn, &QPushButton::clicked, this, &ModifyLedgerWidget::backRequested);
     bottomLayout->addWidget(m_cancelBtn);
 
-    m_deleteBtn = new QPushButton("Delete Ledger (Alt+D)", bottomCard);
-    m_deleteBtn->setFixedSize(150, 30);
-    m_deleteBtn->setCursor(Qt::PointingHandCursor);
-    m_deleteBtn->setStyleSheet("QPushButton { background-color: #FEE2E2; color: #DC2626; border: 1px solid #FCA5A5; border-radius: 5px; font-weight: 700; font-size: 12px; } QPushButton:hover { background-color: #FECACA; }");
+    m_deleteBtn = new KbdBadgeButton("Delete Ledger", "Alt+D", bottomCard);
+    m_deleteBtn->setPrimaryColor(ErpTheme::kRedBg, ErpTheme::kRedBorder);
+    m_deleteBtn->setTextColor(ErpTheme::kRed);
     connect(m_deleteBtn, &QPushButton::clicked, this, &ModifyLedgerWidget::onDeleteClicked);
     bottomLayout->addWidget(m_deleteBtn);
 
     bottomLayout->addStretch();
 
-    m_updateBtn = new QPushButton("Update Complete Ledger Account (Enter)", bottomCard);
-    m_updateBtn->setFixedSize(270, 30);
-    m_updateBtn->setCursor(Qt::PointingHandCursor);
-    m_updateBtn->setStyleSheet("QPushButton { background-color: #059669; color: #FFFFFF; border: 1px solid #047857; border-radius: 5px; font-weight: 800; font-size: 12px; } QPushButton:hover { background-color: #047857; } QPushButton:focus { border: 2px solid #6EE7B7; }");
+    m_updateBtn = new KbdBadgeButton("Update Complete Ledger Account", "Enter", bottomCard);
+    m_updateBtn->setPrimaryColor(ErpTheme::kEmerald, ErpTheme::kEmeraldDark);
+    m_updateBtn->setTextColor(ErpTheme::kPaper);
     connect(m_updateBtn, &QPushButton::clicked, this, &ModifyLedgerWidget::onUpdateClicked);
     bottomLayout->addWidget(m_updateBtn);
 
@@ -276,7 +266,7 @@ void ModifyLedgerWidget::setupUi() {
 
 QWidget* ModifyLedgerWidget::createHeaderSection() {
     auto* card = new QFrame(this);
-    card->setFixedHeight(44);
+    card->setMinimumHeight(44);
     card->setStyleSheet("background-color: #0F172A; border: 1px solid #1E293B; border-radius: 8px;");
     auto* layout = new QHBoxLayout(card);
     layout->setContentsMargins(12, 2, 12, 2);
@@ -290,8 +280,8 @@ QWidget* ModifyLedgerWidget::createHeaderSection() {
     pfxRow->addWidget(pfxTitle);
 
     m_prefixCombo = new QComboBox(card);
-    m_prefixCombo->setFixedHeight(30);
-    m_prefixCombo->setFixedWidth(80);
+    m_prefixCombo->setMinimumHeight(30);
+    m_prefixCombo->setMinimumWidth(80);
     pfxRow->addWidget(m_prefixCombo);
 
     m_createPrefixBtn = new QPushButton("(Alt+C : Create New)", card);
@@ -319,7 +309,7 @@ QWidget* ModifyLedgerWidget::createHeaderSection() {
 
     // Right: Total Opening Bal. Monitor Card
     auto* balCard = new QFrame(card);
-    balCard->setFixedHeight(38);
+    balCard->setMinimumHeight(38);
     balCard->setStyleSheet("background-color: #1E293B; border: 1px solid #334155; border-radius: 6px;");
     auto* balLayout = new QVBoxLayout(balCard);
     balLayout->setContentsMargins(10, 2, 10, 2);
@@ -351,7 +341,7 @@ QWidget* ModifyLedgerWidget::createHeaderSection() {
 
 QWidget* ModifyLedgerWidget::createSearchCard() {
     auto* card = new QFrame(this);
-    card->setFixedHeight(36);
+    card->setMinimumHeight(36);
     card->setStyleSheet("QFrame { background-color: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 6px; }");
     auto* layout = new QHBoxLayout(card);
     layout->setContentsMargins(10, 2, 10, 2);
@@ -398,7 +388,7 @@ QWidget* ModifyLedgerWidget::createSlateSection() {
     m_nameInput = new QLineEdit(card);
     m_nameInput->setPlaceholderText("e.g. KRISHNA FOODS");
     m_nameInput->setStyleSheet(inputStyle());
-    m_nameInput->setFixedHeight(30);
+    m_nameInput->setMinimumHeight(30);
     nameBox->addWidget(nameLbl);
     nameBox->addWidget(m_nameInput);
     row1->addLayout(nameBox, 3);
@@ -410,7 +400,7 @@ QWidget* ModifyLedgerWidget::createSlateSection() {
     m_aliasInput = new QLineEdit(card);
     m_aliasInput->setPlaceholderText("Alias / Code");
     m_aliasInput->setStyleSheet(inputStyle());
-    m_aliasInput->setFixedHeight(30);
+    m_aliasInput->setMinimumHeight(30);
     aliasBox->addWidget(aliasLbl);
     aliasBox->addWidget(m_aliasInput);
     row1->addLayout(aliasBox, 1);
@@ -422,7 +412,7 @@ QWidget* ModifyLedgerWidget::createSlateSection() {
     auto* underRow = new QHBoxLayout();
     underRow->setSpacing(4);
     m_groupCombo = new QComboBox(card);
-    m_groupCombo->setFixedHeight(30);
+    m_groupCombo->setMinimumHeight(30);
     underRow->addWidget(m_groupCombo, 2);
 
     m_parentGroupLbl = new QLabel("(Sundry Debtors)", card);
@@ -443,7 +433,7 @@ QWidget* ModifyLedgerWidget::createSlateSection() {
     auto* stLbl = new QLabel("Station :", card);
     stLbl->setStyleSheet("color: #0F172A; font-size: 12px; font-weight: 700; border: none;");
     m_stationCombo = new QComboBox(card);
-    m_stationCombo->setFixedHeight(30);
+    m_stationCombo->setMinimumHeight(30);
     stBox->addWidget(stLbl);
     stBox->addWidget(m_stationCombo);
     row2->addLayout(stBox, 2);
@@ -453,7 +443,7 @@ QWidget* ModifyLedgerWidget::createSlateSection() {
     auto* stateLbl = new QLabel("State :", card);
     stateLbl->setStyleSheet("color: #0F172A; font-size: 12px; font-weight: 700; border: none;");
     m_stateCombo = new QComboBox(card);
-    m_stateCombo->setFixedHeight(30);
+    m_stateCombo->setMinimumHeight(30);
     stateBox->addWidget(stateLbl);
     stateBox->addWidget(m_stateCombo);
     row2->addLayout(stateBox, 2);
@@ -465,8 +455,8 @@ QWidget* ModifyLedgerWidget::createSlateSection() {
     m_stateCodeInput = new QLineEdit(card);
     m_stateCodeInput->setPlaceholderText("06");
     m_stateCodeInput->setStyleSheet(inputStyle());
-    m_stateCodeInput->setFixedHeight(30);
-    m_stateCodeInput->setFixedWidth(65);
+    m_stateCodeInput->setMinimumHeight(30);
+    m_stateCodeInput->setMinimumWidth(65);
     scBox->addWidget(scLbl);
     scBox->addWidget(m_stateCodeInput);
     row2->addLayout(scBox);
@@ -478,8 +468,8 @@ QWidget* ModifyLedgerWidget::createSlateSection() {
     m_pincodeInput = new QLineEdit(card);
     m_pincodeInput->setPlaceholderText("125055");
     m_pincodeInput->setStyleSheet(inputStyle());
-    m_pincodeInput->setFixedHeight(30);
-    m_pincodeInput->setFixedWidth(85);
+    m_pincodeInput->setMinimumHeight(30);
+    m_pincodeInput->setMinimumWidth(85);
     pinBox->addWidget(pinLbl);
     pinBox->addWidget(m_pincodeInput);
     row2->addLayout(pinBox);
@@ -494,8 +484,8 @@ QWidget* ModifyLedgerWidget::createSlateSection() {
     rcLayout->addWidget(m_useRoutesCheck);
 
     m_routeCombo = new QComboBox(m_routeContainer);
-    m_routeCombo->setFixedHeight(30);
-    m_routeCombo->setFixedWidth(120);
+    m_routeCombo->setMinimumHeight(30);
+    m_routeCombo->setMinimumWidth(120);
     m_routeCombo->setEnabled(false);
     rcLayout->addWidget(m_routeCombo);
 
@@ -517,7 +507,7 @@ QWidget* ModifyLedgerWidget::createSlateSection() {
     m_booksFromInput = new QLineEdit(card);
     m_booksFromInput->setPlaceholderText("DD-MM-YYYY");
     m_booksFromInput->setStyleSheet(inputStyle());
-    m_booksFromInput->setFixedHeight(30);
+    m_booksFromInput->setMinimumHeight(30);
     booksBox->addWidget(booksLbl);
     booksBox->addWidget(m_booksFromInput);
     row3->addLayout(booksBox, 2);
@@ -533,14 +523,14 @@ QWidget* ModifyLedgerWidget::createSlateSection() {
     m_opBalInput->setAlignment(Qt::AlignRight);
     m_opBalInput->setValidator(new QDoubleValidator(0.0, 999999999.0, 2, this));
     m_opBalInput->setStyleSheet(inputStyle());
-    m_opBalInput->setFixedHeight(30);
+    m_opBalInput->setMinimumHeight(30);
     opRow->addWidget(m_opBalInput, 2);
 
     m_balTypeCombo = new QComboBox(card);
     m_balTypeCombo->addItems({"Dr", "Cr"});
     m_balTypeCombo->setStyleSheet(comboStyle());
-    m_balTypeCombo->setFixedHeight(30);
-    m_balTypeCombo->setFixedWidth(55);
+    m_balTypeCombo->setMinimumHeight(30);
+    m_balTypeCombo->setMinimumWidth(55);
     opRow->addWidget(m_balTypeCombo);
 
     opBox->addWidget(opLbl);
@@ -554,7 +544,7 @@ QWidget* ModifyLedgerWidget::createSlateSection() {
     m_openFromInput = new QLineEdit(card);
     m_openFromInput->setPlaceholderText("e.g. Sales A/c, Head Office");
     m_openFromInput->setStyleSheet(inputStyle());
-    m_openFromInput->setFixedHeight(30);
+    m_openFromInput->setMinimumHeight(30);
     openFromBox->addWidget(openFromLbl);
     openFromBox->addWidget(m_openFromInput);
     row3->addLayout(openFromBox, 2);
@@ -565,7 +555,7 @@ QWidget* ModifyLedgerWidget::createSlateSection() {
     // DIVIDER 1
     // ==========================================
     auto* div1 = new QFrame(card);
-    div1->setFixedHeight(1);
+    div1->setMinimumHeight(1);
     div1->setStyleSheet("background-color: #F1F5F9; border: none; margin: 1px 0px;");
     layout->addWidget(div1);
     // Expanding gap: leftover slate height spreads between sections instead of
@@ -590,7 +580,7 @@ QWidget* ModifyLedgerWidget::createSlateSection() {
         edit = new QLineEdit(parent);
         edit->setPlaceholderText(placeholder);
         edit->setStyleSheet(inputStyle());
-        edit->setFixedHeight(30);
+        edit->setMinimumHeight(30);
         box->addWidget(lbl);
         box->addWidget(edit);
         return box;
@@ -600,14 +590,14 @@ QWidget* ModifyLedgerWidget::createSlateSection() {
     auto* col1 = new QVBoxLayout();
     col1->setSpacing(6);
 
-    col1->addLayout(createFormField(card, "GSTIN :", m_gstinInput, "06AAAAA0000A1Z5"));
+    col1->addLayout(createFormField(card, "GSTIN :", m_gstinInput, MasterDataProvider::instance().gstinPlaceholder()));
 
     auto* ptBox = new QVBoxLayout();
     ptBox->setSpacing(2);
     auto* ptLbl = new QLabel("Party Type (GST) :", card);
     ptLbl->setStyleSheet("color: #334155; font-size: 12px; font-weight: 600; border: none;");
     m_gstPartyTypeCombo = new QComboBox(card);
-    m_gstPartyTypeCombo->setFixedHeight(30);
+    m_gstPartyTypeCombo->setMinimumHeight(30);
     ptBox->addWidget(ptLbl);
     ptBox->addWidget(m_gstPartyTypeCombo);
     col1->addLayout(ptBox);
@@ -645,7 +635,7 @@ QWidget* ModifyLedgerWidget::createSlateSection() {
     // DIVIDER 2
     // ==========================================
     auto* div2 = new QFrame(card);
-    div2->setFixedHeight(1);
+    div2->setMinimumHeight(1);
     div2->setStyleSheet("background-color: #F1F5F9; border: none; margin: 1px 0px;");
     layout->addWidget(div2);
     layout->addStretch(1);

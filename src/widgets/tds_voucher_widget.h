@@ -28,6 +28,9 @@ public slots:
     void openDateDialog();
     void onSaveClicked();
     void onDeleteClicked();
+
+protected:
+    void keyPressEvent(QKeyEvent* event) override;
     void saveVoucher() { onSaveClicked(); }
     void deleteVoucher() { onDeleteClicked(); }
 

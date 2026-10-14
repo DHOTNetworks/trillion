@@ -33,18 +33,7 @@ VoucherDateDialog::VoucherDateDialog(const QString& currentDate, const FiscalYea
     }
 
     if (!m_contextFy.isValid()) {
-        if (parsedDate.isValid()) {
-            m_contextFy = FiscalYearHelper::getFiscalYearForDate(parsedDate.toString("yyyy-MM-dd"));
-        }
-        if (!m_contextFy.isValid() && !m_initialDate.isEmpty()) {
-            QString iso = FiscalYearHelper::normalizeToIso(m_initialDate);
-            if (!iso.isEmpty()) {
-                m_contextFy = FiscalYearHelper::getFiscalYearForDate(iso);
-            }
-        }
-        if (!m_contextFy.isValid()) {
-            m_contextFy = FiscalYearHelper::getActiveFiscalYear();
-        }
+        m_contextFy = FiscalYearHelper::getActiveFiscalYear();
     }
 
     if (!parsedDate.isValid()) {
@@ -64,7 +53,7 @@ VoucherDateDialog::VoucherDateDialog(const QString& currentDate, const FiscalYea
 }
 
 void VoucherDateDialog::setupUi() {
-    setFixedWidth(380);
+    setMinimumWidth(380);
 
     setStyleSheet(
         "QDialog {"
@@ -125,7 +114,7 @@ void VoucherDateDialog::setupUi() {
     m_dateInput = new QLineEdit(this);
     m_dateInput->setAlignment(Qt::AlignCenter);
     m_dateInput->setText(m_workingDate);
-    m_dateInput->setFixedHeight(36);
+    m_dateInput->setMinimumHeight(36);
     m_dateInput->installEventFilter(this);
     mainLayout->addWidget(m_dateInput);
 
@@ -141,17 +130,13 @@ void VoucherDateDialog::setupUi() {
     QHBoxLayout* btnLayout = new QHBoxLayout();
     btnLayout->setSpacing(8);
 
-    m_applyBtn = new QPushButton("Apply (Enter)", this);
-    m_applyBtn->setStyleSheet(
-        "QPushButton { background-color: #059669; color: #FFFFFF; border: 1px solid #047857; font-weight: 800; } "
-        "QPushButton:hover { background-color: #047857; } "
-        "QPushButton:pressed { background-color: #064E3B; }"
-    );
+    m_applyBtn = new KbdBadgeButton("Apply", "Enter", this);
+    m_applyBtn->setPrimaryColor(ErpTheme::kEmerald, ErpTheme::kEmeraldDark);
+    m_applyBtn->setTextColor(ErpTheme::kPaper);
     connect(m_applyBtn, &QPushButton::clicked, this, &VoucherDateDialog::onAccept);
     btnLayout->addWidget(m_applyBtn);
 
-    m_cancelBtn = new QPushButton("Cancel (Esc)", this);
-    m_cancelBtn->setStyleSheet("QPushButton { background-color: #FFFFFF; color: #475569; border: 1px solid #CBD5E1; } QPushButton:hover { background-color: #F1F5F9; }");
+    m_cancelBtn = new KbdBadgeButton("Cancel", "Esc", this);
     connect(m_cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
     btnLayout->addWidget(m_cancelBtn);
 
@@ -215,14 +200,9 @@ void VoucherDateDialog::onAccept() {
             QDate s = QDate::fromString(targetFy.startDate, "yyyy-MM-dd");
             QDate e = QDate::fromString(targetFy.endDate, "yyyy-MM-dd");
             if (s.isValid() && e.isValid() && (d < s || d > e)) {
-                FiscalYearInfo altFy = FiscalYearHelper::getFiscalYearForDate(res.value("isoDate").toString());
-                if (altFy.isValid()) {
-                    m_contextFy = altFy;
-                } else {
-                    valid = false;
-                    res["error"] = QString("Date %1 is outside the Financial Year Period (%2: %3 to %4).\nPlease enter a date within this period or switch the Financial Year (Alt+F).")
-                                        .arg(d.toString("dd-MM-yyyy"), targetFy.name, s.toString("dd-MM-yyyy"), e.toString("dd-MM-yyyy"));
-                }
+                valid = false;
+                res["error"] = QString("Date %1 is outside the Financial Year Period (%2: %3 to %4).\nPlease enter a date within this period or switch the Financial Year (Alt+F).")
+                                    .arg(d.toString("dd-MM-yyyy"), targetFy.name, s.toString("dd-MM-yyyy"), e.toString("dd-MM-yyyy"));
             }
         }
     }
@@ -458,7 +438,7 @@ QDate DateRangeDialog::parseDateFlexible(const QString& input, const QDate& fall
 }
 
 void DateRangeDialog::setupUi() {
-    setFixedWidth(440);
+    setMinimumWidth(440);
 
     setStyleSheet(
         "QDialog {"
@@ -588,17 +568,13 @@ void DateRangeDialog::setupUi() {
     QHBoxLayout* btnLayout = new QHBoxLayout();
     btnLayout->setSpacing(8);
 
-    m_applyBtn = new QPushButton("Apply Period (Enter)", this);
-    m_applyBtn->setStyleSheet(
-        "QPushButton { background-color: #2563EB; color: #FFFFFF; border: 1px solid #1D4ED8; font-weight: 800; padding: 8px 16px; font-size: 12px; } "
-        "QPushButton:hover { background-color: #1D4ED8; } "
-        "QPushButton:pressed { background-color: #1E40AF; }"
-    );
+    m_applyBtn = new KbdBadgeButton("Apply Period", "Enter", this);
+    m_applyBtn->setPrimaryColor(ErpTheme::kBlue, ErpTheme::kBlueDark);
+    m_applyBtn->setTextColor(ErpTheme::kPaper);
     connect(m_applyBtn, &QPushButton::clicked, this, &DateRangeDialog::onAccept);
     btnLayout->addWidget(m_applyBtn);
 
-    m_cancelBtn = new QPushButton("Cancel (Esc)", this);
-    m_cancelBtn->setStyleSheet("QPushButton { background-color: #FFFFFF; color: #475569; border: 1px solid #CBD5E1; padding: 8px 16px; font-size: 12px; } QPushButton:hover { background-color: #F1F5F9; }");
+    m_cancelBtn = new KbdBadgeButton("Cancel", "Esc", this);
     connect(m_cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
     btnLayout->addWidget(m_cancelBtn);
 

@@ -1,4 +1,6 @@
 #include "bill_series_dialog.h"
+#include "kbd_badge_button.h"
+#include "erp_theme.h"
 #include "voucher_common.h"
 #include "../engine/fiscal_year_helper.h"
 #include <QVBoxLayout>
@@ -20,7 +22,7 @@ BillSeriesDialog::BillSeriesDialog(QWidget* parent)
 
 void BillSeriesDialog::setupUi()
 {
-    setFixedWidth(520);
+    setMinimumWidth(520);
     setStyleSheet(
         "QDialog {"
         "  background-color: #FFFFFF;"
@@ -128,17 +130,15 @@ void BillSeriesDialog::setupUi()
     auto* btnRow = new QHBoxLayout();
     btnRow->setContentsMargins(20, 0, 20, 0);
 
-    auto* btnCancel = new QPushButton("Close [Esc]", this);
-    btnCancel->setStyleSheet("QPushButton { background-color: #F1F5F9; border: 1px solid #CBD5E1; color: #475569; padding: 7px 18px; border-radius: 6px; font-weight: 600; font-size: 13px; } QPushButton:hover { background-color: #E2E8F0; }");
-    btnCancel->setCursor(Qt::PointingHandCursor);
+    auto* btnCancel = new KbdBadgeButton("Close", "Esc", this);
     connect(btnCancel, &QPushButton::clicked, this, &QDialog::reject);
     btnRow->addWidget(btnCancel);
 
     btnRow->addStretch(1);
 
-    m_saveBtn = new QPushButton("Save [Ctrl+S]", this);
-    m_saveBtn->setStyleSheet("QPushButton { background-color: #16A34A; color: white; border: none; padding: 7px 20px; border-radius: 6px; font-weight: 700; font-size: 13px; } QPushButton:hover { background-color: #15803D; }");
-    m_saveBtn->setCursor(Qt::PointingHandCursor);
+    m_saveBtn = new KbdBadgeButton("Save", "Ctrl+S", this);
+    m_saveBtn->setPrimaryColor(ErpTheme::kGreen, ErpTheme::kGreenDark);
+    m_saveBtn->setTextColor(ErpTheme::kPaper);
     connect(m_saveBtn, &QPushButton::clicked, this, &BillSeriesDialog::onSaveClicked);
     btnRow->addWidget(m_saveBtn);
 
@@ -155,7 +155,7 @@ void BillSeriesDialog::setupUi()
     VoucherCommon::installGridNavigation(m_suffixEdit, m_startSpin, m_resetCheck, [this, go]() { go(m_resetCheck); });
     VoucherCommon::installGridNavigation(m_resetCheck, m_suffixEdit, m_saveBtn, [this]() { if (m_saveBtn) m_saveBtn->setFocus(); });
 
-    auto* saveShortcut = new QShortcut(QKeySequence("Ctrl+S"), this);
+    auto* saveShortcut = new QShortcut(QKeySequence(Qt::ALT | Qt::Key_S), this);
     connect(saveShortcut, &QShortcut::activated, this, &BillSeriesDialog::onSaveClicked);
 
     connect(m_prefixEdit, &QLineEdit::textChanged, this, &BillSeriesDialog::updatePreview);

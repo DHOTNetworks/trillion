@@ -2,6 +2,7 @@
 #include "voucher_common.h"
 #include "voucher_date_dialog.h"
 #include "kbd_badge_button.h"
+#include "erp_theme.h"
 #include "custom_dialogs.h"
 #include "../engine/fiscal_year_helper.h"
 #include "../database_manager.h"
@@ -33,7 +34,7 @@ DebitCreditNoteWidget::DebitCreditNoteWidget(DebitCreditNoteController* controll
 void DebitCreditNoteWidget::setupUi() {
     setAttribute(Qt::WA_StyledBackground, true);
     setStyleSheet(
-        "DebitCreditNoteWidget { background-color: #FFF3EA; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif; }"
+        "DebitCreditNoteWidget { background-color: #F8FAFC; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif; }"
         "QLabel { border: none; background: transparent; color: #1E293B; font-size: 11px; font-weight: 700; }"
         "QLineEdit { background-color: #FFFFFF; color: #0F172A; border: 1px solid #CBD5E1; border-radius: 5px; padding: 2px 6px; font-size: 11.5px; font-weight: 700; }"
         "QLineEdit:focus { border: 1.5px solid #0284C7; background-color: #F0F9FF; color: #0F172A; }"
@@ -47,8 +48,8 @@ void DebitCreditNoteWidget::setupUi() {
     // TIER 1: STICKY HEADER BAR CARD
     // ========================================================================
     auto* headerCard = new QFrame(this);
-    headerCard->setFixedHeight(50);
-    headerCard->setStyleSheet("QFrame { background-color: #FFF8F3; border: 1px solid #E2D5C8; border-radius: 6px; }");
+    headerCard->setMinimumHeight(50);
+    headerCard->setStyleSheet("QFrame { background-color: #FFFFFF; border: 1px solid #E2D5C8; border-radius: 6px; }");
     auto* headerLayout = new QHBoxLayout(headerCard);
     headerLayout->setContentsMargins(12, 4, 12, 4);
     headerLayout->setSpacing(10);
@@ -237,21 +238,13 @@ void DebitCreditNoteWidget::setupUi() {
 
     tableTopRow->addStretch(1);
 
-    m_addRowBtn = new QPushButton("+ Add Item Row (F4)", tableCard);
-    m_addRowBtn->setCursor(Qt::PointingHandCursor);
-    m_addRowBtn->setStyleSheet(
-        "QPushButton { background-color: #EFF6FF; border: 1.5px solid #93C5FD; border-radius: 6px; padding: 4px 12px; font-weight: 800; font-size: 11.5px; color: #1D4ED8; }"
-        "QPushButton:hover { background-color: #DBEAFE; }"
-    );
+    m_addRowBtn = new KbdBadgeButton("+ Add Item Row", "F4", tableCard);
     connect(m_addRowBtn, &QPushButton::clicked, this, &DebitCreditNoteWidget::onAddItemRow);
     tableTopRow->addWidget(m_addRowBtn);
 
-    m_remRowBtn = new QPushButton("- Remove Item (Del)", tableCard);
-    m_remRowBtn->setCursor(Qt::PointingHandCursor);
-    m_remRowBtn->setStyleSheet(
-        "QPushButton { background-color: #FEF2F2; border: 1.5px solid #FECACA; border-radius: 6px; padding: 4px 12px; font-weight: 800; font-size: 11.5px; color: #DC2626; }"
-        "QPushButton:hover { background-color: #FEE2E2; }"
-    );
+    m_remRowBtn = new KbdBadgeButton("- Remove Item", "Del", tableCard);
+    m_remRowBtn->setPrimaryColor(ErpTheme::kRedBg, ErpTheme::kRedBorder);
+    m_remRowBtn->setTextColor(ErpTheme::kRed);
     connect(m_remRowBtn, &QPushButton::clicked, this, &DebitCreditNoteWidget::onRemoveItemRow);
     tableTopRow->addWidget(m_remRowBtn);
 
@@ -289,7 +282,7 @@ void DebitCreditNoteWidget::setupUi() {
         "  gridline-color: #E2E8F0;"
         "  font-size: 12px;"
         "  color: #0F172A;"
-        "  selection-background-color: #EFF6FF;"
+        "  selection-background-color: #2563EB;"
         "  selection-color: #1E3A8A;"
         "}"
         "QTableWidget::item {"
@@ -297,19 +290,19 @@ void DebitCreditNoteWidget::setupUi() {
         "  color: #0F172A;"
         "}"
         "QTableWidget::item:selected {"
-        "  background-color: #EFF6FF;"
-        "  color: #1D4ED8;"
+        "  background-color: #2563EB;"
+        "  color: #FFFFFF;"
         "  font-weight: bold;"
         "}"
         "QHeaderView::section {"
-        "  background-color: #F1F5F9;"
-        "  color: #1E293B;"
+        "  background-color: #0F172A;"
+        "  color: #FFFFFF;"
         "  font-weight: 800;"
         "  font-size: 12px;"
         "  padding: 8px 10px;"
         "  border: none;"
-        "  border-bottom: 2px solid #CBD5E1;"
-        "  border-right: 1px solid #E2E8F0;"
+        "  "
+        "  border-right: 1px solid #334155;"
         "}"
     );
 
@@ -572,6 +565,11 @@ void DebitCreditNoteWidget::keyPressEvent(QKeyEvent* event) {
     }
     if (event->key() == Qt::Key_F4) {
         onAddItemRow();
+        event->accept();
+        return;
+    }
+    if (event->key() == Qt::Key_Delete) {
+        onRemoveItemRow();
         event->accept();
         return;
     }

@@ -126,7 +126,9 @@ void NewGroupWidget::setupUi() {
     bottomLayout->addWidget(m_saveBtn);
     mainLayout->addLayout(bottomLayout);
 
+
     connect(new QShortcut(QKeySequence(Qt::Key_Escape), this), &QShortcut::activated, this, &NewGroupWidget::backRequested);
+    connect(new QShortcut(QKeySequence(Qt::ALT | Qt::Key_S), this), &QShortcut::activated, this, &NewGroupWidget::onSaveClicked);
     connect(new QShortcut(QKeySequence(Qt::Key_Return), this), &QShortcut::activated, this, &NewGroupWidget::onSaveClicked);
     connect(new QShortcut(QKeySequence(Qt::Key_Enter), this), &QShortcut::activated, this, &NewGroupWidget::onSaveClicked);
 }

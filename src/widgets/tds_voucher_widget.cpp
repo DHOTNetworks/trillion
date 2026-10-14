@@ -4,6 +4,7 @@
 #include "custom_dialogs.h"
 #include "../database_manager.h"
 #include "../engine/fiscal_year_helper.h"
+#include "../models/tds_model.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGridLayout>
@@ -12,6 +13,7 @@
 #include <QFrame>
 #include <QDate>
 #include <QShortcut>
+#include <QKeyEvent>
 
 namespace MahadevERP {
 
@@ -29,10 +31,10 @@ TdsVoucherWidget::TdsVoucherWidget(TdsVoucherController* controller,
 void TdsVoucherWidget::setupUi() {
     setAttribute(Qt::WA_StyledBackground, true);
     setStyleSheet(
-        "TdsVoucherWidget { background-color: #FFF3EA; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif; }"
+        "TdsVoucherWidget { background-color: #F8FAFC; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif; }"
         "QLabel { border: none; background: transparent; color: #1E293B; font-size: 11px; font-weight: 700; }"
         "QLineEdit { background-color: #FFFFFF; color: #0F172A; border: 1px solid #CBD5E1; border-radius: 5px; padding: 2px 6px; font-size: 11.5px; font-weight: 700; }"
-        "QLineEdit:focus { border: 1.5px solid #2563EB; background-color: #EFF6FF; color: #0F172A; }"
+        "QLineEdit:focus { border: 1.5px solid #2563EB; background-color: #FFFFF0; color: #0F172A; }"
     );
 
     auto* rootLayout = new QVBoxLayout(this);
@@ -43,9 +45,9 @@ void TdsVoucherWidget::setupUi() {
     // TIER 1: STICKY HEADER CARD (COMPACT HEIGHT)
     // ========================================================================
     auto* headerCard = new QFrame(this);
-    headerCard->setFixedHeight(48);
+    headerCard->setMinimumHeight(48);
     headerCard->setStyleSheet(
-        "QFrame { background-color: #FFF8F3; border: 1px solid #E2D5C8; border-radius: 6px; }"
+        "QFrame { background-color: #FFFFFF; border: 1px solid #E2D5C8; border-radius: 6px; }"
     );
     auto* headerLayout = new QHBoxLayout(headerCard);
     headerLayout->setContentsMargins(12, 4, 12, 4);
@@ -133,16 +135,17 @@ void TdsVoucherWidget::setupUi() {
     // Row 1: TDS Section & Post in Books
     leftGrid->addWidget(new QLabel("TDS Section *:", leftCard), 1, 0);
     m_tdsTypeCombo = new QComboBox(leftCard);
-    m_tdsTypeCombo->addItems({
-        "194C - Payment to Contractors (1% Indiv / 2% Others)",
-        "194J - Professional Fees / Technical Services (2% / 10%)",
-        "194I - Rent on Land & Building (10%)",
-        "194I - Rent on Plant & Machinery (2%)",
-        "194Q - Purchase of Goods exceeding 50 Lakhs (0.1%)",
-        "194H - Commission or Brokerage (5%)",
-        "192 - Salaries",
-        "194A - Interest other than on Securities (10%)"
-    });
+    m_tdsTypeCombo->addItem("194I - Rent on Land & Building (10%)", "RENT");
+    m_tdsTypeCombo->addItem("194I - Rent on Plant & Machinery (2%)", "RENT");
+    m_tdsTypeCombo->addItem("194C - Payment to Contractors / Transport (2%)", "FREIGHT");
+    m_tdsTypeCombo->addItem("194C - Labour Charges (1%)", "LABOUR");
+    m_tdsTypeCombo->addItem("194H - Commission (5%)", "COMMISSION");
+    m_tdsTypeCombo->addItem("194H - Brokerage (5%)", "BROKERAGE");
+    m_tdsTypeCombo->addItem("194H - Dami (2%)", "DAMI");
+    m_tdsTypeCombo->addItem("194A - Interest other than on Securities (10%)", "INTEREST");
+    m_tdsTypeCombo->addItem("194J - Professional Fees / Technical Services (10%)", "PROFESSIONAL");
+    m_tdsTypeCombo->addItem("192 - Salaries", "SALARY");
+    m_tdsTypeCombo->addItem("194Q - Purchase of Goods exceeding 50 Lakhs (0.1%)", "194Q");
     connect(m_tdsTypeCombo, &QComboBox::currentIndexChanged, this, &TdsVoucherWidget::onTdsTypeChanged);
     leftGrid->addWidget(m_tdsTypeCombo, 1, 1);
 
@@ -330,14 +333,14 @@ void TdsVoucherWidget::setupUi() {
     m_netPayableSummaryLabel = m4.second;
     footerRow->addWidget(m4.first, 1);
 
-    m_deleteBtn = new KbdBadgeButton("Delete Voucher", "Del", this);
+    m_deleteBtn = new KbdBadgeButton("Delete Voucher", "Ctrl+D", this);
     m_deleteBtn->setPrimaryColor("#FEF2F2", "#FEE2E2");
     m_deleteBtn->setTextColor("#DC2626");
     m_deleteBtn->setVisible(false);
     connect(m_deleteBtn, &QPushButton::clicked, this, &TdsVoucherWidget::onDeleteClicked);
     footerRow->addWidget(m_deleteBtn, 0);
 
-    m_saveBtn = new KbdBadgeButton("Save TDS Voucher", "Enter", this);
+    m_saveBtn = new KbdBadgeButton("Save TDS Voucher", "Ctrl+S", this);
     m_saveBtn->setPrimaryColor("#16A34A", "#15803D");
     m_saveBtn->setTextColor("#FFFFFF");
     m_saveBtn->setMinimumWidth(180);
@@ -401,6 +404,21 @@ void TdsVoucherWidget::setupUi() {
     connect(new QShortcut(QKeySequence(Qt::Key_Escape), this), &QShortcut::activated, this, &TdsVoucherWidget::backRequested);
 }
 
+void TdsVoucherWidget::keyPressEvent(QKeyEvent* event) {
+    // Backs the Ctrl+S / Ctrl+D badges (Esc already owns a QShortcut above).
+    if ((event->modifiers() & Qt::ControlModifier) && event->key() == Qt::Key_S) {
+        onSaveClicked();
+        event->accept();
+        return;
+    }
+    if ((event->modifiers() & Qt::ControlModifier) && event->key() == Qt::Key_D) {
+        if (m_deleteBtn && m_deleteBtn->isVisible()) onDeleteClicked();
+        event->accept();
+        return;
+    }
+    QWidget::keyPressEvent(event);
+}
+
 void TdsVoucherWidget::resetForm() {
     m_editVoucherId = 0;
     m_deleteBtn->setVisible(false);
@@ -449,41 +467,35 @@ void TdsVoucherWidget::openDateDialog() {
 }
 
 void TdsVoucherWidget::onTdsTypeChanged(int index) {
-    auto findParty = [](const QStringList& patterns, const QString& fallback) -> QString {
-        for (const QString& pat : patterns) {
-            QVariant v = DatabaseManager::instance().executeScalar(
-                "SELECT name FROM parties WHERE name LIKE ? ORDER BY id ASC LIMIT 1;",
-                {"%" + pat + "%"}
-            );
-            if (v.isValid() && !v.isNull()) return v.toString().trimmed();
-        }
-        return fallback;
-    };
+    Q_UNUSED(index);
+    QString canon = m_tdsTypeCombo->currentData().toString();
+    if (canon.isEmpty()) {
+        QString txt = m_tdsTypeCombo->currentText().toUpper();
+        if (txt.contains("RENT")) canon = "RENT";
+        else if (txt.contains("COMMISSION")) canon = "COMMISSION";
+        else if (txt.contains("BROKERAGE")) canon = "BROKERAGE";
+        else if (txt.contains("DAMI")) canon = "DAMI";
+        else if (txt.contains("INTEREST")) canon = "INTEREST";
+        else if (txt.contains("LABOUR")) canon = "LABOUR";
+        else if (txt.contains("SALARY")) canon = "SALARY";
+        else if (txt.contains("194J") || txt.contains("PROFESSIONAL")) canon = "PROFESSIONAL";
+        else if (txt.contains("194Q")) canon = "194Q";
+        else canon = "FREIGHT";
+    }
 
-    if (index == 0) { // 194C
-        m_tdsRateEdit->setText("2.00");
-        m_expLedgerEdit->setText(findParty({"Freight", "Transport"}, "Freight & Transport Expense"));
-        m_tdsLedgerEdit->setText(findParty({"TDS", "194C"}, "TDS Payable (Contractors - 194C)"));
-    } else if (index == 1) { // 194J
-        m_tdsRateEdit->setText("10.00");
-        m_expLedgerEdit->setText(findParty({"Professional", "Legal", "Audit"}, "Legal & Professional Charges"));
-        m_tdsLedgerEdit->setText(findParty({"194J", "TDS"}, "TDS Payable (Professional - 194J)"));
-    } else if (index == 2) { // 194I Land
-        m_tdsRateEdit->setText("10.00");
-        m_expLedgerEdit->setText(findParty({"Rent"}, "Rent Paid"));
-        m_tdsLedgerEdit->setText(findParty({"194I", "TDS"}, "TDS Payable (Rent - 194I)"));
-    } else if (index == 3) { // 194I Plant
-        m_tdsRateEdit->setText("2.00");
-        m_expLedgerEdit->setText(findParty({"Machinery", "Hire", "Plant"}, "Machinery Hire Charges"));
-        m_tdsLedgerEdit->setText(findParty({"194I", "TDS"}, "TDS Payable (Rent - 194I)"));
-    } else if (index == 4) { // 194Q
-        m_tdsRateEdit->setText("0.10");
-        m_expLedgerEdit->setText(findParty({"Purchase"}, "Purchase A/c"));
-        m_tdsLedgerEdit->setText(findParty({"194Q", "TDS"}, "TDS Payable (Purchase - 194Q)"));
-    } else if (index == 5) { // 194H
-        m_tdsRateEdit->setText("5.00");
-        m_expLedgerEdit->setText(findParty({"Brokerage", "Commission", "Dami"}, "Brokerage & Commission"));
-        m_tdsLedgerEdit->setText(findParty({"194H", "TDS"}, "TDS Payable (Commission - 194H)"));
+    TdsModel tModel;
+    QVariantMap info = tModel.get_next_voucher_info(canon);
+    if (m_tdsRateEdit) {
+        double defRate = info.value("default_tds_rate", 2.0).toDouble();
+        if (m_tdsTypeCombo->currentText().contains("Plant & Machinery")) defRate = 2.0;
+        else if (m_tdsTypeCombo->currentText().contains("Labour Charges")) defRate = 1.0;
+        m_tdsRateEdit->setText(QString::number(defRate, 'f', 2));
+    }
+    if (m_expLedgerEdit) m_expLedgerEdit->setText(info.value("default_exp_ledger_name", "").toString());
+    if (m_tdsLedgerEdit) m_tdsLedgerEdit->setText(info.value("default_tds_ledger_name", "").toString());
+
+    if (m_controller) {
+        m_controller->setTdsType(canon);
     }
     onRecalculateTax();
 }
@@ -557,6 +569,20 @@ bool TdsVoucherWidget::loadVoucherForEditing(int voucherId) {
     m_narrationEdit->setText(m_controller->narration());
     m_nonDeductReasonEdit->setText(m_controller->nonDeductionReason());
 
+    QString curTdsType = m_controller->tdsType().toUpper();
+    int matchIdx = -1;
+    for (int i = 0; i < m_tdsTypeCombo->count(); ++i) {
+        if (m_tdsTypeCombo->itemData(i).toString().toUpper() == curTdsType) {
+            matchIdx = i;
+            break;
+        }
+    }
+    if (matchIdx >= 0) {
+        m_tdsTypeCombo->blockSignals(true);
+        m_tdsTypeCombo->setCurrentIndex(matchIdx);
+        m_tdsTypeCombo->blockSignals(false);
+    }
+
     onRecalculateTax();
     return true;
 }
@@ -581,7 +607,9 @@ void TdsVoucherWidget::onSaveClicked() {
 
     bool ok = false;
     if (m_controller) {
-        m_controller->setTdsType(m_tdsTypeCombo->currentText());
+        QString canon = m_tdsTypeCombo->currentData().toString();
+        if (canon.isEmpty()) canon = "RENT";
+        m_controller->setTdsType(canon);
         m_controller->setSelectedPartyName(m_partySearch->text().trimmed());
         m_controller->setPartyPan(m_panEdit->text().trimmed());
         m_controller->setIncomeAmount(income);
@@ -617,7 +645,13 @@ void TdsVoucherWidget::onDeleteClicked() {
         return;
     }
 
-    DatabaseManager::instance().executeQuery(QString("DELETE FROM tds_vouchers WHERE id = %1;").arg(m_editVoucherId));
+    if (m_controller) {
+        m_controller->deleteVoucher(m_editVoucherId);
+    } else {
+        TdsModel tModel;
+        tModel.delete_tds_voucher(m_editVoucherId);
+    }
+
     CustomMessageBox::showInformation(this, "Deleted", "TDS Voucher removed successfully.");
     resetForm();
     emit voucherSaved(0);

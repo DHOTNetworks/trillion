@@ -49,12 +49,12 @@ bool GateRegisterController::createGateEntry(
     bool ok = DatabaseManager::instance().executeNonQuery(
         "INSERT INTO gate_register ("
         "  financial_year, gate_pass_no, entry_date, entry_time, direction, purpose, "
-        "  vehicle_no, driver_name, driver_phone, transporter_name, party_id, party_name, "
+        "  vehicle_no, driver_name, driver_phone, transport, party_id, party_name, "
         "  commodity, bag_count, gross_weight_qtl, status, remarks"
         ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'AT_GATE', ?);",
         {
             fyLabel, passNo, entryDate, eTime, direction, purpose,
-            vehicleNo, driverName, driverPhone, transporterName, pId, partyName,
+            vehicleNo.trimmed().toUpper(), driverName, driverPhone, transporterName, pId, partyName,
             commodity, bagCount, grossWeightQtl, remarks
         }
     );

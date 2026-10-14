@@ -251,11 +251,6 @@ public:
     QString renderGstrReportHtml(const QString& gstrType, const QString& fromDate, const QString& toDate);
 
 private:
-    QVariantMap getFirmProfile();
-    QVariantMap getPartyProfile(int partyId = 0, const QString& partyName = "");
-    QString numberToWords(long long n);
-    QString amountInWords(double amount);
-
     QString m_lastExportedFile;
     QString m_statusMessage;
     bool m_isSuccess = false;

@@ -17,7 +17,7 @@ GstPortalSyncDialog::GstPortalSyncDialog(const QDate& defaultDate, QWidget* pare
       m_portalService(new GstPortalService(this))
 {
     setWindowTitle("GST Portal GSTR-2B Auto-Download & Reconciler");
-    setFixedWidth(560);
+    setMinimumWidth(560);
     setModal(true);
 
     setupUi();
@@ -29,7 +29,7 @@ void GstPortalSyncDialog::setupUi() {
         "QGroupBox { font-weight: 700; font-size: 13px; color: #1E293B; border: 1px solid #CBD5E1; border-radius: 8px; margin-top: 10px; padding-top: 14px; background-color: #FFFFFF; }"
         "QGroupBox::title { subcontrol-origin: margin; left: 12px; padding: 0 4px; }"
         "QLineEdit, QComboBox { padding: 8px 10px; border: 1px solid #CBD5E1; border-radius: 6px; font-size: 13px; background-color: #FFFFFF; color: #0F172A; }"
-        "QLineEdit:focus, QComboBox:focus { border: 1px solid #2563EB; background-color: #EFF6FF; }"
+        "QLineEdit:focus, QComboBox:focus { border: 1px solid #2563EB; background-color: #FFFFF0; }"
         "QPushButton { padding: 8px 16px; font-size: 13px; font-weight: 700; border-radius: 6px; }"
     );
 
@@ -89,9 +89,9 @@ void GstPortalSyncDialog::setupUi() {
     otpLayout->setSpacing(12);
 
     auto* otpRow = new QHBoxLayout();
-    m_requestOtpBtn = new QPushButton("Request OTP (Alt+O)", otpGroup);
+    m_requestOtpBtn = new QPushButton("Request OTP (Crtl+O)", otpGroup);
     m_requestOtpBtn->setStyleSheet("background-color: #2563EB; color: #FFFFFF; border: none;");
-    m_requestOtpBtn->setShortcut(QKeySequence("Alt+O"));
+    m_requestOtpBtn->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_O));
     connect(m_requestOtpBtn, &QPushButton::clicked, this, &GstPortalSyncDialog::onRequestOtpClicked);
 
     m_otpEdit = new QLineEdit(otpGroup);
@@ -106,7 +106,7 @@ void GstPortalSyncDialog::setupUi() {
 
     // 4. Progress & Status Display
     m_progressBar = new QProgressBar(this);
-    m_progressBar->setFixedHeight(8);
+    m_progressBar->setMinimumHeight(8);
     m_progressBar->setTextVisible(false);
     m_progressBar->setRange(0, 0); // Indeterminate
     m_progressBar->setVisible(false);

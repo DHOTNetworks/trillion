@@ -27,6 +27,7 @@ public:
     void enterView(const QDate& fromDate, const QDate& toDate); // open on GSTR-1, focus row 0
     void focusGstr1Table();
     void focusGstr2Table();
+    void focusTable();
     void markDirty() { m_isDirty = true; }
     bool isDirty() const { return m_isDirty; }
 

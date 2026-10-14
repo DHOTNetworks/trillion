@@ -19,7 +19,7 @@ TcsConfigDialog::TcsConfigDialog(QWidget *parent)
 
 void TcsConfigDialog::setupUi()
 {
-    setFixedWidth(480);
+    setMinimumWidth(480);
     setStyleSheet(
         "QDialog {"
         "  background-color: #FFFFFF;"

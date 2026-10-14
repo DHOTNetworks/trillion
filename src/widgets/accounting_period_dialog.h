@@ -4,6 +4,8 @@
 #include <QListWidget>
 #include <QLabel>
 #include <QPushButton>
+#include "kbd_badge_button.h"
+#include "erp_theme.h"
 #include <QVector>
 #include <QHBoxLayout>
 #include <QVBoxLayout>
@@ -93,8 +95,8 @@ private:
 
     QLabel* m_previewDateRangeLabel = nullptr;
     QLabel* m_previewFyBadge = nullptr;
-    QPushButton* m_applyBtn = nullptr;
-    QPushButton* m_cancelBtn = nullptr;
+    KbdBadgeButton* m_applyBtn = nullptr;
+    KbdBadgeButton* m_cancelBtn = nullptr;
 
     bool m_updating = false;
 };

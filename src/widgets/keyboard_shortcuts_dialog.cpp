@@ -1,7 +1,9 @@
 #include "keyboard_shortcuts_dialog.h"
+#include "erp_theme.h"
+#include "../services/keymap.h"
 #include <QHeaderView>
-#include <QShortcut>
 #include <QKeySequence>
+#include <QSet>
 
 namespace MahadevERP {
 
@@ -12,16 +14,16 @@ KeyboardShortcutsDialog::KeyboardShortcutsDialog(QWidget* parent)
     setModal(true);
     resize(720, 560);
     setStyleSheet(
-        "QDialog { background-color: #F8FAFC; }"
-        "QLineEdit { background-color: #FFFFFF; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 6px 12px; font-size: 13px; color: #0F172A; }"
-        "QLineEdit:focus { border-color: #2563EB; }"
-        "QTableWidget { background-color: #FFFFFF; alternate-background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 8px; gridline-color: #F1F5F9; font-size: 12.5px; color: #0F172A; }"
-        "QTableWidget::item { padding: 6px 12px; }"
-        "QTableWidget::item:selected { background-color: #EFF6FF; color: #1D4ED8; font-weight: bold; }"
-        "QHeaderView::section { background-color: #F1F5F9; color: #1E293B; font-weight: 800; font-size: 12px; padding: 8px 12px; border: none; border-bottom: 2px solid #CBD5E1; border-right: 1px solid #E2E8F0; }"
-        "QPushButton { background-color: #2563EB; color: #FFFFFF; font-weight: bold; font-size: 13px; border-radius: 6px; padding: 8px 20px; border: none; }"
-        "QPushButton:hover { background-color: #1D4ED8; }"
-    );
+        QString("QDialog { background-color: %1; }"
+                "QLineEdit { background-color: %2; border: 1.5px solid %3; border-radius: 6px; padding: 6px 12px; font-size: 13px; color: %4; }"
+                "QLineEdit:focus { border-color: %5; }"
+                "QTableWidget { background-color: %2; alternate-background-color: %1; border: 1px solid %3; border-radius: 8px; gridline-color: %6; font-size: 12.5px; color: %4; }"
+                "QTableWidget::item { padding: 6px 12px; }"
+                "QTableWidget::item:selected { background-color: %7; color: %8; font-weight: bold; }"
+                "QHeaderView::section { background-color: %6; color: #1E293B; font-weight: 800; font-size: 12px; padding: 8px 12px; border: none; border-bottom: 2px solid %3; border-right: 1px solid #E2E8F0; }")
+            .arg(ErpTheme::kCanvas.name(), ErpTheme::kPaper.name(), ErpTheme::kLine.name(),
+                 ErpTheme::kNavy.name(), ErpTheme::kBlue.name(), ErpTheme::kHeaderBg.name(),
+                 ErpTheme::kSelected.name(), ErpTheme::kBlueDark.name()));
 
     setupUi();
     populateShortcuts();
@@ -41,9 +43,9 @@ void KeyboardShortcutsDialog::setupUi() {
     auto* headerLayout = new QHBoxLayout();
     auto* titleCol = new QVBoxLayout();
     auto* titleLabel = new QLabel("Keyboard Shortcuts Cheat Sheet", this);
-    titleLabel->setStyleSheet("font-size: 18px; font-weight: bold; color: #0F172A;");
+    titleLabel->setStyleSheet(ErpTheme::headerTitleStyle(18));
     auto* subLabel = new QLabel("Navigate entire application without touching mouse • Press Esc to close", this);
-    subLabel->setStyleSheet("font-size: 12px; color: #64748B;");
+    subLabel->setStyleSheet(ErpTheme::mutedLabelStyle(12));
     titleCol->addWidget(titleLabel);
     titleCol->addWidget(subLabel);
     headerLayout->addLayout(titleCol);
@@ -74,16 +76,16 @@ void KeyboardShortcutsDialog::setupUi() {
     // Bottom Bar
     auto* bottomLayout = new QHBoxLayout();
     auto* tipLabel = new QLabel("Tip: Type fast to search hotkeys instantly.", this);
-    tipLabel->setStyleSheet("font-size: 11px; color: #94A3B8;");
+    tipLabel->setStyleSheet(ErpTheme::mutedLabelStyle(11));
     bottomLayout->addWidget(tipLabel);
     bottomLayout->addStretch();
 
-    m_closeBtn = new QPushButton("Close (Esc)", this);
+    m_closeBtn = new KbdBadgeButton("Close", "Esc", this);
+    m_closeBtn->bindShortcut(QKeySequence(Qt::Key_Escape));
     connect(m_closeBtn, &QPushButton::clicked, this, &QDialog::accept);
     bottomLayout->addWidget(m_closeBtn);
     mainLayout->addLayout(bottomLayout);
-
-    new QShortcut(QKeySequence(Qt::Key_Escape), this, SLOT(accept()));
+    // Esc is owned by m_closeBtn->bindShortcut() above — no second QShortcut.
 }
 
 void KeyboardShortcutsDialog::populateShortcuts() {
@@ -93,44 +95,51 @@ void KeyboardShortcutsDialog::populateShortcuts() {
         QString description;
     };
 
-    const QVector<ShortcutEntry> shortcuts = {
-        // Navigation
-        {"Navigation", "Alt + 1", "Switch to Executive Dashboard"},
-        {"Navigation", "Alt + 2", "Switch to Paddy Procurement (Raw Arrivals)"},
-        {"Navigation", "Alt + 3", "Switch to Sales & Invoicing"},
-        {"Navigation", "Alt + 4", "Switch to Milling & Production Stock"},
-        {"Navigation", "Alt + 5", "Open Other Vouchers Submenu"},
-        {"Navigation", "Alt + 6", "Switch to Reports & Ledgers"},
-        {"Navigation", "Alt + 7", "Open Reports Submenu"},
-        {"Navigation", "Alt + F1", "Open Firm / Company Selector"},
-        {"Navigation", "Alt + F2", "Change Global Accounting Period / Financial Year"},
-        {"Navigation", "Esc", "Navigate Back / Cancel / Close Modal"},
-
-        // Vouchers & Entry
-        {"Voucher Entry", "F2", "Context Date Dialog / New Voucher"},
-        {"Voucher Entry", "F3", "Open Bank/Cash Payment Voucher"},
-        {"Voucher Entry", "F4", "Open Bank/Cash Receipt Voucher"},
-        {"Voucher Entry", "F5", "Open Journal Voucher"},
-        {"Voucher Entry", "F8", "Open Sales Tax Invoice Entry"},
-        {"Voucher Entry", "F9", "Open Purchase Bill Entry"},
-        {"Voucher Entry", "F10", "Open J-Form Mandi Procurement Voucher"},
-        {"Voucher Entry", "F11", "Open I-Form Mandi Buyer Issue Voucher"},
-        {"Voucher Entry", "F12", "Open Milling Batch & Yield Voucher"},
-        {"Voucher Entry", "Ctrl + S", "Save Active Voucher / Record"},
-
-        // Reports & Print
-        {"Reports & Export", "Ctrl + P", "Print Invoice / Active Ledger / Statement"},
-        {"Reports & Export", "Alt + P", "Export Active View as PDF Document"},
-        {"Reports & Export", "Ctrl + E", "Export Active View as Excel / CSV Spreadsheet"},
-        {"Reports & Export", "F1 / ?", "Open Keyboard Shortcuts Help Reference"},
-
-        // Table & Form Control
-        {"Forms & Tables", "Enter / Tab", "Advance focus to next input field"},
-        {"Forms & Tables", "Shift + Tab", "Move focus to previous input field"},
-        {"Forms & Tables", "↑ / ↓ Arrow", "Navigate table rows / search suggestions"},
-        {"Forms & Tables", "Delete", "Delete selected table row / item entry"},
-        {"Forms & Tables", "Space", "Toggle checkbox / selection"}
+    // Rendered FROM ErpKeymap::bindings() — the same table the controller
+    // dispatches. A shortcut documented here always works, and vice versa.
+    auto categoryFor = [](const QString& action) {
+        if (action.startsWith("nav.") || action.startsWith("app.period") ||
+            action.startsWith("app.firm") || action == "app.back")
+            return QString("Navigation");
+        if (action.startsWith("voucher.") || action.startsWith("row.") ||
+            action == "report.expand" || action == "report.collapse")
+            return QString("Voucher Entry");
+        if (action.startsWith("app.print") || action.startsWith("app.pdf") ||
+            action.startsWith("app.csv") || action == "app.help")
+            return QString("Reports & Export");
+        return QString("Forms & Tables");
     };
+    auto scopeFor = [](const QString& views) {
+        if (views.isEmpty()) return QString();
+        if (views == "29,30") return QString(" (Balance Sheet / P&L)");
+        if (views == "8") return QString(" (Ledger Statement)");
+        return QString(" (views %1)").arg(views);
+    };
+
+    QVector<ShortcutEntry> shortcuts;
+    QSet<QString> seen; // dedupe actions bound to two chords (Ctrl+P / Alt+P)
+    for (const auto& b : ErpKeymap::bindings()) {
+        const QString action = QString::fromLatin1(b.action);
+        const QString keyText = b.key.toString(QKeySequence::NativeText);
+        if (seen.contains(action + "|" + QString::fromLatin1(b.label))) {
+            // Merge duplicate chord into the existing row's key text.
+            for (auto& s : shortcuts) {
+                if (s.description == QString::fromLatin1(b.label)) {
+                    s.key += " / " + keyText;
+                    break;
+                }
+            }
+            continue;
+        }
+        seen.insert(action + "|" + QString::fromLatin1(b.label));
+        shortcuts.append({categoryFor(action), keyText,
+                          QString::fromLatin1(b.label) + scopeFor(QString::fromLatin1(b.views))});
+    }
+    // Static form/table behaviour (Qt-native, not app bindings).
+    shortcuts.append({"Forms & Tables", "Enter / Tab", "Advance focus to next input field"});
+    shortcuts.append({"Forms & Tables", "Shift + Tab", "Move focus to previous input field"});
+    shortcuts.append({"Forms & Tables", "Arrow keys", "Navigate table rows / search suggestions"});
+    shortcuts.append({"Forms & Tables", "Space", "Toggle checkbox / selection"});
 
     m_table->setRowCount(shortcuts.size());
     for (int i = 0; i < shortcuts.size(); ++i) {

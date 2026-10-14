@@ -20,6 +20,7 @@ public:
     ~MandiReportsWidget() override;
 
     void refreshAllTabs();
+    void focusTable();
     void markDirty() { m_isDirty = true; }
     bool isDirty() const { return m_isDirty; }
     void setWorkingPeriod(const QString& fromDate, const QString& toDate);

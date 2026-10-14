@@ -180,6 +180,13 @@ bool DepreciationCalculator::postDepreciationToBooks(const QVector<DepreciationA
     DatabaseManager& db = DatabaseManager::instance();
     QString vDateIso = voucherDate.isValid() ? voucherDate.toString("yyyy-MM-dd") : QDate::currentDate().toString("yyyy-MM-dd");
 
+    // FY lock: never post depreciation into an audited/closed year.
+    const QString blockReason = FiscalYearHelper::writeBlockReason(vDateIso);
+    if (!blockReason.isEmpty()) {
+        outError = blockReason;
+        return false;
+    }
+
     QString depLedger = depreciationLedgerName.trimmed();
     if (depLedger.isEmpty()) depLedger = "Depreciation A/c";
 

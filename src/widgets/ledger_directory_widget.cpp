@@ -38,7 +38,7 @@ void LedgerDirectoryWidget::setupUi() {
     // 1. Header Card
     auto* headerCard = new QFrame(this);
     headerCard->setObjectName("headerCard");
-    headerCard->setFixedHeight(50);
+    headerCard->setMinimumHeight(50);
     headerCard->setStyleSheet(
         "QFrame#headerCard {"
         "  background-color: #FFFFFF;"
@@ -98,7 +98,7 @@ void LedgerDirectoryWidget::setupUi() {
     // 2. Filter & Controls Bar
     auto* filterCard = new QFrame(this);
     filterCard->setObjectName("filterCard");
-    filterCard->setFixedHeight(46);
+    filterCard->setMinimumHeight(46);
     filterCard->setStyleSheet(
         "QFrame#filterCard {"
         "  background-color: #FFFFFF;"
@@ -194,7 +194,7 @@ void LedgerDirectoryWidget::setupUi() {
     // 3. Summary Stat Bar (Evenly distributed, clean typography, no child borders)
     auto* statsFrame = new QFrame(this);
     statsFrame->setObjectName("statsBarFrame");
-    statsFrame->setFixedHeight(54);
+    statsFrame->setMinimumHeight(54);
     statsFrame->setStyleSheet(
         "QFrame#statsBarFrame {"
         "  background-color: #FFFFFF;"
@@ -233,8 +233,8 @@ void LedgerDirectoryWidget::setupUi() {
         if (!isLast) {
             auto* sep = new QFrame(statsFrame);
             sep->setFrameShape(QFrame::VLine);
-            sep->setFixedWidth(1);
-            sep->setFixedHeight(32);
+            sep->setMinimumWidth(1);
+            sep->setMinimumHeight(32);
             sep->setStyleSheet("background-color: #E2E8F0; border: none;");
             statsLayout->addWidget(sep);
         }
@@ -273,23 +273,23 @@ void LedgerDirectoryWidget::setupUi() {
         "  border: 1px solid #CBD5E1;"
         "  gridline-color: #E2E8F0;"
         "  selection-background-color: #DBEAFE;"
-        "  selection-color: #0F172A;"
+        "  selection-color: #FFFFFF;"
         "  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;"
         "  font-size: 11.5px;"
         "}"
         "QHeaderView::section {"
-        "  background-color: #F1F5F9;"
-        "  color: #0F172A;"
+        "  background-color: #0F172A;"
+        "  color: #FFFFFF;"
         "  font-weight: 800;"
         "  font-size: 11.5px;"
         "  padding: 8px 8px;"
         "  border: none;"
-        "  border-bottom: 2px solid #CBD5E1;"
-        "  border-right: 1px solid #E2E8F0;"
+        "  "
+        "  border-right: 1px solid #334155;"
         "}"
         "QTableWidget::item:selected {"
-        "  background-color: #DBEAFE;"
-        "  color: #1E3A8A;"
+        "  background-color: #2563EB;"
+        "  color: #FFFFFF;"
         "  font-weight: 700;"
         "}"
         "QScrollBar:vertical {"
@@ -384,7 +384,7 @@ void LedgerDirectoryWidget::keyPressEvent(QKeyEvent* event) {
         return;
     }
 
-    if (event->key() == Qt::Key_F2 || (event->key() == Qt::Key_M && (event->modifiers() & Qt::AltModifier))) {
+    if (event->key() == Qt::Key_M && (event->modifiers() & Qt::AltModifier)) {
         int r = m_table->currentRow();
         if (r >= 0 && r < m_filteredItems.size()) {
             event->accept();
@@ -741,7 +741,7 @@ void LedgerDirectoryWidget::onExportPdfClicked() {
     }
     html += "</table>";
 
-    m_printExportCtrl->exportHtmlToPdf(html, "Ledger_Directory.pdf", "", true);
+    m_printExportCtrl->exportHtmlToPdf(html, "Ledger_Directory.pdf", "", false);
 }
 
 void LedgerDirectoryWidget::onExportCsvClicked() {

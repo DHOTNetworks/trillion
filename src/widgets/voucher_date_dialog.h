@@ -4,6 +4,8 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include "kbd_badge_button.h"
+#include "erp_theme.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QKeyEvent>
@@ -60,8 +62,8 @@ private:
     QLineEdit* m_toInput = nullptr;
     QLabel* m_durationLabel = nullptr;
     QLabel* m_errorLabel = nullptr;
-    QPushButton* m_applyBtn = nullptr;
-    QPushButton* m_cancelBtn = nullptr;
+    KbdBadgeButton* m_applyBtn = nullptr;
+    KbdBadgeButton* m_cancelBtn = nullptr;
 
     FinancialYearsModel m_fyModel;
 };
@@ -121,8 +123,8 @@ private:
     QLabel* m_currentDateLabel = nullptr;
     QLineEdit* m_dateInput = nullptr;
     QLabel* m_errorLabel = nullptr;
-    QPushButton* m_applyBtn = nullptr;
-    QPushButton* m_cancelBtn = nullptr;
+    KbdBadgeButton* m_applyBtn = nullptr;
+    KbdBadgeButton* m_cancelBtn = nullptr;
 
     FinancialYearsModel m_fyModel;
 };

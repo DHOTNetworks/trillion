@@ -1,4 +1,5 @@
 #include "ledger_statement_widget.h"
+#include "voucher_ops.h"
 #include "voucher_date_dialog.h"
 #include "engine/accounting_engine.h"
 #include "engine/fiscal_year_helper.h"
@@ -13,6 +14,7 @@
 #include <QTimer>
 #include <QHeaderView>
 #include <QMessageBox>
+#include <QSignalBlocker>
 #include <cmath>
 
 LedgerStatementWidget::LedgerStatementWidget(LedgerStatementController* controller,
@@ -42,7 +44,7 @@ void LedgerStatementWidget::setupUi() {
 
     // ================= 1. TOP HEADER BAR CARD =================
     QFrame* headerCard = new QFrame(this);
-    headerCard->setFixedHeight(54);
+    headerCard->setMinimumHeight(54);
     headerCard->setStyleSheet("background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px;");
     QHBoxLayout* headerLayout = new QHBoxLayout(headerCard);
     headerLayout->setContentsMargins(14, 6, 14, 6);
@@ -50,9 +52,9 @@ void LedgerStatementWidget::setupUi() {
 
     QVBoxLayout* titleLayout = new QVBoxLayout();
     titleLayout->setSpacing(1);
-    QLabel* titleLabel = new QLabel("Account Ledger Statement & Mandi Aank Rokka", headerCard);
+    QLabel* titleLabel = new QLabel("Account Ledger Statement & Mandi Interest Calculator", headerCard);
     titleLabel->setStyleSheet("font-size: 16px; font-weight: bold; color: #0F172A; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif; border: none; background: transparent;");
-    QLabel* subtitleLabel = new QLabel("Side-by-side Credit (Cr) & Debit (Dr) double-entry ledger with Aank daily product interest calculation.", headerCard);
+    QLabel* subtitleLabel = new QLabel("Credit (Cr) & Debit (Dr) Entries + Interest calculation.", headerCard);
     subtitleLabel->setStyleSheet("font-size: 11px; color: #64748B; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif; border: none; background: transparent;");
     titleLayout->addWidget(titleLabel);
     titleLayout->addWidget(subtitleLabel);
@@ -60,7 +62,7 @@ void LedgerStatementWidget::setupUi() {
 
     headerLayout->addStretch(1);
 
-    m_toggleAankBtn = new KbdBadgeButton("Aank Interest (Rokka)", "Alt+A", QColor("#7C3AED"), QColor("#6D28D9"), QColor("#FFFFFF"), QColor("#7C3AED"), headerCard);
+    m_toggleAankBtn = new KbdBadgeButton("Interest Calculator", "Alt+A", QColor("#7C3AED"), QColor("#6D28D9"), QColor("#FFFFFF"), QColor("#7C3AED"), headerCard);
     connect(m_toggleAankBtn, &QPushButton::clicked, this, &LedgerStatementWidget::toggleAankMode);
     headerLayout->addWidget(m_toggleAankBtn);
 
@@ -76,7 +78,7 @@ void LedgerStatementWidget::setupUi() {
     connect(m_csvBtn, &QPushButton::clicked, this, &LedgerStatementWidget::exportCsv);
     headerLayout->addWidget(m_csvBtn);
 
-    m_backBtn = new KbdBadgeButton("Back to Dashboard", "Esc", QColor("#EF4444"), QColor("#DC2626"), QColor("#FFFFFF"), QColor("#EF4444"), headerCard);
+    m_backBtn = new KbdBadgeButton("Back", "Esc", QColor("#EF4444"), QColor("#DC2626"), QColor("#FFFFFF"), QColor("#EF4444"), headerCard);
     connect(m_backBtn, &QPushButton::clicked, this, &LedgerStatementWidget::backRequested);
     headerLayout->addWidget(m_backBtn);
 
@@ -84,7 +86,7 @@ void LedgerStatementWidget::setupUi() {
 
     // ================= 2. SEARCH & FILTER BAR CARD =================
     QFrame* filterCard = new QFrame(this);
-    filterCard->setFixedHeight(50);
+    filterCard->setMinimumHeight(50);
     filterCard->setStyleSheet("background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px;");
     QHBoxLayout* filterLayout = new QHBoxLayout(filterCard);
     filterLayout->setContentsMargins(12, 6, 12, 6);
@@ -104,7 +106,7 @@ void LedgerStatementWidget::setupUi() {
 
     m_fyBadge = new QLabel(activeFy.name, filterCard);
     m_fyBadge->setAlignment(Qt::AlignCenter);
-    m_fyBadge->setFixedHeight(34);
+    m_fyBadge->setMinimumHeight(34);
     m_fyBadge->setStyleSheet("background-color: #F8FAFC; color: #334155; border: 1px solid #CBD5E1; border-radius: 6px; padding: 4px 12px; font-weight: bold; font-size: 11px;");
     filterLayout->addWidget(m_fyBadge);
 
@@ -114,7 +116,7 @@ void LedgerStatementWidget::setupUi() {
 
     m_fromDateEdit = new AccountingDateDisplay(filterCard);
     m_fromDateEdit->setIsoDate(activeFy.startDate);
-    m_fromDateEdit->setFixedWidth(115);
+    m_fromDateEdit->setMinimumWidth(115);
     connect(m_fromDateEdit, &AccountingDateDisplay::clicked, this, &LedgerStatementWidget::onPeriodClicked);
     filterLayout->addWidget(m_fromDateEdit);
 
@@ -124,12 +126,12 @@ void LedgerStatementWidget::setupUi() {
 
     m_toDateEdit = new AccountingDateDisplay(filterCard);
     m_toDateEdit->setIsoDate(activeFy.endDate);
-    m_toDateEdit->setFixedWidth(115);
+    m_toDateEdit->setMinimumWidth(115);
     connect(m_toDateEdit, &AccountingDateDisplay::clicked, this, &LedgerStatementWidget::onPeriodClicked);
     filterLayout->addWidget(m_toDateEdit);
 
     m_periodBtn = new QPushButton("Period (F2)", filterCard);
-    m_periodBtn->setFixedHeight(34);
+    m_periodBtn->setMinimumHeight(34);
     m_periodBtn->setCursor(Qt::PointingHandCursor);
     m_periodBtn->setStyleSheet(
         "QPushButton { background-color: #EFF6FF; color: #1D4ED8; border: 1px solid #BFDBFE; font-weight: 700; font-size: 11.5px; border-radius: 6px; padding: 4px 14px; }"
@@ -163,7 +165,7 @@ void LedgerStatementWidget::setupUi() {
     crSideLayout->setSpacing(4);
 
     QFrame* crBanner = new QFrame(m_twoColumnWidget);
-    crBanner->setFixedHeight(32);
+    crBanner->setMinimumHeight(32);
     crBanner->setStyleSheet("background-color: #DCFCE7; border: 1px solid #86EFAC; border-radius: 6px;");
     QHBoxLayout* crBannerLayout = new QHBoxLayout(crBanner);
     crBannerLayout->setContentsMargins(10, 0, 10, 0);
@@ -197,7 +199,7 @@ void LedgerStatementWidget::setupUi() {
 
     // Cr Footer
     QFrame* crFooter = new QFrame(m_twoColumnWidget);
-    crFooter->setFixedHeight(32);
+    crFooter->setMinimumHeight(32);
     crFooter->setStyleSheet("background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 6px;");
     QHBoxLayout* crFooterLayout = new QHBoxLayout(crFooter);
     crFooterLayout->setContentsMargins(10, 0, 10, 0);
@@ -217,7 +219,7 @@ void LedgerStatementWidget::setupUi() {
     drSideLayout->setSpacing(4);
 
     QFrame* drBanner = new QFrame(m_twoColumnWidget);
-    drBanner->setFixedHeight(32);
+    drBanner->setMinimumHeight(32);
     drBanner->setStyleSheet("background-color: #DBEAFE; border: 1px solid #93C5FD; border-radius: 6px;");
     QHBoxLayout* drBannerLayout = new QHBoxLayout(drBanner);
     drBannerLayout->setContentsMargins(10, 0, 10, 0);
@@ -249,9 +251,25 @@ void LedgerStatementWidget::setupUi() {
     connect(m_drTable, &LedgerTableView::focusSearchRequested, this, &LedgerStatementWidget::focusSearch);
     drSideLayout->addWidget(m_drTable, 1);
 
+    // Enter on either grid opens the focused row's voucher (= drill-down).
+    // Table-scoped so the search box and buttons keep their own keys.
+    // Alt+D deletes the focused row's voucher (shared VoucherOps path).
+    auto openFocusedVoucher = [this]() { openSelectedVoucher(); };
+    for (QWidget* grid : {static_cast<QWidget*>(m_drTable), static_cast<QWidget*>(m_crTable)}) {
+        auto* ret = new QShortcut(QKeySequence(Qt::Key_Return), grid);
+        ret->setContext(Qt::WidgetWithChildrenShortcut);
+        connect(ret, &QShortcut::activated, this, openFocusedVoucher);
+        auto* num = new QShortcut(QKeySequence(Qt::Key_Enter), grid);
+        num->setContext(Qt::WidgetWithChildrenShortcut);
+        connect(num, &QShortcut::activated, this, openFocusedVoucher);
+        auto* del = new QShortcut(QKeySequence(Qt::ALT | Qt::Key_D), grid);
+        del->setContext(Qt::WidgetWithChildrenShortcut);
+        connect(del, &QShortcut::activated, this, &LedgerStatementWidget::deleteFocusedVoucher);
+    }
+
     // Dr Footer
     QFrame* drFooter = new QFrame(m_twoColumnWidget);
-    drFooter->setFixedHeight(32);
+    drFooter->setMinimumHeight(32);
     drFooter->setStyleSheet("background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 6px;");
     QHBoxLayout* drFooterLayout = new QHBoxLayout(drFooter);
     drFooterLayout->setContentsMargins(10, 0, 10, 0);
@@ -269,7 +287,7 @@ void LedgerStatementWidget::setupUi() {
 
     // Bottom Net Reconciliation Summary
     QFrame* summaryBar = new QFrame(m_twoColumnWidget);
-    summaryBar->setFixedHeight(44);
+    summaryBar->setMinimumHeight(44);
     summaryBar->setStyleSheet("background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 6px;");
     QHBoxLayout* summaryLayout = new QHBoxLayout(summaryBar);
     summaryLayout->setContentsMargins(16, 0, 16, 0);
@@ -300,7 +318,7 @@ void LedgerStatementWidget::setupUi() {
 
     // Aank Control Card
     QFrame* aankControlCard = new QFrame(m_aankWidget);
-    aankControlCard->setFixedHeight(46);
+    aankControlCard->setMinimumHeight(46);
     aankControlCard->setStyleSheet("background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px;");
     QHBoxLayout* aankControlLayout = new QHBoxLayout(aankControlCard);
     aankControlLayout->setContentsMargins(12, 4, 12, 4);
@@ -314,7 +332,7 @@ void LedgerStatementWidget::setupUi() {
     m_drInterestRateSpin->setRange(0.0, 100.0);
     m_drInterestRateSpin->setValue(12.0);
     m_drInterestRateSpin->setSingleStep(0.25);
-    m_drInterestRateSpin->setFixedHeight(28);
+    m_drInterestRateSpin->setMinimumHeight(28);
     m_drInterestRateSpin->setMinimumWidth(75);
     connect(m_drInterestRateSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &LedgerStatementWidget::recalculateAankStatement);
     aankControlLayout->addWidget(m_drInterestRateSpin);
@@ -327,7 +345,7 @@ void LedgerStatementWidget::setupUi() {
     m_crInterestRateSpin->setRange(0.0, 100.0);
     m_crInterestRateSpin->setValue(12.0);
     m_crInterestRateSpin->setSingleStep(0.25);
-    m_crInterestRateSpin->setFixedHeight(28);
+    m_crInterestRateSpin->setMinimumHeight(28);
     m_crInterestRateSpin->setMinimumWidth(75);
     connect(m_crInterestRateSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &LedgerStatementWidget::recalculateAankStatement);
     aankControlLayout->addWidget(m_crInterestRateSpin);
@@ -378,14 +396,14 @@ void LedgerStatementWidget::setupUi() {
     m_aankTable->setStyleSheet(
         "QTableWidget { background-color: #FFFFFF; alternate-background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 8px; gridline-color: #F1F5F9; font-size: 12px; color: #0F172A; }"
         "QTableWidget::item { padding: 7px 6px; }"
-        "QTableWidget::item:selected { background-color: #EFF6FF; color: #0F172A; }"
-        "QHeaderView::section { background-color: #F1F5F9; color: #1E293B; font-weight: 800; font-size: 11.5px; padding: 7px 8px; border: none; border-bottom: 2px solid #CBD5E1; border-right: 1px solid #E2E8F0; }"
+        "QTableWidget::item:selected { background-color: #2563EB; color: #FFFFFF; }"
+        "QHeaderView::section { background-color: #0F172A; color: #FFFFFF; font-weight: 800; font-size: 11.5px; padding: 7px 8px; border: none;  border-right: 1px solid #334155; }"
     );
     aankLayout->addWidget(m_aankTable, 1);
 
     // Aank Summary Bar Card
     QFrame* aankSummaryBar = new QFrame(m_aankWidget);
-    aankSummaryBar->setFixedHeight(46);
+    aankSummaryBar->setMinimumHeight(46);
     aankSummaryBar->setStyleSheet("background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 6px;");
     QHBoxLayout* aankSummaryLayout = new QHBoxLayout(aankSummaryBar);
     aankSummaryLayout->setContentsMargins(14, 4, 14, 4);
@@ -426,19 +444,15 @@ void LedgerStatementWidget::setupUi() {
     setTabOrder(m_crTable, m_drTable);
 
     // Global Shortcuts
-    new QShortcut(QKeySequence("Alt+S"), this, SLOT(focusSearch()));
-    new QShortcut(QKeySequence("Alt+L"), this, SLOT(focusSearch()));
-    new QShortcut(QKeySequence("Ctrl+F"), this, SLOT(focusSearch()));
-    new QShortcut(QKeySequence("F3"), this, SLOT(focusSearch()));
-    new QShortcut(QKeySequence("F2"), this, SLOT(onPeriodClicked()));
-    new QShortcut(QKeySequence("Ctrl+E"), this, SLOT(openSelectedVoucher()));
-    new QShortcut(QKeySequence("Ctrl+P"), this, SLOT(printStatement()));
-    new QShortcut(QKeySequence("Alt+P"), this, SLOT(exportPdf()));
-    new QShortcut(QKeySequence("Alt+O"), this, SLOT(exportOdf()));
-    new QShortcut(QKeySequence("Alt+E"), this, SLOT(exportExcel()));
-    new QShortcut(QKeySequence("Alt+F"), this, SLOT(onPeriodClicked()));
-    new QShortcut(QKeySequence("Alt+A"), this, SLOT(toggleAankMode()));
-    new QShortcut(QKeySequence("Alt+I"), this, SLOT(onPostInterestVoucherClicked()));
+    new QShortcut(QKeySequence(Qt::ALT | Qt::Key_Q), this, SLOT(focusSearch()));
+    new QShortcut(QKeySequence(Qt::Key_F2), this, SLOT(onPeriodClicked()));
+    new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_O), this, SLOT(openSelectedVoucher()));
+    new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_P), this, SLOT(printStatement()));
+    new QShortcut(QKeySequence(Qt::ALT | Qt::Key_P), this, SLOT(exportPdf()));
+    new QShortcut(QKeySequence(Qt::ALT | Qt::Key_O), this, SLOT(exportOdf()));
+    new QShortcut(QKeySequence(Qt::ALT | Qt::Key_E), this, SLOT(exportExcel()));
+    new QShortcut(QKeySequence(Qt::ALT | Qt::Key_Left), this, SLOT(toggleAankMode()));
+    new QShortcut(QKeySequence(Qt::ALT | Qt::Key_I), this, SLOT(onPostInterestVoucherClicked()));
 }
 
 void LedgerStatementWidget::toggleAankMode() {
@@ -487,6 +501,10 @@ void LedgerStatementWidget::recalculateAankStatement() {
         opDrCr = pr.value("balance_type").toString();
         double savedRate = pr.value("interest_rate").toDouble();
         if (savedRate > 0.0 && m_drInterestRateSpin->value() == 12.0) {
+            // Blocked: setValue fires valueChanged -> recalculateAankStatement,
+            // which would re-enter this whole function (redundant full reload).
+            QSignalBlocker b1(m_drInterestRateSpin);
+            QSignalBlocker b2(m_crInterestRateSpin);
             m_drInterestRateSpin->setValue(savedRate);
             m_crInterestRateSpin->setValue(savedRate);
         }
@@ -684,8 +702,8 @@ void LedgerStatementWidget::loadParty(const QString& partyName, const QString& f
     updateHeadersAndTotals();
     recalculateAankStatement();
 
-    // Default focus to Dr table if entries exist, else Cr
-    m_lastSide = "Dr";
+    // Default focus to Cr table if entries exist, else Dr
+    m_lastSide = "Cr";
     m_lastDrIndex = 0;
     m_lastCrIndex = 0;
     m_lastIndex = 0;
@@ -697,11 +715,12 @@ void LedgerStatementWidget::loadParty(const QString& partyName, const QString& f
         m_crTable->selectRowIndex(0);
     }
 
-    if (m_controller && m_controller->drModel()->rowCount() > 0) {
-        m_drTable->setFocus();
-    } else if (m_controller && m_controller->crModel()->rowCount() > 0) {
+    if (m_controller && m_controller->crModel()->rowCount() > 0) {
         m_crTable->setFocus();
         m_lastSide = "Cr";
+    } else if (m_controller && m_controller->drModel()->rowCount() > 0) {
+        m_drTable->setFocus();
+        m_lastSide = "Dr";
     }
 }
 
@@ -730,7 +749,7 @@ void LedgerStatementWidget::restoreState(const QString& partyName, const QString
     updateHeadersAndTotals();
     recalculateAankStatement();
 
-    m_lastSide = side.isEmpty() ? "Dr" : side;
+    m_lastSide = side.isEmpty() ? "Cr" : side;
     m_lastDrIndex = drRowIndex;
     m_lastCrIndex = crRowIndex;
     m_lastIndex = (m_lastSide == "Cr") ? m_lastCrIndex : m_lastDrIndex;
@@ -788,6 +807,19 @@ QString LedgerStatementWidget::toDate() const {
 void LedgerStatementWidget::focusSearch() {
     m_searchBox->setFocus();
     m_searchBox->selectAll();
+}
+
+// Grid-first focus: opening a party statement lands on the active side's
+// grid (same contract as every other statement's focusTable).
+void LedgerStatementWidget::focusTable() {
+    if (m_lastSide == "Cr" && m_crTable) {
+        if (m_controller && m_controller->crModel()->rowCount() > 0) m_crTable->setFocus();
+        else if (m_drTable) m_drTable->setFocus();
+    } else if (m_drTable) {
+        m_drTable->setFocus();
+    } else if (m_crTable) {
+        m_crTable->setFocus();
+    }
 }
 
 void LedgerStatementWidget::onPartySelected(const QString& partyName) {
@@ -898,6 +930,40 @@ void LedgerStatementWidget::onVoucherActivated(const QVariantMap& entry) {
     openVoucherForEntry(entry);
 }
 
+// Alt+D: delete the focused side's current voucher through the shared
+// VoucherOps path, then invalidate every statement and reload in place
+// (party/dates preserved, active side restored).
+void LedgerStatementWidget::deleteFocusedVoucher() {
+    int crRow = m_crTable->selectedRowIndex();
+    if (crRow >= 0) m_lastCrIndex = crRow;
+    int drRow = m_drTable->selectedRowIndex();
+    if (drRow >= 0) m_lastDrIndex = drRow;
+
+    QVariantMap entry;
+    if ((m_crTable->hasFocus() || (crRow >= 0 && !m_drTable->hasFocus())) && crRow >= 0 && m_controller) {
+        m_lastSide = "Cr";
+        entry = m_controller->crModel()->get(crRow);
+    } else if (drRow >= 0 && m_controller) {
+        m_lastSide = "Dr";
+        entry = m_controller->drModel()->get(drRow);
+    }
+    if (entry.isEmpty()) return;
+
+    const QString part = entry.value("particulars").toString().toLower();
+    if (part.contains("opening balance") || part.contains("closing balance") || part.contains("b/f")) return;
+
+    QString error;
+    if (VoucherOps::deleteEntry(this, entry, &error)) {
+        emit entriesChanged();
+        const QString side = m_lastSide;
+        loadParty(currentParty(), fromDate(), toDate());
+        if (side == "Cr") onSwitchSideRequested("Cr");
+        else focusTable();
+    } else if (!error.isEmpty()) {
+        QMessageBox::critical(this, "Delete Failed", error);
+    }
+}
+
 void LedgerStatementWidget::openVoucherForEntry(const QVariantMap& entry) {
     if (entry.isEmpty()) return;
 
@@ -925,58 +991,8 @@ void LedgerStatementWidget::openVoucherForEntry(const QVariantMap& entry) {
     QString upRawType = rawType.trimmed().toUpper();
     QString upRefNo = refNo.trimmed().toUpper();
 
-    int targetViewIndex = -1;
-
-    // 1. TDS Voucher (View 24)
-    if (upVType == "TDS" || upRawType == "TDS" || upRefNo.startsWith("TDS") || part.contains("t.d.s.")) {
-        targetViewIndex = 24;
-    }
-    // 2. J-Form Voucher (View 18)
-    else if (upVType.contains("J-FORM") || upVType.contains("JFORM") || upVType == "JFRM" || upVType == "JF" ||
-             upRawType.contains("J-FORM") || upRawType.contains("JFORM") || upRawType == "JFRM" || upRawType == "JF" ||
-             upRefNo.startsWith("JFRM") || upRefNo.startsWith("J-FORM") || upRefNo.startsWith("JFORM") || upRefNo.startsWith("JF-")) {
-        targetViewIndex = 18;
-    }
-    // 3. I-Form Voucher (View 19)
-    else if (upVType.contains("I-FORM") || upVType.contains("IFORM") || upVType == "IFRM" || upVType == "IF" ||
-             upRawType.contains("I-FORM") || upRawType.contains("IFORM") || upRawType == "IFRM" || upRawType == "IF" ||
-             upRefNo.startsWith("IFRM") || upRefNo.startsWith("I-FORM") || upRefNo.startsWith("IFORM") || upRefNo.startsWith("IF-")) {
-        targetViewIndex = 19;
-    }
-    // 4. Sales Voucher (View 14)
-    else if (upVType.contains("SALE") || upRawType.contains("SALE") || upRawType == "SL" || upRefNo.startsWith("SALE") || upRefNo.startsWith("SL-")) {
-        targetViewIndex = 14;
-    }
-    // 5. Purchase Voucher (View 15)
-    else if (upVType.contains("PURCHASE") || upVType.contains("PURC") || upRawType.contains("PURCHASE") || upRawType.contains("PURC") || upRawType == "PU" || upRefNo.startsWith("PURC") || upRefNo.startsWith("PUR") || upRefNo.startsWith("PU-")) {
-        targetViewIndex = 15;
-    }
-    // 6. Cash Payment / Receipt (View 60)
-    else if (upRawType == "PYMT" || upRawType == "RCPT" || upRefNo.startsWith("PYMT") || upRefNo.startsWith("RCPT") || upVType == "CASH PAYMENT" || upVType == "CASH RECEIPT") {
-        targetViewIndex = 60;
-    }
-    // 7. Cheque / Bank Payment / Receipt (View 16)
-    else if (upVType == "PAYMENT" || upVType == "RECEIPT" || upRawType == "CHPT" || upRawType == "CHRT" || upRawType == "BANK" ||
-             upRefNo.startsWith("CHPT") || upRefNo.startsWith("CHRT") || upRefNo.startsWith("CHQ") || upRefNo.startsWith("BANK")) {
-        targetViewIndex = 16;
-    }
-    // 8. Journal Voucher (View 17)
-    else if (upVType.contains("JOURNAL") || upVType == "JRNL" || upVType == "JV" || upVType == "JL" || upVType == "JRN" ||
-             upRawType.contains("JOURNAL") || upRawType == "JRNL" || upRawType == "JV" || upRawType == "JL" || upRawType == "JRN" ||
-             upRefNo.startsWith("JRNL") || upRefNo.startsWith("JV-") || upRefNo.startsWith("JL-") || upRefNo.startsWith("JOURNAL")) {
-        targetViewIndex = 17;
-    }
-    // 9. Milling Voucher (View 31)
-    else if (upVType.contains("MILLING") || upRawType.contains("MILL") || upRawType == "PROD" || upRawType == "ML" ||
-             upRefNo.startsWith("MILL") || upRefNo.startsWith("ML-") || upRefNo.startsWith("PROD")) {
-        targetViewIndex = 31;
-    }
-    // 10. Debit / Credit Note (View 28)
-    else if (upVType.contains("DEBIT NOTE") || upVType.contains("CREDIT NOTE") || upRawType == "DBNT" || upRawType == "CRNT" ||
-             upRawType == "DN" || upRawType == "CN" || upRefNo.startsWith("DBNT") || upRefNo.startsWith("CRNT") || upRefNo.startsWith("DN-") || upRefNo.startsWith("CN-")) {
-        targetViewIndex = 28;
-    }
-
+    // Single canonical router (VoucherOps) — alter and Alt+D delete agree.
+    const int targetViewIndex = VoucherOps::viewIndexForKind(VoucherOps::kindForEntry(entry));
     if (targetViewIndex != -1) {
         emit alterVoucherRequested(targetViewIndex, entry);
     }

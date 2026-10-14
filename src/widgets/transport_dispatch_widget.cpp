@@ -2,6 +2,7 @@
 #include "weighbridge_kanda_dialog.h"
 #include "voucher_date_dialog.h"
 #include "kbd_badge_button.h"
+#include "erp_theme.h"
 #include "custom_dialogs.h"
 #include "../engine/fiscal_year_helper.h"
 #include <QVBoxLayout>
@@ -53,14 +54,14 @@ void TransportDispatchWidget::setupUi() {
     headerLayout->addLayout(titleCol);
     headerLayout->addStretch();
 
-    auto* newSlipBtn = new KbdBadgeButton("+ New Dispatch Slip", "F2", this);
+    auto* newSlipBtn = new KbdBadgeButton("+ New Dispatch Slip", "Ctrl+N", this);
     newSlipBtn->setPrimaryColor("#16A34A", "#15803D");
     newSlipBtn->setTextColor("#FFFFFF");
     connect(newSlipBtn, &QPushButton::clicked, this, &TransportDispatchWidget::openNewDispatchDialog);
     headerLayout->addWidget(newSlipBtn);
 
     auto* csvBtn = new QPushButton("Export CSV", this);
-    csvBtn->setStyleSheet("background-color: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 6px; padding: 6px 12px; font-weight: bold; color: #334155;");
+    csvBtn->setStyleSheet(ErpTheme::secondaryButtonStyle());
     connect(csvBtn, &QPushButton::clicked, this, &TransportDispatchWidget::onExportCsv);
     headerLayout->addWidget(csvBtn);
 
@@ -90,13 +91,13 @@ void TransportDispatchWidget::setupUi() {
     QDate initSDate = QDate::fromString(initFy.startDate, "yyyy-MM-dd");
     if (!initSDate.isValid()) initSDate = QDate(QDate::currentDate().month() < 4 ? QDate::currentDate().year() - 1 : QDate::currentDate().year(), 4, 1);
     m_fromDateEdit = new AccountingDateDisplay(initSDate, filterCard);
-    m_fromDateEdit->setFixedWidth(115);
+    m_fromDateEdit->setMinimumWidth(115);
     connect(m_fromDateEdit, &AccountingDateDisplay::dateChanged, this, &TransportDispatchWidget::onDateFilterChanged);
     filterLayout->addWidget(m_fromDateEdit);
 
     filterLayout->addWidget(new QLabel("To Date:", filterCard));
     m_toDateEdit = new AccountingDateDisplay(QDate::currentDate(), filterCard);
-    m_toDateEdit->setFixedWidth(115);
+    m_toDateEdit->setMinimumWidth(115);
     connect(m_toDateEdit, &AccountingDateDisplay::dateChanged, this, &TransportDispatchWidget::onDateFilterChanged);
     filterLayout->addWidget(m_toDateEdit);
 
@@ -112,10 +113,7 @@ void TransportDispatchWidget::setupUi() {
     connect(m_toDateEdit, &AccountingDateDisplay::clicked, this, openPeriodDlg);
 
     auto* periodBtn = new QPushButton("Period (F2)", filterCard);
-    periodBtn->setStyleSheet(
-        "QPushButton { background-color: #EFF6FF; color: #1D4ED8; border: 1px solid #BFDBFE; font-weight: 700; font-size: 11px; border-radius: 6px; padding: 4px 10px; }"
-        "QPushButton:hover { background-color: #DBEAFE; color: #1E40AF; }"
-    );
+    periodBtn->setStyleSheet(ErpTheme::secondaryButtonStyle());
     connect(periodBtn, &QPushButton::clicked, this, openPeriodDlg);
     filterLayout->addWidget(periodBtn);
 
@@ -156,8 +154,8 @@ void TransportDispatchWidget::setupUi() {
     m_table->setStyleSheet(
         "QTableWidget { background-color: #FFFFFF; alternate-background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 8px; gridline-color: #F1F5F9; font-size: 12.5px; color: #0F172A; }"
         "QTableWidget::item { padding: 7px 8px; }"
-        "QTableWidget::item:selected { background-color: #EFF6FF; color: #0F172A; }"
-        "QHeaderView::section { background-color: #F1F5F9; color: #1E293B; font-weight: 800; font-size: 12px; padding: 8px 10px; border: none; border-bottom: 2px solid #CBD5E1; border-right: 1px solid #E2E8F0; }"
+        "QTableWidget::item:selected { background-color: #2563EB; color: #FFFFFF; }"
+        "QHeaderView::section { background-color: #0F172A; color: #FFFFFF; font-weight: 800; font-size: 12px; padding: 8px 10px; border: none;  border-right: 1px solid #334155; }"
     );
     connect(m_table, &QTableWidget::cellDoubleClicked, this, &TransportDispatchWidget::onTableDoubleClicked);
     // Enter opens the focused row (same as double-click).
@@ -172,6 +170,10 @@ void TransportDispatchWidget::setupUi() {
     auto* numEnterShortcut = new QShortcut(QKeySequence(Qt::Key_Enter), m_table);
     numEnterShortcut->setContext(Qt::WidgetWithChildrenShortcut);
     connect(numEnterShortcut, &QShortcut::activated, this, openFocusedRow);
+    // Alt+D deletes the focused dispatch slip (controller delete + confirm).
+    auto* delShortcut = new QShortcut(QKeySequence(Qt::ALT | Qt::Key_D), m_table);
+    delShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+    connect(delShortcut, &QShortcut::activated, this, &TransportDispatchWidget::deleteFocusedRow);
     mainLayout->addWidget(m_table, 1);
 
     // ========================================================================
@@ -209,12 +211,17 @@ void TransportDispatchWidget::setupUi() {
 
     // Keyboard Shortcuts
     connect(new QShortcut(QKeySequence(Qt::Key_Escape), this), &QShortcut::activated, this, &TransportDispatchWidget::backRequested);
-    connect(new QShortcut(QKeySequence(Qt::Key_F2), this), &QShortcut::activated, this, &TransportDispatchWidget::openNewDispatchDialog);
+    connect(new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_N), this), &QShortcut::activated, this, &TransportDispatchWidget::openNewDispatchDialog);
+    connect(new QShortcut(QKeySequence(Qt::Key_F2), this), &QShortcut::activated, this, openPeriodDlg);
 }
 
 void TransportDispatchWidget::loadData(const QDate& fromDate, const QDate& toDate) {
-    if (fromDate.isValid()) m_fromDateEdit->setDate(fromDate);
-    if (toDate.isValid()) m_toDateEdit->setDate(toDate);
+    {
+        QSignalBlocker b1(m_fromDateEdit);
+        QSignalBlocker b2(m_toDateEdit);
+        if (fromDate.isValid()) m_fromDateEdit->setDate(fromDate);
+        if (toDate.isValid()) m_toDateEdit->setDate(toDate);
+    }
 
     if (m_controller) {
         m_controller->reload();
@@ -230,88 +237,115 @@ void TransportDispatchWidget::populateTable() {
     if (!m_controller) return;
 
     auto* mdl = m_controller->model();
-    int count = mdl ? mdl->rowCount() : 0;
-    QString q = m_searchEdit->text();
+    if (!mdl) return;
 
-    int row = 0;
+    const auto& allRecs = mdl->allRecords();
+    int count = allRecs.size();
+    QString q = m_searchEdit->text().trimmed().toLower();
+    QDate fromD = m_fromDateEdit->date();
+    QDate toD = m_toDateEdit->date();
+
+    // 1. First pass: filter records matching both date range and search query
+    QVector<int> matchedIndices;
+    matchedIndices.reserve(count);
+
     double totWeight = 0.0;
     double totFreight = 0.0;
     double totBal = 0.0;
 
     for (int i = 0; i < count; ++i) {
-        auto map = mdl->get(i);
-        QString slipNo = map.value("slipNo").toString();
-        QString dateVal = map.value("dispatchDate").toString();
-        QString veh = map.value("vehicleNo").toString();
-        QString party = map.value("partyName").toString();
-        QString item = map.value("itemName").toString();
-        QString dest = map.value("destination").toString();
-        QString trans = map.value("transporterName").toString();
-        QString status = map.value("freightPaymentStatus").toString();
-        int id = map.value("id").toInt();
-
-        if (!q.isEmpty()) {
-            QString searchTarget = (slipNo + " " + veh + " " + party + " " + item + " " + dest + " " + trans + " " + status).toLower();
-            if (!searchTarget.contains(q.toLower())) continue;
+        const auto& r = allRecs.at(i);
+        if (fromD.isValid() || toD.isValid()) {
+            QDate dDate = QDate::fromString(r.dispatchDate, "yyyy-MM-dd");
+            if (dDate.isValid()) {
+                if (fromD.isValid() && dDate < fromD) continue;
+                if (toD.isValid() && dDate > toD) continue;
+            }
         }
 
-        int bags = map.value("bagCount").toInt();
-        double weight = map.value("netWeightQtl").toDouble();
-        double freight = map.value("totalFreight").toDouble();
-        double bal = map.value("balanceFreight").toDouble();
+        if (!q.isEmpty()) {
+            QString searchTarget = (r.slipNo + " " + r.vehicleNo + " " + r.partyName + " " +
+                                    r.itemName + " " + r.destination + " " + r.transporterName + " " +
+                                    r.freightPaymentStatus).toLower();
+            if (!searchTarget.contains(q)) continue;
+        }
 
-        totWeight += weight;
-        totFreight += freight;
-        totBal += bal;
+        matchedIndices.append(i);
+        totWeight += r.netWeightQtl;
+        totFreight += r.totalFreight;
+        totBal += r.balanceFreight;
+    }
 
-        m_table->insertRow(row);
+    // Memory guard: the grid is capped at the newest MaxGridRows matches
+    // (records themselves stay fully loaded for exact footer totals below).
+    static const int MaxGridRows = 5000;
+    const int fullMatches = matchedIndices.size();
+    while (matchedIndices.size() > MaxGridRows) matchedIndices.removeLast();
 
-        auto* itemSlip = new QTableWidgetItem(slipNo);
-        itemSlip->setData(Qt::UserRole, id);
-        { QFont f = m_table->font(); f.setBold(true); itemSlip->setFont(f); }
-        itemSlip->setForeground(QBrush(QColor("#1D4ED8")));
+    // 2. Pre-allocate table rows once (O(1) allocation instead of O(N^2) insertRow)
+    m_table->setUpdatesEnabled(false);
+    m_table->setRowCount(matchedIndices.size());
+
+    QFont boldFont = m_table->font();
+    boldFont.setBold(true);
+    QBrush blueBrush(QColor("#1D4ED8"));
+    QBrush greenBrush(QColor("#16A34A"));
+    QBrush redBrush(QColor("#DC2626"));
+
+    for (int row = 0; row < matchedIndices.size(); ++row) {
+        const auto& r = allRecs.at(matchedIndices.at(row));
+
+        auto* itemSlip = new QTableWidgetItem(r.slipNo);
+        itemSlip->setData(Qt::UserRole, r.id);
+        itemSlip->setFont(boldFont);
+        itemSlip->setForeground(blueBrush);
         m_table->setItem(row, 0, itemSlip);
 
-        m_table->setItem(row, 1, new QTableWidgetItem(FiscalYearHelper::formatDisplayDate(dateVal)));
+        m_table->setItem(row, 1, new QTableWidgetItem(FiscalYearHelper::formatDisplayDate(r.dispatchDate)));
 
-        auto* itemVeh = new QTableWidgetItem(veh);
-        { QFont f = m_table->font(); f.setBold(true); itemVeh->setFont(f); }
+        auto* itemVeh = new QTableWidgetItem(r.vehicleNo);
+        itemVeh->setFont(boldFont);
         m_table->setItem(row, 2, itemVeh);
 
-        m_table->setItem(row, 3, new QTableWidgetItem(party));
-        m_table->setItem(row, 4, new QTableWidgetItem(item));
+        m_table->setItem(row, 3, new QTableWidgetItem(r.partyName));
+        m_table->setItem(row, 4, new QTableWidgetItem(r.itemName));
 
-        auto* itemBags = new QTableWidgetItem(QString::number(bags));
+        auto* itemBags = new QTableWidgetItem(QString::number(r.bagCount));
         itemBags->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         m_table->setItem(row, 5, itemBags);
 
-        auto* itemWt = new QTableWidgetItem(QString::number(weight, 'f', 2));
+        auto* itemWt = new QTableWidgetItem(QString::number(r.netWeightQtl, 'f', 2));
         itemWt->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        { QFont f = m_table->font(); f.setBold(true); itemWt->setFont(f); }
-        itemWt->setForeground(QBrush(QColor("#16A34A")));
+        itemWt->setFont(boldFont);
+        itemWt->setForeground(greenBrush);
         m_table->setItem(row, 6, itemWt);
 
-        m_table->setItem(row, 7, new QTableWidgetItem(trans));
-        m_table->setItem(row, 8, new QTableWidgetItem(dest));
+        m_table->setItem(row, 7, new QTableWidgetItem(r.transporterName));
+        m_table->setItem(row, 8, new QTableWidgetItem(r.destination));
 
-        auto* itemFr = new QTableWidgetItem(QString::number(freight, 'f', 2));
+        auto* itemFr = new QTableWidgetItem(QString::number(r.totalFreight, 'f', 2));
         itemFr->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         m_table->setItem(row, 9, itemFr);
 
-        auto* itemBal = new QTableWidgetItem(QString::number(bal, 'f', 2));
+        auto* itemBal = new QTableWidgetItem(QString::number(r.balanceFreight, 'f', 2));
         itemBal->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        { QFont f = m_table->font(); f.setBold(true); itemBal->setFont(f); }
-        itemBal->setForeground(QBrush(QColor("#DC2626")));
+        itemBal->setFont(boldFont);
+        itemBal->setForeground(redBrush);
         m_table->setItem(row, 10, itemBal);
 
-        auto* itemSt = new QTableWidgetItem(status);
+        auto* itemSt = new QTableWidgetItem(r.freightPaymentStatus);
         itemSt->setTextAlignment(Qt::AlignCenter);
         m_table->setItem(row, 11, itemSt);
-
-        row++;
     }
 
-    m_totalDispatchesLabel->setText(QString::number(row));
+    m_table->setUpdatesEnabled(true);
+
+    if (fullMatches > matchedIndices.size()) {
+        m_totalDispatchesLabel->setText(QString("%1 of %2 (newest — narrow dates for the rest)")
+                                            .arg(matchedIndices.size()).arg(fullMatches));
+    } else {
+        m_totalDispatchesLabel->setText(QString::number(matchedIndices.size()));
+    }
     m_totalNetWeightLabel->setText(QString::number(totWeight, 'f', 2));
     m_totalFreightLabel->setText("₹ " + QString::number(totFreight, 'f', 2));
     m_totalBalancePayableLabel->setText("₹ " + QString::number(totBal, 'f', 2));
@@ -323,7 +357,7 @@ void TransportDispatchWidget::onSearchChanged(const QString& query) {
 }
 
 void TransportDispatchWidget::onDateFilterChanged() {
-    loadData(m_fromDateEdit->date(), m_toDateEdit->date());
+    populateTable();
 }
 
 void TransportDispatchWidget::focusTable() {
@@ -332,6 +366,29 @@ void TransportDispatchWidget::focusTable() {
         m_table->selectRow(0);
     } else {
         m_searchEdit->setFocus();
+    }
+}
+
+// Alt+D: delete the focused dispatch slip, invalidate every statement,
+// reload in place (filters preserved).
+void TransportDispatchWidget::deleteFocusedRow() {
+    const int row = m_table ? m_table->currentRow() : -1;
+    if (row < 0 || row >= m_table->rowCount()) return;
+    auto* item = m_table->item(row, 0);
+    if (!item) return;
+    const int id = item->data(Qt::UserRole).toInt();
+    if (id <= 0) return;
+
+    if (!CustomMessageBox::question(this, "Confirm Delete",
+            QString("Permanently delete dispatch slip %1?\nThis cannot be undone.").arg(item->text()))) {
+        return;
+    }
+    if (m_controller && m_controller->deleteDispatch(id)) {
+        emit entriesChanged();
+        loadData(m_fromDateEdit->date(), m_toDateEdit->date());
+        focusTable();
+    } else {
+        CustomMessageBox::showCritical(this, "Delete Failed", "Could not delete the dispatch slip.");
     }
 }
 

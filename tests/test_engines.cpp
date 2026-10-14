@@ -1,5 +1,7 @@
 #include <QTest>
 #include <QObject>
+#include <cmath>
+#include "../src/services/financial_math_service.h"
 #include "../src/engine/mandi_calculator.h"
 #include "../src/engine/aank_interest_engine.h"
 #include "../src/engine/gst_tax_engine.h"
@@ -27,6 +29,7 @@ private slots:
     void testMandiCalculatorMath();
     void testAankInterestEngineMath();
     void testGstTaxEnginePosAndTcs();
+    void testGstOddPaiseSplitPreservesTotal();
     void testMillingYieldEngine();
     void testGstr2Reconciliation4WayMatch();
     void testGstr3BEngineCalculationAndExcelExport();
@@ -160,6 +163,22 @@ void TestEnginesSuite::testGstTaxEnginePosAndTcs() {
     );
     // 0.1% on ₹10,00,000 = ₹1,000.00
     QCOMPARE(tcs.tcsAmount, 1000.00);
+}
+
+void TestEnginesSuite::testGstOddPaiseSplitPreservesTotal() {
+    // 333.33 @ 5% = 16.67 total; naive per-half rounding sums to 16.66.
+    GstTaxBreakdown odd = GstTaxEngine::computeTax(333.33, 5.0, "06", "06", "06");
+    QVERIFY(odd.isIntraState);
+    QCOMPARE(odd.totalTax, 16.67);
+    QCOMPARE(odd.cgstAmount + odd.sgstAmount, odd.totalTax);
+    QVERIFY(std::abs(odd.cgstAmount - odd.sgstAmount) <= 0.011);
+    QCOMPARE(odd.igstAmount, 0.00);
+
+    // Same invariant through the service-level splitter.
+    auto parts = FinancialMathService::instance().calculateGst(333.33, 5.0, false);
+    QCOMPARE(parts.value("totalTax").toDouble(), 16.67);
+    QCOMPARE(parts.value("cgst").toDouble() + parts.value("sgst").toDouble(),
+             parts.value("totalTax").toDouble());
 }
 
 void TestEnginesSuite::testMillingYieldEngine() {

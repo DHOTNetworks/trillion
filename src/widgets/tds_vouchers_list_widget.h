@@ -19,6 +19,7 @@ public:
     void reloadData();
     void markDirty() { m_isDirty = true; }
     bool isDirty() const { return m_isDirty; }
+    void focusTable();
 
 signals:
     void backRequested();

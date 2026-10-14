@@ -149,7 +149,7 @@ public:
     void setProcurementMode(const QString &m) { if (m_procurementMode != m) { m_procurementMode = m; emit procurementModeChanged(); } }
 
     QString vehicleNo() const { return m_vehicleNo; }
-    void setVehicleNo(const QString &v) { if (m_vehicleNo != v) { m_vehicleNo = v; emit vehicleNoChanged(); } }
+    void setVehicleNo(const QString &v) { QString u = v.trimmed().toUpper(); if (m_vehicleNo != u) { m_vehicleNo = u; emit vehicleNoChanged(); } }
 
     QString driverName() const { return m_driverName; }
     void setDriverName(const QString &v) { if (m_driverName != v) { m_driverName = v; emit driverNameChanged(); } }

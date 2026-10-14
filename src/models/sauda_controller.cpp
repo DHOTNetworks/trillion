@@ -136,10 +136,36 @@ bool SaudaController::createDalaliSettlement(
     double tdsAmount = std::round((dalaliAmount * (tdsPct / 100.0)) * 100.0) / 100.0;
     double netDalali = dalaliAmount - tdsAmount;
 
-    int finalBrokerId = brokerId > 0 ? brokerId : 1;
-    if (brokerId <= 0 && !brokerName.isEmpty()) {
+    QVariant finalBrokerId;
+    if (brokerId > 0) {
+        QVariant chk = DatabaseManager::instance().executeScalar("SELECT id FROM parties WHERE id = ? LIMIT 1;", {brokerId});
+        if (chk.isValid() && !chk.isNull()) {
+            finalBrokerId = chk.toInt();
+        } else if (!brokerName.isEmpty()) {
+            // Auto-create broker record preserving the specified ID so FK succeeds
+            DatabaseManager::instance().executeNonQuery(
+                "INSERT OR IGNORE INTO parties (id, name, group_name, group_code, party_type) VALUES (?, ?, 'Sundry Creditors', 8, 'Broker');",
+                {brokerId, brokerName}
+            );
+            finalBrokerId = brokerId;
+        }
+    }
+    if ((!finalBrokerId.isValid() || finalBrokerId.isNull()) && !brokerName.isEmpty()) {
         QVariant chk = DatabaseManager::instance().executeScalar("SELECT id FROM parties WHERE name = ? LIMIT 1;", {brokerName});
-        if (chk.isValid() && !chk.isNull()) finalBrokerId = chk.toInt();
+        if (chk.isValid() && !chk.isNull()) {
+            finalBrokerId = chk.toInt();
+        } else {
+            DatabaseManager::instance().executeNonQuery(
+                "INSERT INTO parties (name, group_name, group_code, party_type) VALUES (?, 'Sundry Creditors', 8, 'Broker');",
+                {brokerName}
+            );
+            QVariant newId = DatabaseManager::instance().executeScalar("SELECT MAX(id) FROM parties WHERE name = ?;", {brokerName});
+            if (newId.isValid()) finalBrokerId = newId.toInt();
+        }
+    }
+    if (!finalBrokerId.isValid() || finalBrokerId.isNull()) {
+        QVariant anyParty = DatabaseManager::instance().executeScalar("SELECT id FROM parties ORDER BY id ASC LIMIT 1;");
+        if (anyParty.isValid() && !anyParty.isNull()) finalBrokerId = anyParty.toInt();
     }
 
     QVariant sId;

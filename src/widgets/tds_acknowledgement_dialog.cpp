@@ -56,8 +56,8 @@ void TdsAcknowledgementDialog::setupUi()
         "QComboBox QAbstractItemView {"
         "  background-color: #FFFFFF;"
         "  color: #0F172A;"
-        "  selection-background-color: #EFF6FF;"
-        "  selection-color: #1E3A8A;"
+        "  selection-background-color: #2563EB;"
+        "  selection-color: #FFFFFF;"
         "}"
     );
 
@@ -100,7 +100,7 @@ void TdsAcknowledgementDialog::setupUi()
     m_filingDateEdit->setText(QDate::currentDate().toString("dd-MM-yyyy"));
     dtRow->addWidget(m_filingDateEdit);
     auto *btnDt = new QPushButton("", formCard);
-    btnDt->setFixedWidth(32);
+    btnDt->setMinimumWidth(32);
     btnDt->setStyleSheet("background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 4px; font-size: 13px;");
     btnDt->setCursor(Qt::PointingHandCursor);
     connect(btnDt, &QPushButton::clicked, this, [this]() {
@@ -160,7 +160,7 @@ void TdsAcknowledgementDialog::setupUi()
         "  alternate-background-color: #F8FAFC;"
         "  border: 1px solid #CBD5E1;"
         "  border-radius: 8px;"
-        "  gridline-color: #F1F5F9;"
+        "  gridline-color: #E2E8F0;"
         "  color: #0F172A;"
         "  font-size: 12.5px;"
         "  margin: 0 16px;"
@@ -169,19 +169,19 @@ void TdsAcknowledgementDialog::setupUi()
         "  padding: 4px 8px;"
         "}"
         "QTableWidget::item:selected {"
-        "  background-color: #EFF6FF;"
-        "  color: #1D4ED8;"
+        "  background-color: #2563EB;"
+        "  color: #FFFFFF;"
         "  font-weight: bold;"
         "}"
         "QHeaderView::section {"
-        "  background-color: #F1F5F9;"
-        "  color: #1E293B;"
+        "  background-color: #0F172A;"
+        "  color: #FFFFFF;"
         "  font-weight: 800;"
         "  font-size: 12px;"
         "  padding: 8px 10px;"
         "  border: none;"
-        "  border-bottom: 2px solid #CBD5E1;"
-        "  border-right: 1px solid #E2E8F0;"
+        "  "
+        "  border-right: 1px solid #334155;"
         "}"
     );
     mainLayout->addWidget(m_table, 1);

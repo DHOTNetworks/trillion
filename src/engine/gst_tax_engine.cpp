@@ -1,15 +1,12 @@
 #include "gst_tax_engine.h"
+#include "../services/gst_state_codes.h"
+#include "../services/financial_math_service.h"
 #include <algorithm>
 
 namespace MahadevERP {
 
-static double round2(double val) {
-    return std::round(val * 100.0) / 100.0;
-}
-
-static double roundRupee(double val) {
-    return std::round(val);
-}
+// Rounding lives in FinancialMathService — the single implementation.
+// (Former file-static round2/roundRupee removed; see Doc 05.)
 
 QString GstTaxEngine::extractStateCodeFromGstin(const QString& gstin) {
     QString trimmed = gstin.trimmed();
@@ -27,26 +24,8 @@ bool GstTaxEngine::isStateCodeMatch(const QString& state1, const QString& state2
 }
 
 QString GstTaxEngine::getStateNameByCode(const QString& stateCode) {
-    QString c = stateCode.trimmed().rightJustified(2, '0');
-    if (c == "06") return "Haryana";
-    if (c == "08") return "Rajasthan";
-    if (c == "03") return "Punjab";
-    if (c == "07") return "Delhi";
-    if (c == "09") return "Uttar Pradesh";
-    if (c == "02") return "Himachal Pradesh";
-    if (c == "01") return "Jammu & Kashmir";
-    if (c == "05") return "Uttarakhand";
-    if (c == "24") return "Gujarat";
-    if (c == "23") return "Madhya Pradesh";
-    if (c == "27") return "Maharashtra";
-    if (c == "10") return "Bihar";
-    if (c == "19") return "West Bengal";
-    if (c == "21") return "Odisha";
-    if (c == "36") return "Telangana";
-    if (c == "37") return "Andhra Pradesh";
-    if (c == "29") return "Karnataka";
-    if (c == "33") return "Tamil Nadu";
-    return "Other State";
+    const QString name = GstStateCodes::stateForCode(stateCode.trimmed().rightJustified(2, '0'));
+    return name.isEmpty() ? QString("Code ") + stateCode.trimmed() : name;
 }
 
 SupplyType GstTaxEngine::determineSupplyType(
@@ -84,7 +63,7 @@ GstTaxBreakdown GstTaxEngine::computeTax(
     double extraNonTaxable
 ) {
     GstTaxBreakdown res;
-    res.taxableAmount = round2(taxableAmount);
+    res.taxableAmount = FinancialMathService::round2(taxableAmount);
     res.taxRatePct = taxRatePct;
     res.isReverseCharge = isReverseCharge;
 
@@ -95,21 +74,24 @@ GstTaxBreakdown GstTaxEngine::computeTax(
         res.cgstRate = taxRatePct / 2.0;
         res.sgstRate = taxRatePct / 2.0;
         res.igstRate = 0.0;
-        
-        res.cgstAmount = round2(res.taxableAmount * (res.cgstRate / 100.0));
-        res.sgstAmount = round2(res.taxableAmount * (res.sgstRate / 100.0));
+
+        // Sum-preserving split: halves are rounded independently nowhere —
+        // total is rounded once, second half absorbs the odd paise.
+        const double total = FinancialMathService::round2(res.taxableAmount * (taxRatePct / 100.0));
+        res.cgstAmount = FinancialMathService::round2(total / 2.0);
+        res.sgstAmount = FinancialMathService::round2(total - res.cgstAmount);
         res.igstAmount = 0.0;
     } else {
         res.cgstRate = 0.0;
         res.sgstRate = 0.0;
         res.igstRate = taxRatePct;
-        
+
         res.cgstAmount = 0.0;
         res.sgstAmount = 0.0;
-        res.igstAmount = round2(res.taxableAmount * (res.igstRate / 100.0));
+        res.igstAmount = FinancialMathService::round2(res.taxableAmount * (res.igstRate / 100.0));
     }
 
-    res.totalTax = round2(res.cgstAmount + res.sgstAmount + res.igstAmount + res.cessAmount);
+    res.totalTax = FinancialMathService::round2(res.cgstAmount + res.sgstAmount + res.igstAmount + res.cessAmount);
 
     // TCS Sec 206C(1H) calculation (applies if turnover exceeds 50 Lakhs)
     res.applyTcs = applyTcs;
@@ -119,13 +101,13 @@ GstTaxBreakdown GstTaxEngine::computeTax(
         if (cumulativeTurnover + res.taxableAmount > tcsThreshold) {
             currentPortionTaxable = (cumulativeTurnover >= tcsThreshold) ? res.taxableAmount : (cumulativeTurnover + res.taxableAmount - tcsThreshold);
         }
-        res.tcsAmount = round2(currentPortionTaxable * (res.tcsRatePct / 100.0));
+        res.tcsAmount = FinancialMathService::round2(currentPortionTaxable * (res.tcsRatePct / 100.0));
     }
 
     // Invoice Total and Rounding
     double rawTotal = res.taxableAmount + res.totalTax + res.tcsAmount + extraNonTaxable;
-    res.finalInvoiceValue = roundRupee(rawTotal);
-    res.roundOff = round2(res.finalInvoiceValue - rawTotal);
+    res.finalInvoiceValue = FinancialMathService::instance().calculateGrandTotal(rawTotal);
+    res.roundOff = FinancialMathService::instance().calculateRoundOff(rawTotal);
 
     return res;
 }

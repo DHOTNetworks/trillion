@@ -1,6 +1,7 @@
 #include "interest_calculator_widget.h"
 #include "voucher_date_dialog.h"
 #include "kbd_badge_button.h"
+#include "erp_theme.h"
 #include "custom_dialogs.h"
 #include "../engine/fiscal_year_helper.h"
 #include <QVBoxLayout>
@@ -58,8 +59,7 @@ void InterestCalculatorWidget::setupUi() {
     headerLayout->addStretch();
 
     auto* csvBtn = new QPushButton("Export CSV", headerCard);
-    csvBtn->setCursor(Qt::PointingHandCursor);
-    csvBtn->setStyleSheet("QPushButton { background-color: #FFFFFF; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 6px 12px; font-weight: 800; font-size: 11.5px; color: #334155; } QPushButton:hover { background-color: #F8FAFC; }");
+    csvBtn->setStyleSheet(ErpTheme::secondaryButtonStyle());
     connect(csvBtn, &QPushButton::clicked, this, &InterestCalculatorWidget::onExportCsv);
     headerLayout->addWidget(csvBtn);
 
@@ -95,12 +95,12 @@ void InterestCalculatorWidget::setupUi() {
     QDate initSDate = QDate::fromString(initFy.startDate, "yyyy-MM-dd");
     if (!initSDate.isValid()) initSDate = QDate(QDate::currentDate().month() < 4 ? QDate::currentDate().year() - 1 : QDate::currentDate().year(), 4, 1);
     m_fromDateEdit = new AccountingDateDisplay(initSDate, paramCard);
-    m_fromDateEdit->setFixedWidth(115);
+    m_fromDateEdit->setMinimumWidth(115);
     paramGrid->addWidget(new QLabel("From Date:", paramCard), 0, 4);
     paramGrid->addWidget(m_fromDateEdit, 0, 5);
 
     m_toDateEdit = new AccountingDateDisplay(QDate::currentDate(), paramCard);
-    m_toDateEdit->setFixedWidth(115);
+    m_toDateEdit->setMinimumWidth(115);
     paramGrid->addWidget(new QLabel("To Date:", paramCard), 0, 6);
     paramGrid->addWidget(m_toDateEdit, 0, 7);
 
@@ -134,9 +134,7 @@ void InterestCalculatorWidget::setupUi() {
     m_includeOpBalCheck->setChecked(true);
     paramGrid->addWidget(m_includeOpBalCheck, 1, 6);
 
-    auto* calcBtn = new QPushButton("Calculate", paramCard);
-    calcBtn->setCursor(Qt::PointingHandCursor);
-    calcBtn->setStyleSheet("QPushButton { background-color: #2563EB; color: #FFFFFF; font-weight: 800; font-size: 12px; padding: 5px 14px; border-radius: 6px; border: none; } QPushButton:hover { background-color: #1D4ED8; }");
+    auto* calcBtn = new KbdBadgeButton("Calculate", "", paramCard);
     connect(calcBtn, &QPushButton::clicked, this, &InterestCalculatorWidget::onCalculateClicked);
     paramGrid->addWidget(calcBtn, 1, 7);
 
@@ -167,8 +165,8 @@ void InterestCalculatorWidget::setupUi() {
     m_table->setStyleSheet(
         "QTableWidget { background-color: #FFFFFF; alternate-background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 8px; gridline-color: #F1F5F9; font-size: 12.5px; color: #0F172A; }"
         "QTableWidget::item { padding: 7px 8px; }"
-        "QTableWidget::item:selected { background-color: #EFF6FF; color: #0F172A; }"
-        "QHeaderView::section { background-color: #F1F5F9; color: #1E293B; font-weight: 800; font-size: 12px; padding: 8px 10px; border: none; border-bottom: 2px solid #CBD5E1; border-right: 1px solid #E2E8F0; }"
+        "QTableWidget::item:selected { background-color: #2563EB; color: #FFFFFF; }"
+        "QHeaderView::section { background-color: #0F172A; color: #FFFFFF; font-weight: 800; font-size: 12px; padding: 8px 10px; border: none;  border-right: 1px solid #334155; }"
     );
     rootLayout->addWidget(m_table, 1);
 

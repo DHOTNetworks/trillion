@@ -15,7 +15,26 @@ QString FiscalYearHelper::normalizeToIso(const QString& dateStr) {
 }
 
 QString FiscalYearHelper::formatDisplayDate(const QString& dateStr) {
-    QString iso = normalizeToIso(dateStr);
+    QString s = dateStr.trimmed();
+    // Bare 8-digit stamps (Busy/migrated YYYYMMDD, or DDMMYYYY): the ISO
+    // parser below echoes anything it can't split, which would display a raw
+    // yyyymmdd stamp. Normalize here so display is always dd-MM-yyyy.
+    if (s.length() == 8) {
+        bool allDigits = true;
+        for (const QChar& ch : s) {
+            if (!ch.isDigit()) { allDigits = false; break; }
+        }
+        if (allDigits) {
+            QDate d8 = QDate::fromString(s, "yyyyMMdd");
+            if ((!d8.isValid() || d8.year() < 1900 || d8.year() > 2100)) {
+                d8 = QDate::fromString(s, "ddMMyyyy");
+            }
+            if (d8.isValid() && d8.year() >= 1900 && d8.year() <= 2100) {
+                return d8.toString("dd-MM-yyyy");
+            }
+        }
+    }
+    QString iso = normalizeToIso(s);
     if (iso.length() == 10 && iso.at(4) == '-' && iso.at(7) == '-') {
         QStringList p = iso.split('-');
         return QString("%1-%2-%3").arg(p[2], p[1], p[0]);
@@ -295,6 +314,21 @@ FiscalYearInfo FiscalYearHelper::getFiscalYearForDate(const QString& dateStr) {
     }
 
     return getActiveFiscalYear();
+}
+
+QString FiscalYearHelper::writeBlockReason(const QString& dateStr) {
+    const QString iso = normalizeToIso(dateStr);
+    if (iso.isEmpty()) {
+        return QString("Cannot post: date '%1' is not a recognisable accounting date.").arg(dateStr.trimmed());
+    }
+    const FiscalYearInfo fy = getFiscalYearForDate(iso);
+    if (!fy.isValid()) {
+        return QString("Cannot post %1: no financial year covers this date.").arg(iso);
+    }
+    if (fy.isLocked) {
+        return QString("Cannot post %1: %2 is locked (audited/closed). Duplicate the entry into the active year instead.").arg(iso, fy.name);
+    }
+    return QString();
 }
 
 FiscalYearInfo FiscalYearHelper::getFiscalYearByName(const QString& fyName) {
@@ -729,7 +763,10 @@ PartitionedLedgerData FiscalYearHelper::partitionPartyTransactions(
         if (rawType == "Sale" || vType == "Sales") {
             desc = QString("Sales Invoice: %1").arg(!invNo.isEmpty() ? invNo : vNo);
         } else if (rawType == "Purc" || vType == "Purchase") {
-            desc = QString("Purchase Bill: %1").arg(!invNo.isEmpty() ? invNo : vNo);
+            desc = !invNo.isEmpty() ? QString("B.No. %1").arg(invNo) : QString("Purchase Bill: %1").arg(vNo);
+            if (!narr.isEmpty() && narr != QString("B.No. %1").arg(invNo) && !desc.contains(narr)) {
+                desc += " | " + narr;
+            }
         } else if (rawType == "ChRt" || rawType == "Rcpt" || vType == "Receipt") {
             desc = QString("Receipt via %1").arg(!opposing.isEmpty() ? opposing : "Bank/Cash");
         } else if (rawType == "ChPt" || rawType == "Pymt" || vType == "Payment") {
@@ -737,82 +774,36 @@ PartitionedLedgerData FiscalYearHelper::partitionPartyTransactions(
         } else if (rawType == "TDS" || vType == "TDS") {
             desc = !narr.isEmpty() ? narr : QString("TDS: %1").arg(!opposing.isEmpty() ? opposing : "TDS");
         } else if (rawType == "Jrnl" || vType == "Journal") {
-            desc = QString("Journal: %1").arg(!opposing.isEmpty() ? opposing : "A/c");
+            desc = !narr.isEmpty() ? narr : QString("Journal: %1").arg(!opposing.isEmpty() ? opposing : "A/c");
         } else if (rawType == "JFrm" || vType == "J-Form") {
             desc = QString("J-Form: %1").arg(!opposing.isEmpty() ? opposing : "Paddy Purchase");
         } else {
             desc = QString("%1: %2").arg(vType, opposing);
         }
 
-        double tdsAmt = t.value("tds_amount").toDouble();
-        if ((rawType == "Purc" || vType == "Purchase") && tdsAmt > 0.0) {
-            LedgerStatementEntry item;
-            item.id = vId;
-            item.partyId = rPartyId;
-            item.partyName = rPartyName;
-            item.isSelected = false;
-            item.vIso = isoD;
-            item.vDate = fmtD;
-            item.refNo = displayRef;
-            item.voucherNo = vNo;
-            item.invoiceNo = invNo;
-            item.voucherType = vType;
-            item.legacyType = rawType;
-            item.transType = rawType;
-            item.particulars = QString("B.No. %1").arg(!invNo.isEmpty() ? invNo : vNo);
-            if (!veh.isEmpty()) item.particulars += " | Veh: " + veh;
-            if (!broker.isEmpty()) item.particulars += " | Broker: " + broker;
-            if (!narr.isEmpty()) item.particulars += " | " + narr;
-            item.amount = amt + tdsAmt;
-            item.amountFmt = AccountingEngine::formatIndianCurrency(item.amount, true);
-            item.financialYear = result.activeFy.name;
-            item.side = "Cr";
-            result.crEntries.append(item);
+        LedgerStatementEntry entry;
+        entry.id = vId;
+        entry.partyId = rPartyId;
+        entry.partyName = rPartyName;
+        entry.isSelected = false;
+        entry.vIso = isoD;
+        entry.vDate = fmtD;
+        entry.refNo = displayRef;
+        entry.voucherNo = vNo;
+        entry.invoiceNo = invNo;
+        entry.voucherType = vType;
+        entry.legacyType = rawType;
+        entry.transType = !rawType.isEmpty() ? rawType : vType;
+        entry.particulars = desc;
+        entry.amount = amt;
+        entry.amountFmt = AccountingEngine::formatIndianCurrency(amt, true);
+        entry.financialYear = result.activeFy.name;
+        entry.side = drCr;
 
-            LedgerStatementEntry tdsItem;
-            tdsItem.id = vId;
-            tdsItem.partyId = rPartyId;
-            tdsItem.partyName = rPartyName;
-            tdsItem.isSelected = false;
-            tdsItem.vIso = isoD;
-            tdsItem.vDate = fmtD;
-            tdsItem.refNo = displayRef;
-            tdsItem.voucherNo = vNo;
-            tdsItem.invoiceNo = invNo;
-            tdsItem.voucherType = "TDS";
-            tdsItem.legacyType = "TDS";
-            tdsItem.transType = "TDS";
-            tdsItem.particulars = QString("T.D.S. U/S 194Q (B.No. %1)").arg(!invNo.isEmpty() ? invNo : vNo);
-            tdsItem.amount = tdsAmt;
-            tdsItem.amountFmt = AccountingEngine::formatIndianCurrency(tdsItem.amount, true);
-            tdsItem.financialYear = result.activeFy.name;
-            tdsItem.side = "Dr";
-            result.drEntries.append(tdsItem);
+        if (drCr.compare("Dr", Qt::CaseInsensitive) == 0) {
+            result.drEntries.append(entry);
         } else {
-            LedgerStatementEntry entry;
-            entry.id = vId;
-            entry.partyId = rPartyId;
-            entry.partyName = rPartyName;
-            entry.isSelected = false;
-            entry.vIso = isoD;
-            entry.vDate = fmtD;
-            entry.refNo = displayRef;
-            entry.voucherNo = vNo;
-            entry.invoiceNo = invNo;
-            entry.voucherType = vType;
-            entry.legacyType = rawType;
-            entry.transType = !rawType.isEmpty() ? rawType : vType;
-            entry.particulars = desc;
-            entry.amount = amt;
-            entry.amountFmt = AccountingEngine::formatIndianCurrency(amt, true);
-            entry.financialYear = result.activeFy.name;
-            entry.side = drCr;
-
-            if (drCr.compare("Dr", Qt::CaseInsensitive) == 0) {
-                result.drEntries.append(entry);
-            } else {
-                result.crEntries.append(entry);
-            }
+            result.crEntries.append(entry);
         }
     }
 

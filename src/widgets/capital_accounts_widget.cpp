@@ -96,20 +96,20 @@ void CapitalAccountsWidget::setupUi() {
 
     filterLayout->addWidget(new QLabel("From Date:", filterCard));
     m_fromDateEdit = new AccountingDateDisplay(filterCard);
-    m_fromDateEdit->setFixedWidth(115);
+    m_fromDateEdit->setMinimumWidth(115);
     connect(m_fromDateEdit, &AccountingDateDisplay::dateChanged, this, &CapitalAccountsWidget::onDateFilterChanged);
     connect(m_fromDateEdit, &AccountingDateDisplay::clicked, this, &CapitalAccountsWidget::onPeriodClicked);
     filterLayout->addWidget(m_fromDateEdit);
 
     filterLayout->addWidget(new QLabel("To Date:", filterCard));
     m_toDateEdit = new AccountingDateDisplay(filterCard);
-    m_toDateEdit->setFixedWidth(115);
+    m_toDateEdit->setMinimumWidth(115);
     connect(m_toDateEdit, &AccountingDateDisplay::dateChanged, this, &CapitalAccountsWidget::onDateFilterChanged);
     connect(m_toDateEdit, &AccountingDateDisplay::clicked, this, &CapitalAccountsWidget::onPeriodClicked);
     filterLayout->addWidget(m_toDateEdit);
 
     auto* periodBtn = new QPushButton("Period (F2)", filterCard);
-    periodBtn->setFixedHeight(34);
+    periodBtn->setMinimumHeight(34);
     periodBtn->setCursor(Qt::PointingHandCursor);
     periodBtn->setStyleSheet("QPushButton { background-color: #EFF6FF; color: #1D4ED8; border: 1px solid #BFDBFE; border-radius: 6px; padding: 4px 10px; font-weight: 700; font-size: 11.5px; } QPushButton:hover { background-color: #DBEAFE; color: #1E40AF; }");
     connect(periodBtn, &QPushButton::clicked, this, &CapitalAccountsWidget::onPeriodClicked);
@@ -145,16 +145,16 @@ void CapitalAccountsWidget::setupUi() {
         "  color: #0F172A;"
         "}"
         "QTableWidget::item { padding: 7px 8px; }"
-        "QTableWidget::item:selected { background-color: #EFF6FF; color: #0F172A; }"
+        "QTableWidget::item:selected { background-color: #2563EB; color: #FFFFFF; }"
         "QHeaderView::section {"
-        "  background-color: #F1F5F9;"
-        "  color: #1E293B;"
+        "  background-color: #0F172A;"
+        "  color: #FFFFFF;"
         "  font-weight: 800;"
         "  font-size: 12px;"
         "  padding: 8px 10px;"
         "  border: none;"
-        "  border-bottom: 2px solid #CBD5E1;"
-        "  border-right: 1px solid #E2E8F0;"
+        "  "
+        "  border-right: 1px solid #334155;"
         "}"
     );
     m_table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
@@ -380,7 +380,7 @@ void CapitalAccountsWidget::keyPressEvent(QKeyEvent* event) {
         event->accept();
         return;
     }
-    if (event->key() == Qt::Key_F2 || (event->modifiers() & Qt::AltModifier && event->key() == Qt::Key_F2)) {
+    if (event->key() == Qt::Key_F2 && !(event->modifiers() & Qt::AltModifier)) {
         event->accept();
         onPeriodClicked();
         return;

@@ -17,7 +17,7 @@ ScaleSettingsDialog::ScaleSettingsDialog(QWidget* parent)
     m_selectedPercent = m_initialPercent;
 
     setWindowTitle("Display & UI Scaling Settings");
-    setFixedWidth(560);
+    setMinimumWidth(560);
     setModal(true);
 
     setupUi();
@@ -56,7 +56,7 @@ void ScaleSettingsDialog::setupUi() {
     headerLayout->addStretch(1);
 
     m_autoDetectBtn = new QPushButton("Auto-Detect", headerCard);
-    m_autoDetectBtn->setFixedHeight(32);
+    m_autoDetectBtn->setMinimumHeight(32);
     m_autoDetectBtn->setCursor(Qt::PointingHandCursor);
     m_autoDetectBtn->setStyleSheet(
         "QPushButton { background-color: #EFF6FF; border: 1.5px solid #3B82F6; border-radius: 6px; padding: 0px 12px; font-weight: 700; color: #1D4ED8; font-size: 11.5px; }"
@@ -181,7 +181,7 @@ void ScaleSettingsDialog::setupUi() {
     for (int i = 0; i < presets.size(); ++i) {
         const auto& p = presets.at(i);
         QPushButton* btn = new QPushButton(presetsFrame);
-        btn->setFixedHeight(46);
+        btn->setMinimumHeight(46);
         btn->setCursor(Qt::PointingHandCursor);
 
         QVBoxLayout* bLayout = new QVBoxLayout(btn);
@@ -216,7 +216,7 @@ void ScaleSettingsDialog::setupUi() {
     footerLayout->setSpacing(10);
 
     m_resetBtn = new QPushButton("Reset (100%)", this);
-    m_resetBtn->setFixedHeight(36);
+    m_resetBtn->setMinimumHeight(36);
     m_resetBtn->setCursor(Qt::PointingHandCursor);
     m_resetBtn->setStyleSheet(
         "QPushButton { background-color: #FFFFFF; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 0px 14px; font-weight: 700; color: #475569; font-size: 11.5px; }"
@@ -228,7 +228,7 @@ void ScaleSettingsDialog::setupUi() {
     footerLayout->addStretch(1);
 
     m_cancelBtn = new QPushButton("Cancel", this);
-    m_cancelBtn->setFixedHeight(36);
+    m_cancelBtn->setMinimumHeight(36);
     m_cancelBtn->setCursor(Qt::PointingHandCursor);
     m_cancelBtn->setStyleSheet(
         "QPushButton { background-color: #FFFFFF; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 0px 16px; font-weight: 700; color: #64748B; font-size: 12px; }"
@@ -238,7 +238,7 @@ void ScaleSettingsDialog::setupUi() {
     footerLayout->addWidget(m_cancelBtn);
 
     m_saveBtn = new QPushButton("Apply & Save", this);
-    m_saveBtn->setFixedHeight(36);
+    m_saveBtn->setMinimumHeight(36);
     m_saveBtn->setCursor(Qt::PointingHandCursor);
     m_saveBtn->setStyleSheet(
         "QPushButton { background-color: #16A34A; border: none; border-radius: 6px; padding: 0px 20px; font-weight: 800; color: #FFFFFF; font-size: 12px; }"

@@ -22,7 +22,7 @@ public:
         double dami = 0.0, double labour = 0.0, double auction = 0.0, double m_fee = 0.0,
         double hrdf = 0.0, double other_exp = 0.0, double welfare = 0.0, double dhrmd = 0.0,
         double sutli = 0.0, double less_amount = 0.0, const QString& gr_no = "",
-        const QString& driver = "", const QString& bill_time = "", const QString& sauda_date = "",
+        const QString& driver_name = "", const QString& bill_time = "", const QString& sauda_date = "",
         const QString& shipping_address = "", const QString& po_no = "", const QString& grade = "",
         const QString& kanda_weight = "", const QString& transport = "", const QString& broker_name = "",
         const QString& voucher_no = "",
@@ -53,7 +53,7 @@ public:
         double dami = 0.0, double labour = 0.0, double auction = 0.0, double m_fee = 0.0,
         double hrdf = 0.0, double other_exp = 0.0, double welfare = 0.0, double dhrmd = 0.0,
         double sutli = 0.0, double less_amount = 0.0, const QString& gr_no = "",
-        const QString& driver = "", const QString& bill_time = "", const QString& sauda_date = "",
+        const QString& driver_name = "", const QString& bill_time = "", const QString& sauda_date = "",
         const QString& shipping_address = "", const QString& po_no = "", const QString& grade = "",
         const QString& kanda_weight = "", const QString& transport = "", const QString& broker_name = "",
         const QString& voucher_no = "",
@@ -69,4 +69,6 @@ public:
     );
 
     Q_INVOKABLE bool delete_purchase_invoice(int invoice_id, const QString& invoice_no = "");
+
+    Q_INVOKABLE static double get_supplier_fy_purchase_turnover(int supplierId, const QString& supplierName, const QString& invoiceDate, int excludeInvoiceId = 0);
 };

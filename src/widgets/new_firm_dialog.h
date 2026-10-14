@@ -5,6 +5,8 @@
 #include <QComboBox>
 #include <QLabel>
 #include <QPushButton>
+#include "kbd_badge_button.h"
+#include "erp_theme.h"
 #include "../models/firm_manager.h"
 
 class NewFirmDialog : public QDialog {
@@ -55,6 +57,6 @@ private:
     QLineEdit* m_ifscEdit = nullptr;
 
     QLabel* m_errorLabel = nullptr;
-    QPushButton* m_createBtn = nullptr;
-    QPushButton* m_cancelBtn = nullptr;
+    KbdBadgeButton* m_createBtn = nullptr;
+    KbdBadgeButton* m_cancelBtn = nullptr;
 };

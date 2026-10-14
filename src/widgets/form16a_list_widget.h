@@ -15,6 +15,9 @@ public:
     explicit Form16AListWidget(QWidget *parent = nullptr);
 
     void reloadData();
+    void markDirty() { m_isDirty = true; }
+    bool isDirty() const { return m_isDirty; }
+    void focusTable();
 
 signals:
     void backRequested();
@@ -41,6 +44,7 @@ private:
     QLabel *m_totalTdsVal = nullptr;
 
     QVariantList m_currentCerts;
+    bool m_isDirty = true;
 };
 
 } // namespace MahadevERP

@@ -13,6 +13,7 @@
 #include <QFrame>
 #include "accounting_date_edit.h"
 #include "account_search_box.h"
+#include "kbd_badge_button.h"
 #include "item_search_delegate.h"
 #include "../models/jform_model.h"
 #include "../models/parties_model.h"
@@ -106,7 +107,7 @@ private:
 
     // Logistics info
     QLineEdit* m_vehicleNoEdit = nullptr;
-    QLineEdit* m_brokerNameEdit = nullptr;
+    AccountSearchBox* m_brokerNameEdit = nullptr;
 
     // Table
     QTableWidget* m_table = nullptr;
@@ -123,11 +124,11 @@ private:
     QLineEdit* m_narrationEdit = nullptr;
 
     // Bottom Action Buttons
-    QPushButton* m_saveButton = nullptr;
-    QPushButton* m_deleteButton = nullptr;
-    QPushButton* m_cancelButton = nullptr;
-    QPushButton* m_dateButton = nullptr;
-    QPushButton* m_printButton = nullptr;
+    KbdBadgeButton* m_saveButton = nullptr;
+    KbdBadgeButton* m_deleteButton = nullptr;
+    KbdBadgeButton* m_cancelButton = nullptr;
+    KbdBadgeButton* m_dateButton = nullptr;
+    KbdBadgeButton* m_printButton = nullptr;
     QLabel* m_statusLabel = nullptr;
 
     int m_selectedFarmerId = 0;

@@ -1,4 +1,5 @@
 #include "gate_register_widget.h"
+#include "voucher_common.h"
 #include "voucher_date_dialog.h"
 #include "kbd_badge_button.h"
 #include "custom_dialogs.h"
@@ -51,9 +52,9 @@ void GateRegisterWidget::applyCustomStyles() {
         "QLabel.fieldLabel { font-size: 11px; font-weight: 700; color: #475569; border: none; background: transparent; }"
         "QLineEdit, QComboBox, AccountingDateEdit, QDateEdit { background-color: #FFFFFF; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 5px 8px; font-size: 12px; color: #0F172A; font-weight: 600; }"
         "QLineEdit:focus, QComboBox:focus, AccountingDateEdit:focus, QDateEdit:focus { border-color: #2563EB; background-color: #F8FAFC; }"
-        "QTableWidget { background-color: #FFFFFF; alternate-background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 8px; gridline-color: #F1F5F9; font-size: 12.5px; color: #0F172A; selection-background-color: #EFF6FF; selection-color: #1D4ED8; }"
+        "QTableWidget { background-color: #FFFFFF; alternate-background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 8px; gridline-color: #F1F5F9; font-size: 12.5px; color: #0F172A; selection-background-color: #2563EB; selection-color: #FFFFFF; }"
         "QTableWidget::item { padding: 4px 8px; }"
-        "QHeaderView::section { background-color: #F1F5F9; color: #1E293B; font-weight: 800; font-size: 12px; padding: 8px 10px; border: none; border-bottom: 2px solid #CBD5E1; border-right: 1px solid #E2E8F0; }"
+        "QHeaderView::section { background-color: #0F172A; color: #FFFFFF; font-weight: 800; font-size: 12px; padding: 8px 10px; border: none;  border-right: 1px solid #334155; }"
         "QTabWidget::pane { border: 1px solid #CBD5E1; background: #FFFFFF; border-radius: 8px; top: -1px; }"
         "QTabBar::tab { background: #F1F5F9; color: #475569; padding: 8px 18px; font-weight: 700; font-size: 12px; border-top-left-radius: 6px; border-top-right-radius: 6px; margin-right: 4px; border: 1px solid #CBD5E1; border-bottom: none; }"
         "QTabBar::tab:selected { background: #2563EB; color: #FFFFFF; border-color: #2563EB; }"
@@ -81,7 +82,7 @@ void GateRegisterWidget::setupUi() {
     headerLayout->addLayout(titleCol);
     headerLayout->addStretch();
 
-    auto* btnNewPass = new KbdBadgeButton("+ New Gate Pass", "F2", this);
+    auto* btnNewPass = new KbdBadgeButton("+ New Gate Pass", "Ctrl+N", this);
     btnNewPass->setPrimaryColor("#16A34A", "#15803D");
     btnNewPass->setTextColor("#FFFFFF");
     connect(btnNewPass, &QPushButton::clicked, this, &GateRegisterWidget::toggleEntryForm);
@@ -200,6 +201,7 @@ void GateRegisterWidget::setupUi() {
 
     m_vehicleEdit = new QLineEdit(m_entryCard);
     m_vehicleEdit->setPlaceholderText("e.g. HR-57-A-1234");
+    VoucherCommon::setupUppercaseInput(m_vehicleEdit);
 
     m_driverNameEdit = new QLineEdit(m_entryCard);
     m_driverNameEdit->setPlaceholderText("Driver Full Name");
@@ -214,14 +216,13 @@ void GateRegisterWidget::setupUi() {
 
     // Row 2
     m_transporterSearchBox = new AccountSearchBox(m_entryCard);
-    m_transporterSearchBox->setPlaceholderText("Search Transporter / Self Fleet...");
+    m_transporterSearchBox->configureForTransportSearch();
 
     m_partySearchBox = new AccountSearchBox(m_entryCard);
     m_partySearchBox->setPlaceholderText("Search Supplier / Farmer / Customer...");
 
     m_commodityEdit = new ItemSearchEditor(m_entryCard);
     m_commodityEdit->setPlaceholderText("Search Commodity / Stock Item...");
-    m_commodityEdit->setText("Paddy Basmati 1121");
 
     m_bagCountEdit = new QLineEdit(m_entryCard);
     m_bagCountEdit->setPlaceholderText("e.g. 500");
@@ -261,6 +262,33 @@ void GateRegisterWidget::setupUi() {
     rLay->addLayout(sBox, 1);
 
     grid->addLayout(rLay, 3, 1, 1, 3);
+
+    // Keyboard Flow Setup (Tally/Busy ERP Standards)
+    auto focusWidget = [](QWidget* w) {
+        if (!w) return;
+        w->setFocus();
+        if (auto* le = qobject_cast<QLineEdit*>(w)) le->selectAll();
+        else if (auto* cb = qobject_cast<QComboBox*>(w)) {
+            if (cb->lineEdit()) cb->lineEdit()->selectAll();
+        }
+    };
+
+    VoucherCommon::installGridNavigation(m_dateEdit, nullptr, m_timeEdit, [this, focusWidget]() { focusWidget(m_timeEdit); });
+    VoucherCommon::installGridNavigation(m_timeEdit, m_dateEdit, m_directionCombo, [this, focusWidget]() { focusWidget(m_directionCombo); });
+    VoucherCommon::installGridNavigation(m_directionCombo, m_timeEdit, m_purposeCombo, [this, focusWidget]() { focusWidget(m_purposeCombo); });
+    VoucherCommon::installGridNavigation(m_purposeCombo, m_directionCombo, m_vehicleEdit, [this, focusWidget]() { focusWidget(m_vehicleEdit); });
+
+    VoucherCommon::installGridNavigation(m_vehicleEdit, m_purposeCombo, m_driverNameEdit, [this, focusWidget]() { focusWidget(m_driverNameEdit); });
+    VoucherCommon::installGridNavigation(m_driverNameEdit, m_vehicleEdit, m_driverPhoneEdit, [this, focusWidget]() { focusWidget(m_driverPhoneEdit); });
+    VoucherCommon::installGridNavigation(m_driverPhoneEdit, m_driverNameEdit, m_transporterSearchBox, [this, focusWidget]() { focusWidget(m_transporterSearchBox); });
+    VoucherCommon::installGridNavigation(m_transporterSearchBox, m_driverPhoneEdit, m_partySearchBox, [this, focusWidget]() { focusWidget(m_partySearchBox); });
+
+    VoucherCommon::installGridNavigation(m_partySearchBox, m_transporterSearchBox, m_commodityEdit, [this, focusWidget]() { focusWidget(m_commodityEdit); });
+    VoucherCommon::installGridNavigation(m_commodityEdit, m_partySearchBox, m_bagCountEdit, [this, focusWidget]() { focusWidget(m_bagCountEdit); });
+    VoucherCommon::installGridNavigation(m_bagCountEdit, m_commodityEdit, m_grossWtEdit, [this, focusWidget]() { focusWidget(m_grossWtEdit); });
+    VoucherCommon::installGridNavigation(m_grossWtEdit, m_bagCountEdit, m_remarksEdit, [this, focusWidget]() { focusWidget(m_remarksEdit); });
+    VoucherCommon::installGridNavigation(m_remarksEdit, m_grossWtEdit, m_btnSave, [this, focusWidget]() { focusWidget(m_btnSave); });
+    VoucherCommon::installGridNavigation(m_btnSave, m_remarksEdit, nullptr, [this]() { onSaveGateEntry(); });
 
     formLayout->addLayout(grid);
     m_entryCard->setVisible(false);
@@ -367,7 +395,7 @@ void GateRegisterWidget::setupUi() {
     hFLay->addWidget(m_histToDate);
 
     auto* periodBtn = new QPushButton("Period (F2)", histFilterCard);
-    periodBtn->setFixedHeight(32);
+    periodBtn->setMinimumHeight(32);
     periodBtn->setCursor(Qt::PointingHandCursor);
     periodBtn->setStyleSheet("QPushButton { background-color: #F1F5F9; color: #0F172A; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 0 10px; font-weight: 700; font-size: 11.5px; } QPushButton:hover { background-color: #E2E8F0; }");
     connect(periodBtn, &QPushButton::clicked, this, [this]() {
@@ -428,6 +456,10 @@ void GateRegisterWidget::setupUi() {
     mainLayout->addWidget(m_tabWidget, 1);
 }
 
+void GateRegisterWidget::loadDynamicCommodities() {
+    // Zero prefilling: user initiates search cleanly
+}
+
 void GateRegisterWidget::toggleEntryForm() {
     if (m_entryCard) {
         bool nowVisible = !m_entryCard->isVisible();
@@ -435,9 +467,17 @@ void GateRegisterWidget::toggleEntryForm() {
         if (nowVisible) {
             m_gatePassEdit->setText(m_controller->generateNextGatePassNo());
             m_timeEdit->setText(QTime::currentTime().toString("HH:mm"));
-            m_vehicleEdit->setFocus();
+            m_dateEdit->setFocus();
         }
     }
+}
+
+void GateRegisterWidget::focusTable()
+{
+    // Primary live register grid (history tab keeps its own position).
+    if (!m_liveTable) return;
+    if (m_liveTable->rowCount() > 0 && m_liveTable->currentRow() < 0) m_liveTable->selectRow(0);
+    m_liveTable->setFocus();
 }
 
 void GateRegisterWidget::keyPressEvent(QKeyEvent* event) {
@@ -447,8 +487,20 @@ void GateRegisterWidget::keyPressEvent(QKeyEvent* event) {
             return;
         }
         emit backRequested();
-    } else if (event->key() == Qt::Key_F2) {
+    } else if ((event->modifiers() & (Qt::ControlModifier | Qt::MetaModifier)) && event->key() == Qt::Key_N) {
         toggleEntryForm();
+    } else if (event->key() == Qt::Key_F2) {
+        if (m_entryCard && m_entryCard->isVisible()) {
+            if (m_dateEdit) m_dateEdit->openDateDialog();
+        } else {
+            QDate f = m_histFromDate->date();
+            QDate t = m_histToDate->date();
+            if (VoucherDateDialog::selectDateRange(this, &f, &t, f, t)) {
+                m_histFromDate->setDate(f);
+                m_histToDate->setDate(t);
+                populateHistoryTable();
+            }
+        }
     } else if (event->key() == Qt::Key_F3) {
         onSendToWeighbridge();
     } else if (event->key() == Qt::Key_F12) {
@@ -538,7 +590,7 @@ void GateRegisterWidget::populateLiveTable() {
         else statusItem->setForeground(QColor("#059669"));
 
         m_liveTable->setItem(r, 0, createItem(pNo, Qt::AlignCenter));
-        m_liveTable->setItem(r, 1, createItem(row.value("entry_date").toString(), Qt::AlignCenter));
+        m_liveTable->setItem(r, 1, createItem(FiscalYearHelper::formatDisplayDate(row.value("entry_date").toString()), Qt::AlignCenter));
         m_liveTable->setItem(r, 2, createItem(row.value("entry_time").toString(), Qt::AlignCenter));
         m_liveTable->setItem(r, 3, dirItem);
         m_liveTable->setItem(r, 4, createItem(veh));
@@ -584,7 +636,7 @@ void GateRegisterWidget::populateHistoryTable() {
         };
 
         m_historyTable->setItem(r, 0, createItem(pNo, Qt::AlignCenter));
-        m_historyTable->setItem(r, 1, createItem(row.value("entry_date").toString(), Qt::AlignCenter));
+        m_historyTable->setItem(r, 1, createItem(FiscalYearHelper::formatDisplayDate(row.value("entry_date").toString()), Qt::AlignCenter));
         m_historyTable->setItem(r, 2, createItem(row.value("entry_time").toString(), Qt::AlignCenter));
         m_historyTable->setItem(r, 3, createItem(row.value("exit_time").toString(), Qt::AlignCenter));
         m_historyTable->setItem(r, 4, createItem(row.value("direction").toString().startsWith("INWARD") ? "IN" : "OUT", Qt::AlignCenter));
@@ -600,7 +652,7 @@ void GateRegisterWidget::populateHistoryTable() {
 }
 
 void GateRegisterWidget::onSaveGateEntry() {
-    QString veh = m_vehicleEdit->text().trimmed();
+    QString veh = m_vehicleEdit->text().trimmed().toUpper();
     if (veh.isEmpty()) {
         CustomMessageBox::critical(this, "Validation Error", "Please enter vehicle registration number.");
         m_vehicleEdit->setFocus();
@@ -620,7 +672,11 @@ void GateRegisterWidget::onSaveGateEntry() {
     if (party.isEmpty() && m_partySearchBox) party = m_partySearchBox->text().trimmed();
     int partyId = m_partySearchBox ? m_partySearchBox->selectedPartyId() : 0;
     QString commodity = m_commodityEdit ? m_commodityEdit->text().trimmed() : "";
-    if (commodity.isEmpty()) commodity = "Paddy Basmati 1121";
+    if (commodity.isEmpty()) {
+        CustomMessageBox::critical(this, "Validation Error", "Please select or enter Commodity item name.");
+        if (m_commodityEdit) m_commodityEdit->setFocus();
+        return;
+    }
     int bags = m_bagCountEdit->text().toInt();
     double gross = m_grossWtEdit->text().toDouble();
     QString rem = m_remarksEdit->text().trimmed();

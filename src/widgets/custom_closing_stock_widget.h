@@ -24,6 +24,7 @@ class CustomClosingStockWidget : public QWidget {
 public:
     explicit CustomClosingStockWidget(PrintExportController* printCtrl, QWidget* parent = nullptr);
     void reloadData();
+    void focusTable();
     void markDirty() { m_isDirty = true; }
     bool isDirty() const { return m_isDirty; }
 

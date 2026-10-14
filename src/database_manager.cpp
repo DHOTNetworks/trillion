@@ -4,6 +4,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QDebug>
+#include <QElapsedTimer>
 
 DatabaseManager::DatabaseManager() {}
 
@@ -89,6 +90,11 @@ qint64 DatabaseManager::lastInsertedId() {
     return static_cast<qint64>(sqlite3_last_insert_rowid(m_db));
 }
 
+QString DatabaseManager::lastErrorText() {
+    QMutexLocker locker(&m_mutex);
+    return m_lastError;
+}
+
 static void bindParams(sqlite3_stmt* stmt, const QVariantList& params) {
     for (int i = 0; i < params.size(); ++i) {
         int idx = i + 1;
@@ -153,19 +159,22 @@ QVariantList DatabaseManager::executeQuery(const QString& sql, const QVariantLis
 
 bool DatabaseManager::executeNonQuery(const QString& sql, const QVariantList& params) {
     QMutexLocker locker(&m_mutex);
+    m_lastError.clear();
     if (!m_db) return false;
 
     sqlite3_stmt* stmt = nullptr;
     int rc = sqlite3_prepare_v2(m_db, sql.toUtf8().constData(), -1, &stmt, nullptr);
     if (rc != SQLITE_OK) {
-        qWarning() << "SQL Prepare Error:" << sqlite3_errmsg(m_db) << "in SQL:" << sql;
+        m_lastError = QString::fromUtf8(sqlite3_errmsg(m_db));
+        qWarning() << "SQL Prepare Error:" << m_lastError << "in SQL:" << sql;
         return false;
     }
 
     bindParams(stmt, params);
     rc = sqlite3_step(stmt);
     if (rc != SQLITE_DONE && rc != SQLITE_ROW) {
-        qWarning() << "SQL Step Error:" << sqlite3_errmsg(m_db) << "in SQL:" << sql;
+        m_lastError = QString::fromUtf8(sqlite3_errmsg(m_db));
+        qWarning() << "SQL Step Error:" << m_lastError << "in SQL:" << sql;
     }
     sqlite3_finalize(stmt);
     return (rc == SQLITE_DONE || rc == SQLITE_ROW);
@@ -173,11 +182,15 @@ bool DatabaseManager::executeNonQuery(const QString& sql, const QVariantList& pa
 
 QVariant DatabaseManager::executeScalar(const QString& sql, const QVariantList& params) {
     QMutexLocker locker(&m_mutex);
+    m_lastError.clear();
     if (!m_db) return QVariant();
 
     sqlite3_stmt* stmt = nullptr;
     int rc = sqlite3_prepare_v2(m_db, sql.toUtf8().constData(), -1, &stmt, nullptr);
-    if (rc != SQLITE_OK) return QVariant();
+    if (rc != SQLITE_OK) {
+        m_lastError = QString::fromUtf8(sqlite3_errmsg(m_db));
+        return QVariant();
+    }
 
     bindParams(stmt, params);
     QVariant result;
@@ -196,6 +209,8 @@ QVariant DatabaseManager::executeScalar(const QString& sql, const QVariantList& 
 }
 
 void DatabaseManager::ensureTablesExist() {
+    QElapsedTimer ddlTimer;
+    ddlTimer.start();
     executeNonQuery("BEGIN TRANSACTION;");
 
     // -1. Application Key-Value Settings
@@ -563,7 +578,6 @@ void DatabaseManager::ensureTablesExist() {
         "less_amount REAL DEFAULT 0.0,"
         "gr_no TEXT,"
         "driver_name TEXT,"
-        "driver TEXT,"
         "broker_name TEXT,"
         "shipping_address TEXT,"
         "po_no TEXT,"
@@ -644,7 +658,6 @@ void DatabaseManager::ensureTablesExist() {
         "less_amount REAL DEFAULT 0.0,"
         "gr_no TEXT,"
         "driver_name TEXT,"
-        "driver TEXT,"
         "broker_name TEXT,"
         "shipping_address TEXT,"
         "po_no TEXT,"
@@ -706,7 +719,7 @@ void DatabaseManager::ensureTablesExist() {
         "procurement_mode TEXT,"
         "lot_no TEXT,"
         "grade TEXT,"
-        "transport_name TEXT,"
+        "transport TEXT,"
         "broker_name TEXT,"
         "challan_no TEXT,"
         "kanda_weight TEXT,"
@@ -747,7 +760,7 @@ void DatabaseManager::ensureTablesExist() {
         "vehicle_no TEXT NOT NULL,"
         "driver_name TEXT,"
         "driver_phone TEXT,"
-        "transporter_name TEXT,"
+        "transport TEXT,"
         "transporter_gstin TEXT,"
         "gr_no TEXT,"
         "gr_date TEXT,"
@@ -872,6 +885,7 @@ void DatabaseManager::ensureTablesExist() {
         "buyer_id INTEGER,"
         "buyer_name TEXT NOT NULL,"
         "broker_name TEXT,"
+        "transport TEXT,"
         "due_days INTEGER DEFAULT 0,"
         "vehicle_no TEXT,"
         "driver_name TEXT,"
@@ -1220,6 +1234,7 @@ void DatabaseManager::ensureTablesExist() {
         ");"
     );
     executeNonQuery("CREATE INDEX IF NOT EXISTS idx_transactions_party_name ON transactions(party_name, voucher_date);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(voucher_date, id);");
     executeNonQuery("CREATE INDEX IF NOT EXISTS idx_transactions_party_id_date ON transactions(party_id, voucher_date);");
     executeNonQuery("CREATE INDEX IF NOT EXISTS idx_transactions_account_code ON transactions(account_code, voucher_date);");
     executeNonQuery("CREATE INDEX IF NOT EXISTS idx_transactions_voucher ON transactions(voucher_no, voucher_type, voucher_date);");
@@ -1414,7 +1429,7 @@ void DatabaseManager::ensureTablesExist() {
         "vehicle_no TEXT NOT NULL,"
         "driver_name TEXT,"
         "driver_phone TEXT,"
-        "transporter_name TEXT,"
+        "transport TEXT,"
         "party_id INTEGER,"
         "party_name TEXT NOT NULL,"
         "commodity TEXT DEFAULT 'Paddy',"
@@ -1555,6 +1570,8 @@ void DatabaseManager::ensureTablesExist() {
     addColumnIfNotExists("purchase_invoices", "freight_charges", "REAL DEFAULT 0.0");
     addColumnIfNotExists("purchase_invoices", "tcs_amount", "REAL DEFAULT 0.0");
     addColumnIfNotExists("purchase_invoices", "tcs_rate", "REAL DEFAULT 0.0");
+    addColumnIfNotExists("purchase_invoices", "tds_amount", "REAL DEFAULT 0.0");
+    addColumnIfNotExists("purchase_invoices", "tds_rate", "REAL DEFAULT 0.0");
     addColumnIfNotExists("purchase_invoices", "place_of_supply", "TEXT");
     addColumnIfNotExists("purchase_invoice_items", "grade", "TEXT DEFAULT ''");
 
@@ -1579,6 +1596,58 @@ void DatabaseManager::ensureTablesExist() {
     addColumnIfNotExists("transactions", "due_days", "INTEGER DEFAULT 0");
     addColumnIfNotExists("transactions", "place_of_supply", "TEXT");
     addColumnIfNotExists("transactions", "market_type", "TEXT");
+    addColumnIfNotExists("transactions", "purchase_type", "TEXT");
+    addColumnIfNotExists("transactions", "entry_type", "TEXT");
+    addColumnIfNotExists("transactions", "tcs_amount", "REAL DEFAULT 0.0");
+    addColumnIfNotExists("transactions", "tcs_rate", "REAL DEFAULT 0.0");
+    addColumnIfNotExists("transactions", "voucher_reconcile", "INTEGER DEFAULT 0");
+
+    // TDSDeductions table matching canonical Data.002 schema
+    executeNonQuery(
+        "CREATE TABLE IF NOT EXISTS TDSDeductions ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "voucher_date TEXT,"
+        "voucher_number INTEGER,"
+        "trans_type TEXT DEFAULT 'Jrnl',"
+        "account_code INTEGER,"
+        "income_amount REAL,"
+        "tds REAL,"
+        "surcharge REAL DEFAULT 0.0,"
+        "education REAL DEFAULT 0.0,"
+        "tds_rate REAL,"
+        "income_type TEXT,"
+        "reason_for_non_deduction TEXT,"
+        "rate_tds REAL,"
+        "rate_surcharge REAL DEFAULT 0.0,"
+        "rate_education REAL DEFAULT 0.0,"
+        "post_in_books INTEGER DEFAULT 1,"
+        "challan_voucher_date TEXT,"
+        "challan_voucher_number INTEGER DEFAULT 0,"
+        "income_narration TEXT,"
+        "prev_income_amount REAL DEFAULT 0.0"
+        ");"
+    );
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_tds_deductions_vch ON TDSDeductions(trans_type, voucher_number, voucher_date);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_tds_deductions_party ON TDSDeductions(account_code, voucher_date);");
+
+    // Backfill TDSDeductions from existing tds_vouchers if table is empty
+    QVariant tdsDedCount = executeScalar("SELECT COUNT(*) FROM TDSDeductions;");
+    if (!tdsDedCount.isValid() || tdsDedCount.toLongLong() == 0) {
+        executeNonQuery(
+            "INSERT INTO TDSDeductions ("
+            "voucher_date, voucher_number, trans_type, account_code, "
+            "income_amount, tds, surcharge, education, tds_rate, "
+            "income_type, reason_for_non_deduction, rate_tds, rate_surcharge, rate_education, "
+            "post_in_books, challan_voucher_date, challan_voucher_number, income_narration, prev_income_amount"
+            ") SELECT v.voucher_date, v.voucher_no, 'Jrnl', COALESCE(p.legacy_id, v.ledger_id), "
+            "v.income_amount, v.tax_amount_tds, v.tax_amount_surcharge, v.tax_amount_cess, v.total_tax_rate, "
+            "v.tds_type, v.non_deduction_reason, v.rate_tds, v.rate_surcharge, v.rate_cess, "
+            "v.post_in_books, '', 0, v.narration, v.previous_amount "
+            "FROM tds_vouchers v "
+            "LEFT JOIN parties p ON v.ledger_id = p.id "
+            "WHERE v.post_in_books = 1;"
+        );
+    }
 
     // Parties Master Bahi-Khata attributes
     addColumnIfNotExists("parties", "party_station", "TEXT");
@@ -1744,6 +1813,31 @@ void DatabaseManager::ensureTablesExist() {
     }
 
     addColumnIfNotExists("jform_vouchers", "vehicle_no", "TEXT");
+    addColumnIfNotExists("iform_vouchers", "vehicle_no", "TEXT");
+    addColumnIfNotExists("purchase_invoices", "vehicle_no", "TEXT");
+    addColumnIfNotExists("sales_invoices", "vehicle_no", "TEXT");
+    addColumnIfNotExists("vouchers", "vehicle_no", "TEXT");
+    addColumnIfNotExists("gate_register", "vehicle_no", "TEXT");
+    addColumnIfNotExists("bardana_transactions", "vehicle_no", "TEXT");
+    addColumnIfNotExists("transport_dispatches", "vehicle_no", "TEXT");
+
+    // Deterministic uppercase normalization for all vehicle_no entries
+    executeNonQuery("UPDATE purchase_invoices SET vehicle_no = UPPER(TRIM(vehicle_no)) WHERE vehicle_no IS NOT NULL AND vehicle_no != UPPER(TRIM(vehicle_no));");
+    executeNonQuery("UPDATE sales_invoices SET vehicle_no = UPPER(TRIM(vehicle_no)) WHERE vehicle_no IS NOT NULL AND vehicle_no != UPPER(TRIM(vehicle_no));");
+    executeNonQuery("UPDATE vouchers SET vehicle_no = UPPER(TRIM(vehicle_no)) WHERE vehicle_no IS NOT NULL AND vehicle_no != UPPER(TRIM(vehicle_no));");
+    executeNonQuery("UPDATE gate_register SET vehicle_no = UPPER(TRIM(vehicle_no)) WHERE vehicle_no IS NOT NULL AND vehicle_no != UPPER(TRIM(vehicle_no));");
+    executeNonQuery("UPDATE bardana_transactions SET vehicle_no = UPPER(TRIM(vehicle_no)) WHERE vehicle_no IS NOT NULL AND vehicle_no != UPPER(TRIM(vehicle_no));");
+    executeNonQuery("UPDATE jform_vouchers SET vehicle_no = UPPER(TRIM(vehicle_no)) WHERE vehicle_no IS NOT NULL AND vehicle_no != UPPER(TRIM(vehicle_no));");
+    executeNonQuery("UPDATE iform_vouchers SET vehicle_no = UPPER(TRIM(vehicle_no)) WHERE vehicle_no IS NOT NULL AND vehicle_no != UPPER(TRIM(vehicle_no));");
+    executeNonQuery("UPDATE transport_dispatches SET vehicle_no = UPPER(TRIM(vehicle_no)) WHERE vehicle_no IS NOT NULL AND vehicle_no != UPPER(TRIM(vehicle_no));");
+
+    // Deterministic indexes for vehicle_no lookups
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_purchase_vehicle ON purchase_invoices(vehicle_no);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_sales_vehicle ON sales_invoices(vehicle_no);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_vouchers_vehicle ON vouchers(vehicle_no);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_bardana_vehicle ON bardana_transactions(vehicle_no);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_jform_vehicle ON jform_vouchers(vehicle_no);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_iform_vehicle ON iform_vouchers(vehicle_no);");
     addColumnIfNotExists("jform_vouchers", "driver_name", "TEXT");
     addColumnIfNotExists("jform_vouchers", "gate_pass_no", "TEXT");
     addColumnIfNotExists("jform_vouchers", "eway_bill_no", "TEXT");
@@ -1753,10 +1847,78 @@ void DatabaseManager::ensureTablesExist() {
     addColumnIfNotExists("jform_vouchers", "procurement_mode", "TEXT");
     addColumnIfNotExists("jform_vouchers", "lot_no", "TEXT");
     addColumnIfNotExists("jform_vouchers", "grade", "TEXT");
-    addColumnIfNotExists("jform_vouchers", "transport_name", "TEXT");
+    addColumnIfNotExists("jform_vouchers", "transport", "TEXT");
     addColumnIfNotExists("jform_vouchers", "broker_name", "TEXT");
     addColumnIfNotExists("jform_vouchers", "challan_no", "TEXT");
     addColumnIfNotExists("jform_vouchers", "kanda_weight", "TEXT");
+    addColumnIfNotExists("jform_vouchers", "gr_no", "TEXT");
+
+    addColumnIfNotExists("iform_vouchers", "transport", "TEXT");
+    addColumnIfNotExists("iform_vouchers", "broker_name", "TEXT");
+    addColumnIfNotExists("iform_vouchers", "driver_name", "TEXT");
+    addColumnIfNotExists("iform_vouchers", "challan_no", "TEXT");
+    addColumnIfNotExists("iform_vouchers", "gr_no", "TEXT");
+
+    addColumnIfNotExists("vouchers", "transport", "TEXT");
+    addColumnIfNotExists("vouchers", "broker_name", "TEXT");
+    addColumnIfNotExists("vouchers", "driver_name", "TEXT");
+    addColumnIfNotExists("vouchers", "gate_pass_no", "TEXT");
+
+    addColumnIfNotExists("transactions", "transport", "TEXT");
+    addColumnIfNotExists("transactions", "broker_name", "TEXT");
+    addColumnIfNotExists("transactions", "driver_name", "TEXT");
+    addColumnIfNotExists("transactions", "gate_pass_no", "TEXT");
+
+    addColumnIfNotExists("purchase_invoices", "transport", "TEXT");
+    addColumnIfNotExists("purchase_invoices", "broker_name", "TEXT");
+    addColumnIfNotExists("purchase_invoices", "driver_name", "TEXT");
+    addColumnIfNotExists("purchase_invoices", "gate_pass_no", "TEXT");
+
+    addColumnIfNotExists("sales_invoices", "transport", "TEXT");
+    addColumnIfNotExists("sales_invoices", "broker_name", "TEXT");
+    addColumnIfNotExists("sales_invoices", "driver_name", "TEXT");
+    addColumnIfNotExists("sales_invoices", "gate_pass_no", "TEXT");
+
+    addColumnIfNotExists("transport_dispatches", "transport", "TEXT");
+    addColumnIfNotExists("transport_dispatches", "broker_name", "TEXT");
+    addColumnIfNotExists("transport_dispatches", "gate_pass_no", "TEXT");
+
+    addColumnIfNotExists("gate_register", "transport", "TEXT");
+    addColumnIfNotExists("gate_register", "broker_name", "TEXT");
+    addColumnIfNotExists("gate_register", "gr_no", "TEXT");
+
+    // Migrate any legacy non-standard column data into standard single definitions
+    if (getCols("sales_invoices").contains("driver")) {
+        executeNonQuery("UPDATE sales_invoices SET driver_name = driver WHERE (driver_name IS NULL OR driver_name = '') AND driver IS NOT NULL AND driver != '';");
+    }
+    if (getCols("purchase_invoices").contains("driver")) {
+        executeNonQuery("UPDATE purchase_invoices SET driver_name = driver WHERE (driver_name IS NULL OR driver_name = '') AND driver IS NOT NULL AND driver != '';");
+    }
+    if (getCols("vouchers").contains("driver")) {
+        executeNonQuery("UPDATE vouchers SET driver_name = driver WHERE (driver_name IS NULL OR driver_name = '') AND driver IS NOT NULL AND driver != '';");
+    }
+    if (getCols("transport_dispatches").contains("transporter_name")) {
+        executeNonQuery("UPDATE transport_dispatches SET transport = transporter_name WHERE (transport IS NULL OR transport = '') AND transporter_name IS NOT NULL AND transporter_name != '';");
+    }
+    if (getCols("gate_register").contains("transporter_name")) {
+        executeNonQuery("UPDATE gate_register SET transport = transporter_name WHERE (transport IS NULL OR transport = '') AND transporter_name IS NOT NULL AND transporter_name != '';");
+    }
+    if (getCols("jform_vouchers").contains("transport_name")) {
+        executeNonQuery("UPDATE jform_vouchers SET transport = transport_name WHERE (transport IS NULL OR transport = '') AND transport_name IS NOT NULL AND transport_name != '';");
+    }
+    if (getCols("iform_vouchers").contains("transport_name")) {
+        executeNonQuery("UPDATE iform_vouchers SET transport = transport_name WHERE (transport IS NULL OR transport = '') AND transport_name IS NOT NULL AND transport_name != '';");
+    }
+
+    // Deterministic indexes for broker and transport lookups
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_purchase_transport ON purchase_invoices(transport);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_sales_transport ON sales_invoices(transport);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_vouchers_transport ON vouchers(transport);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_purchase_broker ON purchase_invoices(broker_name);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_sales_broker ON sales_invoices(broker_name);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_vouchers_broker ON vouchers(broker_name);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_transport_dispatches_transport ON transport_dispatches(transport);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_gate_register_transport ON gate_register(transport);");
 
     // Ensure all Stock Item columns exist for backward compatibility
     addColumnIfNotExists("stock_items", "trading_group", "TEXT");
@@ -1928,7 +2090,123 @@ void DatabaseManager::ensureTablesExist() {
         );
     }
 
+    // Audit trail: every mutation leaves a row (Tally Edit-Log parity).
+    // Written by DatabaseManager::logAudit from inside the caller's
+    // transaction, so a rolled-back posting leaves no audit row either.
+    executeNonQuery(
+        "CREATE TABLE IF NOT EXISTS audit_log ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "ts TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),"
+        "actor TEXT NOT NULL DEFAULT 'local',"
+        "action TEXT NOT NULL,"
+        "table_name TEXT NOT NULL,"
+        "row_id TEXT NOT NULL DEFAULT '',"
+        "voucher_no TEXT NOT NULL DEFAULT '',"
+        "fy_name TEXT NOT NULL DEFAULT '',"
+        "before_json TEXT NOT NULL DEFAULT '',"
+        "after_json TEXT NOT NULL DEFAULT ''"
+        ");"
+    );
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_audit_table_row ON audit_log(table_name, row_id);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_log(ts);");
+
+    // Query-audit index coverage (2026-10-12): every predicate observed in
+    // hot paths gets a leftmost-column index. OR-conditions across columns
+    // still scan — those call sites are being rewritten to UNION/single-key
+    // lookups separately; these indexes cover the single-key halves.
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_vouchers_no ON vouchers(voucher_no);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_vouchers_date ON vouchers(voucher_date);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_vouchers_party_date ON vouchers(party_name, voucher_date);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_transactions_invoice ON transactions(invoice_no);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(voucher_date, id);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_transactions_opposing ON transactions(opposing_account, voucher_date);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_sales_inv_nos ON sales_invoices(invoice_no, voucher_no);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_sales_customer ON sales_invoices(customer_name);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_purchase_inv_nos ON purchase_invoices(invoice_no, voucher_no);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_purchase_supplier ON purchase_invoices(supplier_name);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_transport_voucher ON transport_dispatches(voucher_no);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_parties_name ON parties(name COLLATE NOCASE);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_jform_nos ON jform_vouchers(voucher_no, jform_no);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_iform_nos ON iform_vouchers(voucher_no, iform_no);");
+    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_milling_batch_no ON milling_batches(batch_no);");
+
+    // One-time transport dedupe (v1): the pre-fix sync re-inserted rows on
+    // every view visit, so legacy files can hold thousands of byte-identical
+    // dispatches (same slip/voucher/invoice/party/date/vehicle/freight).
+    // Keep MIN(id) per identical group; runs once, gated by setting.
+    if (getSetting("transport_deduped_v1", "") != "1") {
+        QVariant dupeGroups = executeScalar(
+            "SELECT COUNT(*) FROM (SELECT voucher_type, financial_year, voucher_no, invoice_no, slip_no, "
+            "party_name, dispatch_date, vehicle_no, total_freight FROM transport_dispatches "
+            "GROUP BY voucher_type, financial_year, voucher_no, invoice_no, slip_no, "
+            "party_name, dispatch_date, vehicle_no, total_freight HAVING COUNT(*) > 1);");
+        const qint64 ng = dupeGroups.isValid() ? dupeGroups.toLongLong() : 0;
+        if (ng > 0) {
+            QVariant dupeRows = executeScalar(
+                "SELECT COUNT(*) - COUNT(DISTINCT voucher_type || '|' || financial_year || '|' || voucher_no || '|' || "
+                "invoice_no || '|' || slip_no || '|' || party_name || '|' || dispatch_date || '|' || "
+                "vehicle_no || '|' || total_freight) FROM transport_dispatches;");
+            executeNonQuery(
+                "DELETE FROM transport_dispatches WHERE id NOT IN ("
+                "  SELECT MIN(id) FROM transport_dispatches GROUP BY voucher_type, financial_year, voucher_no, "
+                "  invoice_no, slip_no, party_name, dispatch_date, vehicle_no, total_freight"
+                ");");
+            qWarning() << "[DB] transport dedupe v1: removed duplicates across" << ng
+                       << "groups (" << (dupeRows.isValid() ? dupeRows.toLongLong() : -1) << "rows).";
+            logAudit("REPAIR", "transport_dispatches", "",
+                     QString("{\"duplicate_groups\":%1}").arg(ng), "", "", "");
+        }
+        setSetting("transport_deduped_v1", "1");
+    }
+
+    // Numbering guard: own-numbered series get a UNIQUE backstop so a
+    // select-then-insert race can never double-issue a number.
+    // sales_invoices carry OUR bills (unique per FY by construction).
+    executeNonQuery(
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_sales_fy_invoice "
+        "ON sales_invoices(financial_year, invoice_no);");
+    // purchase_invoices carry the SUPPLIER's bill verbatim — the same number
+    // legitimately repeats across suppliers/FYs, so it must NEVER be unique.
+    if (getSetting("numbering_repair_needed", "") == "1") {
+        // Previously degraded: re-check — self-heals to UNIQUE once repaired.
+        QVariant stillDup = executeScalar(
+            "SELECT COUNT(*) FROM (SELECT voucher_type, financial_year, voucher_no "
+            "FROM vouchers GROUP BY voucher_type, financial_year, voucher_no HAVING COUNT(*) > 1);");
+        if (stillDup.isValid() && stillDup.toLongLong() == 0) {
+            if (executeNonQuery(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS uq_vouchers_type_fy_no "
+                    "ON vouchers(voucher_type, financial_year, voucher_no);")) {
+                setSetting("numbering_repair_needed", "0");
+            }
+        } else {
+            executeNonQuery(
+                "CREATE INDEX IF NOT EXISTS idx_vouchers_type_fy_no "
+                "ON vouchers(voucher_type, financial_year, voucher_no);");
+        }
+    } else if (!executeNonQuery(
+                   "CREATE UNIQUE INDEX IF NOT EXISTS uq_vouchers_type_fy_no "
+                   "ON vouchers(voucher_type, financial_year, voucher_no);")) {
+        // Legacy migrated data can hold real double-posts (see
+        // VoucherNumbering::findDuplicateVoucherNos). Never delete money:
+        // degrade to a plain index, flag repair, keep the app-level claim
+        // loop as the live guard.
+        QVariant dupes = executeScalar(
+            "SELECT COUNT(*) FROM (SELECT voucher_type, financial_year, voucher_no "
+            "FROM vouchers GROUP BY voucher_type, financial_year, voucher_no HAVING COUNT(*) > 1);");
+        qWarning() << "[DB] UNIQUE vouchers guard skipped:"
+                   << (dupes.isValid() ? dupes.toLongLong() : -1)
+                   << "legacy duplicate groups; repair report available, app-level claim loop active.";
+        setSetting("numbering_repair_needed", "1");
+        executeNonQuery(
+            "CREATE INDEX IF NOT EXISTS idx_vouchers_type_fy_no "
+            "ON vouchers(voucher_type, financial_year, voucher_no);");
+    } else {
+        setSetting("numbering_repair_needed", "0");
+    }
+
     executeNonQuery("COMMIT;");
+    qDebug() << "[DB] ensureTablesExist finished in" << ddlTimer.elapsed()
+             << "ms (db:" << m_dbPath << ")";
 
     // Automatically heal and catalog any custom or foreign groups
     AccountClassifier::healAllGroups();
@@ -1951,3 +2229,76 @@ bool DatabaseManager::setSetting(const QString& key, const QString& val) {
         {key.trimmed(), val}
     );
 }
+
+bool DatabaseManager::logAudit(const QString& action, const QString& tableName,
+                               const QString& rowId, const QString& beforeJson,
+                               const QString& afterJson, const QString& voucherNo,
+                               const QString& fyName) {
+    if (action.trimmed().isEmpty() || tableName.trimmed().isEmpty()) return false;
+    const QString actor = getSetting("audit_actor", "local");
+    return executeNonQuery(
+        "INSERT INTO audit_log (actor, action, table_name, row_id, voucher_no, fy_name, before_json, after_json) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?);",
+        {actor, action.trimmed().toUpper(), tableName.trimmed(), rowId, voucherNo, fyName, beforeJson, afterJson}
+    );
+}
+
+DatabaseManager::DocumentMetadata DatabaseManager::resolveDocumentMetadata(
+    const QString& voucherNo, const QString& invoiceNo,
+    const QString& existingTransport, const QString& existingBroker,
+    const QString& existingVehicle, const QString& existingDriver)
+{
+    DocumentMetadata meta;
+    meta.transport = existingTransport.trimmed();
+    meta.brokerName = existingBroker.trimmed();
+    meta.vehicleNo = existingVehicle.trimmed().toUpper();
+    meta.driverName = existingDriver.trimmed();
+
+    // If transport, broker, vehicle, and driver are already non-empty, return immediately (0 queries!)
+    if (!meta.transport.isEmpty() && !meta.brokerName.isEmpty() && !meta.vehicleNo.isEmpty() && !meta.driverName.isEmpty()) {
+        return meta;
+    }
+
+    const QString vNo = voucherNo.trimmed();
+    const QString invNo = invoiceNo.trimmed();
+    if (vNo.isEmpty() && invNo.isEmpty()) {
+        return meta;
+    }
+
+    // 1 single consolidated query with indexed subqueries
+    static const QString sql = QStringLiteral(
+        "SELECT "
+        "  COALESCE("
+        "    NULLIF(TRIM(?1), ''),"
+        "    (SELECT transport FROM transport_dispatches WHERE (voucher_no = ?3 OR invoice_no = ?4) AND transport IS NOT NULL AND TRIM(transport) != '' LIMIT 1),"
+        "    (SELECT transport FROM gate_register WHERE (linked_voucher_no = ?3 OR weighbridge_slip_no = ?4) AND transport IS NOT NULL AND TRIM(transport) != '' LIMIT 1),"
+        "    (SELECT transport FROM vouchers WHERE (voucher_no = ?3 OR instrument_no = ?4) AND transport IS NOT NULL AND TRIM(transport) != '' LIMIT 1)"
+        "  ) AS transport,"
+        "  COALESCE("
+        "    NULLIF(TRIM(?2), ''),"
+        "    (SELECT broker_name FROM vouchers WHERE (voucher_no = ?3 OR instrument_no = ?4) AND broker_name IS NOT NULL AND TRIM(broker_name) != '' LIMIT 1),"
+        "    (SELECT broker_name FROM transactions WHERE (voucher_no = ?3 OR invoice_no = ?4) AND broker_name IS NOT NULL AND TRIM(broker_name) != '' LIMIT 1)"
+        "  ) AS broker_name,"
+        "  COALESCE("
+        "    NULLIF(TRIM(?5), ''),"
+        "    (SELECT vehicle_no FROM vouchers WHERE (voucher_no = ?3 OR instrument_no = ?4) AND vehicle_no IS NOT NULL AND TRIM(vehicle_no) != '' LIMIT 1),"
+        "    (SELECT vehicle_no FROM transport_dispatches WHERE (voucher_no = ?3 OR invoice_no = ?4) AND vehicle_no IS NOT NULL AND TRIM(vehicle_no) != '' LIMIT 1)"
+        "  ) AS vehicle_no,"
+        "  COALESCE("
+        "    NULLIF(TRIM(?6), ''),"
+        "    (SELECT driver_name FROM vouchers WHERE (voucher_no = ?3 OR instrument_no = ?4) AND driver_name IS NOT NULL AND TRIM(driver_name) != '' LIMIT 1),"
+        "    (SELECT driver_name FROM transport_dispatches WHERE (voucher_no = ?3 OR invoice_no = ?4) AND driver_name IS NOT NULL AND TRIM(driver_name) != '' LIMIT 1)"
+        "  ) AS driver_name;"
+    );
+
+    QVariantList rows = executeQuery(sql, {meta.transport, meta.brokerName, vNo, invNo, meta.vehicleNo, meta.driverName});
+    if (!rows.isEmpty()) {
+        QVariantMap m = rows.first().toMap();
+        if (meta.transport.isEmpty()) meta.transport = m.value("transport").toString().trimmed();
+        if (meta.brokerName.isEmpty()) meta.brokerName = m.value("broker_name").toString().trimmed();
+        if (meta.vehicleNo.isEmpty()) meta.vehicleNo = m.value("vehicle_no").toString().trimmed().toUpper();
+        if (meta.driverName.isEmpty()) meta.driverName = m.value("driver_name").toString().trimmed();
+    }
+    return meta;
+}
+

@@ -25,6 +25,9 @@ public:
 
     void refreshData();
     void setDateRange(const QString& fromDate, const QString& toDate);
+    void markDirty() { m_isDirty = true; }
+    bool isDirty() const { return m_isDirty; }
+    void focusTable();
 
 signals:
     void backRequested();
@@ -34,13 +37,15 @@ protected:
     void showEvent(QShowEvent* event) override;
     void keyPressEvent(QKeyEvent* event) override;
 
+public slots:
+    void onAccountingPeriod();
+
 private slots:
     void onDateChanged();
     void onSearchTextChanged(const QString& text);
     void onRowDoubleClicked(int row, int col);
     void onExportPdf();
     void onExportCsv();
-    void onAccountingPeriod();
 
 private:
     void setupUi();
@@ -77,6 +82,7 @@ private:
     QLabel* m_paymentsValLabel = nullptr;
     QLabel* m_clBalValLabel = nullptr;
     QLabel* m_clBalTitleLabel = nullptr;
+    bool m_isDirty = true;
 };
 
 } // namespace MahadevERP

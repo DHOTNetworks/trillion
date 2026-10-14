@@ -44,6 +44,7 @@ public:
 signals:
     void backRequested();
     void alterVoucherRequested(int targetViewIndex, const QVariantMap& entry);
+    void entriesChanged();
 
 public slots:
     void openSelectedVoucher();
@@ -53,6 +54,7 @@ public slots:
     void exportExcel();
     void exportCsv();
     void focusSearch();
+    void focusTable();
     void onTotalsChanged();
     void onSwitchSideRequested(const QString& targetSide);
     void recalculateAankStatement();
@@ -70,6 +72,7 @@ private slots:
     void onPartySelected(const QString& partyName);
     void onDateFilterApplied();
     void onVoucherActivated(const QVariantMap& entry);
+    void deleteFocusedVoucher();
 
 private:
     void setupUi();

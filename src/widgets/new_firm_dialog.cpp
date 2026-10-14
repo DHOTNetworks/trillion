@@ -1,5 +1,7 @@
 #include "new_firm_dialog.h"
 #include "../services/gstin_autofill_service.h"
+#include "../services/gst_state_codes.h"
+#include "../services/master_data_provider.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGridLayout>
@@ -60,7 +62,7 @@ void NewFirmDialog::setupUi() {
     rootLayout->addLayout(headerLayout);
 
     QFrame* div1 = new QFrame(this);
-    div1->setFixedHeight(1);
+    div1->setMinimumHeight(1);
     div1->setStyleSheet("background-color: #E2E8F0; border: none;");
     rootLayout->addWidget(div1);
 
@@ -84,7 +86,7 @@ void NewFirmDialog::setupUi() {
 
     auto makeLineEdit = [](const QString& placeholder = "", const QString& defaultVal = "") -> QLineEdit* {
         QLineEdit* edit = new QLineEdit();
-        edit->setFixedHeight(32);
+        edit->setMinimumHeight(32);
         edit->setPlaceholderText(placeholder);
         if (!defaultVal.isEmpty()) edit->setText(defaultVal);
         edit->setStyleSheet(
@@ -123,7 +125,7 @@ void NewFirmDialog::setupUi() {
 
     grid1->addWidget(makeFieldLabel("Legal Entity Type"), 0, 1);
     m_firmTypeCombo = new QComboBox();
-    m_firmTypeCombo->setFixedHeight(32);
+    m_firmTypeCombo->setMinimumHeight(32);
     m_firmTypeCombo->addItems({
         "Partnership Firm",
         "Proprietorship Firm",
@@ -170,7 +172,7 @@ void NewFirmDialog::setupUi() {
     grid2->setVerticalSpacing(6);
 
     grid2->addWidget(makeFieldLabel("GSTIN Number (15 Digits)"), 0, 0);
-    m_gstinEdit = makeLineEdit("06AAAAA0000A1Z5");
+    m_gstinEdit = makeLineEdit(MasterDataProvider::instance().gstinPlaceholder());
     grid2->addWidget(m_gstinEdit, 1, 0);
 
     grid2->addWidget(makeFieldLabel("PAN Number (10 Digits)"), 0, 1);
@@ -246,7 +248,7 @@ void NewFirmDialog::setupUi() {
     rootLayout->addWidget(scrollArea, 1);
 
     QFrame* div2 = new QFrame(this);
-    div2->setFixedHeight(1);
+    div2->setMinimumHeight(1);
     div2->setStyleSheet("background-color: #E2E8F0; border: none;");
     rootLayout->addWidget(div2);
 
@@ -254,25 +256,17 @@ void NewFirmDialog::setupUi() {
     QHBoxLayout* footerLayout = new QHBoxLayout();
     footerLayout->setSpacing(12);
 
-    m_cancelBtn = new QPushButton("Cancel (Esc)", this);
-    m_cancelBtn->setFixedHeight(36);
-    m_cancelBtn->setCursor(Qt::PointingHandCursor);
-    m_cancelBtn->setStyleSheet(
-        "QPushButton { background-color: #F1F5F9; border: 1px solid #CBD5E1; border-radius: 6px; padding: 0px 16px; font-weight: 700; color: #475569; font-size: 12px; }"
-        "QPushButton:hover { background-color: #E2E8F0; }"
-    );
+    m_cancelBtn = new KbdBadgeButton("Cancel", "Esc", this);
+    m_cancelBtn->setMinimumHeight(36);
     connect(m_cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
     footerLayout->addWidget(m_cancelBtn);
 
     footerLayout->addStretch(1);
 
-    m_createBtn = new QPushButton("Create & Open Company (Enter)", this);
-    m_createBtn->setFixedHeight(36);
-    m_createBtn->setCursor(Qt::PointingHandCursor);
-    m_createBtn->setStyleSheet(
-        "QPushButton { background-color: #16A34A; border: none; border-radius: 6px; padding: 0px 20px; font-weight: 700; color: #FFFFFF; font-size: 12px; }"
-        "QPushButton:hover { background-color: #15803D; }"
-    );
+    m_createBtn = new KbdBadgeButton("Create & Open Company", "Enter", this);
+    m_createBtn->setPrimaryColor(ErpTheme::kGreen, ErpTheme::kGreenDark);
+    m_createBtn->setTextColor(ErpTheme::kPaper);
+    m_createBtn->setMinimumHeight(36);
     connect(m_createBtn, &QPushButton::clicked, this, &NewFirmDialog::onCreateClicked);
     footerLayout->addWidget(m_createBtn);
 
@@ -315,12 +309,8 @@ void NewFirmDialog::onGstinChanged(const QString& text) {
     QString g = text.trimmed().toUpper();
     applyDerivedPan(g);
     if (g.length() >= 2) {
-        QString code = g.left(2);
-        if (code == "06") m_stateEdit->setText("Haryana");
-        else if (code == "03") m_stateEdit->setText("Punjab");
-        else if (code == "08") m_stateEdit->setText("Rajasthan");
-        else if (code == "07") m_stateEdit->setText("Delhi");
-        else if (code == "09") m_stateEdit->setText("Uttar Pradesh");
+        const QString state = GstStateCodes::stateForGstin(g);
+        if (!state.isEmpty()) m_stateEdit->setText(state);
     }
 }
 

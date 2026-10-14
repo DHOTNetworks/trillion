@@ -1,6 +1,7 @@
 #include "parties_model.h"
 #include "account_classifier.h"
 #include "../database_manager.h"
+#include "../services/gst_state_codes.h"
 #include "../engine/accounting_engine.h"
 #include "../engine/fiscal_year_helper.h"
 #include "../engine/ledger_pipeline.h"
@@ -109,14 +110,7 @@ QStringList PartiesModel::get_states() const {
             result.append(n);
         }
     }
-    QStringList standardStates = {
-        "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chandigarh", "Chhattisgarh",
-        "Dadra & Nagar Haveli and Daman & Diu", "Delhi", "Goa", "Gujarat", "Haryana",
-        "Himachal Pradesh", "Jammu & Kashmir", "Jharkhand", "Karnataka", "Kerala", "Ladakh",
-        "Lakshadweep", "Madhya Pradesh", "Maharashtra", "Manipur", "Meghalaya", "Mizoram",
-        "Nagaland", "Odisha", "Puducherry", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu",
-        "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal"
-    };
+    QStringList standardStates = GstStateCodes::codeToState().values();
     for (const QString& s : standardStates) {
         if (!result.contains(s, Qt::CaseInsensitive)) {
             result.append(s);
@@ -129,43 +123,11 @@ QStringList PartiesModel::get_states() const {
 }
 
 QString PartiesModel::get_state_code_for_state(const QString& state) const {
-    static const QHash<QString, QString> stateMap = {
-        {"jammu & kashmir", "01"}, {"jammu and kashmir", "01"}, {"himachal pradesh", "02"},
-        {"punjab", "03"}, {"chandigarh", "04"}, {"uttarakhand", "05"}, {"uttaranchal", "05"},
-        {"haryana", "06"}, {"delhi", "07"}, {"rajasthan", "08"}, {"uttar pradesh", "09"},
-        {"up", "09"}, {"bihar", "10"}, {"sikkim", "11"}, {"arunachal pradesh", "12"},
-        {"nagaland", "13"}, {"manipur", "14"}, {"mizoram", "15"}, {"tripura", "16"},
-        {"meghalaya", "17"}, {"assam", "18"}, {"west bengal", "19"}, {"jharkhand", "20"},
-        {"odisha", "21"}, {"orissa", "21"}, {"chhattisgarh", "22"}, {"madhya pradesh", "23"},
-        {"mp", "23"}, {"gujarat", "24"}, {"dadra & nagar haveli and daman & diu", "26"},
-        {"maharashtra", "27"}, {"karnataka", "29"}, {"goa", "30"}, {"lakshadweep", "31"},
-        {"kerala", "32"}, {"tamil nadu", "33"}, {"puducherry", "34"}, {"pondicherry", "34"},
-        {"telangana", "36"}, {"andhra pradesh", "37"}, {"ladakh", "38"}
-    };
-    return stateMap.value(state.trimmed().toLower(), "");
+    return GstStateCodes::codeForState(state);
 }
 
 QString PartiesModel::get_state_for_gstin(const QString& gstin) const {
-    QString g = gstin.trimmed();
-    if (g.length() >= 2 && g.at(0).isDigit() && g.at(1).isDigit()) {
-        QString code = g.left(2);
-        static const QMap<QString, QString> codeMap = {
-            {"01", "Jammu & Kashmir"}, {"02", "Himachal Pradesh"}, {"03", "Punjab"},
-            {"04", "Chandigarh"}, {"05", "Uttarakhand"}, {"06", "Haryana"},
-            {"07", "Delhi"}, {"08", "Rajasthan"}, {"09", "Uttar Pradesh"},
-            {"10", "Bihar"}, {"11", "Sikkim"}, {"12", "Arunachal Pradesh"},
-            {"13", "Nagaland"}, {"14", "Manipur"}, {"15", "Mizoram"},
-            {"16", "Tripura"}, {"17", "Meghalaya"}, {"18", "Assam"},
-            {"19", "West Bengal"}, {"20", "Jharkhand"}, {"21", "Odisha"},
-            {"22", "Chhattisgarh"}, {"23", "Madhya Pradesh"}, {"24", "Gujarat"},
-            {"26", "Dadra & Nagar Haveli and Daman & Diu"}, {"27", "Maharashtra"},
-            {"29", "Karnataka"}, {"30", "Goa"}, {"31", "Lakshadweep"},
-            {"32", "Kerala"}, {"33", "Tamil Nadu"}, {"34", "Puducherry"},
-            {"36", "Telangana"}, {"37", "Andhra Pradesh"}, {"38", "Ladakh"}
-        };
-        return codeMap.value(code, "");
-    }
-    return "";
+    return GstStateCodes::stateForGstin(gstin);
 }
 
 QString PartiesModel::get_state_code_for_gstin(const QString& gstin) const {

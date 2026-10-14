@@ -422,7 +422,7 @@ void ModifyStockItemWidget::setupUi() {
 
     bottomLayout->addStretch();
 
-    m_updateBtn = new KbdBadgeButton("Update Stock Item", "Ctrl+S / F2", this);
+    m_updateBtn = new KbdBadgeButton("Update Stock Item", "Ctrl+S", this);
     m_updateBtn->setPrimaryColor("#16A34A", "#15803D");
     m_updateBtn->setTextColor("#FFFFFF");
     m_updateBtn->setMinimumWidth(220);
@@ -472,11 +472,10 @@ void ModifyStockItemWidget::setupUi() {
     }
 
     connect(new QShortcut(QKeySequence(Qt::Key_Escape), this), &QShortcut::activated, this, &ModifyStockItemWidget::backRequested);
-    connect(new QShortcut(QKeySequence(Qt::Key_F2), this), &QShortcut::activated, this, &ModifyStockItemWidget::onUpdateClicked);
-    connect(new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_S), this), &QShortcut::activated, this, &ModifyStockItemWidget::onUpdateClicked);
-    connect(new QShortcut(QKeySequence(Qt::Key_F5), this), &QShortcut::activated, this, &ModifyStockItemWidget::onCopyAllLedgersFromPurchase);
-    connect(new QShortcut(QKeySequence(Qt::ALT | Qt::Key_C), this), &QShortcut::activated, this, &ModifyStockItemWidget::onCreateStockGroup);
-    connect(new QShortcut(QKeySequence(Qt::Key_Delete), this), &QShortcut::activated, this, &ModifyStockItemWidget::onDeleteClicked);
+    connect(new QShortcut(QKeySequence(Qt::ALT | Qt::Key_S), this), &QShortcut::activated, this, &ModifyStockItemWidget::onUpdateClicked);
+    connect(new QShortcut(QKeySequence(Qt::ALT | Qt::Key_C), this), &QShortcut::activated, this, &ModifyStockItemWidget::onCopyAllLedgersFromPurchase);
+    connect(new QShortcut(QKeySequence(Qt::ALT | Qt::Key_N), this), &QShortcut::activated, this, &ModifyStockItemWidget::onCreateStockGroup);
+    connect(new QShortcut(QKeySequence(Qt::ALT | Qt::Key_D), this), &QShortcut::activated, this, &ModifyStockItemWidget::onDeleteClicked);
 }
 
 void ModifyStockItemWidget::refreshStockGroups() {

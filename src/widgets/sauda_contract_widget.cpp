@@ -1,7 +1,10 @@
 #include "sauda_contract_widget.h"
+#include "voucher_common.h"
 #include "kbd_badge_button.h"
 #include "custom_dialogs.h"
 #include "../engine/accounting_engine.h"
+#include "../engine/fiscal_year_helper.h"
+#include "../database_manager.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGridLayout>
@@ -38,9 +41,9 @@ void SaudaContractWidget::applyCustomStyles() {
         "QLabel.fieldLabel { font-size: 11px; font-weight: 700; color: #475569; border: none; background: transparent; }"
         "QLineEdit, QComboBox, AccountingDateEdit, QDateEdit { background-color: #FFFFFF; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 5px 8px; font-size: 12px; color: #0F172A; font-weight: 600; }"
         "QLineEdit:focus, QComboBox:focus, AccountingDateEdit:focus, QDateEdit:focus { border-color: #2563EB; background-color: #F8FAFC; }"
-        "QTableWidget { background-color: #FFFFFF; alternate-background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 8px; gridline-color: #F1F5F9; font-size: 12.5px; color: #0F172A; selection-background-color: #EFF6FF; selection-color: #1D4ED8; }"
+        "QTableWidget { background-color: #FFFFFF; alternate-background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 8px; gridline-color: #F1F5F9; font-size: 12.5px; color: #0F172A; selection-background-color: #2563EB; selection-color: #FFFFFF; }"
         "QTableWidget::item { padding: 4px 8px; }"
-        "QHeaderView::section { background-color: #F1F5F9; color: #1E293B; font-weight: 800; font-size: 12px; padding: 8px 10px; border: none; border-bottom: 2px solid #CBD5E1; border-right: 1px solid #E2E8F0; }"
+        "QHeaderView::section { background-color: #0F172A; color: #FFFFFF; font-weight: 800; font-size: 12px; padding: 8px 10px; border: none;  border-right: 1px solid #334155; }"
         "QTabWidget::pane { border: 1px solid #CBD5E1; background: #FFFFFF; border-radius: 8px; top: -1px; }"
         "QTabBar::tab { background: #F1F5F9; color: #475569; padding: 8px 18px; font-weight: 700; font-size: 12px; border-top-left-radius: 6px; border-top-right-radius: 6px; margin-right: 4px; border: 1px solid #CBD5E1; border-bottom: none; }"
         "QTabBar::tab:selected { background: #2563EB; color: #FFFFFF; border-color: #2563EB; }"
@@ -68,7 +71,7 @@ void SaudaContractWidget::setupUi() {
     headerLayout->addLayout(titleCol);
     headerLayout->addStretch();
 
-    auto* btnNewSauda = new KbdBadgeButton("+ Book New Sauda", "F2", this);
+    auto* btnNewSauda = new KbdBadgeButton("+ Book New Sauda", "Ctrl+N", this);
     btnNewSauda->setPrimaryColor("#16A34A", "#15803D");
     btnNewSauda->setTextColor("#FFFFFF");
     connect(btnNewSauda, &QPushButton::clicked, this, &SaudaContractWidget::toggleEntryForm);
@@ -178,11 +181,10 @@ void SaudaContractWidget::setupUi() {
 
     // Row 1
     m_brokerSearchBox = new AccountSearchBox(m_entryCard);
-    m_brokerSearchBox->setPlaceholderText("Search Broker / Dalal Name...");
+    m_brokerSearchBox->configureForBrokerSearch();
 
     m_itemEdit = new ItemSearchEditor(m_entryCard);
     m_itemEdit->setPlaceholderText("Search Commodity / Stock Item...");
-    m_itemEdit->setText("Basmati Rice 1121 Steam");
 
     m_gradeEdit = new QLineEdit(m_entryCard);
     m_gradeEdit->setPlaceholderText("e.g. Grade-A / Premium");
@@ -247,6 +249,34 @@ void SaudaContractWidget::setupUi() {
     nLay->addLayout(sb, 1);
 
     grid->addLayout(nLay, 3, 2, 1, 2);
+
+    // Keyboard Flow Setup (Tally/Busy ERP Standards)
+    auto focusWidget = [](QWidget* w) {
+        if (!w) return;
+        w->setFocus();
+        if (auto* le = qobject_cast<QLineEdit*>(w)) le->selectAll();
+        else if (auto* cb = qobject_cast<QComboBox*>(w)) {
+            if (cb->lineEdit()) cb->lineEdit()->selectAll();
+        }
+    };
+
+    VoucherCommon::installGridNavigation(m_dateEdit, nullptr, m_typeCombo, [this, focusWidget]() { focusWidget(m_typeCombo); });
+    VoucherCommon::installGridNavigation(m_typeCombo, m_dateEdit, m_partySearchBox, [this, focusWidget]() { focusWidget(m_partySearchBox); });
+    VoucherCommon::installGridNavigation(m_partySearchBox, m_typeCombo, m_brokerSearchBox, [this, focusWidget]() { focusWidget(m_brokerSearchBox); });
+    VoucherCommon::installGridNavigation(m_brokerSearchBox, m_partySearchBox, m_itemEdit, [this, focusWidget]() { focusWidget(m_itemEdit); });
+
+    VoucherCommon::installGridNavigation(m_itemEdit, m_brokerSearchBox, m_gradeEdit, [this, focusWidget]() { focusWidget(m_gradeEdit); });
+    VoucherCommon::installGridNavigation(m_gradeEdit, m_itemEdit, m_bagsEdit, [this, focusWidget]() { focusWidget(m_bagsEdit); });
+    VoucherCommon::installGridNavigation(m_bagsEdit, m_gradeEdit, m_weightEdit, [this, focusWidget]() { focusWidget(m_weightEdit); });
+    VoucherCommon::installGridNavigation(m_weightEdit, m_bagsEdit, m_rateEdit, [this, focusWidget]() { focusWidget(m_rateEdit); });
+
+    VoucherCommon::installGridNavigation(m_rateEdit, m_weightEdit, m_dalaliRateEdit, [this, focusWidget]() { focusWidget(m_dalaliRateEdit); });
+    VoucherCommon::installGridNavigation(m_dalaliRateEdit, m_rateEdit, m_dalaliPctEdit, [this, focusWidget]() { focusWidget(m_dalaliPctEdit); });
+    VoucherCommon::installGridNavigation(m_dalaliPctEdit, m_dalaliRateEdit, m_deliveryFromEdit, [this, focusWidget]() { focusWidget(m_deliveryFromEdit); });
+    VoucherCommon::installGridNavigation(m_deliveryFromEdit, m_dalaliPctEdit, m_deliveryToEdit, [this, focusWidget]() { focusWidget(m_deliveryToEdit); });
+    VoucherCommon::installGridNavigation(m_deliveryToEdit, m_deliveryFromEdit, m_notesEdit, [this, focusWidget]() { focusWidget(m_notesEdit); });
+    VoucherCommon::installGridNavigation(m_notesEdit, m_deliveryToEdit, m_btnSaveSauda, [this, focusWidget]() { focusWidget(m_btnSaveSauda); });
+    VoucherCommon::installGridNavigation(m_btnSaveSauda, m_notesEdit, nullptr, [this]() { onSaveSauda(); });
 
     formLayout->addLayout(grid);
     m_entryCard->setVisible(false);
@@ -346,6 +376,7 @@ void SaudaContractWidget::setupUi() {
 
     dFLay->addWidget(new QLabel("Search Broker:", dFilterCard));
     m_searchDalaliBox = new AccountSearchBox(dFilterCard);
+    m_searchDalaliBox->configureForBrokerSearch();
     m_searchDalaliBox->setPlaceholderText("Filter by broker name...");
     connect(m_searchDalaliBox, &AccountSearchBox::partySelected, this, [this](const QString& /*pName*/) {
         populateDalaliTable();
@@ -389,15 +420,26 @@ void SaudaContractWidget::setupUi() {
     mainLayout->addWidget(m_tabWidget, 1);
 }
 
+void SaudaContractWidget::loadDynamicCommodities() {
+    // Zero prefilling: user initiates search cleanly
+}
+
 void SaudaContractWidget::toggleEntryForm() {
     if (m_entryCard) {
         bool nowVisible = !m_entryCard->isVisible();
         m_entryCard->setVisible(nowVisible);
         if (nowVisible) {
             m_saudaNoEdit->setText(m_controller->generateNextSaudaNo());
-            m_partySearchBox->setFocus();
+            m_dateEdit->setFocus();
         }
     }
+}
+
+void SaudaContractWidget::focusTable()
+{
+    if (!m_saudaTable) return;
+    if (m_saudaTable->rowCount() > 0 && m_saudaTable->currentRow() < 0) m_saudaTable->selectRow(0);
+    m_saudaTable->setFocus();
 }
 
 void SaudaContractWidget::keyPressEvent(QKeyEvent* event) {
@@ -407,8 +449,12 @@ void SaudaContractWidget::keyPressEvent(QKeyEvent* event) {
             return;
         }
         emit backRequested();
-    } else if (event->key() == Qt::Key_F2) {
+    } else if ((event->modifiers() & (Qt::ControlModifier | Qt::MetaModifier)) && event->key() == Qt::Key_N) {
         toggleEntryForm();
+    } else if (event->key() == Qt::Key_F2) {
+        if (m_entryCard && m_entryCard->isVisible()) {
+            if (m_dateEdit) m_dateEdit->openDateDialog();
+        }
     } else if (event->key() == Qt::Key_F12) {
         if (m_entryCard && m_entryCard->isVisible()) {
             onSaveSauda();
@@ -501,7 +547,7 @@ void SaudaContractWidget::populateSaudaTable() {
         else statusItem->setForeground(QColor("#059669"));
 
         m_saudaTable->setItem(r, 0, createItem(sNo, Qt::AlignCenter));
-        m_saudaTable->setItem(r, 1, createItem(row.value("sauda_date").toString(), Qt::AlignCenter));
+        m_saudaTable->setItem(r, 1, createItem(FiscalYearHelper::formatDisplayDate(row.value("sauda_date").toString()), Qt::AlignCenter));
         m_saudaTable->setItem(r, 2, createItem(row.value("sauda_type").toString(), Qt::AlignCenter));
         m_saudaTable->setItem(r, 3, createItem(party));
         m_saudaTable->setItem(r, 4, createItem(broker));
@@ -600,7 +646,11 @@ void SaudaContractWidget::onSaveSauda() {
     int brokerId = m_brokerSearchBox ? m_brokerSearchBox->selectedPartyId() : 0;
 
     QString item = m_itemEdit ? m_itemEdit->text().trimmed() : "";
-    if (item.isEmpty()) item = "Basmati Rice 1121 Steam";
+    if (item.isEmpty()) {
+        CustomMessageBox::critical(this, "Validation Error", "Please select or enter Commodity item name.");
+        if (m_itemEdit) m_itemEdit->setFocus();
+        return;
+    }
     QString grade = m_gradeEdit->text().trimmed();
     int bags = m_bagsEdit->text().toInt();
     double dRate = m_dalaliRateEdit->text().toDouble();

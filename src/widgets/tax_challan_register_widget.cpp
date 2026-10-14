@@ -1,4 +1,5 @@
 #include "tax_challan_register_widget.h"
+#include "../engine/fiscal_year_helper.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -144,8 +145,8 @@ void TaxChallanRegisterWidget::setupUi()
     m_table->setStyleSheet(
         "QTableWidget { background-color: #FFFFFF; alternate-background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 8px; gridline-color: #F1F5F9; font-size: 12.5px; color: #0F172A; }"
         "QTableWidget::item { padding: 4px 8px; }"
-        "QTableWidget::item:selected { background-color: #EFF6FF; color: #1D4ED8; font-weight: bold; }"
-        "QHeaderView::section { background-color: #F1F5F9; color: #1E293B; font-weight: 800; font-size: 12px; padding: 8px 10px; border: none; border-bottom: 2px solid #CBD5E1; border-right: 1px solid #E2E8F0; }"
+        "QTableWidget::item:selected { background-color: #2563EB; color: #FFFFFF; font-weight: bold; }"
+        "QHeaderView::section { background-color: #0F172A; color: #FFFFFF; font-weight: 800; font-size: 12px; padding: 8px 10px; border: none;  border-right: 1px solid #334155; }"
     );
     mainLayout->addWidget(m_table, 1);
 
@@ -183,10 +184,10 @@ void TaxChallanRegisterWidget::setupUi()
     mainLayout->addLayout(metricsLayout);
 
     // Shortcuts
-    new QShortcut(QKeySequence(Qt::Key_Insert), this, SLOT(onNewClicked()));
-    new QShortcut(QKeySequence("F5"), this, SLOT(onRefreshClicked()));
-    new QShortcut(QKeySequence(Qt::Key_Delete), this, SLOT(onDeleteClicked()));
-    new QShortcut(QKeySequence("Escape"), this, SIGNAL(backRequested()));
+    new QShortcut(QKeySequence(Qt::ALT | Qt::Key_N), this, SLOT(onNewClicked()));
+    new QShortcut(QKeySequence(Qt::ALT | Qt::Key_F5), this, SLOT(onRefreshClicked()));
+    new QShortcut(QKeySequence(Qt::ALT | Qt::Key_D), this, SLOT(onDeleteClicked()));
+    new QShortcut(QKeySequence(Qt::ALT | Qt::Key_Escape), this, SIGNAL(backRequested()));
 }
 
 void TaxChallanRegisterWidget::reloadData()
@@ -238,7 +239,7 @@ void TaxChallanRegisterWidget::populateTable()
         m_table->setItem(i, 2, new QTableWidgetItem(m.value("challan_no").toString()));
 
         QDate dt = QDate::fromString(m.value("challan_date").toString(), "yyyy-MM-dd");
-        m_table->setItem(i, 3, new QTableWidgetItem(dt.isValid() ? dt.toString("dd-MM-yyyy") : m.value("challan_date").toString()));
+        m_table->setItem(i, 3, new QTableWidgetItem(dt.isValid() ? dt.toString("dd-MM-yyyy") : FiscalYearHelper::formatDisplayDate(m.value("challan_date").toString())));
 
         QString period = QString("%1 to %2").arg(m.value("period_from").toString(), m.value("period_to").toString());
         m_table->setItem(i, 4, new QTableWidgetItem(period));
@@ -308,6 +309,13 @@ void TaxChallanRegisterWidget::onRefreshClicked()
 void TaxChallanRegisterWidget::onFilterChanged()
 {
     reloadData();
+}
+
+void TaxChallanRegisterWidget::focusTable()
+{
+    if (!m_table) return;
+    if (m_table->rowCount() > 0 && m_table->currentRow() < 0) m_table->selectRow(0);
+    m_table->setFocus();
 }
 
 void TaxChallanRegisterWidget::keyPressEvent(QKeyEvent *event)

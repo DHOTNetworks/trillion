@@ -18,6 +18,7 @@ public:
 
     void setTaxType(const QString &type);
     void reloadData();
+    void focusTable();
     void markDirty() { m_isDirty = true; }
     bool isDirty() const { return m_isDirty; }
 

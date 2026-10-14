@@ -248,6 +248,7 @@ QStringList MasterDataProvider::getUnitNames() {
         names << r.toMap().value("unit_name").toString();
     }
     if (names.isEmpty()) {
+        qWarning() << "[MasterDataProvider] stock_units empty — using built-in unit fallback.";
         names << "Qtl." << "Bags" << "Kg." << "Nos" << "Mtr.";
     }
     return names;
@@ -278,6 +279,7 @@ QVariantList MasterDataProvider::getAvailableVoucherTypes() {
     QVariantList rows = DatabaseManager::instance().executeQuery(sql);
     if (rows.isEmpty()) {
         // Fallback default list
+        qWarning() << "[MasterDataProvider] voucher_settings table missing/empty — using built-in voucher fallback.";
         QVariantList defaults;
         QVariantMap vSale; vSale["voucher_type"] = "Sale"; defaults.append(vSale);
         QVariantMap vPurc; vPurc["voucher_type"] = "Purc"; defaults.append(vPurc);
@@ -306,6 +308,7 @@ QStringList MasterDataProvider::getVoucherTypeCodes() {
         codes << r.toMap().value("voucher_type").toString();
     }
     if (codes.isEmpty()) {
+        qWarning() << "[MasterDataProvider] voucher_settings table missing/empty — using built-in code fallback.";
         codes << "Sale" << "Purc" << "Pymt" << "Rcpt" << "Jrnl" << "ChPt" << "ChRt" << "JFrm" << "IFrm";
     }
     return codes;
@@ -320,6 +323,7 @@ QVariantList MasterDataProvider::getActiveTaxRates() {
     QString sql = "SELECT DISTINCT gst_rate FROM stock_items WHERE gst_rate IS NOT NULL ORDER BY gst_rate ASC;";
     QVariantList rows = DatabaseManager::instance().executeQuery(sql);
     if (rows.isEmpty()) {
+        qWarning() << "[MasterDataProvider] no gst_rate in stock_items — using statutory default slabs.";
         QVariantList defs;
         QVariantMap r0; r0["gst_rate"] = 0.0; defs.append(r0);
         QVariantMap r5; r5["gst_rate"] = 5.0; defs.append(r5);
@@ -410,4 +414,15 @@ QVariantMap MasterDataProvider::getActiveFinancialYear() {
         return rows.first().toMap();
     }
     return QVariantMap();
+}
+
+// 8. Input hints derived from the active firm (never hardcoded identities)
+QString MasterDataProvider::gstinPlaceholder() {
+    QVariantMap co = getActiveCompanyInfo();
+    const QString code = co.value("state_code").toString().trimmed();
+    const QString state = co.value("state").toString().trimmed();
+    if (code.length() == 2 && !state.isEmpty()) {
+        return QString("15-digit GSTIN starting %1 (%2)").arg(code, state);
+    }
+    return QString("15-digit GSTIN (2-digit state code + PAN + …)");
 }

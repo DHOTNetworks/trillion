@@ -25,6 +25,7 @@ public:
     void resetForm();
     bool loadBatchForEditing(const QVariant& batchIdOrNo);
     void openDateDialog(bool isInitial = false);
+    void saveVoucher() { onSaveClicked(); }
 
 signals:
     void backRequested();

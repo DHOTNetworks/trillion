@@ -1,7 +1,11 @@
 #include "sales_voucher_widget.h"
 #include "voucher_date_dialog.h"
 #include "custom_dialogs.h"
+#include "print_copy_options_dialog.h"
 #include "voucher_common.h"
+#include "erp_theme.h"
+#include "kbd_badge_button.h"
+#include <QBrush>
 #include "../engine/fiscal_year_helper.h"
 #include "../engine/accounting_engine.h"
 #include <QVBoxLayout>
@@ -41,14 +45,15 @@ SalesVoucherWidget::~SalesVoucherWidget() {
 }
 
 void SalesVoucherWidget::setupUi() {
-    setAttribute(Qt::WA_StyledBackground, true);
+    // Standard slate scaffold (ErpTheme): light palette pin + page margins.
+    // Voucher grids stay editable — only the register/report T3 look is shared
+    // (navy headers, explicit foregrounds), never styleTable's NoEditTriggers.
+    ErpTheme::applySlate(this);
     setStyleSheet(
-        "SalesVoucherWidget { background-color: #FFF3EA; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', 'Noto Sans', 'Liberation Sans', Arial, sans-serif; }"
+        "SalesVoucherWidget { background-color: #F8FAFC; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', 'Noto Sans', 'Liberation Sans', Arial, sans-serif; }"
         "QLabel { border: none; background: transparent; color: #1E293B; font-size: 11px; font-weight: 700; }"
-        "QLineEdit { background-color: #FFFFFF; color: #0F172A; border: 1px solid #CBD5E1; border-radius: 5px; padding: 2px 6px; font-size: 11.5px; font-weight: 700; }"
-        "QLineEdit:focus { border: 1.5px solid #2563EB; background-color: #EFF6FF; }"
-        "QComboBox { background-color: #FFFFFF; color: #0F172A; border: 1px solid #CBD5E1; border-radius: 5px; padding: 2px 6px; font-size: 11.5px; font-weight: 700; }"
-        "QComboBox:focus { border: 1.5px solid #2563EB; background-color: #EFF6FF; }"
+        "QLineEdit, QComboBox { background-color: #FFFFFF; color: #0F172A; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 4px 8px; font-size: 12px; font-weight: 700; }"
+        "QLineEdit:focus, QComboBox:focus { border: 2px solid #2563EB; background-color: #FFFFF0; }"
         "QRadioButton { font-size: 11px; font-weight: 700; color: #1E293B; spacing: 5px; background: transparent; }"
         "QRadioButton:hover { color: #0F172A; }"
         "QRadioButton::indicator { width: 14px; height: 14px; border-radius: 7px; border: 1.5px solid #94A3B8; background-color: #FFFFFF; }"
@@ -57,16 +62,16 @@ void SalesVoucherWidget::setupUi() {
         "QRadioButton::indicator:checked:hover { border-color: #1D4ED8; }"
         "QCheckBox { font-size: 11px; font-weight: 700; color: #334155; spacing: 4px; background: transparent; }"
         "QCheckBox::indicator { width: 13px; height: 13px; background: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 3px; }"
-        "QGroupBox { font-size: 10.5px; font-weight: 800; color: #1E293B; border: 1px solid #E2D5C8; border-radius: 6px; margin-top: 12px; padding: 6px 8px 4px 8px; background-color: #FFF3EA; }"
-        "QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top left; padding: 0 4px; left: 8px; top: 0px; color: #2563EB; font-weight: 800; background-color: #FFF3EA; }"
-        "QPushButton { background-color: #F1F5F9; border: 1px solid #CBD5E1; border-radius: 5px; font-size: 11px; font-weight: 700; color: #475569; padding: 3px 10px; }"
+        "QGroupBox { font-size: 10.5px; font-weight: 800; color: #1E293B; border: 1px solid #E2E8F0; border-radius: 8px; margin-top: 12px; padding: 6px 8px 4px 8px; background-color: #FFFFFF; }"
+        "QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top left; padding: 0 4px; left: 8px; top: 0px; color: #2563EB; font-weight: 800; background-color: #FFFFFF; }"
+        "QPushButton { background-color: #F1F5F9; border: 1px solid #CBD5E1; border-radius: 6px; font-size: 11px; font-weight: 700; color: #475569; padding: 4px 10px; }"
         "QPushButton:hover { background-color: #E2E8F0; }"
-        "QPushButton:focus { border: 1.5px solid #2563EB; background-color: #EFF6FF; }"
+        "QPushButton:focus { border: 2px solid #2563EB; background-color: #FFFFF0; }"
     );
 
     QVBoxLayout* rootLayout = new QVBoxLayout(this);
-    rootLayout->setContentsMargins(8, 4, 8, 4);
-    rootLayout->setSpacing(2);
+    rootLayout->setContentsMargins(12, 10, 12, 10);
+    rootLayout->setSpacing(8);
 
     // ========================================================================
     // 1. TOP HEADER BAR: Modern Badge + No. + Title + Date & Day
@@ -77,19 +82,19 @@ void SalesVoucherWidget::setupUi() {
 
     m_saleBadge = new QLabel("Sale", this);
     m_saleBadge->setAlignment(Qt::AlignCenter);
-    m_saleBadge->setFixedHeight(22);
-    m_saleBadge->setStyleSheet("background-color: #EFF6FF; color: #2563EB; font-weight: 900; font-size: 12px; padding: 1px 10px; border: 1px solid #BFDBFE; border-radius: 5px;");
+    m_saleBadge->setMinimumHeight(22);
+    m_saleBadge->setStyleSheet(ErpTheme::badgeStyle("info"));
     topHeaderLayout->addWidget(m_saleBadge);
 
     m_voucherNoDisplay = new QLabel("No. 1", this);
-    m_voucherNoDisplay->setStyleSheet("font-size: 13px; font-weight: 900; color: #0F172A;");
+    m_voucherNoDisplay->setStyleSheet(ErpTheme::headerTitleStyle(13));
     topHeaderLayout->addWidget(m_voucherNoDisplay);
 
     topHeaderLayout->addStretch(1);
 
     m_titleHeaderLabel = new QLabel("F8 : Sale Voucher", this);
     m_titleHeaderLabel->setAlignment(Qt::AlignCenter);
-    m_titleHeaderLabel->setStyleSheet("font-size: 15px; font-weight: 900; color: #DC2626; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', 'Noto Sans', 'Liberation Sans', Arial, sans-serif;");
+    m_titleHeaderLabel->setStyleSheet(ErpTheme::headerTitleStyle(15));
     topHeaderLayout->addWidget(m_titleHeaderLabel);
 
     topHeaderLayout->addStretch(1);
@@ -100,15 +105,14 @@ void SalesVoucherWidget::setupUi() {
     dateBox->setAlignment(Qt::AlignRight);
 
     m_invoiceDateEdit = new AccountingDateEdit(this);
-    m_invoiceDateEdit->setFixedHeight(22);
-    m_invoiceDateEdit->setFixedWidth(105);
-    m_invoiceDateEdit->setStyleSheet("QLineEdit { background-color: #FFFFFF; color: #0F172A; font-size: 12px; font-weight: 800; border: 1px solid #CBD5E1; border-radius: 5px; }");
+    m_invoiceDateEdit->setMinimumHeight(22);
+    m_invoiceDateEdit->setMinimumWidth(105);
     connect(m_invoiceDateEdit, &AccountingDateEdit::dateChanged, this, &SalesVoucherWidget::onDateChanged);
     dateBox->addWidget(m_invoiceDateEdit);
 
     m_dayOfWeekLabel = new QLabel(this);
     m_dayOfWeekLabel->setAlignment(Qt::AlignRight);
-    m_dayOfWeekLabel->setStyleSheet("font-size: 10.5px; font-weight: 700; color: #0284C7;");
+    m_dayOfWeekLabel->setStyleSheet(QString("font-size: 10.5px; font-weight: 700; color: %1; border: none; background: transparent;").arg(ErpTheme::kSky.name()));
     dateBox->addWidget(m_dayOfWeekLabel);
     topHeaderLayout->addLayout(dateBox);
 
@@ -120,11 +124,11 @@ void SalesVoucherWidget::setupUi() {
     subBarLayout->setSpacing(16);
 
     m_revChargeCheck = new QCheckBox("Rev.Charge By Recipient", this);
-    m_revChargeCheck->setStyleSheet("font-size: 11px; font-weight: 700; color: #334155; spacing: 6px; background: transparent; padding-right: 8px;");
+    m_revChargeCheck->setStyleSheet(QString("font-size: 11px; font-weight: 700; color: %1; spacing: 6px; background: transparent; padding-right: 8px;").arg(ErpTheme::kLabelSlate.name()));
     subBarLayout->addWidget(m_revChargeCheck);
 
     m_helpHintLabel = new QLabel("(Change Date - F8 : Change Sale Mode - Shift+F8: Sale Settings - Alt+L:Show Ledger - Ctrl+F1: Set Image)", this);
-    m_helpHintLabel->setStyleSheet("color: #4A1500; font-size: 10.5px; font-weight: 700; padding-left: 4px;");
+    m_helpHintLabel->setStyleSheet(ErpTheme::mutedLabelStyle(10));
     subBarLayout->addWidget(m_helpHintLabel);
 
     subBarLayout->addStretch(1);
@@ -140,8 +144,8 @@ void SalesVoucherWidget::setupUi() {
     // Market Type Dropdown
     m_marketTypeCombo = new QComboBox(this);
     m_marketTypeCombo->addItems({"Market Type (With Stock)", "Market Type (Without Stock)", "Mandi Type"});
-    m_marketTypeCombo->setFixedHeight(24);
-    m_marketTypeCombo->setFixedWidth(190);
+    m_marketTypeCombo->setMinimumHeight(24);
+    m_marketTypeCombo->setMinimumWidth(190);
     connect(m_marketTypeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SalesVoucherWidget::onMarketTypeChanged);
     row1->addWidget(m_marketTypeCombo);
 
@@ -149,23 +153,23 @@ void SalesVoucherWidget::setupUi() {
     QLabel* invLbl = new QLabel("Inv.No.:", this);
     row1->addWidget(invLbl);
     m_invoiceNoEdit = new QLineEdit(this);
-    m_invoiceNoEdit->setFixedHeight(24);
-    m_invoiceNoEdit->setFixedWidth(110);
+    m_invoiceNoEdit->setMinimumHeight(24);
+    m_invoiceNoEdit->setMinimumWidth(110);
     row1->addWidget(m_invoiceNoEdit);
 
     // Due Days
     QVBoxLayout* dueBox = new QVBoxLayout();
     dueBox->setSpacing(0);
     QLabel* dueHint = new QLabel("(Ctrl+D)", this);
-    dueHint->setStyleSheet("font-size: 9px; font-weight: 700; color: #000000;");
+    dueHint->setStyleSheet(ErpTheme::mutedLabelStyle(9));
     QLabel* dueLbl = new QLabel("Due Days :", this);
     dueBox->addWidget(dueHint);
     dueBox->addWidget(dueLbl);
     row1->addLayout(dueBox);
 
     m_dueDaysEdit = new QLineEdit("0", this);
-    m_dueDaysEdit->setFixedHeight(24);
-    m_dueDaysEdit->setFixedWidth(42);
+    m_dueDaysEdit->setMinimumHeight(24);
+    m_dueDaysEdit->setMinimumWidth(42);
     m_dueDaysEdit->setAlignment(Qt::AlignCenter);
     row1->addWidget(m_dueDaysEdit);
 
@@ -246,11 +250,11 @@ void SalesVoucherWidget::setupUi() {
     row2->setSpacing(6);
 
     m_partyTagLabel = new QLabel("Sale To Party :", this);
-    m_partyTagLabel->setStyleSheet("color: #1E293B; font-size: 12px; font-weight: 800;");
+    m_partyTagLabel->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: 800; border: none; background: transparent;").arg(ErpTheme::kNavy.name()));
     row2->addWidget(m_partyTagLabel);
 
     m_partySearchWidget = new AccountSearchBox(this);
-    m_partySearchWidget->setFixedHeight(26);
+    m_partySearchWidget->setMinimumHeight(26);
     connect(m_partySearchWidget, &AccountSearchBox::partyDataSelected, this, &SalesVoucherWidget::onPartySelected);
     row2->addWidget(m_partySearchWidget, 1);
 
@@ -262,7 +266,7 @@ void SalesVoucherWidget::setupUi() {
     partySubRow->setContentsMargins(10, 0, 0, 0);
 
     m_partyBalLabel = new QLabel("Date Bal. 0.00", this);
-    m_partyBalLabel->setStyleSheet("font-size: 11px; font-weight: 700; color: #64748B; font-style: italic;");
+    m_partyBalLabel->setStyleSheet(ErpTheme::mutedLabelStyle(11));
     partySubRow->addWidget(m_partyBalLabel);
 
     QHBoxLayout* gstinLayout = new QHBoxLayout();
@@ -271,9 +275,9 @@ void SalesVoucherWidget::setupUi() {
     gstinLayout->addWidget(gstinTag);
     m_gstinDisplay = new QLineEdit(this);
     m_gstinDisplay->setReadOnly(true);
-    m_gstinDisplay->setFixedHeight(20);
-    m_gstinDisplay->setFixedWidth(160);
-    m_gstinDisplay->setStyleSheet("QLineEdit { background: transparent; border: none; font-weight: 800; color: #0F172A; }");
+    m_gstinDisplay->setMinimumHeight(20);
+    m_gstinDisplay->setMinimumWidth(160);
+    m_gstinDisplay->setStyleSheet(QString("QLineEdit { background: transparent; border: none; font-weight: 800; color: %1; }").arg(ErpTheme::kNavy.name()));
     gstinLayout->addWidget(m_gstinDisplay);
     partySubRow->addLayout(gstinLayout);
 
@@ -281,7 +285,7 @@ void SalesVoucherWidget::setupUi() {
 
     // Including Tax Checkbox (Above Table)
     m_inclTaxCheck = new QCheckBox("Including Tax (Alt+I)", this);
-    m_inclTaxCheck->setStyleSheet("color: #2563EB; font-weight: 800;");
+    m_inclTaxCheck->setStyleSheet(QString("color: %1; font-weight: 800; background: transparent;").arg(ErpTheme::kBlue.name()));
     connect(m_inclTaxCheck, &QCheckBox::toggled, this, &SalesVoucherWidget::recalculateTotals);
     partySubRow->addWidget(m_inclTaxCheck);
 
@@ -293,7 +297,7 @@ void SalesVoucherWidget::setupUi() {
     m_tableWidget = new QTableWidget(this);
     m_tableWidget->setColumnCount(10);
     m_tableWidget->setHorizontalHeaderLabels({
-        "No.", "Item Name", "Grade", "Bags", "Pkng.", "Weight", "GST", "Rate", "Amount", "Act"
+        "No.", "Item Name", "Grade", "Bags", "Pkng.", "Weight", "Rate", "Amount", "GST", "Act"
     });
 
     m_tableWidget->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Fixed);
@@ -312,10 +316,10 @@ void SalesVoucherWidget::setupUi() {
     m_tableWidget->setColumnWidth(3, 65);
     m_tableWidget->setColumnWidth(4, 65);
     m_tableWidget->setColumnWidth(5, 85);
-    m_tableWidget->setColumnWidth(6, 50);
-    m_tableWidget->setColumnWidth(7, 95);
-    m_tableWidget->setColumnWidth(8, 115);
-    m_tableWidget->setColumnWidth(9, 35);
+    m_tableWidget->setColumnWidth(6, 95);  // Rate
+    m_tableWidget->setColumnWidth(7, 115); // Amount
+    m_tableWidget->setColumnWidth(8, 50);  // GST
+    m_tableWidget->setColumnWidth(9, 35);  // Act
 
     m_tableWidget->verticalHeader()->setVisible(false);
     m_tableWidget->setSelectionBehavior(QAbstractItemView::SelectItems);
@@ -323,29 +327,34 @@ void SalesVoucherWidget::setupUi() {
     m_tableWidget->setShowGrid(true);
     m_tableWidget->setMinimumHeight(140);
     m_tableWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    // Voucher grid: editable entry surface with the Trial Balance look —
+    // navy headers, alternating rows, spec selection. Edit triggers and
+    // delegates are untouched; every cell gets an explicit foreground in
+    // populateRow (dark-mode hardening).
     m_tableWidget->setStyleSheet(
         "QTableWidget {"
         "  background-color: #FFFFFF;"
-        "  gridline-color: #F1E5DB;"
+        "  alternate-background-color: #F8FAFC;"
+        "  gridline-color: #E2E8F0;"
         "  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', 'Noto Sans', 'Liberation Sans', Arial, sans-serif;"
-        "  font-size: 11.5px;"
+        "  font-size: 12px;"
         "  color: #0F172A;"
-        "  border: 1px solid #E2D5C8;"
+        "  border: 1px solid #CBD5E1;"
         "  border-radius: 6px;"
         "}"
         "QHeaderView::section {"
-        "  background-color: #FEECE0;"
-        "  color: #334155;"
-        "  font-weight: 800;"
-        "  font-size: 11px;"
-        "  padding: 3px 6px;"
+        "  background-color: #0F172A;"
+        "  color: #FFFFFF;"
+        "  font-weight: 700;"
+        "  font-size: 12px;"
+        "  padding: 8px 8px;"
         "  border: none;"
-        "  border-bottom: 2px solid #E2D5C8;"
+        "  border-right: 1px solid #334155;"
         "}"
         "QTableWidget::item:selected {"
-        "  background-color: #EFF6FF;"
-        "  color: #2563EB;"
-        "  font-weight: 800;"
+        "  background-color: #2563EB;"
+        "  color: #FFFFFF;"
+        "  font-weight: 700;"
         "}"
     );
 
@@ -360,42 +369,43 @@ void SalesVoucherWidget::setupUi() {
     rootLayout->addWidget(m_tableWidget, 1);
 
     // Table Total Summary Row
+    // Table Total Summary Row (white card, navy figures — was peach-tinted)
     QFrame* totalSummaryBar = new QFrame(this);
-    totalSummaryBar->setFixedHeight(26);
-    totalSummaryBar->setStyleSheet("background: #FDEEE4; border-top: 1px solid #E2D5C8; border-bottom: 1px solid #E2D5C8; border-radius: 4px;");
+    totalSummaryBar->setMinimumHeight(26);
+    totalSummaryBar->setStyleSheet(QString("background: #FFFFFF; border: 1px solid %1; border-radius: 6px;").arg(ErpTheme::kCardBorder.name()));
     QHBoxLayout* sumLayout = new QHBoxLayout(totalSummaryBar);
     sumLayout->setContentsMargins(6, 1, 6, 1);
     sumLayout->setSpacing(0);
 
     sumLayout->addStretch(1);
     QLabel* totTitle = new QLabel("Total :", totalSummaryBar);
-    totTitle->setStyleSheet("font-size: 12px; font-weight: 900; color: #000000;");
+    totTitle->setStyleSheet(QString("font-size: 12px; font-weight: 900; color: %1; border: none; background: transparent;").arg(ErpTheme::kNavy.name()));
     sumLayout->addWidget(totTitle);
     sumLayout->addSpacing(8);
 
     m_totalBagsLabel = new QLabel("0", totalSummaryBar);
-    m_totalBagsLabel->setFixedWidth(65);
+    m_totalBagsLabel->setMinimumWidth(65);
     m_totalBagsLabel->setAlignment(Qt::AlignCenter);
-    m_totalBagsLabel->setStyleSheet("font-size: 12px; font-weight: 900; color: #000000;");
+    m_totalBagsLabel->setStyleSheet(QString("font-size: 12px; font-weight: 900; color: %1; border: none; background: transparent;").arg(ErpTheme::kNavy.name()));
     sumLayout->addWidget(m_totalBagsLabel);
 
     sumLayout->addSpacing(65); // Pkng spacing
 
     m_totalWeightLabel = new QLabel("0.000", totalSummaryBar);
-    m_totalWeightLabel->setFixedWidth(85);
+    m_totalWeightLabel->setMinimumWidth(85);
     m_totalWeightLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    m_totalWeightLabel->setStyleSheet("font-size: 12px; font-weight: 900; color: #000000;");
+    m_totalWeightLabel->setStyleSheet(QString("font-size: 12px; font-weight: 900; color: %1; border: none; background: transparent;").arg(ErpTheme::kNavy.name()));
     sumLayout->addWidget(m_totalWeightLabel);
 
-    sumLayout->addSpacing(145); // GST & Rate spacing
+    sumLayout->addSpacing(95); // Rate spacing
 
     m_subtotalTaxableLabel = new QLabel("0.00", totalSummaryBar);
-    m_subtotalTaxableLabel->setFixedWidth(115);
+    m_subtotalTaxableLabel->setMinimumWidth(115);
     m_subtotalTaxableLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    m_subtotalTaxableLabel->setStyleSheet("font-size: 12px; font-weight: 900; color: #000000;");
+    m_subtotalTaxableLabel->setStyleSheet(QString("font-size: 12px; font-weight: 900; color: %1; border: none; background: transparent;").arg(ErpTheme::kNavy.name()));
     sumLayout->addWidget(m_subtotalTaxableLabel);
 
-    sumLayout->addSpacing(35); // Action col spacing
+    sumLayout->addSpacing(85); // GST (50) & Action (35) spacing
     rootLayout->addWidget(totalSummaryBar);
 
     // ========================================================================
@@ -411,11 +421,11 @@ void SalesVoucherWidget::setupUi() {
         QHBoxLayout* box = new QHBoxLayout();
         box->setSpacing(3);
         QLabel* l = new QLabel(lbl, m_mandiExpensesFrame);
-        l->setStyleSheet("font-size: 11px; font-weight: 700; color: #000000;");
+        l->setStyleSheet(QString("font-size: 11px; font-weight: 700; color: %1; border: none; background: transparent;").arg(ErpTheme::kNavy.name()));
         box->addWidget(l);
         member = new QLineEdit(defVal, m_mandiExpensesFrame);
-        member->setFixedWidth(70);
-        member->setFixedHeight(22);
+        member->setMinimumWidth(70);
+        member->setMinimumHeight(22);
         member->setAlignment(Qt::AlignRight);
         connect(member, &QLineEdit::textChanged, this, &SalesVoucherWidget::recalculateTotals);
         box->addWidget(member);
@@ -458,7 +468,7 @@ void SalesVoucherWidget::setupUi() {
     leftColLayout->setSpacing(4);
 
     QFrame* logMatrixFrame = new QFrame(this);
-    logMatrixFrame->setStyleSheet("QFrame { background: transparent; border: 1px solid #7F9DB9; }");
+    logMatrixFrame->setStyleSheet(QString("QFrame { background-color: #FFFFFF; border: 1px solid %1; border-radius: 8px; }").arg(ErpTheme::kLine.name()));
     QVBoxLayout* logVBox = new QVBoxLayout(logMatrixFrame);
     logVBox->setContentsMargins(6, 6, 6, 6);
     logVBox->setSpacing(4);
@@ -467,23 +477,24 @@ void SalesVoucherWidget::setupUi() {
         QHBoxLayout* row = new QHBoxLayout();
         row->setSpacing(3);
         QLabel* l = new QLabel(lbl, logMatrixFrame);
-        if (isKanda) l->setStyleSheet("color: #0000CC; text-decoration: underline; font-weight: 800; font-size: 11px;");
-        else l->setStyleSheet("color: #000000; font-weight: 700; font-size: 11px;");
+        if (isKanda) l->setStyleSheet(QString("color: %1; text-decoration: underline; font-weight: 800; font-size: 11px; border: none; background: transparent;").arg(ErpTheme::kBlueDark.name()));
+        else l->setStyleSheet(QString("color: %1; font-weight: 700; font-size: 11px; border: none; background: transparent;").arg(ErpTheme::kLabelSlate.name()));
         row->addWidget(l);
-        if (isVeh) w->setStyleSheet("QLineEdit { background: #D5F5D5; color: #000000; border: 1px solid #7F9DB9; font-weight: 800; }");
+        if (isVeh) w->setStyleSheet(QString("QLineEdit { background: %1; color: %2; border: 1px solid %3; border-radius: 6px; font-weight: 800; }").arg(ErpTheme::kGreenBg.name(), ErpTheme::kNavy.name(), ErpTheme::kLine.name()));
         row->addWidget(w, 1);
         return row;
     };
 
-    m_vehicleNoEdit = new QLineEdit(logMatrixFrame); m_vehicleNoEdit->setFixedHeight(24);
-    m_grNoEdit = new QLineEdit(logMatrixFrame); m_grNoEdit->setFixedHeight(24);
-    m_driverNameEdit = new QLineEdit(logMatrixFrame); m_driverNameEdit->setFixedHeight(24);
-    m_ewayBillNoEdit = new QLineEdit(logMatrixFrame); m_ewayBillNoEdit->setFixedHeight(24);
+    m_vehicleNoEdit = new QLineEdit(logMatrixFrame); m_vehicleNoEdit->setMinimumHeight(24);
+    VoucherCommon::setupUppercaseInput(m_vehicleNoEdit);
+    m_grNoEdit = new QLineEdit(logMatrixFrame); m_grNoEdit->setMinimumHeight(24);
+    m_driverNameEdit = new QLineEdit(logMatrixFrame); m_driverNameEdit->setMinimumHeight(24);
+    m_ewayBillNoEdit = new QLineEdit(logMatrixFrame); m_ewayBillNoEdit->setMinimumHeight(24);
 
-    m_billTimeEdit = new QLineEdit(logMatrixFrame); m_billTimeEdit->setFixedHeight(24);
-    m_saudaDateEdit = new QLineEdit(logMatrixFrame); m_saudaDateEdit->setFixedHeight(24);
+    m_billTimeEdit = new QLineEdit(logMatrixFrame); m_billTimeEdit->setMinimumHeight(24);
+    m_saudaDateEdit = new QLineEdit(logMatrixFrame); m_saudaDateEdit->setMinimumHeight(24);
     m_shippingAddressBtn = new QPushButton("Shipping Address", logMatrixFrame);
-    m_shippingAddressBtn->setFixedHeight(24);
+    m_shippingAddressBtn->setMinimumHeight(24);
     m_shippingAddressEdit = new QLineEdit(logMatrixFrame);
     m_shippingAddressEdit->setVisible(false);
     connect(m_shippingAddressBtn, &QPushButton::clicked, this, [this]() {
@@ -494,7 +505,7 @@ void SalesVoucherWidget::setupUi() {
     });
 
     m_posCombo = new QComboBox(logMatrixFrame);
-    m_posCombo->setFixedHeight(24);
+    m_posCombo->setMinimumHeight(24);
     m_posCombo->setEditable(true);
     QStringList posList = {"Same as Buyer"};
     PartiesModel pModel;
@@ -504,13 +515,15 @@ void SalesVoucherWidget::setupUi() {
     }
     m_posCombo->addItems(posList);
 
-    m_poNoEdit = new QLineEdit(logMatrixFrame); m_poNoEdit->setFixedHeight(24);
-    m_gradeEdit = new QLineEdit(logMatrixFrame); m_gradeEdit->setFixedHeight(24);
-    m_transportEdit = new QLineEdit(logMatrixFrame); m_transportEdit->setFixedHeight(24);
+    m_poNoEdit = new QLineEdit(logMatrixFrame); m_poNoEdit->setMinimumHeight(24);
+    m_gradeEdit = new QLineEdit(logMatrixFrame); m_gradeEdit->setMinimumHeight(24);
+    m_transportEdit = new AccountSearchBox(logMatrixFrame); m_transportEdit->setMinimumHeight(24);
+    m_transportEdit->configureForTransportSearch();
 
-    m_challanNoEdit = new QLineEdit(logMatrixFrame); m_challanNoEdit->setFixedHeight(24);
-    m_kandaWeightEdit = new QLineEdit(logMatrixFrame); m_kandaWeightEdit->setFixedHeight(24);
-    m_brokerEdit = new QLineEdit(logMatrixFrame); m_brokerEdit->setFixedHeight(24);
+    m_challanNoEdit = new QLineEdit(logMatrixFrame); m_challanNoEdit->setMinimumHeight(24);
+    m_kandaWeightEdit = new QLineEdit(logMatrixFrame); m_kandaWeightEdit->setMinimumHeight(24);
+    m_brokerEdit = new AccountSearchBox(logMatrixFrame); m_brokerEdit->setMinimumHeight(24);
+    m_brokerEdit->configureForBrokerSearch();
 
     // Matrix Row 1
     QHBoxLayout* lmR1 = new QHBoxLayout();
@@ -552,11 +565,11 @@ void SalesVoucherWidget::setupUi() {
     QHBoxLayout* narrRow = new QHBoxLayout();
     narrRow->setSpacing(6);
     QLabel* narrLbl = new QLabel("Narration :", this);
-    narrLbl->setStyleSheet("font-size: 11.5px; font-weight: 700; color: #000000; font-style: italic;");
+    narrLbl->setStyleSheet(ErpTheme::mutedLabelStyle(11));
     narrRow->addWidget(narrLbl);
 
     m_narrationEdit = new QLineEdit(this);
-    m_narrationEdit->setFixedHeight(24);
+    m_narrationEdit->setMinimumHeight(24);
     narrRow->addWidget(m_narrationEdit, 1);
     leftColLayout->addLayout(narrRow);
 
@@ -567,7 +580,7 @@ void SalesVoucherWidget::setupUi() {
     rightColLayout->setSpacing(4);
 
     m_summaryFrame = new QFrame(this);
-    m_summaryFrame->setStyleSheet("QFrame { background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; }");
+    m_summaryFrame->setStyleSheet(ErpTheme::headerCardStyle());
     QGridLayout* sGrid = new QGridLayout(m_summaryFrame);
     sGrid->setContentsMargins(8, 6, 8, 6);
     sGrid->setHorizontalSpacing(8);
@@ -575,26 +588,26 @@ void SalesVoucherWidget::setupUi() {
 
     // Row 0: Mandi Total (Visible only in Mandi Type)
     m_mandiTotalTitleLabel = new QLabel("Total :", m_summaryFrame);
-    m_mandiTotalTitleLabel->setStyleSheet("color: #2563EB; text-decoration: underline; font-weight: 800;");
+    m_mandiTotalTitleLabel->setStyleSheet(QString("color: %1; text-decoration: underline; font-weight: 800; border: none; background: transparent;").arg(ErpTheme::kBlue.name()));
     m_mandiTotalValLabel = new QLabel("0.00", m_summaryFrame);
     m_mandiTotalValLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    m_mandiTotalValLabel->setStyleSheet("font-size: 11.5px; font-weight: 800; color: #0F172A;");
+    m_mandiTotalValLabel->setStyleSheet(QString("font-size: 11.5px; font-weight: 800; color: %1; border: none; background: transparent;").arg(ErpTheme::kNavy.name()));
     sGrid->addWidget(m_mandiTotalTitleLabel, 0, 0);
     sGrid->addWidget(m_mandiTotalValLabel, 0, 1);
 
     // Row 1: Commission (Mandi) / Other Exp (Standard)
     m_commissionTitleLabel = new QLabel("Commission :", m_summaryFrame);
     m_commissionEdit = new QLineEdit("0.00", m_summaryFrame);
-    m_commissionEdit->setFixedHeight(22);
+    m_commissionEdit->setMinimumHeight(22);
     m_commissionEdit->setAlignment(Qt::AlignRight);
     connect(m_commissionEdit, &QLineEdit::textChanged, this, &SalesVoucherWidget::recalculateTotals);
     sGrid->addWidget(m_commissionTitleLabel, 1, 0);
     sGrid->addWidget(m_commissionEdit, 1, 1);
 
     m_otherExpTitleLabel = new QLabel("Other Exp. :", m_summaryFrame);
-    m_otherExpTitleLabel->setStyleSheet("color: #475569; text-decoration: underline;");
+    m_otherExpTitleLabel->setStyleSheet(QString("color: %1; text-decoration: underline; border: none; background: transparent;").arg(ErpTheme::kMuted.name()));
     m_otherExpEdit = new QLineEdit("0.00", m_summaryFrame);
-    m_otherExpEdit->setFixedHeight(22);
+    m_otherExpEdit->setMinimumHeight(22);
     m_otherExpEdit->setAlignment(Qt::AlignRight);
     connect(m_otherExpEdit, &QLineEdit::textChanged, this, &SalesVoucherWidget::recalculateTotals);
     sGrid->addWidget(m_otherExpTitleLabel, 1, 0);
@@ -602,9 +615,9 @@ void SalesVoucherWidget::setupUi() {
 
     // Row 2: Less Amount
     m_lessTitleLabel = new QLabel("(-) Less :", m_summaryFrame);
-    m_lessTitleLabel->setStyleSheet("color: #DC2626; text-decoration: underline;");
+    m_lessTitleLabel->setStyleSheet(QString("color: %1; text-decoration: underline; border: none; background: transparent;").arg(ErpTheme::kRed.name()));
     m_lessAmountEdit = new QLineEdit("0.00", m_summaryFrame);
-    m_lessAmountEdit->setFixedHeight(22);
+    m_lessAmountEdit->setMinimumHeight(22);
     m_lessAmountEdit->setAlignment(Qt::AlignRight);
     connect(m_lessAmountEdit, &QLineEdit::textChanged, this, &SalesVoucherWidget::recalculateTotals);
     sGrid->addWidget(m_lessTitleLabel, 2, 0);
@@ -612,9 +625,9 @@ void SalesVoucherWidget::setupUi() {
 
     // Row 3: Taxes
     m_taxTitleLabel = new QLabel("SGST+CGST :", m_summaryFrame);
-    m_taxTitleLabel->setStyleSheet("color: #475569;");
+    m_taxTitleLabel->setStyleSheet(QString("color: %1; border: none; background: transparent;").arg(ErpTheme::kMuted.name()));
     m_taxAmountEdit = new QLineEdit("0.00", m_summaryFrame);
-    m_taxAmountEdit->setFixedHeight(22);
+    m_taxAmountEdit->setMinimumHeight(22);
     m_taxAmountEdit->setAlignment(Qt::AlignRight);
     connect(m_taxAmountEdit, &QLineEdit::textChanged, this, &SalesVoucherWidget::recalculateTotals);
     sGrid->addWidget(m_taxTitleLabel, 3, 0);
@@ -622,9 +635,9 @@ void SalesVoucherWidget::setupUi() {
 
     // Row 4: Freight
     m_freightTitleLabel = new QLabel("(+) Freight :", m_summaryFrame);
-    m_freightTitleLabel->setStyleSheet("color: #475569;");
+    m_freightTitleLabel->setStyleSheet(QString("color: %1; border: none; background: transparent;").arg(ErpTheme::kMuted.name()));
     m_freightChargesEdit = new QLineEdit("0.00", m_summaryFrame);
-    m_freightChargesEdit->setFixedHeight(22);
+    m_freightChargesEdit->setMinimumHeight(22);
     m_freightChargesEdit->setAlignment(Qt::AlignRight);
     connect(m_freightChargesEdit, &QLineEdit::textChanged, this, &SalesVoucherWidget::recalculateTotals);
     sGrid->addWidget(m_freightTitleLabel, 4, 0);
@@ -632,23 +645,60 @@ void SalesVoucherWidget::setupUi() {
 
     // Row 5: Round Off
     m_roundOffTitleLabel = new QLabel("Round +/-", m_summaryFrame);
-    m_roundOffTitleLabel->setStyleSheet("color: #475569; text-decoration: underline;");
-    m_roundOffLabel = new QLabel("0.00", m_summaryFrame);
-    m_roundOffLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    m_roundOffLabel->setStyleSheet("font-size: 11.5px; font-weight: 800; color: #0F172A;");
+    m_roundOffTitleLabel->setStyleSheet(QString("color: %1; text-decoration: underline; border: none; background: transparent;").arg(ErpTheme::kMuted.name()));
+    m_roundOffEdit = new QLineEdit("0.00", m_summaryFrame);
+    m_roundOffEdit->setMinimumHeight(22);
+    m_roundOffEdit->setAlignment(Qt::AlignRight);
+    connect(m_roundOffEdit, &QLineEdit::textEdited, this, [this]() {
+        if (m_isUpdatingTotals) return;
+        m_isUpdatingTotals = true;
+        double raw = calculateRawTotal();
+        double tcs = m_tcsAmountEdit ? m_tcsAmountEdit->text().toDouble() : 0.0;
+        double ro = m_roundOffEdit->text().toDouble();
+        double gt = raw + tcs + ro;
+        if (m_grandTotalEdit) m_grandTotalEdit->setText(QString::number(gt, 'f', 2));
+        m_isUpdatingTotals = false;
+    });
     sGrid->addWidget(m_roundOffTitleLabel, 5, 0);
-    sGrid->addWidget(m_roundOffLabel, 5, 1);
+    sGrid->addWidget(m_roundOffEdit, 5, 1);
 
-    // Row 6: TCS
-    m_tcsTitleLabel = new QLabel("TCS @ 0.000% :", m_summaryFrame);
-    m_tcsTitleLabel->setStyleSheet("color: #DC2626; font-weight: 800;");
-    m_tcsAmountLabel = new QLabel("0.00", m_summaryFrame);
-    m_tcsAmountLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    m_tcsAmountLabel->setStyleSheet("font-size: 11.5px; font-weight: 800; color: #0F172A;");
+    // Row 6: TCS (mirrors Purchase TDS row: title + Calc dialog button)
+    QHBoxLayout* tcsTitleLayout = new QHBoxLayout();
+    tcsTitleLayout->setContentsMargins(0, 0, 0, 0);
+    tcsTitleLayout->setSpacing(4);
+
+    m_tcsTitleLabel = new QLabel("TCS @ 0.0% :", m_summaryFrame);
+    m_tcsTitleLabel->setStyleSheet(QString("color: %1; font-weight: 800; border: none; background: transparent;").arg(ErpTheme::kRed.name()));
+    tcsTitleLayout->addWidget(m_tcsTitleLabel);
+
+    m_tcsCalcBtn = new QPushButton("Calc", m_summaryFrame);
+    m_tcsCalcBtn->setMinimumSize(38, 20);
+    m_tcsCalcBtn->setCursor(Qt::PointingHandCursor);
+    m_tcsCalcBtn->setToolTip("Open TCS u/s 206C(1H) Calculation Dialog (TCS on bill amount, no turnover gate)");
+    m_tcsCalcBtn->setStyleSheet(ErpTheme::secondaryButtonStyle());
+    connect(m_tcsCalcBtn, &QPushButton::clicked, this, &SalesVoucherWidget::openTcsCalculationDialog);
+    tcsTitleLayout->addWidget(m_tcsCalcBtn);
+
+    sGrid->addLayout(tcsTitleLayout, 6, 0);
+    m_tcsAmountEdit = new QLineEdit("0.00", m_summaryFrame);
+    m_tcsAmountEdit->setMinimumHeight(22);
+    m_tcsAmountEdit->setAlignment(Qt::AlignRight);
+    connect(m_tcsAmountEdit, &QLineEdit::textEdited, this, [this]() {
+        if (m_isUpdatingTotals) return;
+        m_isUpdatingTotals = true;
+        double raw = calculateRawTotal();
+        double tcs = m_tcsAmountEdit->text().toDouble();
+        double finalTotal = raw + tcs;
+        double rounded = std::round(finalTotal);
+        double ro = rounded - finalTotal;
+        if (m_roundOffEdit) m_roundOffEdit->setText(QString::number(ro, 'f', 2));
+        if (m_grandTotalEdit) m_grandTotalEdit->setText(QString::number(rounded, 'f', 2));
+        m_isUpdatingTotals = false;
+    });
     m_tcsRateEdit = new QLineEdit("0.000", m_summaryFrame);
     m_tcsRateEdit->setVisible(false);
     sGrid->addWidget(m_tcsTitleLabel, 6, 0);
-    sGrid->addWidget(m_tcsAmountLabel, 6, 1);
+    sGrid->addWidget(m_tcsAmountEdit, 6, 1);
 
     rightColLayout->addWidget(m_summaryFrame);
 
@@ -656,13 +706,24 @@ void SalesVoucherWidget::setupUi() {
     QHBoxLayout* gtRow = new QHBoxLayout();
     gtRow->setSpacing(6);
     QLabel* gtTitle = new QLabel("G. Total :", this);
-    gtTitle->setStyleSheet("font-size: 14px; font-weight: 900; color: #0F172A;");
+    gtTitle->setStyleSheet(ErpTheme::headerTitleStyle(14));
     gtRow->addWidget(gtTitle);
 
-    m_grandTotalLabel = new QLabel("0.00", this);
-    m_grandTotalLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    m_grandTotalLabel->setStyleSheet("font-size: 16px; font-weight: 900; color: #0F172A; background-color: #FFFFFF; border: 1.5px solid #2563EB; border-radius: 6px; padding: 2px 6px;");
-    gtRow->addWidget(m_grandTotalLabel, 1);
+    m_grandTotalEdit = new QLineEdit("0.00", this);
+    m_grandTotalEdit->setMinimumHeight(28);
+    m_grandTotalEdit->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    m_grandTotalEdit->setStyleSheet(QString("font-size: 16px; font-weight: 900; color: %1; background-color: #FFFFFF; border: 2px solid %2; border-radius: 6px; padding: 2px 6px;").arg(ErpTheme::kNavy.name(), ErpTheme::kBlue.name()));
+    connect(m_grandTotalEdit, &QLineEdit::textEdited, this, [this]() {
+        if (m_isUpdatingTotals) return;
+        m_isUpdatingTotals = true;
+        double raw = calculateRawTotal();
+        double tcs = m_tcsAmountEdit ? m_tcsAmountEdit->text().toDouble() : 0.0;
+        double gt = m_grandTotalEdit->text().toDouble();
+        double ro = gt - (raw + tcs);
+        if (m_roundOffEdit) m_roundOffEdit->setText(QString::number(ro, 'f', 2));
+        m_isUpdatingTotals = false;
+    });
+    gtRow->addWidget(m_grandTotalEdit, 1);
     rightColLayout->addLayout(gtRow);
 
     bottomSplitLayout->addLayout(rightColLayout, 1);
@@ -675,45 +736,42 @@ void SalesVoucherWidget::setupUi() {
     footerLayout->setSpacing(8);
     footerLayout->addStretch(1);
 
-    m_backBtn = new QPushButton("Back (Esc)", this);
-    m_backBtn->setFixedHeight(30);
-    m_backBtn->setStyleSheet("QPushButton { background-color: #F1F5F9; border: 1px solid #CBD5E1; border-radius: 6px; padding: 0px 14px; font-weight: 700; color: #475569; font-size: 12px; } QPushButton:hover { background-color: #E2E8F0; }");
+    // Footer actions use badge buttons so shortcuts are visible and truthful:
+    // Esc/F8/Ctrl+S are owned by keyPressEvent; Ctrl+P/Ctrl+E were added there
+    // in this pass (previously the badges promised shortcuts that did nothing).
+    m_backBtn = new KbdBadgeButton("Back", "Esc", this);
+    m_backBtn->setMinimumHeight(30);
     connect(m_backBtn, &QPushButton::clicked, this, &SalesVoucherWidget::backRequested);
     footerLayout->addWidget(m_backBtn);
 
-    m_newBtn = new QPushButton("New (F8)", this);
-    m_newBtn->setFixedHeight(30);
-    m_newBtn->setStyleSheet("QPushButton { background-color: #F1F5F9; border: 1px solid #CBD5E1; border-radius: 6px; padding: 0px 14px; font-weight: 700; color: #0284C7; font-size: 12px; } QPushButton:hover { background-color: #E0F2FE; }");
+    m_newBtn = new KbdBadgeButton("New", "F8", this);
+    m_newBtn->setMinimumHeight(30);
     connect(m_newBtn, &QPushButton::clicked, this, &SalesVoucherWidget::resetForm);
     footerLayout->addWidget(m_newBtn);
 
-    m_deleteBtn = new QPushButton("Delete", this);
-    m_deleteBtn->setFixedHeight(30);
-    m_deleteBtn->setStyleSheet("QPushButton { background-color: #FEE2E2; color: #DC2626; border: 1px solid #FCA5A5; border-radius: 6px; padding: 0px 14px; font-weight: 800; font-size: 12px; } QPushButton:hover { background-color: #FECACA; }");
+    m_deleteBtn = new KbdBadgeButton("Delete", "Del", this);
+    m_deleteBtn->setMinimumHeight(30);
+    m_deleteBtn->setPrimaryColor(ErpTheme::kRedBg, ErpTheme::kRedBorder);
+    m_deleteBtn->setTextColor(ErpTheme::kRed);
     m_deleteBtn->setVisible(false);
     connect(m_deleteBtn, &QPushButton::clicked, this, &SalesVoucherWidget::deleteVoucher);
     footerLayout->addWidget(m_deleteBtn);
 
-    m_printBtn = new QPushButton("Print (Ctrl+P)", this);
-    m_printBtn->setFixedHeight(30);
-    m_printBtn->setStyleSheet("QPushButton { background-color: #F1F5F9; border: 1px solid #CBD5E1; border-radius: 6px; padding: 0px 14px; font-weight: 700; color: #475569; font-size: 12px; } QPushButton:hover { background-color: #E2E8F0; }");
+    m_printBtn = new KbdBadgeButton("Print", "Ctrl+P", this);
+    m_printBtn->setMinimumHeight(30);
     connect(m_printBtn, &QPushButton::clicked, this, &SalesVoucherWidget::printInvoice);
     footerLayout->addWidget(m_printBtn);
 
-    m_pdfBtn = new QPushButton("PDF (Ctrl+E)", this);
-    m_pdfBtn->setFixedHeight(30);
-    m_pdfBtn->setStyleSheet("QPushButton { background-color: #F1F5F9; border: 1px solid #CBD5E1; border-radius: 6px; padding: 0px 14px; font-weight: 700; color: #475569; font-size: 12px; } QPushButton:hover { background-color: #E2E8F0; }");
+    m_pdfBtn = new KbdBadgeButton("PDF", "Ctrl+E", this);
+    m_pdfBtn->setMinimumHeight(30);
     connect(m_pdfBtn, &QPushButton::clicked, this, &SalesVoucherWidget::exportPdf);
     footerLayout->addWidget(m_pdfBtn);
 
-    m_saveBtn = new QPushButton("Save Voucher (Ctrl+S)", this);
-    m_saveBtn->setFixedHeight(30);
+    m_saveBtn = new KbdBadgeButton("Save Voucher", "Ctrl+S", this);
+    m_saveBtn->setMinimumHeight(30);
+    m_saveBtn->setPrimaryColor(ErpTheme::kBlue, ErpTheme::kBlueDark);
+    m_saveBtn->setTextColor(ErpTheme::kPaper);
     m_saveBtn->setFocusPolicy(Qt::StrongFocus);
-    m_saveBtn->setStyleSheet(
-        "QPushButton { background-color: #2563EB; border: 1px solid #1D4ED8; border-radius: 6px; padding: 0px 16px; font-weight: 800; color: #FFFFFF; font-size: 12px; } "
-        "QPushButton:hover { background-color: #1D4ED8; } "
-        "QPushButton:focus { background-color: #1D4ED8; border: 2.5px solid #F59E0B; outline: none; }"
-    );
     m_saveBtn->installEventFilter(this);
     connect(m_saveBtn, &QPushButton::clicked, this, &SalesVoucherWidget::saveVoucher);
     footerLayout->addWidget(m_saveBtn);
@@ -840,7 +898,7 @@ void SalesVoucherWidget::setupNavigationChains() {
     };
     auto stepBackToGrid = [this]() {
         if (!m_tableWidget || m_tableWidget->rowCount() == 0) return;
-        int r = m_tableWidget->rowCount() - 1, c = 8;
+        int r = m_tableWidget->rowCount() - 1, c = 7;
         while (c > 1 && m_tableWidget->isColumnHidden(c)) --c;
         m_tableWidget->setCurrentCell(r, c);
         m_tableWidget->edit(m_tableWidget->currentIndex());
@@ -950,64 +1008,26 @@ void SalesVoucherWidget::setupNavigationChains() {
     VoucherCommon::installGridNavigation(m_taxAmountEdit, m_lessAmountEdit, nullptr,
         [this, go]() { go(m_freightChargesEdit); });
     VoucherCommon::installGridNavigation(m_freightChargesEdit, m_taxAmountEdit, nullptr,
+        [this, go]() { go(m_roundOffEdit); });
+    VoucherCommon::installGridNavigation(m_roundOffEdit, m_freightChargesEdit, nullptr,
+        [this, go]() {
+            go(m_tcsAmountEdit);
+            openTcsCalculationDialog();
+        });
+    VoucherCommon::installGridNavigation(m_tcsAmountEdit, m_roundOffEdit, nullptr,
+        [this, go]() {
+            openTcsCalculationDialog();
+        });
+    VoucherCommon::installGridNavigation(m_grandTotalEdit, m_tcsAmountEdit, nullptr,
         [this]() { if (m_saveBtn) m_saveBtn->setFocus(); });
 }
 
 void SalesVoucherWidget::setupCompleters() {
-    auto& db = DatabaseManager::instance();
-
-    // 1. Broker Completer: Group 46 (Broker) parties + historical broker names
     if (m_brokerEdit) {
-        QStringList brokers;
-        QVariantList brRows = db.executeQuery(
-            "SELECT DISTINCT name FROM parties WHERE group_id IN (SELECT id FROM account_groups WHERE code1st = 46 OR name LIKE '%Broker%') "
-            "UNION SELECT DISTINCT broker_name FROM sales_invoices WHERE broker_name IS NOT NULL AND broker_name <> '' "
-            "UNION SELECT DISTINCT broker_name FROM purchase_invoices WHERE broker_name IS NOT NULL AND broker_name <> '' "
-            "ORDER BY 1 ASC;");
-        for (const auto& r : brRows) {
-            QString name = r.toMap().value("name").toString().trimmed();
-            if (name.isEmpty()) name = r.toMap().value("broker_name").toString().trimmed();
-            if (!name.isEmpty() && !brokers.contains(name)) brokers << name;
-        }
-        auto* brokerCompleter = new QCompleter(brokers, m_brokerEdit);
-        brokerCompleter->setCaseSensitivity(Qt::CaseInsensitive);
-        brokerCompleter->setFilterMode(Qt::MatchContains);
-        brokerCompleter->setCompletionMode(QCompleter::PopupCompletion);
-        if (auto* pop = brokerCompleter->popup()) {
-            pop->setStyleSheet(
-                "QListView { background-color: #FFFFFF; color: #0F172A; border: 1px solid #94A3B8; border-radius: 4px; font-size: 12px; font-weight: 700; padding: 2px; selection-background-color: #2563EB; selection-color: #FFFFFF; outline: none; }"
-                "QListView::item { padding: 5px 8px; border-radius: 3px; min-height: 20px; color: #0F172A; }"
-                "QListView::item:hover { background-color: #EFF6FF; color: #1E40AF; }"
-                "QListView::item:selected { background-color: #2563EB; color: #FFFFFF; }"
-            );
-        }
-        m_brokerEdit->setCompleter(brokerCompleter);
+        m_brokerEdit->configureForBrokerSearch();
     }
-
-    // 2. Transport Completer: Historical transport companies
     if (m_transportEdit) {
-        QStringList transports;
-        QVariantList trRows = db.executeQuery(
-            "SELECT DISTINCT transport FROM sales_invoices WHERE transport IS NOT NULL AND transport <> '' "
-            "UNION SELECT DISTINCT transport FROM purchase_invoices WHERE transport IS NOT NULL AND transport <> '' "
-            "ORDER BY 1 ASC;");
-        for (const auto& r : trRows) {
-            QString name = r.toMap().value("transport").toString().trimmed();
-            if (!name.isEmpty() && !transports.contains(name)) transports << name;
-        }
-        auto* transportCompleter = new QCompleter(transports, m_transportEdit);
-        transportCompleter->setCaseSensitivity(Qt::CaseInsensitive);
-        transportCompleter->setFilterMode(Qt::MatchContains);
-        transportCompleter->setCompletionMode(QCompleter::PopupCompletion);
-        if (auto* pop = transportCompleter->popup()) {
-            pop->setStyleSheet(
-                "QListView { background-color: #FFFFFF; color: #0F172A; border: 1px solid #94A3B8; border-radius: 4px; font-size: 12px; font-weight: 700; padding: 2px; selection-background-color: #2563EB; selection-color: #FFFFFF; outline: none; }"
-                "QListView::item { padding: 5px 8px; border-radius: 3px; min-height: 20px; color: #0F172A; }"
-                "QListView::item:hover { background-color: #EFF6FF; color: #1E40AF; }"
-                "QListView::item:selected { background-color: #2563EB; color: #FFFFFF; }"
-            );
-        }
-        m_transportEdit->setCompleter(transportCompleter);
+        m_transportEdit->configureForTransportSearch();
     }
 }
 
@@ -1047,11 +1067,15 @@ void SalesVoucherWidget::advanceCell() {
     }
 
     int nextCol = curCol + 1;
+    // Col 8 is GST (read-only); skip past it so advance finishes row
+    if (nextCol == 8) {
+        nextCol = 9;
+    }
     while (nextCol < 9 && m_tableWidget->isColumnHidden(nextCol)) {
         nextCol++;
     }
 
-    if (nextCol <= 8) {
+    if (nextCol <= 7) {
         m_tableWidget->setCurrentCell(curRow, nextCol);
         m_tableWidget->edit(m_tableWidget->currentIndex());
     } else {
@@ -1083,6 +1107,9 @@ void SalesVoucherWidget::retreatCell() {
     int curCol = m_tableWidget->currentColumn();
 
     int prevCol = curCol - 1;
+    if (prevCol == 8) { // Skip GST (read-only)
+        prevCol = 7;
+    }
     while (prevCol >= 1 && m_tableWidget->isColumnHidden(prevCol)) {
         prevCol--;
     }
@@ -1091,7 +1118,7 @@ void SalesVoucherWidget::retreatCell() {
         m_tableWidget->setCurrentCell(curRow, prevCol);
         m_tableWidget->edit(m_tableWidget->currentIndex());
     } else if (curRow > 0) {
-        m_tableWidget->setCurrentCell(curRow - 1, 8);
+        m_tableWidget->setCurrentCell(curRow - 1, 7);
         m_tableWidget->edit(m_tableWidget->currentIndex());
     } else {
         if (m_partySearchWidget) {
@@ -1111,10 +1138,10 @@ void SalesVoucherWidget::onStockItemConfigured(int row, const QVariantMap& itemD
     m_tableWidget->item(row, 1)->setText(itemData.value("name").toString());
     double gst = itemData.value("gst_rate", 0.0).toDouble();
     if (gst == 0.0) gst = itemData.value("tax_rate", 0.0).toDouble();
-    if (m_tableWidget->item(row, 6)) m_tableWidget->item(row, 6)->setText(QString::number(gst, 'f', 0));
+    if (m_tableWidget->item(row, 8)) m_tableWidget->item(row, 8)->setText(QString::number(gst, 'f', 0));
     double rate = itemData.value("sale_rate", 0.0).toDouble();
     if (rate == 0.0) rate = itemData.value("sales_rate", 0.0).toDouble();
-    if (rate > 0 && m_tableWidget->item(row, 7)) m_tableWidget->item(row, 7)->setText(QString::number(rate, 'f', 2));
+    if (rate > 0 && m_tableWidget->item(row, 6)) m_tableWidget->item(row, 6)->setText(QString::number(rate, 'f', 2));
     m_isUpdatingTable = false;
     focusTableAt(row, 2);
 }
@@ -1123,7 +1150,10 @@ void SalesVoucherWidget::openDateDialog(bool isInitial) {
     Q_UNUSED(isInitial);
     QString curDate = m_invoiceDateEdit ? m_invoiceDateEdit->formattedDate() : "";
     QString curIso = m_invoiceDateEdit ? m_invoiceDateEdit->isoDate() : "";
-    FiscalYearInfo fyCtx = FiscalYearHelper::getFiscalYearForDate(curIso);
+    FiscalYearInfo fyCtx = isEditMode()
+        ? FiscalYearHelper::getFiscalYearForDate(curIso)
+        : FiscalYearHelper::getActiveFiscalYear();
+    if (!fyCtx.isValid()) fyCtx = FiscalYearHelper::getActiveFiscalYear();
     QString newDisp, newIso;
     if (VoucherDateDialog::getVoucherDate(this, curDate, &newDisp, &newIso, fyCtx)) {
         if (m_invoiceDateEdit) {
@@ -1148,7 +1178,7 @@ void SalesVoucherWidget::resetForm() {
     m_hasInitialDateOpened = false;
 
     m_titleHeaderLabel->setText("F8 : Sale Voucher");
-    m_titleHeaderLabel->setStyleSheet("font-size: 16px; font-weight: 900; color: #FF0000; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', 'Noto Sans', 'Liberation Sans', Arial, sans-serif;");
+    m_titleHeaderLabel->setStyleSheet(ErpTheme::headerTitleStyle(15));
     m_deleteBtn->setVisible(false);
     m_statusBanner->setVisible(false);
 
@@ -1213,6 +1243,9 @@ void SalesVoucherWidget::resetForm() {
     if (m_otherExpEdit) m_otherExpEdit->setText("0.00");
     if (m_lessAmountEdit) m_lessAmountEdit->setText("0.00");
     if (m_tcsRateEdit) m_tcsRateEdit->setText("0.00");
+    if (m_tcsAmountEdit) m_tcsAmountEdit->setText("0.00");
+    if (m_roundOffEdit) m_roundOffEdit->setText("0.00");
+    if (m_grandTotalEdit) m_grandTotalEdit->setText("0.00");
 
     updateNextNumbers();
     recalculateTotals();
@@ -1249,40 +1282,66 @@ void SalesVoucherWidget::populateRow(int row, const QString& itemName, const QSt
     }
     m_isUpdatingTable = true;
 
+    // Explicit foregrounds on every cell (spec §2 dark-mode hardening).
+    // Read-only No. + GST stay white; editable cells get the subtle tint.
+    const QBrush navyFg(ErpTheme::kNavy);
+    const QBrush grayFg(ErpTheme::kMuted);
+    const QBrush editBg(ErpTheme::kEditableBg);
+    const QBrush whiteBg(ErpTheme::kPaper);
+
     QTableWidgetItem* snoItem = new QTableWidgetItem(QString::number(row + 1));
     snoItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
     snoItem->setTextAlignment(Qt::AlignCenter);
+    snoItem->setForeground(grayFg);
+    snoItem->setBackground(whiteBg);
     m_tableWidget->setItem(row, 0, snoItem);
 
     QTableWidgetItem* nameItem = new QTableWidgetItem(itemName);
+    nameItem->setForeground(navyFg);
+    nameItem->setBackground(editBg);
     m_tableWidget->setItem(row, 1, nameItem);
 
     QTableWidgetItem* gradeItem = new QTableWidgetItem(grade);
+    gradeItem->setForeground(navyFg);
+    gradeItem->setBackground(editBg);
     m_tableWidget->setItem(row, 2, gradeItem);
 
     QTableWidgetItem* bagsItem = new QTableWidgetItem(bags > 0 ? QString::number(bags) : "");
     bagsItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    bagsItem->setForeground(navyFg);
+    bagsItem->setBackground(editBg);
     m_tableWidget->setItem(row, 3, bagsItem);
 
     QTableWidgetItem* pkgItem = new QTableWidgetItem(packing > 0.0 ? QString::number(packing, 'f', 3) : "0.500");
     pkgItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    pkgItem->setForeground(navyFg);
+    pkgItem->setBackground(editBg);
     m_tableWidget->setItem(row, 4, pkgItem);
 
     QTableWidgetItem* wtItem = new QTableWidgetItem(weight > 0.0 ? QString::number(weight, 'f', 3) : "");
     wtItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    wtItem->setForeground(navyFg);
+    wtItem->setBackground(editBg);
     m_tableWidget->setItem(row, 5, wtItem);
-
-    QTableWidgetItem* gstItem = new QTableWidgetItem(gstPct > 0.0 ? QString::number(gstPct, 'f', 0) : "0");
-    gstItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    m_tableWidget->setItem(row, 6, gstItem);
 
     QTableWidgetItem* rateItem = new QTableWidgetItem(rate > 0.0 ? QString::number(rate, 'f', 2) : "");
     rateItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    m_tableWidget->setItem(row, 7, rateItem);
+    rateItem->setForeground(navyFg);
+    rateItem->setBackground(editBg);
+    m_tableWidget->setItem(row, 6, rateItem);
 
     QTableWidgetItem* amtItem = new QTableWidgetItem(amount > 0.0 ? QString::number(amount, 'f', 2) : "");
     amtItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    m_tableWidget->setItem(row, 8, amtItem);
+    amtItem->setForeground(QBrush(ErpTheme::kGreenDark));
+    amtItem->setBackground(editBg);
+    m_tableWidget->setItem(row, 7, amtItem);
+
+    QTableWidgetItem* gstItem = new QTableWidgetItem(gstPct > 0.0 ? QString::number(gstPct, 'f', 0) : "0");
+    gstItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
+    gstItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    gstItem->setForeground(grayFg);
+    gstItem->setBackground(whiteBg);
+    m_tableWidget->setItem(row, 8, gstItem);
 
     m_isUpdatingTable = false;
 }
@@ -1291,11 +1350,11 @@ void SalesVoucherWidget::onTableCellChanged(int row, int column) {
     if (m_isUpdatingTable) return;
     m_isUpdatingTable = true;
 
-    if (column == 3 || column == 4 || column == 5 || column == 7) {
+    if (column == 3 || column == 4 || column == 5 || column == 6) {
         int bags = m_tableWidget->item(row, 3) ? m_tableWidget->item(row, 3)->text().toInt() : 0;
         double pkg = m_tableWidget->item(row, 4) ? m_tableWidget->item(row, 4)->text().toDouble() : 0.500;
         double wt = m_tableWidget->item(row, 5) ? m_tableWidget->item(row, 5)->text().toDouble() : 0.0;
-        double rate = m_tableWidget->item(row, 7) ? m_tableWidget->item(row, 7)->text().toDouble() : 0.0;
+        double rate = m_tableWidget->item(row, 6) ? m_tableWidget->item(row, 6)->text().toDouble() : 0.0;
 
         if (column == 3 && pkg > 0.0001 && wt <= 0.0001) {
             wt = (bags * pkg);
@@ -1303,18 +1362,16 @@ void SalesVoucherWidget::onTableCellChanged(int row, int column) {
         }
 
         double amt = wt * rate;
-        if (m_tableWidget->item(row, 8)) m_tableWidget->item(row, 8)->setText(QString::number(amt, 'f', 2));
+        if (m_tableWidget->item(row, 7)) m_tableWidget->item(row, 7)->setText(QString::number(amt, 'f', 2));
     }
 
     m_isUpdatingTable = false;
     recalculateTotals();
 
     // Auto-append the next blank row only when the user actually typed an
-    // amount here (non-empty new text with an item set). Clearing the cell
-    // (e.g. word-by-word Backspace while stepping back) must never spawn
-    // phantom empty rows.
-    if (row == m_tableWidget->rowCount() - 1 && column == 8) {
-        auto* amtIt = m_tableWidget->item(row, 8);
+    // amount here (non-empty new text with an item set).
+    if (row == m_tableWidget->rowCount() - 1 && column == 7) {
+        auto* amtIt = m_tableWidget->item(row, 7);
         if (amtIt && !amtIt->text().trimmed().isEmpty() &&
             m_tableWidget->item(row, 1) && !m_tableWidget->item(row, 1)->text().isEmpty()) {
             addNewLineRow();
@@ -1322,7 +1379,74 @@ void SalesVoucherWidget::onTableCellChanged(int row, int column) {
     }
 }
 
+double SalesVoucherWidget::calculateRawTotal() const {
+    double taxableSubtotal = m_subtotalTaxableLabel ? m_subtotalTaxableLabel->text().toDouble() : 0.0;
+    bool isMandi = (m_marketTypeCombo && m_marketTypeCombo->currentIndex() == 2);
+    double otherExp = 0.0;
+    double lessAmt = 0.0;
+
+    if (isMandi) {
+        double dami = m_damiEdit ? m_damiEdit->text().toDouble() : 0.0;
+        double labour = m_labourEdit ? m_labourEdit->text().toDouble() : 0.0;
+        double auction = m_auctionEdit ? m_auctionEdit->text().toDouble() : 0.0;
+        double mfee = m_mFeeEdit ? m_mFeeEdit->text().toDouble() : 0.0;
+        double hrdf = m_hrdfEdit ? m_hrdfEdit->text().toDouble() : 0.0;
+        double mOther = m_mandiOtherExpEdit ? m_mandiOtherExpEdit->text().toDouble() : 0.0;
+        double welfare = m_welfareEdit ? m_welfareEdit->text().toDouble() : 0.0;
+        double dhrmd = m_dhrmdEdit ? m_dhrmdEdit->text().toDouble() : 0.0;
+        double sutli = m_sutliEdit ? m_sutliEdit->text().toDouble() : 0.0;
+        lessAmt = m_mandiLessEdit ? m_mandiLessEdit->text().toDouble() : 0.0;
+        otherExp = dami + labour + auction + mfee + hrdf + mOther + welfare + dhrmd + sutli;
+    } else {
+        otherExp = m_otherExpEdit ? m_otherExpEdit->text().toDouble() : 0.0;
+        lessAmt = m_lessAmountEdit ? m_lessAmountEdit->text().toDouble() : 0.0;
+    }
+
+    double freight = m_freightChargesEdit ? m_freightChargesEdit->text().toDouble() : 0.0;
+    double comm = (isMandi && m_commissionEdit) ? m_commissionEdit->text().toDouble() : 0.0;
+    double tax = m_taxAmountEdit ? m_taxAmountEdit->text().toDouble() : 0.0;
+
+    return taxableSubtotal + otherExp + comm + freight + tax - lessAmt;
+}
+
+void SalesVoucherWidget::openTcsCalculationDialog() {
+    // Commit any currently focused table editor before computing
+    if (m_tableWidget) {
+        auto* edit = m_tableWidget->findChild<QLineEdit*>();
+        if (edit) edit->clearFocus();
+    }
+    recalculateTotals();
+
+    QString party = m_partySearchWidget ? m_partySearchWidget->currentPartyName() : "";
+
+    double currentBill = calculateRawTotal();
+
+    double curTcs = m_tcsAmountEdit ? m_tcsAmountEdit->text().toDouble() : 0.0;
+    double curRate = m_tcsRateEdit ? m_tcsRateEdit->text().toDouble() : 0.100;
+    if (curRate <= 0.0001) curRate = 0.100;
+
+    double outTcs = curTcs;
+    double outRate = curRate;
+    double outTaxable = 0.0;
+
+    if (Tcs206CCalculationDialog::promptTcs206C(this, party, currentBill, &outTcs, &outRate, &outTaxable, curRate)) {
+        if (m_tcsRateEdit) m_tcsRateEdit->setText(QString::number(outRate, 'f', 3));
+        if (m_tcsTitleLabel) m_tcsTitleLabel->setText(QString("TCS @ %1% :").arg(QString::number(outRate, 'f', 1)));
+        if (m_tcsAmountEdit) {
+            m_tcsAmountEdit->setText(QString::number(outTcs, 'f', 2));
+        }
+        recalculateTotals();
+    }
+    if (m_grandTotalEdit) {
+        m_grandTotalEdit->setFocus();
+        m_grandTotalEdit->selectAll();
+    }
+}
+
 void SalesVoucherWidget::recalculateTotals() {
+    if (m_isUpdatingTotals) return;
+    m_isUpdatingTotals = true;
+
     int totalBags = 0;
     double totalWeight = 0.0;
     double taxableSubtotal = 0.0;
@@ -1333,8 +1457,8 @@ void SalesVoucherWidget::recalculateTotals() {
         if (name.isEmpty()) continue;
         int b = m_tableWidget->item(r, 3) ? m_tableWidget->item(r, 3)->text().toInt() : 0;
         double w = m_tableWidget->item(r, 5) ? m_tableWidget->item(r, 5)->text().toDouble() : 0.0;
-        double amt = m_tableWidget->item(r, 8) ? m_tableWidget->item(r, 8)->text().toDouble() : 0.0;
-        double gst = m_tableWidget->item(r, 6) ? m_tableWidget->item(r, 6)->text().toDouble() : 0.0;
+        double amt = m_tableWidget->item(r, 7) ? m_tableWidget->item(r, 7)->text().toDouble() : 0.0;
+        double gst = m_tableWidget->item(r, 8) ? m_tableWidget->item(r, 8)->text().toDouble() : 0.0;
 
         totalBags += b;
         totalWeight += w;
@@ -1349,46 +1473,23 @@ void SalesVoucherWidget::recalculateTotals() {
     m_subtotalTaxableLabel->setText(QString::number(taxableSubtotal, 'f', 2));
     m_mandiTotalValLabel->setText(QString::number(taxableSubtotal, 'f', 2));
 
-    bool isMandi = (m_marketTypeCombo->currentIndex() == 2);
-    double otherExp = 0.0;
-    double lessAmt = 0.0;
-
-    if (isMandi) {
-        double dami = m_damiEdit->text().toDouble();
-        double labour = m_labourEdit->text().toDouble();
-        double auction = m_auctionEdit->text().toDouble();
-        double mfee = m_mFeeEdit->text().toDouble();
-        double hrdf = m_hrdfEdit->text().toDouble();
-        double mOther = m_mandiOtherExpEdit->text().toDouble();
-        double welfare = m_welfareEdit->text().toDouble();
-        double dhrmd = m_dhrmdEdit->text().toDouble();
-        double sutli = m_sutliEdit->text().toDouble();
-        lessAmt = m_mandiLessEdit->text().toDouble();
-        otherExp = dami + labour + auction + mfee + hrdf + mOther + welfare + dhrmd + sutli;
-    } else {
-        otherExp = m_otherExpEdit->text().toDouble();
-        lessAmt = m_lessAmountEdit->text().toDouble();
-    }
-
-    double freight = m_freightChargesEdit->text().toDouble();
-    double comm = isMandi ? m_commissionEdit->text().toDouble() : 0.0;
-
     if (m_taxAmountEdit->text().toDouble() == 0.0 && totalGst > 0) {
         m_taxAmountEdit->setText(QString::number(totalGst, 'f', 2));
     }
-    double tax = m_taxAmountEdit->text().toDouble();
 
-    double rawTotal = taxableSubtotal + otherExp + comm + freight + tax - lessAmt;
-    double tcsRate = m_tcsRateEdit->text().toDouble();
-    double tcsAmt = (tcsRate > 0) ? (rawTotal * tcsRate / 100.0) : 0.0;
-    m_tcsAmountLabel->setText(QString::number(tcsAmt, 'f', 2));
+    double rawTotal = calculateRawTotal();
+    double tcsRate = m_tcsRateEdit ? m_tcsRateEdit->text().toDouble() : 0.0;
+    double tcsAmt = (tcsRate > 0) ? (rawTotal * tcsRate / 100.0) : (m_tcsAmountEdit ? m_tcsAmountEdit->text().toDouble() : 0.0);
+    if (m_tcsAmountEdit) m_tcsAmountEdit->setText(QString::number(tcsAmt, 'f', 2));
 
     double finalTotal = rawTotal + tcsAmt;
     double rounded = std::round(finalTotal);
     double roundOff = rounded - finalTotal;
 
-    m_roundOffLabel->setText(QString::number(roundOff, 'f', 2));
-    m_grandTotalLabel->setText(QString::number(rounded, 'f', 2));
+    if (m_roundOffEdit) m_roundOffEdit->setText(QString::number(roundOff, 'f', 2));
+    if (m_grandTotalEdit) m_grandTotalEdit->setText(QString::number(rounded, 'f', 2));
+
+    m_isUpdatingTotals = false;
 }
 
 void SalesVoucherWidget::saveVoucher() {
@@ -1410,9 +1511,9 @@ void SalesVoucherWidget::saveVoucher() {
         itm["bags"] = m_tableWidget->item(r, 3) ? m_tableWidget->item(r, 3)->text().toInt() : 0;
         itm["packing"] = m_tableWidget->item(r, 4) ? m_tableWidget->item(r, 4)->text().toDouble() : 0.500;
         itm["weight"] = m_tableWidget->item(r, 5) ? m_tableWidget->item(r, 5)->text().toDouble() : 0.0;
-        itm["rate"] = m_tableWidget->item(r, 7) ? m_tableWidget->item(r, 7)->text().toDouble() : 0.0;
-        itm["amount"] = m_tableWidget->item(r, 8) ? m_tableWidget->item(r, 8)->text().toDouble() : 0.0;
-        itm["gst_pct"] = m_tableWidget->item(r, 6) ? m_tableWidget->item(r, 6)->text().toDouble() : 0.0;
+        itm["rate"] = m_tableWidget->item(r, 6) ? m_tableWidget->item(r, 6)->text().toDouble() : 0.0;
+        itm["amount"] = m_tableWidget->item(r, 7) ? m_tableWidget->item(r, 7)->text().toDouble() : 0.0;
+        itm["gst_pct"] = m_tableWidget->item(r, 8) ? m_tableWidget->item(r, 8)->text().toDouble() : 0.0;
         items.append(itm);
     }
 
@@ -1432,10 +1533,10 @@ void SalesVoucherWidget::saveVoucher() {
     if (m_selectedTaxStatus == "IGST") igst = tax;
     else { cgst = tax / 2.0; sgst = tax / 2.0; }
 
-    double roundOff = m_roundOffLabel->text().toDouble();
-    double grandTotal = m_grandTotalLabel->text().toDouble();
+    double roundOff = m_roundOffEdit ? m_roundOffEdit->text().toDouble() : 0.0;
+    double grandTotal = m_grandTotalEdit ? m_grandTotalEdit->text().toDouble() : 0.0;
     double freight = m_freightChargesEdit->text().toDouble();
-    double tcsAmt = m_tcsAmountLabel->text().toDouble();
+    double tcsAmt = m_tcsAmountEdit ? m_tcsAmountEdit->text().toDouble() : 0.0;
     double tcsRate = m_tcsRateEdit->text().toDouble();
 
     bool ok = false;
@@ -1446,7 +1547,7 @@ void SalesVoucherWidget::saveVoucher() {
             m_totalBagsLabel->text().toInt(), m_totalWeightLabel->text().toDouble(),
             items.first().toMap().value("rate").toDouble(), taxable,
             items.first().toMap().value("gst_pct").toDouble(), cgst, sgst, igst,
-            roundOff, grandTotal, "Credit", m_vehicleNoEdit->text(), m_ewayBillNoEdit->text(),
+            roundOff, grandTotal, "Credit", m_vehicleNoEdit->text().trimmed().toUpper(), m_ewayBillNoEdit->text(),
             m_narrationEdit->text(), m_selectedSaleStatus, m_selectedMarketFeeStatus,
             m_damiEdit->text().toDouble(), m_labourEdit->text().toDouble(), m_auctionEdit->text().toDouble(),
             m_mFeeEdit->text().toDouble(), m_hrdfEdit->text().toDouble(), m_otherExpEdit->text().toDouble(),
@@ -1465,7 +1566,7 @@ void SalesVoucherWidget::saveVoucher() {
             m_totalBagsLabel->text().toInt(), m_totalWeightLabel->text().toDouble(),
             items.first().toMap().value("rate").toDouble(), taxable,
             items.first().toMap().value("gst_pct").toDouble(), cgst, sgst, igst,
-            roundOff, grandTotal, "Credit", m_vehicleNoEdit->text(), m_ewayBillNoEdit->text(),
+            roundOff, grandTotal, "Credit", m_vehicleNoEdit->text().trimmed().toUpper(), m_ewayBillNoEdit->text(),
             m_narrationEdit->text(), m_selectedSaleStatus, m_selectedMarketFeeStatus,
             m_damiEdit->text().toDouble(), m_labourEdit->text().toDouble(), m_auctionEdit->text().toDouble(),
             m_mFeeEdit->text().toDouble(), m_hrdfEdit->text().toDouble(), m_otherExpEdit->text().toDouble(),
@@ -1609,7 +1710,7 @@ bool SalesVoucherWidget::loadInvoiceForEditing(const QVariant& invNoOrId, const 
     // Populate logistics
     m_vehicleNoEdit->setText(inv.value("vehicle_no").toString());
     m_grNoEdit->setText(inv.value("gr_no").toString());
-    m_driverNameEdit->setText(inv.value("driver").toString());
+    m_driverNameEdit->setText(inv.value("driver_name").toString());
     m_ewayBillNoEdit->setText(inv.value("eway_bill_no").toString());
     m_billTimeEdit->setText(inv.value("bill_time").toString());
     m_saudaDateEdit->setText(inv.value("sauda_date").toString());
@@ -1641,18 +1742,39 @@ bool SalesVoucherWidget::loadInvoiceForEditing(const QVariant& invNoOrId, const 
     m_narrationEdit->setText(inv.value("narration").toString());
 
     recalculateTotals();
+    if (inv.contains("round_off")) m_roundOffEdit->setText(QString::number(inv.value("round_off").toDouble(), 'f', 2));
+    if (inv.contains("tcs_amount")) m_tcsAmountEdit->setText(QString::number(inv.value("tcs_amount").toDouble(), 'f', 2));
+    if (inv.contains("grand_total")) m_grandTotalEdit->setText(QString::number(inv.value("grand_total").toDouble(), 'f', 2));
     return true;
 }
 
 void SalesVoucherWidget::printInvoice() {
-    if (m_printExportCtrl) {
-        m_printExportCtrl->print_sales_invoice(m_invoiceNoEdit->text());
+    if (!m_printExportCtrl) return;
+    QString invNo = m_invoiceNoEdit ? m_invoiceNoEdit->text().trimmed() : "";
+    if (invNo.isEmpty()) {
+        CustomMessageBox::warning(this, "No Invoice", "Save the voucher first, then print its invoice.");
+        return;
+    }
+    QString cust = m_partySearchWidget ? m_partySearchWidget->currentPartyName() : "";
+    QString copyType = MahadevERP::PrintCopyOptionsDialog::selectCopyType(
+        MahadevERP::PrintCopyOptionsDialog::Mode::Print, invNo, cust, this);
+    if (!copyType.isEmpty()) {
+        m_printExportCtrl->print_sales_invoice(invNo, copyType);
     }
 }
 
 void SalesVoucherWidget::exportPdf() {
-    if (m_printExportCtrl) {
-        m_printExportCtrl->export_sales_invoice_pdf(m_invoiceNoEdit->text());
+    if (!m_printExportCtrl) return;
+    QString invNo = m_invoiceNoEdit ? m_invoiceNoEdit->text().trimmed() : "";
+    if (invNo.isEmpty()) {
+        CustomMessageBox::warning(this, "No Invoice", "Save the voucher first, then export its invoice PDF.");
+        return;
+    }
+    QString cust = m_partySearchWidget ? m_partySearchWidget->currentPartyName() : "";
+    QString copyType = MahadevERP::PrintCopyOptionsDialog::selectCopyType(
+        MahadevERP::PrintCopyOptionsDialog::Mode::Pdf, invNo, cust, this);
+    if (!copyType.isEmpty()) {
+        m_printExportCtrl->export_sales_invoice_pdf(invNo, "", copyType);
     }
 }
 
@@ -1729,12 +1851,24 @@ void SalesVoucherWidget::keyPressEvent(QKeyEvent* event) {
         resetForm();
         event->accept();
         return;
+    } else if (event->key() == Qt::Key_F7 || (event->modifiers() & Qt::AltModifier && event->key() == Qt::Key_D)) {
+        openTcsCalculationDialog();
+        event->accept();
+        return;
     } else if (event->key() == Qt::Key_Escape) {
         emit backRequested();
         event->accept();
         return;
     } else if (event->modifiers() & Qt::ControlModifier && event->key() == Qt::Key_S) {
         saveVoucher();
+        event->accept();
+        return;
+    } else if (event->modifiers() & Qt::ControlModifier && event->key() == Qt::Key_P) {
+        printInvoice();
+        event->accept();
+        return;
+    } else if (event->modifiers() & Qt::ControlModifier && event->key() == Qt::Key_E) {
+        exportPdf();
         event->accept();
         return;
     } else if (event->modifiers() & Qt::AltModifier && event->key() == Qt::Key_T) {
@@ -1774,7 +1908,10 @@ bool SalesVoucherWidget::eventFilter(QObject* watched, QEvent* event) {
                 saveVoucher();
                 return true;
             } else if (key == Qt::Key_Left || key == Qt::Key_Up) {
-                if (m_freightChargesEdit && m_freightChargesEdit->isVisible()) {
+                if (m_grandTotalEdit && m_grandTotalEdit->isVisible()) {
+                    m_grandTotalEdit->setFocus();
+                    m_grandTotalEdit->selectAll();
+                } else if (m_freightChargesEdit && m_freightChargesEdit->isVisible()) {
                     m_freightChargesEdit->setFocus();
                     m_freightChargesEdit->selectAll();
                 } else if (m_narrationEdit) {

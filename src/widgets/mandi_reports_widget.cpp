@@ -91,13 +91,13 @@ void MandiReportsWidget::setupFormMTab() {
     auto* filterLayout = new QHBoxLayout();
     filterLayout->addWidget(new QLabel("From Date:", this));
     m_formMFromDate = new AccountingDateDisplay(defStart, this);
-    m_formMFromDate->setFixedWidth(115);
+    m_formMFromDate->setMinimumWidth(115);
     connect(m_formMFromDate, &AccountingDateDisplay::clicked, this, &MandiReportsWidget::onPeriodClicked);
     filterLayout->addWidget(m_formMFromDate);
 
     filterLayout->addWidget(new QLabel("To Date:", this));
     m_formMToDate = new AccountingDateDisplay(defEnd, this);
-    m_formMToDate->setFixedWidth(115);
+    m_formMToDate->setMinimumWidth(115);
     connect(m_formMToDate, &AccountingDateDisplay::clicked, this, &MandiReportsWidget::onPeriodClicked);
     filterLayout->addWidget(m_formMToDate);
 
@@ -181,13 +181,13 @@ void MandiReportsWidget::setupJFormRegisterTab() {
     auto* filterLayout = new QHBoxLayout();
     filterLayout->addWidget(new QLabel("From Date:", this));
     m_jfFromDate = new AccountingDateDisplay(defStart, this);
-    m_jfFromDate->setFixedWidth(115);
+    m_jfFromDate->setMinimumWidth(115);
     connect(m_jfFromDate, &AccountingDateDisplay::clicked, this, &MandiReportsWidget::onPeriodClicked);
     filterLayout->addWidget(m_jfFromDate);
 
     filterLayout->addWidget(new QLabel("To Date:", this));
     m_jfToDate = new AccountingDateDisplay(defEnd, this);
-    m_jfToDate->setFixedWidth(115);
+    m_jfToDate->setMinimumWidth(115);
     connect(m_jfToDate, &AccountingDateDisplay::clicked, this, &MandiReportsWidget::onPeriodClicked);
     filterLayout->addWidget(m_jfToDate);
 
@@ -238,13 +238,13 @@ void MandiReportsWidget::setupIFormRegisterTab() {
     auto* filterLayout = new QHBoxLayout();
     filterLayout->addWidget(new QLabel("From Date:", this));
     m_ifFromDate = new AccountingDateDisplay(defStart, this);
-    m_ifFromDate->setFixedWidth(115);
+    m_ifFromDate->setMinimumWidth(115);
     connect(m_ifFromDate, &AccountingDateDisplay::clicked, this, &MandiReportsWidget::onPeriodClicked);
     filterLayout->addWidget(m_ifFromDate);
 
     filterLayout->addWidget(new QLabel("To Date:", this));
     m_ifToDate = new AccountingDateDisplay(defEnd, this);
-    m_ifToDate->setFixedWidth(115);
+    m_ifToDate->setMinimumWidth(115);
     connect(m_ifToDate, &AccountingDateDisplay::clicked, this, &MandiReportsWidget::onPeriodClicked);
     filterLayout->addWidget(m_ifToDate);
 
@@ -365,13 +365,13 @@ void MandiReportsWidget::setupDamiRegisterTab() {
     auto* filterLayout = new QHBoxLayout();
     filterLayout->addWidget(new QLabel("From Date:", this));
     m_damiFromDate = new AccountingDateDisplay(defStart, this);
-    m_damiFromDate->setFixedWidth(115);
+    m_damiFromDate->setMinimumWidth(115);
     connect(m_damiFromDate, &AccountingDateDisplay::clicked, this, &MandiReportsWidget::onPeriodClicked);
     filterLayout->addWidget(m_damiFromDate);
 
     filterLayout->addWidget(new QLabel("To Date:", this));
     m_damiToDate = new AccountingDateDisplay(defEnd, this);
-    m_damiToDate->setFixedWidth(115);
+    m_damiToDate->setMinimumWidth(115);
     connect(m_damiToDate, &AccountingDateDisplay::clicked, this, &MandiReportsWidget::onPeriodClicked);
     filterLayout->addWidget(m_damiToDate);
 
@@ -526,13 +526,13 @@ void MandiReportsWidget::applyCustomStyles() {
         "  gridline-color: #E2E8F0;"
         "  border: 1px solid #CBD5E1;"
         "  border-radius: 6px;"
-        "  selection-background-color: #DBEAFE;"
-        "  selection-color: #1E3A8A;"
+        "  selection-background-color: #2563EB;"
+        "  selection-color: #FFFFFF;"
         "  font-size: 12px;"
         "}"
         "QHeaderView::section {"
-        "  background-color: #F1F5F9;"
-        "  color: #334155;"
+        "  background-color: #0F172A;"
+        "  color: #FFFFFF;"
         "  font-weight: 700;"
         "  font-size: 11px;"
         "  padding: 6px 4px;"
@@ -702,7 +702,7 @@ void MandiReportsWidget::generateJFormRegister() {
 
         m_jfTable->setItem(row, 0, new QTableWidgetItem(QString("JFrm-%1").arg(r.value("voucher_no").toInt())));
         m_jfTable->setItem(row, 1, new QTableWidgetItem(r.value("jform_no").toString()));
-        m_jfTable->setItem(row, 2, new QTableWidgetItem(r.value("voucher_date").toString()));
+        m_jfTable->setItem(row, 2, new QTableWidgetItem(FiscalYearHelper::formatDisplayDate(r.value("voucher_date").toString())));
         m_jfTable->setItem(row, 3, new QTableWidgetItem(r.value("zimidar_name").toString()));
         m_jfTable->setItem(row, 4, new QTableWidgetItem(r.value("crop_names").toString()));
         m_jfTable->setItem(row, 5, new QTableWidgetItem(QString::number(r.value("total_bags").toInt())));
@@ -736,7 +736,7 @@ void MandiReportsWidget::generateIFormRegister() {
 
         m_ifTable->setItem(row, 0, new QTableWidgetItem(QString("IFrm-%1").arg(r.value("voucher_no").toInt())));
         m_ifTable->setItem(row, 1, new QTableWidgetItem(r.value("iform_no").toString()));
-        m_ifTable->setItem(row, 2, new QTableWidgetItem(r.value("voucher_date").toString()));
+        m_ifTable->setItem(row, 2, new QTableWidgetItem(FiscalYearHelper::formatDisplayDate(r.value("voucher_date").toString())));
         m_ifTable->setItem(row, 3, new QTableWidgetItem(r.value("buyer_name").toString()));
         m_ifTable->setItem(row, 4, new QTableWidgetItem(r.value("broker_name").toString()));
         m_ifTable->setItem(row, 5, new QTableWidgetItem(r.value("crop_names").toString()));
@@ -770,7 +770,7 @@ void MandiReportsWidget::generateFarmerStatement() {
         int r = m_stmtDheriesTable->rowCount();
         m_stmtDheriesTable->insertRow(r);
         m_stmtDheriesTable->setItem(r, 0, new QTableWidgetItem(d.value("jform_no").toString()));
-        m_stmtDheriesTable->setItem(r, 1, new QTableWidgetItem(d.value("voucher_date").toString()));
+        m_stmtDheriesTable->setItem(r, 1, new QTableWidgetItem(FiscalYearHelper::formatDisplayDate(d.value("voucher_date").toString())));
         m_stmtDheriesTable->setItem(r, 2, new QTableWidgetItem(d.value("item_name").toString()));
         m_stmtDheriesTable->setItem(r, 3, new QTableWidgetItem(QString::number(d.value("bags").toInt())));
         m_stmtDheriesTable->setItem(r, 4, new QTableWidgetItem(QString::number(d.value("weight").toDouble(), 'f', 3)));
@@ -786,7 +786,7 @@ void MandiReportsWidget::generateFarmerStatement() {
         int r = m_stmtPaymentsTable->rowCount();
         m_stmtPaymentsTable->insertRow(r);
         m_stmtPaymentsTable->setItem(r, 0, new QTableWidgetItem(QString("%1-%2").arg(p.value("voucher_type").toString(), QString::number(p.value("voucher_no").toInt()))));
-        m_stmtPaymentsTable->setItem(r, 1, new QTableWidgetItem(p.value("voucher_date").toString()));
+        m_stmtPaymentsTable->setItem(r, 1, new QTableWidgetItem(FiscalYearHelper::formatDisplayDate(p.value("voucher_date").toString())));
         m_stmtPaymentsTable->setItem(r, 2, new QTableWidgetItem(p.value("voucher_type").toString()));
         m_stmtPaymentsTable->setItem(r, 3, new QTableWidgetItem(QString::number(p.value("amount").toDouble(), 'f', 2)));
         m_stmtPaymentsTable->setItem(r, 4, new QTableWidgetItem(p.value("narration").toString()));
@@ -814,7 +814,7 @@ void MandiReportsWidget::generateDamiRegister() {
 
         m_damiTable->setItem(row, 0, new QTableWidgetItem(QString("IFrm-%1").arg(r.value("voucher_no").toInt())));
         m_damiTable->setItem(row, 1, new QTableWidgetItem(r.value("iform_no").toString()));
-        m_damiTable->setItem(row, 2, new QTableWidgetItem(r.value("voucher_date").toString()));
+        m_damiTable->setItem(row, 2, new QTableWidgetItem(FiscalYearHelper::formatDisplayDate(r.value("voucher_date").toString())));
         m_damiTable->setItem(row, 3, new QTableWidgetItem(r.value("buyer_name").toString()));
         m_damiTable->setItem(row, 4, new QTableWidgetItem(QString::number(r.value("total_weight").toDouble(), 'f', 3)));
         m_damiTable->setItem(row, 5, new QTableWidgetItem(QString::number(r.value("goods_amount").toDouble(), 'f', 2)));
@@ -859,11 +859,29 @@ void MandiReportsWidget::onPeriodClicked() {
     }
 }
 
+void MandiReportsWidget::focusTable()
+{
+    // Focus the active tab's grid so keyboard control never lands nowhere.
+    QTableWidget* target = m_formMTable;
+    if (m_tabWidget) {
+        switch (m_tabWidget->currentIndex()) {
+        case 1: target = m_jfTable; break;
+        case 2: target = m_ifTable; break;
+        case 3: target = m_stmtDheriesTable ? m_stmtDheriesTable : m_stmtPaymentsTable; break;
+        case 4: target = m_damiTable; break;
+        default: target = m_formMTable; break;
+        }
+    }
+    if (!target) return;
+    if (target->rowCount() > 0 && target->currentRow() < 0) target->selectRow(0);
+    target->setFocus();
+}
+
 void MandiReportsWidget::keyPressEvent(QKeyEvent* event) {
     if (event->key() == Qt::Key_Escape) {
         emit backRequested();
         event->accept();
-    } else if (event->key() == Qt::Key_F2 || (event->modifiers() & Qt::AltModifier && event->key() == Qt::Key_F2)) {
+    } else if (event->key() == Qt::Key_F2 && !(event->modifiers() & Qt::AltModifier)) {
         onPeriodClicked();
         event->accept();
     } else {
@@ -874,7 +892,7 @@ void MandiReportsWidget::keyPressEvent(QKeyEvent* event) {
 bool MandiReportsWidget::eventFilter(QObject* watched, QEvent* event) {
     if (event->type() == QEvent::KeyPress) {
         auto* keyEvent = static_cast<QKeyEvent*>(event);
-        if (keyEvent->key() == Qt::Key_F2 || (keyEvent->modifiers() & Qt::AltModifier && keyEvent->key() == Qt::Key_F2)) {
+        if (keyEvent->key() == Qt::Key_F2 && !(keyEvent->modifiers() & Qt::AltModifier)) {
             onPeriodClicked();
             return true;
         }

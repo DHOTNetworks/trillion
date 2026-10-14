@@ -6,6 +6,7 @@
 #include <QSpinBox>
 #include <QCheckBox>
 #include <QPushButton>
+#include "kbd_badge_button.h"
 #include <QLabel>
 #include "../engine/bill_series.h"
 
@@ -42,7 +43,7 @@ private:
     QLineEdit* m_suffixEdit = nullptr;
     QLabel* m_previewLabel = nullptr;
     QLabel* m_statusLabel = nullptr;
-    QPushButton* m_saveBtn = nullptr;
+    KbdBadgeButton* m_saveBtn = nullptr;
 };
 
 } // namespace MahadevERP

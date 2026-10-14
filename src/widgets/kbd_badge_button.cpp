@@ -12,7 +12,7 @@ KbdBadgeButton::KbdBadgeButton(const QString& text, const QString& shortcut, QWi
     , m_borderColor(QColor(Qt::transparent))
 {
     setText(text);
-    setFixedHeight(34);
+    setMinimumHeight(34);
     setCursor(Qt::PointingHandCursor);
     setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
 }
@@ -29,7 +29,7 @@ KbdBadgeButton::KbdBadgeButton(const QString& text, const QString& shortcut,
     , m_borderColor(borderColor)
 {
     setText(text);
-    setFixedHeight(34);
+    setMinimumHeight(34);
     setCursor(Qt::PointingHandCursor);
     setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
 }
@@ -53,6 +53,17 @@ void KbdBadgeButton::setButtonColors(const QColor& bg, const QColor& hover, cons
     m_borderColor = border;
     m_badgeBg = badgeBg;
     m_badgeText = badgeText;
+    update();
+}
+
+void KbdBadgeButton::bindShortcut(const QKeySequence& seq, const QString& badgeText) {
+    if (!badgeText.isEmpty()) {
+        m_shortcut = badgeText;
+    } else if (m_shortcut.isEmpty()) {
+        m_shortcut = seq.toString(QKeySequence::NativeText);
+    }
+    auto* sc = new QShortcut(seq, this);
+    connect(sc, &QShortcut::activated, this, &QPushButton::click);
     update();
 }
 

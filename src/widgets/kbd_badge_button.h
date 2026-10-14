@@ -1,6 +1,8 @@
 #pragma once
 
 #include <QPushButton>
+#include <QKeySequence>
+#include <QShortcut>
 #include <QString>
 #include <QColor>
 
@@ -24,6 +26,11 @@ public:
     void setButtonColors(const QColor& bg, const QColor& hover, const QColor& text = QColor("#FFFFFF"),
                          const QColor& border = QColor(Qt::transparent), const QColor& badgeBg = QColor(),
                          const QColor& badgeText = QColor());
+
+    /// Binds the badge to a REAL shortcut: clicking-equivalent activation on
+    /// key press. The badge can never lie — text and key come from one call.
+    /// Pass the same QKeySequence the global keymap uses for this action.
+    void bindShortcut(const QKeySequence& seq, const QString& badgeText = QString());
 
     QSize sizeHint() const override;
     QSize minimumSizeHint() const override;

@@ -155,7 +155,7 @@ void MdbMigrationDialog::setupUi() {
     // 3. File Selection Section
     // ========================================================================
     QFrame* fileSectionFrame = new QFrame(this);
-    fileSectionFrame->setFixedHeight(54);
+    fileSectionFrame->setMinimumHeight(54);
     fileSectionFrame->setStyleSheet("QFrame { background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 8px; }");
     QHBoxLayout* fileLayout = new QHBoxLayout(fileSectionFrame);
     fileLayout->setContentsMargins(12, 8, 12, 8);
@@ -266,7 +266,7 @@ void MdbMigrationDialog::setupUi() {
     progLayout->addLayout(progHeader);
 
     m_progressBar = new QProgressBar(m_progressContainer);
-    m_progressBar->setFixedHeight(12);
+    m_progressBar->setMinimumHeight(12);
     m_progressBar->setRange(0, 100);
     m_progressBar->setValue(0);
     m_progressBar->setTextVisible(false);

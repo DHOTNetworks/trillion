@@ -22,6 +22,7 @@ public:
     explicit SaudaContractWidget(SaudaController* controller, PrintExportController* printCtrl, QWidget* parent = nullptr);
 
     void refreshData();
+    void focusTable();
     void markDirty() { m_isDirty = true; }
     bool isDirty() const { return m_isDirty; }
 
@@ -47,6 +48,7 @@ private:
     void populateSaudaTable();
     void populateDalaliTable();
     void updateSummaryKpis();
+    void loadDynamicCommodities();
 
     SaudaController* m_controller = nullptr;
     PrintExportController* m_printCtrl = nullptr;

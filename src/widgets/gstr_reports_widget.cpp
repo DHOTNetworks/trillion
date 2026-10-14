@@ -52,7 +52,7 @@ void GstrReportsWidget::setupUi() {
 
     // ================= 1. TOP HEADER BAR CARD =================
     QFrame* headerCard = new QFrame(this);
-    headerCard->setFixedHeight(58);
+    headerCard->setMinimumHeight(58);
     headerCard->setStyleSheet("background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px;");
     QHBoxLayout* headerLayout = new QHBoxLayout(headerCard);
     headerLayout->setContentsMargins(14, 6, 14, 6);
@@ -92,7 +92,7 @@ void GstrReportsWidget::setupUi() {
 
     // ================= 2. FILTER & INFO BAR CARD =================
     QFrame* filterCard = new QFrame(this);
-    filterCard->setFixedHeight(54);
+    filterCard->setMinimumHeight(54);
     filterCard->setStyleSheet("background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px;");
     QHBoxLayout* filterLayout = new QHBoxLayout(filterCard);
     filterLayout->setContentsMargins(12, 6, 12, 6);
@@ -103,8 +103,8 @@ void GstrReportsWidget::setupUi() {
     filterLayout->addWidget(fromLbl);
 
     m_fromDateEdit = new AccountingDateDisplay(filterCard);
-    m_fromDateEdit->setFixedHeight(34);
-    m_fromDateEdit->setFixedWidth(115);
+    m_fromDateEdit->setMinimumHeight(34);
+    m_fromDateEdit->setMinimumWidth(115);
     connect(m_fromDateEdit, &AccountingDateDisplay::dateChanged, this, &GstrReportsWidget::onRefreshClicked);
     filterLayout->addWidget(m_fromDateEdit);
 
@@ -113,8 +113,8 @@ void GstrReportsWidget::setupUi() {
     filterLayout->addWidget(toLbl);
 
     m_toDateEdit = new AccountingDateDisplay(filterCard);
-    m_toDateEdit->setFixedHeight(34);
-    m_toDateEdit->setFixedWidth(115);
+    m_toDateEdit->setMinimumHeight(34);
+    m_toDateEdit->setMinimumWidth(115);
     connect(m_toDateEdit, &AccountingDateDisplay::dateChanged, this, &GstrReportsWidget::onRefreshClicked);
     filterLayout->addWidget(m_toDateEdit);
 
@@ -148,7 +148,7 @@ void GstrReportsWidget::setupUi() {
     filterLayout->addWidget(monthLbl);
 
     m_monthCombo = new QComboBox(filterCard);
-    m_monthCombo->setFixedHeight(34);
+    m_monthCombo->setMinimumHeight(34);
     m_monthCombo->setStyleSheet(
         "QComboBox { background-color: #FFFFFF; color: #0F172A; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 4px 10px; font-weight: 700; font-size: 12px; }"
         "QComboBox:focus { border: 2px solid #2563EB; }");
@@ -165,7 +165,7 @@ void GstrReportsWidget::setupUi() {
     filterLayout->addWidget(fyLbl);
 
     m_fyCombo = new QComboBox(filterCard);
-    m_fyCombo->setFixedHeight(34);
+    m_fyCombo->setMinimumHeight(34);
     m_fyCombo->setStyleSheet(m_monthCombo->styleSheet());
     {
         QList<FiscalYearInfo> fys = FiscalYearHelper::getAllFiscalYears();
@@ -205,7 +205,7 @@ void GstrReportsWidget::setupUi() {
 
     QLabel* gstinBadge = new QLabel(badgeText, filterCard);
     gstinBadge->setAlignment(Qt::AlignCenter);
-    gstinBadge->setFixedHeight(34);
+    gstinBadge->setMinimumHeight(34);
     gstinBadge->setStyleSheet("background-color: #EFF6FF; color: #1D4ED8; border: 1.5px solid #93C5FD; border-radius: 6px; padding: 0px 14px; font-weight: 800; font-size: 12px;");
     filterLayout->addWidget(gstinBadge);
 
@@ -215,7 +215,7 @@ void GstrReportsWidget::setupUi() {
     FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
     m_fyBadge = new QLabel(activeFy.isValid() ? activeFy.name : "--", filterCard);
     m_fyBadge->setAlignment(Qt::AlignCenter);
-    m_fyBadge->setFixedHeight(34);
+    m_fyBadge->setMinimumHeight(34);
     m_fyBadge->setStyleSheet("background-color: #F0FDF4; color: #16A34A; border: 1.5px solid #86EFAC; border-radius: 6px; padding: 0px 14px; font-weight: 800; font-size: 12px;");
     filterLayout->addWidget(m_fyBadge);
 
@@ -257,7 +257,7 @@ void GstrReportsWidget::setupUi() {
 
     // GSTR-1 Action Bar (own header: title + its own exports)
     QFrame* gstr1ActionBar = new QFrame(gstr1Widget);
-    gstr1ActionBar->setFixedHeight(50);
+    gstr1ActionBar->setMinimumHeight(50);
     gstr1ActionBar->setStyleSheet("background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px;");
     QHBoxLayout* gstr1ActionLayout = new QHBoxLayout(gstr1ActionBar);
     gstr1ActionLayout->setContentsMargins(14, 6, 14, 6);
@@ -276,7 +276,7 @@ void GstrReportsWidget::setupUi() {
 
     // GSTR-1 Metrics Bar
     QFrame* gstr1MetricsCard = new QFrame(gstr1Widget);
-    gstr1MetricsCard->setFixedHeight(50);
+    gstr1MetricsCard->setMinimumHeight(50);
     gstr1MetricsCard->setStyleSheet("background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 6px;");
     QHBoxLayout* gstr1MetricsLayout = new QHBoxLayout(gstr1MetricsCard);
     gstr1MetricsLayout->setContentsMargins(12, 4, 12, 4);
@@ -351,7 +351,7 @@ void GstrReportsWidget::setupUi() {
 
     // GSTR-2A Action Bar (own header, mirrors the other tabs)
     QFrame* gstr2ActionBar = new QFrame(gstr2Widget);
-    gstr2ActionBar->setFixedHeight(50);
+    gstr2ActionBar->setMinimumHeight(50);
     gstr2ActionBar->setStyleSheet("background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px;");
     QHBoxLayout* gstr2ActionLayout = new QHBoxLayout(gstr2ActionBar);
     gstr2ActionLayout->setContentsMargins(14, 6, 14, 6);
@@ -364,7 +364,7 @@ void GstrReportsWidget::setupUi() {
 
     // GSTR-2A Status Card
     QFrame* gstr2StatusCard = new QFrame(gstr2Widget);
-    gstr2StatusCard->setFixedHeight(50);
+    gstr2StatusCard->setMinimumHeight(50);
     gstr2StatusCard->setStyleSheet("background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 6px;");
     QHBoxLayout* gstr2StatusLayout = new QHBoxLayout(gstr2StatusCard);
     gstr2StatusLayout->setContentsMargins(12, 4, 12, 4);
@@ -438,7 +438,7 @@ void GstrReportsWidget::setupUi() {
 
     // GSTR-3B Actions Bar
     QFrame* gstr3bActionBar = new QFrame(gstr3bWidget);
-    gstr3bActionBar->setFixedHeight(50);
+    gstr3bActionBar->setMinimumHeight(50);
     gstr3bActionBar->setStyleSheet("background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px;");
     QHBoxLayout* gstr3bActionLayout = new QHBoxLayout(gstr3bActionBar);
     gstr3bActionLayout->setContentsMargins(14, 6, 14, 6);
@@ -470,7 +470,7 @@ void GstrReportsWidget::setupUi() {
         table->setShowGrid(true);
         table->setStyleSheet(
             "QTableWidget { background-color: #FFFFFF; alternate-background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px; gridline-color: #F1F5F9; font-size: 11.5px; color: #0F172A; }"
-            "QHeaderView::section { background-color: #F1F5F9; color: #1E293B; font-weight: 800; font-size: 11.5px; padding: 6px 8px; border: none; border-bottom: 2px solid #CBD5E1; border-right: 1px solid #E2E8F0; }"
+            "QHeaderView::section { background-color: #0F172A; color: #FFFFFF; font-weight: 800; font-size: 11.5px; padding: 6px 8px; border: none;  border-right: 1px solid #334155; }"
         );
     };
 
@@ -490,7 +490,7 @@ void GstrReportsWidget::setupUi() {
     });
     m_gstr3bTable31->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     for (int c = 1; c < 6; ++c) m_gstr3bTable31->horizontalHeader()->setSectionResizeMode(c, QHeaderView::ResizeToContents);
-    m_gstr3bTable31->setFixedHeight(200);
+    m_gstr3bTable31->setMinimumHeight(200);
     styleTable(m_gstr3bTable31);
     lay31->addWidget(m_gstr3bTable31);
     gstr3bLayout->addWidget(card31);
@@ -511,7 +511,7 @@ void GstrReportsWidget::setupUi() {
     });
     m_gstr3bTable32->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     for (int c = 1; c < 4; ++c) m_gstr3bTable32->horizontalHeader()->setSectionResizeMode(c, QHeaderView::ResizeToContents);
-    m_gstr3bTable32->setFixedHeight(92);
+    m_gstr3bTable32->setMinimumHeight(92);
     styleTable(m_gstr3bTable32);
     lay32->addWidget(m_gstr3bTable32);
     gstr3bLayout->addWidget(card32);
@@ -532,7 +532,7 @@ void GstrReportsWidget::setupUi() {
     });
     m_gstr3bTable4->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     for (int c = 1; c < 5; ++c) m_gstr3bTable4->horizontalHeader()->setSectionResizeMode(c, QHeaderView::ResizeToContents);
-    m_gstr3bTable4->setFixedHeight(148);
+    m_gstr3bTable4->setMinimumHeight(148);
     styleTable(m_gstr3bTable4);
     lay4->addWidget(m_gstr3bTable4);
     gstr3bLayout->addWidget(card4);
@@ -554,7 +554,7 @@ void GstrReportsWidget::setupUi() {
     m_gstr3bTable5->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     m_gstr3bTable5->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
     m_gstr3bTable5->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
-    m_gstr3bTable5->setFixedHeight(92);
+    m_gstr3bTable5->setMinimumHeight(92);
     styleTable(m_gstr3bTable5);
     lay5->addWidget(m_gstr3bTable5);
     gstr3bLayout->addWidget(card5);
@@ -575,7 +575,7 @@ void GstrReportsWidget::setupUi() {
     });
     m_gstr3bTable61->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     for (int c = 1; c < 5; ++c) m_gstr3bTable61->horizontalHeader()->setSectionResizeMode(c, QHeaderView::ResizeToContents);
-    m_gstr3bTable61->setFixedHeight(148);
+    m_gstr3bTable61->setMinimumHeight(148);
     styleTable(m_gstr3bTable61);
     lay61->addWidget(m_gstr3bTable61);
     gstr3bLayout->addWidget(card61);
@@ -653,19 +653,19 @@ void GstrReportsWidget::applyCustomStyles() {
         "  padding: 4px 8px;"
         "}"
         "QTableWidget::item:selected {"
-        "  background-color: #EFF6FF;"
-        "  color: #1D4ED8;"
+        "  background-color: #2563EB;"
+        "  color: #FFFFFF;"
         "  font-weight: bold;"
         "}"
         "QHeaderView::section {"
-        "  background-color: #F1F5F9;"
-        "  color: #1E293B;"
+        "  background-color: #0F172A;"
+        "  color: #FFFFFF;"
         "  font-weight: 800;"
         "  font-size: 12px;"
         "  padding: 8px 10px;"
         "  border: none;"
-        "  border-bottom: 2px solid #CBD5E1;"
-        "  border-right: 1px solid #E2E8F0;"
+        "  "
+        "  border-right: 1px solid #334155;"
         "}"
         "QDateEdit {"
         "  background-color: #FFFFFF;"
@@ -1238,6 +1238,19 @@ void GstrReportsWidget::onAutoDownloadGstr2Clicked() {
         m_tabs->setCurrentIndex(1);
     });
     dlg->exec();
+}
+
+void GstrReportsWidget::focusTable()
+{
+    // Focus the active tab's grid (GSTR-1 / GSTR-2 / 3B-first-table).
+    if (!m_tabs) return;
+    if (m_tabs->currentIndex() == 1) { focusGstr2Table(); return; }
+    if (m_tabs->currentIndex() == 2 && m_gstr3bTable31) {
+        if (m_gstr3bTable31->rowCount() > 0 && m_gstr3bTable31->currentRow() < 0) m_gstr3bTable31->selectRow(0);
+        m_gstr3bTable31->setFocus();
+        return;
+    }
+    focusGstr1Table();
 }
 
 void GstrReportsWidget::keyPressEvent(QKeyEvent* event) {

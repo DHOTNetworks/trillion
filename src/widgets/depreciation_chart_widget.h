@@ -20,6 +20,8 @@ public:
     ~DepreciationChartWidget() override = default;
 
     void reloadData();
+    void markDirty() { m_isDirty = true; }
+    bool isDirty() const { return m_isDirty; }
     void setDetailedMode(bool isDetailed);
     void focusTable();
 
@@ -54,6 +56,7 @@ private:
     DepreciationCalculator m_calculator;
     QVector<DepreciationAssetItem> m_items;
     bool m_isDetailed = true;
+    bool m_isDirty = true;
 
     // Tier 1 Header
     QLabel* m_titleLabel = nullptr;

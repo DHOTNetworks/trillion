@@ -104,15 +104,25 @@ CustomClosingStockWidget::CustomClosingStockWidget(PrintExportController* printC
     }
 }
 
+void CustomClosingStockWidget::focusTable()
+{
+    if (!m_table) return;
+    if (m_table->rowCount() > 0 && m_table->currentRow() < 0) m_table->selectRow(0);
+    m_table->setFocus();
+}
+
 void CustomClosingStockWidget::keyPressEvent(QKeyEvent* event) {
     if (event->key() == Qt::Key_Escape || (event->modifiers() & Qt::AltModifier && event->key() == Qt::Key_Left)) {
         event->accept();
         emit backRequested();
         return;
     }
-    if (event->modifiers() & Qt::AltModifier && event->key() == Qt::Key_F2) {
+    if (event->key() == Qt::Key_F2 && !(event->modifiers() & Qt::AltModifier)) {
         event->accept();
-        onPeriodClicked();
+        QDate sel = VoucherDateDialog::selectDate(this, m_dateEdit->date());
+        if (sel.isValid() && sel != m_dateEdit->date()) {
+            m_dateEdit->setDate(sel);
+        }
         return;
     }
     if (event->key() == Qt::Key_F5) {
@@ -161,7 +171,7 @@ void CustomClosingStockWidget::setupUi() {
     // 1. TOP HEADER BAR CARD
     // ========================================================================
     QFrame* headerCard = new QFrame(this);
-    headerCard->setFixedHeight(58);
+    headerCard->setMinimumHeight(58);
     headerCard->setStyleSheet("background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px;");
     QHBoxLayout* headerLayout = new QHBoxLayout(headerCard);
     headerLayout->setContentsMargins(14, 6, 14, 6);
@@ -209,7 +219,7 @@ void CustomClosingStockWidget::setupUi() {
     // 2. FILTER & CONTROL BAR CARD
     // ========================================================================
     QFrame* filterCard = new QFrame(this);
-    filterCard->setFixedHeight(52);
+    filterCard->setMinimumHeight(52);
     filterCard->setStyleSheet("background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px;");
     QHBoxLayout* filterLayout = new QHBoxLayout(filterCard);
     filterLayout->setContentsMargins(14, 6, 14, 6);
@@ -220,7 +230,7 @@ void CustomClosingStockWidget::setupUi() {
     filterLayout->addWidget(lblDate);
 
     m_dateEdit = new AccountingDateDisplay(filterCard);
-    m_dateEdit->setFixedHeight(34);
+    m_dateEdit->setMinimumHeight(34);
     m_dateEdit->setMinimumWidth(115);
     connect(m_dateEdit, &AccountingDateDisplay::dateChanged, this, &CustomClosingStockWidget::onDateChanged);
     connect(m_dateEdit, &AccountingDateDisplay::clicked, this, [this]() {
@@ -235,14 +245,14 @@ void CustomClosingStockWidget::setupUi() {
 
     m_statusBadge = new QLabel(filterCard);
     m_statusBadge->setAlignment(Qt::AlignCenter);
-    m_statusBadge->setFixedHeight(34);
+    m_statusBadge->setMinimumHeight(34);
     filterLayout->addWidget(m_statusBadge);
 
     filterLayout->addSpacing(8);
 
     m_searchBox = new QLineEdit(filterCard);
     m_searchBox->setPlaceholderText("Filter item name or code... [Ctrl+F]");
-    m_searchBox->setFixedHeight(34);
+    m_searchBox->setMinimumHeight(34);
     m_searchBox->setMinimumWidth(220);
     connect(m_searchBox, &QLineEdit::textChanged, this, &CustomClosingStockWidget::onSearchTextChanged);
     filterLayout->addWidget(m_searchBox);
@@ -251,7 +261,7 @@ void CustomClosingStockWidget::setupUi() {
 
     FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
     m_btnPeriod = new QPushButton(activeFy.name + " (Alt+F2)", filterCard);
-    m_btnPeriod->setFixedHeight(34);
+    m_btnPeriod->setMinimumHeight(34);
     m_btnPeriod->setCursor(Qt::PointingHandCursor);
     m_btnPeriod->setStyleSheet(
         "QPushButton { background-color: #F8FAFC; color: #334155; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 0px 14px; font-weight: 700; font-size: 12px; }"
@@ -319,19 +329,19 @@ void CustomClosingStockWidget::applyCustomStyles() {
         "  color: #0F172A;"
         "}"
         "QTableWidget::item:selected {"
-        "  background-color: #EFF6FF;"
-        "  color: #1D4ED8;"
+        "  background-color: #2563EB;"
+        "  color: #FFFFFF;"
         "  font-weight: bold;"
         "}"
         "QHeaderView::section {"
-        "  background-color: #F1F5F9;"
-        "  color: #1E293B;"
+        "  background-color: #0F172A;"
+        "  color: #FFFFFF;"
         "  font-weight: 800;"
         "  font-size: 12px;"
         "  padding: 8px 10px;"
         "  border: none;"
-        "  border-bottom: 2px solid #CBD5E1;"
-        "  border-right: 1px solid #E2E8F0;"
+        "  "
+        "  border-right: 1px solid #334155;"
         "}"
         "AccountingDateEdit, QDateEdit, QLineEdit {"
         "  background-color: #FFFFFF;"
@@ -351,7 +361,7 @@ void CustomClosingStockWidget::applyCustomStyles() {
 
 QWidget* CustomClosingStockWidget::createMetricCard(const QString& title, QLabel*& valueLabel, const QString& accentColor) {
     QFrame* card = new QFrame(this);
-    card->setFixedHeight(62);
+    card->setMinimumHeight(62);
     card->setStyleSheet(QString(
         "QFrame { background-color: #FFFFFF; border: 1.5px solid #E2E8F0; border-left: 4px solid %1; border-radius: 8px; } QLabel { border: none; background: transparent; }"
     ).arg(accentColor));

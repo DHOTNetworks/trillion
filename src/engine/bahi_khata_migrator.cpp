@@ -2163,7 +2163,7 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
                 "cgst_amount, sgst_amount, igst_amount, round_off, gst_amount, "
                 "total_amount, payment_mode, vehicle_no, eway_bill_no, narration, sale_status, market_fee_status, "
                 "dami, labour, auction, m_fee, hrdf, other_exp, welfare, dhrmd, sutli, less_amount, "
-                "gr_no, driver, broker_name, sauda_date, bill_time, shipping_address, po_no, grade, "
+                "gr_no, driver_name, broker_name, sauda_date, bill_time, shipping_address, po_no, grade, "
                 "kanda_weight, transport, market_type, due_days, tax_status, challan_no, freight_charges, tcs_amount, tcs_rate, place_of_supply) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Credit', ?, ?, ?, 'Self Sale', 'Paid', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
                 {
@@ -2281,7 +2281,7 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
                 "cgst_amount, sgst_amount, igst_amount, round_off, gst_amount, "
                 "total_amount, payment_mode, vehicle_no, eway_bill_no, narration, sale_status, market_fee_status, "
                 "dami, labour, auction, m_fee, hrdf, other_exp, welfare, dhrmd, sutli, less_amount, "
-                "gr_no, driver, broker_name, sauda_date, bill_time, shipping_address, po_no, grade, "
+                "gr_no, driver_name, broker_name, sauda_date, bill_time, shipping_address, po_no, grade, "
                 "kanda_weight, transport, market_type, due_days, tax_status, challan_no, freight_charges, tcs_amount, tcs_rate, place_of_supply) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Credit', ?, ?, ?, 'Self Purchase', 'Paid', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
                 {
@@ -3300,7 +3300,7 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
             db.executeNonQuery(
                 "INSERT INTO gate_register ("
                 "  financial_year, gate_pass_no, entry_date, entry_time, direction, purpose, "
-                "  vehicle_no, driver_name, driver_phone, transporter_name, party_id, party_name, "
+                "  vehicle_no, driver_name, driver_phone, transport, party_id, party_name, "
                 "  commodity, bag_count, gross_weight_qtl, tare_weight_qtl, net_weight_qtl, status, remarks"
                 ") VALUES (?, ?, ?, '10:00', 'OUTWARD', 'Dispatch Delivery', ?, ?, '', 'Self', ?, ?, ?, ?, ?, 0.0, ?, 'COMPLETED', ?);",
                 {

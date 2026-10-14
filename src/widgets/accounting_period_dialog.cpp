@@ -93,8 +93,8 @@ AccountingPeriodDialog::AccountingPeriodDialog(QWidget* parent)
 {
     setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
     setAttribute(Qt::WA_TranslucentBackground, true);
-    setFixedWidth(560);
-    setFixedHeight(600);
+    setMinimumWidth(560);
+    setMinimumHeight(600);
 
     new QShortcut(QKeySequence(Qt::Key_Escape), this, SLOT(reject()));
     new QShortcut(QKeySequence(Qt::Key_F2), this, SLOT(applyPeriod()));
@@ -226,7 +226,7 @@ void AccountingPeriodDialog::setupUi() {
 
     // ================= 4. ACTIVE PERIOD PREVIEW BANNER =================
     QFrame* previewCard = new QFrame(cardFrame);
-    previewCard->setFixedHeight(46);
+    previewCard->setMinimumHeight(46);
     previewCard->setStyleSheet("background-color: #0F172A; border-radius: 8px; border: none;");
     QHBoxLayout* previewLayout = new QHBoxLayout(previewCard);
     previewLayout->setContentsMargins(14, 0, 14, 0);
@@ -258,27 +258,13 @@ void AccountingPeriodDialog::setupUi() {
 
     footerLayout->addStretch(1);
 
-    m_cancelBtn = new QPushButton("Cancel (Esc)", cardFrame);
-    m_cancelBtn->setFixedHeight(38);
-    m_cancelBtn->setCursor(Qt::PointingHandCursor);
-    m_cancelBtn->setStyleSheet(
-        "QPushButton {"
-        "  background-color: #F1F5F9; color: #475569; border: 1px solid #CBD5E1; border-radius: 6px; padding: 4px 16px; font-weight: bold; font-size: 12px;"
-        "}"
-        "QPushButton:hover { background-color: #E2E8F0; }"
-    );
+    m_cancelBtn = new KbdBadgeButton("Cancel", "Esc", cardFrame);
     connect(m_cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
     footerLayout->addWidget(m_cancelBtn);
 
-    m_applyBtn = new QPushButton("Apply Period (Enter)", cardFrame);
-    m_applyBtn->setFixedHeight(38);
-    m_applyBtn->setCursor(Qt::PointingHandCursor);
-    m_applyBtn->setStyleSheet(
-        "QPushButton {"
-        "  background-color: #2563EB; color: #FFFFFF; border: none; border-radius: 6px; padding: 4px 20px; font-weight: bold; font-size: 12px;"
-        "}"
-        "QPushButton:hover { background-color: #1D4ED8; }"
-    );
+    m_applyBtn = new KbdBadgeButton("Apply Period", "Enter", cardFrame);
+    m_applyBtn->setPrimaryColor(ErpTheme::kBlue, ErpTheme::kBlueDark);
+    m_applyBtn->setTextColor(ErpTheme::kPaper);
     connect(m_applyBtn, &QPushButton::clicked, this, &AccountingPeriodDialog::applyPeriod);
     footerLayout->addWidget(m_applyBtn);
 
@@ -332,7 +318,7 @@ void AccountingPeriodDialog::loadYearsFromDatabase() {
 
     for (const auto& fy : m_availableFys) {
         QPushButton* chip = new QPushButton(fy.name, this);
-        chip->setFixedHeight(32);
+        chip->setMinimumHeight(32);
         chip->setCursor(Qt::PointingHandCursor);
 
         bool isCurrentSelected = (fy.name == m_selectedFyLabel);

@@ -2,6 +2,7 @@
 #include "../database_manager.h"
 #include "../engine/accounting_engine.h"
 #include "../engine/fiscal_year_helper.h"
+#include "../services/audit_helper.h"
 #include <QDate>
 #include <QRegularExpression>
 
@@ -54,6 +55,42 @@ QString PurchaseModel::get_next_voucher_no(const QString& fy) {
     return next;
 }
 
+namespace {
+int resolveLedgerCode(const QString& name, int fallbackId) {
+    if (name.trimmed().isEmpty()) return fallbackId;
+    QVariantList rows = DatabaseManager::instance().executeQuery(
+        "SELECT id, legacy_id, account_code FROM parties WHERE replace(name, ' ', '') = replace(?, ' ', '') LIMIT 1;",
+        {name.trimmed()}
+    );
+    if (!rows.isEmpty()) {
+        QVariantMap m = rows.first().toMap();
+        int legId = m.value("legacy_id").toInt();
+        if (legId > 0) return legId;
+        int ac = m.value("account_code").toInt();
+        if (ac > 0) return ac;
+        return m.value("id").toInt();
+    }
+    return fallbackId;
+}
+
+struct Tds194QAccountInfo {
+    int partyId = 0;
+    int accountCode = 2176;
+};
+
+Tds194QAccountInfo resolveTds194QLedger() {
+    Tds194QAccountInfo info;
+    QVariantList tdsPartyRows = DatabaseManager::instance().executeQuery(
+        "SELECT id, legacy_id FROM parties WHERE replace(name, ' ', '') = replace('T.D.S. U/S 194-Q', ' ', '') OR legacy_id = 2176 LIMIT 1;"
+    );
+    if (!tdsPartyRows.isEmpty()) {
+        info.partyId = tdsPartyRows.first().toMap().value("id").toInt();
+        info.accountCode = tdsPartyRows.first().toMap().value("legacy_id", 2176).toInt();
+    }
+    return info;
+}
+} // namespace
+
 // NOTE: no get_next_invoice_no here by design. A purchase invoice number is
 // the OPPOSING PARTY's bill number — typed in by the user, never generated.
 // The widget requires it (see PurchaseVoucherWidget::saveVoucher) and the
@@ -70,7 +107,7 @@ bool PurchaseModel::add_purchase_invoice_full(
     double dami, double labour, double auction, double m_fee,
     double hrdf, double other_exp, double welfare, double dhrmd,
     double sutli, double less_amount, const QString& gr_no,
-    const QString& driver, const QString& bill_time, const QString& sauda_date,
+    const QString& driver_name, const QString& bill_time, const QString& sauda_date,
     const QString& shipping_address, const QString& po_no, const QString& grade,
     const QString& kanda_weight, const QString& transport, const QString& broker_name,
     const QString& voucher_no,
@@ -85,6 +122,9 @@ bool PurchaseModel::add_purchase_invoice_full(
     const QString& place_of_supply
 ) {
     QString dt = invoice_date.isEmpty() ? QDate::currentDate().toString("yyyy-MM-dd") : invoice_date;
+    QString cleanVehicleNo = vehicle_no.trimmed().toUpper();
+    QString cleanDriverName = driver_name.trimmed();
+    QString cleanTransport = transport.trimmed();
     
     // Resolve Financial Year
     FiscalYearInfo fy = FiscalYearHelper::getFiscalYearForDate(dt);
@@ -142,17 +182,17 @@ bool PurchaseModel::add_purchase_invoice_full(
         "fy_id, financial_year, voucher_no, invoice_no, invoice_date, supplier_id, supplier_name, gstin, item_id, item_name, hsn_code, "
         "bag_count, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount, round_off, gst_amount, "
         "total_amount, payment_mode, vehicle_no, eway_bill_no, narration, sale_status, market_fee_status, dami, labour, auction, "
-        "m_fee, hrdf, other_exp, welfare, dhrmd, sutli, less_amount, gr_no, driver, bill_time, sauda_date, shipping_address, "
+        "m_fee, hrdf, other_exp, welfare, dhrmd, sutli, less_amount, gr_no, driver_name, bill_time, sauda_date, shipping_address, "
         "po_no, grade, kanda_weight, transport, broker_name, market_type, due_days, tax_status, challan_no, freight_charges, "
-        "tcs_amount, tcs_rate, place_of_supply"
-        ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+        "tcs_amount, tcs_rate, tds_amount, tds_rate, place_of_supply"
+        ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
         {
             fyId, fyLabel, vchNo, invNo, dt, supplierId, party_ledger, gstin, itemId, item_name, hsn_code,
             bag_count, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount, round_off, gst_amount,
-            total_amount, payment_mode, vehicle_no, eway_bill_no, narration, sale_status, market_fee_status,
+            total_amount, payment_mode, cleanVehicleNo, eway_bill_no, narration, sale_status, market_fee_status,
             dami, labour, auction, m_fee, hrdf, other_exp, welfare, dhrmd, sutli, less_amount,
-            gr_no, driver, bill_time, sauda_date, shipping_address, po_no, grade, kanda_weight, transport, broker_name,
-            market_type, due_days, tax_status, challan_no, freight_charges, tcs_amount, tcs_rate, place_of_supply
+            gr_no, cleanDriverName, bill_time, sauda_date, shipping_address, po_no, grade, kanda_weight, cleanTransport, broker_name,
+            market_type, due_days, tax_status, challan_no, freight_charges, tcs_amount, tcs_rate, tcs_amount, tcs_rate, place_of_supply
         }
     );
 
@@ -200,14 +240,15 @@ bool PurchaseModel::add_purchase_invoice_full(
     bool okVch = DatabaseManager::instance().executeNonQuery(
         "INSERT INTO vouchers ("
         "fy_id, financial_year, voucher_no, instrument_no, voucher_date, voucher_type, legacy_type, ledger_id, party_id, party_name, "
-        "account_type, amount, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount, round_off, vehicle_no, eway_bill_no, "
-        "broker_name, sauda_date, dami, labour, auction, m_fee, hrdf, other_exp, welfare, dhrmd, sutli, less_amount, narration, "
+        "account_type, amount, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount, round_off, vehicle_no, driver_name, gr_no, eway_bill_no, "
+        "transport, broker_name, sauda_date, dami, labour, auction, m_fee, hrdf, other_exp, welfare, dhrmd, sutli, less_amount, narration, "
         "due_days, market_type, tax_status, place_of_supply, challan_no"
-        ") VALUES (?, ?, ?, ?, ?, 'Purchase', 'Purc', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+        ") VALUES (?, ?, ?, ?, ?, 'Purchase', 'Purc', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
         {
             fyId, fyLabel, vchNo, invNo, dt, supplierId, supplierId, party_ledger,
-            itemPurchaseLedger, total_amount, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount, round_off, vehicle_no, eway_bill_no,
-            broker_name, sauda_date, dami, labour, auction, m_fee, hrdf, other_exp, welfare, dhrmd, sutli, less_amount, vchNarr,
+            itemPurchaseLedger, total_amount, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount, round_off,
+            cleanVehicleNo, cleanDriverName, gr_no, eway_bill_no,
+            cleanTransport, broker_name, sauda_date, dami, labour, auction, m_fee, hrdf, other_exp, welfare, dhrmd, sutli, less_amount, vchNarr,
             due_days, market_type, tax_status, place_of_supply, challan_no
         }
     );
@@ -215,6 +256,13 @@ bool PurchaseModel::add_purchase_invoice_full(
     if (!okVch) {
         DatabaseManager::instance().rollback();
         return false;
+    }
+
+    if (!cleanTransport.isEmpty()) {
+        DatabaseManager::instance().executeNonQuery(
+            "UPDATE transport_dispatches SET transport = ?, vehicle_no = ?, driver_name = ?, gr_no = ? WHERE (invoice_no = ? OR voucher_no = ?);",
+            {cleanTransport, cleanVehicleNo, cleanDriverName, gr_no, invNo, vchNo}
+        );
     }
 
     // 3. Guaranteed Stock Transaction Inward Posting:
@@ -243,23 +291,6 @@ bool PurchaseModel::add_purchase_invoice_full(
 
     QString effectivePurcLedger = itemPurchaseLedger.isEmpty() ? "Purchase A/c" : itemPurchaseLedger;
 
-    auto resolveLedgerCode = [](const QString& name, int fallbackId) -> int {
-        if (name.trimmed().isEmpty()) return fallbackId;
-        QVariantList rows = DatabaseManager::instance().executeQuery(
-            "SELECT id, legacy_id, account_code FROM parties WHERE replace(name, ' ', '') = replace(?, ' ', '') LIMIT 1;",
-            {name.trimmed()}
-        );
-        if (!rows.isEmpty()) {
-            QVariantMap m = rows.first().toMap();
-            int legId = m.value("legacy_id").toInt();
-            if (legId > 0) return legId;
-            int ac = m.value("account_code").toInt();
-            if (ac > 0) return ac;
-            return m.value("id").toInt();
-        }
-        return fallbackId;
-    };
-
     int supCode = resolveLedgerCode(party_ledger, supplierId);
     int purcCode = resolveLedgerCode(effectivePurcLedger, 1050);
     int cgstCode = resolveLedgerCode("CGST A/c", resolveLedgerCode("CGST Input", 944));
@@ -272,12 +303,12 @@ bool PurchaseModel::add_purchase_invoice_full(
         "INSERT INTO transactions ("
         "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
         "account_code, party_id, party_name, opposing_account, dr_cr, amount, "
-        "invoice_no, narration, taxable_amount, row_no"
-        ") VALUES (?, ?, ?, ?, 'Purchase', 'Purc', ?, ?, ?, ?, 'Cr', ?, ?, ?, ?, 1);",
+        "invoice_no, narration, taxable_amount, tds_amount, tds_rate, row_no"
+        ") VALUES (?, ?, ?, ?, 'Purchase', 'Purc', ?, ?, ?, ?, 'Cr', ?, ?, ?, ?, ?, ?, 1);",
         {
             fyId, fyLabel, vchNo, dt,
             supCode, supplierId, party_ledger, effectivePurcLedger, total_amount,
-            invNo, vchNarr, taxable_amount
+            invNo, vchNarr, taxable_amount, tcs_amount, tcs_rate
         }
     );
 
@@ -287,12 +318,12 @@ bool PurchaseModel::add_purchase_invoice_full(
         "INSERT INTO transactions ("
         "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
         "account_code, party_name, opposing_account, dr_cr, amount, "
-        "invoice_no, narration, taxable_amount, row_no"
-        ") VALUES (?, ?, ?, ?, 'Purchase', 'Purc', ?, ?, ?, 'Dr', ?, ?, ?, ?, ?);",
+        "invoice_no, narration, taxable_amount, tds_amount, tds_rate, row_no"
+        ") VALUES (?, ?, ?, ?, 'Purchase', 'Purc', ?, ?, ?, 'Dr', ?, ?, ?, ?, ?, ?, ?);",
         {
             fyId, fyLabel, vchNo, dt,
             purcCode, effectivePurcLedger, party_ledger, taxable_amount,
-            invNo, vchNarr, taxable_amount, rNo++
+            invNo, vchNarr, taxable_amount, tcs_amount, tcs_rate, rNo++
         }
     );
 
@@ -342,7 +373,49 @@ bool PurchaseModel::add_purchase_invoice_full(
         );
     }
 
+    // Leg 7: Credit TDS u/s 194-Q if tcs_amount (TDS) > 0
+    if (tcs_amount > 0.001) {
+        Tds194QAccountInfo tdsAc = resolveTds194QLedger();
+
+        DatabaseManager::instance().executeNonQuery(
+            "INSERT INTO transactions ("
+            "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
+            "account_code, party_id, party_name, opposing_account, dr_cr, amount, "
+            "invoice_no, narration, taxable_amount, tds_amount, tds_rate, row_no, purchase_type, entry_type"
+            ") VALUES (?, ?, ?, ?, 'Purchase', 'Purc', ?, ?, 'T.D.S. U/S 194-Q', ?, 'Cr', ?, ?, ?, ?, ?, ?, ?, ?, 'TDS194Q');",
+            {
+                fyId, fyLabel, vchNo, dt,
+                tdsAc.accountCode, (tdsAc.partyId > 0 ? QVariant(tdsAc.partyId) : QVariant()), party_ledger + " & Others", tcs_amount,
+                invNo, QString("B.No. %1").arg(invNo),
+                taxable_amount, tcs_amount, tcs_rate, rNo++,
+                market_type
+            }
+        );
+
+        // Also record in tds_vouchers for register tracking
+        DatabaseManager::instance().executeNonQuery(
+            "DELETE FROM tds_vouchers WHERE voucher_no = ? AND tds_type = '194Q';",
+            {vchNo}
+        );
+        DatabaseManager::instance().executeNonQuery(
+            "INSERT INTO tds_vouchers ("
+            "fy_id, financial_year, voucher_no, voucher_date, tds_type, ledger_id, ledger_name, "
+            "income_amount, total_for_tds, rate_tds, tax_amount_tds, total_tax_rate, total_tax_amount, net_amount, "
+            "narration, exp_ledger_name, tds_ledger_name, post_in_books"
+            ") VALUES (?, ?, ?, ?, '194Q', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'T.D.S. U/S 194-Q', 0);",
+            {
+                fyId, fyLabel, vchNo, dt, supplierId, party_ledger,
+                taxable_amount, taxable_amount, tcs_rate, tcs_amount, tcs_rate, tcs_amount, total_amount,
+                QString("TDS u/s 194Q against Bill %1").arg(invNo), effectivePurcLedger
+            }
+        );
+    }
+
     // Commit Transaction (ACID Durability Guarantee)
+    DatabaseManager::instance().logAudit(
+        "INSERT", "purchase_invoices", invNo,
+        "", AuditJson::invoice(invNo, dt, party_ledger, total_amount, fyLabel, "Purchase"),
+        invNo, fyLabel);
     DatabaseManager::instance().commit();
     reload_data();
     return true;
@@ -637,6 +710,21 @@ QVariantMap PurchaseModel::get_purchase_invoice(const QVariant& invoiceNoOrId, c
         }
     }
 
+    // Deterministic metadata resolution
+    QString curTransport = inv.value("transport").toString().trimmed();
+    QString curBroker = inv.value("broker_name").toString().trimmed();
+    QString curVehicle = inv.value("vehicle_no").toString().trimmed();
+    QString curDriver = inv.value("driver_name").toString().trimmed();
+
+    auto meta = DatabaseManager::instance().resolveDocumentMetadata(vNo, invNo, curTransport, curBroker, curVehicle, curDriver);
+
+    inv["transport"] = meta.transport;
+    inv["broker_name"] = meta.brokerName;
+    inv["driver_name"] = meta.driverName;
+    if (!meta.vehicleNo.isEmpty()) {
+        inv["vehicle_no"] = meta.vehicleNo;
+    }
+
     // Fetch line items from purchase_invoice_items by invoice_id or invoice_no
     QVariantList itemRows = DatabaseManager::instance().executeQuery(
         "SELECT * FROM purchase_invoice_items WHERE invoice_id = ? ORDER BY id ASC;",
@@ -737,7 +825,7 @@ bool PurchaseModel::update_purchase_invoice_full(
     double dami, double labour, double auction, double m_fee,
     double hrdf, double other_exp, double welfare, double dhrmd,
     double sutli, double less_amount, const QString& gr_no,
-    const QString& driver, const QString& bill_time, const QString& sauda_date,
+    const QString& driver_name, const QString& bill_time, const QString& sauda_date,
     const QString& shipping_address, const QString& po_no, const QString& grade,
     const QString& kanda_weight, const QString& transport, const QString& broker_name,
     const QString& voucher_no,
@@ -752,6 +840,9 @@ bool PurchaseModel::update_purchase_invoice_full(
     const QString& place_of_supply
 ) {
     QString dt = invoice_date.isEmpty() ? QDate::currentDate().toString("yyyy-MM-dd") : invoice_date;
+    QString cleanVehicleNo = vehicle_no.trimmed().toUpper();
+    QString cleanDriverName = driver_name.trimmed();
+    QString cleanTransport = transport.trimmed();
     FiscalYearInfo fy = FiscalYearHelper::getFiscalYearForDate(dt);
     int fyId = 1;
     QString fyLabel = fy.name;
@@ -797,21 +888,21 @@ bool PurchaseModel::update_purchase_invoice_full(
             "taxable_amount = ?, gst_pct = ?, cgst_amount = ?, sgst_amount = ?, igst_amount = ?, round_off = ?, "
             "gst_amount = ?, total_amount = ?, payment_mode = ?, vehicle_no = ?, eway_bill_no = ?, narration = ?, "
             "sale_status = ?, market_fee_status = ?, dami = ?, labour = ?, auction = ?, m_fee = ?, hrdf = ?, "
-            "other_exp = ?, welfare = ?, dhrmd = ?, sutli = ?, less_amount = ?, gr_no = ?, driver = ?, "
+            "other_exp = ?, welfare = ?, dhrmd = ?, sutli = ?, less_amount = ?, gr_no = ?, driver_name = ?, "
             "bill_time = ?, sauda_date = ?, shipping_address = ?, po_no = ?, grade = ?, kanda_weight = ?, "
             "transport = ?, broker_name = ?, market_type = ?, due_days = ?, tax_status = ?, challan_no = ?, "
-            "freight_charges = ?, tcs_amount = ?, tcs_rate = ?, place_of_supply = ?, financial_year = ?, fy_id = ? "
+            "freight_charges = ?, tcs_amount = ?, tcs_rate = ?, tds_amount = ?, tds_rate = ?, place_of_supply = ?, financial_year = ?, fy_id = ? "
             "WHERE id = ?;",
             {
                 voucher_no, invoice_no, dt, supplierId, party_ledger, gstin,
                 itemId, item_name, hsn_code, bag_count, weight_qtl, rate_per_qtl,
                 taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount, round_off,
-                gst_amount, total_amount, payment_mode, vehicle_no, eway_bill_no, narration,
+                gst_amount, total_amount, payment_mode, cleanVehicleNo, eway_bill_no, narration,
                 sale_status, market_fee_status, dami, labour, auction, m_fee, hrdf,
-                other_exp, welfare, dhrmd, sutli, less_amount, gr_no, driver,
+                other_exp, welfare, dhrmd, sutli, less_amount, gr_no, cleanDriverName,
                 bill_time, sauda_date, shipping_address, po_no, grade, kanda_weight,
-                transport, broker_name, market_type, due_days, tax_status, challan_no,
-                freight_charges, tcs_amount, tcs_rate, place_of_supply, fyLabel, fyId,
+                cleanTransport, broker_name, market_type, due_days, tax_status, challan_no,
+                freight_charges, tcs_amount, tcs_rate, tcs_amount, tcs_rate, place_of_supply, fyLabel, fyId,
                 targetInvId
             }
         );
@@ -821,17 +912,17 @@ bool PurchaseModel::update_purchase_invoice_full(
             "fy_id, financial_year, voucher_no, invoice_no, invoice_date, supplier_id, supplier_name, gstin, item_id, item_name, hsn_code, "
             "bag_count, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount, round_off, gst_amount, "
             "total_amount, payment_mode, vehicle_no, eway_bill_no, narration, sale_status, market_fee_status, dami, labour, auction, "
-            "m_fee, hrdf, other_exp, welfare, dhrmd, sutli, less_amount, gr_no, driver, bill_time, sauda_date, shipping_address, "
+            "m_fee, hrdf, other_exp, welfare, dhrmd, sutli, less_amount, gr_no, driver_name, bill_time, sauda_date, shipping_address, "
             "po_no, grade, kanda_weight, transport, broker_name, market_type, due_days, tax_status, challan_no, freight_charges, "
-            "tcs_amount, tcs_rate, place_of_supply"
-            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+            "tcs_amount, tcs_rate, tds_amount, tds_rate, place_of_supply"
+            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
             {
                 fyId, fyLabel, voucher_no, invoice_no, dt, supplierId, party_ledger, gstin, itemId, item_name, hsn_code,
                 bag_count, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount, round_off, gst_amount,
-                total_amount, payment_mode, vehicle_no, eway_bill_no, narration, sale_status, market_fee_status,
+                total_amount, payment_mode, cleanVehicleNo, eway_bill_no, narration, sale_status, market_fee_status,
                 dami, labour, auction, m_fee, hrdf, other_exp, welfare, dhrmd, sutli, less_amount,
-                gr_no, driver, bill_time, sauda_date, shipping_address, po_no, grade, kanda_weight, transport, broker_name,
-                market_type, due_days, tax_status, challan_no, freight_charges, tcs_amount, tcs_rate, place_of_supply
+                gr_no, cleanDriverName, bill_time, sauda_date, shipping_address, po_no, grade, kanda_weight, cleanTransport, broker_name,
+                market_type, due_days, tax_status, challan_no, freight_charges, tcs_amount, tcs_rate, tcs_amount, tcs_rate, place_of_supply
             }
         );
         targetInvId = static_cast<int>(DatabaseManager::instance().lastInsertedId());
@@ -871,7 +962,7 @@ bool PurchaseModel::update_purchase_invoice_full(
             "UPDATE vouchers SET "
             "voucher_no = ?, instrument_no = ?, voucher_date = ?, party_id = ?, party_name = ?, "
             "amount = ?, taxable_amount = ?, gst_pct = ?, cgst_amount = ?, sgst_amount = ?, igst_amount = ?, "
-            "round_off = ?, vehicle_no = ?, eway_bill_no = ?, broker_name = ?, sauda_date = ?, "
+            "round_off = ?, vehicle_no = ?, driver_name = ?, gr_no = ?, eway_bill_no = ?, transport = ?, broker_name = ?, sauda_date = ?, "
             "dami = ?, labour = ?, auction = ?, m_fee = ?, hrdf = ?, other_exp = ?, welfare = ?, "
             "dhrmd = ?, sutli = ?, less_amount = ?, narration = ?, due_days = ?, market_type = ?, "
             "tax_status = ?, place_of_supply = ?, challan_no = ?, financial_year = ?, fy_id = ? "
@@ -879,7 +970,7 @@ bool PurchaseModel::update_purchase_invoice_full(
             {
                 voucher_no, invoice_no, dt, supplierId, party_ledger,
                 total_amount, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount,
-                round_off, vehicle_no, eway_bill_no, broker_name, sauda_date,
+                round_off, cleanVehicleNo, cleanDriverName, gr_no, eway_bill_no, cleanTransport, broker_name, sauda_date,
                 dami, labour, auction, m_fee, hrdf, other_exp, welfare,
                 dhrmd, sutli, less_amount, narration, due_days, market_type,
                 tax_status, place_of_supply, challan_no, fyLabel, fyId,
@@ -890,17 +981,24 @@ bool PurchaseModel::update_purchase_invoice_full(
         DatabaseManager::instance().executeNonQuery(
             "INSERT INTO vouchers ("
             "fy_id, financial_year, voucher_no, instrument_no, voucher_date, voucher_type, legacy_type, party_id, party_name, "
-            "amount, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount, round_off, vehicle_no, eway_bill_no, broker_name, sauda_date, "
+            "amount, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount, round_off, vehicle_no, driver_name, gr_no, eway_bill_no, transport, broker_name, sauda_date, "
             "dami, labour, auction, m_fee, hrdf, other_exp, welfare, dhrmd, sutli, less_amount, narration, due_days, market_type, tax_status, place_of_supply, challan_no"
-            ") VALUES (?, ?, ?, ?, ?, 'Purchase', 'Purc', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+            ") VALUES (?, ?, ?, ?, ?, 'Purchase', 'Purc', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
             {
                 fyId, fyLabel, voucher_no, invoice_no, dt, supplierId, party_ledger,
                 total_amount, taxable_amount, gst_pct, cgst_amount, sgst_amount, igst_amount,
-                round_off, vehicle_no, eway_bill_no, broker_name, sauda_date,
+                round_off, cleanVehicleNo, cleanDriverName, gr_no, eway_bill_no, cleanTransport, broker_name, sauda_date,
                 dami, labour, auction, m_fee, hrdf, other_exp, welfare,
                 dhrmd, sutli, less_amount, narration, due_days, market_type,
                 tax_status, place_of_supply, challan_no
             }
+        );
+    }
+
+    if (!cleanTransport.isEmpty()) {
+        DatabaseManager::instance().executeNonQuery(
+            "UPDATE transport_dispatches SET transport = ?, vehicle_no = ?, driver_name = ?, gr_no = ? WHERE (invoice_no = ? OR voucher_no = ?);",
+            {cleanTransport, cleanVehicleNo, cleanDriverName, gr_no, invoice_no, voucher_no}
         );
     }
 
@@ -957,23 +1055,6 @@ bool PurchaseModel::update_purchase_invoice_full(
     }
     QString effectivePurcLedger = itemPurchaseLedger.isEmpty() ? "Purchase A/c" : itemPurchaseLedger;
 
-    auto resolveLedgerCode = [](const QString& name, int fallbackId) -> int {
-        if (name.trimmed().isEmpty()) return fallbackId;
-        QVariantList rows = DatabaseManager::instance().executeQuery(
-            "SELECT id, legacy_id, account_code FROM parties WHERE replace(name, ' ', '') = replace(?, ' ', '') LIMIT 1;",
-            {name.trimmed()}
-        );
-        if (!rows.isEmpty()) {
-            QVariantMap m = rows.first().toMap();
-            int legId = m.value("legacy_id").toInt();
-            if (legId > 0) return legId;
-            int ac = m.value("account_code").toInt();
-            if (ac > 0) return ac;
-            return m.value("id").toInt();
-        }
-        return fallbackId;
-    };
-
     int supCode = resolveLedgerCode(party_ledger, supplierId);
     int purcCode = resolveLedgerCode(effectivePurcLedger, 1050);
     int cgstCode = resolveLedgerCode("CGST A/c", resolveLedgerCode("CGST Input", 944));
@@ -986,12 +1067,12 @@ bool PurchaseModel::update_purchase_invoice_full(
         "INSERT INTO transactions ("
         "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
         "account_code, party_id, party_name, opposing_account, dr_cr, amount, "
-        "invoice_no, narration, taxable_amount, row_no"
-        ") VALUES (?, ?, ?, ?, 'Purchase', 'Purc', ?, ?, ?, ?, 'Cr', ?, ?, ?, ?, 1);",
+        "invoice_no, narration, taxable_amount, tds_amount, tds_rate, row_no"
+        ") VALUES (?, ?, ?, ?, 'Purchase', 'Purc', ?, ?, ?, ?, 'Cr', ?, ?, ?, ?, ?, ?, 1);",
         {
             fyId, fyLabel, voucher_no, dt,
             supCode, supplierId, party_ledger, effectivePurcLedger, total_amount,
-            invoice_no, vchNarr, taxable_amount
+            invoice_no, vchNarr, taxable_amount, tcs_amount, tcs_rate
         }
     );
 
@@ -1001,12 +1082,12 @@ bool PurchaseModel::update_purchase_invoice_full(
         "INSERT INTO transactions ("
         "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
         "account_code, party_name, opposing_account, dr_cr, amount, "
-        "invoice_no, narration, taxable_amount, row_no"
-        ") VALUES (?, ?, ?, ?, 'Purchase', 'Purc', ?, ?, ?, 'Dr', ?, ?, ?, ?, ?);",
+        "invoice_no, narration, taxable_amount, tds_amount, tds_rate, row_no"
+        ") VALUES (?, ?, ?, ?, 'Purchase', 'Purc', ?, ?, ?, 'Dr', ?, ?, ?, ?, ?, ?, ?);",
         {
             fyId, fyLabel, voucher_no, dt,
             purcCode, effectivePurcLedger, party_ledger, taxable_amount,
-            invoice_no, vchNarr, taxable_amount, tRowNo++
+            invoice_no, vchNarr, taxable_amount, tcs_amount, tcs_rate, tRowNo++
         }
     );
 
@@ -1056,6 +1137,48 @@ bool PurchaseModel::update_purchase_invoice_full(
         );
     }
 
+    // Leg 7: Credit TDS u/s 194-Q if tcs_amount (TDS) > 0
+    if (tcs_amount > 0.001) {
+        Tds194QAccountInfo tdsAc = resolveTds194QLedger();
+
+        DatabaseManager::instance().executeNonQuery(
+            "INSERT INTO transactions ("
+            "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
+            "account_code, party_id, party_name, opposing_account, dr_cr, amount, "
+            "invoice_no, narration, taxable_amount, tds_amount, tds_rate, row_no, purchase_type, entry_type"
+            ") VALUES (?, ?, ?, ?, 'Purchase', 'Purc', ?, ?, 'T.D.S. U/S 194-Q', ?, 'Cr', ?, ?, ?, ?, ?, ?, ?, ?, 'TDS194Q');",
+            {
+                fyId, fyLabel, voucher_no, dt,
+                tdsAc.accountCode, (tdsAc.partyId > 0 ? QVariant(tdsAc.partyId) : QVariant()), party_ledger + " & Others", tcs_amount,
+                invoice_no, QString("B.No. %1").arg(invoice_no),
+                taxable_amount, tcs_amount, tcs_rate, tRowNo++,
+                market_type
+            }
+        );
+
+        // Also record in tds_vouchers with tds_type = '194Q'
+        DatabaseManager::instance().executeNonQuery(
+            "DELETE FROM tds_vouchers WHERE voucher_no = ? AND tds_type = '194Q';",
+            {voucher_no}
+        );
+        DatabaseManager::instance().executeNonQuery(
+            "INSERT INTO tds_vouchers ("
+            "fy_id, financial_year, voucher_no, voucher_date, tds_type, ledger_id, ledger_name, "
+            "income_amount, total_for_tds, rate_tds, tax_amount_tds, total_tax_rate, total_tax_amount, net_amount, "
+            "narration, exp_ledger_name, tds_ledger_name, post_in_books"
+            ") VALUES (?, ?, ?, ?, '194Q', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'T.D.S. U/S 194-Q', 0);",
+            {
+                fyId, fyLabel, voucher_no, dt, supplierId, party_ledger,
+                taxable_amount, taxable_amount, tcs_rate, tcs_amount, tcs_rate, tcs_amount, total_amount,
+                QString("TDS u/s 194Q against Bill %1").arg(invoice_no), effectivePurcLedger
+            }
+        );
+    }
+
+    DatabaseManager::instance().logAudit(
+        "UPDATE", "purchase_invoices", QString::number(invoice_id > 0 ? invoice_id : 0),
+        "", AuditJson::invoice(invoice_no, dt, party_ledger, total_amount, fyLabel, "Purchase"),
+        invoice_no, fyLabel);
     DatabaseManager::instance().commit();
     reload_data();
     return true;
@@ -1074,6 +1197,19 @@ bool PurchaseModel::delete_purchase_invoice(int invoice_id, const QString& invoi
         ).value(0).toMap();
         if (invNo.isEmpty()) invNo = invRow.value("invoice_no").toString();
         vNo = invRow.value("voucher_no").toString();
+    }
+
+    // Before-snapshot for the audit row (read before any DELETE runs).
+    QVariantMap doomed;
+    {
+        QVariantList dRows = invoice_id > 0
+            ? DatabaseManager::instance().executeQuery(
+                  "SELECT invoice_no, invoice_date, supplier_name, total_amount, financial_year, voucher_no "
+                  "FROM purchase_invoices WHERE id = ? LIMIT 1;", {invoice_id})
+            : DatabaseManager::instance().executeQuery(
+                  "SELECT invoice_no, invoice_date, supplier_name, total_amount, financial_year, voucher_no "
+                  "FROM purchase_invoices WHERE invoice_no = ? ORDER BY id DESC LIMIT 1;", {invNo});
+        if (!dRows.isEmpty()) doomed = dRows.first().toMap();
     }
 
     DatabaseManager::instance().beginTransaction();
@@ -1097,8 +1233,71 @@ bool PurchaseModel::delete_purchase_invoice(int invoice_id, const QString& invoi
         DatabaseManager::instance().executeNonQuery("DELETE FROM transactions WHERE voucher_no = ? AND voucher_type IN ('Purchase', 'Purc');", {vNo});
     }
 
+    DatabaseManager::instance().logAudit(
+        "DELETE", "purchase_invoices", invNo,
+        AuditJson::invoice(doomed.value("invoice_no", invNo).toString(),
+                           doomed.value("invoice_date").toString(),
+                           doomed.value("supplier_name").toString(),
+                           doomed.value("total_amount").toDouble(),
+                           doomed.value("financial_year").toString(), "Purchase"),
+        "", invNo, doomed.value("financial_year").toString());
     DatabaseManager::instance().commit();
     reload_data();
     return true;
+}
+
+double PurchaseModel::get_supplier_fy_purchase_turnover(int supplierId, const QString& supplierName, const QString& invoiceDate, int excludeInvoiceId) {
+    FiscalYearInfo fy = FiscalYearHelper::getFiscalYearForDate(invoiceDate);
+    if (!fy.isValid()) fy = FiscalYearHelper::getActiveFiscalYear();
+
+    QString startDate = fy.startDate;
+    QString endDate = fy.endDate;
+
+    int legacyId = 0;
+    if (supplierId > 0) {
+        QVariant legVal = DatabaseManager::instance().executeScalar(
+            "SELECT legacy_id FROM parties WHERE id = ? LIMIT 1;", {supplierId}
+        );
+        if (legVal.isValid() && !legVal.isNull()) legacyId = legVal.toInt();
+    }
+
+    QString sql = "SELECT COALESCE(SUM(taxable_amount), 0.0) FROM purchase_invoices WHERE invoice_date >= ? AND invoice_date <= ? AND (";
+    QVariantList params;
+    params << startDate << endDate;
+
+    QString cleanName = supplierName.trimmed();
+    cleanName.remove(' ');
+
+    if (supplierId > 0 && !cleanName.isEmpty()) {
+        if (legacyId > 0) {
+            sql += "supplier_id = ? OR supplier_id = ? OR replace(supplier_name, ' ', '') = ? OR replace(supplier_name, ' ', '') = replace(?, ' ', '')";
+            params << supplierId << legacyId << cleanName << supplierName.trimmed();
+        } else {
+            sql += "supplier_id = ? OR replace(supplier_name, ' ', '') = ? OR replace(supplier_name, ' ', '') = replace(?, ' ', '')";
+            params << supplierId << cleanName << supplierName.trimmed();
+        }
+    } else if (supplierId > 0) {
+        if (legacyId > 0) {
+            sql += "supplier_id = ? OR supplier_id = ?";
+            params << supplierId << legacyId;
+        } else {
+            sql += "supplier_id = ?";
+            params << supplierId;
+        }
+    } else if (!cleanName.isEmpty()) {
+        sql += "replace(supplier_name, ' ', '') = ? OR replace(supplier_name, ' ', '') = replace(?, ' ', '')";
+        params << cleanName << supplierName.trimmed();
+    } else {
+        return 0.0;
+    }
+    sql += ")";
+
+    if (excludeInvoiceId > 0) {
+        sql += " AND id != ?";
+        params << excludeInvoiceId;
+    }
+
+    QVariant val = DatabaseManager::instance().executeScalar(sql, params);
+    return val.isValid() ? val.toDouble() : 0.0;
 }
 

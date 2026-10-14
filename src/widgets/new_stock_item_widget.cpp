@@ -404,7 +404,7 @@ void NewStockItemWidget::setupUi() {
 
     bottomLayout->addStretch();
 
-    auto* saveBtn = new KbdBadgeButton("Save Stock Item", "Ctrl+S / F2", this);
+    auto* saveBtn = new KbdBadgeButton("Save Stock Item", "Ctrl+S", this);
     saveBtn->setPrimaryColor("#16A34A", "#15803D");
     saveBtn->setTextColor("#FFFFFF");
     saveBtn->setMinimumWidth(220);
@@ -453,10 +453,9 @@ void NewStockItemWidget::setupUi() {
     }
 
     connect(new QShortcut(QKeySequence(Qt::Key_Escape), this), &QShortcut::activated, this, &NewStockItemWidget::backRequested);
-    connect(new QShortcut(QKeySequence(Qt::Key_F2), this), &QShortcut::activated, this, &NewStockItemWidget::onSaveClicked);
     connect(new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_S), this), &QShortcut::activated, this, &NewStockItemWidget::onSaveClicked);
     connect(new QShortcut(QKeySequence(Qt::Key_F5), this), &QShortcut::activated, this, &NewStockItemWidget::onCopyAllLedgersFromPurchase);
-    connect(new QShortcut(QKeySequence(Qt::ALT | Qt::Key_C), this), &QShortcut::activated, this, &NewStockItemWidget::onCreateStockGroup);
+    connect(new QShortcut(QKeySequence(Qt::ALT | Qt::Key_N), this), &QShortcut::activated, this, &NewStockItemWidget::onCreateStockGroup);
 }
 
 void NewStockItemWidget::refreshStockGroups() {

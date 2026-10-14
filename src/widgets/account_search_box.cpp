@@ -8,6 +8,8 @@
 #include <QScrollBar>
 #include <QGraphicsDropShadowEffect>
 #include <QMouseEvent>
+#include <QRegularExpression>
+#include <algorithm>
 
 #include "../engine/ledger_pipeline.h"
 
@@ -15,7 +17,7 @@ AccountSearchBox::AccountSearchBox(QWidget* parent)
     : QLineEdit(parent)
 {
     setPlaceholderText("Search Party Name / Ledger... (Alt+S)");
-    setFixedHeight(28);
+    setMinimumHeight(28);
     setStyleSheet(
         "QLineEdit {"
         "  background-color: #FFFFFF;"
@@ -219,6 +221,30 @@ void AccountSearchBox::selectCurrentListItem() {
     }
 }
 
+void AccountSearchBox::resolveCurrentText() {
+    QString q = text().trimmed();
+    if (q.isEmpty()) return;
+
+    QVariantList list;
+    if (m_searchFn) {
+        list = m_searchFn(q);
+    } else {
+        list = LedgerPipeline::instance().searchLedgers(q, "", 1);
+    }
+
+    if (!list.isEmpty()) {
+        QVariantMap map = list.first().toMap();
+        int partyId = map.value("id").toInt();
+        QString partyName = map.value("name").toString();
+        if (partyName.isEmpty()) partyName = map.value("party_name").toString();
+        m_selectedPartyData = map;
+        setParty(partyName, partyId);
+        emit partySelected(partyName);
+        emit partyDataSelected(m_selectedPartyData);
+        emit partySelectedWithId(partyName, partyId);
+    }
+}
+
 void AccountSearchBox::positionPopup() {
     if (!m_popupFrame || !isVisible()) return;
     QPoint globalPos = mapToGlobal(QPoint(0, height() + 2));
@@ -332,11 +358,13 @@ void AccountSearchBox::keyPressEvent(QKeyEvent* event) {
             event->accept();
             return;
         } else if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
-            QListWidgetItem* item = m_listWidget->currentItem();
-            if (item) {
-                onListItemClicked(item);
+            if (m_listWidget && m_listWidget->count() > 0) {
+                selectCurrentListItem();
                 event->accept();
                 return;
+            } else {
+                closeSearchPopup();
+                resolveCurrentText();
             }
         } else if (event->key() == Qt::Key_Escape) {
             closeSearchPopup();
@@ -353,6 +381,10 @@ void AccountSearchBox::keyPressEvent(QKeyEvent* event) {
             openSearchPopup();
             event->accept();
             return;
+        } else if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
+            if (m_selectedPartyId <= 0 && !text().trimmed().isEmpty()) {
+                resolveCurrentText();
+            }
         }
     }
     QLineEdit::keyPressEvent(event);
@@ -396,3 +428,178 @@ bool AccountSearchBox::eventFilter(QObject* watched, QEvent* event) {
     }
     return QLineEdit::eventFilter(watched, event);
 }
+
+static QVariantList rankNameResults(const QVariantList& rawItems, const QString& query, int limit) {
+    QString q = query.trimmed().toLower();
+    static const QRegularExpression splitRegex(QStringLiteral("[\\s\\-\\/\\.\\[\\]\\(\\)\\,\\&\\_\\+]+"));
+
+    if (q.isEmpty()) {
+        QVariantList sorted = rawItems;
+        std::sort(sorted.begin(), sorted.end(), [](const QVariant& a, const QVariant& b) {
+            QString na = a.toMap().value("name").toString();
+            QString nb = b.toMap().value("name").toString();
+            return QString::compare(na, nb, Qt::CaseInsensitive) < 0;
+        });
+        if (limit > 0 && sorted.size() > limit) {
+            return sorted.mid(0, limit);
+        }
+        return sorted;
+    }
+
+    struct RankedItem {
+        QVariantMap map;
+        int tier = 999;
+        int wordIndex = 999;
+        int nameLength = 0;
+    };
+
+    QVector<RankedItem> matches;
+    matches.reserve(rawItems.size());
+
+    for (const auto& itemVar : rawItems) {
+        QVariantMap map = itemVar.toMap();
+        QString name = map.value("name").toString().trimmed();
+        if (name.isEmpty()) continue;
+
+        QString nameLower = name.toLower();
+        int bStart = nameLower.indexOf('[');
+        int bEnd = nameLower.indexOf(']', bStart);
+        QString bracketLoc;
+        QString cleanNamePart = nameLower;
+        if (bStart != -1 && bEnd > bStart) {
+            bracketLoc = nameLower.mid(bStart + 1, bEnd - bStart - 1).trimmed();
+            cleanNamePart = nameLower.left(bStart).trimmed();
+        }
+
+        QStringList nameWords = cleanNamePart.split(splitRegex, Qt::SkipEmptyParts);
+        QString cityLower = map.value("city").toString().trimmed().toLower();
+        QString gstinLower = map.value("gstin").toString().trimmed().toLower();
+
+        int tier = 999;
+        int wordIdx = 999;
+
+        if (nameLower == q || cleanNamePart == q) {
+            tier = 0;
+            wordIdx = 0;
+        } else if (cleanNamePart.startsWith(q)) {
+            tier = 1;
+            wordIdx = 0;
+        } else {
+            for (int w = 0; w < nameWords.size(); ++w) {
+                if (nameWords[w].startsWith(q)) {
+                    tier = (w == 0) ? 1 : (2 + w);
+                    wordIdx = w;
+                    break;
+                }
+            }
+        }
+
+        if (tier == 999) {
+            if (!bracketLoc.isEmpty() && bracketLoc.startsWith(q)) {
+                tier = 10;
+            } else if (!cityLower.isEmpty() && cityLower.startsWith(q)) {
+                tier = 10;
+            } else if (cleanNamePart.contains(q)) {
+                tier = 20;
+            } else if (!bracketLoc.isEmpty() && bracketLoc.contains(q)) {
+                tier = 25;
+            } else if (!cityLower.isEmpty() && cityLower.contains(q)) {
+                tier = 25;
+            } else if (!gstinLower.isEmpty() && gstinLower.contains(q)) {
+                tier = 30;
+            }
+        }
+
+        if (tier < 999) {
+            RankedItem ri;
+            ri.map = map;
+            ri.tier = tier;
+            ri.wordIndex = wordIdx;
+            ri.nameLength = cleanNamePart.length();
+            matches.append(ri);
+        }
+    }
+
+    std::sort(matches.begin(), matches.end(), [](const RankedItem& a, const RankedItem& b) {
+        if (a.tier != b.tier) return a.tier < b.tier;
+        if (a.wordIndex != b.wordIndex) return a.wordIndex < b.wordIndex;
+        if (a.nameLength != b.nameLength) return a.nameLength < b.nameLength;
+        return QString::compare(a.map.value("name").toString(), b.map.value("name").toString(), Qt::CaseInsensitive) < 0;
+    });
+
+    QVariantList results;
+    int count = (limit > 0) ? qMin(matches.size(), limit) : matches.size();
+    results.reserve(count);
+    for (int i = 0; i < count; ++i) {
+        results.append(matches[i].map);
+    }
+    return results;
+}
+
+QVariantList AccountSearchBox::searchBrokers(const QString& query, int limit) {
+    auto& db = DatabaseManager::instance();
+    static const QString sql = QStringLiteral(
+        "SELECT DISTINCT name, city, gstin, id FROM ("
+        "  SELECT p.name AS name, p.city AS city, p.gstin AS gstin, p.id AS id FROM parties p "
+        "    WHERE p.group_id IN (SELECT id FROM account_groups WHERE code1st = 46 OR name LIKE '%Broker%' OR name LIKE '%Dalal%') "
+        "  UNION "
+        "  SELECT v.broker_name AS name, '' AS city, '' AS gstin, 0 AS id FROM vouchers v "
+        "    WHERE v.broker_name IS NOT NULL AND TRIM(v.broker_name) != '' "
+        "  UNION "
+        "  SELECT si.broker_name AS name, '' AS city, '' AS gstin, 0 AS id FROM sales_invoices si "
+        "    WHERE si.broker_name IS NOT NULL AND TRIM(si.broker_name) != '' "
+        "  UNION "
+        "  SELECT pi.broker_name AS name, '' AS city, '' AS gstin, 0 AS id FROM purchase_invoices pi "
+        "    WHERE pi.broker_name IS NOT NULL AND TRIM(pi.broker_name) != '' "
+        "  UNION "
+        "  SELECT sc.broker_name AS name, '' AS city, '' AS gstin, sc.broker_id AS id FROM sauda_contracts sc "
+        "    WHERE sc.broker_name IS NOT NULL AND TRIM(sc.broker_name) != '' "
+        "  UNION "
+        "  SELECT ds.broker_name AS name, '' AS city, '' AS gstin, ds.broker_id AS id FROM dalali_settlements ds "
+        "    WHERE ds.broker_name IS NOT NULL AND TRIM(ds.broker_name) != '' "
+        ") WHERE name IS NOT NULL AND TRIM(name) != ''"
+    );
+    QVariantList raw = db.executeQuery(sql);
+    return rankNameResults(raw, query, limit);
+}
+
+QVariantList AccountSearchBox::searchTransporters(const QString& query, int limit) {
+    auto& db = DatabaseManager::instance();
+    static const QString sql = QStringLiteral(
+        "SELECT DISTINCT name, city, gstin, id FROM ("
+        "  SELECT p.name AS name, p.city AS city, p.gstin AS gstin, p.id AS id FROM parties p "
+        "    WHERE p.group_id IN (SELECT id FROM account_groups WHERE name LIKE '%Transport%') "
+        "       OR p.name LIKE '%Transport%' OR p.name LIKE '%Carrier%' OR p.name LIKE '%Roadways%' "
+        "       OR p.name LIKE '%Road Lines%' OR p.name LIKE '%Freight%' OR p.name LIKE '%Transporter%' "
+        "  UNION "
+        "  SELECT td.transport AS name, '' AS city, td.transporter_gstin AS gstin, 0 AS id FROM transport_dispatches td "
+        "    WHERE td.transport IS NOT NULL AND TRIM(td.transport) != '' "
+        "  UNION "
+        "  SELECT si.transport AS name, '' AS city, '' AS gstin, 0 AS id FROM sales_invoices si "
+        "    WHERE si.transport IS NOT NULL AND TRIM(si.transport) != '' "
+        "  UNION "
+        "  SELECT pi.transport AS name, '' AS city, '' AS gstin, 0 AS id FROM purchase_invoices pi "
+        "    WHERE pi.transport IS NOT NULL AND TRIM(pi.transport) != '' "
+        "  UNION "
+        "  SELECT gr.transport AS name, '' AS city, '' AS gstin, 0 AS id FROM gate_register gr "
+        "    WHERE gr.transport IS NOT NULL AND TRIM(gr.transport) != '' "
+        ") WHERE name IS NOT NULL AND TRIM(name) != ''"
+    );
+    QVariantList raw = db.executeQuery(sql);
+    return rankNameResults(raw, query, limit);
+}
+
+void AccountSearchBox::configureForBrokerSearch() {
+    setPlaceholderText("Search Broker / Dalal Name... (Enter to select)");
+    setSearchFunction([](const QString& q) {
+        return searchBrokers(q, 50);
+    });
+}
+
+void AccountSearchBox::configureForTransportSearch() {
+    setPlaceholderText("Search Transport / Freight Carrier... (Enter to select)");
+    setSearchFunction([](const QString& q) {
+        return searchTransporters(q, 50);
+    });
+}
+

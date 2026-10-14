@@ -63,7 +63,7 @@ void ModifyGroupWidget::setupUi() {
     selectLayout->addWidget(searchIconLbl);
 
     m_groupSearchBox = new AccountSearchBox(selectFrame);
-    m_groupSearchBox->setFixedHeight(32);
+    m_groupSearchBox->setMinimumHeight(32);
     m_groupSearchBox->setPlaceholderText("Type group name, parent, code (e.g. Sundry Debtors, 8, Bank) (Alt+S)");
     m_groupSearchBox->setSearchFunction([](const QString& query) -> QVariantList {
         return AccountClassifier::searchGroups(query, 50);

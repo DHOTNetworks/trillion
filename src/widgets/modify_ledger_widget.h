@@ -5,6 +5,8 @@
 #include <QComboBox>
 #include <QCheckBox>
 #include <QPushButton>
+#include "kbd_badge_button.h"
+#include "erp_theme.h"
 #include <QLabel>
 #include <QFrame>
 #include <QVBoxLayout>
@@ -124,9 +126,9 @@ private:
     QCheckBox* m_setTitleCaseCheck = nullptr;
 
     // Action Buttons
-    QPushButton* m_cancelBtn = nullptr;
-    QPushButton* m_deleteBtn = nullptr;
-    QPushButton* m_updateBtn = nullptr;
+    KbdBadgeButton* m_cancelBtn = nullptr;
+    KbdBadgeButton* m_deleteBtn = nullptr;
+    KbdBadgeButton* m_updateBtn = nullptr;
 
     QList<QWidget*> m_navOrder;
 };

@@ -118,6 +118,7 @@ private:
     LedgerPipeline& operator=(const LedgerPipeline&) = delete;
 
     void ensureLoaded();
+    QVariantList searchLedgersInternal(const QString& query, const QString& filterGroup, int filterGroupId, int limit);
 
     QMutex m_mutex;
     bool m_valid = false;

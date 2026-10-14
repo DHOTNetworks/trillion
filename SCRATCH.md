@@ -1121,3 +1121,16 @@ Here are the alternative, actively available libraries and wrappers for interact
 
 Would you like to narrow your focus to cross-platform frameworks like POCO and SOCI, or do you need assistance evaluating performance differences among the Windows native COM options?
 
+Purchase voucher fixed — full 1:1 replay of the sales overhaul, verified clean (balanced braces, 0 setFixed, 0 legacy tokens, 0 QColor literals). Green radio accents kept as its identity, red Purchase badge, F9, TDS-194Q row themed, Ctrl+P/E wired, per-cell foregrounds, KbdBadgeButton footer (header types switched, same as sales).
+Roadmap audit (all 12 docs read, claims grep-verified):
+Done: 03-core (keymap truth, GlobalKeyFilter 0 refs, F11, fake GSTIN 0 hits), 05-core (one round2, FY lock ×6 users, audit_log), 01-P0 (party_name 0 hits), 09 (Mac-only), 10-query batch, 11-keepers, and this session's UI work (28/28 statements + both vouchers).
+Open, in recommended order:
+1. Doc 01 leftovers (correctness, P0) — 9 hand-INSERT INTO vouchers/transactions in widgets → VouchersModel; TDSDeductions dual truth (21 refs) → compat view; paddy_arrivals vs paddy_procurement merge. This is the highest-risk remaining work — silent data drift.
+2. Doc 06 interest-post loop + 194Q/206C(1H) settlement view — foundation is ready (interest calc, TCS/194Q/16A lists all stabilized with focus/dirty this session). This is the moat vs Tally/Busy.
+3. Doc 04 provider wiring — only 3 widgets use MasterDataProvider; 7 firm-literal hits remain. Start with GST rates + units, then firm purge + CI gate.
+4. Doc 02 leftovers — gray→navy header swaps (~40 files, mechanical), ledger single-table, remaining vouchers (16/17/18/19/28/31).
+5. Doc 05 P2 — void-instead-of-delete, paise dual-write, tie-out gates; Doc 07/08 per plan; Doc 03 keyboard-flow test.
+Status table written to 00_MASTER_PLAN.md. Rebuild on Mac — purchase voucher needs the same screenshot check as sales.
+
+CA-firm overhaul started: report_html_chrome.h gained print stationery (letterhead with double rule, title block, bordered navy tables, ruled totals, Prepared/Checked/Authorised signatures, generation footer). Trial Balance converted as the pattern: full letterhead, difference row when out of balance, escaped strings, num classes — "KACHA CHITHA" retired. Recipe for the remaining 26 is in Doc 10 §D (keep SQL + row loops, swap shells).
+Mac rebuild notes: re-run cmake (new GLOB files), then build + ctest. Verify trial-balance PDF once — figures logic is untouched (verbatim move), only the shell changed.

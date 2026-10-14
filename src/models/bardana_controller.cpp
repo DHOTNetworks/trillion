@@ -42,7 +42,7 @@ bool BardanaController::createBardanaTransaction(
         {
             fyLabel, voucherNo, voucherDate, vchType, pId, partyName,
             bardanaType, godownName.isEmpty() ? "Main Godown" : godownName,
-            drCr, qty, rate, amount, vehicleNo, billNo, narration
+            drCr, qty, rate, amount, vehicleNo.trimmed().toUpper(), billNo, narration
         }
     );
 

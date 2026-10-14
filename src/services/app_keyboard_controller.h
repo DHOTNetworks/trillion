@@ -26,10 +26,10 @@ public:
     Q_INVOKABLE void openPeriodModal();
     Q_INVOKABLE void expandAll();
     Q_INVOKABLE void collapseAll();
-    Q_INVOKABLE void triggerPrint();
-    Q_INVOKABLE void triggerPdfExport();
-    Q_INVOKABLE void triggerCsvExport();
-    Q_INVOKABLE void focusSearch();
+    Q_INVOKABLE bool triggerPrint();
+    Q_INVOKABLE bool triggerPdfExport();
+    Q_INVOKABLE bool triggerCsvExport();
+    Q_INVOKABLE bool focusSearch();
     Q_INVOKABLE void navigateTo(int viewIndex);
     Q_INVOKABLE void restoreFocus();
 
@@ -44,6 +44,9 @@ protected:
 private:
     bool handleKeyPress(QKeyEvent* keyEvent);
     bool handleKeyRelease(QKeyEvent* keyEvent);
+    bool openDateForView(int vIdx);
+    bool saveActiveVoucher(int vIdx);
+    bool deleteActiveVoucher(int vIdx);
 
     MainWindow* m_mainWindow = nullptr;
     static AppKeyboardController* s_instance;

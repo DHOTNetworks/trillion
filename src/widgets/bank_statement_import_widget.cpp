@@ -1,6 +1,7 @@
 #include "bank_statement_import_widget.h"
 #include "account_search_delegate.h"
 #include "kbd_badge_button.h"
+#include "erp_theme.h"
 #include "custom_dialogs.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -11,6 +12,7 @@
 #include <QFileDialog>
 
 #include "../database_manager.h"
+#include "../engine/fiscal_year_helper.h"
 #include "../models/account_classifier.h"
 #include <QSqlQuery>
 
@@ -36,7 +38,7 @@ void BankStatementImportWidget::setupUi() {
     // TIER 1: STICKY HEADER CARD
     // ========================================================================
     auto* headerCard = new QFrame(this);
-    headerCard->setFixedHeight(50);
+    headerCard->setMinimumHeight(50);
     headerCard->setStyleSheet(
         "QFrame { background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; }"
     );
@@ -89,9 +91,7 @@ void BankStatementImportWidget::setupUi() {
     m_filePathEdit->setStyleSheet("background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 5px 8px; font-size: 12px; color: #0F172A;");
     row1->addWidget(m_filePathEdit, 1);
 
-    auto* browseBtn = new QPushButton("Browse File", filterCard);
-    browseBtn->setCursor(Qt::PointingHandCursor);
-    browseBtn->setStyleSheet("QPushButton { background-color: #2563EB; color: #FFFFFF; font-weight: 800; font-size: 12px; padding: 5px 14px; border-radius: 6px; border: none; } QPushButton:hover { background-color: #1D4ED8; }");
+    auto* browseBtn = new KbdBadgeButton("Browse File", "", filterCard);
     connect(browseBtn, &QPushButton::clicked, this, &BankStatementImportWidget::onSelectFileClicked);
     row1->addWidget(browseBtn);
 
@@ -204,8 +204,8 @@ void BankStatementImportWidget::setupUi() {
     m_table->setStyleSheet(
         "QTableWidget { background-color: #FFFFFF; alternate-background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 8px; gridline-color: #F1F5F9; font-size: 12.5px; color: #0F172A; }"
         "QTableWidget::item { padding: 4px 6px; }"
-        "QTableWidget::item:selected { background-color: #EFF6FF; color: #0F172A; }"
-        "QHeaderView::section { background-color: #F1F5F9; color: #1E293B; font-weight: 800; font-size: 12px; padding: 8px 10px; border: none; border-bottom: 2px solid #CBD5E1; border-right: 1px solid #E2E8F0; }"
+        "QTableWidget::item:selected { background-color: #2563EB; color: #FFFFFF; }"
+        "QHeaderView::section { background-color: #0F172A; color: #FFFFFF; font-weight: 800; font-size: 12px; padding: 8px 10px; border: none;  border-right: 1px solid #334155; }"
     );
     connect(m_table, &QTableWidget::itemChanged, this, &BankStatementImportWidget::onTableItemChanged);
     rootLayout->addWidget(m_table, 1);
@@ -383,7 +383,9 @@ void BankStatementImportWidget::refreshTable() {
         QString dateStr = rowMap.value("date").toString();
         if (dateStr.isEmpty()) dateStr = rowMap.value("vDate").toString();
         if (dateStr.isEmpty()) dateStr = rowMap.value("isoDate").toString();
-        auto* dateItem = new QTableWidgetItem(dateStr);
+        // Statement parsers emit dd-MM-yyyy already; the keeper is idempotent
+        // on those and converts ISO leftovers — display is always dd-MM-yyyy.
+        auto* dateItem = new QTableWidgetItem(FiscalYearHelper::formatDisplayDate(dateStr));
         dateItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
         dateItem->setForeground(QBrush(QColor("#1E293B")));
         { QFont f = m_table->font(); f.setBold(true); dateItem->setFont(f); }

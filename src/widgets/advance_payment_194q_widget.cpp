@@ -1,4 +1,6 @@
 #include "advance_payment_194q_widget.h"
+#include "kbd_badge_button.h"
+#include "erp_theme.h"
 #include "voucher_date_dialog.h"
 #include "../database_manager.h"
 #include <QVBoxLayout>
@@ -28,9 +30,8 @@ void AdvancePayment194QWidget::setupUi()
     mainLayout->addWidget(createHeaderBar());
     mainLayout->addWidget(createFormCard(), 1);
 
-    new QShortcut(QKeySequence("F2"), this, SLOT(onSaveClicked()));
-    new QShortcut(QKeySequence("Ctrl+S"), this, SLOT(onSaveClicked()));
-    new QShortcut(QKeySequence("F3"), this, SLOT(onNewClicked()));
+    new QShortcut(QKeySequence(Qt::ALT | Qt::Key_S), this, SLOT(onSaveClicked()));
+    new QShortcut(QKeySequence(Qt::ALT | Qt::Key_N), this, SLOT(onNewClicked()));
     new QShortcut(QKeySequence("Escape"), this, SIGNAL(backRequested()));
 }
 
@@ -55,30 +56,17 @@ QWidget *AdvancePayment194QWidget::createHeaderBar()
     m_statusLabel->setStyleSheet("margin-left: 15px; border: none; background: transparent;");
     layout->addWidget(m_statusLabel, 1);
 
-    auto *btnNew = new QPushButton("[F3] New", headerCard);
-    btnNew->setCursor(Qt::PointingHandCursor);
-    btnNew->setStyleSheet(
-        "QPushButton { background-color: #FFFFFF; border: 1.5px solid #CBD5E1; padding: 6px 14px; border-radius: 6px; font-weight: 700; font-size: 11.5px; color: #334155; }"
-        "QPushButton:hover { background-color: #F8FAFC; }"
-    );
+    auto *btnNew = new KbdBadgeButton("New", "Alt+N", headerCard);
     connect(btnNew, &QPushButton::clicked, this, &AdvancePayment194QWidget::onNewClicked);
     layout->addWidget(btnNew);
 
-    auto *btnSave = new QPushButton("[F2] Save Voucher", headerCard);
-    btnSave->setCursor(Qt::PointingHandCursor);
-    btnSave->setStyleSheet(
-        "QPushButton { background-color: #16A34A; color: #FFFFFF; border: none; padding: 6px 18px; border-radius: 6px; font-weight: 800; font-size: 12px; }"
-        "QPushButton:hover { background-color: #15803D; }"
-    );
+    auto *btnSave = new KbdBadgeButton("Save Voucher", "Alt+S", headerCard);
+    btnSave->setPrimaryColor(ErpTheme::kGreen, ErpTheme::kGreenDark);
+    btnSave->setTextColor(ErpTheme::kPaper);
     connect(btnSave, &QPushButton::clicked, this, &AdvancePayment194QWidget::onSaveClicked);
     layout->addWidget(btnSave);
 
-    auto *btnBack = new QPushButton("← [Esc] Back", headerCard);
-    btnBack->setCursor(Qt::PointingHandCursor);
-    btnBack->setStyleSheet(
-        "QPushButton { background-color: #F1F5F9; border: 1px solid #CBD5E1; border-radius: 6px; padding: 6px 12px; font-weight: 700; color: #475569; font-size: 11.5px; }"
-        "QPushButton:hover { background-color: #E2E8F0; }"
-    );
+    auto *btnBack = new KbdBadgeButton("Back", "Esc", headerCard);
     connect(btnBack, &QPushButton::clicked, this, &AdvancePayment194QWidget::backRequested);
     layout->addWidget(btnBack);
 
@@ -113,7 +101,7 @@ QWidget *AdvancePayment194QWidget::createFormCard()
     m_voucherDateEdit->setReadOnly(true);
     dtRow->addWidget(m_voucherDateEdit);
     auto *btnDt = new QPushButton("", card);
-    btnDt->setFixedWidth(28);
+    btnDt->setMinimumWidth(28);
     btnDt->setStyleSheet("QPushButton { background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 4px; }");
     connect(btnDt, &QPushButton::clicked, this, [this]() {
         QDate cur = QDate::fromString(m_voucherDateEdit->text(), "dd-MM-yyyy");
@@ -201,7 +189,7 @@ QWidget *AdvancePayment194QWidget::createFormCard()
     m_chequeDateEdit->setReadOnly(true);
     cqRow->addWidget(m_chequeDateEdit);
     auto *btnCq = new QPushButton("", card);
-    btnCq->setFixedWidth(28);
+    btnCq->setMinimumWidth(28);
     btnCq->setStyleSheet("QPushButton { background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 4px; }");
     connect(btnCq, &QPushButton::clicked, this, [this]() {
         QDate cur = QDate::fromString(m_chequeDateEdit->text(), "dd-MM-yyyy");
@@ -414,6 +402,14 @@ void AdvancePayment194QWidget::keyPressEvent(QKeyEvent *event)
 {
     if (event->key() == Qt::Key_Escape) {
         emit backRequested();
+        return;
+    }
+    if (event->key() == Qt::Key_F3) {
+        onNewClicked();
+        return;
+    }
+    if (event->key() == Qt::Key_F2) {
+        onSaveClicked();
         return;
     }
     QWidget::keyPressEvent(event);

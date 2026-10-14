@@ -1,5 +1,6 @@
 #include "stock_valuation_engine.h"
 #include "../database_manager.h"
+#include "../services/financial_math_service.h"
 #include "accounting_engine.h"
 #include "fiscal_year_helper.h"
 #include <QDebug>
@@ -78,9 +79,9 @@ StockValuationReport StockValuationEngine::getAuditedClosingStock(const QString&
             // Auto-resolve missing amount if rate exists
             if (itm.amount <= 0.0 && itm.rate > 0.0) {
                 if (itm.weightQtl > 0.001) {
-                    itm.amount = std::round((itm.weightQtl * itm.rate) * 100.0) / 100.0;
+                    itm.amount = FinancialMathService::round2(itm.weightQtl * itm.rate);
                 } else if (itm.bags > 0) {
-                    itm.amount = std::round((itm.bags * itm.rate) * 100.0) / 100.0;
+                    itm.amount = FinancialMathService::round2(itm.bags * itm.rate);
                 }
             }
 
@@ -385,9 +386,9 @@ StockValuationReport StockValuationEngine::calculateLivePhysicalStock(const QStr
             itm.rate = rate;
 
             if (finalQty > 0.001) {
-                itm.amount = std::round((finalQty * rate) * 100.0) / 100.0;
+                itm.amount = FinancialMathService::round2(finalQty * rate);
             } else {
-                itm.amount = std::round((finalBags * rate) * 100.0) / 100.0;
+                itm.amount = FinancialMathService::round2(finalBags * rate);
             }
 
             itm.amountFmt = AccountingEngine::formatIndianCurrency(itm.amount, true);
@@ -458,9 +459,9 @@ bool StockValuationEngine::saveAuditedClosingStock(const QString& closingDateIso
         double rate = itm.rate;
         double amt = itm.amount;
         if (amt <= 0.01 && itm.weightQtl > 0.001 && rate > 0.0) {
-            amt = std::round((itm.weightQtl * rate) * 100.0) / 100.0;
+            amt = FinancialMathService::round2(itm.weightQtl * rate);
         } else if (rate <= 0.01 && itm.weightQtl > 0.001 && amt > 0.01) {
-            rate = std::round((amt / itm.weightQtl) * 100.0) / 100.0;
+            rate = FinancialMathService::round2(amt / itm.weightQtl);
         }
 
         db.executeNonQuery(

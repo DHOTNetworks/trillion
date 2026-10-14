@@ -29,6 +29,8 @@ public:
     void resetForm();
     bool loadNoteForEditing(int noteId);
     void openDateDialog();
+    void saveVoucher() { onSaveClicked(); }
+    void deleteVoucher() { onDeleteClicked(); }
 
 signals:
     void backRequested();
@@ -79,8 +81,8 @@ private:
 
     // Table
     QTableWidget* m_itemsTable = nullptr;
-    QPushButton* m_addRowBtn = nullptr;
-    QPushButton* m_remRowBtn = nullptr;
+    KbdBadgeButton* m_addRowBtn = nullptr;
+    KbdBadgeButton* m_remRowBtn = nullptr;
 
     // Summary Metrics Cards (Tier 4)
     QLabel* m_taxableValLabel = nullptr;

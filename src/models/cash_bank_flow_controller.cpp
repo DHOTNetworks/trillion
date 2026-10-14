@@ -266,25 +266,27 @@ void CashBankFlowController::recalculate() {
         }
     }
 
-    // 4. Calculate Opening Balances as of fromDate for each party
+    // 4. Calculate Opening Balances as of fromDate for each party.
+    // Single GROUP BY over priors — the old per-party double-SUM issued
+    // 2 queries per party (4000+ per refresh, re-run per keystroke).
+    QMap<QString, double> priorDrMap, priorCrMap;
+    {
+        QVariantList priorRows = db.executeQuery(
+            "SELECT party_name, dr_cr, COALESCE(SUM(amount), 0.0) AS tot FROM transactions "
+            "WHERE voucher_date < ? GROUP BY party_name, dr_cr;",
+            {m_fromDate});
+        for (const QVariant& pv : priorRows) {
+            QVariantMap pm = pv.toMap();
+            const QString pn = pm.value("party_name").toString();
+            if (pm.value("dr_cr").toString() == "Dr") priorDrMap[pn] = pm.value("tot").toDouble();
+            else priorCrMap[pn] = pm.value("tot").toDouble();
+        }
+    }
     auto calculatePartyOpBal = [&](const QString& pName) -> double {
         double baseOp = partyOpBalance.count(pName) ? partyOpBalance[pName] : 0.0;
         QString baseType = partyOpType.count(pName) ? partyOpType[pName] : "Dr";
         double netOp = (baseType == "Cr") ? -baseOp : baseOp;
-
-        // Prior transactions before m_fromDate
-        QVariant priorDrVar = db.executeScalar(
-            "SELECT COALESCE(SUM(amount), 0.0) FROM transactions WHERE party_name = ? AND voucher_date < ? AND dr_cr = 'Dr';",
-            {pName, m_fromDate}
-        );
-        QVariant priorCrVar = db.executeScalar(
-            "SELECT COALESCE(SUM(amount), 0.0) FROM transactions WHERE party_name = ? AND voucher_date < ? AND dr_cr = 'Cr';",
-            {pName, m_fromDate}
-        );
-        double priorDr = priorDrVar.isValid() ? priorDrVar.toDouble() : 0.0;
-        double priorCr = priorCrVar.isValid() ? priorCrVar.toDouble() : 0.0;
-
-        return netOp + (priorDr - priorCr);
+        return netOp + (priorDrMap.value(pName, 0.0) - priorCrMap.value(pName, 0.0));
     };
 
     // Calculate Cash Account overall balance

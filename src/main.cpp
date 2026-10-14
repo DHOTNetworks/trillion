@@ -45,7 +45,6 @@
 #include "models/bank_statement_controller.h"
 #include "models/transport_dispatch_controller.h"
 #include "models/debit_credit_note_controller.h"
-#include "models/global_key_filter.h"
 #include "engine/bahi_khata_migrator.h"
 #include "services/scale_manager.h"
 #include "widgets/main_window.h"
@@ -150,6 +149,15 @@ int main(int argc, char* argv[]) {
         "QListView::item:hover {"
         "  background-color: #EFF6FF;"
         "  color: #1E40AF;"
+        "}"
+        // Tooltips: unstyled they follow the OS theme (black in macOS dark
+        // mode). Pin a readable light tooltip everywhere.
+        "QToolTip {"
+        "  background-color: #FFFFF0;"
+        "  color: #0F172A;"
+        "  border: 1px solid #CBD5E1;"
+        "  padding: 4px 8px;"
+        "  font-size: 12px;"
         "}"
     );
 

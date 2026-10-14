@@ -14,7 +14,7 @@ CashBookOptionsDialog::CashBookOptionsDialog(QWidget* parent)
 }
 
 void CashBookOptionsDialog::setupUi() {
-    setFixedWidth(460);
+    setMinimumWidth(460);
     setStyleSheet(
         "#cashBookOptionsDialog { background-color: #FFFFFF; border: 2.5px solid #2563EB; border-radius: 12px; }"
         "QLabel { border: none; background: transparent; }"
@@ -60,7 +60,7 @@ void CashBookOptionsDialog::setupUi() {
             sepBox->setSpacing(4);
 
             auto* sepLine = new QFrame(this);
-            sepLine->setFixedHeight(1);
+            sepLine->setMinimumHeight(1);
             sepLine->setStyleSheet("background-color: #E2E8F0; border: none;");
             sepBox->addWidget(sepLine);
 
@@ -75,7 +75,7 @@ void CashBookOptionsDialog::setupUi() {
 
         auto* row = new QFrame(this);
         row->setObjectName("menuRow");
-        row->setFixedHeight(38);
+        row->setMinimumHeight(38);
         row->setCursor(Qt::PointingHandCursor);
         row->installEventFilter(this);
 

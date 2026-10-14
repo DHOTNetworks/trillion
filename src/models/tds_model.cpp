@@ -357,8 +357,19 @@ bool TdsModel::save_tds_voucher(const QVariantMap& data) {
     }
 
     int postInBooks = data.value("post_in_books", 1).toInt();
-    QString tdsType = data.value("tds_type").toString().trimmed().toUpper();
-    if (tdsType.isEmpty()) tdsType = "RENT";
+    QString rawTdsType = data.value("tds_type").toString().trimmed().toUpper();
+    QString tdsType = "RENT";
+    if (rawTdsType.contains("RENT")) tdsType = "RENT";
+    else if (rawTdsType.contains("COMMISSION")) tdsType = "COMMISSION";
+    else if (rawTdsType.contains("BROKERAGE")) tdsType = "BROKERAGE";
+    else if (rawTdsType.contains("DAMI")) tdsType = "DAMI";
+    else if (rawTdsType.contains("INTEREST")) tdsType = "INTEREST";
+    else if (rawTdsType.contains("FREIGHT") || rawTdsType.contains("CONTRACT")) tdsType = "FREIGHT";
+    else if (rawTdsType.contains("LABOUR")) tdsType = "LABOUR";
+    else if (rawTdsType.contains("SALARY")) tdsType = "SALARY";
+    else if (rawTdsType.contains("194Q")) tdsType = "194Q";
+    else if (rawTdsType.contains("194J") || rawTdsType.contains("PROFESSIONAL")) tdsType = "PROFESSIONAL";
+    else if (!rawTdsType.isEmpty()) tdsType = rawTdsType;
 
     int ledgerId = data.value("ledger_id").toInt();
     QString ledgerName = data.value("ledger_name").toString().trimmed();
@@ -403,27 +414,52 @@ bool TdsModel::save_tds_voucher(const QVariantMap& data) {
     }
 
     QVariant fyIdVal = (fyId > 0) ? QVariant(fyId) : QVariant();
+
+    auto resolvePartyId = [&](int existingId, const QString& name, const QString& defaultGroup, const QString& partyType) -> int {
+        if (existingId > 0) return existingId;
+        QString clean = name.trimmed();
+        if (clean.isEmpty()) return 0;
+        QVariant lid = db.executeScalar(
+            "SELECT id FROM parties WHERE name = ? COLLATE NOCASE "
+            "OR replace(name, ' ', '') = replace(?, ' ', '') "
+            "OR ? LIKE (name || '%') "
+            "OR name LIKE (? || '%') "
+            "LIMIT 1;",
+            {clean, clean, clean, clean.left(40)}
+        );
+        if (lid.isValid() && lid.toInt() > 0) {
+            return lid.toInt();
+        }
+        db.executeNonQuery(
+            "INSERT INTO parties (name, group_name, party_type) VALUES (?, ?, ?);",
+            {clean, defaultGroup, partyType}
+        );
+        return db.executeScalar("SELECT last_insert_rowid();").toInt();
+    };
+
+    ledgerId = resolvePartyId(ledgerId, ledgerName, "Sundry Creditors", "Party");
+    expLedgerId = resolvePartyId(expLedgerId, expLedgerName, "Direct Expenses", "Expense");
+    tdsLedgerId = resolvePartyId(tdsLedgerId, tdsLedgerName, "Duties & Taxes", "Tax");
+
     QVariant ledgerIdVal = (ledgerId > 0) ? QVariant(ledgerId) : QVariant();
     QVariant expLedgerIdVal = (expLedgerId > 0) ? QVariant(expLedgerId) : QVariant();
     QVariant tdsLedgerIdVal = (tdsLedgerId > 0) ? QVariant(tdsLedgerId) : QVariant();
-
-    if (!ledgerIdVal.isValid() && !ledgerName.isEmpty()) {
-        QVariant lid = db.executeScalar("SELECT id FROM parties WHERE name = ? COLLATE NOCASE;", {ledgerName});
-        if (lid.isValid() && lid.toInt() > 0) ledgerIdVal = lid.toInt();
-    }
-    if (!expLedgerIdVal.isValid() && !expLedgerName.isEmpty()) {
-        QVariant lid = db.executeScalar("SELECT id FROM parties WHERE name = ? COLLATE NOCASE;", {expLedgerName});
-        if (lid.isValid() && lid.toInt() > 0) expLedgerIdVal = lid.toInt();
-    }
-    if (!tdsLedgerIdVal.isValid() && !tdsLedgerName.isEmpty()) {
-        QVariant lid = db.executeScalar("SELECT id FROM parties WHERE name = ? COLLATE NOCASE;", {tdsLedgerName});
-        if (lid.isValid() && lid.toInt() > 0) tdsLedgerIdVal = lid.toInt();
-    }
 
     if (voucherNo <= 0) {
         QVariant maxVch = db.executeScalar("SELECT MAX(voucher_no) FROM tds_vouchers WHERE financial_year = ?;", {fyLabel});
         voucherNo = (maxVch.isValid() && !maxVch.isNull()) ? maxVch.toInt() + 1 : 1;
     }
+
+    // Helper to resolve legacy Bahi-Khata code for accountCode in transactions
+    auto getPartyLegacyCode = [&](int pId) -> int {
+        if (pId <= 0) return 0;
+        QVariant leg = db.executeScalar("SELECT legacy_id FROM parties WHERE id = ? LIMIT 1;", {pId});
+        if (leg.isValid() && !leg.isNull() && leg.toInt() > 0) return leg.toInt();
+        return pId;
+    };
+    int partyLegacyCode = getPartyLegacyCode(ledgerId);
+    int expLegacyCode = getPartyLegacyCode(expLedgerId);
+    int tdsLegacyCode = getPartyLegacyCode(tdsLedgerId);
 
     db.beginTransaction();
 
@@ -481,70 +517,68 @@ bool TdsModel::save_tds_voucher(const QVariantMap& data) {
         return false;
     }
 
-    // Clean up any existing double-entry records in vouchers and transactions for this TDS voucher
+    // Clean up any existing double-entry records in TDSDeductions, vouchers, and transactions
     QString vchCode = QString("TDS-%1").arg(voucherNo);
     QString vchNumStr = QString::number(voucherNo);
+
     db.executeNonQuery(
-        "DELETE FROM vouchers WHERE (voucher_no = ? OR voucher_no = ?) AND (voucher_type = 'TDS' OR legacy_type LIKE 'TDS%');",
+        "DELETE FROM TDSDeductions WHERE (voucher_number = ? OR voucher_number = ?) AND (trans_type = 'Jrnl' OR trans_type = 'TDS');",
+        {voucherNo, vchNumStr}
+    );
+    db.executeNonQuery(
+        "DELETE FROM vouchers WHERE (voucher_no = ? OR voucher_no = ?) AND (voucher_type = 'TDS' OR voucher_type = 'Jrnl' OR legacy_type LIKE 'TDS%');",
         {vchCode, vchNumStr}
     );
     db.executeNonQuery(
-        "DELETE FROM transactions WHERE (voucher_no = ? OR voucher_no = ?) AND (voucher_type = 'TDS' OR trans_type = 'TDS');",
+        "DELETE FROM transactions WHERE (voucher_no = ? OR voucher_no = ?) AND (trans_type = 'TDS' OR voucher_type = 'TDS' OR purchase_type LIKE 'TDS%' OR (trans_type = 'Jrnl' AND entry_type IN ('Exp.', 'Party', 'PartyTDS', 'TDS')));",
         {vchNumStr, vchCode}
     );
 
-    // 2. If post_in_books == 1, create 4-leg double-entry postings in vouchers & transactions table
-    if (postInBooks == 1 && incomeAmount > 0.001) {
-        // Ensure Expense Ledger party ID
-        if (expLedgerId <= 0 && !expLedgerName.isEmpty()) {
-            QVariant expRow = db.executeScalar("SELECT id FROM parties WHERE name = ? LIMIT 1;", {expLedgerName});
-            if (expRow.isValid() && !expRow.isNull()) {
-                expLedgerId = expRow.toInt();
-            } else {
-                db.executeNonQuery(
-                    "INSERT INTO parties (name, group_name, party_type) VALUES (?, 'Direct Expenses', 'Expense');",
-                    {expLedgerName}
-                );
-                expLedgerId = db.executeScalar("SELECT last_insert_rowid();").toInt();
+    // 2. Insert into TDSDeductions table (matches native Data.002 format for Bahi-Khata export)
+    if (postInBooks == 1) {
+        db.executeNonQuery(
+            "INSERT INTO TDSDeductions ("
+            "voucher_date, voucher_number, trans_type, account_code, "
+            "income_amount, tds, surcharge, education, tds_rate, "
+            "income_type, reason_for_non_deduction, rate_tds, rate_surcharge, rate_education, "
+            "post_in_books, challan_voucher_date, challan_voucher_number, income_narration, prev_income_amount"
+            ") VALUES (?, ?, 'Jrnl', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, '', 0, ?, ?);",
+            {
+                voucherDate, voucherNo, partyLegacyCode,
+                incomeAmount, totalTaxAmount, taxAmountSurcharge, taxAmountCess, totalTaxRate,
+                tdsType, nonDeductionReason, rateTds, rateSurcharge, rateCess,
+                narration.isEmpty() ? tdsType : narration, previousAmount
             }
-        }
+        );
+    }
 
-        // Ensure TDS Cr Ledger party ID
-        if (tdsLedgerId <= 0 && !tdsLedgerName.isEmpty()) {
-            QVariant tdsRow = db.executeScalar("SELECT id FROM parties WHERE name = ? LIMIT 1;", {tdsLedgerName});
-            if (tdsRow.isValid() && !tdsRow.isNull()) {
-                tdsLedgerId = tdsRow.toInt();
-            } else {
-                db.executeNonQuery(
-                    "INSERT INTO parties (name, group_name, party_type) VALUES (?, 'Duties & Taxes', 'Tax');",
-                    {tdsLedgerName}
-                );
-                tdsLedgerId = db.executeScalar("SELECT last_insert_rowid();").toInt();
-            }
-        }
+    // 3. If post_in_books == 1, create canonical 4-leg double-entry postings in transactions & vouchers
+    if (postInBooks == 1 && incomeAmount > 0.001) {
+        QString purcType = "TDS" + tdsType;
 
         // Leg 1: Exp. Dr. Ledger [Debit Gross Income Amount]
         db.executeNonQuery(
             "INSERT INTO vouchers ("
             "fy_id, financial_year, voucher_no, voucher_date, voucher_type, legacy_type, "
             "party_id, ledger_id, party_name, account_type, amount, narration"
-            ") VALUES (?, ?, ?, ?, 'TDS', 'TDS', ?, ?, ?, 'Dr', ?, ?);",
+            ") VALUES (?, ?, ?, ?, 'Jrnl', ?, ?, ?, ?, 'Dr', ?, ?);",
             {
-                fyId, fyLabel, vchCode, voucherDate,
-                expLedgerId, expLedgerId, expLedgerName, incomeAmount,
-                narration.isEmpty() ? ledgerName : narration
+                fyIdVal, fyLabel, vchNumStr, voucherDate, purcType,
+                expLedgerIdVal, expLedgerIdVal, expLedgerName, incomeAmount,
+                ledgerName
             }
         );
         db.executeNonQuery(
             "INSERT INTO transactions ("
             "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
             "account_code, party_id, party_name, opposing_account, dr_cr, amount, "
-            "narration, taxable_amount, tds_amount, tds_rate, row_no"
-            ") VALUES (?, ?, ?, ?, 'TDS', 'TDS', ?, ?, ?, ?, 'Dr', ?, ?, ?, ?, ?, 1);",
+            "purchase_type, entry_type, narration, taxable_amount, tds_amount, tds_rate, "
+            "row_no, bank_date, voucher_reconcile"
+            ") VALUES (?, ?, ?, ?, 'Jrnl', 'Jrnl', ?, ?, ?, ?, 'Dr', ?, ?, 'Exp.', ?, ?, ?, ?, 1, ?, 1);",
             {
-                fyId, fyLabel, vchNumStr, voucherDate,
-                expLedgerId, expLedgerId, expLedgerName, ledgerName, incomeAmount,
-                narration.isEmpty() ? ledgerName : narration, totalForTds, totalTaxAmount, totalTaxRate
+                fyIdVal, fyLabel, vchNumStr, voucherDate,
+                expLegacyCode, expLedgerIdVal, expLedgerName, ledgerName, incomeAmount,
+                purcType, ledgerName, totalForTds, totalTaxAmount, totalTaxRate, voucherDate
             }
         );
 
@@ -553,23 +587,24 @@ bool TdsModel::save_tds_voucher(const QVariantMap& data) {
             "INSERT INTO vouchers ("
             "fy_id, financial_year, voucher_no, voucher_date, voucher_type, legacy_type, "
             "party_id, ledger_id, party_name, account_type, amount, narration"
-            ") VALUES (?, ?, ?, ?, 'TDS', 'TDS', ?, ?, ?, 'Cr', ?, ?);",
+            ") VALUES (?, ?, ?, ?, 'Jrnl', ?, ?, ?, ?, 'Cr', ?, ?);",
             {
-                fyId, fyLabel, vchCode, voucherDate,
-                ledgerId, ledgerId, ledgerName, incomeAmount,
-                narration.isEmpty() ? tdsType : narration
+                fyIdVal, fyLabel, vchNumStr, voucherDate, purcType,
+                ledgerIdVal, ledgerIdVal, ledgerName, incomeAmount,
+                tdsType
             }
         );
         db.executeNonQuery(
             "INSERT INTO transactions ("
             "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
             "account_code, party_id, party_name, opposing_account, dr_cr, amount, "
-            "narration, taxable_amount, tds_amount, tds_rate, row_no"
-            ") VALUES (?, ?, ?, ?, 'TDS', 'TDS', ?, ?, ?, ?, 'Cr', ?, ?, ?, ?, ?, 2);",
+            "purchase_type, entry_type, narration, taxable_amount, tds_amount, tds_rate, "
+            "row_no, bank_date, voucher_reconcile"
+            ") VALUES (?, ?, ?, ?, 'Jrnl', 'Jrnl', ?, ?, ?, ?, 'Cr', ?, ?, 'Party', ?, ?, ?, ?, 2, ?, 1);",
             {
-                fyId, fyLabel, vchNumStr, voucherDate,
-                ledgerId, ledgerId, ledgerName, expLedgerName, incomeAmount,
-                narration.isEmpty() ? tdsType : narration, totalForTds, totalTaxAmount, totalTaxRate
+                fyIdVal, fyLabel, vchNumStr, voucherDate,
+                partyLegacyCode, ledgerIdVal, ledgerName, expLedgerName, incomeAmount,
+                purcType, tdsType, totalForTds, totalTaxAmount, totalTaxRate, voucherDate
             }
         );
 
@@ -585,10 +620,10 @@ bool TdsModel::save_tds_voucher(const QVariantMap& data) {
                 "INSERT INTO vouchers ("
                 "fy_id, financial_year, voucher_no, voucher_date, voucher_type, legacy_type, "
                 "party_id, ledger_id, party_name, account_type, amount, narration"
-                ") VALUES (?, ?, ?, ?, 'TDS', 'TDS', ?, ?, ?, 'Dr', ?, ?);",
+                ") VALUES (?, ?, ?, ?, 'Jrnl', ?, ?, ?, ?, 'Dr', ?, ?);",
                 {
-                    fyId, fyLabel, vchCode, voucherDate,
-                    ledgerId, ledgerId, ledgerName, totalTaxAmount,
+                    fyIdVal, fyLabel, vchNumStr, voucherDate, purcType,
+                    ledgerIdVal, ledgerIdVal, ledgerName, totalTaxAmount,
                     taxNarr
                 }
             );
@@ -596,12 +631,13 @@ bool TdsModel::save_tds_voucher(const QVariantMap& data) {
                 "INSERT INTO transactions ("
                 "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
                 "account_code, party_id, party_name, opposing_account, dr_cr, amount, "
-                "narration, taxable_amount, tds_amount, tds_rate, row_no"
-                ") VALUES (?, ?, ?, ?, 'TDS', 'TDS', ?, ?, ?, ?, 'Dr', ?, ?, ?, ?, ?, 3);",
+                "purchase_type, entry_type, narration, taxable_amount, tds_amount, tds_rate, "
+                "row_no, bank_date, voucher_reconcile"
+                ") VALUES (?, ?, ?, ?, 'Jrnl', 'Jrnl', ?, ?, ?, ?, 'Dr', ?, ?, 'PartyTDS', ?, ?, ?, ?, 3, ?, 1);",
                 {
-                    fyId, fyLabel, vchNumStr, voucherDate,
-                    ledgerId, ledgerId, ledgerName, tdsLedgerName, totalTaxAmount,
-                    taxNarr, totalForTds, totalTaxAmount, totalTaxRate
+                    fyIdVal, fyLabel, vchNumStr, voucherDate,
+                    partyLegacyCode, ledgerIdVal, ledgerName, tdsLedgerName, totalTaxAmount,
+                    purcType, taxNarr, totalForTds, totalTaxAmount, totalTaxRate, voucherDate
                 }
             );
 
@@ -610,10 +646,10 @@ bool TdsModel::save_tds_voucher(const QVariantMap& data) {
                 "INSERT INTO vouchers ("
                 "fy_id, financial_year, voucher_no, voucher_date, voucher_type, legacy_type, "
                 "party_id, ledger_id, party_name, account_type, amount, narration"
-                ") VALUES (?, ?, ?, ?, 'TDS', 'TDS', ?, ?, ?, 'Cr', ?, ?);",
+                ") VALUES (?, ?, ?, ?, 'Jrnl', ?, ?, ?, ?, 'Cr', ?, ?);",
                 {
-                    fyId, fyLabel, vchCode, voucherDate,
-                    tdsLedgerId, tdsLedgerId, tdsLedgerName, totalTaxAmount,
+                    fyIdVal, fyLabel, vchNumStr, voucherDate, purcType,
+                    tdsLedgerIdVal, tdsLedgerIdVal, tdsLedgerName, totalTaxAmount,
                     ledgerName
                 }
             );
@@ -621,12 +657,13 @@ bool TdsModel::save_tds_voucher(const QVariantMap& data) {
                 "INSERT INTO transactions ("
                 "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
                 "account_code, party_id, party_name, opposing_account, dr_cr, amount, "
-                "narration, taxable_amount, tds_amount, tds_rate, row_no"
-                ") VALUES (?, ?, ?, ?, 'TDS', 'TDS', ?, ?, ?, ?, 'Cr', ?, ?, ?, ?, ?, 4);",
+                "purchase_type, entry_type, narration, taxable_amount, tds_amount, tds_rate, "
+                "row_no, bank_date, voucher_reconcile"
+                ") VALUES (?, ?, ?, ?, 'Jrnl', 'Jrnl', ?, ?, ?, ?, 'Cr', ?, ?, 'TDS', ?, ?, ?, ?, 4, ?, 1);",
                 {
-                    fyId, fyLabel, vchNumStr, voucherDate,
-                    tdsLedgerId, tdsLedgerId, tdsLedgerName, ledgerName, totalTaxAmount,
-                    ledgerName, totalForTds, totalTaxAmount, totalTaxRate
+                    fyIdVal, fyLabel, vchNumStr, voucherDate,
+                    tdsLegacyCode, tdsLedgerIdVal, tdsLedgerName, ledgerName, totalTaxAmount,
+                    purcType, ledgerName, totalForTds, totalTaxAmount, totalTaxRate, voucherDate
                 }
             );
         }
@@ -752,11 +789,15 @@ bool TdsModel::delete_tds_voucher(int voucherId) {
     db.beginTransaction();
     db.executeNonQuery("DELETE FROM tds_vouchers WHERE id = ?;", {voucherId});
     db.executeNonQuery(
-        "DELETE FROM vouchers WHERE (voucher_no = ? OR voucher_no = ?) AND (voucher_type = 'TDS' OR legacy_type LIKE 'TDS%');",
+        "DELETE FROM TDSDeductions WHERE (voucher_number = ? OR voucher_number = ?) AND (trans_type = 'Jrnl' OR trans_type = 'TDS');",
+        {vchNo, vchNumStr}
+    );
+    db.executeNonQuery(
+        "DELETE FROM vouchers WHERE (voucher_no = ? OR voucher_no = ?) AND (voucher_type = 'TDS' OR voucher_type = 'Jrnl' OR legacy_type LIKE 'TDS%');",
         {vchCode, vchNumStr}
     );
     db.executeNonQuery(
-        "DELETE FROM transactions WHERE (voucher_no = ? OR voucher_no = ?) AND (voucher_type = 'TDS' OR trans_type = 'TDS');",
+        "DELETE FROM transactions WHERE (voucher_no = ? OR voucher_no = ?) AND (trans_type = 'TDS' OR voucher_type = 'TDS' OR purchase_type LIKE 'TDS%' OR (trans_type = 'Jrnl' AND entry_type IN ('Exp.', 'Party', 'PartyTDS', 'TDS')));",
         {vchNumStr, vchCode}
     );
     db.commit();

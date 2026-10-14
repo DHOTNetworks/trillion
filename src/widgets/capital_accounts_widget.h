@@ -30,9 +30,11 @@ signals:
 protected:
     void keyPressEvent(QKeyEvent* event) override;
 
+public slots:
+    void onPeriodClicked();
+
 private slots:
     void onDateFilterChanged();
-    void onPeriodClicked();
     void onTableDoubleClicked(int row, int col);
     void onExportCsv();
     void onExportPdf();

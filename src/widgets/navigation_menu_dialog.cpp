@@ -27,7 +27,7 @@ NavigationMenuDialog::NavigationMenuDialog(const QString& menuTitle, const QStri
 
 void NavigationMenuDialog::setupUi()
 {
-    setFixedWidth(460);
+    setMinimumWidth(460);
     setStyleSheet(QString(
         "#navigationMenuDialog { background-color: #FFFFFF; border: 2.5px solid %1; border-radius: 12px; }"
         "QLabel { border: none; background: transparent; }"
@@ -56,7 +56,7 @@ void NavigationMenuDialog::setupUi()
         const MenuItem& itm = m_items[i];
         auto* row = new QFrame(this);
         row->setObjectName("menuRow");
-        row->setFixedHeight(44);
+        row->setMinimumHeight(44);
         row->setCursor(Qt::PointingHandCursor);
         row->installEventFilter(this);
 

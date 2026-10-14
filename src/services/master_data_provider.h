@@ -76,6 +76,9 @@ public:
     QVariantList getFinancialYearsList();
     QVariantMap getActiveFinancialYear();
 
+    // 8. Input hints derived from the active firm (never hardcoded identities)
+    QString gstinPlaceholder();
+
 signals:
     void masterDataChanged();
 

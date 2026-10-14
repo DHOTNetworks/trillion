@@ -16,6 +16,9 @@
 #include <QPainter>
 #include <QPrinter>
 #include <QTextDocument>
+#include <QPageSize>
+#include <QPageLayout>
+#include <QMarginsF>
 
 namespace MahadevERP {
 
@@ -39,7 +42,7 @@ void CashBankFlowWidget::setupUi() {
     // TIER 1: HEADER BAR CARD
     // ========================================================================
     auto* headerCard = new QFrame(this);
-    headerCard->setFixedHeight(58);
+    headerCard->setMinimumHeight(58);
     headerCard->setStyleSheet("background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px;");
     auto* headerLayout = new QHBoxLayout(headerCard);
     headerLayout->setContentsMargins(16, 0, 16, 0);
@@ -60,7 +63,7 @@ void CashBankFlowWidget::setupUi() {
 
     // Mode Switcher Buttons
     m_cashModeBtn = new QPushButton("Alt+A: Cash Flow", headerCard);
-    m_cashModeBtn->setFixedHeight(32);
+    m_cashModeBtn->setMinimumHeight(32);
     m_cashModeBtn->setCursor(Qt::PointingHandCursor);
     m_cashModeBtn->setStyleSheet(
         "QPushButton { background-color: #EFF6FF; border: 1.5px solid #3B82F6; border-radius: 6px; padding: 0px 12px; font-weight: 700; color: #1D4ED8; font-size: 11.5px; }"
@@ -70,7 +73,7 @@ void CashBankFlowWidget::setupUi() {
     headerLayout->addWidget(m_cashModeBtn);
 
     m_bankModeBtn = new QPushButton("Alt+N: Bank Flow", headerCard);
-    m_bankModeBtn->setFixedHeight(32);
+    m_bankModeBtn->setMinimumHeight(32);
     m_bankModeBtn->setCursor(Qt::PointingHandCursor);
     m_bankModeBtn->setStyleSheet(
         "QPushButton { background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 6px; padding: 0px 12px; font-weight: 700; color: #475569; font-size: 11.5px; }"
@@ -80,7 +83,7 @@ void CashBankFlowWidget::setupUi() {
     headerLayout->addWidget(m_bankModeBtn);
 
     m_jointModeBtn = new QPushButton("Alt+J: Joint Flow", headerCard);
-    m_jointModeBtn->setFixedHeight(32);
+    m_jointModeBtn->setMinimumHeight(32);
     m_jointModeBtn->setCursor(Qt::PointingHandCursor);
     m_jointModeBtn->setStyleSheet(
         "QPushButton { background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 6px; padding: 0px 12px; font-weight: 700; color: #475569; font-size: 11.5px; }"
@@ -91,7 +94,7 @@ void CashBankFlowWidget::setupUi() {
 
     // Action Buttons (PDF, CSV, Back)
     m_pdfBtn = new QPushButton("PDF (Alt+P)", headerCard);
-    m_pdfBtn->setFixedHeight(32);
+    m_pdfBtn->setMinimumHeight(32);
     m_pdfBtn->setCursor(Qt::PointingHandCursor);
     m_pdfBtn->setStyleSheet(
         "QPushButton { background-color: #FEF2F2; border: 1px solid #FCA5A5; border-radius: 6px; padding: 0px 12px; font-weight: 700; color: #DC2626; font-size: 11.5px; }"
@@ -101,7 +104,7 @@ void CashBankFlowWidget::setupUi() {
     headerLayout->addWidget(m_pdfBtn);
 
     m_csvBtn = new QPushButton("CSV (Alt+E)", headerCard);
-    m_csvBtn->setFixedHeight(32);
+    m_csvBtn->setMinimumHeight(32);
     m_csvBtn->setCursor(Qt::PointingHandCursor);
     m_csvBtn->setStyleSheet(
         "QPushButton { background-color: #F0FDF4; border: 1px solid #86EFAC; border-radius: 6px; padding: 0px 12px; font-weight: 700; color: #16A34A; font-size: 11.5px; }"
@@ -111,7 +114,7 @@ void CashBankFlowWidget::setupUi() {
     headerLayout->addWidget(m_csvBtn);
 
     m_backBtn = new QPushButton("← Back (Esc)", headerCard);
-    m_backBtn->setFixedHeight(32);
+    m_backBtn->setMinimumHeight(32);
     m_backBtn->setCursor(Qt::PointingHandCursor);
     m_backBtn->setStyleSheet(
         "QPushButton { background-color: #F1F5F9; border: 1px solid #CBD5E1; border-radius: 6px; padding: 0px 14px; font-weight: 700; color: #475569; font-size: 11.5px; }"
@@ -126,7 +129,7 @@ void CashBankFlowWidget::setupUi() {
     // TIER 2: FILTER & CONTROL BAR CARD
     // ========================================================================
     auto* filterCard = new QFrame(this);
-    filterCard->setFixedHeight(50);
+    filterCard->setMinimumHeight(50);
     filterCard->setStyleSheet("background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px;");
     auto* filterLayout = new QHBoxLayout(filterCard);
     filterLayout->setContentsMargins(16, 0, 16, 0);
@@ -137,7 +140,7 @@ void CashBankFlowWidget::setupUi() {
     filterLayout->addWidget(fromLabel);
 
     m_fromDateEdit = new AccountingDateDisplay(filterCard);
-    m_fromDateEdit->setFixedWidth(115);
+    m_fromDateEdit->setMinimumWidth(115);
     connect(m_fromDateEdit, &AccountingDateDisplay::dateChanged, this, &CashBankFlowWidget::onDateChanged);
     connect(m_fromDateEdit, &AccountingDateDisplay::clicked, this, &CashBankFlowWidget::onAccountingPeriod);
     filterLayout->addWidget(m_fromDateEdit);
@@ -147,13 +150,13 @@ void CashBankFlowWidget::setupUi() {
     filterLayout->addWidget(toLabel);
 
     m_toDateEdit = new AccountingDateDisplay(filterCard);
-    m_toDateEdit->setFixedWidth(115);
+    m_toDateEdit->setMinimumWidth(115);
     connect(m_toDateEdit, &AccountingDateDisplay::dateChanged, this, &CashBankFlowWidget::onDateChanged);
     connect(m_toDateEdit, &AccountingDateDisplay::clicked, this, &CashBankFlowWidget::onAccountingPeriod);
     filterLayout->addWidget(m_toDateEdit);
 
     m_periodBtn = new QPushButton("Period (F2)", filterCard);
-    m_periodBtn->setFixedHeight(34);
+    m_periodBtn->setMinimumHeight(34);
     m_periodBtn->setCursor(Qt::PointingHandCursor);
     m_periodBtn->setStyleSheet(
         "QPushButton { background-color: #EFF6FF; color: #1D4ED8; border: 1px solid #BFDBFE; border-radius: 6px; padding: 4px 10px; font-weight: 700; font-size: 11.5px; }"
@@ -170,7 +173,7 @@ void CashBankFlowWidget::setupUi() {
 
     m_searchBox = new QLineEdit(filterCard);
     m_searchBox->setPlaceholderText("Filter ledger name...");
-    m_searchBox->setFixedHeight(30);
+    m_searchBox->setMinimumHeight(30);
     m_searchBox->setStyleSheet(
         "QLineEdit { background-color: #FFFFFF; color: #0F172A; border: 1.5px solid #CBD5E1; "
         "border-radius: 6px; padding: 2px 10px; font-weight: 600; font-size: 12px; }"
@@ -218,26 +221,26 @@ void CashBankFlowWidget::setupUi() {
         "  alternate-background-color: #F8FAFC;"
         "  border: 1px solid #CBD5E1;"
         "  border-radius: 8px;"
-        "  gridline-color: #F1F5F9;"
+        "  gridline-color: #E2E8F0;"
         "  font-size: 12.5px;"
         "  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;"
         "  color: #0F172A;"
         "}"
         "QTableWidget::item { padding: 4px 8px; }"
         "QTableWidget::item:selected {"
-        "  background-color: #EFF6FF;"
-        "  color: #1D4ED8;"
+        "  background-color: #2563EB;"
+        "  color: #FFFFFF;"
         "  font-weight: bold;"
         "}"
         "QHeaderView::section {"
-        "  background-color: #F1F5F9;"
-        "  color: #1E293B;"
+        "  background-color: #0F172A;"
+        "  color: #FFFFFF;"
         "  font-weight: 800;"
         "  font-size: 12px;"
         "  padding: 8px 10px;"
         "  border: none;"
-        "  border-bottom: 2px solid #CBD5E1;"
-        "  border-right: 1px solid #E2E8F0;"
+        "  "
+        "  border-right: 1px solid #334155;"
         "}"
     );
 
@@ -252,7 +255,7 @@ void CashBankFlowWidget::setupUi() {
 
     auto createFooterCard = [this, footerContainer](const QString& title, QLabel** outVal, const QString& accentColor, int stretch = 1) {
         auto* card = new QFrame(this);
-        card->setFixedHeight(68);
+        card->setMinimumHeight(68);
         card->setStyleSheet(QString(
             "QFrame { background-color: #FFFFFF; border: 1px solid #E2E8F0; border-left: 4px solid %1; border-radius: 8px; }"
             "QLabel { border: none; background: transparent; }"
@@ -294,6 +297,8 @@ void CashBankFlowWidget::setupUi() {
 }
 
 void CashBankFlowWidget::setStatementMode(FlowStatementType mode) {
+    // Mode switches invalidate the loaded rows (Esc-back must still reload).
+    if (m_controller.statementType() != mode) m_isDirty = true;
     m_controller.setStatementType(mode);
     updateHeaderLabels();
 
@@ -340,6 +345,7 @@ void CashBankFlowWidget::refreshData() {
     QString tDate = m_toDateEdit ? m_toDateEdit->isoDate() : "";
     QString q = m_searchBox ? m_searchBox->text().trimmed() : "";
     m_controller.loadData(fDate, tDate, q);
+    m_isDirty = false;
 }
 
 void CashBankFlowWidget::setDateRange(const QString& fromDate, const QString& toDate) {
@@ -521,7 +527,9 @@ void CashBankFlowWidget::onExportPdf() {
     QPrinter printer(QPrinter::HighResolution);
     printer.setOutputFormat(QPrinter::PdfFormat);
     printer.setOutputFileName(path);
+    printer.setPageSize(QPageSize(QPageSize::A4));
     printer.setPageOrientation(QPageLayout::Portrait);
+    printer.setPageMargins(QMarginsF(8, 8, 8, 8), QPageLayout::Millimeter);
 
     QString html;
     html += "<html><head><style>";
@@ -577,6 +585,8 @@ void CashBankFlowWidget::onExportPdf() {
     html += "</tbody></table></body></html>";
 
     QTextDocument doc;
+    doc.setDocumentMargin(0);
+    doc.setPageSize(printer.pageLayout().paintRectPoints().size());
     doc.setHtml(html);
     doc.print(&printer);
 
@@ -585,8 +595,15 @@ void CashBankFlowWidget::onExportPdf() {
 
 void CashBankFlowWidget::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
-    refreshData();
-    if (m_table) m_table->setFocus();
+    if (m_isDirty) refreshData();
+    focusTable();
+}
+
+void CashBankFlowWidget::focusTable()
+{
+    if (!m_table) return;
+    if (m_table->rowCount() > 0 && m_table->currentRow() < 0) m_table->selectRow(0);
+    m_table->setFocus();
 }
 
 void CashBankFlowWidget::keyPressEvent(QKeyEvent* event) {

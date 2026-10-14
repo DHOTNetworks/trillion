@@ -755,7 +755,7 @@ QVariantMap DebitCreditNoteController::saveNote(const QVariantMap &data) {
     // Resolve Party ID
     QVariant partyIdVal = QVariant();
     QVariant pid = DatabaseManager::instance().executeScalar(
-        "SELECT id FROM parties WHERE party_name = ? COLLATE NOCASE;", {partyName}
+        "SELECT id FROM parties WHERE name = ? COLLATE NOCASE;", {partyName}
     );
     if (pid.isValid() && pid.toInt() > 0) {
         partyIdVal = pid.toInt();

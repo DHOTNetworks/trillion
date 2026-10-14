@@ -10,31 +10,46 @@
 #include <QCompleter>
 #include <QAbstractItemView>
 #include <functional>
+#include "account_search_box.h"
+#include "item_search_delegate.h"
 
 namespace VoucherCommon {
 
-    // Bahi-Khata style word-wise Backspace: deletes the previous whitespace-
-    // delimited word before the cursor (selection first, if any). Returns
-    // true when text was actually removed; false when the field is already
-    // empty at the cursor (caller should step back to the previous field).
-    inline bool backspaceWord(QLineEdit* edit) {
+    // Character-by-character Backspace control: deletes selected text if present,
+    // or the single character before the cursor. Returns true when text was removed;
+    // returns false when the field is already empty or cursor is at beginning
+    // (caller should step back to the previous field).
+    inline bool backspaceChar(QLineEdit* edit) {
         if (!edit || edit->isReadOnly()) return false;
         if (edit->hasSelectedText()) {
             edit->backspace();
             return true;
         }
-        const QString text = edit->text();
-        int pos = edit->cursorPosition();
-        if (pos <= 0 || text.isEmpty()) return false;
-        if (pos > text.length()) pos = text.length();
-        int start = pos;
-        while (start > 0 && text.at(start - 1).isSpace()) --start;
-        while (start > 0 && !text.at(start - 1).isSpace()) --start;
-        if (start >= pos) return false;
-        edit->setText(text.left(start) + text.mid(pos));
-        edit->setCursorPosition(start);
-        return true;
+        if (edit->cursorPosition() > 0 && !edit->text().isEmpty()) {
+            edit->backspace();
+            return true;
+        }
+        return false;
     }
+
+    inline bool backspaceWord(QLineEdit* edit) {
+        return backspaceChar(edit);
+    }
+
+    // Automatically converts text to uppercase in real time as the user types,
+    // preserving cursor position and preventing recursion.
+    inline void setupUppercaseInput(QLineEdit* edit) {
+        if (!edit) return;
+        QObject::connect(edit, &QLineEdit::textChanged, edit, [edit](const QString& text) {
+            QString upper = text.toUpper();
+            if (text != upper) {
+                int pos = edit->cursorPosition();
+                edit->setText(upper);
+                edit->setCursorPosition(pos);
+            }
+        });
+    }
+
 
     // Common Color Constants (Lighter, Authentic Bahi-Khata tones)
     inline const QString BgLightPeach     = "#FDEBD0"; // Softer lighter bahi-khata peach
@@ -87,6 +102,16 @@ namespace VoucherCommon {
         // the popup then, never to field navigation.
         static bool popupOpen(QLineEdit* edit) {
             if (!edit) return false;
+            if (auto* asb = qobject_cast<AccountSearchBox*>(edit)) {
+                if (asb->isPopupVisible()) {
+                    return true;
+                }
+            }
+            if (auto* ise = qobject_cast<ItemSearchEditor*>(edit)) {
+                if (ise->isPopupVisible()) {
+                    return true;
+                }
+            }
             if (QWidget* p = edit->parentWidget()) {
                 if (auto* cb = qobject_cast<QComboBox*>(p)) {
                     if (cb->completer() && cb->completer()->popup() &&
@@ -149,6 +174,26 @@ namespace VoucherCommon {
                         }
                     }
                 } else if (ke->key() == Qt::Key_Return || ke->key() == Qt::Key_Enter) {
+                    AccountSearchBox* asb = qobject_cast<AccountSearchBox*>(watched);
+                    if (!asb) asb = qobject_cast<AccountSearchBox*>(m_current);
+                    if (asb) {
+                        if (asb->isPopupVisible()) {
+                            asb->selectCurrentListItem();
+                        } else if (asb->selectedPartyId() <= 0 && !asb->text().trimmed().isEmpty()) {
+                            asb->resolveCurrentText();
+                        }
+                    }
+
+                    ItemSearchEditor* ise = qobject_cast<ItemSearchEditor*>(watched);
+                    if (!ise) ise = qobject_cast<ItemSearchEditor*>(m_current);
+                    if (ise) {
+                        if (ise->isPopupVisible()) {
+                            ise->selectCurrentListItem();
+                        } else if (!ise->text().trimmed().isEmpty()) {
+                            ise->resolveCurrentText();
+                        }
+                    }
+
                     if (le && popupOpen(le)) {
                         return QObject::eventFilter(watched, event);
                     }
@@ -184,4 +229,13 @@ namespace VoucherCommon {
         }
     }
 
+    inline void setupBrokerSearch(AccountSearchBox* box) {
+        if (box) box->configureForBrokerSearch();
+    }
+
+    inline void setupTransportSearch(AccountSearchBox* box) {
+        if (box) box->configureForTransportSearch();
+    }
+
 } // namespace VoucherCommon
+

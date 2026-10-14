@@ -1,0 +1,14 @@
+#pragma once
+// cheque_voucher — print/PDF/ODF renderer + per-target Excel + CSV builders.
+// One report, one contract: edit layout here without touching
+// any other report or the controller plumbing.
+#include <QString>
+#include <QStringList>
+#include <QVector>
+#include <QVariant>
+#include <QVariantMap>
+
+namespace PrintReports {
+QString renderChequeVoucherHtml(const QString& voucherNo, const QString& voucherType = "Cheque Payment");
+QString renderChequeVoucherExcelHtml(const QString& voucherNo, const QString& voucherType = "Cheque Payment");
+} // namespace PrintReports

@@ -1,4 +1,5 @@
 #include "weighbridge_kanda_dialog.h"
+#include "voucher_common.h"
 #include "custom_dialogs.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -51,7 +52,7 @@ void WeighbridgeKandaDialog::setupUi() {
     // TIER 1: HEADER BAR CARD
     // ========================================================================
     auto* headerCard = new QFrame(this);
-    headerCard->setFixedHeight(54);
+    headerCard->setMinimumHeight(54);
     headerCard->setStyleSheet(cardStyle);
     auto* headerLayout = new QHBoxLayout(headerCard);
     headerLayout->setContentsMargins(14, 6, 14, 6);
@@ -158,7 +159,8 @@ void WeighbridgeKandaDialog::setupUi() {
     grid2->addWidget(new QLabel("Vehicle No *:", card2), 0, 0);
     m_vehicleNoEdit = new QLineEdit(card2);
     m_vehicleNoEdit->setPlaceholderText("e.g. PB10-AB-1234");
-    m_vehicleNoEdit->setStyleSheet("font-weight: 800; color: #0F172A; text-transform: uppercase; font-family: 'Consolas', monospace;");
+    m_vehicleNoEdit->setStyleSheet("font-weight: 800; color: #0F172A; font-family: 'Consolas', monospace;");
+    VoucherCommon::setupUppercaseInput(m_vehicleNoEdit);
     grid2->addWidget(m_vehicleNoEdit, 0, 1);
 
     grid2->addWidget(new QLabel("Driver Name:", card2), 0, 2);
@@ -180,7 +182,13 @@ void WeighbridgeKandaDialog::setupUi() {
     // Row 2: Transporter, Transporter GST
     grid2->addWidget(new QLabel("Transporter:", card2), 2, 0);
     m_transporterNameEdit = new AccountSearchBox(card2);
-    m_transporterNameEdit->setPlaceholderText("Search Transport Company...");
+    m_transporterNameEdit->configureForTransportSearch();
+    connect(m_transporterNameEdit, &AccountSearchBox::partyDataSelected, this, [this](const QVariantMap& pData) {
+        QString gstin = pData.value("gstin").toString().trimmed();
+        if (!gstin.isEmpty() && m_transporterGstinEdit) {
+            m_transporterGstinEdit->setText(gstin);
+        }
+    });
     grid2->addWidget(m_transporterNameEdit, 2, 1);
 
     grid2->addWidget(new QLabel("Transporter GST:", card2), 2, 2);
@@ -365,7 +373,7 @@ void WeighbridgeKandaDialog::onResetForm() {
     m_timeEdit->setTime(QTime::currentTime());
     m_invoiceNoEdit->clear();
     m_partyNameEdit->clear();
-    m_itemNameEdit->setText("Rice Basmati");
+    m_itemNameEdit->clear();
     m_vehicleNoEdit->clear();
     m_driverNameEdit->clear();
     m_driverPhoneEdit->clear();
@@ -397,7 +405,7 @@ void WeighbridgeKandaDialog::loadDispatch(int id) {
     m_invoiceNoEdit->setText(map.value("invoiceNo").toString());
     m_partyNameEdit->setText(map.value("partyName").toString());
     m_itemNameEdit->setText(map.value("itemName").toString());
-    m_vehicleNoEdit->setText(map.value("vehicleNo").toString());
+    m_vehicleNoEdit->setText(map.value("vehicleNo", map.value("vehicle_no")).toString().trimmed().toUpper());
     m_driverNameEdit->setText(map.value("driverName").toString());
     m_driverPhoneEdit->setText(map.value("driverPhone").toString());
     m_transporterNameEdit->setText(map.value("transporterName").toString());
@@ -473,7 +481,8 @@ void WeighbridgeKandaDialog::onSaveClicked() {
     data["invoiceNo"] = m_invoiceNoEdit->text().trimmed();
     data["partyName"] = m_partyNameEdit->text().trimmed();
     data["itemName"] = m_itemNameEdit->text().trimmed();
-    data["vehicleNo"] = m_vehicleNoEdit->text().trimmed();
+    data["vehicleNo"] = m_vehicleNoEdit->text().trimmed().toUpper();
+    data["vehicle_no"] = m_vehicleNoEdit->text().trimmed().toUpper();
     data["driverName"] = m_driverNameEdit->text().trimmed();
     data["driverPhone"] = m_driverPhoneEdit->text().trimmed();
     data["transporterName"] = m_transporterNameEdit->text().trimmed();

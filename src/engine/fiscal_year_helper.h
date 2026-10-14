@@ -99,6 +99,11 @@ public:
     static bool isDateInFiscalYear(const QString& dateStr, const FiscalYearInfo& fy);
     static bool isDatePriorTo(const QString& dateStr, const QString& boundaryIso);
 
+    // 3b. Write guard: "" when the date's FY is writable, else an explicit
+    // human reason ("FY 2024-25 is locked…"). Every mutating path must check
+    // this BEFORE beginTransaction and surface the string to the user.
+    static QString writeBlockReason(const QString& dateStr);
+
     // 4. Guaranteed Zero-Leakage Transaction Partitioning
     static PartitionedLedgerData partitionPartyTransactions(
         const QString& partyName,

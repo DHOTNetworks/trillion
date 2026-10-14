@@ -3,6 +3,7 @@
 #include <QWidget>
 #include <QLabel>
 #include <QPushButton>
+#include "kbd_badge_button.h"
 #include <QFrame>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -85,7 +86,7 @@ private:
     QVector<DashboardMenuCard*> m_menuCards;
 
     // Header elements
-    QPushButton* m_openFirmBtn = nullptr;
+    KbdBadgeButton* m_openFirmBtn = nullptr;
     QPushButton* m_syncBtn = nullptr;
     QPushButton* m_periodBtn = nullptr;
     QPushButton* m_scaleBtn = nullptr;
@@ -104,6 +105,8 @@ private:
     QLabel* m_paddyStockLabel = nullptr;
     QLabel* m_riceStockLabel = nullptr;
     QLabel* m_totalSalesLabel = nullptr;
+    QLabel* m_auditRowsLabel = nullptr;
+    QLabel* m_auditBlockedLabel = nullptr;
 };
 
 // Interactive Menu Item Card
