@@ -691,6 +691,27 @@ QVariantList DebitCreditNoteController::searchInvoices(const QString &invType, c
     }
 }
 
+QVariantList DebitCreditNoteController::partyInvoices(const QString &invType, const QString &partyName) {
+    QString party = partyName.trimmed();
+    if (party.isEmpty()) return QVariantList();
+    if (invType == "Purchase") {
+        return DatabaseManager::instance().executeQuery(
+            "SELECT id, invoice_no, invoice_date, supplier_name AS party_name, total_amount "
+            "FROM purchase_invoices "
+            "WHERE supplier_name = ? COLLATE NOCASE "
+            "ORDER BY invoice_date DESC, id DESC LIMIT 100;",
+            {party}
+        );
+    }
+    return DatabaseManager::instance().executeQuery(
+        "SELECT id, invoice_no, invoice_date, customer_name AS party_name, total_amount "
+        "FROM sales_invoices "
+        "WHERE customer_name = ? COLLATE NOCASE "
+        "ORDER BY invoice_date DESC, id DESC LIMIT 100;",
+        {party}
+    );
+}
+
 QVariantMap DebitCreditNoteController::saveNote(const QVariantMap &data) {
     QVariantMap response;
     int id = data.value("id", 0).toInt();

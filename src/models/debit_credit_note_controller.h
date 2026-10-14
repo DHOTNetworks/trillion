@@ -310,6 +310,10 @@ public:
     Q_INVOKABLE QVariantMap saveNote(const QVariantMap &data);
     Q_INVOKABLE QVariantMap getNote(int id);
     Q_INVOKABLE QVariantList searchInvoices(const QString &invType, const QString &query);
+    // Party-scoped invoice lookup for the voucher UI: every invoice of one
+    // party (latest first) so the Orig-Invoice combo fills on party select
+    // and the invoice date auto-fills on invoice select.
+    Q_INVOKABLE QVariantList partyInvoices(const QString &invType, const QString &partyName);
 
 signals:
     void summaryChanged();

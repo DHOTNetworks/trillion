@@ -364,6 +364,8 @@ void PurchaseVoucherWidget::setupUi() {
     connect(m_itemDelegate, &ItemSearchDelegate::stockItemConfigured, this, &PurchaseVoucherWidget::onStockItemConfigured);
     connect(m_itemDelegate, &ItemSearchDelegate::moveNextRequested, this, &PurchaseVoucherWidget::advanceCell);
     connect(m_itemDelegate, &ItemSearchDelegate::movePrevRequested, this, &PurchaseVoucherWidget::retreatCell);
+    connect(m_itemDelegate, &ItemSearchDelegate::browsePrevRequested, this, &PurchaseVoucherWidget::loadPreviousVoucher);
+    connect(m_itemDelegate, &ItemSearchDelegate::browseNextRequested, this, &PurchaseVoucherWidget::loadNextVoucher);
 
     connect(m_tableWidget, &QTableWidget::cellChanged, this, &PurchaseVoucherWidget::onTableCellChanged);
     rootLayout->addWidget(m_tableWidget, 1);

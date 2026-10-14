@@ -2,6 +2,7 @@
 
 #include <QString>
 #include <QWidget>
+#include <QApplication>
 #include <QLineEdit>
 #include <QComboBox>
 #include <QPushButton>
@@ -14,6 +15,32 @@
 #include "item_search_delegate.h"
 
 namespace VoucherCommon {
+
+    // True while the focused control owns PgUp/PgDn itself: an open
+    // suggestion popup, an open combo dropdown, or an open completer list.
+    // Voucher browse keys (PgUp/PgDn) must stand down then — the keystroke
+    // pages the list instead. Every other context belongs to the voucher.
+    inline bool browseBlockedByPopup() {
+        QWidget* fw = QApplication::focusWidget();
+        if (!fw) return false;
+        if (auto* asb = qobject_cast<AccountSearchBox*>(fw)) {
+            if (asb->isPopupVisible()) return true;
+        }
+        if (auto* ise = qobject_cast<ItemSearchEditor*>(fw)) {
+            if (ise->isPopupVisible()) return true;
+        }
+        if (auto* cb = qobject_cast<QComboBox*>(fw)) {
+            if (cb->view() && cb->view()->isVisible()) return true;
+            if (cb->lineEdit() && cb->lineEdit()->completer() &&
+                cb->lineEdit()->completer()->popup() &&
+                cb->lineEdit()->completer()->popup()->isVisible()) return true;
+        }
+        if (auto* le = qobject_cast<QLineEdit*>(fw)) {
+            if (le->completer() && le->completer()->popup() &&
+                le->completer()->popup()->isVisible()) return true;
+        }
+        return false;
+    }
 
     // Character-by-character Backspace control: deletes selected text if present,
     // or the single character before the cursor. Returns true when text was removed;

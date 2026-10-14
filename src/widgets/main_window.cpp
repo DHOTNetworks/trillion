@@ -1176,10 +1176,12 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
         if (m_jformVoucherWidget) {
             m_stackedWidget->setCurrentWidget(m_jformVoucherWidget);
             if (!pendingEntry.isEmpty()) {
-                m_jformVoucherWidget->loadVoucherForEditing(QVariant::fromValue(pendingEntry), pendingDate);
+                const bool loaded = m_jformVoucherWidget->loadVoucherForEditing(QVariant::fromValue(pendingEntry), pendingDate, true);
+                qDebug() << "[NAV] jform alteration loaded:" << loaded << "inv:" << pendingInv << "vch:" << pendingVNo;
             } else if (!pendingInv.isEmpty() || !pendingVNo.isEmpty() || pendingId > 0) {
                 QVariant target = !pendingInv.isEmpty() ? QVariant(pendingInv) : (!pendingVNo.isEmpty() ? QVariant(pendingVNo) : QVariant(pendingId));
-                m_jformVoucherWidget->loadVoucherForEditing(target, pendingDate);
+                const bool loaded = m_jformVoucherWidget->loadVoucherForEditing(target, pendingDate, true);
+                qDebug() << "[NAV] jform alteration loaded:" << loaded << "inv:" << pendingInv << "vch:" << pendingVNo;
             } else {
                 m_jformVoucherWidget->resetForm();
                 m_jformVoucherWidget->openDateDialog(true);
@@ -1189,10 +1191,12 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
         if (m_iformVoucherWidget) {
             m_stackedWidget->setCurrentWidget(m_iformVoucherWidget);
             if (!pendingEntry.isEmpty()) {
-                m_iformVoucherWidget->loadVoucherForEditing(QVariant::fromValue(pendingEntry), pendingDate);
+                const bool loaded = m_iformVoucherWidget->loadVoucherForEditing(QVariant::fromValue(pendingEntry), pendingDate, true);
+                qDebug() << "[NAV] iform alteration loaded:" << loaded << "inv:" << pendingInv << "vch:" << pendingVNo;
             } else if (!pendingInv.isEmpty() || !pendingVNo.isEmpty() || pendingId > 0) {
                 QVariant target = !pendingInv.isEmpty() ? QVariant(pendingInv) : (!pendingVNo.isEmpty() ? QVariant(pendingVNo) : QVariant(pendingId));
-                m_iformVoucherWidget->loadVoucherForEditing(target, pendingDate);
+                const bool loaded = m_iformVoucherWidget->loadVoucherForEditing(target, pendingDate, true);
+                qDebug() << "[NAV] iform alteration loaded:" << loaded << "inv:" << pendingInv << "vch:" << pendingVNo;
             } else {
                 m_iformVoucherWidget->resetForm();
                 m_iformVoucherWidget->openDateDialog(true);
@@ -1254,13 +1258,17 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
             m_stackedWidget->setCurrentWidget(m_debitCreditNoteWidget);
             if (!pendingEntry.isEmpty()) {
                 int nId = pendingEntry.value("id").toInt();
-                if (nId > 0) m_debitCreditNoteWidget->loadNoteForEditing(nId);
+                if (nId > 0) {
+                    const bool loaded = m_debitCreditNoteWidget->loadNoteForEditing(nId, true);
+                    qDebug() << "[NAV] debit-note alteration loaded:" << loaded << "id:" << nId;
+                }
             } else if (pendingId > 0) {
-                m_debitCreditNoteWidget->loadNoteForEditing(pendingId);
+                const bool loaded = m_debitCreditNoteWidget->loadNoteForEditing(pendingId, true);
+                qDebug() << "[NAV] debit-note alteration loaded:" << loaded << "id:" << pendingId;
             } else {
                 m_debitCreditNoteWidget->resetForm();
+                m_debitCreditNoteWidget->openDateDialog(true);
             }
-            m_debitCreditNoteWidget->setFocus();
         }
     } else if (viewIndex == 29) {
         FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();

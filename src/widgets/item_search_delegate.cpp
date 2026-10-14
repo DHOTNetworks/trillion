@@ -418,6 +418,20 @@ bool ItemSearchDelegate::eventFilter(QObject* object, QEvent* event) {
 
         QLineEdit* lineEdit = qobject_cast<QLineEdit*>(editor);
 
+        if (key == Qt::Key_PageUp || key == Qt::Key_PageDown) {
+            // Open suggestion lists keep PgUp/PgDn for paging; a closed
+            // editor commits, closes, and browses vouchers instead of
+            // scrolling the grid (Tally PgUp/PgDn contract).
+            if (itemEditor && itemEditor->isPopupVisible()) {
+                return false;
+            }
+            emit commitData(editor);
+            emit closeEditor(editor, QAbstractItemDelegate::NoHint);
+            if (key == Qt::Key_PageUp) emit browsePrevRequested();
+            else emit browseNextRequested();
+            return true;
+        }
+
         if (key == Qt::Key_Backspace) {
             // Bahi-Khata convention (numeric cells): delete word by word; on
             // an empty field commit, close and step back (same as Backtab).

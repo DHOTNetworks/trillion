@@ -13,6 +13,7 @@
 #include <QHeaderView>
 #include <QFrame>
 #include <QCompleter>
+#include <QApplication>
 #include <QDate>
 #include <QKeyEvent>
 #include <cmath>
@@ -58,12 +59,17 @@ void DebitCreditNoteWidget::setupUi() {
     titleCol->setSpacing(1);
     auto* titleLabel = new QLabel("GST Debit & Credit Notes Entry (Section 34)", headerCard);
     titleLabel->setStyleSheet("font-size: 15px; font-weight: 800; color: #0F172A; border: none; background: transparent;");
-    auto* subLabel = new QLabel("Issue statutory GST Credit Notes (Sales Return / Rate Cut) & Debit Notes (Purchase Return / Rate Difference).", headerCard);
+    auto* subLabel = new QLabel("Credit Notes (Sales Return / Rate Cut) & Debit Notes (Purchase Return / Rate Difference). F4: Alter  PgUp/PgDn: Browse  F2: Date", headerCard);
     subLabel->setStyleSheet("font-size: 11px; color: #64748B; border: none; background: transparent;");
     titleCol->addWidget(titleLabel);
     titleCol->addWidget(subLabel);
     headerLayout->addLayout(titleCol);
     headerLayout->addStretch(1);
+
+    m_voucherNoDisplay = new QLabel("", headerCard);
+    m_voucherNoDisplay->setStyleSheet("background-color: #F1F5F9; color: #1E293B; border: 1px solid #CBD5E1; border-radius: 4px; padding: 4px 10px; font-size: 12px; font-weight: 700;");
+    m_voucherNoDisplay->setVisible(false);
+    headerLayout->addWidget(m_voucherNoDisplay);
 
     m_newBtn = new KbdBadgeButton("+ New Note", "F9", headerCard);
     m_newBtn->setPrimaryColor("#0284C7", "#0369A1");
@@ -121,11 +127,12 @@ void DebitCreditNoteWidget::setupUi() {
     m_noteDateEdit->setMaximumWidth(110);
     dateBox->addWidget(m_noteDateEdit);
 
-    auto* dateBtn = new QPushButton("", leftCard);
+    auto* dateBtn = new QPushButton("…", leftCard);
     dateBtn->setFixedSize(26, 26);
     dateBtn->setCursor(Qt::PointingHandCursor);
+    dateBtn->setToolTip("Pick date (F2)");
     dateBtn->setStyleSheet("background-color: #EFF6FF; border: 1px solid #93C5FD; border-radius: 4px; font-weight: bold; color: #1D4ED8;");
-    connect(dateBtn, &QPushButton::clicked, this, &DebitCreditNoteWidget::openDateDialog);
+    connect(dateBtn, &QPushButton::clicked, this, [this]() { openDateDialog(false); });
     dateBox->addWidget(dateBtn);
 
     m_dayLabel = new QLabel("", leftCard);
@@ -143,6 +150,8 @@ void DebitCreditNoteWidget::setupUi() {
     leftGrid->addWidget(new QLabel("Note No:", leftCard), 1, 0);
     m_noteNoEdit = new QLineEdit(leftCard);
     m_noteNoEdit->setReadOnly(true);
+    // Auto-generated: never a keyboard stop (click still selects).
+    m_noteNoEdit->setFocusPolicy(Qt::ClickFocus);
     m_noteNoEdit->setStyleSheet("background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 4px 8px; font-weight: 800; color: #1D4ED8; font-family: 'Consolas', monospace;");
     leftGrid->addWidget(m_noteNoEdit, 1, 1);
 
@@ -151,15 +160,21 @@ void DebitCreditNoteWidget::setupUi() {
     m_origInvoiceTypeCombo->addItems({"Sale Invoice", "Purchase Bill", "Other / Manual"});
     leftGrid->addWidget(m_origInvoiceTypeCombo, 1, 3);
 
-    // Row 2: Original Inv No, Original Inv Date
+    // Row 2: Original Inv No (party-fed combo), Original Inv Date (auto)
     leftGrid->addWidget(new QLabel("Orig Invoice No *:", leftCard), 2, 0);
-    m_origInvoiceNoEdit = new QLineEdit(leftCard);
-    m_origInvoiceNoEdit->setPlaceholderText("e.g. INV-0045");
-    leftGrid->addWidget(m_origInvoiceNoEdit, 2, 1);
+    m_origInvoiceCombo = new QComboBox(leftCard);
+    m_origInvoiceCombo->setEditable(true);
+    if (m_origInvoiceCombo->lineEdit())
+        m_origInvoiceCombo->lineEdit()->setPlaceholderText("Select party first, then pick invoice");
+    m_origInvoiceCombo->setStyleSheet("background-color: #EFF6FF; border: 1.5px solid #93C5FD; border-radius: 6px; padding: 4px 8px; font-weight: bold; color: #1D4ED8;");
+    leftGrid->addWidget(m_origInvoiceCombo, 2, 1);
 
     leftGrid->addWidget(new QLabel("Orig Inv Date:", leftCard), 2, 2);
     m_origInvoiceDateEdit = new QLineEdit(leftCard);
-    m_origInvoiceDateEdit->setPlaceholderText("dd-MM-yyyy");
+    m_origInvoiceDateEdit->setPlaceholderText("auto from invoice");
+    m_origInvoiceDateEdit->setReadOnly(true);
+    // Display-only mirror of the linked invoice date: no keyboard stop.
+    m_origInvoiceDateEdit->setFocusPolicy(Qt::ClickFocus);
     leftGrid->addWidget(m_origInvoiceDateEdit, 2, 3);
 
     leftLayout->addLayout(leftGrid);
@@ -197,6 +212,9 @@ void DebitCreditNoteWidget::setupUi() {
     rightGrid->addWidget(new QLabel("Party GSTIN:", rightCard), 0, 2);
     m_partyGstinEdit = new QLineEdit(rightCard);
     m_partyGstinEdit->setPlaceholderText("Unregistered / GSTIN");
+    // Display mirror of the party master GSTIN (editable for manual
+    // corrections): mouse-only, never a Tab/Enter stop.
+    m_partyGstinEdit->setFocusPolicy(Qt::ClickFocus);
     m_partyGstinEdit->setStyleSheet("background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 4px 8px; font-weight: bold; font-family: 'Consolas', monospace; color: #334155;");
     rightGrid->addWidget(m_partyGstinEdit, 0, 3);
 
@@ -216,6 +234,12 @@ void DebitCreditNoteWidget::setupUi() {
     m_posCombo = new QComboBox(rightCard);
     populateStates();
     rightGrid->addWidget(m_posCombo, 1, 3);
+
+    // Row 2: running party balance (display only, mirrors sale voucher).
+    rightGrid->addWidget(new QLabel("Date Balance:", rightCard), 2, 0);
+    m_partyBalLabel = new QLabel("Date Bal. 0.00", rightCard);
+    m_partyBalLabel->setStyleSheet("color: #0284C7; font-weight: 800; font-size: 11.5px; border: none; background: transparent;");
+    rightGrid->addWidget(m_partyBalLabel, 2, 1);
 
     rightLayout->addLayout(rightGrid);
     metaRowLayout->addWidget(rightCard, 1);
@@ -309,6 +333,10 @@ void DebitCreditNoteWidget::setupUi() {
     m_itemDelegate = new ItemSearchDelegate(this);
     m_itemsTable->setItemDelegateForColumn(0, m_itemDelegate);
     connect(m_itemDelegate, &ItemSearchDelegate::stockItemConfigured, this, &DebitCreditNoteWidget::onStockItemConfigured);
+    connect(m_itemDelegate, &ItemSearchDelegate::moveNextRequested, this, &DebitCreditNoteWidget::advanceCell);
+    connect(m_itemDelegate, &ItemSearchDelegate::movePrevRequested, this, &DebitCreditNoteWidget::retreatCell);
+    connect(m_itemDelegate, &ItemSearchDelegate::browsePrevRequested, this, &DebitCreditNoteWidget::loadPreviousNote);
+    connect(m_itemDelegate, &ItemSearchDelegate::browseNextRequested, this, &DebitCreditNoteWidget::loadNextNote);
 
     tableCardLayout->addWidget(m_itemsTable, 1);
     rootLayout->addWidget(tableCard, 1);
@@ -376,11 +404,23 @@ void DebitCreditNoteWidget::setupUi() {
     m_narrationEdit->setStyleSheet("background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 6px 10px; font-size: 12px; color: #0F172A; font-weight: 600;");
     footerLayout->addWidget(m_narrationEdit, 1);
 
+    m_statusLabel = new QLabel(footerCard);
+    m_statusLabel->setStyleSheet("font-weight: 700; font-size: 11px; color: #475569; border: none; background: transparent;");
+    footerLayout->addWidget(m_statusLabel);
+
     m_cancelBtn = new KbdBadgeButton("Cancel", "Esc", footerCard);
     m_cancelBtn->setPrimaryColor("#F1F5F9", "#E2E8F0");
     m_cancelBtn->setTextColor("#475569");
     connect(m_cancelBtn, &QPushButton::clicked, this, &DebitCreditNoteWidget::backRequested);
     footerLayout->addWidget(m_cancelBtn);
+
+    m_printBtn = new KbdBadgeButton("Print", "Ctrl+P", footerCard);
+    connect(m_printBtn, &QPushButton::clicked, this, &DebitCreditNoteWidget::printNote);
+    footerLayout->addWidget(m_printBtn);
+
+    m_pdfBtn = new KbdBadgeButton("PDF", "Ctrl+E", footerCard);
+    connect(m_pdfBtn, &QPushButton::clicked, this, &DebitCreditNoteWidget::exportPdf);
+    footerLayout->addWidget(m_pdfBtn);
 
     m_deleteBtn = new KbdBadgeButton("Delete Note", "Del", footerCard);
     m_deleteBtn->setPrimaryColor("#FEF2F2", "#FEE2E2");
@@ -411,126 +451,91 @@ void DebitCreditNoteWidget::setupConnections() {
         }
     });
 
-    connect(m_partySearch, &AccountSearchBox::partySelected, this, &DebitCreditNoteWidget::onPartySelected);
+    connect(m_partySearch, &AccountSearchBox::partyDataSelected, this, &DebitCreditNoteWidget::onPartyDataSelected);
+    connect(m_origInvoiceTypeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this]() { refreshOrigInvoiceCombo(); });
+    connect(m_origInvoiceCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &DebitCreditNoteWidget::onOrigInvoiceChosen);
     connect(m_itemsTable, &QTableWidget::cellChanged, this, &DebitCreditNoteWidget::onRecalculateTotals);
     connect(m_posCombo, &QComboBox::currentIndexChanged, this, &DebitCreditNoteWidget::onRecalculateTotals);
     connect(m_newBtn, &QPushButton::clicked, this, &DebitCreditNoteWidget::resetForm);
-
-    // Keyboard navigation order (visual order; table cells keep grid keys).
-    m_navOrder = {
-        m_noteTypeCombo,
-        m_noteNoEdit,
-        m_origInvoiceTypeCombo,
-        m_origInvoiceNoEdit,
-        m_origInvoiceDateEdit,
-        m_partySearch,
-        m_partyGstinEdit,
-        m_reasonCodeCombo,
-        m_posCombo,
-        m_narrationEdit,
-        m_saveBtn
+    if (m_saveBtn) m_saveBtn->installEventFilter(this);
+    // Function keys must be caught here: QComboBox and the grid natively
+    // swallow PgUp/PgDn (and F4 toggles combo dropdowns), so propagation
+    // to keyPressEvent never happens from those controls.
+    const QList<QWidget*> fnInputs = {
+        m_noteTypeCombo, m_partySearch, m_origInvoiceTypeCombo, m_origInvoiceCombo,
+        m_reasonCodeCombo, m_posCombo, m_partyGstinEdit, m_itemsTable, m_narrationEdit
     };
-    for (QWidget* w : m_navOrder) {
-        if (!w) continue;
-        w->installEventFilter(this);
-        // Typing focus lives in a combo's line edit, not the combo itself.
-        if (auto* cb = qobject_cast<QComboBox*>(w)) {
-            if (cb->lineEdit()) cb->lineEdit()->installEventFilter(this);
-        }
+    for (QWidget* w : fnInputs) {
+        if (w) w->installEventFilter(this);
     }
+
+    setupNavigationChains();
 }
 
-static void focusDebitNavWidget(QWidget* w) {
-    if (!w) return;
-    w->setFocus();
-    if (auto* le = qobject_cast<QLineEdit*>(w)) {
-        le->selectAll();
-    } else if (auto* cb = qobject_cast<QComboBox*>(w)) {
-        if (cb->lineEdit()) cb->lineEdit()->selectAll();
-    }
+void DebitCreditNoteWidget::setupNavigationChains() {
+    // Sale-voucher pattern: single Enter-forward declaration per field
+    // (Backspace/Left derive backward automatically). Dates never take
+    // keyboard focus — the dialog flow owns them.
+    auto go = [](QWidget* w) {
+        if (!w) return;
+        w->setFocus();
+        if (auto* le = qobject_cast<QLineEdit*>(w)) le->selectAll();
+        else if (auto* cb = qobject_cast<QComboBox*>(w)) { if (cb->lineEdit()) cb->lineEdit()->selectAll(); }
+        else if (auto* asb = qobject_cast<AccountSearchBox*>(w)) asb->selectAll();
+    };
+    auto stepBackToGrid = [this]() {
+        if (!m_itemsTable || m_itemsTable->rowCount() == 0) return;
+        int r = m_itemsTable->rowCount() - 1;
+        m_itemsTable->setCurrentCell(r, 7);
+        m_itemsTable->edit(m_itemsTable->currentIndex());
+    };
+    VoucherCommon::installGridNavigation(m_noteTypeCombo, nullptr, m_partySearch,
+        [this, go]() { go(m_partySearch); });
+    VoucherCommon::installGridNavigation(m_partySearch, m_noteTypeCombo, m_origInvoiceTypeCombo,
+        [this, go]() { go(m_origInvoiceTypeCombo); });
+    VoucherCommon::installGridNavigation(m_origInvoiceTypeCombo, m_partySearch, m_origInvoiceCombo,
+        [this, go]() { go(m_origInvoiceCombo); });
+    VoucherCommon::installGridNavigation(m_origInvoiceCombo, m_origInvoiceTypeCombo, m_reasonCodeCombo,
+        [this, go]() { go(m_reasonCodeCombo); });
+    VoucherCommon::installGridNavigation(m_reasonCodeCombo, m_origInvoiceCombo, m_posCombo,
+        [this, go]() { go(m_posCombo); });
+    VoucherCommon::installGridNavigation(m_posCombo, m_reasonCodeCombo, nullptr,
+        [this]() { focusTableAt(0, 0); }, stepBackToGrid);
+    VoucherCommon::installGridNavigation(m_partyGstinEdit, m_partySearch, m_reasonCodeCombo,
+        [this, go]() { go(m_reasonCodeCombo); });
+    VoucherCommon::installGridNavigation(m_narrationEdit, nullptr, nullptr,
+        [this]() { if (m_saveBtn) m_saveBtn->setFocus(); }, stepBackToGrid);
 }
 
 bool DebitCreditNoteWidget::eventFilter(QObject* watched, QEvent* event) {
+    // installGridNavigation owns every field's Enter/Left/Right/Backspace;
+    // only the Save button needs a local contract (Enter/Space saves,
+    // Left steps back to narration).
     if (event->type() == QEvent::KeyPress) {
         auto* keyEvent = static_cast<QKeyEvent*>(event);
-
-        auto* targetWidget = qobject_cast<QWidget*>(watched);
-        if (targetWidget) {
-            if (auto* parentCombo = qobject_cast<QComboBox*>(targetWidget->parent())) {
-                targetWidget = parentCombo;
-            } else if (auto* parentWidget = targetWidget->parentWidget()) {
-                if (m_navOrder.contains(parentWidget)) {
-                    targetWidget = parentWidget;
-                }
+        int key = keyEvent->key();
+        // Combos and the grid swallow PgUp/PgDn/F4 natively — intercept
+        // before them. Open popups keep the keys (list paging/close).
+        if ((key == Qt::Key_PageUp || key == Qt::Key_PageDown || key == Qt::Key_F4) &&
+            watched != m_saveBtn) {
+            if (!VoucherCommon::browseBlockedByPopup()) {
+                if (key == Qt::Key_PageUp) loadPreviousNote();
+                else if (key == Qt::Key_PageDown) loadNextNote();
+                else openAlterNoteDialog();
+                return true;
             }
+            return false;
         }
-
-        int idx = m_navOrder.indexOf(targetWidget);
-
-        if (keyEvent->key() == Qt::Key_Backspace) {
-            // Bahi-Khata convention: Backspace deletes word by word; on an
-            // empty field it steps back to the previous field.
-            QLineEdit* edit = qobject_cast<QLineEdit*>(watched);
-            if (!edit) {
-                if (auto* cb = qobject_cast<QComboBox*>(watched)) edit = cb->lineEdit();
-            }
-            if (VoucherCommon::backspaceWord(edit)) {
-                return true;
-            }
-            if (idx > 0) {
-                for (int prevIdx = idx - 1; prevIdx >= 0; --prevIdx) {
-                    QWidget* prev = m_navOrder.at(prevIdx);
-                    if (prev && prev->isEnabled() && prev->isVisible()) {
-                        focusDebitNavWidget(prev);
-                        return true;
-                    }
-                }
-            }
-        } else if (keyEvent->key() == Qt::Key_Return || keyEvent->key() == Qt::Key_Enter) {
-            if (targetWidget == m_saveBtn) {
+        if (watched == m_saveBtn) {
+            if (key == Qt::Key_Return || key == Qt::Key_Enter || key == Qt::Key_Space) {
                 onSaveClicked();
                 return true;
-            }
-            // Open completer popup consumes Enter (accept completion).
-            if (auto* cb = qobject_cast<QComboBox*>(targetWidget)) {
-                if (cb->completer() && cb->completer()->popup() && cb->completer()->popup()->isVisible()) {
-                    return QWidget::eventFilter(watched, event);
+            } else if (key == Qt::Key_Left || key == Qt::Key_Up) {
+                if (m_narrationEdit) {
+                    m_narrationEdit->setFocus();
+                    m_narrationEdit->selectAll();
                 }
-            }
-            if (idx >= 0) {
-                for (int nextIdx = idx + 1; nextIdx < m_navOrder.size(); ++nextIdx) {
-                    QWidget* next = m_navOrder.at(nextIdx);
-                    if (next && next->isEnabled() && next->isVisible()) {
-                        focusDebitNavWidget(next);
-                        return true;
-                    }
-                }
-                onSaveClicked();
                 return true;
-            }
-        } else if (keyEvent->key() == Qt::Key_Left) {
-            if (auto* le = qobject_cast<QLineEdit*>(watched)) {
-                if (le->cursorPosition() == 0 && !le->hasSelectedText() && idx > 0) {
-                    for (int prevIdx = idx - 1; prevIdx >= 0; --prevIdx) {
-                        QWidget* prev = m_navOrder.at(prevIdx);
-                        if (prev && prev->isEnabled() && prev->isVisible()) {
-                            focusDebitNavWidget(prev);
-                            return true;
-                        }
-                    }
-                }
-            }
-        } else if (keyEvent->key() == Qt::Key_Right) {
-            if (auto* le = qobject_cast<QLineEdit*>(watched)) {
-                if (le->cursorPosition() >= le->text().length() && !le->hasSelectedText() && idx >= 0) {
-                    for (int nextIdx = idx + 1; nextIdx < m_navOrder.size(); ++nextIdx) {
-                        QWidget* next = m_navOrder.at(nextIdx);
-                        if (next && next->isEnabled() && next->isVisible()) {
-                            focusDebitNavWidget(next);
-                            return true;
-                        }
-                    }
-                }
             }
         }
     }
@@ -558,18 +563,48 @@ void DebitCreditNoteWidget::populateStates() {
 }
 
 void DebitCreditNoteWidget::keyPressEvent(QKeyEvent* event) {
-    if (event->key() == Qt::Key_Escape) {
-        emit backRequested();
+    // Grid with focus but no cell editor open (unhandled keys propagate here
+    // only in that state): Enter opens the current cell's editor; Backspace
+    // on a filled cell clears it, on an empty cell steps back.
+    if ((event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter ||
+         event->key() == Qt::Key_Backspace) &&
+        m_itemsTable && QApplication::focusWidget() == m_itemsTable) {
+        int r = m_itemsTable->currentRow(), c = m_itemsTable->currentColumn();
+        if (r >= 0 && c >= 0 && r < m_itemsTable->rowCount() && c < m_itemsTable->columnCount()) {
+            if (event->key() == Qt::Key_Backspace) {
+                if (QTableWidgetItem* it = m_itemsTable->item(r, c)) {
+                    if (!it->text().isEmpty()) {
+                        it->setText("");
+                        onRecalculateTotals();
+                        event->accept();
+                        return;
+                    }
+                }
+                retreatCell();
+            } else {
+                m_itemsTable->edit(m_itemsTable->currentIndex());
+            }
+            event->accept();
+            return;
+        }
+    }
+    if (event->key() == Qt::Key_F2) {
+        openDateDialog(false);
         event->accept();
         return;
     }
     if (event->key() == Qt::Key_F4) {
-        onAddItemRow();
+        if (!VoucherCommon::browseBlockedByPopup()) openAlterNoteDialog();
         event->accept();
         return;
     }
-    if (event->key() == Qt::Key_Delete) {
-        onRemoveItemRow();
+    if (event->key() == Qt::Key_PageUp) {
+        if (!VoucherCommon::browseBlockedByPopup()) loadPreviousNote();
+        event->accept();
+        return;
+    }
+    if (event->key() == Qt::Key_PageDown) {
+        if (!VoucherCommon::browseBlockedByPopup()) loadNextNote();
         event->accept();
         return;
     }
@@ -578,8 +613,31 @@ void DebitCreditNoteWidget::keyPressEvent(QKeyEvent* event) {
         event->accept();
         return;
     }
+    if (event->key() == Qt::Key_Delete) {
+        // Row removal is a grid action only — never while typing elsewhere.
+        if (m_itemsTable && QApplication::focusWidget() == m_itemsTable) {
+            onRemoveItemRow();
+            event->accept();
+            return;
+        }
+    }
     if (event->modifiers() & Qt::ControlModifier && event->key() == Qt::Key_S) {
         onSaveClicked();
+        event->accept();
+        return;
+    }
+    if (event->modifiers() & Qt::ControlModifier && event->key() == Qt::Key_P) {
+        printNote();
+        event->accept();
+        return;
+    }
+    if (event->modifiers() & Qt::ControlModifier && event->key() == Qt::Key_E) {
+        exportPdf();
+        event->accept();
+        return;
+    }
+    if (event->key() == Qt::Key_Escape) {
+        emit backRequested();
         event->accept();
         return;
     }
@@ -589,6 +647,7 @@ void DebitCreditNoteWidget::keyPressEvent(QKeyEvent* event) {
 void DebitCreditNoteWidget::resetForm() {
     m_editNoteId = 0;
     m_deleteBtn->setVisible(false);
+    if (m_voucherNoDisplay) m_voucherNoDisplay->setVisible(false);
 
     FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
     QDate cur = QDate::currentDate();
@@ -603,9 +662,13 @@ void DebitCreditNoteWidget::resetForm() {
         m_noteNoEdit->setText("CN-0001");
     }
 
-    m_origInvoiceNoEdit->clear();
+    m_suppressInvoiceFetch = true;
+    m_origInvoiceCombo->clear();
+    if (m_origInvoiceCombo->lineEdit()) m_origInvoiceCombo->lineEdit()->clear();
+    m_suppressInvoiceFetch = false;
     m_origInvoiceDateEdit->clear();
-    m_partySearch->clear();
+    m_partySearch->clearParty();
+    m_partyBalLabel->setText("Date Bal. 0.00");
     m_partyGstinEdit->clear();
     m_narrationEdit->clear();
 
@@ -615,17 +678,36 @@ void DebitCreditNoteWidget::resetForm() {
 
     onAddItemRow();
     onRecalculateTotals();
+    setStatusMessage("Ready for new note entry", false);
+    if (m_partySearch) { m_partySearch->setFocus(); m_partySearch->selectAll(); }
 }
 
-void DebitCreditNoteWidget::openDateDialog() {
+void DebitCreditNoteWidget::showEvent(QShowEvent* event) {
+    QWidget::showEvent(event);
+}
+
+void DebitCreditNoteWidget::openDateDialog(bool isInitial) {
+    Q_UNUSED(isInitial);
     QDate curDate = m_noteDateEdit->date();
     if (!curDate.isValid()) curDate = QDate::currentDate();
     FiscalYearInfo fyCtx = FiscalYearHelper::getFiscalYearForDate(curDate.toString("yyyy-MM-dd"));
+    if (!fyCtx.isValid()) fyCtx = FiscalYearHelper::getActiveFiscalYear();
 
     QDate chosen = VoucherDateDialog::selectDate(this, curDate, fyCtx);
     if (chosen.isValid()) {
         m_noteDateEdit->setDate(chosen);
     }
+    if (m_partySearch) {
+        m_partySearch->setFocus();
+        m_partySearch->selectAll();
+    }
+}
+
+void DebitCreditNoteWidget::setStatusMessage(const QString& message, bool isError) {
+    if (!m_statusLabel) return;
+    m_statusLabel->setText(message);
+    m_statusLabel->setStyleSheet(QString("font-weight: 700; font-size: 11px; color: %1; border: none; background: transparent;")
+        .arg(isError ? "#DC2626" : "#475569"));
 }
 
 void DebitCreditNoteWidget::onNoteTypeChanged(int index) {
@@ -638,24 +720,38 @@ void DebitCreditNoteWidget::onNoteTypeChanged(int index) {
     } else {
         m_origInvoiceTypeCombo->setCurrentIndex(1); // Purchase Bill
     }
+    refreshOrigInvoiceCombo();
     onRecalculateTotals();
 }
 
-void DebitCreditNoteWidget::onPartySelected(const QString& partyName) {
+void DebitCreditNoteWidget::onPartyDataSelected(const QVariantMap& partyData) {
+    QString partyName = partyData.value("party_name").toString().trimmed();
+    if (partyName.isEmpty()) partyName = partyData.value("name").toString().trimmed();
+    if (partyName.isEmpty()) return;
+
+    QString gstin = partyData.value("gstin").toString().trimmed();
     if (m_controller) {
         m_controller->setDraftPartyName(partyName);
-        m_partyGstinEdit->setText(m_controller->draftPartyGstin());
-    } else {
-        QVariant gstinVar = DatabaseManager::instance().executeScalar("SELECT gstin FROM parties WHERE name = ? LIMIT 1;", {partyName});
-        if (gstinVar.isValid()) {
-            m_partyGstinEdit->setText(gstinVar.toString().trimmed());
+        if (!gstin.isEmpty()) {
+            m_controller->setDraftPartyGstin(gstin);
+            m_partyGstinEdit->setText(gstin);
+        } else {
+            m_partyGstinEdit->setText(m_controller->draftPartyGstin());
         }
+    } else if (!gstin.isEmpty()) {
+        m_partyGstinEdit->setText(gstin);
     }
 
-    // Auto update Place of Supply based on party GSTIN
-    QString gstin = m_partyGstinEdit->text().trimmed();
-    if (gstin.length() >= 2) {
-        QString stateCode = gstin.left(2);
+    double bal = partyData.value("current_balance", 0.0).toDouble();
+    if (m_partyBalLabel) {
+        m_partyBalLabel->setText(QString("Date Bal. %1").arg(QString::number(bal, 'f', 2)));
+    }
+
+    // Auto update Place of Supply based on party GSTIN / state.
+    QString state = partyData.value("state").toString().trimmed();
+    QString gstinTxt = m_partyGstinEdit->text().trimmed();
+    QString stateCode = gstinTxt.length() >= 2 ? gstinTxt.left(2) : state.left(2);
+    if (!stateCode.isEmpty()) {
         for (int i = 0; i < m_posCombo->count(); ++i) {
             if (m_posCombo->itemText(i).startsWith(stateCode)) {
                 m_posCombo->setCurrentIndex(i);
@@ -663,7 +759,129 @@ void DebitCreditNoteWidget::onPartySelected(const QString& partyName) {
             }
         }
     }
+    // Party drives the invoice list: refill + auto-pick latest invoice date.
+    refreshOrigInvoiceCombo();
     onRecalculateTotals();
+}
+
+QString DebitCreditNoteWidget::currentOrigInvType() const {
+    QString t = m_origInvoiceTypeCombo ? m_origInvoiceTypeCombo->currentText() : "Sale Invoice";
+    if (t.contains("Purchase")) return "Purchase";
+    if (t.contains("Manual")) return "Manual";
+    return "Sale";
+}
+
+void DebitCreditNoteWidget::refreshOrigInvoiceCombo(bool preserveSelection) {
+    if (!m_origInvoiceCombo) return;
+    QString keep = preserveSelection ? m_origInvoiceCombo->currentText().trimmed() : QString();
+    m_suppressInvoiceFetch = true;
+    m_origInvoiceCombo->clear();
+    int keepIdx = -1;
+    if (m_controller && !m_partySearch->text().trimmed().isEmpty()
+        && currentOrigInvType() != "Manual") {
+        QVariantList rows = m_controller->partyInvoices(currentOrigInvType(), m_partySearch->text().trimmed());
+        for (int i = 0; i < rows.size(); ++i) {
+            QVariantMap r = rows.at(i).toMap();
+            QString invNo = r.value("invoice_no").toString();
+            QString invDate = r.value("invoice_date").toString();
+            double tot = r.value("total_amount").toDouble();
+            QDate d = QDate::fromString(invDate, "yyyy-MM-dd");
+            QString label = QString("%1  |  %2  |  ₹ %3").arg(invNo, d.isValid() ? d.toString("dd-MM-yyyy") : invDate, QString::number(tot, 'f', 2));
+            m_origInvoiceCombo->addItem(label, invNo);
+            // Stash the ISO date on the item for instant date fill.
+            m_origInvoiceCombo->setItemData(i, invDate, Qt::UserRole + 1);
+            if (!keep.isEmpty() && (invNo == keep || label == keep)) keepIdx = i;
+        }
+    }
+    if (keepIdx >= 0) {
+        m_origInvoiceCombo->setCurrentIndex(keepIdx);
+    } else if (!keep.isEmpty()) {
+        m_origInvoiceCombo->setCurrentText(keep);
+    } else if (m_origInvoiceCombo->count() > 0) {
+        m_origInvoiceCombo->setCurrentIndex(0);
+    }
+    m_suppressInvoiceFetch = false;
+
+    // Auto-fill the linked date for the current row (items load only on
+    // explicit user pick, never while refilling behind their back).
+    int idx = m_origInvoiceCombo->currentIndex();
+    if (idx >= 0) {
+        QString iso = m_origInvoiceCombo->itemData(idx, Qt::UserRole + 1).toString();
+        if (!iso.isEmpty()) {
+            QDate d = QDate::fromString(iso, "yyyy-MM-dd");
+            m_origInvoiceDateEdit->setText(d.isValid() ? d.toString("dd-MM-yyyy") : iso);
+            if (m_controller) m_controller->setDraftOrigInvDate(iso);
+        }
+    } else {
+        m_origInvoiceDateEdit->clear();
+    }
+}
+
+void DebitCreditNoteWidget::onOrigInvoiceChosen(int index) {
+    if (m_suppressInvoiceFetch || !m_controller || index < 0) return;
+    QString invNo = m_origInvoiceCombo->itemData(index).toString();
+    if (invNo.isEmpty()) invNo = m_origInvoiceCombo->currentText().trimmed();
+    // Strip the "no | date | total" label back to the bare invoice number.
+    if (invNo.contains("  |  ")) invNo = invNo.section("  |  ", 0, 0).trimmed();
+    if (invNo.isEmpty() || currentOrigInvType() == "Manual") return;
+
+    if (!m_controller->fetchAndLoadOriginalInvoice(currentOrigInvType(), invNo)) {
+        setStatusMessage(QString("Invoice \"%1\" not found — kept manual entry").arg(invNo), true);
+        return;
+    }
+    QDate d = QDate::fromString(m_controller->draftOrigInvDate(), "yyyy-MM-dd");
+    m_origInvoiceDateEdit->setText(d.isValid() ? d.toString("dd-MM-yyyy") : m_controller->draftOrigInvDate());
+    if (!m_controller->draftPartyName().isEmpty() && m_partySearch->text().trimmed().isEmpty()) {
+        m_partySearch->setPartyName(m_controller->draftPartyName());
+    }
+    if (!m_controller->draftPartyGstin().isEmpty()) {
+        m_partyGstinEdit->setText(m_controller->draftPartyGstin());
+    }
+    syncTableFromDraft();
+    onRecalculateTotals();
+    setStatusMessage(QString("Linked %1 with %2 line(s)").arg(invNo).arg(m_controller->itemsModel()->count()), false);
+}
+
+void DebitCreditNoteWidget::syncTableFromDraft() {
+    if (!m_controller || !m_controller->itemsModel()) return;
+    m_isUpdatingTable = true;
+    m_itemsTable->setRowCount(0);
+
+    auto createCell = [](const QString& text, Qt::Alignment align = Qt::AlignLeft, bool editable = true) {
+        auto* it = new QTableWidgetItem(text);
+        it->setTextAlignment(align | Qt::AlignVCenter);
+        it->setForeground(QBrush(QColor("#0F172A")));
+        if (editable) {
+            it->setBackground(QBrush(QColor("#FFFFFF")));
+            it->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsEditable);
+        } else {
+            it->setBackground(QBrush(QColor("#F8FAFC")));
+            it->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
+        }
+        return it;
+    };
+
+    auto* mdl = m_controller->itemsModel();
+    for (int i = 0; i < mdl->count(); ++i) {
+        auto m = mdl->get(i);
+        int r = m_itemsTable->rowCount();
+        m_itemsTable->insertRow(r);
+        double taxable = m.value("taxableAmount").toDouble();
+        double gst = m.value("gstPct").toDouble();
+        double gstAmt = (taxable * gst) / 100.0;
+        double tot = taxable + gstAmt;
+        m_itemsTable->setItem(r, 0, createCell(m.value("itemName").toString(), Qt::AlignLeft, true));
+        m_itemsTable->setItem(r, 1, createCell(m.value("hsnCode").toString(), Qt::AlignCenter, true));
+        m_itemsTable->setItem(r, 2, createCell(m.value("unit").toString(), Qt::AlignCenter, true));
+        m_itemsTable->setItem(r, 3, createCell(QString::number(m.value("bags").toInt()), Qt::AlignRight, true));
+        m_itemsTable->setItem(r, 4, createCell(QString::number(m.value("weightQtl").toDouble(), 'f', 2), Qt::AlignRight, true));
+        m_itemsTable->setItem(r, 5, createCell(QString::number(m.value("rate").toDouble(), 'f', 2), Qt::AlignRight, true));
+        m_itemsTable->setItem(r, 6, createCell(QString::number(taxable, 'f', 2), Qt::AlignRight, true));
+        m_itemsTable->setItem(r, 7, createCell(QString::number(gst, 'f', 1), Qt::AlignRight, true));
+        m_itemsTable->setItem(r, 8, createCell(QString::number(gstAmt, 'f', 2), Qt::AlignRight, false));
+        m_itemsTable->setItem(r, 9, createCell(QString::number(tot, 'f', 2), Qt::AlignRight, false));
+    }
+    m_isUpdatingTable = false;
 }
 
 void DebitCreditNoteWidget::onStockItemConfigured(int row, const QVariantMap& itemData) {
@@ -791,13 +1009,84 @@ void DebitCreditNoteWidget::onRecalculateTotals() {
     m_grandTotalValLabel->setText("₹ " + QString::number(grandTotal, 'f', 2));
 }
 
-bool DebitCreditNoteWidget::loadNoteForEditing(int noteId) {
+void DebitCreditNoteWidget::focusTableAt(int row, int col) {
+    if (!m_itemsTable || m_itemsTable->rowCount() == 0) return;
+    int r = qBound(0, row, m_itemsTable->rowCount() - 1);
+    int c = qBound(0, col, m_itemsTable->columnCount() - 1);
+    m_itemsTable->setCurrentCell(r, c);
+    m_itemsTable->setFocus(Qt::OtherFocusReason);
+    m_itemsTable->edit(m_itemsTable->currentIndex());
+}
+
+void DebitCreditNoteWidget::moveCell(int row, int col) {
+    focusTableAt(row, col);
+}
+
+void DebitCreditNoteWidget::advanceCell() {
+    if (!m_itemsTable) return;
+    int curRow = m_itemsTable->currentRow();
+    int curCol = m_itemsTable->currentColumn();
+    if (curRow < 0) curRow = 0;
+    if (curCol < 0) curCol = 0;
+
+    QTableWidgetItem* nameIt = m_itemsTable->item(curRow, 0);
+    bool isItemEmpty = (!nameIt || nameIt->text().trimmed().isEmpty());
+    if (curCol == 0 && isItemEmpty) {
+        if (curRow > 0 && curRow == m_itemsTable->rowCount() - 1) {
+            m_itemsTable->removeRow(curRow);
+            onRecalculateTotals();
+        }
+        if (m_narrationEdit) { m_narrationEdit->setFocus(); m_narrationEdit->selectAll(); }
+        return;
+    }
+
+    // Columns 8 (GST Amt) and 9 (Total) are computed — never edited.
+    int nextCol = curCol + 1;
+    if (nextCol == 8) nextCol = 10;
+    if (nextCol <= 7) {
+        m_itemsTable->setCurrentCell(curRow, nextCol);
+        m_itemsTable->edit(m_itemsTable->currentIndex());
+    } else if (!isItemEmpty) {
+        if (curRow == m_itemsTable->rowCount() - 1) onAddItemRow();
+        m_itemsTable->setCurrentCell(curRow + 1, 0);
+        m_itemsTable->edit(m_itemsTable->currentIndex());
+    } else {
+        if (curRow > 0 && curRow == m_itemsTable->rowCount() - 1) {
+            m_itemsTable->removeRow(curRow);
+            onRecalculateTotals();
+        }
+        if (m_narrationEdit) { m_narrationEdit->setFocus(); m_narrationEdit->selectAll(); }
+    }
+}
+
+void DebitCreditNoteWidget::retreatCell() {
+    if (!m_itemsTable) return;
+    int curRow = m_itemsTable->currentRow();
+    int curCol = m_itemsTable->currentColumn();
+    int prevCol = curCol - 1;
+    if (prevCol == 8 || prevCol == 9) prevCol = 7;
+    if (prevCol >= 0) {
+        m_itemsTable->setCurrentCell(curRow, prevCol);
+        m_itemsTable->edit(m_itemsTable->currentIndex());
+    } else if (curRow > 0) {
+        m_itemsTable->setCurrentCell(curRow - 1, 7);
+        m_itemsTable->edit(m_itemsTable->currentIndex());
+    } else if (m_posCombo) {
+        m_posCombo->setFocus();
+    }
+}
+
+bool DebitCreditNoteWidget::loadNoteForEditing(int noteId, bool popupDateOnLoad) {
     if (!m_controller) return false;
     bool ok = m_controller->loadNoteIntoDraft(noteId);
     if (!ok) return false;
 
     m_editNoteId = noteId;
     m_deleteBtn->setVisible(true);
+
+    QString noteTitle = QString("%1 • %2").arg(m_controller->draftNoteNo(), m_controller->draftNoteType());
+    m_voucherNoDisplay->setText(noteTitle);
+    m_voucherNoDisplay->setVisible(true);
 
     m_noteTypeCombo->setCurrentIndex(m_controller->draftNoteType() == "Credit Note" ? 0 : 1);
     m_noteNoEdit->setText(m_controller->draftNoteNo());
@@ -809,57 +1098,102 @@ bool DebitCreditNoteWidget::loadNoteForEditing(int noteId) {
         m_fyBadge->setText(fy.name);
     }
 
-    m_origInvoiceNoEdit->setText(m_controller->draftOrigInvNo());
-    m_origInvoiceDateEdit->setText(m_controller->draftOrigInvDate());
-    m_partySearch->setText(m_controller->draftPartyName());
+    // Orig doc type first (it scopes the invoice list), then the party so
+    // the combo refills around the stored invoice, preserved by text.
+    QString oType = m_controller->draftOrigInvType();
+    m_origInvoiceTypeCombo->setCurrentIndex(oType == "Purchase" ? 1 : 0);
+    m_partySearch->setPartyName(m_controller->draftPartyName());
+    m_suppressInvoiceFetch = true;
+    m_origInvoiceCombo->clear();
+    QString storedInv = m_controller->draftOrigInvNo();
+    if (!storedInv.isEmpty()) m_origInvoiceCombo->addItem(storedInv, storedInv);
+    m_suppressInvoiceFetch = false;
+    refreshOrigInvoiceCombo(true);
+    QDate od = QDate::fromString(m_controller->draftOrigInvDate(), "yyyy-MM-dd");
+    m_origInvoiceDateEdit->setText(od.isValid() ? od.toString("dd-MM-yyyy") : m_controller->draftOrigInvDate());
     m_partyGstinEdit->setText(m_controller->draftPartyGstin());
     m_narrationEdit->setText(m_controller->draftNarration());
 
-    m_isUpdatingTable = true;
-    m_itemsTable->setRowCount(0);
+    syncTableFromDraft();
+    onRecalculateTotals();
+    setStatusMessage(QString("Loaded %1 for alteration").arg(noteTitle), false);
+    // Drill-down entry: date dialog first (dates take no keyboard focus),
+    // then the party field — openDateDialog already lands there.
+    if (popupDateOnLoad) openDateDialog(false);
+    return true;
+}
 
-    auto* mdl = m_controller->itemsModel();
-    if (mdl) {
-        for (int i = 0; i < mdl->count(); ++i) {
-            auto m = mdl->get(i);
-            int r = m_itemsTable->rowCount();
-            m_itemsTable->insertRow(r);
+int DebitCreditNoteWidget::findNoteRow(int noteId) const {
+    if (!m_controller || !m_controller->model()) return -1;
+    for (int i = 0; i < m_controller->model()->count(); ++i) {
+        if (m_controller->model()->get(i).value("id").toInt() == noteId) return i;
+    }
+    return -1;
+}
 
-            auto createCell = [](const QString& text, Qt::Alignment align = Qt::AlignLeft, bool editable = true) {
-                auto* it = new QTableWidgetItem(text);
-                it->setTextAlignment(align | Qt::AlignVCenter);
-                it->setForeground(QBrush(QColor("#0F172A")));
-                if (editable) {
-                    it->setBackground(QBrush(QColor("#FFFFFF")));
-                    it->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsEditable);
-                } else {
-                    it->setBackground(QBrush(QColor("#F8FAFC")));
-                    it->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
-                }
-                return it;
-            };
+void DebitCreditNoteWidget::loadPreviousNote() {
+    if (!m_controller || !m_controller->model()) return;
+    int n = m_controller->model()->count();
+    if (n == 0) return;
+    int row = findNoteRow(m_editNoteId);
+    int target = (row < 0) ? 0 : qMin(row + 1, n - 1);
+    loadNoteForEditing(m_controller->model()->get(target).value("id").toInt());
+}
 
-            double taxable = m.value("taxableAmount").toDouble();
-            double gst = m.value("gstPct").toDouble();
-            double gstAmt = (taxable * gst) / 100.0;
-            double tot = taxable + gstAmt;
+void DebitCreditNoteWidget::loadNextNote() {
+    if (!m_controller || !m_controller->model()) return;
+    int n = m_controller->model()->count();
+    if (n == 0) return;
+    int row = findNoteRow(m_editNoteId);
+    if (row < 0) { loadNoteForEditing(m_controller->model()->get(0).value("id").toInt()); return; }
+    if (row == 0) { resetForm(); return; }
+    loadNoteForEditing(m_controller->model()->get(row - 1).value("id").toInt());
+}
 
-            m_itemsTable->setItem(r, 0, createCell(m.value("itemName").toString(), Qt::AlignLeft, true));
-            m_itemsTable->setItem(r, 1, createCell(m.value("hsnCode").toString(), Qt::AlignCenter, true));
-            m_itemsTable->setItem(r, 2, createCell(m.value("unit").toString(), Qt::AlignCenter, true));
-            m_itemsTable->setItem(r, 3, createCell(QString::number(m.value("bags").toInt()), Qt::AlignRight, true));
-            m_itemsTable->setItem(r, 4, createCell(QString::number(m.value("weightQtl").toDouble(), 'f', 2), Qt::AlignRight, true));
-            m_itemsTable->setItem(r, 5, createCell(QString::number(m.value("rate").toDouble(), 'f', 2), Qt::AlignRight, true));
-            m_itemsTable->setItem(r, 6, createCell(QString::number(taxable, 'f', 2), Qt::AlignRight, true));
-            m_itemsTable->setItem(r, 7, createCell(QString::number(gst, 'f', 1), Qt::AlignRight, true));
-            m_itemsTable->setItem(r, 8, createCell(QString::number(gstAmt, 'f', 2), Qt::AlignRight, false));
-            m_itemsTable->setItem(r, 9, createCell(QString::number(tot, 'f', 2), Qt::AlignRight, false));
+void DebitCreditNoteWidget::openAlterNoteDialog() {
+    bool ok = false;
+    QString text = CustomInputDialog::getText(this, "Find & Alter Note",
+        "Enter Note No (e.g. CN-0001) to alter:", m_noteNoEdit ? m_noteNoEdit->text().trimmed() : "", &ok);
+    if (!ok || text.trimmed().isEmpty() || !m_controller || !m_controller->model()) return;
+    for (int i = 0; i < m_controller->model()->count(); ++i) {
+        QVariantMap r = m_controller->model()->get(i);
+        if (r.value("noteNo").toString().compare(text.trimmed(), Qt::CaseInsensitive) == 0) {
+            loadNoteForEditing(r.value("id").toInt());
+            return;
         }
     }
+    CustomMessageBox::warning(this, "Note Not Found", QString("No note found matching \"%1\".").arg(text.trimmed()));
+}
 
-    m_isUpdatingTable = false;
-    onRecalculateTotals();
-    return true;
+void DebitCreditNoteWidget::printNote() {
+    if (m_editNoteId <= 0) {
+        CustomMessageBox::showWarning(this, "Nothing to Print", "Save the note before printing.");
+        return;
+    }
+    QString noteNo = m_noteNoEdit ? m_noteNoEdit->text().trimmed() : "";
+    if (noteNo.isEmpty() || !m_printExportCtrl) {
+        CustomMessageBox::showWarning(this, "Nothing to Print", "Save the note before printing.");
+        return;
+    }
+    if (!m_printExportCtrl->print_debit_credit_note(noteNo)) {
+        CustomMessageBox::showCritical(this, "Print Failed", QString("Could not print note \"%1\".").arg(noteNo));
+    }
+}
+
+void DebitCreditNoteWidget::exportPdf() {
+    if (m_editNoteId <= 0) {
+        CustomMessageBox::showWarning(this, "Nothing to Export", "Save the note before exporting.");
+        return;
+    }
+    QString noteNo = m_noteNoEdit ? m_noteNoEdit->text().trimmed() : "";
+    if (noteNo.isEmpty() || !m_printExportCtrl) {
+        CustomMessageBox::showWarning(this, "Nothing to Export", "Save the note before exporting.");
+        return;
+    }
+    QString path = m_printExportCtrl->export_debit_credit_note_pdf(noteNo, "");
+    if (path.isEmpty()) {
+        CustomMessageBox::showCritical(this, "Export Failed", QString("Could not export note \"%1\" to PDF.").arg(noteNo));
+    }
 }
 
 void DebitCreditNoteWidget::onSaveClicked() {
@@ -883,7 +1217,9 @@ void DebitCreditNoteWidget::onSaveClicked() {
         m_controller->setDraftNoteType(m_noteTypeCombo->currentIndex() == 0 ? "Credit Note" : "Debit Note");
         m_controller->setDraftNoteNo(m_noteNoEdit->text().trimmed());
         m_controller->setDraftNoteDate(m_noteDateEdit->isoDate());
-        m_controller->setDraftOrigInvNo(m_origInvoiceNoEdit->text().trimmed());
+        QString origInvNo = m_origInvoiceCombo ? m_origInvoiceCombo->currentText().trimmed() : "";
+        if (origInvNo.contains("  |  ")) origInvNo = origInvNo.section("  |  ", 0, 0).trimmed();
+        m_controller->setDraftOrigInvNo(origInvNo);
         m_controller->setDraftOrigInvDate(m_origInvoiceDateEdit->text().trimmed());
         m_controller->setDraftOrigInvType(m_origInvoiceTypeCombo->currentText().contains("Sale") ? "Sale" : "Purchase");
         m_controller->setDraftPartyName(m_partySearch->text().trimmed());

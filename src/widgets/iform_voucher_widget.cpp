@@ -13,6 +13,7 @@
 #include <QHeaderView>
 #include <QKeyEvent>
 #include <QMessageBox>
+#include <QApplication>
 #include <QDate>
 #include <QLocale>
 #include <QTimer>
@@ -51,8 +52,10 @@ void IFormVoucherWidget::setupUi() {
     auto* iformNoLabel = new QLabel("I-Form No:", this);
     m_iformNoEdit = new QLineEdit("1", this);
     m_iformNoEdit->setMinimumWidth(80);
-    // Auto-generated and non-editable on both new and alter pages.
+    // Auto-generated and non-editable on both new and alter pages:
+    // mouse-only, never a Tab/Enter stop.
     m_iformNoEdit->setReadOnly(true);
+    m_iformNoEdit->setFocusPolicy(Qt::ClickFocus);
 
     auto* dateLabel = new QLabel("Date (F2):", this);
     m_dateEdit = new AccountingDateEdit(this);
@@ -125,6 +128,7 @@ void IFormVoucherWidget::setupUi() {
     }
     m_table->verticalHeader()->setVisible(false);
     m_table->horizontalHeader()->setHighlightSections(false);
+    m_table->setAlternatingRowColors(true);
     m_table->setShowGrid(true);
 
     m_itemDelegate = new ItemSearchDelegate(this);
@@ -225,6 +229,8 @@ void IFormVoucherWidget::setupUi() {
     connect(m_itemDelegate, &ItemSearchDelegate::stockItemConfigured, this, &IFormVoucherWidget::onStockItemConfigured);
     connect(m_itemDelegate, &ItemSearchDelegate::moveNextRequested, this, &IFormVoucherWidget::advanceCell);
     connect(m_itemDelegate, &ItemSearchDelegate::movePrevRequested, this, &IFormVoucherWidget::retreatCell);
+    connect(m_itemDelegate, &ItemSearchDelegate::browsePrevRequested, this, &IFormVoucherWidget::loadPreviousVoucher);
+    connect(m_itemDelegate, &ItemSearchDelegate::browseNextRequested, this, &IFormVoucherWidget::loadNextVoucher);
     connect(m_labourEdit, &QLineEdit::textChanged, this, &IFormVoucherWidget::recalculateTotals);
     connect(m_roundOffEdit, &QLineEdit::textChanged, this, &IFormVoucherWidget::recalculateTotals);
 
@@ -236,7 +242,7 @@ void IFormVoucherWidget::setupUi() {
 }
 
 void IFormVoucherWidget::setupNavigationChains() {
-    setTabOrder(m_iformNoEdit, m_buyerSearch);
+    // Qt tab order (keyboard Tab follows the same visual order).
     setTabOrder(m_buyerSearch, m_brokerNameEdit);
     setTabOrder(m_brokerNameEdit, m_dueDaysEdit);
     setTabOrder(m_dueDaysEdit, m_vehicleNoEdit);
@@ -247,8 +253,43 @@ void IFormVoucherWidget::setupNavigationChains() {
     setTabOrder(m_roundOffEdit, m_narrationEdit);
     setTabOrder(m_narrationEdit, m_saveButton);
 
+    // Sale-voucher pattern: single Enter-forward declaration per field
+    // (Backspace/Left derive backward automatically, popup-aware).
+    auto go = [](QWidget* w) {
+        if (!w) return;
+        w->setFocus();
+        if (auto* le = qobject_cast<QLineEdit*>(w)) le->selectAll();
+        else if (auto* asb = qobject_cast<AccountSearchBox*>(w)) asb->selectAll();
+    };
+    auto stepBackToGrid = [this]() {
+        if (!m_table || m_table->rowCount() == 0) return;
+        m_table->setCurrentCell(m_table->rowCount() - 1, 3);
+        m_table->edit(m_table->currentIndex());
+    };
+    VoucherCommon::installGridNavigation(m_buyerSearch, nullptr, m_brokerNameEdit,
+        [this, go]() { go(m_brokerNameEdit); });
+    VoucherCommon::installGridNavigation(m_brokerNameEdit, m_buyerSearch, m_dueDaysEdit,
+        [this, go]() { go(m_dueDaysEdit); });
+    VoucherCommon::installGridNavigation(m_dueDaysEdit, m_brokerNameEdit, m_vehicleNoEdit,
+        [this, go]() { go(m_vehicleNoEdit); });
+    VoucherCommon::installGridNavigation(m_vehicleNoEdit, m_dueDaysEdit, m_grNoEdit,
+        [this, go]() { go(m_grNoEdit); });
+    VoucherCommon::installGridNavigation(m_grNoEdit, m_vehicleNoEdit, nullptr,
+        [this]() {
+            if (m_table->rowCount() == 0) addNewLineRow();
+            focusTableAt(0, 0);
+        });
+    VoucherCommon::installGridNavigation(m_labourEdit, nullptr, m_roundOffEdit,
+        [this, go]() { go(m_roundOffEdit); }, stepBackToGrid);
+    VoucherCommon::installGridNavigation(m_roundOffEdit, m_labourEdit, m_narrationEdit,
+        [this, go]() { go(m_narrationEdit); });
+    VoucherCommon::installGridNavigation(m_narrationEdit, m_roundOffEdit, nullptr,
+        [this]() { if (m_saveButton) m_saveButton->setFocus(); });
+
+    // Global keys (F2/F4/PgUp/PgDn/Ctrl+S/D/P/E, Esc). The grid filters
+    // above ignore function keys, so both coexist peacefully.
     const QList<QWidget*> inputs = {
-        m_iformNoEdit, m_buyerSearch, m_brokerNameEdit, m_dueDaysEdit,
+        m_buyerSearch, m_brokerNameEdit, m_dueDaysEdit,
         m_vehicleNoEdit, m_grNoEdit, m_table, m_labourEdit,
         m_roundOffEdit, m_narrationEdit, m_dateButton,
         m_saveButton, m_deleteButton, m_printButton, m_cancelButton
@@ -739,14 +780,14 @@ void IFormVoucherWidget::saveVoucher() {
         emit voucherSaved(savedIf);
         if (!editMode) {
             resetForm();
-            if (m_dateEdit) m_dateEdit->setFocus();
+            if (m_buyerSearch) { m_buyerSearch->setFocus(); m_buyerSearch->selectAll(); }
         }
     } else {
         CustomMessageBox::critical(this, "Error", "Failed to save I-Form voucher. Check database logs.");
     }
 }
 
-bool IFormVoucherWidget::loadVoucherForEditing(const QVariant& vchNoOrId, const QString& dateHint) {
+bool IFormVoucherWidget::loadVoucherForEditing(const QVariant& vchNoOrId, const QString& dateHint, bool popupDateOnLoad) {
     Q_UNUSED(dateHint);
     QVariantMap vch = m_iformModel.get_iform_voucher(vchNoOrId);
     if (vch.isEmpty()) return false;
@@ -800,6 +841,9 @@ bool IFormVoucherWidget::loadVoucherForEditing(const QVariant& vchNoOrId, const 
 
     recalculateTotals();
     setStatusMessage(QString("Loaded I-Form %1 for editing").arg(m_editingIFormNo), false);
+    // Drill-down entry: date dialog first (dates take no keyboard focus),
+    // then the buyer field — openDateDialog already lands there.
+    if (popupDateOnLoad) openDateDialog(false);
     return true;
 }
 
@@ -863,7 +907,26 @@ void IFormVoucherWidget::loadNextVoucher() {
     }
 }
 
-void IFormVoucherWidget::printVoucher() {}
+void IFormVoucherWidget::printVoucher() {
+    if (!isEditMode() || !m_printExportCtrl) {
+        CustomMessageBox::warning(this, "Nothing to Print", "Save the I-Form before printing.");
+        return;
+    }
+    if (!m_printExportCtrl->print_iform_voucher(m_editingVoucherNo)) {
+        CustomMessageBox::critical(this, "Print Failed", QString("Could not print I-Form %1.").arg(m_editingIFormNo));
+    }
+}
+
+void IFormVoucherWidget::exportPdf() {
+    if (!isEditMode() || !m_printExportCtrl) {
+        CustomMessageBox::warning(this, "Nothing to Export", "Save the I-Form before exporting.");
+        return;
+    }
+    QString path = m_printExportCtrl->export_iform_voucher_pdf(m_editingVoucherNo, "");
+    if (path.isEmpty()) {
+        CustomMessageBox::critical(this, "Export Failed", QString("Could not export I-Form %1 to PDF.").arg(m_editingIFormNo));
+    }
+}
 
 void IFormVoucherWidget::focusTableAt(int row, int col) {
     if (!m_table) return;
@@ -952,16 +1015,45 @@ void IFormVoucherWidget::showEvent(QShowEvent* event) {
 }
 
 void IFormVoucherWidget::keyPressEvent(QKeyEvent* event) {
-    if (event->key() == Qt::Key_F4) {
-        openAlterVoucherDialog();
+    // Grid with focus but no cell editor open (unhandled keys propagate here
+    // only in that state): Enter opens the current cell's editor; Backspace
+    // on a filled cell clears it, on an empty cell steps back.
+    if ((event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter ||
+         event->key() == Qt::Key_Backspace) &&
+        m_table && QApplication::focusWidget() == m_table) {
+        int r = m_table->currentRow(), c = m_table->currentColumn();
+        if (r >= 0 && c >= 0 && r < m_table->rowCount() && c < m_table->columnCount()) {
+            if (event->key() == Qt::Key_Backspace) {
+                if (QTableWidgetItem* it = m_table->item(r, c)) {
+                    if (!it->text().isEmpty()) {
+                        it->setText("");
+                        recalculateTotals();
+                        event->accept();
+                        return;
+                    }
+                }
+                retreatCell();
+            } else {
+                m_table->edit(m_table->currentIndex());
+            }
+            event->accept();
+            return;
+        }
+    }
+    if (event->key() == Qt::Key_F2) {
+        openDateDialog(false);
+        event->accept();
+        return;
+    } else if (event->key() == Qt::Key_F4) {
+        if (!VoucherCommon::browseBlockedByPopup()) openAlterVoucherDialog();
         event->accept();
         return;
     } else if (event->key() == Qt::Key_PageUp) {
-        loadPreviousVoucher();
+        if (!VoucherCommon::browseBlockedByPopup()) loadPreviousVoucher();
         event->accept();
         return;
     } else if (event->key() == Qt::Key_PageDown) {
-        loadNextVoucher();
+        if (!VoucherCommon::browseBlockedByPopup()) loadNextVoucher();
         event->accept();
         return;
     } else if (event->key() == Qt::Key_S && (event->modifiers() & Qt::ControlModifier)) {
@@ -976,6 +1068,10 @@ void IFormVoucherWidget::keyPressEvent(QKeyEvent* event) {
         printVoucher();
         event->accept();
         return;
+    } else if (event->key() == Qt::Key_E && (event->modifiers() & Qt::ControlModifier)) {
+        exportPdf();
+        event->accept();
+        return;
     } else if (event->key() == Qt::Key_Escape) {
         emit backRequested();
         event->accept();
@@ -985,6 +1081,7 @@ void IFormVoucherWidget::keyPressEvent(QKeyEvent* event) {
 }
 
 bool IFormVoucherWidget::eventFilter(QObject* watched, QEvent* event) {
+    Q_UNUSED(watched);
     if (event->type() == QEvent::KeyPress) {
         auto* keyEvent = static_cast<QKeyEvent*>(event);
         int key = keyEvent->key();
@@ -993,16 +1090,18 @@ bool IFormVoucherWidget::eventFilter(QObject* watched, QEvent* event) {
             emit backRequested();
             return true;
         }
-        if (key == Qt::Key_F4) {
-            openAlterVoucherDialog();
+        if (key == Qt::Key_F2) {
+            openDateDialog(false);
             return true;
         }
-        if (key == Qt::Key_PageUp) {
-            loadPreviousVoucher();
-            return true;
-        }
-        if (key == Qt::Key_PageDown) {
-            loadNextVoucher();
+        // Combos swallow PgUp/PgDn/F4 natively, so this filter (which runs
+        // before the control's own handler) is the only reliable catch.
+        // Open popups keep the keys for list paging/close instead.
+        if ((key == Qt::Key_PageUp || key == Qt::Key_PageDown || key == Qt::Key_F4) &&
+            !VoucherCommon::browseBlockedByPopup()) {
+            if (key == Qt::Key_PageUp) loadPreviousVoucher();
+            else if (key == Qt::Key_PageDown) loadNextVoucher();
+            else openAlterVoucherDialog();
             return true;
         }
         if (key == Qt::Key_S && (keyEvent->modifiers() & Qt::ControlModifier)) {
@@ -1017,47 +1116,12 @@ bool IFormVoucherWidget::eventFilter(QObject* watched, QEvent* event) {
             printVoucher();
             return true;
         }
-
-        // Return / Enter progression across form fields
-        if (key == Qt::Key_Return || key == Qt::Key_Enter) {
-            if (watched == m_iformNoEdit) {
-                m_buyerSearch->setFocus();
-                return true;
-            } else if (watched == m_buyerSearch) {
-                if (!m_buyerSearch->isPopupVisible()) {
-                    m_brokerNameEdit->setFocus();
-                    m_brokerNameEdit->selectAll();
-                    return true;
-                }
-            } else if (watched == m_brokerNameEdit) {
-                m_dueDaysEdit->setFocus();
-                m_dueDaysEdit->selectAll();
-                return true;
-            } else if (watched == m_dueDaysEdit) {
-                m_vehicleNoEdit->setFocus();
-                m_vehicleNoEdit->selectAll();
-                return true;
-            } else if (watched == m_vehicleNoEdit) {
-                m_grNoEdit->setFocus();
-                m_grNoEdit->selectAll();
-                return true;
-            } else if (watched == m_grNoEdit) {
-                if (m_table->rowCount() == 0) addNewLineRow();
-                focusTableAt(0, 0);
-                return true;
-            } else if (watched == m_labourEdit) {
-                m_roundOffEdit->setFocus();
-                m_roundOffEdit->selectAll();
-                return true;
-            } else if (watched == m_roundOffEdit) {
-                m_narrationEdit->setFocus();
-                m_narrationEdit->selectAll();
-                return true;
-            } else if (watched == m_narrationEdit) {
-                m_saveButton->setFocus();
-                return true;
-            }
+        if (key == Qt::Key_E && (keyEvent->modifiers() & Qt::ControlModifier)) {
+            exportPdf();
+            return true;
         }
+        // Enter/Left/Right/Backspace belong to installGridNavigation
+        // (setupNavigationChains); never handle field keys here.
     }
     return QWidget::eventFilter(watched, event);
 }

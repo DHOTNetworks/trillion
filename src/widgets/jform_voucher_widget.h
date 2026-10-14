@@ -32,7 +32,10 @@ public:
     int editingVoucherId() const { return m_editingVoucherId; }
 
     void resetForm();
-    bool loadVoucherForEditing(const QVariant& vchNoOrId, const QString& dateHint = "");
+    // popupDateOnLoad: drill-down opens pop the date dialog first (dates are
+    // never keyboard-focusable); after it closes focus lands on the farmer.
+    // In-voucher browsing (prev/next/alter) keeps false.
+    bool loadVoucherForEditing(const QVariant& vchNoOrId, const QString& dateHint = "", bool popupDateOnLoad = false);
     void setWorkingDate(const QString& dateStr);
 
 public slots:

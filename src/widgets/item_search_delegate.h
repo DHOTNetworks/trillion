@@ -68,6 +68,11 @@ signals:
     void movePrevRequested();
     void moveDownRequested();
     void moveUpRequested();
+    // Voucher browse from inside an open cell editor (Tally contract):
+    // PgUp = previous voucher, PgDn = next. Emitted only while the
+    // suggestion popup is closed (open popups keep PgUp/PgDn for paging).
+    void browsePrevRequested();
+    void browseNextRequested();
 
 protected:
     bool eventFilter(QObject* object, QEvent* event) override;

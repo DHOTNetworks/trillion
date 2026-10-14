@@ -14,6 +14,7 @@
 #include <QKeyEvent>
 #include <QMessageBox>
 #include <QDate>
+#include <QApplication>
 #include <QLocale>
 #include <QTimer>
 #include <cmath>
@@ -52,8 +53,10 @@ void JFormVoucherWidget::setupUi() {
     m_jformNoDisplay = new QLabel("J-Form No:", this);
     m_jformNoEdit = new QLineEdit("1", this);
     m_jformNoEdit->setMinimumWidth(80);
-    // Auto-generated and non-editable on both new and alter pages.
+    // Auto-generated and non-editable on both new and alter pages:
+    // mouse-only, never a Tab/Enter stop.
     m_jformNoEdit->setReadOnly(true);
+    m_jformNoEdit->setFocusPolicy(Qt::ClickFocus);
 
     auto* dateLabel = new QLabel("Date (F2):", this);
     m_dateEdit = new AccountingDateEdit(this);
@@ -126,6 +129,7 @@ void JFormVoucherWidget::setupUi() {
     m_table->horizontalHeader()->setSectionResizeMode(6, QHeaderView::ResizeToContents);
     m_table->verticalHeader()->setVisible(false);
     m_table->horizontalHeader()->setHighlightSections(false);
+    m_table->setAlternatingRowColors(true);
     m_table->setShowGrid(true);
 
     m_itemDelegate = new ItemSearchDelegate(this);
@@ -214,6 +218,8 @@ void JFormVoucherWidget::setupUi() {
     connect(m_itemDelegate, &ItemSearchDelegate::stockItemConfigured, this, &JFormVoucherWidget::onStockItemConfigured);
     connect(m_itemDelegate, &ItemSearchDelegate::moveNextRequested, this, &JFormVoucherWidget::advanceCell);
     connect(m_itemDelegate, &ItemSearchDelegate::movePrevRequested, this, &JFormVoucherWidget::retreatCell);
+    connect(m_itemDelegate, &ItemSearchDelegate::browsePrevRequested, this, &JFormVoucherWidget::loadPreviousVoucher);
+    connect(m_itemDelegate, &ItemSearchDelegate::browseNextRequested, this, &JFormVoucherWidget::loadNextVoucher);
     connect(m_labourEdit, &QLineEdit::textChanged, this, &JFormVoucherWidget::recalculateTotals);
     connect(m_bonusEdit, &QLineEdit::textChanged, this, &JFormVoucherWidget::recalculateTotals);
     connect(m_roundOffEdit, &QLineEdit::textChanged, this, &JFormVoucherWidget::recalculateTotals);
@@ -226,7 +232,7 @@ void JFormVoucherWidget::setupUi() {
 }
 
 void JFormVoucherWidget::setupNavigationChains() {
-    setTabOrder(m_jformNoEdit, m_farmerSearch);
+    // Qt tab order (keyboard Tab follows the same visual order).
     setTabOrder(m_farmerSearch, m_saleStatusCombo);
     setTabOrder(m_saleStatusCombo, m_dueDaysEdit);
     setTabOrder(m_dueDaysEdit, m_vehicleNoEdit);
@@ -238,8 +244,48 @@ void JFormVoucherWidget::setupNavigationChains() {
     setTabOrder(m_roundOffEdit, m_narrationEdit);
     setTabOrder(m_narrationEdit, m_saveButton);
 
+    // Sale-voucher pattern: single Enter-forward declaration per field
+    // (Backspace/Left derive backward automatically, popup-aware).
+    // The global-key filter below ignores field keys, so both coexist:
+    // grid filters own Enter/Left/Right/Backspace, this-filter owns the
+    // function/shortcut keys.
+    auto go = [](QWidget* w) {
+        if (!w) return;
+        w->setFocus();
+        if (auto* le = qobject_cast<QLineEdit*>(w)) le->selectAll();
+        else if (auto* asb = qobject_cast<AccountSearchBox*>(w)) asb->selectAll();
+    };
+    auto stepBackToGrid = [this]() {
+        if (!m_table || m_table->rowCount() == 0) return;
+        m_table->setCurrentCell(m_table->rowCount() - 1, 5);
+        m_table->edit(m_table->currentIndex());
+    };
+    VoucherCommon::installGridNavigation(m_farmerSearch, nullptr, m_saleStatusCombo,
+        [this, go]() { go(m_saleStatusCombo); });
+    VoucherCommon::installGridNavigation(m_saleStatusCombo, m_farmerSearch, m_dueDaysEdit,
+        [this, go]() { go(m_dueDaysEdit); });
+    VoucherCommon::installGridNavigation(m_dueDaysEdit, m_saleStatusCombo, m_vehicleNoEdit,
+        [this, go]() { go(m_vehicleNoEdit); });
+    VoucherCommon::installGridNavigation(m_vehicleNoEdit, m_dueDaysEdit, m_brokerNameEdit,
+        [this, go]() { go(m_brokerNameEdit); });
+    VoucherCommon::installGridNavigation(m_brokerNameEdit, m_vehicleNoEdit, nullptr,
+        [this]() {
+            if (m_table->rowCount() == 0) addNewLineRow();
+            focusTableAt(0, 0);
+        });
+    VoucherCommon::installGridNavigation(m_labourEdit, nullptr, m_bonusEdit,
+        [this, go]() { go(m_bonusEdit); }, stepBackToGrid);
+    VoucherCommon::installGridNavigation(m_bonusEdit, m_labourEdit, m_roundOffEdit,
+        [this, go]() { go(m_roundOffEdit); });
+    VoucherCommon::installGridNavigation(m_roundOffEdit, m_bonusEdit, m_narrationEdit,
+        [this, go]() { go(m_narrationEdit); });
+    VoucherCommon::installGridNavigation(m_narrationEdit, m_roundOffEdit, nullptr,
+        [this]() { if (m_saveButton) m_saveButton->setFocus(); });
+
+    // Global keys (F2/F4/PgUp/PgDn/Ctrl+S/D/P/E, Esc): install FIRST so the
+    // grid filters above (installed later) take precedence on field keys.
     const QList<QWidget*> inputs = {
-        m_jformNoEdit, m_farmerSearch, m_saleStatusCombo, m_dueDaysEdit,
+        m_farmerSearch, m_saleStatusCombo, m_dueDaysEdit,
         m_vehicleNoEdit, m_brokerNameEdit, m_table, m_labourEdit,
         m_bonusEdit, m_roundOffEdit, m_narrationEdit, m_dateButton,
         m_saveButton, m_deleteButton, m_printButton, m_cancelButton
@@ -711,14 +757,14 @@ void JFormVoucherWidget::saveVoucher() {
         emit voucherSaved(savedJf);
         if (!editMode) {
             resetForm();
-            if (m_dateEdit) m_dateEdit->setFocus();
+            if (m_farmerSearch) { m_farmerSearch->setFocus(); m_farmerSearch->selectAll(); }
         }
     } else {
         CustomMessageBox::critical(this, "Error", "Failed to save J-Form voucher. Check database error logs.");
     }
 }
 
-bool JFormVoucherWidget::loadVoucherForEditing(const QVariant& vchNoOrId, const QString& dateHint) {
+bool JFormVoucherWidget::loadVoucherForEditing(const QVariant& vchNoOrId, const QString& dateHint, bool popupDateOnLoad) {
     Q_UNUSED(dateHint);
     QVariantMap vch = m_jformModel.get_jform_voucher(vchNoOrId);
     if (vch.isEmpty()) return false;
@@ -768,6 +814,9 @@ bool JFormVoucherWidget::loadVoucherForEditing(const QVariant& vchNoOrId, const 
 
     recalculateTotals();
     setStatusMessage(QString("Loaded J-Form %1 for editing").arg(m_editingJFormNo), false);
+    // Drill-down entry: date dialog first (dates take no keyboard focus),
+    // then the farmer field — openDateDialog already lands there.
+    if (popupDateOnLoad) openDateDialog(false);
     return true;
 }
 
@@ -831,8 +880,26 @@ void JFormVoucherWidget::loadNextVoucher() {
     }
 }
 
-void JFormVoucherWidget::printVoucher() {}
-void JFormVoucherWidget::exportPdf() {}
+void JFormVoucherWidget::printVoucher() {
+    if (!isEditMode() || !m_printExportCtrl) {
+        CustomMessageBox::warning(this, "Nothing to Print", "Save the J-Form before printing.");
+        return;
+    }
+    if (!m_printExportCtrl->print_jform_voucher(m_editingVoucherNo)) {
+        CustomMessageBox::critical(this, "Print Failed", QString("Could not print J-Form %1.").arg(m_editingJFormNo));
+    }
+}
+
+void JFormVoucherWidget::exportPdf() {
+    if (!isEditMode() || !m_printExportCtrl) {
+        CustomMessageBox::warning(this, "Nothing to Export", "Save the J-Form before exporting.");
+        return;
+    }
+    QString path = m_printExportCtrl->export_jform_voucher_pdf(m_editingVoucherNo, "");
+    if (path.isEmpty()) {
+        CustomMessageBox::critical(this, "Export Failed", QString("Could not export J-Form %1 to PDF.").arg(m_editingJFormNo));
+    }
+}
 
 void JFormVoucherWidget::focusTableAt(int row, int col) {
     if (!m_table) return;
@@ -856,7 +923,7 @@ void JFormVoucherWidget::advanceCell() {
     QTableWidgetItem* itemIt = m_table->item(curRow, 0);
     bool isItemEmpty = (!itemIt || itemIt->text().trimmed().isEmpty());
 
-    // If empty item name on first column
+    // Empty item name: drop a trailing empty row, exit to the footer.
     if (curCol == 0 && isItemEmpty) {
         if (curRow > 0 && curRow == m_table->rowCount() - 1) {
             m_table->removeRow(curRow);
@@ -869,8 +936,9 @@ void JFormVoucherWidget::advanceCell() {
         return;
     }
 
+    // Editable columns: 0 Item, 1 Bags, 2 Packing, 3 Loose, 5 Rate.
+    // Columns 4 (Total Wt) and 6 (Goods Amount) are computed — skipped.
     int nextCol = curCol + 1;
-    // Skip read-only columns (column 4 Total Wt and column 6 Amount)
     if (nextCol == 4) nextCol = 5;
     if (nextCol == 6) nextCol = 7;
 
@@ -904,7 +972,7 @@ void JFormVoucherWidget::retreatCell() {
     int curCol = m_table->currentColumn();
 
     int prevCol = curCol - 1;
-    if (prevCol == 4) prevCol = 3;
+    if (prevCol == 4) prevCol = 3; // Total Wt is computed — skip back over it
 
     if (prevCol >= 0) {
         m_table->setCurrentCell(curRow, prevCol);
@@ -925,16 +993,45 @@ void JFormVoucherWidget::showEvent(QShowEvent* event) {
 }
 
 void JFormVoucherWidget::keyPressEvent(QKeyEvent* event) {
-    if (event->key() == Qt::Key_F4) {
-        openAlterVoucherDialog();
+    // Grid with focus but no cell editor open (unhandled keys propagate here
+    // only in that state): Enter opens the current cell's editor; Backspace
+    // on a filled cell clears it, on an empty cell steps back.
+    if ((event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter ||
+         event->key() == Qt::Key_Backspace) &&
+        m_table && QApplication::focusWidget() == m_table) {
+        int r = m_table->currentRow(), c = m_table->currentColumn();
+        if (r >= 0 && c >= 0 && r < m_table->rowCount() && c < m_table->columnCount()) {
+            if (event->key() == Qt::Key_Backspace) {
+                if (QTableWidgetItem* it = m_table->item(r, c)) {
+                    if (!it->text().isEmpty()) {
+                        it->setText("");
+                        recalculateTotals();
+                        event->accept();
+                        return;
+                    }
+                }
+                retreatCell();
+            } else {
+                m_table->edit(m_table->currentIndex());
+            }
+            event->accept();
+            return;
+        }
+    }
+    if (event->key() == Qt::Key_F2) {
+        openDateDialog(false);
+        event->accept();
+        return;
+    } else if (event->key() == Qt::Key_F4) {
+        if (!VoucherCommon::browseBlockedByPopup()) openAlterVoucherDialog();
         event->accept();
         return;
     } else if (event->key() == Qt::Key_PageUp) {
-        loadPreviousVoucher();
+        if (!VoucherCommon::browseBlockedByPopup()) loadPreviousVoucher();
         event->accept();
         return;
     } else if (event->key() == Qt::Key_PageDown) {
-        loadNextVoucher();
+        if (!VoucherCommon::browseBlockedByPopup()) loadNextVoucher();
         event->accept();
         return;
     } else if (event->key() == Qt::Key_S && (event->modifiers() & Qt::ControlModifier)) {
@@ -949,6 +1046,10 @@ void JFormVoucherWidget::keyPressEvent(QKeyEvent* event) {
         printVoucher();
         event->accept();
         return;
+    } else if (event->key() == Qt::Key_E && (event->modifiers() & Qt::ControlModifier)) {
+        exportPdf();
+        event->accept();
+        return;
     } else if (event->key() == Qt::Key_Escape) {
         emit backRequested();
         event->accept();
@@ -958,6 +1059,7 @@ void JFormVoucherWidget::keyPressEvent(QKeyEvent* event) {
 }
 
 bool JFormVoucherWidget::eventFilter(QObject* watched, QEvent* event) {
+    Q_UNUSED(watched);
     if (event->type() == QEvent::KeyPress) {
         auto* keyEvent = static_cast<QKeyEvent*>(event);
         int key = keyEvent->key();
@@ -966,16 +1068,18 @@ bool JFormVoucherWidget::eventFilter(QObject* watched, QEvent* event) {
             emit backRequested();
             return true;
         }
-        if (key == Qt::Key_F4) {
-            openAlterVoucherDialog();
+        if (key == Qt::Key_F2) {
+            openDateDialog(false);
             return true;
         }
-        if (key == Qt::Key_PageUp) {
-            loadPreviousVoucher();
-            return true;
-        }
-        if (key == Qt::Key_PageDown) {
-            loadNextVoucher();
+        // Combos swallow PgUp/PgDn/F4 natively, so this filter (which runs
+        // before the control's own handler) is the only reliable catch.
+        // Open popups keep the keys for list paging/close instead.
+        if ((key == Qt::Key_PageUp || key == Qt::Key_PageDown || key == Qt::Key_F4) &&
+            !VoucherCommon::browseBlockedByPopup()) {
+            if (key == Qt::Key_PageUp) loadPreviousVoucher();
+            else if (key == Qt::Key_PageDown) loadNextVoucher();
+            else openAlterVoucherDialog();
             return true;
         }
         if (key == Qt::Key_S && (keyEvent->modifiers() & Qt::ControlModifier)) {
@@ -990,50 +1094,12 @@ bool JFormVoucherWidget::eventFilter(QObject* watched, QEvent* event) {
             printVoucher();
             return true;
         }
-
-        // Return / Enter progression across form fields
-        if (key == Qt::Key_Return || key == Qt::Key_Enter) {
-            if (watched == m_jformNoEdit) {
-                m_farmerSearch->setFocus();
-                return true;
-            } else if (watched == m_farmerSearch) {
-                if (!m_farmerSearch->isPopupVisible()) {
-                    m_saleStatusCombo->setFocus();
-                    return true;
-                }
-            } else if (watched == m_saleStatusCombo) {
-                m_dueDaysEdit->setFocus();
-                m_dueDaysEdit->selectAll();
-                return true;
-            } else if (watched == m_dueDaysEdit) {
-                m_vehicleNoEdit->setFocus();
-                m_vehicleNoEdit->selectAll();
-                return true;
-            } else if (watched == m_vehicleNoEdit) {
-                m_brokerNameEdit->setFocus();
-                m_brokerNameEdit->selectAll();
-                return true;
-            } else if (watched == m_brokerNameEdit) {
-                if (m_table->rowCount() == 0) addNewLineRow();
-                focusTableAt(0, 0);
-                return true;
-            } else if (watched == m_labourEdit) {
-                m_bonusEdit->setFocus();
-                m_bonusEdit->selectAll();
-                return true;
-            } else if (watched == m_bonusEdit) {
-                m_roundOffEdit->setFocus();
-                m_roundOffEdit->selectAll();
-                return true;
-            } else if (watched == m_roundOffEdit) {
-                m_narrationEdit->setFocus();
-                m_narrationEdit->selectAll();
-                return true;
-            } else if (watched == m_narrationEdit) {
-                m_saveButton->setFocus();
-                return true;
-            }
+        if (key == Qt::Key_E && (keyEvent->modifiers() & Qt::ControlModifier)) {
+            exportPdf();
+            return true;
         }
+        // Enter/Left/Right/Backspace belong to installGridNavigation
+        // (setupNavigationChains); never handle field keys here.
     }
     return QWidget::eventFilter(watched, event);
 }

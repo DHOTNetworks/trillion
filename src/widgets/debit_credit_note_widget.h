@@ -9,6 +9,7 @@
 #include <QFrame>
 #include <QVector>
 #include <QKeyEvent>
+#include <QShowEvent>
 #include "../models/debit_credit_note_controller.h"
 #include "../services/print_export_controller.h"
 #include "account_search_box.h"
@@ -27,8 +28,11 @@ public:
                                    QWidget* parent = nullptr);
 
     void resetForm();
-    bool loadNoteForEditing(int noteId);
-    void openDateDialog();
+    // popupDateOnLoad: drill-down opens pop the date dialog first (dates are
+    // never keyboard-focusable); after it closes focus lands on the party.
+    // In-voucher browsing (prev/next/alter) keeps false.
+    bool loadNoteForEditing(int noteId, bool popupDateOnLoad = false);
+    void openDateDialog(bool isInitial = false);
     void saveVoucher() { onSaveClicked(); }
     void deleteVoucher() { onDeleteClicked(); }
 
@@ -36,13 +40,26 @@ signals:
     void backRequested();
     void noteSaved(const QString& noteNo);
 
+public slots:
+    void openAlterNoteDialog();
+    void loadPreviousNote();
+    void loadNextNote();
+    void printNote();
+    void exportPdf();
+    void focusTableAt(int row, int col);
+    void advanceCell();
+    void retreatCell();
+    void moveCell(int row, int col);
+
 protected:
+    void showEvent(QShowEvent* event) override;
     void keyPressEvent(QKeyEvent* event) override;
     bool eventFilter(QObject* watched, QEvent* event) override;
 
 private slots:
     void onNoteTypeChanged(int index);
-    void onPartySelected(const QString& partyName);
+    void onPartyDataSelected(const QVariantMap& partyData);
+    void onOrigInvoiceChosen(int index);
     void onStockItemConfigured(int row, const QVariantMap& itemData);
     void onAddItemRow();
     void onRemoveItemRow();
@@ -53,7 +70,13 @@ private slots:
 private:
     void setupUi();
     void setupConnections();
+    void setupNavigationChains();
     void populateStates();
+    void refreshOrigInvoiceCombo(bool preserveSelection = false);
+    void syncTableFromDraft();
+    QString currentOrigInvType() const;
+    int findNoteRow(int noteId) const;
+    void setStatusMessage(const QString& message, bool isError);
 
     DebitCreditNoteController* m_controller = nullptr;
     PrintExportController* m_printExportCtrl = nullptr;
@@ -68,13 +91,18 @@ private:
     AccountingDateEdit* m_noteDateEdit = nullptr;
     QLabel* m_dayLabel = nullptr;
     QLabel* m_fyBadge = nullptr;
+    QLabel* m_voucherNoDisplay = nullptr;
 
+    // Orig-invoice link: combo fed by the selected party's invoices
+    // (latest first); the date fills automatically on selection.
     QComboBox* m_origInvoiceTypeCombo = nullptr;
-    QLineEdit* m_origInvoiceNoEdit = nullptr;
+    QComboBox* m_origInvoiceCombo = nullptr;
     QLineEdit* m_origInvoiceDateEdit = nullptr;
+    bool m_suppressInvoiceFetch = false;
 
     // Party & Statutory Controls
     AccountSearchBox* m_partySearch = nullptr;
+    QLabel* m_partyBalLabel = nullptr;
     QLineEdit* m_partyGstinEdit = nullptr;
     QComboBox* m_reasonCodeCombo = nullptr;
     QComboBox* m_posCombo = nullptr;
@@ -91,16 +119,17 @@ private:
     QLabel* m_grandTotalValLabel = nullptr;
     QLabel* m_statsSummaryLabel = nullptr;
 
-    // Narration & Actions
+    // Narration & Actions (badge text is always truthful: F2/F4/PgUp/PgDn/
+    // Ctrl+S/Ctrl+P/Ctrl+E/Esc owned by keyPressEvent; Del removes a row
+    // only while the grid has focus)
     QLineEdit* m_narrationEdit = nullptr;
     KbdBadgeButton* m_saveBtn = nullptr;
     KbdBadgeButton* m_deleteBtn = nullptr;
+    KbdBadgeButton* m_printBtn = nullptr;
+    KbdBadgeButton* m_pdfBtn = nullptr;
     KbdBadgeButton* m_cancelBtn = nullptr;
     KbdBadgeButton* m_newBtn = nullptr;
-
-    // Keyboard navigation order: Enter advances, Backspace clears-then-steps
-    // back (Bahi-Khata convention, same as ledger/stock forms).
-    QVector<QWidget*> m_navOrder;
+    QLabel* m_statusLabel = nullptr;
 };
 
 } // namespace MahadevERP
