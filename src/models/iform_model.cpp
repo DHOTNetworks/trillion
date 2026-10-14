@@ -2,6 +2,7 @@
 #include "../database_manager.h"
 #include "../engine/accounting_engine.h"
 #include "../engine/fiscal_year_helper.h"
+#include "gate_register_controller.h"
 #include <QDate>
 #include <QLocale>
 #include <cmath>
@@ -283,6 +284,10 @@ bool IFormModel::save_iform_voucher(const QVariantMap& data, const QVariantList&
     }
 
     db.commit();
+    if (!gatePassNo.isEmpty()) {
+        // Sale ↔ gatepass connection (mirrors J-Form; Doc 06).
+        GateRegisterController().linkVoucher(gatePassNo, QString::number(vchNo));
+    }
     emit voucherSaved();
     return true;
 }

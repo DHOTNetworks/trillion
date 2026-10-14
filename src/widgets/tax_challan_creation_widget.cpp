@@ -23,7 +23,7 @@ TaxChallanCreationWidget::TaxChallanCreationWidget(TaxChallanController *control
     connect(m_controller, &TaxChallanController::undepositedVouchersChanged, this, &TaxChallanCreationWidget::populateTable);
     connect(m_controller, &TaxChallanController::statusChanged, this, [this]() {
         m_statusLabel->setText(m_controller->statusMessage());
-        m_statusLabel->setStyleSheet(QString("font-weight: 700; font-size: 12px; color: %1;").arg(m_controller->isError() ? "#dc2626" : "#16a34a"));
+        m_statusLabel->setStyleSheet(QString("font-weight: 700; font-size: 12px; color: %1;").arg(m_controller->isError() ? ErpTheme::kRed.name() : ErpTheme::kGreen.name()));
     });
 
     syncUiFromController();
@@ -39,9 +39,7 @@ void TaxChallanCreationWidget::setTaxType(const QString &taxType)
 
 void TaxChallanCreationWidget::setupUi()
 {
-    auto *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(14, 12, 14, 12);
-    mainLayout->setSpacing(10);
+    auto *mainLayout = ErpTheme::makePageLayout(this);
 
     // 1. Header Bar
     mainLayout->addWidget(createHeaderBar());
@@ -51,14 +49,14 @@ void TaxChallanCreationWidget::setupUi()
 
     // 3. Center Table & selection buttons
     auto *tableContainer = new QFrame(this);
-    tableContainer->setStyleSheet("QFrame { background-color: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 8px; }");
+    tableContainer->setStyleSheet(ErpTheme::headerCardStyle());
     auto *tableLayout = new QVBoxLayout(tableContainer);
     tableLayout->setContentsMargins(12, 10, 12, 10);
     tableLayout->setSpacing(8);
 
     auto *tableHeaderLayout = new QHBoxLayout();
     auto *tableTitle = new QLabel("Un-deposited Vouchers List", tableContainer);
-    tableTitle->setStyleSheet("font-weight: 800; color: #0F172A; font-size: 13px; border: none; background: transparent;");
+    tableTitle->setStyleSheet(ErpTheme::headerTitleStyle(13));
     tableHeaderLayout->addWidget(tableTitle);
 
     tableHeaderLayout->addStretch(1);
@@ -66,8 +64,7 @@ void TaxChallanCreationWidget::setupUi()
     auto *btnSelectAll = new QPushButton("Select All", tableContainer);
     btnSelectAll->setCursor(Qt::PointingHandCursor);
     btnSelectAll->setStyleSheet(
-        "QPushButton { background-color: #FFFFFF; border: 1.5px solid #CBD5E1; border-radius: 4px; padding: 4px 10px; font-size: 11px; font-weight: 700; color: #334155; }"
-        "QPushButton:hover { background-color: #F8FAFC; }"
+ErpTheme::secondaryButtonStyle()
     );
     connect(btnSelectAll, &QPushButton::clicked, this, &TaxChallanCreationWidget::onSelectAllClicked);
     tableHeaderLayout->addWidget(btnSelectAll);
@@ -75,8 +72,7 @@ void TaxChallanCreationWidget::setupUi()
     auto *btnSelectNone = new QPushButton("Clear All", tableContainer);
     btnSelectNone->setCursor(Qt::PointingHandCursor);
     btnSelectNone->setStyleSheet(
-        "QPushButton { background-color: #FFFFFF; border: 1.5px solid #CBD5E1; border-radius: 4px; padding: 4px 10px; font-size: 11px; font-weight: 700; color: #334155; }"
-        "QPushButton:hover { background-color: #F8FAFC; }"
+ErpTheme::secondaryButtonStyle()
     );
     connect(btnSelectNone, &QPushButton::clicked, this, &TaxChallanCreationWidget::onSelectNoneClicked);
     tableHeaderLayout->addWidget(btnSelectNone);
@@ -91,22 +87,12 @@ void TaxChallanCreationWidget::setupUi()
     });
     m_vouchersTable->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
     m_vouchersTable->horizontalHeader()->setSectionResizeMode(4, QHeaderView::Stretch);
-    m_vouchersTable->verticalHeader()->setVisible(false);
-    m_vouchersTable->verticalHeader()->setDefaultSectionSize(30);
-    m_vouchersTable->setShowGrid(true);
-    m_vouchersTable->setSelectionBehavior(QAbstractItemView::SelectRows);
-    m_vouchersTable->setAlternatingRowColors(true);
-    m_vouchersTable->setStyleSheet(
-        "QTableWidget { background-color: #FFFFFF; alternate-background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 8px; gridline-color: #F1F5F9; font-size: 12.5px; color: #0F172A; }"
-        "QTableWidget::item { padding: 4px 8px; }"
-        "QTableWidget::item:selected { background-color: #2563EB; color: #FFFFFF; font-weight: bold; }"
-        "QHeaderView::section { background-color: #0F172A; color: #FFFFFF; font-weight: 800; font-size: 12px; padding: 8px 10px; border: none;  border-right: 1px solid #334155; }"
-    );
+    ErpTheme::styleTable(m_vouchersTable);
     connect(m_vouchersTable, &QTableWidget::itemChanged, this, &TaxChallanCreationWidget::onTableItemChanged);
     tableLayout->addWidget(m_vouchersTable, 1);
 
     m_tableSummaryLabel = new QLabel("Selected: 0 vouchers | Total Tax: ₹0.00", tableContainer);
-    m_tableSummaryLabel->setStyleSheet("color: #16A34A; font-weight: 700; font-size: 12px; border: none; background: transparent;");
+    m_tableSummaryLabel->setStyleSheet(QString("color: %1; font-weight: 700; font-size: 12px; border: none; background: transparent;").arg(ErpTheme::kGreen.name()));
     tableLayout->addWidget(m_tableSummaryLabel);
 
     mainLayout->addWidget(tableContainer, 1);
@@ -120,8 +106,32 @@ void TaxChallanCreationWidget::setupUi()
 
     mainLayout->addLayout(bottomLayout);
 
+    // Keyboard-first path across the editable fields.
+    connect(m_challanNoEdit, &QLineEdit::returnPressed, this, [this]() {
+        if (m_interestAmtEdit) { m_interestAmtEdit->setFocus(); m_interestAmtEdit->selectAll(); }
+    });
+    connect(m_interestAmtEdit, &QLineEdit::returnPressed, this, [this]() {
+        if (m_penaltyAmtEdit) { m_penaltyAmtEdit->setFocus(); m_penaltyAmtEdit->selectAll(); }
+    });
+    connect(m_penaltyAmtEdit, &QLineEdit::returnPressed, this, [this]() {
+        if (m_otherAmtEdit) { m_otherAmtEdit->setFocus(); m_otherAmtEdit->selectAll(); }
+    });
+    connect(m_otherAmtEdit, &QLineEdit::returnPressed, this, [this]() {
+        if (m_chequeNoEdit) { m_chequeNoEdit->setFocus(); m_chequeNoEdit->selectAll(); }
+    });
+    connect(m_chequeNoEdit, &QLineEdit::returnPressed, this, [this]() {
+        if (m_bsrCodeEdit) { m_bsrCodeEdit->setFocus(); m_bsrCodeEdit->selectAll(); }
+    });
+    QWidget::setTabOrder(m_challanNoEdit, m_postInBooksCombo);
+    QWidget::setTabOrder(m_postInBooksCombo, m_interestAmtEdit);
+    QWidget::setTabOrder(m_interestAmtEdit, m_penaltyAmtEdit);
+    QWidget::setTabOrder(m_penaltyAmtEdit, m_otherAmtEdit);
+    QWidget::setTabOrder(m_otherAmtEdit, m_chequeNoEdit);
+    QWidget::setTabOrder(m_chequeNoEdit, m_bsrCodeEdit);
+
     // Shortcuts
     new QShortcut(QKeySequence(Qt::ALT | Qt::Key_S), this, SLOT(onSaveClicked()));
+    new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_S), this, SLOT(onSaveClicked()));
     new QShortcut(QKeySequence(Qt::Key_Escape), this, SIGNAL(backRequested()));
     auto* f2Shortcut = new QShortcut(QKeySequence(Qt::Key_F2), this);
     connect(f2Shortcut, &QShortcut::activated, this, [this]() {
@@ -138,16 +148,16 @@ void TaxChallanCreationWidget::setupUi()
 QWidget *TaxChallanCreationWidget::createHeaderBar()
 {
     auto *headerCard = new QFrame(this);
-    headerCard->setStyleSheet("QFrame { background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; }");
+    headerCard->setStyleSheet(ErpTheme::headerCardStyle());
     auto *layout = new QHBoxLayout(headerCard);
     layout->setContentsMargins(14, 10, 14, 10);
 
     auto *titleCol = new QVBoxLayout();
     titleCol->setSpacing(2);
     m_titleLabel = new QLabel(QString("%1. Deposit Challan (Creation)").arg(m_controller->taxType() == "TDS" ? "T.D.S" : "T.C.S"), headerCard);
-    m_titleLabel->setStyleSheet("font-size: 16px; font-weight: 800; color: #0F172A; border: none; background: transparent;");
+    m_titleLabel->setStyleSheet(ErpTheme::headerTitleStyle(15));
     auto *subLabel = new QLabel("Prepare ITNS 281 single deposit challan for selected withholding vouchers.", headerCard);
-    subLabel->setStyleSheet("font-size: 11px; color: #64748B; border: none; background: transparent;");
+    subLabel->setStyleSheet(ErpTheme::mutedLabelStyle(11));
     titleCol->addWidget(m_titleLabel);
     titleCol->addWidget(subLabel);
     layout->addLayout(titleCol);
@@ -173,10 +183,7 @@ QWidget *TaxChallanCreationWidget::createParamsCard()
 {
     auto *card = new QFrame(this);
     card->setStyleSheet(
-        "QFrame { background-color: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 8px; }"
-        "QLabel { color: #475569; font-weight: 700; font-size: 11.5px; border: none; background: transparent; }"
-        "QLineEdit, QComboBox { background-color: #FFFFFF; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 4px 8px; font-size: 12px; color: #0F172A; font-weight: 600; }"
-        "QLineEdit:focus, QComboBox:focus { border-color: #2563EB; background-color: #F8FAFC; }"
+ErpTheme::filterBarStyle()
     );
     auto *layout = new QHBoxLayout(card);
     layout->setContentsMargins(12, 10, 12, 10);
@@ -200,9 +207,10 @@ QWidget *TaxChallanCreationWidget::createParamsCard()
     m_challanDateEdit = new QLineEdit(card);
     m_challanDateEdit->setReadOnly(true);
     dtRow->addWidget(m_challanDateEdit);
-    auto *btnDate = new QPushButton("", card);
+    auto *btnDate = new QPushButton("\u2026", card);
     btnDate->setMinimumWidth(28);
-    btnDate->setStyleSheet("QPushButton { background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 4px; }");
+    btnDate->setToolTip("Pick date (F2)");
+    btnDate->setStyleSheet(QString("QPushButton { background-color: %1; border: 1.5px solid %2; border-radius: 4px; }").arg(ErpTheme::kCanvas.name(), ErpTheme::kLine.name()));
     connect(btnDate, &QPushButton::clicked, this, [this]() {
         QDate cur = QDate::fromString(m_controller->challanDate(), "yyyy-MM-dd");
         if (!cur.isValid()) cur = QDate::currentDate();
@@ -236,9 +244,10 @@ QWidget *TaxChallanCreationWidget::createParamsCard()
     m_periodFromEdit = new QLineEdit(card);
     m_periodFromEdit->setReadOnly(true);
     pfRow->addWidget(m_periodFromEdit);
-    auto *btnPf = new QPushButton("", card);
+    auto *btnPf = new QPushButton("\u2026", card);
     btnPf->setMinimumWidth(28);
-    btnPf->setStyleSheet("QPushButton { background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 4px; }");
+    btnPf->setToolTip("Pick date");
+    btnPf->setStyleSheet(QString("QPushButton { background-color: %1; border: 1.5px solid %2; border-radius: 4px; }").arg(ErpTheme::kCanvas.name(), ErpTheme::kLine.name()));
     connect(btnPf, &QPushButton::clicked, this, [this]() {
         QDate cur = QDate::fromString(m_controller->periodFrom(), "yyyy-MM-dd");
         if (!cur.isValid()) cur = QDate::currentDate();
@@ -260,9 +269,10 @@ QWidget *TaxChallanCreationWidget::createParamsCard()
     m_periodToEdit = new QLineEdit(card);
     m_periodToEdit->setReadOnly(true);
     ptRow->addWidget(m_periodToEdit);
-    auto *btnPt = new QPushButton("", card);
+    auto *btnPt = new QPushButton("\u2026", card);
     btnPt->setMinimumWidth(28);
-    btnPt->setStyleSheet("QPushButton { background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 4px; }");
+    btnPt->setToolTip("Pick date");
+    btnPt->setStyleSheet(QString("QPushButton { background-color: %1; border: 1.5px solid %2; border-radius: 4px; }").arg(ErpTheme::kCanvas.name(), ErpTheme::kLine.name()));
     connect(btnPt, &QPushButton::clicked, this, [this]() {
         QDate cur = QDate::fromString(m_controller->periodTo(), "yyyy-MM-dd");
         if (!cur.isValid()) cur = QDate::currentDate();
@@ -281,8 +291,7 @@ QWidget *TaxChallanCreationWidget::createParamsCard()
     btnFetch->setMinimumHeight(30);
     btnFetch->setCursor(Qt::PointingHandCursor);
     btnFetch->setStyleSheet(
-        "QPushButton { background-color: #2563EB; color: #FFFFFF; font-weight: 700; font-size: 11.5px; padding: 0 16px; border-radius: 6px; border: none; }"
-        "QPushButton:hover { background-color: #1D4ED8; }"
+QString("QPushButton { background-color: %1; color: %2; font-weight: 700; font-size: 11.5px; padding: 0 16px; border-radius: 6px; border: none; }QPushButton:hover { background-color: %3; }").arg(ErpTheme::kBlue.name(), ErpTheme::kPaper.name(), ErpTheme::kBlueDark.name())
     );
     connect(btnFetch, &QPushButton::clicked, this, &TaxChallanCreationWidget::onFetchClicked);
     layout->addWidget(btnFetch);
@@ -294,10 +303,7 @@ QWidget *TaxChallanCreationWidget::createAdjustmentCard()
 {
     auto *card = new QFrame(this);
     card->setStyleSheet(
-        "QFrame { background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; }"
-        "QLabel { color: #475569; font-weight: 700; font-size: 11.5px; border: none; background: transparent; }"
-        "QLineEdit { background-color: #FFFFFF; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 4px 8px; font-size: 12px; color: #0F172A; font-weight: 600; }"
-        "QLineEdit:focus { border-color: #2563EB; background-color: #F8FAFC; }"
+ErpTheme::filterBarStyle()
     );
     auto *grid = new QGridLayout(card);
     grid->setContentsMargins(14, 12, 14, 12);
@@ -361,22 +367,14 @@ QWidget *TaxChallanCreationWidget::createAdjustmentCard()
 
     // Row 4: Total Challan Amount
     auto *totalLabel = new QLabel("Total Challan Amount:", card);
-    totalLabel->setStyleSheet("font-weight: 800; color: #15803D; font-size: 13px;");
+    totalLabel->setStyleSheet(QString("font-weight: 800; color: %1; font-size: 13px;").arg(ErpTheme::kGreenDark.name()));
     grid->addWidget(totalLabel, 4, 0);
     m_totalChallanAmtEdit = new QLineEdit(card);
     m_totalChallanAmtEdit->setReadOnly(true);
     m_totalChallanAmtEdit->setAlignment(Qt::AlignRight);
     m_totalChallanAmtEdit->setStyleSheet(
-        "QLineEdit {"
-        "  font-size: 15px;"
-        "  font-weight: 800;"
-        "  color: #15803D;"
-        "  background-color: #F0FDF4;"
-        "  border: 1.5px solid #86EFAC;"
-        "  border-radius: 6px;"
-        "  padding: 4px 8px;"
-        "}"
-    );
+QString("QLineEdit { font-size: 15px; font-weight: 800; color: %1; background-color: %2; border: 1.5px solid %3; border-radius: 6px; padding: 4px 8px; }")
+        .arg(ErpTheme::kGreenDark.name(), ErpTheme::kGreenBg.name(), ErpTheme::kGreenBorder.name()));
     grid->addWidget(m_totalChallanAmtEdit, 4, 1, 1, 2);
 
     return card;
@@ -386,10 +384,7 @@ QWidget *TaxChallanCreationWidget::createBankDetailsCard()
 {
     auto *card = new QFrame(this);
     card->setStyleSheet(
-        "QFrame { background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; }"
-        "QLabel { color: #475569; font-weight: 700; font-size: 11.5px; border: none; background: transparent; }"
-        "QLineEdit { background-color: #FFFFFF; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 4px 8px; font-size: 12px; color: #0F172A; font-weight: 600; }"
-        "QLineEdit:focus { border-color: #2563EB; background-color: #F8FAFC; }"
+ErpTheme::filterBarStyle()
     );
     auto *grid = new QGridLayout(card);
     grid->setContentsMargins(14, 12, 14, 12);
@@ -415,9 +410,10 @@ QWidget *TaxChallanCreationWidget::createBankDetailsCard()
     m_chequeDateEdit = new QLineEdit(card);
     m_chequeDateEdit->setReadOnly(true);
     chqDateRow->addWidget(m_chequeDateEdit);
-    auto *btnChqDate = new QPushButton("", card);
+    auto *btnChqDate = new QPushButton("\u2026", card);
     btnChqDate->setMinimumWidth(28);
-    btnChqDate->setStyleSheet("QPushButton { background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 4px; }");
+    btnChqDate->setToolTip("Pick cheque date");
+    btnChqDate->setStyleSheet(QString("QPushButton { background-color: %1; border: 1.5px solid %2; border-radius: 4px; }").arg(ErpTheme::kCanvas.name(), ErpTheme::kLine.name()));
     connect(btnChqDate, &QPushButton::clicked, this, [this]() {
         QDate cur = QDate::fromString(m_controller->chequeDate(), "yyyy-MM-dd");
         if (!cur.isValid()) cur = QDate::currentDate();

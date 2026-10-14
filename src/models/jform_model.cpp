@@ -2,6 +2,7 @@
 #include "../database_manager.h"
 #include "../engine/accounting_engine.h"
 #include "../engine/fiscal_year_helper.h"
+#include "gate_register_controller.h"
 #include <QDate>
 #include <QLocale>
 #include <iostream>
@@ -283,6 +284,11 @@ bool JFormModel::save_jform_voucher(const QVariantMap& data, const QVariantList&
     }
 
     db.commit();
+    if (!gatePassNo.isEmpty()) {
+        // Purchase/sale ↔ gatepass connection: record the voucher against
+        // the gate entry so transport meta + history resolve (Doc 06).
+        GateRegisterController().linkVoucher(gatePassNo, QString::number(vchNo));
+    }
     emit voucherSaved();
     std::cout << "[SUCCESS] J-Form Voucher #" << vchNo << " saved successfully!" << std::endl;
     return true;
@@ -534,6 +540,7 @@ bool JFormModel::delete_jform_voucher(int voucherId) {
     db.executeNonQuery("DELETE FROM jform_vouchers WHERE id = ?;", {voucherId});
     db.executeNonQuery("DELETE FROM jform_voucher_items WHERE voucher_id = ?;", {voucherId});
     db.executeNonQuery("DELETE FROM stock_transactions WHERE trans_type = 'JFrm' AND voucher_no = ?;", {vchNo});
+    db.executeNonQuery("DELETE FROM transactions WHERE (voucher_type = 'JFrm' OR trans_type = 'JFrm') AND voucher_no = ?;", {vchNo});
     db.executeNonQuery("DELETE FROM vouchers WHERE voucher_type = 'JFrm' AND voucher_no = ?;", {vchNo});
     db.commit();
 

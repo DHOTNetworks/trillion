@@ -507,8 +507,35 @@ void GateRegisterWidget::keyPressEvent(QKeyEvent* event) {
         if (m_entryCard && m_entryCard->isVisible()) {
             onSaveGateEntry();
         }
+    } else if ((event->modifiers() & Qt::AltModifier) && event->key() == Qt::Key_D) {
+        onDeleteSelected();
+    } else if (event->key() == Qt::Key_Delete && !(event->modifiers() & Qt::ControlModifier)) {
+        onDeleteSelected();
     } else {
         QWidget::keyPressEvent(event);
+    }
+}
+
+void GateRegisterWidget::onDeleteSelected() {
+    QTableWidget* tbl = (m_tabWidget && m_tabWidget->currentIndex() == 1 && m_historyTable) ? m_historyTable : m_liveTable;
+    if (!tbl) return;
+    int r = tbl->currentRow();
+    if (r < 0) {
+        CustomMessageBox::information(this, "Selection Required", "Please select a gate entry to delete.");
+        return;
+    }
+    QTableWidgetItem* cell = tbl->item(r, 0);
+    QString passNo = cell ? cell->text().trimmed() : QString();
+    if (passNo.isEmpty()) return;
+    if (!CustomMessageBox::question(this, "Confirm Delete",
+            QString("Permanently delete gate pass %1?\nThis cannot be undone.").arg(passNo))) {
+        return;
+    }
+    QString err;
+    if (m_controller->deleteGateEntry(passNo, &err)) {
+        refreshData();
+    } else if (!err.isEmpty()) {
+        CustomMessageBox::critical(this, "Delete Failed", err);
     }
 }
 

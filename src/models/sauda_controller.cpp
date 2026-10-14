@@ -319,3 +319,30 @@ QVariantMap SaudaController::getSaudaById(int id) {
     );
     return rows.isEmpty() ? QVariantMap() : rows.first().toMap();
 }
+
+bool SaudaController::deleteSaudaContract(const QString& saudaNo, QString* error) {
+    QString sNo = saudaNo.trimmed();
+    if (sNo.isEmpty()) {
+        if (error) *error = QString("No sauda selected.");
+        return false;
+    }
+    DatabaseManager& db = DatabaseManager::instance();
+    QVariantList posted = db.executeQuery(
+        "SELECT COUNT(*) AS c FROM dalali_settlements WHERE sauda_no = ? AND is_posted_to_jv = 1;", {sNo});
+    if (!posted.isEmpty() && posted.first().toMap().value("c").toInt() > 0) {
+        if (error) *error = QString("Sauda %1 has settlements posted to journal — cannot delete.").arg(sNo);
+        return false;
+    }
+    db.beginTransaction();
+    db.executeNonQuery("DELETE FROM dalali_settlements WHERE sauda_no = ?;", {sNo});
+    bool ok = db.executeNonQuery("DELETE FROM sauda_contracts WHERE sauda_no = ?;", {sNo});
+    if (!ok) {
+        db.rollback();
+        if (error) *error = QString("Delete failed for sauda %1.").arg(sNo);
+        return false;
+    }
+    db.commit();
+    emit saudaDataChanged();
+    emit dalaliDataChanged();
+    return true;
+}

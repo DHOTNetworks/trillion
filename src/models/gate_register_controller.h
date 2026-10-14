@@ -40,6 +40,7 @@ public:
 
     bool updateGateStatus(int id, const QString& newStatus, const QString& exitTime = "");
     bool linkVoucher(const QString& gatePassNo, const QString& voucherNo);
+    bool deleteGateEntry(const QString& gatePassNo, QString* error = nullptr);
 
     // Queries
     QVariantList getLiveGateEntries(const QString& filterDirection = "ALL", const QString& filterStatus = "ALL");

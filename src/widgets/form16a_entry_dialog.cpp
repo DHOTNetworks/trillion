@@ -8,6 +8,7 @@
 #include <QGridLayout>
 #include <QDate>
 #include <QDoubleValidator>
+#include <QShortcut>
 
 namespace MahadevERP {
 
@@ -23,53 +24,27 @@ Form16AEntryDialog::Form16AEntryDialog(QWidget *parent)
 void Form16AEntryDialog::setupUi()
 {
     setMinimumWidth(540);
-    setStyleSheet(
-        "QDialog {"
-        "  background-color: #FFFFFF;"
-        "  border: 2px solid #2563EB;"
-        "  border-radius: 8px;"
-        "}"
-        "QLineEdit, QComboBox {"
-        "  background-color: #FFFFFF;"
-        "  border: 1.5px solid #CBD5E1;"
-        "  border-radius: 6px;"
-        "  color: #0F172A;"
-        "  padding: 5px 8px;"
-        "  font-size: 13px;"
-        "  min-height: 26px;"
-        "}"
-        "QLineEdit:focus, QComboBox:focus {"
-        "  border: 1.5px solid #2563EB;"
-        "}"
-        "QLineEdit[readOnly=\"true\"] {"
-        "  background-color: #F1F5F9;"
-        "  color: #64748B;"
-        "  border: 1.5px solid #E2E8F0;"
-        "}"
-        "QLabel {"
-        "  color: #475569;"
-        "  font-size: 12px;"
-        "  font-weight: 700;"
-        "}"
-        "QComboBox QAbstractItemView {"
-        "  background-color: #FFFFFF;"
-        "  color: #0F172A;"
-        "  selection-background-color: #2563EB;"
-        "  selection-color: #1E3A8A;"
-        "}"
-    );
+setStyleSheet(
+        QString("QDialog { background-color: %1; border: 2px solid %2; border-radius: 8px; }"
+        "QLineEdit, QComboBox { background-color: %1; border: 1.5px solid %3; border-radius: 6px; color: %4; padding: 5px 8px; font-size: 13px; min-height: 26px; }"
+        "QLineEdit:focus, QComboBox:focus { border: 1.5px solid %2; }"
+        "QLineEdit[readOnly=\"true\"] { background-color: %5; color: %6; border: 1.5px solid %7; }"
+        "QLabel { color: %8; font-size: 12px; font-weight: 700; }"
+        "QComboBox QAbstractItemView { background-color: %1; color: %4; selection-background-color: %2; selection-color: #FFFFFF; }")
+        .arg(ErpTheme::kPaper.name(), ErpTheme::kBlue.name(), ErpTheme::kLine.name(), ErpTheme::kNavy.name(),
+             ErpTheme::kHeaderBg.name(), ErpTheme::kMuted.name(), ErpTheme::kCardBorder.name(), ErpTheme::kLabelSlate.name()));
 
     auto *mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(0, 0, 0, 16);
     mainLayout->setSpacing(12);
 
     auto *title = new QLabel("Receive Form-16A / Form-27D Certificate", this);
-    title->setStyleSheet("color: #0F172A; font-size: 15px; font-weight: 800; padding: 12px; background-color: #F8FAFC; border-bottom: 1px solid #E2E8F0; border-top-left-radius: 6px; border-top-right-radius: 6px;");
+    title->setStyleSheet(QString("color: %1; font-size: 15px; font-weight: 800; padding: 12px; background-color: %2; border-bottom: 1px solid %3; border-top-left-radius: 6px; border-top-right-radius: 6px;").arg(ErpTheme::kNavy.name(), ErpTheme::kCanvas.name(), ErpTheme::kCardBorder.name()));
     title->setAlignment(Qt::AlignCenter);
     mainLayout->addWidget(title);
 
     auto *formWidget = new QWidget(this);
-    formWidget->setStyleSheet("background-color: #FFFFFF;");
+    formWidget->setStyleSheet(QString("background-color: %1;").arg(ErpTheme::kPaper.name()));
     auto *grid = new QGridLayout(formWidget);
     grid->setContentsMargins(20, 6, 20, 0);
     grid->setHorizontalSpacing(14);
@@ -90,9 +65,10 @@ void Form16AEntryDialog::setupUi()
     m_dateEdit->setReadOnly(true);
     m_dateEdit->setText(QDate::currentDate().toString("dd-MM-yyyy"));
     dtRow->addWidget(m_dateEdit);
-    auto *btnDt = new QPushButton("", formWidget);
+    auto *btnDt = new QPushButton("\u2026", formWidget);
     btnDt->setMinimumWidth(32);
-    btnDt->setStyleSheet("background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 4px; font-size: 13px;");
+    btnDt->setToolTip("Pick date");
+    btnDt->setStyleSheet(QString("background-color: %1; border: 1.5px solid %2; border-radius: 6px; padding: 4px; font-size: 13px;").arg(ErpTheme::kCanvas.name(), ErpTheme::kLine.name()));
     btnDt->setCursor(Qt::PointingHandCursor);
     connect(btnDt, &QPushButton::clicked, this, [this]() {
         QDate cur = QDate::fromString(m_dateEdit->text(), "dd-MM-yyyy");
@@ -164,13 +140,38 @@ void Form16AEntryDialog::setupUi()
 
     btnRow->addStretch(1);
 
-    auto *btnSave = new KbdBadgeButton("Save Certificate", "", this);
+    auto *btnSave = new KbdBadgeButton("Save Certificate", "Ctrl+S", this);
     btnSave->setPrimaryColor(ErpTheme::kGreen, ErpTheme::kGreenDark);
     btnSave->setTextColor(ErpTheme::kPaper);
     connect(btnSave, &QPushButton::clicked, this, &Form16AEntryDialog::onSaveClicked);
     btnRow->addWidget(btnSave);
 
     mainLayout->addLayout(btnRow);
+
+    // Keyboard-first: full Enter chain + Tab order + Ctrl+S.
+    connect(m_certNoEdit, &QLineEdit::returnPressed, this, [this]() {
+        if (m_partySearch) m_partySearch->setFocus();
+    });
+    connect(m_partySearch, &AccountSearchBox::returnPressed, this, [this]() {
+        if (m_grossAmtEdit) { m_grossAmtEdit->setFocus(); m_grossAmtEdit->selectAll(); }
+    });
+    connect(m_grossAmtEdit, &QLineEdit::returnPressed, this, [this]() {
+        if (m_tdsAmtEdit) { m_tdsAmtEdit->setFocus(); m_tdsAmtEdit->selectAll(); }
+    });
+    connect(m_tdsAmtEdit, &QLineEdit::returnPressed, this, [this]() {
+        if (m_remarksEdit) { m_remarksEdit->setFocus(); m_remarksEdit->selectAll(); }
+    });
+    connect(m_remarksEdit, &QLineEdit::returnPressed, btnSave, [btnSave]() { btnSave->setFocus(); });
+    QWidget::setTabOrder(m_certNoEdit, m_partySearch);
+    QWidget::setTabOrder(m_partySearch, m_panEdit);
+    QWidget::setTabOrder(m_panEdit, m_quarterCombo);
+    QWidget::setTabOrder(m_quarterCombo, m_grossAmtEdit);
+    QWidget::setTabOrder(m_grossAmtEdit, m_tdsAmtEdit);
+    QWidget::setTabOrder(m_tdsAmtEdit, m_matchedCombo);
+    QWidget::setTabOrder(m_matchedCombo, m_remarksEdit);
+    QWidget::setTabOrder(m_remarksEdit, btnSave);
+    new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_S), this, SLOT(onSaveClicked()));
+    if (m_certNoEdit) m_certNoEdit->setFocus();
 }
 
 void Form16AEntryDialog::onSaveClicked()
@@ -180,19 +181,21 @@ void Form16AEntryDialog::onSaveClicked()
     double tdsAmt = m_tdsAmtEdit->text().toDouble();
     double grossAmt = m_grossAmtEdit->text().toDouble();
 
+    auto markError = [this](const QString &msg, QWidget *focus) {
+        m_statusLabel->setText(msg);
+        m_statusLabel->setStyleSheet(QString("color: %1; font-weight: 600;").arg(ErpTheme::kRed.name()));
+        if (focus) focus->setFocus();
+    };
     if (certNo.isEmpty()) {
-        m_statusLabel->setText("Certificate Number cannot be empty.");
-        m_statusLabel->setStyleSheet("color: #ef4444; font-weight: 600;");
+        markError("Certificate Number cannot be empty.", m_certNoEdit);
         return;
     }
     if (partyId <= 0) {
-        m_statusLabel->setText("Please select a Deductor (Customer).");
-        m_statusLabel->setStyleSheet("color: #ef4444; font-weight: 600;");
+        markError("Please select a Deductor (Customer).", m_partySearch);
         return;
     }
     if (tdsAmt <= 0.0) {
-        m_statusLabel->setText("TDS Deducted Amount must be greater than zero.");
-        m_statusLabel->setStyleSheet("color: #ef4444; font-weight: 600;");
+        markError("TDS Deducted Amount must be greater than zero.", m_tdsAmtEdit);
         return;
     }
 

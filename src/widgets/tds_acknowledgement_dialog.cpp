@@ -1,10 +1,13 @@
 #include "tds_acknowledgement_dialog.h"
+#include "kbd_badge_button.h"
+#include "erp_theme.h"
 #include "../database_manager.h"
 #include "voucher_date_dialog.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGridLayout>
 #include <QHeaderView>
+#include <QShortcut>
 #include <QDate>
 #include <QDoubleValidator>
 #include <QIntValidator>
@@ -24,55 +27,30 @@ TdsAcknowledgementDialog::TdsAcknowledgementDialog(QWidget *parent)
 
 void TdsAcknowledgementDialog::setupUi()
 {
-    setFixedSize(740, 540);
-    setStyleSheet(
-        "QDialog {"
-        "  background-color: #FFFFFF;"
-        "  border: 2px solid #2563EB;"
-        "  border-radius: 8px;"
-        "}"
-        "QLineEdit, QComboBox {"
-        "  background-color: #FFFFFF;"
-        "  border: 1.5px solid #CBD5E1;"
-        "  border-radius: 6px;"
-        "  color: #0F172A;"
-        "  padding: 5px 8px;"
-        "  font-size: 13px;"
-        "  min-height: 26px;"
-        "}"
-        "QLineEdit:focus, QComboBox:focus {"
-        "  border: 1.5px solid #2563EB;"
-        "}"
-        "QLineEdit[readOnly=\"true\"] {"
-        "  background-color: #F1F5F9;"
-        "  color: #64748B;"
-        "  border: 1.5px solid #E2E8F0;"
-        "}"
-        "QLabel {"
-        "  color: #475569;"
-        "  font-size: 12px;"
-        "  font-weight: 700;"
-        "}"
-        "QComboBox QAbstractItemView {"
-        "  background-color: #FFFFFF;"
-        "  color: #0F172A;"
-        "  selection-background-color: #2563EB;"
-        "  selection-color: #FFFFFF;"
-        "}"
-    );
+    setMinimumSize(740, 540);
+    resize(740, 540);
+setStyleSheet(
+        QString("QDialog { background-color: %1; border: 2px solid %2; border-radius: 8px; }"
+        "QLineEdit, QComboBox { background-color: %1; border: 1.5px solid %3; border-radius: 6px; color: %4; padding: 5px 8px; font-size: 13px; min-height: 26px; }"
+        "QLineEdit:focus, QComboBox:focus { border: 1.5px solid %2; }"
+        "QLineEdit[readOnly=\"true\"] { background-color: %5; color: %6; border: 1.5px solid %7; }"
+        "QLabel { color: %8; font-size: 12px; font-weight: 700; }"
+        "QComboBox QAbstractItemView { background-color: %1; color: %4; selection-background-color: %2; selection-color: #FFFFFF; }")
+        .arg(ErpTheme::kPaper.name(), ErpTheme::kBlue.name(), ErpTheme::kLine.name(), ErpTheme::kNavy.name(),
+             ErpTheme::kHeaderBg.name(), ErpTheme::kMuted.name(), ErpTheme::kCardBorder.name(), ErpTheme::kLabelSlate.name()));
 
     auto *mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(0, 0, 0, 16);
     mainLayout->setSpacing(10);
 
     auto *title = new QLabel("TDS / TCS Return Acknowledgement Numbers", this);
-    title->setStyleSheet("color: #0F172A; font-size: 15px; font-weight: 800; padding: 12px; background-color: #F8FAFC; border-bottom: 1px solid #E2E8F0; border-top-left-radius: 6px; border-top-right-radius: 6px;");
+    title->setStyleSheet(QString("color: %1; font-size: 15px; font-weight: 800; padding: 12px; background-color: %2; border-bottom: 1px solid %3; border-top-left-radius: 6px; border-top-right-radius: 6px;").arg(ErpTheme::kNavy.name(), ErpTheme::kCanvas.name(), ErpTheme::kCardBorder.name()));
     title->setAlignment(Qt::AlignCenter);
     mainLayout->addWidget(title);
 
     // Form Grid
     auto *formCard = new QWidget(this);
-    formCard->setStyleSheet("background-color: #FFFFFF; border-bottom: 1px solid #E2E8F0;");
+    formCard->setStyleSheet(QString("background-color: %1; border-bottom: 1px solid %2;").arg(ErpTheme::kPaper.name(), ErpTheme::kCardBorder.name()));
     auto *grid = new QGridLayout(formCard);
     grid->setContentsMargins(16, 6, 16, 12);
     grid->setHorizontalSpacing(12);
@@ -99,9 +77,10 @@ void TdsAcknowledgementDialog::setupUi()
     m_filingDateEdit->setReadOnly(true);
     m_filingDateEdit->setText(QDate::currentDate().toString("dd-MM-yyyy"));
     dtRow->addWidget(m_filingDateEdit);
-    auto *btnDt = new QPushButton("", formCard);
+    auto *btnDt = new QPushButton("\u2026", formCard);
     btnDt->setMinimumWidth(32);
-    btnDt->setStyleSheet("background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 4px; font-size: 13px;");
+    btnDt->setToolTip("Pick date");
+    btnDt->setStyleSheet(QString("background-color: %1; border: 1.5px solid %2; border-radius: 6px; padding: 4px; font-size: 13px;").arg(ErpTheme::kCanvas.name(), ErpTheme::kLine.name()));
     btnDt->setCursor(Qt::PointingHandCursor);
     connect(btnDt, &QPushButton::clicked, this, [this]() {
         QDate cur = QDate::fromString(m_filingDateEdit->text(), "dd-MM-yyyy");
@@ -128,9 +107,10 @@ void TdsAcknowledgementDialog::setupUi()
     m_remarksEdit = new QLineEdit(formCard);
     grid->addWidget(m_remarksEdit, 3, 1, 1, 2);
 
-    auto *btnAdd = new QPushButton("+ Add Entry", formCard);
-    btnAdd->setStyleSheet("QPushButton { background-color: #16A34A; color: white; border: none; padding: 7px 16px; border-radius: 6px; font-weight: 700; font-size: 13px; } QPushButton:hover { background-color: #15803D; }");
-    btnAdd->setCursor(Qt::PointingHandCursor);
+    auto *btnAdd = new KbdBadgeButton("+ Add Entry", "Ins", formCard);
+    btnAdd->setPrimaryColor(ErpTheme::kGreen, ErpTheme::kGreenDark);
+    btnAdd->setTextColor(ErpTheme::kPaper);
+    btnAdd->bindShortcut(QKeySequence(Qt::Key_Insert));
     connect(btnAdd, &QPushButton::clicked, this, &TdsAcknowledgementDialog::onAddClicked);
     grid->addWidget(btnAdd, 3, 3);
 
@@ -148,63 +128,48 @@ void TdsAcknowledgementDialog::setupUi()
     });
     m_table->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
     m_table->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Stretch);
-    m_table->verticalHeader()->setVisible(false);
-    m_table->verticalHeader()->setDefaultSectionSize(30);
-    m_table->setShowGrid(true);
-    m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
-    m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    m_table->setAlternatingRowColors(true);
-    m_table->setStyleSheet(
-        "QTableWidget {"
-        "  background-color: #FFFFFF;"
-        "  alternate-background-color: #F8FAFC;"
-        "  border: 1px solid #CBD5E1;"
-        "  border-radius: 8px;"
-        "  gridline-color: #E2E8F0;"
-        "  color: #0F172A;"
-        "  font-size: 12.5px;"
-        "  margin: 0 16px;"
-        "}"
-        "QTableWidget::item {"
-        "  padding: 4px 8px;"
-        "}"
-        "QTableWidget::item:selected {"
-        "  background-color: #2563EB;"
-        "  color: #FFFFFF;"
-        "  font-weight: bold;"
-        "}"
-        "QHeaderView::section {"
-        "  background-color: #0F172A;"
-        "  color: #FFFFFF;"
-        "  font-weight: 800;"
-        "  font-size: 12px;"
-        "  padding: 8px 10px;"
-        "  border: none;"
-        "  "
-        "  border-right: 1px solid #334155;"
-        "}"
-    );
+    ErpTheme::styleTable(m_table);
     mainLayout->addWidget(m_table, 1);
 
     // Buttons
     auto *btnRow = new QHBoxLayout();
     btnRow->setContentsMargins(16, 0, 16, 0);
 
-    auto *btnDelete = new QPushButton("[Del] Delete Selected", this);
-    btnDelete->setStyleSheet("QPushButton { background-color: #DC2626; color: white; border: none; padding: 7px 16px; border-radius: 6px; font-weight: 700; font-size: 13px; } QPushButton:hover { background-color: #B91C1C; }");
-    btnDelete->setCursor(Qt::PointingHandCursor);
+    auto *btnDelete = new KbdBadgeButton("Delete Selected", "Del", this);
+    btnDelete->setPrimaryColor(ErpTheme::kRed, QColor("#B91C1C"));
+    btnDelete->setTextColor(ErpTheme::kPaper);
+    btnDelete->bindShortcut(QKeySequence(Qt::Key_Delete));
     connect(btnDelete, &QPushButton::clicked, this, &TdsAcknowledgementDialog::onDeleteClicked);
     btnRow->addWidget(btnDelete);
 
     btnRow->addStretch(1);
 
-    auto *btnClose = new QPushButton("Close [Esc]", this);
-    btnClose->setStyleSheet("QPushButton { background-color: #F1F5F9; border: 1px solid #CBD5E1; color: #475569; padding: 7px 18px; border-radius: 6px; font-weight: 600; font-size: 13px; } QPushButton:hover { background-color: #E2E8F0; }");
-    btnClose->setCursor(Qt::PointingHandCursor);
+    auto *btnClose = new KbdBadgeButton("Close", "Esc", this);
+    btnClose->setButtonColors(QColor("#F1F5F9"), QColor("#E2E8F0"), QColor("#475569"), QColor("#CBD5E1"));
     connect(btnClose, &QPushButton::clicked, this, &QDialog::accept);
     btnRow->addWidget(btnClose);
 
     mainLayout->addLayout(btnRow);
+
+    // Esc closes (no handler existed before); Del lives on the button badge.
+    new QShortcut(QKeySequence(Qt::Key_Escape), this, SLOT(accept()));
+
+    connect(m_ackNoEdit, &QLineEdit::returnPressed, this, [this]() {
+        if (m_deducteesEdit) { m_deducteesEdit->setFocus(); m_deducteesEdit->selectAll(); }
+    });
+    connect(m_deducteesEdit, &QLineEdit::returnPressed, this, [this]() {
+        if (m_taxDepositedEdit) { m_taxDepositedEdit->setFocus(); m_taxDepositedEdit->selectAll(); }
+    });
+    connect(m_taxDepositedEdit, &QLineEdit::returnPressed, this, [this]() {
+        if (m_remarksEdit) { m_remarksEdit->setFocus(); m_remarksEdit->selectAll(); }
+    });
+    QWidget::setTabOrder(m_formTypeCombo, m_quarterCombo);
+    QWidget::setTabOrder(m_quarterCombo, m_ackNoEdit);
+    QWidget::setTabOrder(m_ackNoEdit, m_deducteesEdit);
+    QWidget::setTabOrder(m_deducteesEdit, m_taxDepositedEdit);
+    QWidget::setTabOrder(m_taxDepositedEdit, m_remarksEdit);
+    QWidget::setTabOrder(m_remarksEdit, btnAdd);
+    if (m_ackNoEdit) m_ackNoEdit->setFocus();
 }
 
 void TdsAcknowledgementDialog::reloadData()
@@ -250,7 +215,7 @@ void TdsAcknowledgementDialog::onAddClicked()
     QString ackNo = m_ackNoEdit->text().trimmed();
     if (ackNo.isEmpty()) {
         m_statusLabel->setText("Acknowledgement Number cannot be empty.");
-        m_statusLabel->setStyleSheet("color: #ef4444; font-weight: 600;");
+        m_statusLabel->setStyleSheet(QString("color: %1; font-weight: 600;").arg(ErpTheme::kRed.name()));
         return;
     }
 
@@ -276,7 +241,7 @@ void TdsAcknowledgementDialog::onAddClicked()
     );
 
     m_statusLabel->setText("Acknowledgement saved successfully.");
-    m_statusLabel->setStyleSheet("color: #10b981; font-weight: 600;");
+    m_statusLabel->setStyleSheet(QString("color: %1; font-weight: 600;").arg(ErpTheme::kGreen.name()));
     m_ackNoEdit->clear();
     m_deducteesEdit->clear();
     m_taxDepositedEdit->clear();

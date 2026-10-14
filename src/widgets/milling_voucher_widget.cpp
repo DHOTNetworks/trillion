@@ -301,6 +301,7 @@ void MillingVoucherWidget::setupUi() {
 
     connect(new QShortcut(QKeySequence(Qt::Key_Escape), this), &QShortcut::activated, this, &MillingVoucherWidget::backRequested);
     connect(new QShortcut(QKeySequence(Qt::ALT | Qt::Key_S), this), &QShortcut::activated, this, &MillingVoucherWidget::onSaveClicked);
+    connect(new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_S), this), &QShortcut::activated, this, &MillingVoucherWidget::onSaveClicked);
 }
 
 void MillingVoucherWidget::resetForm() {

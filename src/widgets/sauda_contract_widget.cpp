@@ -459,8 +459,34 @@ void SaudaContractWidget::keyPressEvent(QKeyEvent* event) {
         if (m_entryCard && m_entryCard->isVisible()) {
             onSaveSauda();
         }
+    } else if ((event->modifiers() & Qt::AltModifier) && event->key() == Qt::Key_D) {
+        onDeleteSelected();
+    } else if (event->key() == Qt::Key_Delete && !(event->modifiers() & Qt::ControlModifier)) {
+        onDeleteSelected();
     } else {
         QWidget::keyPressEvent(event);
+    }
+}
+
+void SaudaContractWidget::onDeleteSelected() {
+    if (!m_saudaTable) return;
+    int r = m_saudaTable->currentRow();
+    if (r < 0) {
+        CustomMessageBox::information(this, "Selection Required", "Please select a sauda contract to delete.");
+        return;
+    }
+    QTableWidgetItem* cell = m_saudaTable->item(r, 0);
+    QString sNo = cell ? cell->text().trimmed() : QString();
+    if (sNo.isEmpty()) return;
+    if (!CustomMessageBox::question(this, "Confirm Delete",
+            QString("Permanently delete sauda %1 and its unposted settlements?\nThis cannot be undone.").arg(sNo))) {
+        return;
+    }
+    QString err;
+    if (m_controller->deleteSaudaContract(sNo, &err)) {
+        refreshData();
+    } else if (!err.isEmpty()) {
+        CustomMessageBox::critical(this, "Delete Failed", err);
     }
 }
 

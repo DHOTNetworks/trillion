@@ -2,6 +2,7 @@
 #include "voucher_date_dialog.h"
 #include "kbd_badge_button.h"
 #include "custom_dialogs.h"
+#include "erp_theme.h"
 #include "../database_manager.h"
 #include "../engine/fiscal_year_helper.h"
 #include "../models/tds_model.h"
@@ -29,37 +30,30 @@ TdsVoucherWidget::TdsVoucherWidget(TdsVoucherController* controller,
 }
 
 void TdsVoucherWidget::setupUi() {
-    setAttribute(Qt::WA_StyledBackground, true);
-    setStyleSheet(
-        "TdsVoucherWidget { background-color: #F8FAFC; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif; }"
-        "QLabel { border: none; background: transparent; color: #1E293B; font-size: 11px; font-weight: 700; }"
-        "QLineEdit { background-color: #FFFFFF; color: #0F172A; border: 1px solid #CBD5E1; border-radius: 5px; padding: 2px 6px; font-size: 11.5px; font-weight: 700; }"
-        "QLineEdit:focus { border: 1.5px solid #2563EB; background-color: #FFFFF0; color: #0F172A; }"
-    );
-
-    auto* rootLayout = new QVBoxLayout(this);
-    rootLayout->setContentsMargins(10, 6, 10, 6);
-    rootLayout->setSpacing(6);
+    auto* rootLayout = ErpTheme::makePageLayout(this);
 
     // ========================================================================
     // TIER 1: STICKY HEADER CARD (COMPACT HEIGHT)
     // ========================================================================
     auto* headerCard = new QFrame(this);
     headerCard->setMinimumHeight(48);
-    headerCard->setStyleSheet(
-        "QFrame { background-color: #FFFFFF; border: 1px solid #E2D5C8; border-radius: 6px; }"
-    );
+    headerCard->setStyleSheet(ErpTheme::headerCardStyle());
     auto* headerLayout = new QHBoxLayout(headerCard);
     headerLayout->setContentsMargins(12, 4, 12, 4);
     headerLayout->setSpacing(10);
 
     auto* titleLabel = new QLabel("TDS Deduction & Statutory Tax Voucher (Section 194)", headerCard);
-    titleLabel->setStyleSheet("font-size: 15px; font-weight: 800; color: #0F172A; border: none; background: transparent;");
+    titleLabel->setStyleSheet(ErpTheme::headerTitleStyle(15));
     headerLayout->addWidget(titleLabel);
 
     auto* subLabel = new QLabel("• Contractors (194C), Professional Fees (194J), Rent (194I), Goods Purchase (194Q)", headerCard);
-    subLabel->setStyleSheet("font-size: 11px; color: #64748B; border: none; background: transparent;");
+    subLabel->setStyleSheet(ErpTheme::mutedLabelStyle(11));
     headerLayout->addWidget(subLabel);
+
+    m_alterBadge = new QLabel("ALTERATION", headerCard);
+    m_alterBadge->setStyleSheet(ErpTheme::badgeStyle("danger"));
+    m_alterBadge->setVisible(false);
+    headerLayout->addWidget(m_alterBadge);
 
     headerLayout->addStretch();
 
@@ -76,12 +70,8 @@ void TdsVoucherWidget::setupUi() {
     auto* metaRowLayout = new QHBoxLayout();
     metaRowLayout->setSpacing(10);
 
-    const QString cardStyle =
-        "QFrame { background-color: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 8px; }"
-        "QLabel { color: #475569; font-size: 11.5px; font-weight: 700; border: none; background: transparent; }"
-        "QLineEdit, QComboBox { background-color: #FFFFFF; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 4px 8px; font-size: 12px; color: #0F172A; font-weight: 600; }"
-        "QLineEdit:focus, QComboBox:focus { border-color: #2563EB; background-color: #F8FAFC; }"
-        "QCheckBox { color: #1E293B; font-weight: 700; font-size: 12px; border: none; background: transparent; }";
+    const QString cardStyle = ErpTheme::filterBarStyle()
+        + "QCheckBox { color: #1E293B; font-weight: 700; font-size: 12px; border: none; background: transparent; }";
 
     // --- Left Card: Voucher & Party Identification ---
     auto* leftCard = new QFrame(this);
@@ -91,7 +81,7 @@ void TdsVoucherWidget::setupUi() {
     leftLayout->setSpacing(8);
 
     auto* leftHeader = new QLabel("1. VOUCHER & DEDUCTEE IDENTIFICATION", leftCard);
-    leftHeader->setStyleSheet("color: #2563EB; font-size: 10.5px; font-weight: 800; letter-spacing: 0.5px; border: none; background: transparent;");
+    leftHeader->setStyleSheet(QString("color: %1; font-size: 10.5px; font-weight: 800; letter-spacing: 0.5px; border: none; background: transparent;").arg(ErpTheme::kBlue.name()));
     leftLayout->addWidget(leftHeader);
 
     auto* leftGrid = new QGridLayout();
@@ -104,7 +94,7 @@ void TdsVoucherWidget::setupUi() {
     leftGrid->addWidget(new QLabel("Voucher No:", leftCard), 0, 0);
     m_voucherNoEdit = new QLineEdit(leftCard);
     m_voucherNoEdit->setReadOnly(true);
-    m_voucherNoEdit->setStyleSheet("background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 4px 8px; font-weight: 800; color: #1D4ED8; font-family: 'Consolas', monospace;");
+    m_voucherNoEdit->setStyleSheet(QString("background-color: %1; border: 1.5px solid %2; border-radius: 6px; padding: 4px 8px; font-weight: 800; color: %3; font-family: 'Consolas', monospace;").arg(ErpTheme::kCanvas.name(), ErpTheme::kLine.name(), ErpTheme::kBlueDark.name()));
     leftGrid->addWidget(m_voucherNoEdit, 0, 1);
 
     leftGrid->addWidget(new QLabel("Date (F2) *:", leftCard), 0, 2);
@@ -115,19 +105,20 @@ void TdsVoucherWidget::setupUi() {
     m_voucherDateEdit->setMinimumWidth(85);
     dateBox->addWidget(m_voucherDateEdit);
 
-    auto* dateBtn = new QPushButton("", leftCard);
+    auto* dateBtn = new QPushButton("\u2026", leftCard);
     dateBtn->setFixedSize(26, 26);
+    dateBtn->setToolTip("Pick date (F2)");
     dateBtn->setCursor(Qt::PointingHandCursor);
-    dateBtn->setStyleSheet("background-color: #EFF6FF; border: 1px solid #93C5FD; border-radius: 4px; font-weight: bold; color: #1D4ED8;");
+    dateBtn->setStyleSheet(QString("background-color: %1; border: 1px solid %2; border-radius: 4px; font-weight: bold; color: %3;").arg(ErpTheme::kSelected.name(), ErpTheme::kSkyBorder.name(), ErpTheme::kBlueDark.name()));
     connect(dateBtn, &QPushButton::clicked, this, &TdsVoucherWidget::openDateDialog);
     dateBox->addWidget(dateBtn);
 
     m_dayLabel = new QLabel("", leftCard);
-    m_dayLabel->setStyleSheet("color: #0284C7; font-weight: 800; font-size: 11px;");
+    m_dayLabel->setStyleSheet(QString("color: %1; font-weight: 800; font-size: 11px;").arg(ErpTheme::kSky.name()));
     dateBox->addWidget(m_dayLabel);
 
     m_fyBadge = new QLabel(FiscalYearHelper::getActiveFiscalYear().name, leftCard);
-    m_fyBadge->setStyleSheet("background-color: #F1F5F9; color: #475569; border: 1px solid #CBD5E1; border-radius: 4px; padding: 2px 6px; font-size: 10.5px; font-weight: 800;");
+    m_fyBadge->setStyleSheet(QString("background-color: %1; color: %2; border: 1px solid %3; border-radius: 4px; padding: 2px 6px; font-size: 10.5px; font-weight: 800;").arg(ErpTheme::kHeaderBg.name(), ErpTheme::kMuted.name(), ErpTheme::kLine.name()));
     dateBox->addWidget(m_fyBadge);
     dateBox->addStretch();
     leftGrid->addLayout(dateBox, 0, 3);
@@ -167,7 +158,7 @@ void TdsVoucherWidget::setupUi() {
 
     leftGrid->addWidget(new QLabel("Balance:", leftCard), 3, 2);
     m_partyBalanceLabel = new QLabel("₹ 0.00", leftCard);
-    m_partyBalanceLabel->setStyleSheet("font-size: 12px; font-weight: 800; color: #0284C7;");
+    m_partyBalanceLabel->setStyleSheet(QString("font-size: 12px; font-weight: 800; color: %1;").arg(ErpTheme::kSky.name()));
     leftGrid->addWidget(m_partyBalanceLabel, 3, 3);
 
     // Row 4: Expense Ledger & TDS Ledger
@@ -192,7 +183,7 @@ void TdsVoucherWidget::setupUi() {
     rightLayout->setSpacing(8);
 
     auto* rightHeader = new QLabel("2. INCOME AMOUNT & STATUTORY TAX BREAKUP", rightCard);
-    rightHeader->setStyleSheet("color: #2563EB; font-size: 10.5px; font-weight: 800; letter-spacing: 0.5px; border: none; background: transparent;");
+    rightHeader->setStyleSheet(QString("color: %1; font-size: 10.5px; font-weight: 800; letter-spacing: 0.5px; border: none; background: transparent;").arg(ErpTheme::kBlue.name()));
     rightLayout->addWidget(rightHeader);
 
     auto* calcGrid = new QGridLayout();
@@ -221,7 +212,7 @@ void TdsVoucherWidget::setupUi() {
     // Row 1: Total for TDS & TDS Rate
     calcGrid->addWidget(new QLabel("TDS Base Amt:", rightCard), 1, 0);
     m_totalForTdsLabel = new QLabel("₹ 0.00", rightCard);
-    m_totalForTdsLabel->setStyleSheet("font-size: 12px; font-weight: 800; color: #0F172A;");
+    m_totalForTdsLabel->setStyleSheet(ErpTheme::headerTitleStyle(12));
     calcGrid->addWidget(m_totalForTdsLabel, 1, 1);
 
     calcGrid->addWidget(new QLabel("TDS Rate %:", rightCard), 1, 2);
@@ -233,7 +224,7 @@ void TdsVoucherWidget::setupUi() {
     // Row 2: TDS Amount & Surcharge Rate
     calcGrid->addWidget(new QLabel("TDS Tax Amt:", rightCard), 2, 0);
     m_tdsTaxAmountLabel = new QLabel("₹ 0.00", rightCard);
-    m_tdsTaxAmountLabel->setStyleSheet("font-size: 12px; font-weight: 800; color: #DC2626;");
+    m_tdsTaxAmountLabel->setStyleSheet(QString("font-size: 12px; font-weight: 800; color: %1;").arg(ErpTheme::kRed.name()));
     calcGrid->addWidget(m_tdsTaxAmountLabel, 2, 1);
 
     calcGrid->addWidget(new QLabel("Surcharge %:", rightCard), 2, 2);
@@ -245,7 +236,7 @@ void TdsVoucherWidget::setupUi() {
     // Row 3: Surcharge Amt & Cess Rate
     calcGrid->addWidget(new QLabel("Surch Amt:", rightCard), 3, 0);
     m_surchargeTaxAmountLabel = new QLabel("₹ 0.00", rightCard);
-    m_surchargeTaxAmountLabel->setStyleSheet("font-size: 12px; font-weight: 800; color: #D97706;");
+    m_surchargeTaxAmountLabel->setStyleSheet(QString("font-size: 12px; font-weight: 800; color: %1;").arg(ErpTheme::kAmber.name()));
     calcGrid->addWidget(m_surchargeTaxAmountLabel, 3, 1);
 
     calcGrid->addWidget(new QLabel("Cess %:", rightCard), 3, 2);
@@ -257,7 +248,7 @@ void TdsVoucherWidget::setupUi() {
     // Row 4: Cess Amt & Round Off
     calcGrid->addWidget(new QLabel("Cess Amt:", rightCard), 4, 0);
     m_cessTaxAmountLabel = new QLabel("₹ 0.00", rightCard);
-    m_cessTaxAmountLabel->setStyleSheet("font-size: 12px; font-weight: 800; color: #D97706;");
+    m_cessTaxAmountLabel->setStyleSheet(QString("font-size: 12px; font-weight: 800; color: %1;").arg(ErpTheme::kAmber.name()));
     calcGrid->addWidget(m_cessTaxAmountLabel, 4, 1);
 
     m_roundOffCheck = new QCheckBox("Round Off", rightCard);
@@ -298,51 +289,28 @@ void TdsVoucherWidget::setupUi() {
     auto* footerRow = new QHBoxLayout();
     footerRow->setSpacing(10);
 
-    auto createMetric = [this](const QString& title, const QString& initVal, const QString& color) {
-        auto* card = new QFrame(this);
-        card->setStyleSheet(
-            "QFrame { background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; border-left: 4px solid " + color + "; }"
-            "QLabel { border: none; background: transparent; }"
-        );
-        auto* cLayout = new QVBoxLayout(card);
-        cLayout->setContentsMargins(10, 6, 10, 6);
-        cLayout->setSpacing(2);
+    m_taxableSummaryLabel = ErpTheme::makeMetricCard(this, footerRow, "TAXABLE / BILL AMOUNT", "₹0.00", ErpTheme::kBlue);
+    footerRow->setStretch(footerRow->count() - 1, 1);
 
-        auto* tLabel = new QLabel(title, card);
-        tLabel->setStyleSheet("font-size: 9.5px; font-weight: 800; color: #64748B; letter-spacing: 0.5px; border: none; background: transparent;");
-        auto* vLabel = new QLabel(initVal, card);
-        vLabel->setStyleSheet("font-size: 14px; font-weight: 800; color: #0F172A; border: none; background: transparent;");
-        cLayout->addWidget(tLabel);
-        cLayout->addWidget(vLabel);
-        return qMakePair(card, vLabel);
-    };
+    m_tdsSummaryLabel = ErpTheme::makeMetricCard(this, footerRow, "TOTAL TDS DEDUCTED", "₹0.00", ErpTheme::kRed);
+    footerRow->setStretch(footerRow->count() - 1, 1);
 
-    auto m1 = createMetric("TAXABLE / BILL AMOUNT", "₹ 0.00", "#2563EB");
-    m_taxableSummaryLabel = m1.second;
-    footerRow->addWidget(m1.first, 1);
+    m_surchCessSummaryLabel = ErpTheme::makeMetricCard(this, footerRow, "SURCHARGE & CESS", "₹0.00", ErpTheme::kAmber);
+    footerRow->setStretch(footerRow->count() - 1, 1);
 
-    auto m2 = createMetric("TOTAL TDS DEDUCTED", "₹ 0.00", "#DC2626");
-    m_tdsSummaryLabel = m2.second;
-    footerRow->addWidget(m2.first, 1);
-
-    auto m3 = createMetric("SURCHARGE & CESS", "₹ 0.00", "#D97706");
-    m_surchCessSummaryLabel = m3.second;
-    footerRow->addWidget(m3.first, 1);
-
-    auto m4 = createMetric("NET AMOUNT PAYABLE", "₹ 0.00", "#16A34A");
-    m_netPayableSummaryLabel = m4.second;
-    footerRow->addWidget(m4.first, 1);
+    m_netPayableSummaryLabel = ErpTheme::makeMetricCard(this, footerRow, "NET AMOUNT PAYABLE", "₹0.00", ErpTheme::kGreen);
+    footerRow->setStretch(footerRow->count() - 1, 1);
 
     m_deleteBtn = new KbdBadgeButton("Delete Voucher", "Ctrl+D", this);
-    m_deleteBtn->setPrimaryColor("#FEF2F2", "#FEE2E2");
-    m_deleteBtn->setTextColor("#DC2626");
+    m_deleteBtn->setPrimaryColor(ErpTheme::kRedBg, ErpTheme::kRedBorder);
+    m_deleteBtn->setTextColor(ErpTheme::kRed);
     m_deleteBtn->setVisible(false);
     connect(m_deleteBtn, &QPushButton::clicked, this, &TdsVoucherWidget::onDeleteClicked);
     footerRow->addWidget(m_deleteBtn, 0);
 
     m_saveBtn = new KbdBadgeButton("Save TDS Voucher", "Ctrl+S", this);
-    m_saveBtn->setPrimaryColor("#16A34A", "#15803D");
-    m_saveBtn->setTextColor("#FFFFFF");
+    m_saveBtn->setPrimaryColor(ErpTheme::kGreen, ErpTheme::kGreenDark);
+    m_saveBtn->setTextColor(ErpTheme::kPaper);
     m_saveBtn->setMinimumWidth(180);
     connect(m_saveBtn, &QPushButton::clicked, this, &TdsVoucherWidget::onSaveClicked);
     footerRow->addWidget(m_saveBtn, 0);
@@ -397,11 +365,35 @@ void TdsVoucherWidget::setupUi() {
     }
     if (m_narrationEdit) {
         connect(m_narrationEdit, &QLineEdit::returnPressed, this, [this]() {
+            if (m_nonDeductReasonEdit) { m_nonDeductReasonEdit->setFocus(); m_nonDeductReasonEdit->selectAll(); }
+        });
+    }
+    if (m_nonDeductReasonEdit) {
+        connect(m_nonDeductReasonEdit, &QLineEdit::returnPressed, this, [this]() {
             if (m_saveBtn) { m_saveBtn->setFocus(); }
         });
     }
 
+    // Full Tab chain mirrors the Enter chain (combos/checks included).
+    QWidget::setTabOrder(m_tdsTypeCombo, m_partySearch);
+    QWidget::setTabOrder(m_partySearch, m_panEdit);
+    QWidget::setTabOrder(m_panEdit, m_expLedgerEdit);
+    QWidget::setTabOrder(m_expLedgerEdit, m_tdsLedgerEdit);
+    QWidget::setTabOrder(m_tdsLedgerEdit, m_incomeAmountEdit);
+    QWidget::setTabOrder(m_incomeAmountEdit, m_previousAmountEdit);
+    QWidget::setTabOrder(m_previousAmountEdit, m_tdsRateEdit);
+    QWidget::setTabOrder(m_tdsRateEdit, m_surchargeRateEdit);
+    QWidget::setTabOrder(m_surchargeRateEdit, m_cessRateEdit);
+    QWidget::setTabOrder(m_cessRateEdit, m_narrationEdit);
+    QWidget::setTabOrder(m_narrationEdit, m_nonDeductReasonEdit);
+    QWidget::setTabOrder(m_nonDeductReasonEdit, m_saveBtn);
+
     connect(new QShortcut(QKeySequence(Qt::Key_Escape), this), &QShortcut::activated, this, &TdsVoucherWidget::backRequested);
+    // Real bindings behind the Ctrl+S / Ctrl+D badges (keyPressEvent alone
+    // never fires when a child combo/search eats the key).
+    connect(new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_S), this), &QShortcut::activated, this, &TdsVoucherWidget::onSaveClicked);
+    connect(new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_D), this), &QShortcut::activated, this, &TdsVoucherWidget::onDeleteClicked);
+    connect(new QShortcut(QKeySequence(Qt::Key_F2), this), &QShortcut::activated, this, &TdsVoucherWidget::openDateDialog);
 }
 
 void TdsVoucherWidget::keyPressEvent(QKeyEvent* event) {
@@ -422,6 +414,7 @@ void TdsVoucherWidget::keyPressEvent(QKeyEvent* event) {
 void TdsVoucherWidget::resetForm() {
     m_editVoucherId = 0;
     m_deleteBtn->setVisible(false);
+    if (m_alterBadge) m_alterBadge->setVisible(false);
     QDate cur = QDate::currentDate();
     m_voucherDateEdit->setText(cur.toString("dd-MM-yyyy"));
     m_dayLabel->setText(cur.toString("ddd"));
@@ -449,6 +442,7 @@ void TdsVoucherWidget::resetForm() {
     m_nonDeductReasonEdit->clear();
 
     onRecalculateTax();
+    if (m_partySearch) m_partySearch->setFocus();
 }
 
 void TdsVoucherWidget::openDateDialog() {
@@ -548,6 +542,7 @@ bool TdsVoucherWidget::loadVoucherForEditing(int voucherId) {
 
     m_editVoucherId = voucherId;
     m_deleteBtn->setVisible(true);
+    if (m_alterBadge) m_alterBadge->setVisible(true);
 
     m_voucherNoEdit->setText(QString::number(m_controller->voucherNo()));
     QDate d = QDate::fromString(m_controller->voucherDate(), "yyyy-MM-dd");
@@ -584,6 +579,7 @@ bool TdsVoucherWidget::loadVoucherForEditing(int voucherId) {
     }
 
     onRecalculateTax();
+    if (m_partySearch) m_partySearch->setFocus();
     return true;
 }
 

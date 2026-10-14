@@ -41,6 +41,7 @@ private slots:
     void onExportPdf();
     void onExportCsv();
     void toggleEntryForm();
+    void onDeleteSelected();
 
 private:
     void setupUi();

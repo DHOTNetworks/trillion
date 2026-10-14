@@ -90,6 +90,7 @@ private:
     KbdBadgeButton* m_saveBtn = nullptr;
     KbdBadgeButton* m_deleteBtn = nullptr;
     KbdBadgeButton* m_cancelBtn = nullptr;
+    QLabel* m_alterBadge = nullptr;
 };
 
 } // namespace MahadevERP

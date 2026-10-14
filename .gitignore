@@ -37,8 +37,8 @@ data/
 *.md
 !README.md
 !THIRD_PARTY_NOTICES.md
-docs/*.md
-docs/**/*.md
+!docs/*.md
+!docs/**/*.md
 !decompiled-data/*.md
 !impl*.md
 !SCRATCH.md
@@ -48,7 +48,7 @@ docs/**/*.md
 *.db-shm
 *.db-wal
 *.class
-*.pdf
+!*.pdf
 *.xls
 *.xlsx
 *.XLS
@@ -59,7 +59,7 @@ docs/**/*.md
 *.json
 *.ods
 *.odt
-*.png
+!*.png
 
 
 # Files

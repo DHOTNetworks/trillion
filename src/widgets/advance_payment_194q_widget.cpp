@@ -23,14 +23,38 @@ AdvancePayment194QWidget::AdvancePayment194QWidget(QWidget *parent)
 
 void AdvancePayment194QWidget::setupUi()
 {
-    auto *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(14, 12, 14, 12);
-    mainLayout->setSpacing(10);
+    auto *mainLayout = ErpTheme::makePageLayout(this);
 
     mainLayout->addWidget(createHeaderBar());
     mainLayout->addWidget(createFormCard(), 1);
 
+    // Keyboard-first Enter chain across the whole form.
+    connect(m_supplierSearch, &AccountSearchBox::returnPressed, this, [this]() {
+        if (m_bankSearch) m_bankSearch->setFocus();
+    });
+    connect(m_bankSearch, &AccountSearchBox::returnPressed, this, [this]() {
+        if (m_grossAdvanceEdit) { m_grossAdvanceEdit->setFocus(); m_grossAdvanceEdit->selectAll(); }
+    });
+    connect(m_grossAdvanceEdit, &QLineEdit::returnPressed, this, [this]() {
+        if (m_tdsRateEdit) { m_tdsRateEdit->setFocus(); m_tdsRateEdit->selectAll(); }
+    });
+    connect(m_tdsRateEdit, &QLineEdit::returnPressed, this, [this]() {
+        if (m_chequeNoEdit) { m_chequeNoEdit->setFocus(); m_chequeNoEdit->selectAll(); }
+    });
+    connect(m_chequeNoEdit, &QLineEdit::returnPressed, this, [this]() {
+        if (m_narrationEdit) { m_narrationEdit->setFocus(); m_narrationEdit->selectAll(); }
+    });
+
+    QWidget::setTabOrder(m_voucherNoEdit, m_postInBooksCombo);
+    QWidget::setTabOrder(m_postInBooksCombo, m_supplierSearch);
+    QWidget::setTabOrder(m_supplierSearch, m_bankSearch);
+    QWidget::setTabOrder(m_bankSearch, m_grossAdvanceEdit);
+    QWidget::setTabOrder(m_grossAdvanceEdit, m_tdsRateEdit);
+    QWidget::setTabOrder(m_tdsRateEdit, m_chequeNoEdit);
+    QWidget::setTabOrder(m_chequeNoEdit, m_narrationEdit);
+
     new QShortcut(QKeySequence(Qt::ALT | Qt::Key_S), this, SLOT(onSaveClicked()));
+    new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_S), this, SLOT(onSaveClicked()));
     new QShortcut(QKeySequence(Qt::ALT | Qt::Key_N), this, SLOT(onNewClicked()));
     new QShortcut(QKeySequence("Escape"), this, SIGNAL(backRequested()));
 }
@@ -38,19 +62,24 @@ void AdvancePayment194QWidget::setupUi()
 QWidget *AdvancePayment194QWidget::createHeaderBar()
 {
     auto *headerCard = new QFrame(this);
-    headerCard->setStyleSheet("QFrame { background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; }");
+    headerCard->setStyleSheet(ErpTheme::headerCardStyle());
     auto *layout = new QHBoxLayout(headerCard);
     layout->setContentsMargins(14, 10, 14, 10);
 
     auto *titleCol = new QVBoxLayout();
     titleCol->setSpacing(2);
-    auto *title = new QLabel("Advance Payment Voucher U/S 194-Q (Creation)", headerCard);
-    title->setStyleSheet("font-size: 16px; font-weight: 800; color: #0F172A; border: none; background: transparent;");
+    m_titleLabel = new QLabel("Advance Payment Voucher U/S 194-Q (Creation)", headerCard);
+    m_titleLabel->setStyleSheet(ErpTheme::headerTitleStyle(15));
     auto *subLabel = new QLabel("Withhold tax at 0.1% on purchase advance payments above statutory limits.", headerCard);
-    subLabel->setStyleSheet("font-size: 11px; color: #64748B; border: none; background: transparent;");
-    titleCol->addWidget(title);
+    subLabel->setStyleSheet(ErpTheme::mutedLabelStyle(11));
+    titleCol->addWidget(m_titleLabel);
     titleCol->addWidget(subLabel);
     layout->addLayout(titleCol);
+
+    m_alterBadge = new QLabel("ALTERATION", headerCard);
+    m_alterBadge->setStyleSheet(ErpTheme::badgeStyle("danger"));
+    m_alterBadge->setVisible(false);
+    layout->addWidget(m_alterBadge);
 
     m_statusLabel = new QLabel("", headerCard);
     m_statusLabel->setStyleSheet("margin-left: 15px; border: none; background: transparent;");
@@ -76,12 +105,7 @@ QWidget *AdvancePayment194QWidget::createHeaderBar()
 QWidget *AdvancePayment194QWidget::createFormCard()
 {
     auto *card = new QFrame(this);
-    card->setStyleSheet(
-        "QFrame { background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; }"
-        "QLabel { color: #475569; font-weight: 700; font-size: 11.5px; border: none; background: transparent; }"
-        "QLineEdit, QComboBox { background-color: #FFFFFF; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 4px 8px; font-size: 12px; color: #0F172A; font-weight: 600; }"
-        "QLineEdit:focus, QComboBox:focus { border-color: #2563EB; background-color: #F8FAFC; }"
-    );
+    card->setStyleSheet(ErpTheme::filterBarStyle());
     auto *grid = new QGridLayout(card);
     grid->setContentsMargins(16, 14, 16, 14);
     grid->setHorizontalSpacing(16);
@@ -100,9 +124,10 @@ QWidget *AdvancePayment194QWidget::createFormCard()
     m_voucherDateEdit = new QLineEdit(card);
     m_voucherDateEdit->setReadOnly(true);
     dtRow->addWidget(m_voucherDateEdit);
-    auto *btnDt = new QPushButton("", card);
+    auto *btnDt = new QPushButton("\u2026", card);
     btnDt->setMinimumWidth(28);
-    btnDt->setStyleSheet("QPushButton { background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 4px; }");
+    btnDt->setToolTip("Pick date (F2)");
+    btnDt->setStyleSheet(QString("QPushButton { background-color: %1; border: 1.5px solid %2; border-radius: 4px; }").arg(ErpTheme::kCanvas.name(), ErpTheme::kLine.name()));
     connect(btnDt, &QPushButton::clicked, this, [this]() {
         QDate cur = QDate::fromString(m_voucherDateEdit->text(), "dd-MM-yyyy");
         if (!cur.isValid()) cur = QDate::currentDate();
@@ -130,7 +155,7 @@ QWidget *AdvancePayment194QWidget::createFormCard()
     grid->addWidget(new QLabel("Supplier PAN:", card), 1, 4);
     m_supplierPanEdit = new QLineEdit(card);
     m_supplierPanEdit->setReadOnly(true);
-    m_supplierPanEdit->setStyleSheet("background-color: #F8FAFC; color: #334155; font-weight: 700;");
+    m_supplierPanEdit->setStyleSheet(QString("background-color: %1; color: %2; font-weight: 700;").arg(ErpTheme::kCanvas.name(), ErpTheme::kLabelSlate.name()));
     grid->addWidget(m_supplierPanEdit, 1, 5);
 
     // Row 2: Bank Account & Gross Advance
@@ -155,27 +180,19 @@ QWidget *AdvancePayment194QWidget::createFormCard()
     m_tdsAmountEdit = new QLineEdit(card);
     m_tdsAmountEdit->setReadOnly(true);
     m_tdsAmountEdit->setAlignment(Qt::AlignRight);
-    m_tdsAmountEdit->setStyleSheet("background-color: #F8FAFC; color: #D97706; font-weight: 700;");
+    m_tdsAmountEdit->setStyleSheet(QString("background-color: %1; color: %2; font-weight: 700;").arg(ErpTheme::kCanvas.name(), ErpTheme::kAmber.name()));
     grid->addWidget(m_tdsAmountEdit, 3, 3);
 
     // Row 4: Net Payment Amount
     auto *netLbl = new QLabel("Net Payment Amount:", card);
-    netLbl->setStyleSheet("font-weight: 800; color: #15803D; font-size: 13px;");
+    netLbl->setStyleSheet(QString("font-weight: 800; color: %1; font-size: 13px;").arg(ErpTheme::kGreenDark.name()));
     grid->addWidget(netLbl, 4, 0);
     m_netPaymentEdit = new QLineEdit(card);
     m_netPaymentEdit->setReadOnly(true);
     m_netPaymentEdit->setAlignment(Qt::AlignRight);
     m_netPaymentEdit->setStyleSheet(
-        "QLineEdit {"
-        "  font-size: 15px;"
-        "  font-weight: 800;"
-        "  color: #15803D;"
-        "  background-color: #F0FDF4;"
-        "  border: 1.5px solid #86EFAC;"
-        "  border-radius: 6px;"
-        "  padding: 4px 8px;"
-        "}"
-    );
+        QString("QLineEdit { font-size: 15px; font-weight: 800; color: %1; background-color: %2; border: 1.5px solid %3; border-radius: 6px; padding: 4px 8px; }")
+        .arg(ErpTheme::kGreenDark.name(), ErpTheme::kGreenBg.name(), ErpTheme::kGreenBorder.name()));
     grid->addWidget(m_netPaymentEdit, 4, 1, 1, 3);
 
     // Row 5: Cheque No & Date
@@ -188,9 +205,10 @@ QWidget *AdvancePayment194QWidget::createFormCard()
     m_chequeDateEdit = new QLineEdit(card);
     m_chequeDateEdit->setReadOnly(true);
     cqRow->addWidget(m_chequeDateEdit);
-    auto *btnCq = new QPushButton("", card);
+    auto *btnCq = new QPushButton("\u2026", card);
     btnCq->setMinimumWidth(28);
-    btnCq->setStyleSheet("QPushButton { background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 4px; }");
+    btnCq->setToolTip("Pick cheque date");
+    btnCq->setStyleSheet(QString("QPushButton { background-color: %1; border: 1.5px solid %2; border-radius: 4px; }").arg(ErpTheme::kCanvas.name(), ErpTheme::kLine.name()));
     connect(btnCq, &QPushButton::clicked, this, [this]() {
         QDate cur = QDate::fromString(m_chequeDateEdit->text(), "dd-MM-yyyy");
         if (!cur.isValid()) cur = QDate::currentDate();
@@ -210,6 +228,9 @@ QWidget *AdvancePayment194QWidget::createFormCard()
 
 void AdvancePayment194QWidget::onNewClicked()
 {
+    m_editVoucherId = 0;
+    if (m_titleLabel) m_titleLabel->setText("Advance Payment Voucher U/S 194-Q (Creation)");
+    if (m_alterBadge) m_alterBadge->setVisible(false);
     m_supplierSearch->clear();
     m_bankSearch->clear();
     m_supplierPanEdit->clear();
@@ -230,6 +251,7 @@ void AdvancePayment194QWidget::onNewClicked()
     m_voucherNoEdit->setText(nextNo.toString());
 
     m_statusLabel->clear();
+    if (m_supplierSearch) m_supplierSearch->setFocus();
 }
 
 void AdvancePayment194QWidget::onSaveClicked()
@@ -271,6 +293,40 @@ void AdvancePayment194QWidget::onSaveClicked()
     bool postBooks = (m_postInBooksCombo->currentIndex() == 0);
 
     DatabaseManager &db = DatabaseManager::instance();
+
+    // Resolve FY + TDS payable ledger up front (canonical schema requires
+    // fy_id + tds_payable_ledger_id NOT NULL on every row).
+    QVariant fyRow = db.executeScalar("SELECT id FROM financial_years WHERE is_active = 1 LIMIT 1;");
+    if (!fyRow.isValid() || fyRow.isNull())
+        fyRow = db.executeScalar("SELECT id FROM financial_years ORDER BY id DESC LIMIT 1;");
+    int fyId = (fyRow.isValid() && !fyRow.isNull()) ? fyRow.toInt() : 1;
+
+    int tdsLedgerId = 0;
+    if (tax > 0.0) {
+        QVariant tdsAcc = db.executeScalar("SELECT id FROM parties WHERE name = 'TDS u/s 194-Q Payable A/c' LIMIT 1;");
+        if (tdsAcc.isValid() && !tdsAcc.isNull()) {
+            tdsLedgerId = tdsAcc.toInt();
+        } else {
+            db.executeNonQuery(
+                "INSERT INTO parties (name, group_name, party_type) VALUES ('TDS u/s 194-Q Payable A/c', 'Duties & Taxes (GST)', 'Tax');"
+            );
+            tdsLedgerId = db.executeScalar("SELECT last_insert_rowid();").toInt();
+        }
+    }
+    if (tdsLedgerId <= 0) {
+        // Zero-tax advances still need a valid ledger id for the NOT NULL
+        // column — resolve-or-create the canonical ledger regardless.
+        QVariant tdsAcc = db.executeScalar("SELECT id FROM parties WHERE name = 'TDS u/s 194-Q Payable A/c' LIMIT 1;");
+        if (tdsAcc.isValid() && !tdsAcc.isNull()) {
+            tdsLedgerId = tdsAcc.toInt();
+        } else {
+            db.executeNonQuery(
+                "INSERT INTO parties (name, group_name, party_type) VALUES ('TDS u/s 194-Q Payable A/c', 'Duties & Taxes (GST)', 'Tax');"
+            );
+            tdsLedgerId = db.executeScalar("SELECT last_insert_rowid();").toInt();
+        }
+    }
+
     db.beginTransaction();
 
     int pId = 0;
@@ -340,10 +396,10 @@ void AdvancePayment194QWidget::onSaveClicked()
     }
 
     bool okAdv = db.executeNonQuery(
-        "INSERT INTO advance_payments_194q (voucher_no, voucher_date, supplier_id, bank_id, gross_advance, "
-        "tds_rate, tds_amount, net_payment, cheque_no, cheque_date, post_in_books, voucher_id, narration) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-        {vchNo, vDateStr, partyId, bankId, gross, rate, tax, net, m_chequeNoEdit->text().trimmed(),
+        "INSERT INTO advance_payments_194q (fy_id, voucher_no, voucher_date, supplier_id, bank_ledger_id, gross_advance_amount, "
+        "tds_rate, tds_amount, net_payment_amount, tds_payable_ledger_id, cheque_no, cheque_date, post_in_books, voucher_id, narration) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+        {fyId, vchNo, vDateStr, partyId, bankId, gross, rate, tax, net, tdsLedgerId, m_chequeNoEdit->text().trimmed(),
          cqDateStr, postBooks ? 1 : 0, pId > 0 ? pId : QVariant(), m_narrationEdit->text().trimmed()}
     );
 
@@ -383,19 +439,22 @@ void AdvancePayment194QWidget::loadVoucher(int voucherId)
     if (rows.isEmpty()) return;
     QVariantMap m = rows.first().toMap();
     m_editVoucherId = voucherId;
+    if (m_titleLabel) m_titleLabel->setText("Advance Payment Voucher U/S 194-Q (Alteration)");
+    if (m_alterBadge) m_alterBadge->setVisible(true);
     m_voucherNoEdit->setText(m.value("voucher_no").toString());
     QDate dt = QDate::fromString(m.value("voucher_date").toString(), "yyyy-MM-dd");
     m_voucherDateEdit->setText(dt.isValid() ? dt.toString("dd-MM-yyyy") : m.value("voucher_date").toString());
     m_postInBooksCombo->setCurrentIndex(m.value("post_in_books").toInt() == 1 ? 0 : 1);
     m_supplierSearch->setSelectedPartyId(m.value("supplier_id").toInt());
-    m_bankSearch->setSelectedPartyId(m.value("bank_id").toInt());
-    m_grossAdvanceEdit->setText(QString::number(m.value("gross_advance").toDouble(), 'f', 2));
+    m_bankSearch->setSelectedPartyId(m.value("bank_ledger_id").toInt());
+    m_grossAdvanceEdit->setText(QString::number(m.value("gross_advance_amount").toDouble(), 'f', 2));
     m_tdsRateEdit->setText(QString::number(m.value("tds_rate").toDouble(), 'f', 3));
     m_chequeNoEdit->setText(m.value("cheque_no").toString());
     QDate cqDt = QDate::fromString(m.value("cheque_date").toString(), "yyyy-MM-dd");
     m_chequeDateEdit->setText(cqDt.isValid() ? cqDt.toString("dd-MM-yyyy") : m.value("cheque_date").toString());
     m_narrationEdit->setText(m.value("narration").toString());
     recalculate();
+    if (m_supplierSearch) m_supplierSearch->setFocus();
 }
 
 void AdvancePayment194QWidget::keyPressEvent(QKeyEvent *event)
@@ -408,8 +467,13 @@ void AdvancePayment194QWidget::keyPressEvent(QKeyEvent *event)
         onNewClicked();
         return;
     }
-    if (event->key() == Qt::Key_F2) {
+    if ((event->key() == Qt::Key_S && event->modifiers() & Qt::ControlModifier)) {
         onSaveClicked();
+        return;
+    }
+    if (event->key() == Qt::Key_F2) {
+        // F2 = date field (label says "Date (F2)"), never save.
+        if (m_voucherDateEdit) m_voucherDateEdit->setFocus();
         return;
     }
     QWidget::keyPressEvent(event);

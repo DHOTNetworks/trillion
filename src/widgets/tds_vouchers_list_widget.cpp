@@ -1,4 +1,6 @@
 #include "tds_vouchers_list_widget.h"
+#include "kbd_badge_button.h"
+#include "erp_theme.h"
 #include "../engine/fiscal_year_helper.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -19,71 +21,54 @@ TdsVouchersListWidget::TdsVouchersListWidget(TdsVoucherController *controller, Q
 
 void TdsVouchersListWidget::setupUi()
 {
-    auto *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(14, 12, 14, 12);
-    mainLayout->setSpacing(10);
+    auto *mainLayout = ErpTheme::makePageLayout(this);
 
     // ========================================================================
     // TIER 1: STICKY HEADER CARD
     // ========================================================================
     auto *headerCard = new QFrame(this);
-    headerCard->setStyleSheet("QFrame { background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; }");
+    headerCard->setStyleSheet(ErpTheme::headerCardStyle());
     auto *headerLayout = new QHBoxLayout(headerCard);
     headerLayout->setContentsMargins(14, 10, 14, 10);
 
     auto *titleCol = new QVBoxLayout();
     titleCol->setSpacing(2);
     auto *title = new QLabel("TDS Deduction Vouchers Register", headerCard);
-    title->setStyleSheet("font-size: 16px; font-weight: 800; color: #0F172A; border: none; background: transparent;");
+    title->setStyleSheet(ErpTheme::headerTitleStyle(16));
     auto *subLabel = new QLabel("Tax withheld at source on rent, contractors, commission, professional fees, and salary.", headerCard);
-    subLabel->setStyleSheet("font-size: 11px; color: #64748B; border: none; background: transparent;");
+    subLabel->setStyleSheet(ErpTheme::mutedLabelStyle(11));
     titleCol->addWidget(title);
     titleCol->addWidget(subLabel);
     headerLayout->addLayout(titleCol);
     headerLayout->addStretch(1);
 
-    auto *btnNew = new QPushButton("[Ins] + New Voucher", headerCard);
-    btnNew->setCursor(Qt::PointingHandCursor);
-    btnNew->setStyleSheet(
-        "QPushButton { background-color: #16A34A; color: #FFFFFF; border: none; border-radius: 6px; padding: 6px 16px; font-weight: 800; font-size: 12px; }"
-        "QPushButton:hover { background-color: #15803D; }"
-    );
+    auto *btnNew = new KbdBadgeButton("+ New Voucher", "Ins", headerCard);
+    btnNew->setPrimaryColor(ErpTheme::kGreen, ErpTheme::kGreenDark);
+    btnNew->setTextColor(ErpTheme::kPaper);
+    btnNew->bindShortcut(QKeySequence(Qt::Key_Insert));
     connect(btnNew, &QPushButton::clicked, this, &TdsVouchersListWidget::onNewClicked);
     headerLayout->addWidget(btnNew);
 
-    auto *btnEdit = new QPushButton("[Enter] Edit", headerCard);
-    btnEdit->setCursor(Qt::PointingHandCursor);
-    btnEdit->setStyleSheet(
-        "QPushButton { background-color: #FFFFFF; border: 1.5px solid #CBD5E1; padding: 6px 14px; border-radius: 6px; font-weight: 700; font-size: 11.5px; color: #334155; }"
-        "QPushButton:hover { background-color: #F8FAFC; }"
-    );
+    auto *btnEdit = new KbdBadgeButton("Edit", "Enter", headerCard);
+    btnEdit->setButtonColors(QColor("#FFFFFF"), QColor("#F8FAFC"), QColor("#334155"), QColor("#CBD5E1"));
     connect(btnEdit, &QPushButton::clicked, this, &TdsVouchersListWidget::onEditClicked);
     headerLayout->addWidget(btnEdit);
 
-    auto *btnDelete = new QPushButton("[Del] Delete", headerCard);
-    btnDelete->setCursor(Qt::PointingHandCursor);
-    btnDelete->setStyleSheet(
-        "QPushButton { background-color: #DC2626; color: #FFFFFF; border: none; border-radius: 6px; padding: 6px 14px; font-weight: 700; font-size: 12px; }"
-        "QPushButton:hover { background-color: #B91C1C; }"
-    );
+    auto *btnDelete = new KbdBadgeButton("Delete", "Del", headerCard);
+    btnDelete->setPrimaryColor(ErpTheme::kRed, QColor("#B91C1C"));
+    btnDelete->setTextColor(ErpTheme::kPaper);
+    btnDelete->bindShortcut(QKeySequence(Qt::Key_Delete));
     connect(btnDelete, &QPushButton::clicked, this, &TdsVouchersListWidget::onDeleteClicked);
     headerLayout->addWidget(btnDelete);
 
-    auto *btnRefresh = new QPushButton("[F5] Refresh", headerCard);
-    btnRefresh->setCursor(Qt::PointingHandCursor);
-    btnRefresh->setStyleSheet(
-        "QPushButton { background-color: #FFFFFF; border: 1.5px solid #CBD5E1; padding: 6px 12px; border-radius: 6px; font-weight: 700; font-size: 11.5px; color: #334155; }"
-        "QPushButton:hover { background-color: #F8FAFC; }"
-    );
+    auto *btnRefresh = new KbdBadgeButton("Refresh", "F5", headerCard);
+    btnRefresh->setButtonColors(QColor("#FFFFFF"), QColor("#F8FAFC"), QColor("#334155"), QColor("#CBD5E1"));
+    btnRefresh->bindShortcut(QKeySequence(Qt::Key_F5));
     connect(btnRefresh, &QPushButton::clicked, this, &TdsVouchersListWidget::onRefreshClicked);
     headerLayout->addWidget(btnRefresh);
 
-    auto *btnBack = new QPushButton("← [Esc] Back", headerCard);
-    btnBack->setCursor(Qt::PointingHandCursor);
-    btnBack->setStyleSheet(
-        "QPushButton { background-color: #F1F5F9; border: 1px solid #CBD5E1; border-radius: 6px; padding: 6px 12px; font-weight: 700; color: #475569; font-size: 11.5px; }"
-        "QPushButton:hover { background-color: #E2E8F0; }"
-    );
+    auto *btnBack = new KbdBadgeButton("Back", "Esc", headerCard);
+    btnBack->setButtonColors(QColor("#F1F5F9"), QColor("#E2E8F0"), QColor("#475569"), QColor("#CBD5E1"));
     connect(btnBack, &QPushButton::clicked, this, &TdsVouchersListWidget::backRequested);
     headerLayout->addWidget(btnBack);
 
@@ -93,12 +78,7 @@ void TdsVouchersListWidget::setupUi()
     // TIER 2: SEARCH & FILTER TOOLBAR
     // ========================================================================
     auto *filterCard = new QFrame(this);
-    filterCard->setStyleSheet(
-        "QFrame { background-color: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 8px; }"
-        "QLabel { color: #475569; font-weight: 700; font-size: 11.5px; border: none; background: transparent; }"
-        "QLineEdit, QComboBox { background-color: #FFFFFF; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 4px 8px; font-size: 12px; color: #0F172A; font-weight: 600; }"
-        "QLineEdit:focus, QComboBox:focus { border-color: #2563EB; background-color: #F8FAFC; }"
-    );
+    filterCard->setStyleSheet(ErpTheme::filterBarStyle());
     auto *filterLayout = new QHBoxLayout(filterCard);
     filterLayout->setContentsMargins(12, 8, 12, 8);
     filterLayout->setSpacing(12);
@@ -129,18 +109,7 @@ void TdsVouchersListWidget::setupUi()
     });
     m_table->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
     m_table->horizontalHeader()->setSectionResizeMode(4, QHeaderView::Stretch);
-    m_table->verticalHeader()->setVisible(false);
-    m_table->verticalHeader()->setDefaultSectionSize(30);
-    m_table->setShowGrid(true);
-    m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
-    m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    m_table->setAlternatingRowColors(true);
-    m_table->setStyleSheet(
-        "QTableWidget { background-color: #FFFFFF; alternate-background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 8px; gridline-color: #F1F5F9; font-size: 12.5px; color: #0F172A; }"
-        "QTableWidget::item { padding: 4px 8px; }"
-        "QTableWidget::item:selected { background-color: #2563EB; color: #FFFFFF; font-weight: bold; }"
-        "QHeaderView::section { background-color: #0F172A; color: #FFFFFF; font-weight: 800; font-size: 12px; padding: 8px 10px; border: none;  border-right: 1px solid #334155; }"
-    );
+    ErpTheme::styleTable(m_table);
     connect(m_table, &QTableWidget::cellDoubleClicked, this, [this](int row, int) {
         if (row >= 0 && row < m_table->rowCount()) {
             int id = m_table->item(row, 0)->text().toInt();
@@ -163,30 +132,10 @@ void TdsVouchersListWidget::setupUi()
     auto *metricsLayout = new QHBoxLayout();
     metricsLayout->setSpacing(10);
 
-    auto createMetricCard = [this, metricsLayout](const QString &title, const QString &initVal, const QString &color) {
-        auto *card = new QFrame(this);
-        card->setStyleSheet(
-            "QFrame { background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; border-left: 4px solid " + color + "; }"
-            "QLabel, QWidget { border: none; background: transparent; }"
-        );
-        auto *cLayout = new QVBoxLayout(card);
-        cLayout->setContentsMargins(12, 6, 12, 6);
-        cLayout->setSpacing(2);
-
-        auto *tLabel = new QLabel(title, card);
-        tLabel->setStyleSheet("font-size: 9.5px; font-weight: 800; color: #64748B; letter-spacing: 0.5px; border: none; background: transparent;");
-        auto *vLabel = new QLabel(initVal, card);
-        vLabel->setStyleSheet("font-size: 14px; font-weight: 800; color: #0F172A; border: none; background: transparent;");
-        cLayout->addWidget(tLabel);
-        cLayout->addWidget(vLabel);
-        metricsLayout->addWidget(card);
-        return vLabel;
-    };
-
-    m_totalVouchersVal = createMetricCard("TOTAL VOUCHERS", "0", "#2563EB");
-    m_totalGrossVal = createMetricCard("TOTAL GROSS", "₹ 0.00", "#0284C7");
-    m_totalTaxVal = createMetricCard("TOTAL TDS DEDUCTED", "₹ 0.00", "#D97706");
-    m_totalNetVal = createMetricCard("NET PAYABLE / PAID", "₹ 0.00", "#16A34A");
+        m_totalVouchersVal = ErpTheme::makeMetricCard(this, metricsLayout, "TOTAL VOUCHERS", "0", ErpTheme::kBlue);
+    m_totalGrossVal = ErpTheme::makeMetricCard(this, metricsLayout, "TOTAL GROSS", "₹ 0.00", ErpTheme::kSky);
+    m_totalTaxVal = ErpTheme::makeMetricCard(this, metricsLayout, "TOTAL TDS DEDUCTED", "₹ 0.00", ErpTheme::kAmber);
+    m_totalNetVal = ErpTheme::makeMetricCard(this, metricsLayout, "NET PAYABLE / PAID", "₹ 0.00", ErpTheme::kGreen);
 
     mainLayout->addLayout(metricsLayout);
 

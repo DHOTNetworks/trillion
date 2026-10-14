@@ -38,6 +38,8 @@ private:
 
     int m_editVoucherId = 0;
     QLabel *m_statusLabel = nullptr;
+    QLabel *m_titleLabel = nullptr;
+    QLabel *m_alterBadge = nullptr;
 
     QLineEdit *m_voucherNoEdit = nullptr;
     QLineEdit *m_voucherDateEdit = nullptr;

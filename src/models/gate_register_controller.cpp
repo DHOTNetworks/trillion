@@ -122,6 +122,22 @@ bool GateRegisterController::linkVoucher(const QString& gatePassNo, const QStrin
     return ok;
 }
 
+bool GateRegisterController::deleteGateEntry(const QString& gatePassNo, QString* error) {
+    QString passNo = gatePassNo.trimmed();
+    if (passNo.isEmpty()) {
+        if (error) *error = QString("No gate pass selected.");
+        return false;
+    }
+    bool ok = DatabaseManager::instance().executeNonQuery(
+        "DELETE FROM gate_register WHERE gate_pass_no = ?;", {passNo});
+    if (!ok) {
+        if (error) *error = QString("Delete failed for gate pass %1.").arg(passNo);
+        return false;
+    }
+    emit gateDataChanged();
+    return true;
+}
+
 QVariantList GateRegisterController::getLiveGateEntries(const QString& filterDirection, const QString& filterStatus) {
     QString sql = "SELECT * FROM gate_register WHERE status != 'DISPATCHED'";
     QVariantList params;

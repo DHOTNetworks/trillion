@@ -551,6 +551,10 @@ void BardanaWidget::keyPressEvent(QKeyEvent* event) {
         if (m_entryCard && m_entryCard->isVisible()) {
             onSaveTransaction();
         }
+    } else if ((event->modifiers() & Qt::AltModifier) && event->key() == Qt::Key_D) {
+        onDeleteSelected();
+    } else if (event->key() == Qt::Key_Delete && !(event->modifiers() & Qt::ControlModifier)) {
+        onDeleteSelected();
     } else {
         QWidget::keyPressEvent(event);
     }

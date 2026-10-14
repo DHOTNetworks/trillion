@@ -8,6 +8,8 @@
 #include "../models/tcs_receipt_voucher_controller.h"
 #include "account_search_box.h"
 
+class KbdBadgeButton;
+
 namespace MahadevERP {
 
 class TcsReceiptVoucherWidget : public QWidget {
@@ -41,6 +43,7 @@ private:
 
     QLabel *m_titleLabel = nullptr;
     QLabel *m_statusLabel = nullptr;
+    QLabel *m_alterBadge = nullptr;
 
     QLineEdit *m_receiptNoEdit = nullptr;
     QLineEdit *m_receiptDateEdit = nullptr;
@@ -67,6 +70,7 @@ private:
 
     QLineEdit *m_netCreditPartyEdit = nullptr;
     QLineEdit *m_narrationEdit = nullptr;
+    KbdBadgeButton *m_saveBtn = nullptr;
 
     bool m_isSyncing = false;
 };

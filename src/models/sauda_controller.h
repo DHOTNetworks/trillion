@@ -64,6 +64,10 @@ public:
     QVariantMap getSaudaById(int id);
     QString generateNextSaudaNo(const QString& prefix = "SD-");
 
+    // Delete a contract + its unposted settlements. Refuses when any
+    // settlement is already posted to a journal voucher (money exists).
+    bool deleteSaudaContract(const QString& saudaNo, QString* error = nullptr);
+
 signals:
     void saudaDataChanged();
     void dalaliDataChanged();

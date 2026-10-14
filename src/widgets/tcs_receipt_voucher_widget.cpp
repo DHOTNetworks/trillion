@@ -22,7 +22,7 @@ TcsReceiptVoucherWidget::TcsReceiptVoucherWidget(TcsReceiptVoucherController *co
     connect(m_controller, &TcsReceiptVoucherController::totalsChanged, this, &TcsReceiptVoucherWidget::syncUiFromController);
     connect(m_controller, &TcsReceiptVoucherController::statusChanged, this, [this]() {
         m_statusLabel->setText(m_controller->statusMessage());
-        m_statusLabel->setStyleSheet(QString("font-weight: 700; font-size: 12px; color: %1;").arg(m_controller->isError() ? "#dc2626" : "#16a34a"));
+        m_statusLabel->setStyleSheet(QString("font-weight: 700; font-size: 12px; color: %1;").arg(m_controller->isError() ? ErpTheme::kRed.name() : ErpTheme::kGreen.name()));
     });
 
     onNewClicked();
@@ -30,17 +30,7 @@ TcsReceiptVoucherWidget::TcsReceiptVoucherWidget(TcsReceiptVoucherController *co
 
 void TcsReceiptVoucherWidget::setupUi()
 {
-    setAttribute(Qt::WA_StyledBackground, true);
-    setStyleSheet(
-        "TcsReceiptVoucherWidget { background-color: #F8FAFC; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif; }"
-        "QLabel { border: none; background: transparent; color: #1E293B; font-size: 11px; font-weight: 700; }"
-        "QLineEdit { background-color: #FFFFFF; color: #0F172A; border: 1px solid #CBD5E1; border-radius: 5px; padding: 2px 6px; font-size: 11.5px; font-weight: 700; }"
-        "QLineEdit:focus { border: 1.5px solid #2563EB; background-color: #FFFFF0; color: #0F172A; }"
-    );
-
-    auto *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(10, 6, 10, 6);
-    mainLayout->setSpacing(6);
+    auto *mainLayout = ErpTheme::makePageLayout(this);
 
     // 1. Header Bar
     mainLayout->addWidget(createHeaderBar());
@@ -51,9 +41,63 @@ void TcsReceiptVoucherWidget::setupUi()
     // 3. Main Form Card
     mainLayout->addWidget(createMainFormCard(), 1);
 
+    // Keyboard-first Enter chain across the whole form.
+    connect(m_partySearch, &AccountSearchBox::returnPressed, this, [this]() {
+        if (m_bankSearch) m_bankSearch->setFocus();
+    });
+    connect(m_bankSearch, &AccountSearchBox::returnPressed, this, [this]() {
+        if (m_bankAmountEdit) { m_bankAmountEdit->setFocus(); m_bankAmountEdit->selectAll(); }
+    });
+    connect(m_bankAmountEdit, &QLineEdit::returnPressed, this, [this]() {
+        if (m_withoutTcsEdit) { m_withoutTcsEdit->setFocus(); m_withoutTcsEdit->selectAll(); }
+    });
+    connect(m_withoutTcsEdit, &QLineEdit::returnPressed, this, [this]() {
+        if (m_tcsRateEdit) { m_tcsRateEdit->setFocus(); m_tcsRateEdit->selectAll(); }
+    });
+    connect(m_tcsRateEdit, &QLineEdit::returnPressed, this, [this]() {
+        if (m_interestAmtEdit) { m_interestAmtEdit->setFocus(); m_interestAmtEdit->selectAll(); }
+    });
+    connect(m_interestAmtEdit, &QLineEdit::returnPressed, this, [this]() {
+        if (m_interestLedgerBox) m_interestLedgerBox->setFocus();
+    });
+    connect(m_interestLedgerBox, &AccountSearchBox::returnPressed, this, [this]() {
+        if (m_discountAmtEdit) { m_discountAmtEdit->setFocus(); m_discountAmtEdit->selectAll(); }
+    });
+    connect(m_discountAmtEdit, &QLineEdit::returnPressed, this, [this]() {
+        if (m_discountLedgerBox) m_discountLedgerBox->setFocus();
+    });
+    connect(m_discountLedgerBox, &AccountSearchBox::returnPressed, this, [this]() {
+        if (m_otherAmtEdit) { m_otherAmtEdit->setFocus(); m_otherAmtEdit->selectAll(); }
+    });
+    connect(m_otherAmtEdit, &QLineEdit::returnPressed, this, [this]() {
+        if (m_otherLedgerBox) m_otherLedgerBox->setFocus();
+    });
+    connect(m_otherLedgerBox, &AccountSearchBox::returnPressed, this, [this]() {
+        if (m_narrationEdit) { m_narrationEdit->setFocus(); m_narrationEdit->selectAll(); }
+    });
+    connect(m_narrationEdit, &QLineEdit::returnPressed, this, [this]() {
+        if (m_saveBtn) m_saveBtn->setFocus();
+    });
+
+    QWidget::setTabOrder(m_partySearch, m_bankSearch);
+    QWidget::setTabOrder(m_bankSearch, m_bankAmountEdit);
+    QWidget::setTabOrder(m_bankAmountEdit, m_withoutTcsEdit);
+    QWidget::setTabOrder(m_withoutTcsEdit, m_tcsRateEdit);
+    QWidget::setTabOrder(m_tcsRateEdit, m_tcsReceivedCombo);
+    QWidget::setTabOrder(m_tcsReceivedCombo, m_interestAmtEdit);
+    QWidget::setTabOrder(m_interestAmtEdit, m_interestLedgerBox);
+    QWidget::setTabOrder(m_interestLedgerBox, m_discountAmtEdit);
+    QWidget::setTabOrder(m_discountAmtEdit, m_discountLedgerBox);
+    QWidget::setTabOrder(m_discountLedgerBox, m_otherAmtEdit);
+    QWidget::setTabOrder(m_otherAmtEdit, m_otherLedgerBox);
+    QWidget::setTabOrder(m_otherLedgerBox, m_narrationEdit);
+    QWidget::setTabOrder(m_narrationEdit, m_saveBtn);
+
     // Shortcuts
     new QShortcut(QKeySequence(Qt::ALT | Qt::Key_S), this, SLOT(onSaveClicked()));
+    new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_S), this, SLOT(onSaveClicked()));
     new QShortcut(QKeySequence(Qt::ALT | Qt::Key_N), this, SLOT(onNewClicked()));
+    new QShortcut(QKeySequence(Qt::Key_F3), this, SLOT(onNewClicked()));
     new QShortcut(QKeySequence(Qt::Key_Escape), this, SIGNAL(backRequested()));
     auto* f2Shortcut = new QShortcut(QKeySequence(Qt::Key_F2), this);
     connect(f2Shortcut, &QShortcut::activated, this, [this]() {
@@ -70,19 +114,24 @@ void TcsReceiptVoucherWidget::setupUi()
 QWidget *TcsReceiptVoucherWidget::createHeaderBar()
 {
     auto *headerCard = new QFrame(this);
-    headerCard->setStyleSheet("QFrame { background-color: #FFFFFF; border: 1px solid #E2D5C8; border-radius: 6px; }");
+    headerCard->setStyleSheet(ErpTheme::headerCardStyle());
     auto *layout = new QHBoxLayout(headerCard);
     layout->setContentsMargins(12, 4, 12, 4);
 
     auto *titleCol = new QVBoxLayout();
     titleCol->setSpacing(2);
     m_titleLabel = new QLabel("Receipt Voucher With TCS (Creation)", headerCard);
-    m_titleLabel->setStyleSheet("font-size: 16px; font-weight: 800; color: #0F172A; border: none; background: transparent;");
+    m_titleLabel->setStyleSheet(ErpTheme::headerTitleStyle(15));
     auto *subLabel = new QLabel("Section 206C(1H) collection on customer sales realization with net ledger balancing.", headerCard);
-    subLabel->setStyleSheet("font-size: 11px; color: #64748B; border: none; background: transparent;");
+    subLabel->setStyleSheet(ErpTheme::mutedLabelStyle(11));
     titleCol->addWidget(m_titleLabel);
     titleCol->addWidget(subLabel);
     layout->addLayout(titleCol);
+
+    m_alterBadge = new QLabel("ALTERATION", headerCard);
+    m_alterBadge->setStyleSheet(ErpTheme::badgeStyle("danger"));
+    m_alterBadge->setVisible(false);
+    layout->addWidget(m_alterBadge);
 
     m_statusLabel = new QLabel("", headerCard);
     m_statusLabel->setStyleSheet("margin-left: 15px; border: none; background: transparent;");
@@ -92,11 +141,11 @@ QWidget *TcsReceiptVoucherWidget::createHeaderBar()
     connect(btnNew, &QPushButton::clicked, this, &TcsReceiptVoucherWidget::onNewClicked);
     layout->addWidget(btnNew);
 
-    auto *btnSave = new KbdBadgeButton("Save Voucher", "Ctrl+S", headerCard);
-    btnSave->setPrimaryColor(ErpTheme::kGreen, ErpTheme::kGreenDark);
-    btnSave->setTextColor(ErpTheme::kPaper);
-    connect(btnSave, &QPushButton::clicked, this, &TcsReceiptVoucherWidget::onSaveClicked);
-    layout->addWidget(btnSave);
+    m_saveBtn = new KbdBadgeButton("Save Voucher", "Ctrl+S", headerCard);
+    m_saveBtn->setPrimaryColor(ErpTheme::kGreen, ErpTheme::kGreenDark);
+    m_saveBtn->setTextColor(ErpTheme::kPaper);
+    connect(m_saveBtn, &QPushButton::clicked, this, &TcsReceiptVoucherWidget::onSaveClicked);
+    layout->addWidget(m_saveBtn);
 
     auto *btnBack = new KbdBadgeButton("Back", "Esc", headerCard);
     connect(btnBack, &QPushButton::clicked, this, &TcsReceiptVoucherWidget::backRequested);
@@ -108,12 +157,7 @@ QWidget *TcsReceiptVoucherWidget::createHeaderBar()
 QWidget *TcsReceiptVoucherWidget::createParamsCard()
 {
     auto *card = new QFrame(this);
-    card->setStyleSheet(
-        "QFrame { background-color: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 8px; }"
-        "QLabel { color: #475569; font-weight: 700; font-size: 11.5px; border: none; background: transparent; }"
-        "QLineEdit { background-color: #FFFFFF; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 4px 8px; font-size: 12px; color: #0F172A; font-weight: 600; }"
-        "QLineEdit:focus { border-color: #2563EB; background-color: #F8FAFC; }"
-    );
+    card->setStyleSheet(ErpTheme::filterBarStyle());
     auto *layout = new QHBoxLayout(card);
     layout->setContentsMargins(12, 10, 12, 10);
     layout->setSpacing(16);
@@ -140,9 +184,10 @@ QWidget *TcsReceiptVoucherWidget::createParamsCard()
     m_receiptDateEdit = new QLineEdit(card);
     m_receiptDateEdit->setReadOnly(true);
     dtRow->addWidget(m_receiptDateEdit);
-    auto *btnDate = new QPushButton("", card);
+    auto *btnDate = new QPushButton("\u2026", card);
     btnDate->setMinimumWidth(28);
-    btnDate->setStyleSheet("QPushButton { background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 4px; }");
+    btnDate->setToolTip("Pick date (F2)");
+    btnDate->setStyleSheet(QString("QPushButton { background-color: %1; border: 1.5px solid %2; border-radius: 4px; }").arg(ErpTheme::kCanvas.name(), ErpTheme::kLine.name()));
     connect(btnDate, &QPushButton::clicked, this, [this]() {
         QDate cur = QDate::fromString(m_controller->receiptDate(), "yyyy-MM-dd");
         if (!cur.isValid()) cur = QDate::currentDate();
@@ -163,12 +208,7 @@ QWidget *TcsReceiptVoucherWidget::createParamsCard()
 QWidget *TcsReceiptVoucherWidget::createMainFormCard()
 {
     auto *card = new QFrame(this);
-    card->setStyleSheet(
-        "QFrame { background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; }"
-        "QLabel { color: #475569; font-weight: 700; font-size: 11.5px; border: none; background: transparent; }"
-        "QLineEdit, QComboBox { background-color: #FFFFFF; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 4px 8px; font-size: 12px; color: #0F172A; font-weight: 600; }"
-        "QLineEdit:focus, QComboBox:focus { border-color: #2563EB; background-color: #F8FAFC; }"
-    );
+    card->setStyleSheet(ErpTheme::filterBarStyle());
     auto *grid = new QGridLayout(card);
     grid->setContentsMargins(16, 14, 16, 14);
     grid->setHorizontalSpacing(16);
@@ -188,7 +228,7 @@ QWidget *TcsReceiptVoucherWidget::createMainFormCard()
     grid->addWidget(new QLabel("Party PAN:", card), 0, 3);
     m_panEdit = new QLineEdit(card);
     m_panEdit->setReadOnly(true);
-    m_panEdit->setStyleSheet("background-color: #F8FAFC; color: #334155; font-weight: 700;");
+    m_panEdit->setStyleSheet(QString("background-color: %1; color: %2; font-weight: 700;").arg(ErpTheme::kCanvas.name(), ErpTheme::kLabelSlate.name()));
     grid->addWidget(m_panEdit, 0, 4);
 
     // Row 1: Bank Account & Bank/Cash Amount
@@ -219,21 +259,19 @@ QWidget *TcsReceiptVoucherWidget::createMainFormCard()
     grid->addWidget(m_withoutTcsEdit, 2, 1);
 
     grid->addWidget(new QLabel("T.C.S. Rate (%):", card), 2, 2);
-    auto *rateRow = new QHBoxLayout();
     m_tcsRateEdit = new QLineEdit("0.100", card);
     m_tcsRateEdit->setMinimumWidth(70);
     connect(m_tcsRateEdit, &QLineEdit::textChanged, this, [this](const QString &t) {
         if (!m_isSyncing) m_controller->setTcsRate(t.toDouble());
     });
-    rateRow->addWidget(m_tcsRateEdit);
-    grid->addLayout(rateRow, 2, 3);
+    grid->addWidget(m_tcsRateEdit, 2, 3);
 
     grid->addWidget(new QLabel("T.C.S. Amount:", card), 2, 4);
     m_tcsAmountEdit = new QLineEdit(card);
     m_tcsAmountEdit->setReadOnly(true);
     m_tcsAmountEdit->setAlignment(Qt::AlignRight);
-    m_tcsAmountEdit->setStyleSheet("background-color: #F8FAFC; color: #D97706; font-weight: 700;");
-    grid->addWidget(m_tcsAmountEdit, 2, 4);
+    m_tcsAmountEdit->setStyleSheet(QString("background-color: %1; color: %2; font-weight: 700;").arg(ErpTheme::kCanvas.name(), ErpTheme::kAmber.name()));
+    grid->addWidget(m_tcsAmountEdit, 2, 5);
 
     // Row 3: TCS Received & Net Receipt In Bank
     grid->addWidget(new QLabel("T.C.S. Received:", card), 3, 0);
@@ -248,7 +286,7 @@ QWidget *TcsReceiptVoucherWidget::createMainFormCard()
     m_netBankReceiptEdit = new QLineEdit(card);
     m_netBankReceiptEdit->setReadOnly(true);
     m_netBankReceiptEdit->setAlignment(Qt::AlignRight);
-    m_netBankReceiptEdit->setStyleSheet("background-color: #F8FAFC; color: #0F172A; font-weight: 700;");
+    m_netBankReceiptEdit->setStyleSheet(QString("background-color: %1; color: %2; font-weight: 700;").arg(ErpTheme::kCanvas.name(), ErpTheme::kNavy.name()));
     grid->addWidget(m_netBankReceiptEdit, 3, 4);
 
     // Row 4: Less Interest Received
@@ -298,22 +336,14 @@ QWidget *TcsReceiptVoucherWidget::createMainFormCard()
 
     // Row 7: Net Amount Credit to Party
     auto *creditPartyLabel = new QLabel("Net Amount Credit to Party:", card);
-    creditPartyLabel->setStyleSheet("font-weight: 800; color: #15803D; font-size: 13px;");
+    creditPartyLabel->setStyleSheet(QString("font-weight: 800; color: %1; font-size: 13px;").arg(ErpTheme::kGreenDark.name()));
     grid->addWidget(creditPartyLabel, 7, 0);
     m_netCreditPartyEdit = new QLineEdit(card);
     m_netCreditPartyEdit->setReadOnly(true);
     m_netCreditPartyEdit->setAlignment(Qt::AlignRight);
     m_netCreditPartyEdit->setStyleSheet(
-        "QLineEdit {"
-        "  font-size: 15px;"
-        "  font-weight: 800;"
-        "  color: #15803D;"
-        "  background-color: #F0FDF4;"
-        "  border: 1.5px solid #86EFAC;"
-        "  border-radius: 6px;"
-        "  padding: 4px 8px;"
-        "}"
-    );
+        QString("QLineEdit { font-size: 15px; font-weight: 800; color: %1; background-color: %2; border: 1.5px solid %3; border-radius: 6px; padding: 4px 8px; }")
+        .arg(ErpTheme::kGreenDark.name(), ErpTheme::kGreenBg.name(), ErpTheme::kGreenBorder.name()));
     grid->addWidget(m_netCreditPartyEdit, 7, 1, 1, 4);
 
     // Row 8: Narration
@@ -327,6 +357,8 @@ QWidget *TcsReceiptVoucherWidget::createMainFormCard()
 
 void TcsReceiptVoucherWidget::onNewClicked()
 {
+    if (m_titleLabel) m_titleLabel->setText("Receipt Voucher With TCS (Creation)");
+    if (m_alterBadge) m_alterBadge->setVisible(false);
     m_controller->resetForm();
     m_partySearch->clear();
     m_bankSearch->clear();
@@ -334,6 +366,7 @@ void TcsReceiptVoucherWidget::onNewClicked()
     m_discountLedgerBox->clear();
     m_otherLedgerBox->clear();
     syncUiFromController();
+    if (m_partySearch) m_partySearch->setFocus();
 }
 
 void TcsReceiptVoucherWidget::onSaveClicked()
@@ -387,6 +420,9 @@ void TcsReceiptVoucherWidget::loadVoucher(int voucherId)
     if (m_controller) {
         m_controller->loadVoucher(voucherId);
         syncUiFromController();
+        if (m_titleLabel) m_titleLabel->setText("Receipt Voucher With TCS (Alteration)");
+        if (m_alterBadge) m_alterBadge->setVisible(true);
+        if (m_partySearch) m_partySearch->setFocus();
     }
 }
 
