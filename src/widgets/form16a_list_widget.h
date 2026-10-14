@@ -5,6 +5,7 @@
 #include <QLineEdit>
 #include <QPushButton>
 #include <QLabel>
+#include <QFutureWatcher>
 
 namespace MahadevERP {
 
@@ -29,6 +30,8 @@ protected:
 private slots:
     void onNewClicked();
     void onDeleteClicked();
+    void onDeleteFinished();
+    void onQueryReady();
     void onRefreshClicked();
     void onFilterChanged();
 
@@ -38,6 +41,10 @@ private:
 
     QLineEdit *m_searchEdit = nullptr;
     QTableWidget *m_table = nullptr;
+
+    QFutureWatcher<bool> m_deleteWatcher;
+    QFutureWatcher<QVariantList> m_queryWatcher;
+    bool m_deleting = false;
 
     QLabel *m_totalCertsVal = nullptr;
     QLabel *m_totalPaidVal = nullptr;

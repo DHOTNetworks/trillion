@@ -1,4 +1,6 @@
 #include "tax_challan_controller.h"
+#include "../services/db_worker.h"
+#include "../services/db_service.h"
 #include "../services/financial_math_service.h"
 #include "account_classifier.h"
 #include "../database_manager.h"
@@ -385,205 +387,334 @@ void TaxChallanController::recalculate()
     emit totalsChanged();
 }
 
+namespace {
+
+// Snapshot keys (see buildPayload): tax_type, challan_no, challan_date,
+// post_in_books, period_from, period_to, basic_tax, surcharge, cess,
+// total_tax, interest_amount, interest_ledger_id, penalty_amount,
+// penalty_ledger_id, other_amount, other_ledger_id, total_challan,
+// bank_ledger_id, cheque_no, cheque_date, bsr_code, minor_head, major_head,
+// narration, items (list of maps: selected, id, vch_type, basic_tax,
+// surcharge, cess, total_tax_amount).
+bool saveChallanIn(MahadevERP::DbTx& tx, const QVariantMap& p, int& outChallanId) {
+    outChallanId = 0;
+    const QString taxType = p.value("tax_type").toString();
+    const QString challanNo = p.value("challan_no").toString().trimmed();
+    const QString challanDate = p.value("challan_date").toString();
+    const bool postInBooks = p.value("post_in_books").toBool();
+    const QString periodFrom = p.value("period_from").toString();
+    const QString periodTo = p.value("period_to").toString();
+    const double basicTax = p.value("basic_tax").toDouble();
+    const double surcharge = p.value("surcharge").toDouble();
+    const double cess = p.value("cess").toDouble();
+    const double totalTax = p.value("total_tax").toDouble();
+    const double interestAmount = p.value("interest_amount").toDouble();
+    const int interestLedgerId = p.value("interest_ledger_id").toInt();
+    const double penaltyAmount = p.value("penalty_amount").toDouble();
+    const int penaltyLedgerId = p.value("penalty_ledger_id").toInt();
+    const double otherAmount = p.value("other_amount").toDouble();
+    const int otherLedgerId = p.value("other_ledger_id").toInt();
+    const double totalChallan = p.value("total_challan").toDouble();
+    const int bankLedgerId = p.value("bank_ledger_id").toInt();
+    const QString chequeNo = p.value("cheque_no").toString().trimmed();
+    const QString chequeDate = p.value("cheque_date").toString();
+    const QString bsrCode = p.value("bsr_code").toString().trimmed();
+    const QString minorHead = p.value("minor_head").toString();
+    const QString majorHead = p.value("major_head").toString();
+    const QString narration = p.value("narration").toString().trimmed();
+    const QVariantList items = p.value("items").toList();
+
+    // FY in-transaction (legacy hardcoded a "FY 2025-26" label fallback).
+    int fyId = 1;
+    QString fyLabel;
+    QVariantList fyRows = tx.query(
+        "SELECT id, year_name FROM financial_years WHERE is_active = 1 LIMIT 1;", {});
+    if (fyRows.isEmpty()) {
+        fyRows = tx.query(
+            "SELECT id, year_name FROM financial_years ORDER BY id DESC LIMIT 1;", {});
+    }
+    if (!fyRows.isEmpty()) {
+        fyId = fyRows.first().toMap().value("id", 1).toInt();
+        fyLabel = fyRows.first().toMap().value("year_name").toString();
+    }
+
+    int glVoucherId = 0;
+
+    // 1. Post in Books (Double-Entry General Ledger) if enabled
+    if (postInBooks) {
+        const QString taxLedgerName = (taxType == "TDS") ? "TDS Payable A/c" : "TCS Payable A/c";
+        const int taxLedgerId = tx.resolvePartyId(0, taxLedgerName, "Duties & Taxes (GST)", "Tax");
+        if (taxLedgerId <= 0) return false;
+
+        const QString bankName = tx.scalar(
+            "SELECT name FROM parties WHERE id = ?;", {bankLedgerId}).toString();
+
+        const QString vchNo = QString("CH-%1").arg(challanNo);
+        const QString vchNarration = narration.isEmpty()
+            ? QString("%1 Tax Deposit Challan ITNS-281 BSR:%2").arg(taxType, bsrCode)
+            : narration;
+
+        if (!tx.exec(
+                "INSERT INTO vouchers ("
+                "fy_id, financial_year, voucher_no, voucher_date, voucher_type, legacy_type, "
+                "party_id, ledger_id, party_name, account_type, amount, narration"
+                ") VALUES (?, ?, ?, ?, 'PAYMENT', 'BANK', ?, ?, ?, 'Cr', ?, ?);",
+                {fyId, fyLabel, vchNo, challanDate,
+                 bankLedgerId, bankLedgerId, bankName, totalChallan, vchNarration})) {
+            return false;
+        }
+        glVoucherId = static_cast<int>(tx.lastInsertId());
+
+        int rowNo = 1;
+
+        // Leg 1: Debit Tax Payable
+        if (totalTax > 0.0) {
+            tx.execUnchecked(
+                "INSERT INTO transactions ("
+                "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
+                "account_code, party_id, party_name, opposing_account, dr_cr, amount, "
+                "narration, taxable_amount, tds_amount, tds_rate, row_no"
+                ") VALUES (?, ?, ?, ?, 'PAYMENT', 'BANK', ?, ?, ?, ?, 'Dr', ?, ?, 0, ?, 0, ?);",
+                {fyId, fyLabel, vchNo, challanDate,
+                 taxLedgerId, taxLedgerId, taxLedgerName, bankName, totalTax,
+                 vchNarration, totalTax, rowNo++});
+        }
+
+        // Leg 2: Debit Interest (if any)
+        if (interestAmount > 0.0 && interestLedgerId > 0) {
+            const QString intName = tx.scalar(
+                "SELECT name FROM parties WHERE id = ?;", {interestLedgerId}).toString();
+            tx.execUnchecked(
+                "INSERT INTO transactions ("
+                "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
+                "account_code, party_id, party_name, opposing_account, dr_cr, amount, "
+                "narration, taxable_amount, tds_amount, tds_rate, row_no"
+                ") VALUES (?, ?, ?, ?, 'PAYMENT', 'BANK', ?, ?, ?, ?, 'Dr', ?, ?, 0, 0, 0, ?);",
+                {fyId, fyLabel, vchNo, challanDate,
+                 interestLedgerId, interestLedgerId, intName, bankName, interestAmount,
+                 "Interest on Tax Deposit", rowNo++});
+        }
+
+        // Leg 3: Debit Penalty (if any)
+        if (penaltyAmount > 0.0 && penaltyLedgerId > 0) {
+            const QString penName = tx.scalar(
+                "SELECT name FROM parties WHERE id = ?;", {penaltyLedgerId}).toString();
+            tx.execUnchecked(
+                "INSERT INTO transactions ("
+                "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
+                "account_code, party_id, party_name, opposing_account, dr_cr, amount, "
+                "narration, taxable_amount, tds_amount, tds_rate, row_no"
+                ") VALUES (?, ?, ?, ?, 'PAYMENT', 'BANK', ?, ?, ?, ?, 'Dr', ?, ?, 0, 0, 0, ?);",
+                {fyId, fyLabel, vchNo, challanDate,
+                 penaltyLedgerId, penaltyLedgerId, penName, bankName, penaltyAmount,
+                 "Penalty on Tax Deposit", rowNo++});
+        }
+
+        // Leg 4: Debit Other Charges (if any)
+        if (otherAmount > 0.0 && otherLedgerId > 0) {
+            const QString othName = tx.scalar(
+                "SELECT name FROM parties WHERE id = ?;", {otherLedgerId}).toString();
+            tx.execUnchecked(
+                "INSERT INTO transactions ("
+                "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
+                "account_code, party_id, party_name, opposing_account, dr_cr, amount, "
+                "narration, taxable_amount, tds_amount, tds_rate, row_no"
+                ") VALUES (?, ?, ?, ?, 'PAYMENT', 'BANK', ?, ?, ?, ?, 'Dr', ?, ?, 0, 0, 0, ?);",
+                {fyId, fyLabel, vchNo, challanDate,
+                 otherLedgerId, otherLedgerId, othName, bankName, otherAmount,
+                 "Other Charges on Tax Deposit", rowNo++});
+        }
+
+        // Balancing Leg: Credit Bank
+        tx.execUnchecked(
+            "INSERT INTO transactions ("
+            "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
+            "account_code, party_id, party_name, opposing_account, dr_cr, amount, "
+            "narration, taxable_amount, tds_amount, tds_rate, row_no"
+            ") VALUES (?, ?, ?, ?, 'PAYMENT', 'BANK', ?, ?, ?, ?, 'Cr', ?, ?, 0, 0, 0, ?);",
+            {fyId, fyLabel, vchNo, challanDate,
+             bankLedgerId, bankLedgerId, bankName, taxLedgerName, totalChallan,
+             vchNarration, rowNo++});
+    }
+
+    // 2. Insert into tax_deposit_challans
+    if (!tx.exec(
+            "INSERT INTO tax_deposit_challans ("
+            "fy_id, tax_type, challan_no, challan_date, post_in_books, period_from, period_to, "
+            "basic_tax, surcharge, cess, total_tax, interest_amount, interest_ledger_id, "
+            "penalty_amount, penalty_ledger_id, other_amount, other_ledger_id, total_challan_amount, "
+            "bank_ledger_id, cheque_no, cheque_date, bsr_code, minor_head, major_head, voucher_id, narration"
+            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+            {fyId, taxType, challanNo, challanDate, postInBooks ? 1 : 0,
+             periodFrom, periodTo, basicTax, surcharge, cess, totalTax,
+             interestAmount,
+             interestLedgerId > 0 ? interestLedgerId : QVariant(),
+             penaltyAmount,
+             penaltyLedgerId > 0 ? penaltyLedgerId : QVariant(),
+             otherAmount,
+             otherLedgerId > 0 ? otherLedgerId : QVariant(),
+             totalChallan, bankLedgerId,
+             chequeNo, chequeDate, bsrCode, minorHead, majorHead,
+             glVoucherId > 0 ? glVoucherId : QVariant(), narration})) {
+        return false;
+    }
+
+    const int challanId = static_cast<int>(tx.lastInsertId());
+    outChallanId = challanId;
+
+    // 3. Insert linked vouchers into tax_deposit_challan_items & mark as deposited
+    for (const auto &v : items) {
+        const QVariantMap m = v.toMap();
+        if (!m.value("selected").toBool()) continue;
+        const int srcId = m.value("id").toInt();
+        const QString vchType = m.value("vch_type").toString();
+        tx.execUnchecked(
+            "INSERT INTO tax_deposit_challan_items ("
+            "challan_id, voucher_type, source_voucher_id, tax_amount, surcharge_amount, cess_amount, total_tax_amount"
+            ") VALUES (?, ?, ?, ?, ?, ?, ?);",
+            {challanId, vchType, srcId, m.value("basic_tax").toDouble(),
+             m.value("surcharge").toDouble(), m.value("cess").toDouble(),
+             m.value("total_tax_amount").toDouble()});
+
+        // Mark source voucher as deposited
+        if (vchType == "TDS_VOUCHER") {
+            tx.execUnchecked("UPDATE tds_vouchers SET is_deposited = 1, challan_id = ? WHERE id = ?;",
+                    {challanId, srcId});
+        } else if (vchType == "ADVANCE_194Q") {
+            tx.execUnchecked("UPDATE advance_payments_194q SET is_deposited = 1, challan_id = ? WHERE id = ?;",
+                    {challanId, srcId});
+        } else if (vchType == "TCS_RECEIPT") {
+            tx.execUnchecked("UPDATE tcs_receipt_vouchers SET is_deposited = 1, challan_id = ? WHERE id = ?;",
+                    {challanId, srcId});
+        }
+    }
+    return true;
+}
+
+bool deleteChallanIn(MahadevERP::DbTx& tx, int challanId) {
+    if (challanId <= 0) return false;
+
+    // 1. Release deposited vouchers
+    const QVariantList items = tx.query(
+        "SELECT voucher_type, source_voucher_id FROM tax_deposit_challan_items WHERE challan_id = ?;",
+        {challanId});
+    for (const auto &it : items) {
+        const QVariantMap m = it.toMap();
+        const QString vType = m.value("voucher_type").toString();
+        const int srcId = m.value("source_voucher_id").toInt();
+        if (vType == "TDS_VOUCHER") {
+            tx.execUnchecked("UPDATE tds_vouchers SET is_deposited = 0, challan_id = NULL WHERE id = ?;", {srcId});
+        } else if (vType == "ADVANCE_194Q") {
+            tx.execUnchecked("UPDATE advance_payments_194q SET is_deposited = 0, challan_id = NULL WHERE id = ?;", {srcId});
+        } else if (vType == "TCS_RECEIPT") {
+            tx.execUnchecked("UPDATE tcs_receipt_vouchers SET is_deposited = 0, challan_id = NULL WHERE id = ?;", {srcId});
+        }
+    }
+
+    // 2. Remove GL voucher if one was created
+    const QVariant vId = tx.scalar(
+        "SELECT voucher_id FROM tax_deposit_challans WHERE id = ?;", {challanId});
+    if (vId.isValid() && !vId.isNull() && vId.toInt() > 0) {
+        const int glId = vId.toInt();
+        const QString vNo = tx.scalar(
+            "SELECT voucher_no FROM vouchers WHERE id = ?;", {glId}).toString();
+        tx.execUnchecked("DELETE FROM transactions WHERE voucher_no = ?;", {vNo});
+        tx.execUnchecked("DELETE FROM vouchers WHERE id = ?;", {glId});
+    }
+
+    // 3. Delete challan & items
+    tx.execUnchecked("DELETE FROM tax_deposit_challan_items WHERE challan_id = ?;", {challanId});
+    return tx.exec("DELETE FROM tax_deposit_challans WHERE id = ?;", {challanId});
+}
+
+} // namespace
+
+QVariantMap TaxChallanController::buildPayload() const {
+    QVariantMap p;
+    p["tax_type"] = m_taxType;
+    p["challan_no"] = m_challanNo;
+    p["challan_date"] = m_challanDate;
+    p["post_in_books"] = m_postInBooks;
+    p["period_from"] = m_periodFrom;
+    p["period_to"] = m_periodTo;
+    p["basic_tax"] = m_basicTax;
+    p["surcharge"] = m_surcharge;
+    p["cess"] = m_cess;
+    p["total_tax"] = m_totalTax;
+    p["interest_amount"] = m_interestAmount;
+    p["interest_ledger_id"] = m_interestLedgerId;
+    p["penalty_amount"] = m_penaltyAmount;
+    p["penalty_ledger_id"] = m_penaltyLedgerId;
+    p["other_amount"] = m_otherAmount;
+    p["other_ledger_id"] = m_otherLedgerId;
+    p["total_challan"] = m_totalChallanAmount;
+    p["bank_ledger_id"] = m_bankLedgerId;
+    p["cheque_no"] = m_chequeNo;
+    p["cheque_date"] = m_chequeDate;
+    p["bsr_code"] = m_bsrCode;
+    p["minor_head"] = m_minorHead;
+    p["major_head"] = m_majorHead;
+    p["narration"] = m_narration;
+    p["items"] = m_undepositedVouchers;
+    return p;
+}
+
+QString TaxChallanController::validateForSave() const {
+    if (m_challanNo.trimmed().isEmpty()) {
+        return "Challan Number cannot be empty.";
+    }
+    if (m_bankLedgerId <= 0) {
+        return "Please select a Bank / Cash account for deposit payment.";
+    }
+    if (!m_bsrCode.trimmed().isEmpty()) {
+        static const QRegularExpression bsrRegex("^[0-9]{7}$");
+        if (!bsrRegex.match(m_bsrCode.trimmed()).hasMatch()) {
+            return "BSR Code must be exactly 7 numeric digits.";
+        }
+    }
+    // Ensure at least some amount is being deposited
+    if (m_totalChallanAmount <= 0.0) {
+        return "Total Challan Amount must be greater than zero.";
+    }
+    return "";
+}
+
+QFuture<bool> TaxChallanController::saveChallanAsync() {
+    if (!validateForSave().isEmpty()) return MahadevERP::DbService::refused<bool>();
+    const QVariantMap payload = buildPayload();
+    return MahadevERP::DbService::instance().transact(
+        [payload](MahadevERP::DbTx& tx) {
+            int outId = 0;
+            return saveChallanIn(tx, payload, outId);
+        });
+}
+
+QFuture<bool> TaxChallanController::deleteChallanAsync(int challanId) {
+    if (challanId <= 0) return MahadevERP::DbService::refused<bool>();
+    return MahadevERP::DbService::instance().transact(
+        [challanId](MahadevERP::DbTx& tx) {
+            return deleteChallanIn(tx, challanId);
+        });
+}
+
 bool TaxChallanController::saveChallan()
 {
     m_isError = false;
     m_statusMessage.clear();
 
-    if (m_challanNo.trimmed().isEmpty()) {
+    const QString err = validateForSave();
+    if (!err.isEmpty()) {
         m_isError = true;
-        m_statusMessage = "Challan Number cannot be empty.";
-        emit statusChanged();
-        return false;
-    }
-
-    if (m_bankLedgerId <= 0) {
-        m_isError = true;
-        m_statusMessage = "Please select a Bank / Cash account for deposit payment.";
-        emit statusChanged();
-        return false;
-    }
-
-    if (!m_bsrCode.trimmed().isEmpty()) {
-        static const QRegularExpression bsrRegex("^[0-9]{7}$");
-        if (!bsrRegex.match(m_bsrCode.trimmed()).hasMatch()) {
-            m_isError = true;
-            m_statusMessage = "BSR Code must be exactly 7 numeric digits.";
-            emit statusChanged();
-            return false;
-        }
-    }
-
-    // Ensure at least some amount is being deposited
-    if (m_totalChallanAmount <= 0.0) {
-        m_isError = true;
-        m_statusMessage = "Total Challan Amount must be greater than zero.";
+        m_statusMessage = err;
         emit statusChanged();
         return false;
     }
 
     DatabaseManager &db = DatabaseManager::instance();
     db.beginTransaction();
-
-    int fyId = 1;
-    QString fyLabel = "FY 2025-26";
-    QVariant fyRow = db.executeScalar("SELECT id FROM financial_years WHERE is_active = 1 LIMIT 1;");
-    if (!fyRow.isValid() || fyRow.isNull()) {
-        fyRow = db.executeScalar("SELECT id FROM financial_years ORDER BY id DESC LIMIT 1;");
-    }
-    if (fyRow.isValid() && !fyRow.isNull()) {
-        fyId = fyRow.toInt();
-        QVariant nameVal = db.executeScalar("SELECT year_name FROM financial_years WHERE id = ?;", {fyId});
-        if (nameVal.isValid()) fyLabel = nameVal.toString();
-    }
-
-    int glVoucherId = 0;
-
-    // 1. Post in Books (Double-Entry General Ledger) if enabled
-    if (m_postInBooks) {
-        // Resolve Tax Payable Account
-        QString taxLedgerName = (m_taxType == "TDS") ? "TDS Payable A/c" : "TCS Payable A/c";
-        int taxLedgerId = 0;
-        QVariant tRow = db.executeScalar("SELECT id FROM parties WHERE name = ? LIMIT 1;", {taxLedgerName});
-        if (tRow.isValid() && !tRow.isNull()) {
-            taxLedgerId = tRow.toInt();
-        } else {
-            db.executeNonQuery(
-                "INSERT INTO parties (name, group_name, party_type) VALUES (?, 'Duties & Taxes (GST)', 'Tax');",
-                {taxLedgerName}
-            );
-            taxLedgerId = db.executeScalar("SELECT last_insert_rowid();").toInt();
-        }
-
-        // Bank Account Name
-        QString bankName = db.executeScalar("SELECT name FROM parties WHERE id = ?;", {m_bankLedgerId}).toString();
-
-        // Insert Voucher Master Header
-        QString vchNo = QString("CH-%1").arg(m_challanNo.trimmed());
-        QString vchNarration = m_narration.isEmpty()
-            ? QString("%1 Tax Deposit Challan ITNS-281 BSR:%2").arg(m_taxType, m_bsrCode)
-            : m_narration;
-
-        db.executeNonQuery(
-            "INSERT INTO vouchers ("
-            "fy_id, financial_year, voucher_no, voucher_date, voucher_type, legacy_type, "
-            "party_id, ledger_id, party_name, account_type, amount, narration"
-            ") VALUES (?, ?, ?, ?, 'PAYMENT', 'BANK', ?, ?, ?, 'Cr', ?, ?);",
-            {
-                fyId, fyLabel, vchNo, m_challanDate,
-                m_bankLedgerId, m_bankLedgerId, bankName, m_totalChallanAmount,
-                vchNarration
-            }
-        );
-        glVoucherId = db.executeScalar("SELECT last_insert_rowid();").toInt();
-
-        int rowNo = 1;
-
-        // Leg 1: Debit Tax Payable
-        if (m_totalTax > 0.0) {
-            db.executeNonQuery(
-                "INSERT INTO transactions ("
-                "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
-                "account_code, party_id, party_name, opposing_account, dr_cr, amount, "
-                "narration, taxable_amount, tds_amount, tds_rate, row_no"
-                ") VALUES (?, ?, ?, ?, 'PAYMENT', 'BANK', ?, ?, ?, ?, 'Dr', ?, ?, 0, ?, 0, ?);",
-                {
-                    fyId, fyLabel, vchNo, m_challanDate,
-                    taxLedgerId, taxLedgerId, taxLedgerName, bankName, m_totalTax,
-                    vchNarration, m_totalTax, rowNo++
-                }
-            );
-        }
-
-        // Leg 2: Debit Interest (if any)
-        if (m_interestAmount > 0.0 && m_interestLedgerId > 0) {
-            QString intName = db.executeScalar("SELECT name FROM parties WHERE id = ?;", {m_interestLedgerId}).toString();
-            db.executeNonQuery(
-                "INSERT INTO transactions ("
-                "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
-                "account_code, party_id, party_name, opposing_account, dr_cr, amount, "
-                "narration, taxable_amount, tds_amount, tds_rate, row_no"
-                ") VALUES (?, ?, ?, ?, 'PAYMENT', 'BANK', ?, ?, ?, ?, 'Dr', ?, ?, 0, 0, 0, ?);",
-                {
-                    fyId, fyLabel, vchNo, m_challanDate,
-                    m_interestLedgerId, m_interestLedgerId, intName, bankName, m_interestAmount,
-                    "Interest on Tax Deposit", rowNo++
-                }
-            );
-        }
-
-        // Leg 3: Debit Penalty (if any)
-        if (m_penaltyAmount > 0.0 && m_penaltyLedgerId > 0) {
-            QString penName = db.executeScalar("SELECT name FROM parties WHERE id = ?;", {m_penaltyLedgerId}).toString();
-            db.executeNonQuery(
-                "INSERT INTO transactions ("
-                "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
-                "account_code, party_id, party_name, opposing_account, dr_cr, amount, "
-                "narration, taxable_amount, tds_amount, tds_rate, row_no"
-                ") VALUES (?, ?, ?, ?, 'PAYMENT', 'BANK', ?, ?, ?, ?, 'Dr', ?, ?, 0, 0, 0, ?);",
-                {
-                    fyId, fyLabel, vchNo, m_challanDate,
-                    m_penaltyLedgerId, m_penaltyLedgerId, penName, bankName, m_penaltyAmount,
-                    "Penalty on Tax Deposit", rowNo++
-                }
-            );
-        }
-
-        // Leg 4: Debit Other Charges (if any)
-        if (m_otherAmount > 0.0 && m_otherLedgerId > 0) {
-            QString othName = db.executeScalar("SELECT name FROM parties WHERE id = ?;", {m_otherLedgerId}).toString();
-            db.executeNonQuery(
-                "INSERT INTO transactions ("
-                "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
-                "account_code, party_id, party_name, opposing_account, dr_cr, amount, "
-                "narration, taxable_amount, tds_amount, tds_rate, row_no"
-                ") VALUES (?, ?, ?, ?, 'PAYMENT', 'BANK', ?, ?, ?, ?, 'Dr', ?, ?, 0, 0, 0, ?);",
-                {
-                    fyId, fyLabel, vchNo, m_challanDate,
-                    m_otherLedgerId, m_otherLedgerId, othName, bankName, m_otherAmount,
-                    "Other Charges on Tax Deposit", rowNo++
-                }
-            );
-        }
-
-        // Balancing Leg: Credit Bank
-        db.executeNonQuery(
-            "INSERT INTO transactions ("
-            "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
-            "account_code, party_id, party_name, opposing_account, dr_cr, amount, "
-            "narration, taxable_amount, tds_amount, tds_rate, row_no"
-            ") VALUES (?, ?, ?, ?, 'PAYMENT', 'BANK', ?, ?, ?, ?, 'Cr', ?, ?, 0, 0, 0, ?);",
-            {
-                fyId, fyLabel, vchNo, m_challanDate,
-                m_bankLedgerId, m_bankLedgerId, bankName, taxLedgerName, m_totalChallanAmount,
-                vchNarration, rowNo++
-            }
-        );
-    }
-
-    // 2. Insert into tax_deposit_challans
-    bool ok = db.executeNonQuery(
-        "INSERT INTO tax_deposit_challans ("
-        "fy_id, tax_type, challan_no, challan_date, post_in_books, period_from, period_to, "
-        "basic_tax, surcharge, cess, total_tax, interest_amount, interest_ledger_id, "
-        "penalty_amount, penalty_ledger_id, other_amount, other_ledger_id, total_challan_amount, "
-        "bank_ledger_id, cheque_no, cheque_date, bsr_code, minor_head, major_head, voucher_id, narration"
-        ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-        {
-            fyId, m_taxType, m_challanNo.trimmed(), m_challanDate, m_postInBooks ? 1 : 0,
-            m_periodFrom, m_periodTo, m_basicTax, m_surcharge, m_cess, m_totalTax,
-            m_interestAmount,
-            m_interestLedgerId > 0 ? m_interestLedgerId : QVariant(),
-            m_penaltyAmount,
-            m_penaltyLedgerId > 0 ? m_penaltyLedgerId : QVariant(),
-            m_otherAmount,
-            m_otherLedgerId > 0 ? m_otherLedgerId : QVariant(),
-            m_totalChallanAmount, m_bankLedgerId,
-            m_chequeNo.trimmed(), m_chequeDate, m_bsrCode.trimmed(), m_minorHead, m_majorHead,
-            glVoucherId > 0 ? glVoucherId : QVariant(), m_narration.trimmed()
-        }
-    );
-
+    int challanId = 0;
+    MahadevERP::DbTx tx(db.getConnection());
+    const bool ok = saveChallanIn(tx, buildPayload(), challanId);
     if (!ok) {
         db.rollback();
         m_isError = true;
@@ -591,47 +722,6 @@ bool TaxChallanController::saveChallan()
         emit statusChanged();
         return false;
     }
-
-    int challanId = db.executeScalar("SELECT last_insert_rowid();").toInt();
-
-    // 3. Insert linked vouchers into tax_deposit_challan_items & mark as deposited
-    for (const auto &v : m_undepositedVouchers) {
-        QVariantMap m = v.toMap();
-        if (m.value("selected").toBool()) {
-            int srcId = m.value("id").toInt();
-            QString vchType = m.value("vch_type").toString();
-            double taxAmt = m.value("basic_tax").toDouble();
-            double surAmt = m.value("surcharge").toDouble();
-            double cessAmt = m.value("cess").toDouble();
-            double totTax = m.value("total_tax_amount").toDouble();
-
-            db.executeNonQuery(
-                "INSERT INTO tax_deposit_challan_items ("
-                "challan_id, voucher_type, source_voucher_id, tax_amount, surcharge_amount, cess_amount, total_tax_amount"
-                ") VALUES (?, ?, ?, ?, ?, ?, ?);",
-                {challanId, vchType, srcId, taxAmt, surAmt, cessAmt, totTax}
-            );
-
-            // Mark source voucher as deposited
-            if (vchType == "TDS_VOUCHER") {
-                db.executeNonQuery(
-                    "UPDATE tds_vouchers SET is_deposited = 1, challan_id = ? WHERE id = ?;",
-                    {challanId, srcId}
-                );
-            } else if (vchType == "ADVANCE_194Q") {
-                db.executeNonQuery(
-                    "UPDATE advance_payments_194q SET is_deposited = 1, challan_id = ? WHERE id = ?;",
-                    {challanId, srcId}
-                );
-            } else if (vchType == "TCS_RECEIPT") {
-                db.executeNonQuery(
-                    "UPDATE tcs_receipt_vouchers SET is_deposited = 1, challan_id = ? WHERE id = ?;",
-                    {challanId, srcId}
-                );
-            }
-        }
-    }
-
     db.commit();
 
     m_statusMessage = QString("%1 Deposit Challan %2 saved successfully!").arg(m_taxType, m_challanNo);
@@ -641,6 +731,18 @@ bool TaxChallanController::saveChallan()
 
     resetForm();
     return true;
+}
+
+bool TaxChallanController::deleteChallan(int challanId)
+{
+    if (challanId <= 0) return false;
+    DatabaseManager &db = DatabaseManager::instance();
+    db.beginTransaction();
+    MahadevERP::DbTx tx(db.getConnection());
+    const bool ok = deleteChallanIn(tx, challanId);
+    if (ok) db.commit();
+    else db.rollback();
+    return ok;
 }
 
 bool TaxChallanController::loadChallan(int challanId)
@@ -701,50 +803,7 @@ bool TaxChallanController::loadChallan(int challanId)
     return true;
 }
 
-bool TaxChallanController::deleteChallan(int challanId)
-{
-    if (challanId <= 0) return false;
-    DatabaseManager &db = DatabaseManager::instance();
-    db.beginTransaction();
-
-    // 1. Release deposited vouchers
-    QVariantList items = db.executeQuery(
-        "SELECT voucher_type, source_voucher_id FROM tax_deposit_challan_items WHERE challan_id = ?;",
-        {challanId}
-    );
-    for (const auto &it : items) {
-        QVariantMap m = it.toMap();
-        QString vType = m.value("voucher_type").toString();
-        int srcId = m.value("source_voucher_id").toInt();
-        if (vType == "TDS_VOUCHER") {
-            db.executeNonQuery("UPDATE tds_vouchers SET is_deposited = 0, challan_id = NULL WHERE id = ?;", {srcId});
-        } else if (vType == "ADVANCE_194Q") {
-            db.executeNonQuery("UPDATE advance_payments_194q SET is_deposited = 0, challan_id = NULL WHERE id = ?;", {srcId});
-        } else if (vType == "TCS_RECEIPT") {
-            db.executeNonQuery("UPDATE tcs_receipt_vouchers SET is_deposited = 0, challan_id = NULL WHERE id = ?;", {srcId});
-        }
-    }
-
-    // 2. Remove GL voucher if one was created
-    QVariant vId = db.executeScalar("SELECT voucher_id FROM tax_deposit_challans WHERE id = ?;", {challanId});
-    if (vId.isValid() && !vId.isNull() && vId.toInt() > 0) {
-        int glId = vId.toInt();
-        QString vNo = db.executeScalar("SELECT voucher_no FROM vouchers WHERE id = ?;", {glId}).toString();
-        db.executeNonQuery("DELETE FROM transactions WHERE voucher_no = ?;", {vNo});
-        db.executeNonQuery("DELETE FROM vouchers WHERE id = ?;", {glId});
-    }
-
-    // 3. Delete challan & items
-    db.executeNonQuery("DELETE FROM tax_deposit_challan_items WHERE challan_id = ?;", {challanId});
-    db.executeNonQuery("DELETE FROM tax_deposit_challans WHERE id = ?;", {challanId});
-
-    db.commit();
-    return true;
-}
-
-QVariantList TaxChallanController::getChallansList(const QString &typeFilter) const
-{
-    DatabaseManager &db = DatabaseManager::instance();
+QString TaxChallanController::challansSql(const QString &typeFilter) {
     QString sql =
         "SELECT c.id, c.tax_type, c.challan_no, c.challan_date, c.period_from, c.period_to, "
         "c.basic_tax, c.interest_amount, c.penalty_amount, c.other_amount, c.total_challan_amount, "
@@ -756,6 +815,15 @@ QVariantList TaxChallanController::getChallansList(const QString &typeFilter) co
         sql += QString("WHERE c.tax_type = '%1' ").arg(typeFilter.toUpper());
     }
     sql += "ORDER BY c.challan_date DESC, c.id DESC;";
+    return sql;
+}
 
-    return db.executeQuery(sql);
+QVariantList TaxChallanController::getChallansList(const QString &typeFilter) const
+{
+    DatabaseManager &db = DatabaseManager::instance();
+    return db.executeQuery(challansSql(typeFilter));
+}
+
+QFuture<QVariantList> TaxChallanController::getChallansListAsync(const QString &typeFilter) const {
+    return MahadevERP::DbService::instance().query(challansSql(typeFilter), {});
 }

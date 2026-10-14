@@ -11,6 +11,7 @@
 #include <QHeaderView>
 #include <QKeyEvent>
 #include <QShortcut>
+#include <QDebug>
 #include <QtGlobal>
 #include <QMessageBox>
 #include <QFileDialog>
@@ -544,7 +545,12 @@ void DayBookWidget::deleteFocusedRow() {
     if (row < 0 || row >= m_table->rowCount()) return;
     auto* itm = m_table->item(row, 0);
     if (!itm) return;
-    const QVariantMap entry = itm->data(Qt::UserRole).toMap();
+    QVariantMap entry = itm->data(Qt::UserRole).toMap();
+    if (entry.contains("id")) {
+        // Daybook rows are transactions legs: "id" is the LEG id, never an
+        // invoice id. VoucherOps would otherwise delete by the wrong id.
+        entry["legId"] = entry.take("id");
+    }
     if (entry.isEmpty()) return;
 
     QString error;
@@ -570,11 +576,22 @@ void DayBookWidget::onRowDoubleClicked(int row, int /*column*/) {
     if (row < 0 || row >= m_table->rowCount()) return;
     auto* itm = m_table->item(row, 0);
     if (!itm) return;
-    const QVariantMap entry = itm->data(Qt::UserRole).toMap();
+    QVariantMap entry = itm->data(Qt::UserRole).toMap();
+    if (entry.contains("id")) {
+        // Same leg-id rename as deleteFocusedRow: invoice lookups must run
+        // on numbers, never on a transactions-leg id that can collide with
+        // a different invoice's id and open/delete the wrong voucher.
+        entry["legId"] = entry.take("id");
+    }
     if (entry.isEmpty()) return;
 
     // Single canonical router (VoucherOps) — alter and Alt+D delete agree.
     const int targetView = VoucherOps::viewIndexForKind(VoucherOps::kindForEntry(entry));
+    qDebug() << "[DAYBOOK] drill kind:" << static_cast<int>(VoucherOps::kindForEntry(entry))
+             << "view:" << targetView
+             << "vch:" << entry.value("voucher_no").toString()
+             << "type:" << entry.value("voucher_type").toString()
+             << "trans:" << entry.value("trans_type").toString();
     if (targetView > 0) {
         emit alterVoucherRequested(targetView, entry);
     }

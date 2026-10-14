@@ -33,7 +33,10 @@ public:
     int editingInvoiceId() const { return m_editingInvoiceId; }
 
     void resetForm();
-    bool loadInvoiceForEditing(const QVariant& invNoOrId, const QString& dateHint = "");
+    // popupDateOnLoad: drill-down opens pop the date dialog first (dates are
+    // never keyboard-focusable); after it closes focus lands per-voucher
+    // (sale: party, purchase: invoice no). In-voucher browsing keeps false.
+    bool loadInvoiceForEditing(const QVariant& invNoOrId, const QString& dateHint = "", bool popupDateOnLoad = false);
     void setWorkingDate(const QString& dateStr);
 
 public slots:

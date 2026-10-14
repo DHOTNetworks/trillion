@@ -3,10 +3,10 @@
 #include <QWidget>
 #include <QTableWidget>
 #include <QComboBox>
-#include <QDateEdit>
 #include <QLineEdit>
 #include <QLabel>
 #include <QPushButton>
+#include "accounting_date_edit.h"
 #include "../models/salary_register_controller.h"
 #include "../services/print_export_controller.h"
 
@@ -51,7 +51,7 @@ private:
     // UI Controls
     QComboBox* m_monthCombo = nullptr;
     QComboBox* m_yearCombo = nullptr;
-    QDateEdit* m_voucherDateEdit = nullptr;
+    AccountingDateEdit* m_voucherDateEdit = nullptr;
     QComboBox* m_statusCombo = nullptr;
     QLineEdit* m_searchEdit = nullptr;
     QTableWidget* m_table = nullptr;

@@ -90,6 +90,7 @@ void MillingVoucherWidget::setupUi() {
 
     m_batchDateEdit = new QLineEdit(this);
     m_batchDateEdit->setReadOnly(true);
+m_batchDateEdit->setFocusPolicy(Qt::ClickFocus);
     m_batchDateEdit->setMinimumHeight(22);
     m_batchDateEdit->setMinimumWidth(95);
     m_batchDateEdit->setStyleSheet("background-color: #FFFFFF; color: #0F172A; font-size: 12px; font-weight: 800; border: 1px solid #CBD5E1; border-radius: 5px;");
@@ -300,6 +301,7 @@ void MillingVoucherWidget::setupUi() {
     connect(m_producedTable, &QTableWidget::cellChanged, this, &MillingVoucherWidget::onRecalculate);
 
     connect(new QShortcut(QKeySequence(Qt::Key_Escape), this), &QShortcut::activated, this, &MillingVoucherWidget::backRequested);
+    connect(new QShortcut(QKeySequence(Qt::Key_F2), this), &QShortcut::activated, this, [this]() { openDateDialog(false); });
     connect(new QShortcut(QKeySequence(Qt::ALT | Qt::Key_S), this), &QShortcut::activated, this, &MillingVoucherWidget::onSaveClicked);
     connect(new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_S), this), &QShortcut::activated, this, &MillingVoucherWidget::onSaveClicked);
 }

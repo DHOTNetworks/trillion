@@ -102,6 +102,7 @@ void TdsVoucherWidget::setupUi() {
     dateBox->setSpacing(4);
     m_voucherDateEdit = new QLineEdit(leftCard);
     m_voucherDateEdit->setReadOnly(true);
+m_voucherDateEdit->setFocusPolicy(Qt::ClickFocus);
     m_voucherDateEdit->setMinimumWidth(85);
     dateBox->addWidget(m_voucherDateEdit);
 
@@ -394,6 +395,9 @@ void TdsVoucherWidget::setupUi() {
     connect(new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_S), this), &QShortcut::activated, this, &TdsVoucherWidget::onSaveClicked);
     connect(new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_D), this), &QShortcut::activated, this, &TdsVoucherWidget::onDeleteClicked);
     connect(new QShortcut(QKeySequence(Qt::Key_F2), this), &QShortcut::activated, this, &TdsVoucherWidget::openDateDialog);
+    // Isolated-write completions (worker thread never touches widgets).
+    connect(&m_saveWatcher, &QFutureWatcher<bool>::finished, this, &TdsVoucherWidget::onSaveFinished);
+    connect(&m_deleteWatcher, &QFutureWatcher<bool>::finished, this, &TdsVoucherWidget::onDeleteFinished);
 }
 
 void TdsVoucherWidget::keyPressEvent(QKeyEvent* event) {
@@ -619,7 +623,12 @@ void TdsVoucherWidget::onSaveClicked() {
         m_controller->setNarration(m_narrationEdit->text().trimmed());
         m_controller->setNonDeductionReason(m_nonDeductReasonEdit->text().trimmed());
         m_controller->setPostInBooks(m_postBooksCheck->isChecked());
-        ok = m_controller->saveVoucher();
+        // Isolated write: snapshot is complete above; postings run on the
+        // worker, UI reports in onSaveFinished. Buttons lock meanwhile.
+        if (m_saveBtn) m_saveBtn->setEnabled(false);
+        if (m_deleteBtn) m_deleteBtn->setEnabled(false);
+        m_saveWatcher.setFuture(m_controller->saveVoucherAsync());
+        return;
     } else {
         ok = true;
     }
@@ -634,6 +643,34 @@ void TdsVoucherWidget::onSaveClicked() {
     }
 }
 
+void TdsVoucherWidget::onSaveFinished() {
+    if (m_saveBtn) m_saveBtn->setEnabled(true);
+    if (m_deleteBtn) m_deleteBtn->setEnabled(m_editVoucherId > 0);
+    bool ok = m_saveWatcher.future().resultCount() > 0 && m_saveWatcher.result();
+    if (ok) {
+        CustomMessageBox::showInformation(this, "Success", "TDS Voucher saved successfully.");
+        int vNo = m_voucherNoEdit->text().toInt();
+        resetForm();
+        emit voucherSaved(vNo);
+    } else {
+        CustomMessageBox::showCritical(this, "Save Failed", "Failed to save TDS Voucher in database.");
+        if (m_partySearch) m_partySearch->setFocus();
+    }
+}
+
+void TdsVoucherWidget::onDeleteFinished() {
+    if (m_saveBtn) m_saveBtn->setEnabled(true);
+    if (m_deleteBtn) m_deleteBtn->setEnabled(m_editVoucherId > 0);
+    bool ok = m_deleteWatcher.future().resultCount() > 0 && m_deleteWatcher.result();
+    if (ok) {
+        CustomMessageBox::showInformation(this, "Deleted", "TDS Voucher removed successfully.");
+        resetForm();
+        emit voucherSaved(0);
+    } else {
+        CustomMessageBox::showCritical(this, "Delete Failed", "Failed to delete TDS Voucher (record not found or locked).");
+    }
+}
+
 void TdsVoucherWidget::onDeleteClicked() {
     if (m_editVoucherId <= 0) return;
 
@@ -642,15 +679,14 @@ void TdsVoucherWidget::onDeleteClicked() {
     }
 
     if (m_controller) {
-        m_controller->deleteVoucher(m_editVoucherId);
+        if (m_saveBtn) m_saveBtn->setEnabled(false);
+        if (m_deleteBtn) m_deleteBtn->setEnabled(false);
+        m_deleteWatcher.setFuture(m_controller->deleteVoucherAsync(m_editVoucherId));
     } else {
-        TdsModel tModel;
-        tModel.delete_tds_voucher(m_editVoucherId);
+        m_deleteWatcher.setFuture(TdsModel::delete_tds_voucher_async(m_editVoucherId));
+        if (m_saveBtn) m_saveBtn->setEnabled(false);
+        if (m_deleteBtn) m_deleteBtn->setEnabled(false);
     }
-
-    CustomMessageBox::showInformation(this, "Deleted", "TDS Voucher removed successfully.");
-    resetForm();
-    emit voucherSaved(0);
 }
 
 } // namespace MahadevERP

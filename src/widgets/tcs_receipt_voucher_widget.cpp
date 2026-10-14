@@ -96,6 +96,7 @@ void TcsReceiptVoucherWidget::setupUi()
     // Shortcuts
     new QShortcut(QKeySequence(Qt::ALT | Qt::Key_S), this, SLOT(onSaveClicked()));
     new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_S), this, SLOT(onSaveClicked()));
+    connect(&m_saveWatcher, &QFutureWatcher<bool>::finished, this, &TcsReceiptVoucherWidget::onSaveFinished);
     new QShortcut(QKeySequence(Qt::ALT | Qt::Key_N), this, SLOT(onNewClicked()));
     new QShortcut(QKeySequence(Qt::Key_F3), this, SLOT(onNewClicked()));
     new QShortcut(QKeySequence(Qt::Key_Escape), this, SIGNAL(backRequested()));
@@ -183,6 +184,7 @@ QWidget *TcsReceiptVoucherWidget::createParamsCard()
     auto *dtRow = new QHBoxLayout();
     m_receiptDateEdit = new QLineEdit(card);
     m_receiptDateEdit->setReadOnly(true);
+m_receiptDateEdit->setFocusPolicy(Qt::ClickFocus);
     dtRow->addWidget(m_receiptDateEdit);
     auto *btnDate = new QPushButton("\u2026", card);
     btnDate->setMinimumWidth(28);
@@ -357,6 +359,7 @@ QWidget *TcsReceiptVoucherWidget::createMainFormCard()
 
 void TcsReceiptVoucherWidget::onNewClicked()
 {
+    if (m_saving) return; // write flight pending: receipt_no not committed yet
     if (m_titleLabel) m_titleLabel->setText("Receipt Voucher With TCS (Creation)");
     if (m_alterBadge) m_alterBadge->setVisible(false);
     m_controller->resetForm();
@@ -371,10 +374,24 @@ void TcsReceiptVoucherWidget::onNewClicked()
 
 void TcsReceiptVoucherWidget::onSaveClicked()
 {
-    if (m_controller->saveVoucher()) {
+    if (m_saving) return; // write flight already posted
+    if (!m_controller) return;
+    m_saving = true;
+    if (m_saveBtn) m_saveBtn->setEnabled(false);
+    m_saveWatcher.setFuture(m_controller->saveVoucherAsync());
+}
+
+void TcsReceiptVoucherWidget::onSaveFinished() {
+    m_saving = false;
+    if (m_saveBtn) m_saveBtn->setEnabled(true);
+    const bool ok = m_saveWatcher.future().resultCount() > 0 && m_saveWatcher.result();
+    if (ok) {
         emit voucherSaved(m_controller->receiptNo());
         onNewClicked();
     }
+    // On failure the controller status label already explains (sync
+    // validation) or the books are untouched (worker refusal) — the form
+    // keeps its data so nothing is lost.
 }
 
 void TcsReceiptVoucherWidget::syncUiFromController()

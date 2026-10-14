@@ -3,6 +3,7 @@
 #include "erp_theme.h"
 #include "../engine/fiscal_year_helper.h"
 #include "../database_manager.h"
+#include "../services/db_service.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -118,21 +119,23 @@ void AdvancePayment194QListWidget::setupUi()
     new QShortcut(QKeySequence(Qt::ALT | Qt::Key_N), this, SLOT(onNewClicked()));
     new QShortcut(QKeySequence(Qt::ALT | Qt::Key_D), this, SLOT(onDeleteClicked()));
     new QShortcut(QKeySequence("Escape"), this, SIGNAL(backRequested()));
+    connect(&m_deleteWatcher, &QFutureWatcher<bool>::finished,
+            this, &AdvancePayment194QListWidget::onDeleteFinished);
+    connect(&m_queryWatcher, &QFutureWatcher<QVariantList>::finished,
+            this, &AdvancePayment194QListWidget::onQueryReady);
 }
 
 void AdvancePayment194QListWidget::reloadData()
 {
-    DatabaseManager &db = DatabaseManager::instance();
-    m_currentVouchers = db.executeQuery(
+    // Isolated read: scan runs on the worker, render lands in onQueryReady.
+    m_queryWatcher.setFuture(MahadevERP::DbService::instance().query(
         "SELECT a.id, a.voucher_no, a.voucher_date, p.name as supplier_name, b.name as bank_name, "
         "a.gross_advance_amount, a.tds_rate, a.tds_amount, a.net_payment_amount "
         "FROM advance_payments_194q a "
         "LEFT JOIN parties p ON a.supplier_id = p.id "
         "LEFT JOIN parties b ON a.bank_ledger_id = b.id "
-        "ORDER BY a.voucher_no DESC;"
-    );
-    populateTable();
-    m_isDirty = false;
+        "ORDER BY a.voucher_no DESC;",
+        {}));
 }
 
 void AdvancePayment194QListWidget::populateTable()
@@ -226,19 +229,41 @@ void AdvancePayment194QListWidget::onDeleteClicked()
         QMessageBox::Yes | QMessageBox::No
     );
 
-    if (res == QMessageBox::Yes) {
-        DatabaseManager &db = DatabaseManager::instance();
-        db.beginTransaction();
-        QVariant vchId = db.executeScalar("SELECT voucher_id FROM advance_payments_194q WHERE id = ?;", {id});
-        if (vchId.isValid() && vchId.toInt() > 0) {
-            QVariant vchNo = db.executeScalar("SELECT voucher_no FROM vouchers WHERE id = ?;", {vchId.toInt()});
-            db.executeNonQuery("DELETE FROM transactions WHERE voucher_no = ?;", {vchNo.toString()});
-            db.executeNonQuery("DELETE FROM vouchers WHERE id = ?;", {vchId.toInt()});
-        }
-        db.executeNonQuery("DELETE FROM advance_payments_194q WHERE id = ?;", {id});
-        db.commit();
-        reloadData();
+    if (res == QMessageBox::Yes && !m_deleting) {
+        // Isolated delete: voucher legs + advance row clear atomically
+        // on the worker (was a UI-thread transaction).
+        m_deleting = true;
+        m_deleteWatcher.setFuture(MahadevERP::DbService::instance().transact(
+            [id](MahadevERP::DbTx& tx) {
+                const QVariant vchId = tx.scalar(
+                    "SELECT voucher_id FROM advance_payments_194q WHERE id = ?;", {id});
+                if (vchId.isValid() && !vchId.isNull() && vchId.toInt() > 0) {
+                    const QString vchNo = tx.scalar(
+                        "SELECT voucher_no FROM vouchers WHERE id = ?;", {vchId.toInt()}).toString();
+                    tx.execUnchecked("DELETE FROM transactions WHERE voucher_no = ?;", {vchNo});
+                    tx.execUnchecked("DELETE FROM vouchers WHERE id = ?;", {vchId.toInt()});
+                }
+                return tx.exec("DELETE FROM advance_payments_194q WHERE id = ?;", {id});
+            }));
     }
+}
+
+void AdvancePayment194QListWidget::onDeleteFinished() {
+    m_deleting = false;
+    const bool ok = m_deleteWatcher.future().resultCount() > 0 && m_deleteWatcher.result();
+    if (ok) {
+        reloadData();
+    } else {
+        QMessageBox::critical(this, "Delete Failed",
+            "Failed to delete advance voucher (record not found or locked).");
+    }
+}
+
+void AdvancePayment194QListWidget::onQueryReady() {
+    if (m_queryWatcher.future().resultCount() == 0) return; // keep last-good rows
+    m_currentVouchers = m_queryWatcher.result();
+    populateTable();
+    m_isDirty = false;
 }
 
 void AdvancePayment194QListWidget::onRefreshClicked()

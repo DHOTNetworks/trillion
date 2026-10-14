@@ -1603,7 +1603,7 @@ void SalesVoucherWidget::deleteVoucher() {
     }
 }
 
-bool SalesVoucherWidget::loadInvoiceForEditing(const QVariant& invNoOrId, const QString& dateHint) {
+bool SalesVoucherWidget::loadInvoiceForEditing(const QVariant& invNoOrId, const QString& dateHint, bool popupDateOnLoad) {
     resetForm();
 
     QVariantMap inv = m_salesModel.get_sales_invoice(invNoOrId, dateHint);
@@ -1745,6 +1745,9 @@ bool SalesVoucherWidget::loadInvoiceForEditing(const QVariant& invNoOrId, const 
     if (inv.contains("round_off")) m_roundOffEdit->setText(QString::number(inv.value("round_off").toDouble(), 'f', 2));
     if (inv.contains("tcs_amount")) m_tcsAmountEdit->setText(QString::number(inv.value("tcs_amount").toDouble(), 'f', 2));
     if (inv.contains("grand_total")) m_grandTotalEdit->setText(QString::number(inv.value("grand_total").toDouble(), 'f', 2));
+    // Drill-down entry: date dialog first (dates take no keyboard focus),
+    // then party — openDateDialog already lands there.
+    if (popupDateOnLoad) openDateDialog(false);
     return true;
 }
 

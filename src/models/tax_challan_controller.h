@@ -4,6 +4,7 @@
 #include <QString>
 #include <QVariantList>
 #include <QVariantMap>
+#include <QFuture>
 
 class TaxChallanController : public QObject {
     Q_OBJECT
@@ -121,9 +122,15 @@ public:
     Q_INVOKABLE bool saveChallan();
     Q_INVOKABLE bool loadChallan(int challanId);
     Q_INVOKABLE bool deleteChallan(int challanId);
+    // Worker-thread writes (UI never blocks): validate + snapshot here,
+    // postings on the worker, widget reports on finish. Never wait on them
+    // from the GUI thread — use a QFutureWatcher.
+    QFuture<bool> saveChallanAsync();
+    QFuture<bool> deleteChallanAsync(int challanId);
 
     QVariantList undepositedVouchers() const { return m_undepositedVouchers; }
     QVariantList getChallansList(const QString &typeFilter = "") const;
+    QFuture<QVariantList> getChallansListAsync(const QString &typeFilter = "") const;
 
 signals:
     void taxTypeChanged();
@@ -148,6 +155,11 @@ signals:
 
 private:
     QString nextChallanNumber() const;
+    // Single owner of the register SELECT (sync + async readers share it).
+    static QString challansSql(const QString &typeFilter);
+    // Pure snapshot + validation shared by the sync and async save paths.
+    QVariantMap buildPayload() const;
+    QString validateForSave() const;
     void ensureDefaultLedgers();
 
     QString m_taxType = "TDS"; // TDS or TCS

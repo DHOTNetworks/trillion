@@ -3,6 +3,7 @@
 #include <QObject>
 #include <QString>
 #include <QVariantMap>
+#include <QFuture>
 
 class TdsVoucherController : public QObject {
     Q_OBJECT
@@ -134,7 +135,13 @@ public:
     Q_INVOKABLE void updatePartyInfo(const QString &partyName);
     Q_INVOKABLE void recalculateTotals();
     Q_INVOKABLE bool saveVoucher();
+    // Worker-thread writes (UI never blocks): validate + snapshot here,
+    // postings on the worker, widget reports on finish. Never wait on them
+    // from the GUI thread — use a QFutureWatcher.
+    QFuture<bool> saveVoucherAsync();
+    QFuture<bool> deleteVoucherAsync(int voucherId);
     Q_INVOKABLE QVariantList getTdsVouchersList() const;
+    QFuture<QVariantList> getTdsVouchersListAsync() const;
     Q_INVOKABLE bool deleteVoucher(int voucherId);
 
 signals:
@@ -158,6 +165,9 @@ signals:
     void voucherSaved();
 
 private:
+    QString validateForSave(QString* fyNameOut = nullptr) const;
+    QVariantMap buildPayload(const QString& fyName) const;
+
     int m_editVoucherId = 0;
     int m_voucherNo = 1;
     QString m_voucherDate;

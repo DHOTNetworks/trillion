@@ -3,6 +3,8 @@
 #include <QObject>
 #include <QString>
 #include <QVariantList>
+#include <QVariantMap>
+#include <QFuture>
 
 class TcsReceiptVoucherController : public QObject {
     Q_OBJECT
@@ -108,8 +110,14 @@ public:
     Q_INVOKABLE bool saveVoucher();
     Q_INVOKABLE bool loadVoucher(int voucherId);
     Q_INVOKABLE bool deleteVoucher(int voucherId);
+    // Worker-thread writes (UI never blocks): validate + snapshot here,
+    // postings on the worker, widget reports on finish. Never wait on them
+    // from the GUI thread — use a QFutureWatcher.
+    QFuture<bool> saveVoucherAsync();
+    QFuture<bool> deleteVoucherAsync(int voucherId);
 
     QVariantList getReceiptVouchersList() const;
+    QFuture<QVariantList> getReceiptVouchersListAsync() const;
 
 signals:
     void receiptNoChanged();
@@ -131,6 +139,11 @@ signals:
 private:
     int nextReceiptNumber() const;
     void ensureDefaultLedgers();
+    // Single owner of the register SELECT (sync + async readers share it).
+    static QString receiptListSql();
+    // Pure snapshot + validation shared by the sync and async save paths.
+    QVariantMap buildPayload() const;
+    QString validateForSave() const;
 
     int m_editVoucherId = 0;
     int m_receiptNo = 1;

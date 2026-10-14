@@ -133,6 +133,8 @@ ErpTheme::secondaryButtonStyle()
     new QShortcut(QKeySequence(Qt::ALT | Qt::Key_S), this, SLOT(onSaveClicked()));
     new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_S), this, SLOT(onSaveClicked()));
     new QShortcut(QKeySequence(Qt::Key_Escape), this, SIGNAL(backRequested()));
+    connect(&m_saveWatcher, &QFutureWatcher<bool>::finished,
+            this, &TaxChallanCreationWidget::onSaveFinished);
     auto* f2Shortcut = new QShortcut(QKeySequence(Qt::Key_F2), this);
     connect(f2Shortcut, &QShortcut::activated, this, [this]() {
         QDate cur = QDate::fromString(m_controller->challanDate(), "yyyy-MM-dd");
@@ -565,8 +567,18 @@ void TaxChallanCreationWidget::onFetchClicked()
 
 void TaxChallanCreationWidget::onSaveClicked()
 {
-    if (m_controller->saveChallan()) {
+    if (m_saving) return; // write flight already posted
+    m_saving = true;
+    m_saveWatcher.setFuture(m_controller->saveChallanAsync());
+}
+
+void TaxChallanCreationWidget::onSaveFinished() {
+    m_saving = false;
+    const bool ok = m_saveWatcher.future().resultCount() > 0 && m_saveWatcher.result();
+    if (ok) {
         emit challanSaved(0);
+    } else if (m_statusLabel) {
+        m_statusLabel->setText("Save failed — challan was not recorded. Fix validation errors and retry.");
     }
 }
 

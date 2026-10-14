@@ -6,6 +6,7 @@
 #include <QPushButton>
 #include <QTableWidget>
 #include <QLabel>
+#include <QFutureWatcher>
 #include "../models/tax_challan_controller.h"
 #include "account_search_box.h"
 
@@ -30,6 +31,7 @@ protected:
 private slots:
     void onFetchClicked();
     void onSaveClicked();
+    void onSaveFinished();
     void onTableItemChanged(QTableWidgetItem *item);
     void onSelectAllClicked();
     void onSelectNoneClicked();
@@ -54,6 +56,9 @@ private:
 
     QTableWidget *m_vouchersTable = nullptr;
     QLabel *m_tableSummaryLabel = nullptr;
+
+    QFutureWatcher<bool> m_saveWatcher;
+    bool m_saving = false;
 
     QLineEdit *m_basicTaxEdit = nullptr;
     QLineEdit *m_interestAmtEdit = nullptr;

@@ -6,6 +6,7 @@
 #include <QCheckBox>
 #include <QPushButton>
 #include <QLabel>
+#include <QFutureWatcher>
 #include "../models/tds_voucher_controller.h"
 #include "../services/print_export_controller.h"
 #include "account_search_box.h"
@@ -42,6 +43,8 @@ private slots:
     void onTdsTypeChanged(int index);
     void onPartySelected(const QString& partyName);
     void onRecalculateTax();
+    void onSaveFinished();
+    void onDeleteFinished();
 
 private:
     void setupUi();
@@ -91,6 +94,8 @@ private:
     KbdBadgeButton* m_deleteBtn = nullptr;
     KbdBadgeButton* m_cancelBtn = nullptr;
     QLabel* m_alterBadge = nullptr;
+    QFutureWatcher<bool> m_saveWatcher;
+    QFutureWatcher<bool> m_deleteWatcher;
 };
 
 } // namespace MahadevERP

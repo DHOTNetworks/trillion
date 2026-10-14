@@ -121,3 +121,63 @@ responsibility, no DDL, `[[nodiscard]]` throughout):
 
 Next: migrate write paths per voucher via `transact()` (TDS/TCS first —
 freshest code), then CI-grep `DatabaseManager` out of `src/widgets/`.
+
+## Write migration (2026-10-14, Mac rebuild required — not compile-verified here)
+
+All TDS/TCS-domain writes now post atomically on the worker; zero
+UI-thread `beginTransaction`/`executeNonQuery` writes remain in these
+widgets (only cheap indexed reads: MAX numbers, PK/pan lookups):
+
+- Pattern per voucher: connection-agnostic core (`save_*_in(DbTx&, payload)`)
+  + thin sync wrapper (legacy callers/tests untouched) + `*Async()` future
+  + controller `buildPayload()`/`validateForSave()` split (pure snapshot on
+  UI, postings on worker) + widget `QFutureWatcher` busy UX (buttons lock,
+  New guarded until the flight commits so numbers can't duplicate).
+- TDS voucher + list, TCS receipt + list, 194Q advance + list, challan
+  creation + register, Form-16A dialog + list.
+- Shared `DbTx::resolvePartyId` (canonical match order) + `lastInsertId()`
+  replace per-file copies; `DbService::refused<T>()` replaces 3 inline
+  validation-refusal promises.
+- Latent bugs fixed in passing: 194Q/TCS/challan hardcoded `fy_id=1` with
+  empty `fyLabel` (scalar drops the 2nd column — FY now properly resolved
+  in-txn); 194Q resolved its TDS ledger 3x (now once); TCS Row-2 grid
+  overlap noted earlier.
+- Worker hardening: `runQuery/Scalar/Exec` refuse on a dead handle instead
+  of touching it (post-stop race); `stop()` moves affinity home from inside
+  the worker thread (cross-thread `moveToThread` warns and no-ops —
+  that was the firm-switch hang); parent-less construction; 10 s start
+  timeout; `MAHADEV_SYNC_DB=1` escape hatch.
+- Deliberately untouched: integer rounds and int-cents display casts
+  (would change figures); `fetchUndepositedVouchers`/register/list READS
+  (next read-migration wave with the daybook pattern).
+
+## Read migration, TDS/TCS domain (2026-10-14)
+
+All five domain registers now scan on the worker (`QFutureWatcher` render,
+empty futures keep last-good rows — same as legacy failed-query behavior):
+
+- TDS/TCS/challan lists via model-owned shared SQL
+  (`TdsModel::registerSql`, `receiptListSql`, `challansSql` — single owner,
+  sync + async readers share it) exposed as controller `*Async()`
+  passthroughs; 194Q/Form-16A lists (SQL already inline) via
+  `DbService::query` directly. No SQL string exists twice anywhere.
+- Superseded flights auto-discard on `setFuture`, so debounced search and
+  showEvent reloads can't render out of order.
+
+## Full SQL audit (2026-10-14, 370 files) — what remains, ranked
+
+1. **Sale/purchase voucher writes** (`sales_model` 3, `purchase_model` 3,
+   `vouchers_model` 5 `beginTransaction` sites): same core/wrapper/async
+   pattern as TDS — next write wave.
+2. **Mandi/manufacturing writes** (jform/iform 2+2, milling 2, sauda 2,
+   transport reads): same pattern, per Doc 06/07 order.
+3. **Heavy statement reads on UI** (sale/purchase/stock registers, trial,
+   `fetchUndepositedVouchers`, ledger): daybook/list pattern.
+4. **Party-lookup copies** (`stock_items_model` file-static + 34 call sites,
+   `parties_model`, jform/sales/purchase `get_party_by_name`): converge on
+   `DbTx::resolvePartyId` (worker) + one UI-thread twin when masters migrate.
+5. **Hand-rolled UI writes**: `ledger_statement_widget` INSERT (Doc 01 §3 →
+   `VouchersModel`), `numbering_repair_dialog` renumber txn (interactive —
+   keep sync, it's modal and user-paced).
+6. Migrators/`migration/*` dead-DDL + `lastInsertedId` clusters: Doc 01/08
+   cleanup, untouched by this slice (one-shot import paths, own txns).

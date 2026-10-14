@@ -28,6 +28,11 @@ E2D5C8/F1E5DB/7F9DB9/4A1500/0000CC/D5F5D5/FF0000` all banned — CI-gated);
 indicators, 40px row-action cells, icon boxes); badges never lie (every
 printed shortcut works — Ctrl+P/Ctrl+E wired where promised); Esc preserves
 state, dashboard refreshes (Doc 10 §E contract).
+Dates are display-only everywhere (2026-10-14): `AccountingDateEdit` is
+read-only — free typing and Up/Down stepping removed; the F2 dialog
+(F2 key, calendar button, double-click) is the single editor across all
+~15 voucher/filter surfaces. Salary's raw `QDateEdit` replaced with it;
+milling's lying "Date (F2)" label given a real F2 binding.
 
 ## 2. Applied
 
@@ -74,6 +79,18 @@ state, dashboard refreshes (Doc 10 §E contract).
   work); TCS/challan/194Q/form16a entry screens are always-new (their
   registers delete). 194Q widget edit-mode delete left to its list on purpose
   (list owns the multi-table SQL — no second copy).
+
+## 7. Drill-down hardening (2026-10-14, Mac rebuild required)
+- `onLedgerAlterVoucherRequested` normalizes entry keys once (camelCase
+  aliases from snake_case DB rows), so daybook/ledger/register sources all
+  resolve through the same pending fields + full map. Daybook `id`
+  (transactions-leg id, never an invoice id) is renamed to `legId` at the
+  source in both alter and delete paths — it previously risked opening or
+  deleting the wrong invoice on id collision. Same hazard class noted (not
+  yet fixed) for ledger-statement entries.
+- Daybook drill logs `[DAYBOOK] kind/view/vch/type/trans` — if Enter ever
+  does nothing again, that line says whether the key, the classifier, or
+  the lookup is at fault.
 
 ## 5. Keyboard-truth batch (2026-10-14, Mac rebuild required)
 - 194Q advance save rewritten to the canonical schema (`fy_id`,

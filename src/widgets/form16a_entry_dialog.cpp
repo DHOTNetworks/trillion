@@ -1,4 +1,5 @@
 #include "form16a_entry_dialog.h"
+#include "../services/db_service.h"
 #include "kbd_badge_button.h"
 #include "erp_theme.h"
 #include "../database_manager.h"
@@ -63,6 +64,7 @@ setStyleSheet(
     dtRow->setSpacing(4);
     m_dateEdit = new QLineEdit(formWidget);
     m_dateEdit->setReadOnly(true);
+    m_dateEdit->setFocusPolicy(Qt::ClickFocus);
     m_dateEdit->setText(QDate::currentDate().toString("dd-MM-yyyy"));
     dtRow->addWidget(m_dateEdit);
     auto *btnDt = new QPushButton("\u2026", formWidget);
@@ -140,11 +142,11 @@ setStyleSheet(
 
     btnRow->addStretch(1);
 
-    auto *btnSave = new KbdBadgeButton("Save Certificate", "Ctrl+S", this);
-    btnSave->setPrimaryColor(ErpTheme::kGreen, ErpTheme::kGreenDark);
-    btnSave->setTextColor(ErpTheme::kPaper);
-    connect(btnSave, &QPushButton::clicked, this, &Form16AEntryDialog::onSaveClicked);
-    btnRow->addWidget(btnSave);
+    m_saveBtn = new KbdBadgeButton("Save Certificate", "Ctrl+S", this);
+    m_saveBtn->setPrimaryColor(ErpTheme::kGreen, ErpTheme::kGreenDark);
+    m_saveBtn->setTextColor(ErpTheme::kPaper);
+    connect(m_saveBtn, &QPushButton::clicked, this, &Form16AEntryDialog::onSaveClicked);
+    btnRow->addWidget(m_saveBtn);
 
     mainLayout->addLayout(btnRow);
 
@@ -161,7 +163,9 @@ setStyleSheet(
     connect(m_tdsAmtEdit, &QLineEdit::returnPressed, this, [this]() {
         if (m_remarksEdit) { m_remarksEdit->setFocus(); m_remarksEdit->selectAll(); }
     });
-    connect(m_remarksEdit, &QLineEdit::returnPressed, btnSave, [btnSave]() { btnSave->setFocus(); });
+    connect(m_remarksEdit, &QLineEdit::returnPressed, this, [this]() {
+        if (m_saveBtn) m_saveBtn->setFocus();
+    });
     QWidget::setTabOrder(m_certNoEdit, m_partySearch);
     QWidget::setTabOrder(m_partySearch, m_panEdit);
     QWidget::setTabOrder(m_panEdit, m_quarterCombo);
@@ -169,8 +173,9 @@ setStyleSheet(
     QWidget::setTabOrder(m_grossAmtEdit, m_tdsAmtEdit);
     QWidget::setTabOrder(m_tdsAmtEdit, m_matchedCombo);
     QWidget::setTabOrder(m_matchedCombo, m_remarksEdit);
-    QWidget::setTabOrder(m_remarksEdit, btnSave);
+    QWidget::setTabOrder(m_remarksEdit, m_saveBtn);
     new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_S), this, SLOT(onSaveClicked()));
+    connect(&m_saveWatcher, &QFutureWatcher<bool>::finished, this, &Form16AEntryDialog::onSaveFinished);
     if (m_certNoEdit) m_certNoEdit->setFocus();
 }
 
@@ -198,31 +203,55 @@ void Form16AEntryDialog::onSaveClicked()
         markError("TDS Deducted Amount must be greater than zero.", m_tdsAmtEdit);
         return;
     }
-
-    DatabaseManager &db = DatabaseManager::instance();
-    int fyId = 1;
-    QVariant fyRow = db.executeScalar("SELECT id FROM financial_years WHERE is_active = 1 LIMIT 1;");
-    if (fyRow.isValid() && !fyRow.isNull()) fyId = fyRow.toInt();
+    if (m_saving) return;
 
     QDate dt = QDate::fromString(m_dateEdit->text(), "dd-MM-yyyy");
-    QString dtIso = dt.isValid() ? dt.toString("yyyy-MM-dd") : QDate::currentDate().toString("yyyy-MM-dd");
+    const QString dtIso = dt.isValid() ? dt.toString("yyyy-MM-dd") : QDate::currentDate().toString("yyyy-MM-dd");
 
-    QString qtr = m_quarterCombo->currentText().left(2);
-    int matched = m_matchedCombo->currentIndex() == 0 ? 1 : 0;
+    // Snapshot for the worker (no widgets past this line).
+    const QString cCertNo = certNo;
+    const int cPartyId = partyId;
+    const QString cPan = m_panEdit->text().trimmed();
+    const QString cQtr = m_quarterCombo->currentText().left(2);
+    const double cGross = grossAmt, cTds = tdsAmt;
+    const int cMatched = m_matchedCombo->currentIndex() == 0 ? 1 : 0;
+    const QString cRemarks = m_remarksEdit->text().trimmed();
 
-    int tdsRecId = db.executeScalar("SELECT id FROM parties WHERE name = 'TDS Receivable A/c' LIMIT 1;").toInt();
+    m_saving = true;
+    if (m_saveBtn) m_saveBtn->setEnabled(false);
+    m_statusLabel->setText("Saving certificate...");
+    m_statusLabel->setStyleSheet(QString("color: %1; font-weight: 600;").arg(ErpTheme::kMuted.name()));
+    m_saveWatcher.setFuture(MahadevERP::DbService::instance().transact(
+        [=](MahadevERP::DbTx& tx) {
+            QVariantList fyRows = tx.query(
+                "SELECT id FROM financial_years WHERE is_active = 1 LIMIT 1;", {});
+            if (fyRows.isEmpty()) {
+                fyRows = tx.query(
+                    "SELECT id FROM financial_years ORDER BY id DESC LIMIT 1;", {});
+            }
+            if (fyRows.isEmpty()) return false;
+            const int fyId = fyRows.first().toMap().value("id", 1).toInt();
+            const int tdsRecId = tx.scalar(
+                "SELECT id FROM parties WHERE name = 'TDS Receivable A/c' LIMIT 1;").toInt();
+            return tx.exec(
+                "INSERT INTO received_forms_16a ("
+                "fy_id, certificate_no, receipt_date, party_id, pan_of_deductor, quarter, "
+                "gross_amount, tds_amount, tds_receivable_ledger_id, matched_with_26as, remarks"
+                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+                {fyId, cCertNo, dtIso, cPartyId, cPan, cQtr,
+                 cGross, cTds, tdsRecId > 0 ? tdsRecId : QVariant(), cMatched, cRemarks});
+        }));
+}
 
-    db.executeNonQuery(
-        "INSERT INTO received_forms_16a ("
-        "fy_id, certificate_no, receipt_date, party_id, pan_of_deductor, quarter, "
-        "gross_amount, tds_amount, tds_receivable_ledger_id, matched_with_26as, remarks"
-        ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-        {
-            fyId, certNo, dtIso, partyId, m_panEdit->text().trimmed(), qtr,
-            grossAmt, tdsAmt, tdsRecId > 0 ? tdsRecId : QVariant(), matched, m_remarksEdit->text().trimmed()
-        }
-    );
-
+void Form16AEntryDialog::onSaveFinished() {
+    m_saving = false;
+    if (m_saveBtn) m_saveBtn->setEnabled(true);
+    const bool ok = m_saveWatcher.future().resultCount() > 0 && m_saveWatcher.result();
+    if (!ok) {
+        m_statusLabel->setText("Save failed — certificate was not recorded.");
+        m_statusLabel->setStyleSheet(QString("color: %1; font-weight: 600;").arg(ErpTheme::kRed.name()));
+        return;
+    }
     emit certificateSaved();
     accept();
 }

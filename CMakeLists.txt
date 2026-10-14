@@ -880,6 +880,8 @@ set(CLI_SOURCES
     src/engine/accounting_engine.h
     src/services/accounting_date_service.h
     src/services/accounting_date_service.cpp
+    src/services/financial_math_service.h
+    src/services/financial_math_service.cpp
     src/models/account_classifier.h
     src/models/account_classifier.cpp
     src/engine/data_preprocessor.h
@@ -926,6 +928,8 @@ add_executable(TestFirmEnter
     tests/test_firm_enter.cpp
     src/widgets/account_search_box.cpp
     src/widgets/account_search_box.h
+    src/widgets/item_search_delegate.cpp
+    src/widgets/item_search_delegate.h
     src/widgets/voucher_common.h
     src/engine/ledger_pipeline.cpp
     src/engine/group_hierarchy_pipeline.cpp

@@ -5,7 +5,10 @@
 #include <QComboBox>
 #include <QPushButton>
 #include <QLabel>
+#include <QFutureWatcher>
 #include "account_search_box.h"
+
+class KbdBadgeButton;
 
 namespace MahadevERP {
 
@@ -20,6 +23,7 @@ signals:
 
 private slots:
     void onSaveClicked();
+    void onSaveFinished();
 
 private:
     void setupUi();
@@ -34,6 +38,9 @@ private:
     QComboBox *m_matchedCombo = nullptr;
     QLineEdit *m_remarksEdit = nullptr;
     QLabel *m_statusLabel = nullptr;
+    KbdBadgeButton *m_saveBtn = nullptr;
+    QFutureWatcher<bool> m_saveWatcher;
+    bool m_saving = false;
 };
 
 } // namespace MahadevERP

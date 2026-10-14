@@ -1115,10 +1115,12 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
         if (m_salesVoucherWidget) {
             m_stackedWidget->setCurrentWidget(m_salesVoucherWidget);
             if (!pendingEntry.isEmpty()) {
-                m_salesVoucherWidget->loadInvoiceForEditing(QVariant::fromValue(pendingEntry), pendingDate);
+                const bool loaded = m_salesVoucherWidget->loadInvoiceForEditing(QVariant::fromValue(pendingEntry), pendingDate, true);
+                qDebug() << "[NAV] sale alteration loaded:" << loaded << "inv:" << pendingInv << "vch:" << pendingVNo;
             } else if (!pendingInv.isEmpty() || !pendingVNo.isEmpty() || pendingId > 0) {
                 QVariant target = !pendingInv.isEmpty() ? QVariant(pendingInv) : (!pendingVNo.isEmpty() ? QVariant(pendingVNo) : QVariant(pendingId));
-                m_salesVoucherWidget->loadInvoiceForEditing(target, pendingDate);
+                const bool loaded = m_salesVoucherWidget->loadInvoiceForEditing(target, pendingDate, true);
+                qDebug() << "[NAV] sale alteration loaded:" << loaded << "inv:" << pendingInv << "vch:" << pendingVNo;
             } else {
                 m_salesVoucherWidget->resetForm();
                 m_salesVoucherWidget->openDateDialog(true);
@@ -1128,10 +1130,12 @@ void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
         if (m_purchaseVoucherWidget) {
             m_stackedWidget->setCurrentWidget(m_purchaseVoucherWidget);
             if (!pendingEntry.isEmpty()) {
-                m_purchaseVoucherWidget->loadInvoiceForEditing(QVariant::fromValue(pendingEntry), pendingDate);
+                const bool loaded = m_purchaseVoucherWidget->loadInvoiceForEditing(QVariant::fromValue(pendingEntry), pendingDate, true);
+                qDebug() << "[NAV] purchase alteration loaded:" << loaded << "inv:" << pendingInv << "vch:" << pendingVNo;
             } else if (!pendingInv.isEmpty() || !pendingVNo.isEmpty() || pendingId > 0) {
                 QVariant target = !pendingInv.isEmpty() ? QVariant(pendingInv) : (!pendingVNo.isEmpty() ? QVariant(pendingVNo) : QVariant(pendingId));
-                m_purchaseVoucherWidget->loadInvoiceForEditing(target, pendingDate);
+                const bool loaded = m_purchaseVoucherWidget->loadInvoiceForEditing(target, pendingDate, true);
+                qDebug() << "[NAV] purchase alteration loaded:" << loaded << "inv:" << pendingInv << "vch:" << pendingVNo;
             } else {
                 m_purchaseVoucherWidget->resetForm();
                 m_purchaseVoucherWidget->openDateDialog(true);
@@ -1744,11 +1748,24 @@ void MainWindow::onLedgerAlterVoucherRequested(int targetViewIndex, const QVaria
         m_lastViewedStatementCrIndex = m_ledgerWidget->lastCrIndex();
     }
     m_pendingEditEntry = entry;  // Store FULL entry map for FY-scoped lookup
-    m_pendingEditInvoiceNo = entry.value("invoiceNo", entry.value("voucherNo", "")).toString();
-    m_pendingEditVoucherNo = entry.value("voucherNo", "").toString();
+    // Normalize once: daybook/ledger rows carry snake_case DB keys while
+    // registers carry camelCase — every downstream consumer (pending fields
+    // AND the full map) must work regardless of source.
+    auto alias = [&entry](const char* camel, const char* snake, const char* alt = nullptr) {
+        QString v = entry.value(camel).toString();
+        if (v.isEmpty()) v = entry.value(snake).toString();
+        if (v.isEmpty() && alt) v = entry.value(alt).toString();
+        return v;
+    };
+    m_pendingEditEntry["invoiceNo"] = alias("invoiceNo", "invoice_no", "voucher_no");
+    m_pendingEditEntry["voucherNo"] = alias("voucherNo", "voucher_no");
+    m_pendingEditEntry["vIso"] = alias("vIso", "voucher_date", "date");
+    m_pendingEditEntry["financialYear"] = alias("financialYear", "financial_year");
+    m_pendingEditInvoiceNo = m_pendingEditEntry.value("invoiceNo").toString();
+    m_pendingEditVoucherNo = m_pendingEditEntry.value("voucherNo").toString();
     m_pendingEditVoucherId = entry.value("id", 0).toInt();
-    m_pendingEditVoucherDate = entry.value("vIso", entry.value("date", "")).toString();
-    m_pendingEditFinancialYear = entry.value("financialYear", entry.value("financial_year", "")).toString();
+    m_pendingEditVoucherDate = m_pendingEditEntry.value("vIso").toString();
+    m_pendingEditFinancialYear = m_pendingEditEntry.value("financialYear").toString();
     if (entry.contains("type")) {
         m_targetChequeMode = entry.value("type").toString();
     }

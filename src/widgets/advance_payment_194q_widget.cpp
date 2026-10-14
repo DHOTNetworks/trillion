@@ -1,5 +1,6 @@
 #include "advance_payment_194q_widget.h"
 #include "kbd_badge_button.h"
+#include "../services/db_service.h"
 #include "erp_theme.h"
 #include "voucher_date_dialog.h"
 #include "../database_manager.h"
@@ -55,6 +56,7 @@ void AdvancePayment194QWidget::setupUi()
 
     new QShortcut(QKeySequence(Qt::ALT | Qt::Key_S), this, SLOT(onSaveClicked()));
     new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_S), this, SLOT(onSaveClicked()));
+    connect(&m_saveWatcher, &QFutureWatcher<bool>::finished, this, &AdvancePayment194QWidget::onSaveFinished);
     new QShortcut(QKeySequence(Qt::ALT | Qt::Key_N), this, SLOT(onNewClicked()));
     new QShortcut(QKeySequence("Escape"), this, SIGNAL(backRequested()));
 }
@@ -123,6 +125,7 @@ QWidget *AdvancePayment194QWidget::createFormCard()
     auto *dtRow = new QHBoxLayout();
     m_voucherDateEdit = new QLineEdit(card);
     m_voucherDateEdit->setReadOnly(true);
+m_voucherDateEdit->setFocusPolicy(Qt::ClickFocus);
     dtRow->addWidget(m_voucherDateEdit);
     auto *btnDt = new QPushButton("\u2026", card);
     btnDt->setMinimumWidth(28);
@@ -204,6 +207,7 @@ QWidget *AdvancePayment194QWidget::createFormCard()
     auto *cqRow = new QHBoxLayout();
     m_chequeDateEdit = new QLineEdit(card);
     m_chequeDateEdit->setReadOnly(true);
+m_chequeDateEdit->setFocusPolicy(Qt::ClickFocus);
     cqRow->addWidget(m_chequeDateEdit);
     auto *btnCq = new QPushButton("\u2026", card);
     btnCq->setMinimumWidth(28);
@@ -228,6 +232,7 @@ QWidget *AdvancePayment194QWidget::createFormCard()
 
 void AdvancePayment194QWidget::onNewClicked()
 {
+    if (m_saving) return; // write flight pending: voucher_no not committed yet
     m_editVoucherId = 0;
     if (m_titleLabel) m_titleLabel->setText("Advance Payment Voucher U/S 194-Q (Creation)");
     if (m_alterBadge) m_alterBadge->setVisible(false);
@@ -256,6 +261,7 @@ void AdvancePayment194QWidget::onNewClicked()
 
 void AdvancePayment194QWidget::onSaveClicked()
 {
+    if (m_saving) return; // write flight already posted
     int vchNo = m_voucherNoEdit->text().toInt();
     if (vchNo <= 0) {
         QMessageBox::warning(this, "Validation Error", "Please provide a valid Voucher Number.");
@@ -292,126 +298,101 @@ void AdvancePayment194QWidget::onSaveClicked()
 
     bool postBooks = (m_postInBooksCombo->currentIndex() == 0);
 
-    DatabaseManager &db = DatabaseManager::instance();
+    // Snapshot everything the worker needs (no widgets past this line).
+    const int cVchNo = vchNo;
+    const int cPartyId = partyId;
+    const int cBankId = bankId;
+    const double cGross = gross, cRate = rate, cTax = tax, cNet = net;
+    const QString cVDate = vDateStr, cCqDate = cqDateStr;
+    const bool cPostBooks = postBooks;
+    const QString cChequeNo = m_chequeNoEdit->text().trimmed();
+    const QString cNarration = m_narrationEdit->text().trimmed();
 
-    // Resolve FY + TDS payable ledger up front (canonical schema requires
-    // fy_id + tds_payable_ledger_id NOT NULL on every row).
-    QVariant fyRow = db.executeScalar("SELECT id FROM financial_years WHERE is_active = 1 LIMIT 1;");
-    if (!fyRow.isValid() || fyRow.isNull())
-        fyRow = db.executeScalar("SELECT id FROM financial_years ORDER BY id DESC LIMIT 1;");
-    int fyId = (fyRow.isValid() && !fyRow.isNull()) ? fyRow.toInt() : 1;
-
-    int tdsLedgerId = 0;
-    if (tax > 0.0) {
-        QVariant tdsAcc = db.executeScalar("SELECT id FROM parties WHERE name = 'TDS u/s 194-Q Payable A/c' LIMIT 1;");
-        if (tdsAcc.isValid() && !tdsAcc.isNull()) {
-            tdsLedgerId = tdsAcc.toInt();
-        } else {
-            db.executeNonQuery(
-                "INSERT INTO parties (name, group_name, party_type) VALUES ('TDS u/s 194-Q Payable A/c', 'Duties & Taxes (GST)', 'Tax');"
-            );
-            tdsLedgerId = db.executeScalar("SELECT last_insert_rowid();").toInt();
-        }
-    }
-    if (tdsLedgerId <= 0) {
-        // Zero-tax advances still need a valid ledger id for the NOT NULL
-        // column — resolve-or-create the canonical ledger regardless.
-        QVariant tdsAcc = db.executeScalar("SELECT id FROM parties WHERE name = 'TDS u/s 194-Q Payable A/c' LIMIT 1;");
-        if (tdsAcc.isValid() && !tdsAcc.isNull()) {
-            tdsLedgerId = tdsAcc.toInt();
-        } else {
-            db.executeNonQuery(
-                "INSERT INTO parties (name, group_name, party_type) VALUES ('TDS u/s 194-Q Payable A/c', 'Duties & Taxes (GST)', 'Tax');"
-            );
-            tdsLedgerId = db.executeScalar("SELECT last_insert_rowid();").toInt();
-        }
-    }
-
-    db.beginTransaction();
-
-    int pId = 0;
-    if (postBooks) {
-        QVariant fyVal = db.executeScalar("SELECT id, year_name FROM financial_years WHERE is_active = 1 LIMIT 1;");
-        if (!fyVal.isValid()) fyVal = db.executeScalar("SELECT id, year_name FROM financial_years ORDER BY id DESC LIMIT 1;");
-        int fyId = fyVal.isValid() ? fyVal.toMap().value("id", 1).toInt() : 1;
-        QString fyLabel = fyVal.isValid() ? fyVal.toMap().value("year_name", "").toString() : "";
-
-        QString supplierName = db.executeScalar("SELECT name FROM parties WHERE id = ?;", {partyId}).toString();
-        QString bankName = db.executeScalar("SELECT name FROM parties WHERE id = ?;", {bankId}).toString();
-        QString vchFormatted = QString("ADV-%1").arg(vchNo, 4, 10, QChar('0'));
-        QString vchNarration = m_narrationEdit->text().trimmed().isEmpty()
-            ? QString("Advance Payment u/s 194-Q to %1").arg(supplierName)
-            : m_narrationEdit->text().trimmed();
-
-        // Resolve TDS 194-Q Payable Account
-        int tdsId = 0;
-        if (tax > 0.0) {
-            QVariant tdsAcc = db.executeScalar("SELECT id FROM parties WHERE name = 'TDS u/s 194-Q Payable A/c' LIMIT 1;");
-            if (tdsAcc.isValid() && !tdsAcc.isNull()) {
-                tdsId = tdsAcc.toInt();
-            } else {
-                db.executeNonQuery(
-                    "INSERT INTO parties (name, group_name, party_type) VALUES ('TDS u/s 194-Q Payable A/c', 'Duties & Taxes (GST)', 'Tax');"
-                );
-                tdsId = db.executeScalar("SELECT last_insert_rowid();").toInt();
+    m_saving = true;
+    m_pendingVoucherNo = cVchNo;
+    m_statusLabel->setText("Saving voucher on background worker...");
+    m_saveWatcher.setFuture(MahadevERP::DbService::instance().transact(
+        [=](MahadevERP::DbTx& tx) {
+            // FY, properly resolved (legacy code hardcoded fy_id=1 and an
+            // empty label here because executeScalar drops the 2nd column).
+            QVariantList fyRows = tx.query(
+                "SELECT id, year_name FROM financial_years WHERE is_active = 1 LIMIT 1;", {});
+            if (fyRows.isEmpty()) {
+                fyRows = tx.query(
+                    "SELECT id, year_name FROM financial_years ORDER BY id DESC LIMIT 1;", {});
             }
-        }
+            if (fyRows.isEmpty()) return false;
+            const int fyId = fyRows.first().toMap().value("id", 1).toInt();
+            const QString fyLabel = fyRows.first().toMap().value("year_name").toString();
 
-        bool okH = db.executeNonQuery(
-            "INSERT INTO vouchers (fy_id, financial_year, voucher_no, voucher_date, voucher_type, legacy_type, party_id, ledger_id, party_name, account_type, amount, narration) "
-            "VALUES (?, ?, ?, ?, 'PAYMENT', 'BANK', ?, ?, ?, 'Dr', ?, ?);",
-            {fyId, fyLabel, vchFormatted, vDateStr, partyId, partyId, supplierName, gross, vchNarration}
-        );
-        if (!okH) {
-            db.rollback();
-            QMessageBox::critical(this, "Database Error", "Failed to create payment voucher header.");
-            return;
-        }
+            // Single canonical TDS ledger (legacy resolved it 3x over).
+            const int tdsLedgerId = tx.resolvePartyId(
+                0, "TDS u/s 194-Q Payable A/c", "Duties & Taxes (GST)", "Tax");
+            if (tdsLedgerId <= 0) return false;
 
-        pId = db.lastInsertedId();
+            int pId = 0;
+            if (cPostBooks) {
+                const QString supplierName = tx.scalar(
+                    "SELECT name FROM parties WHERE id = ?;", {cPartyId}).toString();
+                const QString bankName = tx.scalar(
+                    "SELECT name FROM parties WHERE id = ?;", {cBankId}).toString();
+                const QString vchFormatted = QString("ADV-%1").arg(cVchNo, 4, 10, QChar('0'));
+                const QString vchNarration = cNarration.isEmpty()
+                    ? QString("Advance Payment u/s 194-Q to %1").arg(supplierName)
+                    : cNarration;
 
-        int rowNo = 1;
-        // 1. Debit Supplier with Gross Advance
-        db.executeNonQuery(
-            "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, account_code, party_id, party_name, opposing_account, dr_cr, amount, narration, taxable_amount, tds_amount, tds_rate, row_no) "
-            "VALUES (?, ?, ?, ?, 'PAYMENT', 'BANK', ?, ?, ?, ?, 'Dr', ?, ?, ?, ?, ?, ?);",
-            {fyId, fyLabel, vchFormatted, vDateStr, partyId, partyId, supplierName, bankName, gross, vchNarration, gross, tax, rate, rowNo++}
-        );
+                if (!tx.exec(
+                        "INSERT INTO vouchers (fy_id, financial_year, voucher_no, voucher_date, voucher_type, legacy_type, party_id, ledger_id, party_name, account_type, amount, narration) "
+                        "VALUES (?, ?, ?, ?, 'PAYMENT', 'BANK', ?, ?, ?, 'Dr', ?, ?);",
+                        {fyId, fyLabel, vchFormatted, cVDate, cPartyId, cPartyId, supplierName, cGross, vchNarration})) {
+                    return false;
+                }
+                pId = static_cast<int>(tx.lastInsertId());
 
-        // 2. Credit TDS 194-Q Payable A/c
-        if (tax > 0.0 && tdsId > 0) {
-            db.executeNonQuery(
-                "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, account_code, party_id, party_name, opposing_account, dr_cr, amount, narration, taxable_amount, tds_amount, tds_rate, row_no) "
-                "VALUES (?, ?, ?, ?, 'PAYMENT', 'BANK', ?, ?, ?, ?, 'Cr', ?, ?, ?, ?, ?, ?);",
-                {fyId, fyLabel, vchFormatted, vDateStr, tdsId, tdsId, "TDS u/s 194-Q Payable A/c", supplierName, tax, "TDS u/s 194-Q Withheld", gross, tax, rate, rowNo++}
-            );
-        }
+                int rowNo = 1;
+                // 1. Debit Supplier with Gross Advance
+                tx.execUnchecked(
+                    "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, account_code, party_id, party_name, opposing_account, dr_cr, amount, narration, taxable_amount, tds_amount, tds_rate, row_no) "
+                    "VALUES (?, ?, ?, ?, 'PAYMENT', 'BANK', ?, ?, ?, ?, 'Dr', ?, ?, ?, ?, ?, ?);",
+                    {fyId, fyLabel, vchFormatted, cVDate, cPartyId, cPartyId, supplierName, bankName, cGross, vchNarration, cGross, cTax, cRate, rowNo++});
 
-        // 3. Credit Bank A/c with Net Payment
-        db.executeNonQuery(
-            "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, account_code, party_id, party_name, opposing_account, dr_cr, amount, narration, taxable_amount, tds_amount, tds_rate, row_no) "
-            "VALUES (?, ?, ?, ?, 'PAYMENT', 'BANK', ?, ?, ?, ?, 'Cr', ?, ?, ?, 0, 0, ?);",
-            {fyId, fyLabel, vchFormatted, vDateStr, bankId, bankId, bankName, supplierName, net, vchNarration, gross, rowNo++}
-        );
-    }
+                // 2. Credit TDS 194-Q Payable A/c
+                if (cTax > 0.0) {
+                    tx.execUnchecked(
+                        "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, account_code, party_id, party_name, opposing_account, dr_cr, amount, narration, taxable_amount, tds_amount, tds_rate, row_no) "
+                        "VALUES (?, ?, ?, ?, 'PAYMENT', 'BANK', ?, ?, ?, ?, 'Cr', ?, ?, ?, ?, ?, ?);",
+                        {fyId, fyLabel, vchFormatted, cVDate, tdsLedgerId, tdsLedgerId, "TDS u/s 194-Q Payable A/c", supplierName, cTax, "TDS u/s 194-Q Withheld", cGross, cTax, cRate, rowNo++});
+                }
 
-    bool okAdv = db.executeNonQuery(
-        "INSERT INTO advance_payments_194q (fy_id, voucher_no, voucher_date, supplier_id, bank_ledger_id, gross_advance_amount, "
-        "tds_rate, tds_amount, net_payment_amount, tds_payable_ledger_id, cheque_no, cheque_date, post_in_books, voucher_id, narration) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-        {fyId, vchNo, vDateStr, partyId, bankId, gross, rate, tax, net, tdsLedgerId, m_chequeNoEdit->text().trimmed(),
-         cqDateStr, postBooks ? 1 : 0, pId > 0 ? pId : QVariant(), m_narrationEdit->text().trimmed()}
-    );
+                // 3. Credit Bank A/c with Net Payment
+                tx.execUnchecked(
+                    "INSERT INTO transactions (fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, account_code, party_id, party_name, opposing_account, dr_cr, amount, narration, taxable_amount, tds_amount, tds_rate, row_no) "
+                    "VALUES (?, ?, ?, ?, 'PAYMENT', 'BANK', ?, ?, ?, ?, 'Cr', ?, ?, ?, 0, 0, ?);",
+                    {fyId, fyLabel, vchFormatted, cVDate, cBankId, cBankId, bankName, supplierName, cNet, vchNarration, cGross, rowNo++});
+            }
 
-    if (!okAdv) {
-        db.rollback();
+            return tx.exec(
+                "INSERT INTO advance_payments_194q (fy_id, voucher_no, voucher_date, supplier_id, bank_ledger_id, gross_advance_amount, "
+                "tds_rate, tds_amount, net_payment_amount, tds_payable_ledger_id, cheque_no, cheque_date, post_in_books, voucher_id, narration) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+                {fyId, cVchNo, cVDate, cPartyId, cBankId, cGross, cRate, cTax, cNet, tdsLedgerId, cChequeNo,
+                 cCqDate, cPostBooks ? 1 : 0, pId > 0 ? pId : QVariant(), cNarration});
+        }));
+}
+
+void AdvancePayment194QWidget::onSaveFinished() {
+    m_saving = false;
+    const bool ok = m_saveWatcher.future().resultCount() > 0 && m_saveWatcher.result();
+    if (ok) {
+        const int vNo = m_pendingVoucherNo;
+        m_pendingVoucherNo = 0;
+        m_statusLabel->clear();
+        emit voucherSaved(vNo);
+        onNewClicked();
+    } else {
+        m_statusLabel->setText("Save failed — voucher was not recorded.");
         QMessageBox::critical(this, "Database Error", "Failed to record Advance Payment 194-Q.");
-        return;
     }
-
-    db.commit();
-    emit voucherSaved(vchNo);
-    onNewClicked();
 }
 
 void AdvancePayment194QWidget::recalculate()

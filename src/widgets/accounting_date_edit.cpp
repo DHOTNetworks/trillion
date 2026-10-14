@@ -44,6 +44,15 @@ static QIcon createCalendarIcon() {
 AccountingDateEdit::AccountingDateEdit(QWidget* parent)
     : QLineEdit(parent)
 {
+    // Strictly display-only: the date changes ONLY through the F2 dialog
+    // (F2 key, calendar button, double-click). Free typing and Up/Down
+    // stepping are disabled — they bypassed FY validation and stole focus
+    // from the dialog flow.
+    setReadOnly(true);
+    // Click-to-focus only: Tab/Backtab traversal must never land here.
+    // Manual edits happen via click-then-F2; alteration opens pop the
+    // dialog explicitly instead. Programmatic setFocus() still works.
+    setFocusPolicy(Qt::ClickFocus);
     setPlaceholderText("DD-MM-YYYY");
     m_lastDate = QDate::currentDate();
     setText(m_lastDate.toString("dd-MM-yyyy"));
@@ -161,23 +170,9 @@ void AccountingDateEdit::keyPressEvent(QKeyEvent* event) {
         openDateDialog();
         event->accept();
         return;
-    } else if (event->key() == Qt::Key_Up) {
-        QDate d = date();
-        if (d.isValid()) {
-            setDate(d.addDays(1));
-            selectAll();
-            event->accept();
-            return;
-        }
-    } else if (event->key() == Qt::Key_Down) {
-        QDate d = date();
-        if (d.isValid()) {
-            setDate(d.addDays(-1));
-            selectAll();
-            event->accept();
-            return;
-        }
     }
+    // No Up/Down day-stepping, no typing (read-only): the F2 dialog is the
+    // single editor. Other keys fall through for navigation (Tab/Esc/etc.).
     QLineEdit::keyPressEvent(event);
 }
 

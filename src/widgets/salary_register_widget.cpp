@@ -158,9 +158,7 @@ void SalaryRegisterWidget::setupUi() {
 
     // Voucher Posting Date
     filterLayout->addWidget(new QLabel("Voucher Date:", filterCard));
-    m_voucherDateEdit = new QDateEdit(filterCard);
-    m_voucherDateEdit->setCalendarPopup(true);
-    m_voucherDateEdit->setDisplayFormat("dd/MM/yyyy");
+    m_voucherDateEdit = new AccountingDateEdit(filterCard);
     filterLayout->addWidget(m_voucherDateEdit);
 
     // Status Filter

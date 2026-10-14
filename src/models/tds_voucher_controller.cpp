@@ -4,6 +4,7 @@
 #include "financial_years_model.h"
 #include "../services/accounting_date_service.h"
 #include "../services/financial_math_service.h"
+#include "../services/db_service.h"
 #include <cmath>
 
 TdsVoucherController::TdsVoucherController(QObject *parent)
@@ -272,49 +273,28 @@ bool TdsVoucherController::loadVoucher(int voucherId) {
     return true;
 }
 
-bool TdsVoucherController::saveVoucher() {
-    m_statusMessage.clear();
-    m_isError = false;
-
+QString TdsVoucherController::validateForSave(QString* fyNameOut) const {
     if (m_selectedPartyName.isEmpty()) {
-        m_statusMessage = "Please select a Deductee / Party Ledger!";
-        m_isError = true;
-        emit statusChanged();
-        return false;
+        return "Please select a Deductee / Party Ledger!";
     }
-
     if (m_incomeAmount <= 0.001) {
-        m_statusMessage = "Please enter a valid Income Amount greater than 0!";
-        m_isError = true;
-        emit statusChanged();
-        return false;
+        return "Please enter a valid Income Amount greater than 0!";
     }
-
     FinancialYearsModel fyModel;
     auto activeFy = fyModel.get_active_year();
     int fyStartYear = QDate::fromString(activeFy.value("start_date").toString(), "yyyy-MM-dd").year();
     if (fyStartYear <= 0) fyStartYear = 2026;
-
     if (!AccountingDateService::instance().validateDateInFy(m_voucherDate, fyStartYear)) {
-        m_statusMessage = "Voucher Date is outside the active Financial Year.";
-        m_isError = true;
-        emit statusChanged();
-        return false;
+        return "Voucher Date is outside the active Financial Year.";
     }
+    if (fyNameOut) *fyNameOut = activeFy.value("year_name").toString();
+    return "";
+}
 
-    PartiesModel pModel;
-    int expId = 0;
-    if (!m_expLedgerName.isEmpty()) {
-        auto expP = pModel.get_party_by_name(m_expLedgerName);
-        expId = expP.value("id", 0).toInt();
-    }
-
-    int tdsId = 0;
-    if (!m_tdsLedgerName.isEmpty()) {
-        auto tdsP = pModel.get_party_by_name(m_tdsLedgerName);
-        tdsId = tdsP.value("id", 0).toInt();
-    }
-
+// Pure snapshot: member reads only, zero DB. Ledger ids resolve-or-create
+// inside the write transaction (model core), so both sync and async paths
+// share byte-identical postings.
+QVariantMap TdsVoucherController::buildPayload(const QString& fyName) const {
     QVariantMap payload;
     payload["id"] = m_editVoucherId;
     payload["voucher_no"] = m_voucherNo;
@@ -339,13 +319,29 @@ bool TdsVoucherController::saveVoucher() {
     payload["total_tax_amount"] = m_totalTaxAmount;
     payload["net_amount"] = m_netAmount;
     payload["non_deduction_reason"] = m_nonDeductionReason.trimmed();
-    payload["exp_ledger_id"] = expId;
+    payload["exp_ledger_id"] = 0; // resolved in-txn (was a pre-read here)
     payload["exp_ledger_name"] = m_expLedgerName;
-    payload["tds_ledger_id"] = tdsId;
+    payload["tds_ledger_id"] = 0; // resolved in-txn (was a pre-read here)
     payload["tds_ledger_name"] = m_tdsLedgerName;
+    payload["fy_name"] = fyName;
+    return payload;
+}
+
+bool TdsVoucherController::saveVoucher() {
+    m_statusMessage.clear();
+    m_isError = false;
+
+    QString fyName;
+    const QString err = validateForSave(&fyName);
+    if (!err.isEmpty()) {
+        m_statusMessage = err;
+        m_isError = true;
+        emit statusChanged();
+        return false;
+    }
 
     TdsModel tModel;
-    bool ok = tModel.save_tds_voucher(payload);
+    bool ok = tModel.save_tds_voucher(buildPayload(fyName));
 
     if (ok) {
         m_statusMessage = QString("TDS Voucher #%1 saved & posted successfully!").arg(m_voucherNo);
@@ -362,9 +358,30 @@ bool TdsVoucherController::saveVoucher() {
     }
 }
 
+// Worker-thread save: validate + snapshot on the UI thread, postings on the
+// worker. Touches no members after posting (no races); the widget reports.
+QFuture<bool> TdsVoucherController::saveVoucherAsync() {
+    QString fyName;
+    if (!validateForSave(&fyName).isEmpty()) {
+        return MahadevERP::DbService::refused<bool>();
+    }
+    return TdsModel::save_tds_voucher_async(buildPayload(fyName));
+}
+
+QFuture<bool> TdsVoucherController::deleteVoucherAsync(int voucherId) {
+    if (voucherId <= 0) {
+        return MahadevERP::DbService::refused<bool>();
+    }
+    return TdsModel::delete_tds_voucher_async(voucherId);
+}
+
 QVariantList TdsVoucherController::getTdsVouchersList() const {
     TdsModel tModel;
     return tModel.get_tds_register();
+}
+
+QFuture<QVariantList> TdsVoucherController::getTdsVouchersListAsync() const {
+    return TdsModel::get_tds_register_async();
 }
 
 bool TdsVoucherController::deleteVoucher(int voucherId) {

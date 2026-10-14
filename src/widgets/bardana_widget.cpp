@@ -480,10 +480,11 @@ void BardanaWidget::loadDynamicGodowns() {
     m_godownCombo->clear();
 
     QStringList godowns;
+    // NOTE: vouchers carries no godown column — bardana_transactions is the
+    // only source (the old UNION leg against vouchers failed prepare and
+    // blanked the whole combo on every load).
     QVariantList rows = DatabaseManager::instance().executeQuery(
         "SELECT DISTINCT godown_name FROM bardana_transactions WHERE godown_name IS NOT NULL AND godown_name != '' "
-        "UNION "
-        "SELECT DISTINCT godown FROM vouchers WHERE godown IS NOT NULL AND godown != '' "
         "ORDER BY godown_name ASC;"
     );
 

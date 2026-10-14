@@ -1,4 +1,5 @@
 #include "tds_vouchers_list_widget.h"
+#include <QFutureWatcher>
 #include "kbd_badge_button.h"
 #include "erp_theme.h"
 #include "../engine/fiscal_year_helper.h"
@@ -144,13 +145,16 @@ void TdsVouchersListWidget::setupUi()
     new QShortcut(QKeySequence(Qt::ALT | Qt::Key_F5), this, SLOT(onRefreshClicked()));
     new QShortcut(QKeySequence(Qt::ALT | Qt::Key_D), this, SLOT(onDeleteClicked()));
     new QShortcut(QKeySequence(Qt::Key_Escape), this, SIGNAL(backRequested()));
+    connect(&m_deleteWatcher, &QFutureWatcher<bool>::finished,
+            this, &TdsVouchersListWidget::onDeleteFinished);
+    connect(&m_queryWatcher, &QFutureWatcher<QVariantList>::finished,
+            this, &TdsVouchersListWidget::onQueryReady);
 }
 
 void TdsVouchersListWidget::reloadData()
 {
-    m_currentVouchers = m_controller->getTdsVouchersList();
-    populateTable();
-    m_isDirty = false;
+    // Isolated read: scan runs on the worker, render lands in onQueryReady.
+    m_queryWatcher.setFuture(m_controller->getTdsVouchersListAsync());
 }
 
 void TdsVouchersListWidget::populateTable()
@@ -273,10 +277,29 @@ void TdsVouchersListWidget::onDeleteClicked()
         QMessageBox::Yes | QMessageBox::No
     );
 
-    if (res == QMessageBox::Yes) {
-        m_controller->deleteVoucher(id);
-        reloadData();
+    if (res == QMessageBox::Yes && !m_deleting) {
+        // Isolated delete: postings clear on the worker, list reloads after.
+        m_deleting = true;
+        m_deleteWatcher.setFuture(m_controller->deleteVoucherAsync(id));
     }
+}
+
+void TdsVouchersListWidget::onDeleteFinished() {
+    m_deleting = false;
+    const bool ok = m_deleteWatcher.future().resultCount() > 0 && m_deleteWatcher.result();
+    if (ok) {
+        reloadData();
+    } else {
+        QMessageBox::critical(this, "Delete Failed",
+            "Failed to delete TDS Voucher (record not found or locked).");
+    }
+}
+
+void TdsVouchersListWidget::onQueryReady() {
+    if (m_queryWatcher.future().resultCount() == 0) return; // keep last-good rows
+    m_currentVouchers = m_queryWatcher.result();
+    populateTable();
+    m_isDirty = false;
 }
 
 void TdsVouchersListWidget::onRefreshClicked()

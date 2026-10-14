@@ -5,6 +5,7 @@
 #include <QComboBox>
 #include <QPushButton>
 #include <QLabel>
+#include <QFutureWatcher>
 #include "account_search_box.h"
 
 namespace MahadevERP {
@@ -29,6 +30,7 @@ private slots:
     void onSaveClicked();
     void onNewClicked();
     void recalculate();
+    void onSaveFinished();
 
 private:
     void setupUi();
@@ -40,6 +42,10 @@ private:
     QLabel *m_statusLabel = nullptr;
     QLabel *m_titleLabel = nullptr;
     QLabel *m_alterBadge = nullptr;
+    // Isolated-write flight state (worker owns the SQL, UI only reports).
+    QFutureWatcher<bool> m_saveWatcher;
+    bool m_saving = false;
+    int m_pendingVoucherNo = 0;
 
     QLineEdit *m_voucherNoEdit = nullptr;
     QLineEdit *m_voucherDateEdit = nullptr;

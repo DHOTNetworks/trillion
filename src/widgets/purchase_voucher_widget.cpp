@@ -1641,7 +1641,7 @@ void PurchaseVoucherWidget::deleteVoucher() {
     }
 }
 
-bool PurchaseVoucherWidget::loadInvoiceForEditing(const QVariant& invNoOrId, const QString& dateHint) {
+bool PurchaseVoucherWidget::loadInvoiceForEditing(const QVariant& invNoOrId, const QString& dateHint, bool popupDateOnLoad) {
     resetForm();
 
     QVariantMap inv = m_purchaseModel.get_purchase_invoice(invNoOrId, dateHint);
@@ -1789,6 +1789,12 @@ bool PurchaseVoucherWidget::loadInvoiceForEditing(const QVariant& invNoOrId, con
         m_tdsAmountEdit->setText(QString::number(tAmt, 'f', 2));
     }
     if (inv.contains("grand_total")) m_grandTotalEdit->setText(QString::number(inv.value("grand_total").toDouble(), 'f', 2));
+    // Drill-down entry: date dialog first (dates take no keyboard focus),
+    // then the invoice number field (purchase convention).
+    if (popupDateOnLoad) {
+        openDateDialog(false);
+        if (m_invoiceNoEdit) { m_invoiceNoEdit->setFocus(); m_invoiceNoEdit->selectAll(); }
+    }
     return true;
 }
 

@@ -668,7 +668,11 @@ bool FirmManager::switch_to_firm(const QString& firmId) {
     bool ok = DatabaseManager::instance().switchDatabase(dbPath);
     if (ok) {
         // Keep the isolated reader on the same file as the writer.
-        MahadevERP::DbService::instance().restart(dbPath);
+        const bool workerOk = MahadevERP::DbService::instance().restart(dbPath);
+        if (!workerOk) {
+            std::cerr << "[WARN] DbService worker failed to restart on: "
+                      << dbPath.toStdString() << " (reads fall back to sync)" << std::endl;
+        }
         m_activeFirmId = firmId;
         saveRegistry(firms);
         emit firmSwitched(m_activeFirmId, targetFirm.value("name").toString());
@@ -716,7 +720,10 @@ bool FirmManager::prepare_firm_for_import(const QString& mdbFilePath, const QStr
 
     // Switch DB to target (will initialize tables if needed)
     DatabaseManager::instance().switchDatabase(targetDbPath);
-    MahadevERP::DbService::instance().restart(targetDbPath);
+    if (!MahadevERP::DbService::instance().restart(targetDbPath)) {
+        std::cerr << "[WARN] DbService worker failed to restart on: "
+                  << targetDbPath.toStdString() << " (reads fall back to sync)" << std::endl;
+    }
     m_activeFirmId = slug;
 
     QVariantMap firm;
@@ -782,7 +789,10 @@ bool FirmManager::create_new_firm(const QVariantMap& firmInfo) {
     QString carriedGstinKey = DatabaseManager::instance().getSetting("gstin_lookup/api_key").trimmed();
 
     DatabaseManager::instance().switchDatabase(targetDbPath);
-    MahadevERP::DbService::instance().restart(targetDbPath);
+    if (!MahadevERP::DbService::instance().restart(targetDbPath)) {
+        std::cerr << "[WARN] DbService worker failed to restart on: "
+                  << targetDbPath.toStdString() << " (reads fall back to sync)" << std::endl;
+    }
 
     // Flexible date parsing for books_from (e.g., "1.4.24", "01/04/2024", "2024-04-01", "1-4-24", "01.04.2024")
     QDate cur = QDate::currentDate();

@@ -5,6 +5,7 @@
 #include <QLineEdit>
 #include <QPushButton>
 #include <QLabel>
+#include <QFutureWatcher>
 #include "../models/tcs_receipt_voucher_controller.h"
 
 namespace MahadevERP {
@@ -30,6 +31,8 @@ protected:
 private slots:
     void onNewClicked();
     void onDeleteClicked();
+    void onDeleteFinished();
+    void onQueryReady();
     void onRefreshClicked();
     void onFilterChanged();
 
@@ -41,6 +44,9 @@ private:
 
     QLineEdit *m_searchEdit = nullptr;
     QTableWidget *m_table = nullptr;
+    QFutureWatcher<bool> m_deleteWatcher;
+    QFutureWatcher<QVariantList> m_queryWatcher;
+    bool m_deleting = false;
 
     QLabel *m_totalVouchersVal = nullptr;
     QLabel *m_totalBankReceiptVal = nullptr;

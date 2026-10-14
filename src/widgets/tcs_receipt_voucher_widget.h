@@ -5,6 +5,7 @@
 #include <QComboBox>
 #include <QPushButton>
 #include <QLabel>
+#include <QFutureWatcher>
 #include "../models/tcs_receipt_voucher_controller.h"
 #include "account_search_box.h"
 
@@ -31,6 +32,7 @@ protected:
 private slots:
     void onSaveClicked();
     void onNewClicked();
+    void onSaveFinished();
     void syncUiFromController();
 
 private:
@@ -71,6 +73,9 @@ private:
     QLineEdit *m_netCreditPartyEdit = nullptr;
     QLineEdit *m_narrationEdit = nullptr;
     KbdBadgeButton *m_saveBtn = nullptr;
+    // Isolated-write flight state (worker owns the SQL, UI only reports).
+    QFutureWatcher<bool> m_saveWatcher;
+    bool m_saving = false;
 
     bool m_isSyncing = false;
 };

@@ -4,6 +4,7 @@
 #include "form16a_entry_dialog.h"
 #include "../engine/fiscal_year_helper.h"
 #include "../database_manager.h"
+#include "../services/db_service.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -118,20 +119,22 @@ void Form16AListWidget::setupUi()
     new QShortcut(QKeySequence(Qt::ALT | Qt::Key_N), this, SLOT(onNewClicked()));
     new QShortcut(QKeySequence(Qt::ALT | Qt::Key_D), this, SLOT(onDeleteClicked()));
     new QShortcut(QKeySequence("Escape"), this, SIGNAL(backRequested()));
+    connect(&m_deleteWatcher, &QFutureWatcher<bool>::finished,
+            this, &Form16AListWidget::onDeleteFinished);
+    connect(&m_queryWatcher, &QFutureWatcher<QVariantList>::finished,
+            this, &Form16AListWidget::onQueryReady);
 }
 
 void Form16AListWidget::reloadData()
 {
-    DatabaseManager &db = DatabaseManager::instance();
-    m_currentCerts = db.executeQuery(
+    // Isolated read: scan runs on the worker, render lands in onQueryReady.
+    m_queryWatcher.setFuture(MahadevERP::DbService::instance().query(
         "SELECT f.id, f.certificate_no, p.name as customer_name, f.quarter, f.receipt_date, "
         "f.gross_amount as total_amount_credited, f.tds_amount as total_tds_deducted, f.matched_with_26as as is_verified "
         "FROM received_forms_16a f "
         "LEFT JOIN parties p ON f.party_id = p.id "
-        "ORDER BY f.id DESC;"
-    );
-    populateTable();
-    m_isDirty = false;
+        "ORDER BY f.id DESC;",
+        {}));
 }
 
 void Form16AListWidget::populateTable()
@@ -220,11 +223,32 @@ void Form16AListWidget::onDeleteClicked()
         QMessageBox::Yes | QMessageBox::No
     );
 
-    if (res == QMessageBox::Yes) {
-        DatabaseManager &db = DatabaseManager::instance();
-        db.executeNonQuery("DELETE FROM received_forms_16a WHERE id = ?;", {id});
-        reloadData();
+    if (res == QMessageBox::Yes && !m_deleting) {
+        // Isolated delete (was a UI-thread write).
+        m_deleting = true;
+        m_deleteWatcher.setFuture(MahadevERP::DbService::instance().transact(
+            [id](MahadevERP::DbTx& tx) {
+                return tx.exec("DELETE FROM received_forms_16a WHERE id = ?;", {id});
+            }));
     }
+}
+
+void Form16AListWidget::onDeleteFinished() {
+    m_deleting = false;
+    const bool ok = m_deleteWatcher.future().resultCount() > 0 && m_deleteWatcher.result();
+    if (ok) {
+        reloadData();
+    } else {
+        QMessageBox::critical(this, "Delete Failed",
+            "Failed to delete certificate (record not found or locked).");
+    }
+}
+
+void Form16AListWidget::onQueryReady() {
+    if (m_queryWatcher.future().resultCount() == 0) return; // keep last-good rows
+    m_currentCerts = m_queryWatcher.result();
+    populateTable();
+    m_isDirty = false;
 }
 
 void Form16AListWidget::onRefreshClicked()

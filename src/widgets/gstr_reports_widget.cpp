@@ -131,8 +131,9 @@ void GstrReportsWidget::setupUi() {
     connect(m_toDateEdit, &AccountingDateDisplay::clicked, this, openPeriodDlg);
 
     auto* periodBtn = new QPushButton("Period (F2)", filterCard);
+    periodBtn->setCursor(Qt::PointingHandCursor);
     periodBtn->setStyleSheet(
-        "QPushButton { background-color: #EFF6FF; color: #1D4ED8; border: 1px solid #BFDBFE; font-weight: 700; font-size: 11px; border-radius: 6px; padding: 4px 10px; cursor: pointer; }"
+        "QPushButton { background-color: #EFF6FF; color: #1D4ED8; border: 1px solid #BFDBFE; font-weight: 700; font-size: 11px; border-radius: 6px; padding: 4px 10px; }"
         "QPushButton:hover { background-color: #DBEAFE; color: #1E40AF; }"
     );
     connect(periodBtn, &QPushButton::clicked, this, openPeriodDlg);

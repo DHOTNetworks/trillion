@@ -142,15 +142,18 @@ void TaxChallanRegisterWidget::setupUi()
     new QShortcut(QKeySequence(Qt::ALT | Qt::Key_D), this, SLOT(onDeleteClicked()));
     new QShortcut(QKeySequence(Qt::ALT | Qt::Key_Escape), this, SIGNAL(backRequested()));
     new QShortcut(QKeySequence(Qt::Key_Escape), this, SIGNAL(backRequested()));
+    connect(&m_deleteWatcher, &QFutureWatcher<bool>::finished,
+            this, &TaxChallanRegisterWidget::onDeleteFinished);
+    connect(&m_queryWatcher, &QFutureWatcher<QVariantList>::finished,
+            this, &TaxChallanRegisterWidget::onQueryReady);
 }
 
 void TaxChallanRegisterWidget::reloadData()
 {
     QString filterType = m_typeFilterCombo ? m_typeFilterCombo->currentText() : m_taxType;
     if (filterType == "ALL") filterType = "";
-    m_currentChallans = m_controller->getChallansList(filterType);
-    populateTable();
-    m_isDirty = false;
+    // Isolated read: scan runs on the worker, render lands in onQueryReady.
+    m_queryWatcher.setFuture(m_controller->getChallansListAsync(filterType));
 }
 
 void TaxChallanRegisterWidget::populateTable()
@@ -249,10 +252,29 @@ void TaxChallanRegisterWidget::onDeleteClicked()
         QMessageBox::Yes | QMessageBox::No
     );
 
-    if (res == QMessageBox::Yes) {
-        m_controller->deleteChallan(id);
-        reloadData();
+    if (res == QMessageBox::Yes && !m_deleting) {
+        // Isolated delete: linked vouchers release on the worker, list reloads after.
+        m_deleting = true;
+        m_deleteWatcher.setFuture(m_controller->deleteChallanAsync(id));
     }
+}
+
+void TaxChallanRegisterWidget::onDeleteFinished() {
+    m_deleting = false;
+    const bool ok = m_deleteWatcher.future().resultCount() > 0 && m_deleteWatcher.result();
+    if (ok) {
+        reloadData();
+    } else {
+        QMessageBox::critical(this, "Delete Failed",
+            "Failed to delete challan (record not found or locked).");
+    }
+}
+
+void TaxChallanRegisterWidget::onQueryReady() {
+    if (m_queryWatcher.future().resultCount() == 0) return; // keep last-good rows
+    m_currentChallans = m_queryWatcher.result();
+    populateTable();
+    m_isDirty = false;
 }
 
 void TaxChallanRegisterWidget::onRefreshClicked()
