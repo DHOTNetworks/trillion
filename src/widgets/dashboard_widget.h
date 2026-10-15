@@ -11,6 +11,7 @@
 #include <QKeyEvent>
 #include <QDialog>
 #include <QVector>
+#include <QStringList>
 #include "../engine/fiscal_year_helper.h"
 #include "../services/print_export_controller.h"
 #include "../models/dashboard_controller.h"
@@ -45,6 +46,7 @@ public slots:
     void openLedgerMenu(int initialIndex = 0);
     void openStockMenu(int initialIndex = 0);
     void openAddVoucherMenu(int initialIndex = 0);
+    void openMandiMenu(int initialIndex = 0);
     void openOtherVoucherMenu(int initialIndex = 0);
     void openReportsMenu(int initialIndex = 0);
     void openFinalAccountsMenu(int initialIndex = 0);
@@ -63,6 +65,12 @@ private slots:
     void updateScaleButtonText(double factor, int percent);
 
 private:
+    // §23.5 position-free card routing: m_cardMenuIds parallels m_menuCards
+    // (visible cards only); badge numbers and digit keys are visible
+    // positions, never fixed indices. Hub submenus map to their card.
+    int cardForMenu(const QString& menuId) const;
+    void selectMenu(const QString& menuId);
+    void buildMenuCards();
     void setupUi();
     QWidget* createLeftSection();
     QWidget* createMiddleSection();
@@ -84,6 +92,9 @@ private:
     bool m_hasMouseMoved = false;
 
     QVector<DashboardMenuCard*> m_menuCards;
+    QStringList m_cardMenuIds; // parallel to m_menuCards: menu id per visible card
+    QVBoxLayout* m_menuSection = nullptr;
+    bool m_mandiCardShown = false; // true while the mandi card is built (S3: mandi OR mill)
 
     // Header elements
     KbdBadgeButton* m_openFirmBtn = nullptr;

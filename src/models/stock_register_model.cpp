@@ -390,7 +390,7 @@ void StockRegisterController::fetchRawData(const QString& fromDate, const QStrin
             // Monthly Timeline (Apr to Mar)
             QDate sDate = QDate::fromString(fromDate, "yyyy-MM-dd");
             QDate eDate = QDate::fromString(toDate, "yyyy-MM-dd");
-            if (!sDate.isValid()) sDate = QDate(QDate::currentDate().year(), 4, 1);
+            if (!sDate.isValid()) sDate = QDate(QDate::currentDate().year(), FiscalCalendar::startMonth(), 1);
             if (!eDate.isValid()) eDate = QDate::currentDate();
 
             double runningQty = opQty;

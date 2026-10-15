@@ -17,4 +17,8 @@ public:
     Q_INVOKABLE QVariantMap get_group_by_name(const QString& name) const;
     Q_INVOKABLE bool add_group(const QString& name, const QString& parentGroup, const QString& nature, const QString& desc = "", bool balanceSheet = false);
     Q_INVOKABLE bool update_group(int groupId, const QString& name, const QString& parentGroup, const QString& nature, const QString& desc = "", bool balanceSheet = false);
+
+    // Domain top-up (Phase 2/3): idempotent by name; never deletes.
+    // Mandi rows reuse legacy codes (31-34), mill rows (22-23).
+    static void ensureDomainGroups(const QString& domain);
 };

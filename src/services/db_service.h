@@ -13,8 +13,9 @@
 //  - A future with resultCount() == 0 means "worker down or SQL error" —
 //    keep last-good data, never blank the screen.
 //  - Writes still go through DatabaseManager on the UI thread until their
-//    voucher is migrated (Phase 2). Reads via the worker already proceed
-//    concurrently thanks to WAL + busy_timeout.
+//    voucher is migrated (migration-strangler: one migrator per slice).
+//    Reads via the worker already proceed concurrently thanks to WAL +
+//    busy_timeout.
 //  - nextGeneration() hands out stale-result discard tokens: capture one per
 //    request, ignore watcher results from older generations.
 
@@ -58,7 +59,7 @@ public:
                                               const QVariantList& params = {});
     [[nodiscard]] QFuture<QVariant> scalar(const QString& sql,
                                            const QVariantList& params = {});
-    // Atomic unit of work on the worker connection (Phase 2 writes).
+    // Atomic unit of work on the worker connection (generic-ERP: migrated writes).
     [[nodiscard]] QFuture<bool> transact(std::function<bool(DbTx&)> fn);
 
     // Stale-result discard tokens for debounced search/showEvent reloads.

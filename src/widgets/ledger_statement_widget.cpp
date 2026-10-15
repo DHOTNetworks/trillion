@@ -481,7 +481,7 @@ void LedgerStatementWidget::recalculateAankStatement() {
     if (!fromDt.isValid()) {
         FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
         fromDt = QDate::fromString(activeFy.startDate, "yyyy-MM-dd");
-        if (!fromDt.isValid()) fromDt = QDate(QDate::currentDate().month() < 4 ? QDate::currentDate().year() - 1 : QDate::currentDate().year(), 4, 1);
+        if (!fromDt.isValid()) fromDt = QDate(FiscalCalendar::fyStartYearForDate(QDate::currentDate().year(), QDate::currentDate().month()), FiscalCalendar::startMonth(), 1);
     }
     if (!toDt.isValid()) toDt = QDate::currentDate();
 

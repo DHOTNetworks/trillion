@@ -1,5 +1,6 @@
 #include "gst_portal_sync_dialog.h"
 #include "../database_manager.h"
+#include "../config/settings_registry.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QFormLayout>
@@ -50,7 +51,7 @@ void GstPortalSyncDialog::setupUi() {
     credForm->setSpacing(12);
 
     // GSTIN (Pre-fill dynamically from company_info or app_settings)
-    QString defaultGstin = DatabaseManager::instance().getSetting("company_gstin", "");
+    QString defaultGstin = DatabaseManager::instance().getSetting(SettingsKeys::company_gstin(), "");
     if (defaultGstin.isEmpty()) {
         QVariant gVal = DatabaseManager::instance().executeScalar("SELECT gstin FROM company_info LIMIT 1;");
         if (gVal.isValid() && !gVal.isNull()) defaultGstin = gVal.toString().trimmed();

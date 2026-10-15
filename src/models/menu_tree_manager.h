@@ -32,6 +32,11 @@ struct MenuItem {
              std::function<void()> cb = nullptr)
         : title(t), shortcut(sc), hotkey(hk), actionType(act),
           targetViewIndex(viewIdx), targetSubmenuId(subId), callback(cb) {}
+    // Phase 3 flags: false hides the row from reach while keeping the
+    // canonical positional indices stable for setItemCallback wiring.
+    // The dialog receives only enabled rows (see resumeMenuStack), so
+    // hidden domain options never appear — no grey rows.
+    bool enabled = true;
 };
 
 struct MenuNode {
@@ -76,6 +81,12 @@ public:
     // Execute menu loop (handles full stack navigation and Esc-unwinding)
     void executeMenu(const QString& startMenuId, QWidget* parent = nullptr, int initialIndex = -1);
     void resumeMenuStack(QWidget* parent = nullptr);
+
+    // Phase 3 flags: hides domain items whose views are off. Canonical
+    // indices stay stable (filtering happens at display time in
+    // resumeMenuStack); idempotent and re-applied on every menu open so
+    // firm switches take effect immediately.
+    void applyFeatureFlags();
 
     // Returns the menu ID that triggered the most recent view transition
     QString lastTriggeredMenuId() const { return m_lastTriggeredMenuId; }

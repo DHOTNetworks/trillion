@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QString>
+#include <QChar>
 #include <QVector>
 #include <QList>
 #include <QVariantMap>
@@ -12,6 +13,9 @@ struct FiscalYearInfo {
     QString endDate;     // "YYYY-MM-DD" e.g. "2025-03-31"
     bool isActive = false;
     bool isLocked = false;
+    // F2 lifecycle state: "open" | "soft_closed" | "locked". Authoritative;
+    // isLocked mirrors locked for legacy readers.
+    QString status;
 
     bool isValid() const {
         return !name.isEmpty() && !startDate.isEmpty() && !endDate.isEmpty();
@@ -50,6 +54,29 @@ struct PartitionedLedgerData {
     
     QVector<LedgerStatementEntry> drEntries;
     QVector<LedgerStatementEntry> crEntries;
+};
+
+// F1 FiscalCalendar choke (§24 F1, D14a): April–March is FIXED per Indian
+// standards — one constant, no user-facing setting, no scattered `m >= 4`.
+// Every FY boundary computation reads this choke (sibling .cpp converted,
+// F1 remainder). All other call sites read it now.
+struct FiscalCalendar {
+    static int startMonth() { return 4; } // April, FIXED (D14a)
+    static int endMonth() { return 3; }   // March, FIXED
+    static bool isNewFiscalYear(int calendarMonth) { return calendarMonth >= startMonth(); }
+    static int fyStartYearForDate(int y, int m) { return isNewFiscalYear(m) ? y : y - 1; }
+    static QString fyStartDate(int fyStartYear) {
+        return QString("%1-%2-01").arg(fyStartYear).arg(startMonth(), 2, 10, QChar('0'));
+    }
+    static QString fyEndDate(int fyStartYear) {
+        // March always has 31 days; fixed because April is fixed.
+        return QString("%1-%2-31").arg(fyStartYear + 1).arg(endMonth(), 2, 10, QChar('0'));
+    }
+    static QString fyName(int fyStartYear) {
+        // Canonical "FY 2026-27" label (zero-padded; correct across century
+        // turns, unlike the legacy .right(2) sites which stay untouched).
+        return QString("FY %1-%2").arg(fyStartYear).arg(QString::number((fyStartYear + 1) % 100).rightJustified(2, '0'));
+    }
 };
 
 class FiscalYearHelper {
@@ -103,6 +130,16 @@ public:
     // human reason ("FY 2024-25 is locked…"). Every mutating path must check
     // this BEFORE beginTransaction and surface the string to the user.
     static QString writeBlockReason(const QString& dateStr);
+    // F2 soft warning: non-empty when the date's FY is soft-closed (writes
+    // still allowed, user should confirm). Locked/missing behave like the
+    // block guard (non-empty); open years return "".
+    static QString writeSoftWarning(const QString& dateStr);
+    // F2 lifecycle transition (open <-> soft_closed <-> locked). Writes
+    // status + the is_locked mirror + an audit row. Returns false + reason
+    // on illegal jumps (e.g. locked -> soft_closed without reopen).
+    static bool setYearStatus(const QString& fyName, const QString& status,
+                              const QString& actor, const QString& reason,
+                              QString* errorOut = nullptr);
 
     // 4. Guaranteed Zero-Leakage Transaction Partitioning
     static PartitionedLedgerData partitionPartyTransactions(

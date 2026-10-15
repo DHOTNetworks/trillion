@@ -1,5 +1,7 @@
 #include "firm_manager.h"
 #include "../database_manager.h"
+#include "../config/settings_registry.h"
+#include "../engine/fiscal_year_helper.h"
 #include "../services/db_service.h"
 #include "../engine/bahi_khata_migrator.h"
 #include "../engine/busy_data_migrator.h"
@@ -30,7 +32,7 @@ QString FirmManager::get_app_data_folder() const {
 
 QString FirmManager::choose_firm_folder(const QString& currentFolder) {
     QString start = currentFolder.isEmpty() ? get_app_data_folder() : currentFolder;
-    return QFileDialog::getExistingDirectory(nullptr, "Select Bahi-Khata Firm Data Folder", start);
+    return QFileDialog::getExistingDirectory(nullptr, "Select Firm Data Folder (Bahi-Khata / Busy / Tally export)", start);
 }
 
 QString FirmManager::registryFilePath() const {
@@ -786,7 +788,7 @@ bool FirmManager::create_new_firm(const QVariantMap& firmInfo) {
     QString targetDbPath = "data/" + slug + ".db";
 
     // Carry the GSTIN lookup key into the new file so autofill works there too.
-    QString carriedGstinKey = DatabaseManager::instance().getSetting("gstin_lookup/api_key").trimmed();
+    QString carriedGstinKey = DatabaseManager::instance().getSetting(SettingsKeys::gstin_api_key()).trimmed();
 
     DatabaseManager::instance().switchDatabase(targetDbPath);
     if (!MahadevERP::DbService::instance().restart(targetDbPath)) {
@@ -796,9 +798,9 @@ bool FirmManager::create_new_firm(const QVariantMap& firmInfo) {
 
     // Flexible date parsing for books_from (e.g., "1.4.24", "01/04/2024", "2024-04-01", "1-4-24", "01.04.2024")
     QDate cur = QDate::currentDate();
-    int currentFyStartYear = (cur.month() >= 4) ? cur.year() : (cur.year() - 1);
+    int currentFyStartYear = FiscalCalendar::fyStartYearForDate(cur.year(), cur.month());
     QString rawBooksFrom = firmInfo.value("books_from").toString().trimmed();
-    if (rawBooksFrom.isEmpty()) rawBooksFrom = QString("%1-04-01").arg(currentFyStartYear);
+    if (rawBooksFrom.isEmpty()) rawBooksFrom = FiscalCalendar::fyStartDate(currentFyStartYear);
 
     int startYear = currentFyStartYear;
     int startMonth = 4;
@@ -822,7 +824,7 @@ bool FirmManager::create_new_firm(const QVariantMap& firmInfo) {
     }
 
     // Determine the starting FY year
-    int fyStartYear = (startMonth >= 4) ? startYear : (startYear - 1);
+    int fyStartYear = FiscalCalendar::fyStartYearForDate(startYear, startMonth);
     int targetEndYear = std::max(currentFyStartYear, fyStartYear);
 
     QString formattedBooksFrom = QString("%1-%2-%3")
@@ -858,22 +860,22 @@ bool FirmManager::create_new_firm(const QVariantMap& firmInfo) {
             firmInfo.value("bank_account").toString(),
             firmInfo.value("ifsc_code").toString(),
             formattedBooksFrom,
-            QString("%1-04-01").arg(targetEndYear),
-            QString("%1-03-31").arg(targetEndYear + 1)
+            FiscalCalendar::fyStartDate(targetEndYear),
+            FiscalCalendar::fyEndDate(targetEndYear)
         }
     );
 
     if (!carriedGstinKey.isEmpty() &&
-        DatabaseManager::instance().getSetting("gstin_lookup/api_key").trimmed().isEmpty()) {
-        DatabaseManager::instance().setSetting("gstin_lookup/api_key", carriedGstinKey);
+        DatabaseManager::instance().getSetting(SettingsKeys::gstin_api_key()).trimmed().isEmpty()) {
+        DatabaseManager::instance().setSetting(SettingsKeys::gstin_api_key(), carriedGstinKey);
     }
 
     // Create all Financial Years from fyStartYear to targetEndYear (e.g. 2024 -> FY 2024-25, FY 2025-26, FY 2026-27, FY 2027-28)
     DatabaseManager::instance().executeNonQuery("DELETE FROM financial_years;");
     for (int y = fyStartYear; y <= targetEndYear; ++y) {
         QString fyName = QString("FY %1-%2").arg(y).arg(QString::number((y + 1) % 100).rightJustified(2, '0'));
-        QString fyStart = QString("%1-04-01").arg(y);
-        QString fyEnd = QString("%1-03-31").arg(y + 1);
+        QString fyStart = FiscalCalendar::fyStartDate(y);
+        QString fyEnd = FiscalCalendar::fyEndDate(y);
         int isActive = (y == targetEndYear) ? 1 : 0;
 
         DatabaseManager::instance().executeNonQuery(
@@ -897,7 +899,7 @@ bool FirmManager::create_new_firm(const QVariantMap& firmInfo) {
     regItem["state"] = firmInfo.value("state").toString();
     regItem["firm_type"] = resolvedFirmType;
     regItem["is_imported"] = true;
-    regItem["period"] = QString("%1-04-01 To %2-03-31").arg(fyStartYear).arg(targetEndYear + 1);
+    regItem["period"] = QString("%1 To %2").arg(FiscalCalendar::fyStartDate(fyStartYear), FiscalCalendar::fyEndDate(targetEndYear));
 
     QVariantList firms = get_registered_firms();
     firms.append(regItem);

@@ -27,7 +27,7 @@ StockDetailWidget::StockDetailWidget(StockRegisterController* controller, PrintE
     FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
     QDate sDate = QDate::fromString(activeFy.startDate, "yyyy-MM-dd");
     QDate eDate = QDate::fromString(activeFy.endDate, "yyyy-MM-dd");
-    if (!sDate.isValid()) sDate = QDate(QDate::currentDate().month() < 4 ? QDate::currentDate().year() - 1 : QDate::currentDate().year(), 4, 1);
+    if (!sDate.isValid()) sDate = QDate(FiscalCalendar::fyStartYearForDate(QDate::currentDate().year(), QDate::currentDate().month()), FiscalCalendar::startMonth(), 1);
     if (!eDate.isValid()) eDate = QDate::currentDate();
 
     m_fromDateEdit->blockSignals(true);
@@ -856,7 +856,7 @@ void StockDetailWidget::showEvent(QShowEvent* event) {
     FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
     QDate sDate = QDate::fromString(activeFy.startDate, "yyyy-MM-dd");
     QDate eDate = QDate::fromString(activeFy.endDate, "yyyy-MM-dd");
-    if (!sDate.isValid()) sDate = QDate(QDate::currentDate().month() < 4 ? QDate::currentDate().year() - 1 : QDate::currentDate().year(), 4, 1);
+    if (!sDate.isValid()) sDate = QDate(FiscalCalendar::fyStartYearForDate(QDate::currentDate().year(), QDate::currentDate().month()), FiscalCalendar::startMonth(), 1);
     if (!eDate.isValid()) eDate = sDate.addYears(1).addDays(-1);
 
     if (m_isDirty || !m_fromDateEdit->date().isValid() || !m_toDateEdit->date().isValid()) {

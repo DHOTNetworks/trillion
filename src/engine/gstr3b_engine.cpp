@@ -1,6 +1,7 @@
 #include "gstr3b_engine.h"
 #include "gst_tax_engine.h"
 #include "../database_manager.h"
+#include "fiscal_year_helper.h" // FiscalCalendar choke (April fixed)
 #include <QRegularExpression>
 #include <QFile>
 #include <QFileInfo>
@@ -51,7 +52,7 @@ Gstr3BReturnSummary Gstr3BEngine::generateFromDatabase(
     summary.monthName = getMonthName(fromDate.month());
     QString supplierState = stateCode.trimmed().rightJustified(2, '0');
 
-    int startYear = fromDate.month() >= 4 ? fromDate.year() : fromDate.year() - 1;
+    int startYear = FiscalCalendar::fyStartYearForDate(fromDate.year(), fromDate.month());
     summary.fiscalYear = QString("%1-%2").arg(startYear).arg((startYear + 1) % 100, 2, 10, QChar('0'));
 
     QString fromStr = fromDate.toString("yyyy-MM-dd");

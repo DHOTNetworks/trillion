@@ -1,5 +1,7 @@
 #include "fiscal_year_helper.h"
 #include "../database_manager.h"
+#include "../config/settings_registry.h"
+#include "../config/feature_flags.h"
 #include "accounting_engine.h"
 #include "../services/accounting_date_service.h"
 #include <QDate>
@@ -7,6 +9,16 @@
 #include <QSet>
 #include <cmath>
 #include <algorithm>
+
+namespace {
+// F2 lifecycle state from a financial_years row. Unknown/empty (pre-status
+// rows, partial SELECTs) means open; callers OR the legacy is_locked mirror.
+QString fyStatusOf(const QVariantMap& r) {
+    const QString s = r.value("status").toString().trimmed().toLower();
+    if (s == "locked" || s == "soft_closed") return s;
+    return "open";
+}
+}
 
 QString FiscalYearHelper::normalizeToIso(const QString& dateStr) {
     QString s = dateStr.trimmed();
@@ -51,7 +63,7 @@ void FiscalYearHelper::ensureFiscalYearsDiscovered() {
 
     // 2. Query existing financial years in database
     QVariantList existingRows = DatabaseManager::instance().executeQuery(
-        "SELECT id, year_name, start_date, end_date, is_active, is_locked FROM financial_years ORDER BY start_date ASC;"
+        "SELECT id, year_name, start_date, end_date, is_active, is_locked, status FROM financial_years ORDER BY start_date ASC;"
     );
 
     // If financial years already populated in database:
@@ -102,7 +114,7 @@ void FiscalYearHelper::ensureFiscalYearsDiscovered() {
                 int y = iso.left(4).toInt();
                 int m = iso.mid(5, 2).toInt();
                 if (y > 1990 && y < 2100) {
-                    int sYear = (m >= 4) ? y : y - 1;
+                    int sYear = FiscalCalendar::fyStartYearForDate(y, m);
                     if (sYear < earliestYear) earliestYear = sYear;
                     if (sYear > latestYear) latestYear = sYear;
                 }
@@ -110,22 +122,26 @@ void FiscalYearHelper::ensureFiscalYearsDiscovered() {
         }
     }
 
-    // 4. Scan transaction tables for min/max dates
-    QStringList dateQueries = {
-        "SELECT MIN(voucher_date), MAX(voucher_date) FROM vouchers WHERE voucher_date IS NOT NULL AND voucher_date != '';",
-        "SELECT MIN(voucher_date), MAX(voucher_date) FROM transactions WHERE voucher_date IS NOT NULL AND voucher_date != '';",
-        "SELECT MIN(invoice_date), MAX(invoice_date) FROM sales_invoices WHERE invoice_date IS NOT NULL AND invoice_date != '';",
-        "SELECT MIN(invoice_date), MAX(invoice_date) FROM purchase_invoices WHERE invoice_date IS NOT NULL AND invoice_date != '';",
-        "SELECT MIN(arrival_date), MAX(arrival_date) FROM paddy_procurement WHERE arrival_date IS NOT NULL AND arrival_date != '';",
-        "SELECT MIN(batch_date), MAX(batch_date) FROM milling_batches WHERE batch_date IS NOT NULL AND batch_date != '';",
-        "SELECT MIN(voucher_date), MAX(voucher_date) FROM jform_vouchers WHERE voucher_date IS NOT NULL AND voucher_date != '';",
-        "SELECT MIN(voucher_date), MAX(voucher_date) FROM tds_vouchers WHERE voucher_date IS NOT NULL AND voucher_date != '';",
-        "SELECT MIN(dispatch_date), MAX(dispatch_date) FROM transport_dispatches WHERE dispatch_date IS NOT NULL AND dispatch_date != '';",
-        "SELECT MIN(note_date), MAX(note_date) FROM debit_credit_notes WHERE note_date IS NOT NULL AND note_date != '';"
+    // 4. Scan transaction tables for min/max dates. Domain tables may not
+    // exist on generic firms — skip absent tables instead of erroring
+    // (Phase 3 gating; core tables always exist).
+    struct DateProbe { const char* table; const char* sql; };
+    static const DateProbe dateQueries[] = {
+        {"vouchers", "SELECT MIN(voucher_date), MAX(voucher_date) FROM vouchers WHERE voucher_date IS NOT NULL AND voucher_date != '';"},
+        {"transactions", "SELECT MIN(voucher_date), MAX(voucher_date) FROM transactions WHERE voucher_date IS NOT NULL AND voucher_date != '';"},
+        {"sales_invoices", "SELECT MIN(invoice_date), MAX(invoice_date) FROM sales_invoices WHERE invoice_date IS NOT NULL AND invoice_date != '';"},
+        {"purchase_invoices", "SELECT MIN(invoice_date), MAX(invoice_date) FROM purchase_invoices WHERE invoice_date IS NOT NULL AND invoice_date != '';"},
+        {"paddy_slips", "SELECT MIN(arrival_date), MAX(arrival_date) FROM paddy_slips WHERE arrival_date IS NOT NULL AND arrival_date != '';"},
+        {"milling_batches", "SELECT MIN(batch_date), MAX(batch_date) FROM milling_batches WHERE batch_date IS NOT NULL AND batch_date != '';"},
+        {"jform_vouchers", "SELECT MIN(voucher_date), MAX(voucher_date) FROM jform_vouchers WHERE voucher_date IS NOT NULL AND voucher_date != '';"},
+        {"tds_vouchers", "SELECT MIN(voucher_date), MAX(voucher_date) FROM tds_vouchers WHERE voucher_date IS NOT NULL AND voucher_date != '';"},
+        {"transport_dispatches", "SELECT MIN(dispatch_date), MAX(dispatch_date) FROM transport_dispatches WHERE dispatch_date IS NOT NULL AND dispatch_date != '';"},
+        {"debit_credit_notes", "SELECT MIN(note_date), MAX(note_date) FROM debit_credit_notes WHERE note_date IS NOT NULL AND note_date != '';"},
     };
 
-    for (const auto& sql : dateQueries) {
-        QVariantList res = DatabaseManager::instance().executeQuery(sql);
+    for (const auto& probe : dateQueries) {
+        if (!FeatureFlags::tableExists(QString::fromUtf8(probe.table))) continue;
+        QVariantList res = DatabaseManager::instance().executeQuery(QString::fromUtf8(probe.sql));
         if (!res.isEmpty()) {
             QVariantMap row = res.first().toMap();
             for (auto it = row.begin(); it != row.end(); ++it) {
@@ -135,7 +151,7 @@ void FiscalYearHelper::ensureFiscalYearsDiscovered() {
                     int y = iso.left(4).toInt();
                     int m = iso.mid(5, 2).toInt();
                     if (y > 1990 && y < 2100) {
-                        int sYear = (m >= 4) ? y : y - 1;
+                        int sYear = FiscalCalendar::fyStartYearForDate(y, m);
                         if (sYear < earliestYear) earliestYear = sYear;
                         if (sYear > latestYear) latestYear = sYear;
                     }
@@ -147,7 +163,7 @@ void FiscalYearHelper::ensureFiscalYearsDiscovered() {
     // 5. If no dates were found in database at all (brand new empty database), default to current date's FY
     if (earliestYear == 9999 && latestYear == 0) {
         QDate today = QDate::currentDate();
-        int currentStartYear = (today.month() >= 4) ? today.year() : today.year() - 1;
+        int currentStartYear = FiscalCalendar::fyStartYearForDate(today.year(), today.month());
         earliestYear = currentStartYear;
         latestYear = currentStartYear;
     } else if (earliestYear == 9999) {
@@ -158,10 +174,10 @@ void FiscalYearHelper::ensureFiscalYearsDiscovered() {
 
     // 6. Insert only the actual discovered financial years (never invent future years)
     for (int y = earliestYear; y <= latestYear; ++y) {
-        QString fyName = QString("FY %1-%2").arg(y).arg(QString::number((y + 1) % 100).rightJustified(2, '0'));
+        QString fyName = FiscalCalendar::fyName(y);
         if (!seenFys.contains(fyName)) {
-            QString fromD = QString("%1-04-01").arg(y);
-            QString toD = QString("%1-03-31").arg(y + 1);
+            QString fromD = FiscalCalendar::fyStartDate(y);
+            QString toD = FiscalCalendar::fyEndDate(y);
             DatabaseManager::instance().executeNonQuery(
                 "INSERT INTO financial_years (year_name, start_date, end_date, is_active, is_locked) "
                 "VALUES (?, ?, ?, 0, 0);",
@@ -172,7 +188,7 @@ void FiscalYearHelper::ensureFiscalYearsDiscovered() {
     }
 
     // 7. Ensure at least one active financial year exists (the latest actual year)
-    QString defaultActive = QString("FY %1-%2").arg(latestYear).arg(QString::number((latestYear + 1) % 100).rightJustified(2, '0'));
+    QString defaultActive = FiscalCalendar::fyName(latestYear);
     DatabaseManager::instance().executeNonQuery("UPDATE financial_years SET is_active = 0;");
     DatabaseManager::instance().executeNonQuery(
         "UPDATE financial_years SET is_active = 1 WHERE year_name = ?;",
@@ -199,9 +215,9 @@ FiscalYearInfo FiscalYearHelper::getActiveFiscalYear() {
     FiscalYearInfo info;
 
     // 2. Check Database saved settings for last selected FY/period across app restarts
-    QString lastFy = DatabaseManager::instance().getSetting("last_selected_fy");
-    QString lastFrom = DatabaseManager::instance().getSetting("last_from_date");
-    QString lastTo = DatabaseManager::instance().getSetting("last_to_date");
+    QString lastFy = DatabaseManager::instance().getSetting(SettingsKeys::last_selected_fy());
+    QString lastFrom = DatabaseManager::instance().getSetting(SettingsKeys::last_from_date());
+    QString lastTo = DatabaseManager::instance().getSetting(SettingsKeys::last_to_date());
     if (!lastFrom.isEmpty() && !lastTo.isEmpty()) {
         info.name = !lastFy.isEmpty() ? lastFy : QString("%1 To %2").arg(formatDisplayDate(lastFrom), formatDisplayDate(lastTo));
         info.startDate = normalizeToIso(lastFrom);
@@ -213,7 +229,7 @@ FiscalYearInfo FiscalYearHelper::getActiveFiscalYear() {
 
     // 3. Query database for active year first (guaranteed single source of truth for the active database)
     QVariantList activeRows = DatabaseManager::instance().executeQuery(
-        "SELECT year_name, start_date, end_date, is_active, is_locked FROM financial_years WHERE is_active = 1 LIMIT 1;"
+        "SELECT year_name, start_date, end_date, is_active, is_locked, status FROM financial_years WHERE is_active = 1 LIMIT 1;"
     );
     if (!activeRows.isEmpty()) {
         QVariantMap r = activeRows.first().toMap();
@@ -221,7 +237,8 @@ FiscalYearInfo FiscalYearHelper::getActiveFiscalYear() {
         info.startDate = normalizeToIso(r.value("start_date").toString());
         info.endDate = normalizeToIso(r.value("end_date").toString());
         info.isActive = true;
-        info.isLocked = r.value("is_locked").toBool();
+        info.status = fyStatusOf(r);
+        info.isLocked = (info.status == "locked") || r.value("is_locked").toBool();
 
         AccountingEngine::setActivePeriod(info.startDate, info.endDate, info.name);
         return info;
@@ -229,7 +246,7 @@ FiscalYearInfo FiscalYearHelper::getActiveFiscalYear() {
 
     // 4. Fallback to the latest year in database
     QVariantList latestRows = DatabaseManager::instance().executeQuery(
-        "SELECT year_name, start_date, end_date, is_active, is_locked FROM financial_years ORDER BY start_date DESC LIMIT 1;"
+        "SELECT year_name, start_date, end_date, is_active, is_locked, status FROM financial_years ORDER BY start_date DESC LIMIT 1;"
     );
     if (!latestRows.isEmpty()) {
         QVariantMap r = latestRows.first().toMap();
@@ -237,7 +254,8 @@ FiscalYearInfo FiscalYearHelper::getActiveFiscalYear() {
         info.startDate = normalizeToIso(r.value("start_date").toString());
         info.endDate = normalizeToIso(r.value("end_date").toString());
         info.isActive = r.value("is_active").toBool();
-        info.isLocked = r.value("is_locked").toBool();
+        info.status = fyStatusOf(r);
+        info.isLocked = (info.status == "locked") || r.value("is_locked").toBool();
 
         AccountingEngine::setActivePeriod(info.startDate, info.endDate, info.name);
         return info;
@@ -245,11 +263,11 @@ FiscalYearInfo FiscalYearHelper::getActiveFiscalYear() {
 
     // 5. Default fallback based on current date
     QDate today = QDate::currentDate();
-    int startY = (today.month() >= 4) ? today.year() : today.year() - 1;
+    int startY = FiscalCalendar::fyStartYearForDate(today.year(), today.month());
     int endY = startY + 1;
     info.name = QString("FY %1-%2").arg(startY).arg(QString::number(endY).right(2));
-    info.startDate = QString("%1-04-01").arg(startY);
-    info.endDate = QString("%1-03-31").arg(endY);
+    info.startDate = FiscalCalendar::fyStartDate(startY);
+    info.endDate = FiscalCalendar::fyEndDate(startY);
     info.isActive = true;
 
     AccountingEngine::setActivePeriod(info.startDate, info.endDate, info.name);
@@ -262,9 +280,9 @@ void FiscalYearHelper::setActiveFiscalYear(const QString& fyNameOrLabel) {
     if (fy.isValid()) {
         DatabaseManager::instance().executeNonQuery("UPDATE financial_years SET is_active = 0;");
         DatabaseManager::instance().executeNonQuery("UPDATE financial_years SET is_active = 1 WHERE year_name = ?;", {fy.name});
-        DatabaseManager::instance().setSetting("last_selected_fy", fy.name);
-        DatabaseManager::instance().setSetting("last_from_date", fy.startDate);
-        DatabaseManager::instance().setSetting("last_to_date", fy.endDate);
+        DatabaseManager::instance().setSetting(SettingsKeys::last_selected_fy(), fy.name);
+        DatabaseManager::instance().setSetting(SettingsKeys::last_from_date(), fy.startDate);
+        DatabaseManager::instance().setSetting(SettingsKeys::last_to_date(), fy.endDate);
         AccountingEngine::setActivePeriod(fy.startDate, fy.endDate, fy.name);
     }
 }
@@ -274,9 +292,9 @@ void FiscalYearHelper::setActiveCustomPeriod(const QString& fromIso, const QStri
     QString t = normalizeToIso(toIso);
     if (f.isEmpty() || t.isEmpty()) return;
     QString lbl = !label.isEmpty() ? label : QString("%1 To %2").arg(formatDisplayDate(f), formatDisplayDate(t));
-    DatabaseManager::instance().setSetting("last_selected_fy", lbl);
-    DatabaseManager::instance().setSetting("last_from_date", f);
-    DatabaseManager::instance().setSetting("last_to_date", t);
+    DatabaseManager::instance().setSetting(SettingsKeys::last_selected_fy(), lbl);
+    DatabaseManager::instance().setSetting(SettingsKeys::last_from_date(), f);
+    DatabaseManager::instance().setSetting(SettingsKeys::last_to_date(), t);
     AccountingEngine::setActivePeriod(f, t, lbl);
 }
 
@@ -285,7 +303,7 @@ FiscalYearInfo FiscalYearHelper::getFiscalYearForDate(const QString& dateStr) {
     if (iso.isEmpty()) return getActiveFiscalYear();
 
     QVariantList rows = DatabaseManager::instance().executeQuery(
-        "SELECT year_name, start_date, end_date, is_active, is_locked FROM financial_years WHERE start_date <= ? AND end_date >= ? LIMIT 1;",
+        "SELECT year_name, start_date, end_date, is_active, is_locked, status FROM financial_years WHERE start_date <= ? AND end_date >= ? LIMIT 1;",
         {iso, iso}
     );
     if (!rows.isEmpty()) {
@@ -295,7 +313,8 @@ FiscalYearInfo FiscalYearHelper::getFiscalYearForDate(const QString& dateStr) {
         info.startDate = normalizeToIso(r.value("start_date").toString());
         info.endDate = normalizeToIso(r.value("end_date").toString());
         info.isActive = r.value("is_active").toBool();
-        info.isLocked = r.value("is_locked").toBool();
+        info.status = fyStatusOf(r);
+        info.isLocked = (info.status == "locked") || r.value("is_locked").toBool();
         return info;
     }
 
@@ -304,12 +323,12 @@ FiscalYearInfo FiscalYearHelper::getFiscalYearForDate(const QString& dateStr) {
     if (p.size() == 3) {
         int y = p[0].toInt();
         int m = p[1].toInt();
-        int startY = (m >= 4) ? y : y - 1;
+        int startY = FiscalCalendar::fyStartYearForDate(y, m);
         int endY = startY + 1;
         FiscalYearInfo info;
         info.name = QString("FY %1-%2").arg(startY).arg(QString::number(endY).right(2));
-        info.startDate = QString("%1-04-01").arg(startY);
-        info.endDate = QString("%1-03-31").arg(endY);
+        info.startDate = FiscalCalendar::fyStartDate(startY);
+        info.endDate = FiscalCalendar::fyEndDate(startY);
         return info;
     }
 
@@ -331,12 +350,68 @@ QString FiscalYearHelper::writeBlockReason(const QString& dateStr) {
     return QString();
 }
 
+QString FiscalYearHelper::writeSoftWarning(const QString& dateStr) {
+    const QString iso = normalizeToIso(dateStr);
+    if (iso.isEmpty()) return QString();
+    const FiscalYearInfo fy = getFiscalYearForDate(iso);
+    if (!fy.isValid()) return QString();
+    if (fy.status == "soft_closed") {
+        return QString("Heads up: %1 is soft-closed (year-end in progress). You can still post, but prefer the active year.").arg(fy.name);
+    }
+    return QString();
+}
+
+bool FiscalYearHelper::setYearStatus(const QString& fyName, const QString& status,
+                                     const QString& actor, const QString& reason,
+                                     QString* errorOut) {
+    const QString want = status.trimmed().toLower();
+    if (want != "open" && want != "soft_closed" && want != "locked") {
+        if (errorOut) *errorOut = QString("Unknown fiscal-year status '%1'.").arg(status);
+        return false;
+    }
+    auto& db = DatabaseManager::instance();
+    QVariantList rows = db.executeQuery(
+        "SELECT year_name, status, is_locked FROM financial_years WHERE year_name = ? LIMIT 1;",
+        {fyName.trimmed()});
+    if (rows.isEmpty()) {
+        if (errorOut) *errorOut = QString("Financial year '%1' not found.").arg(fyName);
+        return false;
+    }
+    QVariantMap r = rows.first().toMap();
+    const QString cur = r.value("status").toString().trimmed().toLower();
+    const QString curNorm = (cur == "locked" || cur == "soft_closed") ? cur : "open";
+    // Legal jumps: open<->soft_closed, soft_closed->locked, locked->open
+    // (explicit reopen only). locked->soft_closed is refused (reopen first).
+    const bool legal = (curNorm == want)
+        || (curNorm == "open" && (want == "soft_closed" || want == "locked"))
+        || (curNorm == "soft_closed" && (want == "open" || want == "locked"))
+        || (curNorm == "locked" && want == "open");
+    if (!legal) {
+        if (errorOut) *errorOut = QString("%1 is %2: reopen it before moving to %3.")
+            .arg(r.value("year_name").toString(), curNorm, want);
+        return false;
+    }
+    const int lockedMirror = (want == "locked") ? 1 : 0;
+    if (!db.executeNonQuery("UPDATE financial_years SET status = ?, is_locked = ? WHERE year_name = ?;",
+                            {want, lockedMirror, r.value("year_name").toString()})) {
+        if (errorOut) *errorOut = QString("Could not update %1: %2.")
+            .arg(r.value("year_name").toString(), db.lastErrorText());
+        return false;
+    }
+    db.logAudit(want == "open" && curNorm == "locked" ? "FY_REOPEN" : "FY_STATUS",
+                "financial_years", r.value("year_name").toString(),
+                QString("{\"status\":\"%1\",\"by\":\"%2\"}").arg(curNorm, actor.trimmed()),
+                QString("{\"status\":\"%1\",\"by\":\"%2\",\"reason\":\"%3\"}")
+                    .arg(want, actor.trimmed(), reason.trimmed()));
+    return true;
+}
+
 FiscalYearInfo FiscalYearHelper::getFiscalYearByName(const QString& fyName) {
     QString cleanName = fyName.trimmed();
     if (cleanName.isEmpty()) return getActiveFiscalYear();
 
     QVariantList rows = DatabaseManager::instance().executeQuery(
-        "SELECT year_name, start_date, end_date, is_active, is_locked FROM financial_years WHERE year_name = ? OR year_name LIKE ? LIMIT 1;",
+        "SELECT year_name, start_date, end_date, is_active, is_locked, status FROM financial_years WHERE year_name = ? OR year_name LIKE ? LIMIT 1;",
         {cleanName, "%" + cleanName + "%"}
     );
     if (!rows.isEmpty()) {
@@ -346,7 +421,8 @@ FiscalYearInfo FiscalYearHelper::getFiscalYearByName(const QString& fyName) {
         info.startDate = normalizeToIso(r.value("start_date").toString());
         info.endDate = normalizeToIso(r.value("end_date").toString());
         info.isActive = r.value("is_active").toBool();
-        info.isLocked = r.value("is_locked").toBool();
+        info.status = fyStatusOf(r);
+        info.isLocked = (info.status == "locked") || r.value("is_locked").toBool();
         return info;
     }
 
@@ -552,7 +628,7 @@ QList<FiscalYearInfo> FiscalYearHelper::getAllFiscalYears() {
     ensureFiscalYearsDiscovered();
     QList<FiscalYearInfo> list;
     QVariantList rows = DatabaseManager::instance().executeQuery(
-        "SELECT year_name, start_date, end_date, is_active, is_locked FROM financial_years ORDER BY start_date ASC;"
+        "SELECT year_name, start_date, end_date, is_active, is_locked, status FROM financial_years ORDER BY start_date ASC;"
     );
     for (const auto& rowVar : rows) {
         QVariantMap r = rowVar.toMap();
@@ -561,7 +637,8 @@ QList<FiscalYearInfo> FiscalYearHelper::getAllFiscalYears() {
         info.startDate = normalizeToIso(r.value("start_date").toString());
         info.endDate = normalizeToIso(r.value("end_date").toString());
         info.isActive = r.value("is_active").toBool();
-        info.isLocked = r.value("is_locked").toBool();
+        info.status = fyStatusOf(r);
+        info.isLocked = (info.status == "locked") || r.value("is_locked").toBool();
         list.append(info);
     }
     return list;
@@ -817,12 +894,14 @@ QStringList FiscalYearHelper::fyMonthNames() {
 
 int FiscalYearHelper::fyMonthIndex(int calendarMonth) {
     if (calendarMonth < 1 || calendarMonth > 12) return -1;
-    return (calendarMonth >= 4) ? (calendarMonth - 4) : (calendarMonth + 8);
+    // April(0)..March(11); single April constant via the choke.
+    return (calendarMonth - FiscalCalendar::startMonth() + 12) % 12;
 }
 
 int FiscalYearHelper::calendarMonthForFyIndex(int fyIdx) {
     if (fyIdx < 0 || fyIdx > 11) return -1;
-    return (fyIdx < 9) ? (fyIdx + 4) : (fyIdx - 8);
+    const int m = (fyIdx + FiscalCalendar::startMonth()) % 12;
+    return (m == 0) ? 12 : m;
 }
 
 int FiscalYearHelper::fyStartYear(const QString& fyName) {

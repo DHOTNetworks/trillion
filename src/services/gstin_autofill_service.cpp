@@ -1,5 +1,6 @@
 #include "gstin_autofill_service.h"
 #include "../database_manager.h"
+#include "../config/settings_registry.h"
 #include "../engine/gstr1_engine.h"
 #include <QDir>
 #include <QFile>
@@ -24,7 +25,7 @@ bool GstinAutofillService::isValidGstin(const QString& gstin) {
 }
 
 QString GstinAutofillService::apiKey() {
-    QString k = DatabaseManager::instance().getSetting("gstin_lookup/api_key").trimmed();
+    QString k = DatabaseManager::instance().getSetting(SettingsKeys::gstin_api_key()).trimmed();
     if (!k.isEmpty()) return k;
     QFile f(QDir::current().filePath("data/.gstin_api_key"));
     if (f.open(QIODevice::ReadOnly)) {

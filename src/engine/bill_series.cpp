@@ -1,5 +1,6 @@
 #include "bill_series.h"
 #include "../database_manager.h"
+#include "../config/settings_registry.h"
 #include "accounting_engine.h"
 #include "fiscal_year_helper.h"
 #include <QJsonDocument>
@@ -197,7 +198,7 @@ QString BillSeriesConfig::validate() const {
 }
 
 QString BillSeriesManager::settingsKey(const QString& docType) {
-    return "bill_series/" + docType.trimmed().toLower();
+    return SettingsKeys::bill_series(docType);
 }
 
 BillSeriesConfig BillSeriesManager::load(const QString& docType, const QString& table) {

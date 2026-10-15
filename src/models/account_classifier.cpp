@@ -224,6 +224,11 @@ bool AccountClassifier::isProfitAndLoss(int c1, int c2, int c3, int c4) {
 
 bool AccountClassifier::isDirectExpense(int c1, int c2, int c3, int c4, int calcDirectExpense) {
     if (calcDirectExpense == 1) return true;
+    // Generic-chart direct buckets (Phase 2): codes 200/201 exist only where
+    // we seed them, always inside the P&L chain — mirrors the 22/23/24 rule
+    // so fresh-firm postings land in Trading (Tally behavior). Legacy and
+    // migrated charts carry no such codes and are unaffected.
+    if ((c1 == 200 || c1 == 201) && isProfitAndLoss(c1, c2, c3, c4)) return true;
     return isDescendantOf(c1, c2, c3, c4, 22) ||
            isDescendantOf(c1, c2, c3, c4, 23) ||
            isDescendantOf(c1, c2, c3, c4, 24);

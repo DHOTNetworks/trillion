@@ -28,7 +28,7 @@ InterestCalculatorWidget::InterestCalculatorWidget(InterestModel* model,
     FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
     QDate sDate = QDate::fromString(activeFy.startDate, "yyyy-MM-dd");
     QDate eDate = QDate::fromString(activeFy.endDate, "yyyy-MM-dd");
-    if (!sDate.isValid()) sDate = QDate(QDate::currentDate().month() < 4 ? QDate::currentDate().year() - 1 : QDate::currentDate().year(), 4, 1);
+    if (!sDate.isValid()) sDate = QDate(FiscalCalendar::fyStartYearForDate(QDate::currentDate().year(), QDate::currentDate().month()), FiscalCalendar::startMonth(), 1);
     if (!eDate.isValid()) eDate = QDate::currentDate();
     m_fromDateEdit->setDate(sDate);
     m_toDateEdit->setDate(eDate);
@@ -93,7 +93,7 @@ void InterestCalculatorWidget::setupUi() {
 
     FiscalYearInfo initFy = FiscalYearHelper::getActiveFiscalYear();
     QDate initSDate = QDate::fromString(initFy.startDate, "yyyy-MM-dd");
-    if (!initSDate.isValid()) initSDate = QDate(QDate::currentDate().month() < 4 ? QDate::currentDate().year() - 1 : QDate::currentDate().year(), 4, 1);
+    if (!initSDate.isValid()) initSDate = QDate(FiscalCalendar::fyStartYearForDate(QDate::currentDate().year(), QDate::currentDate().month()), FiscalCalendar::startMonth(), 1);
     m_fromDateEdit = new AccountingDateDisplay(initSDate, paramCard);
     m_fromDateEdit->setMinimumWidth(115);
     paramGrid->addWidget(new QLabel("From Date:", paramCard), 0, 4);

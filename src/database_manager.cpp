@@ -1,5 +1,7 @@
 #include "database_manager.h"
+#include "config/feature_flags.h"
 #include "models/account_classifier.h"
+#include <initializer_list>
 #include "engine/accounting_engine.h"
 #include <QDir>
 #include <QFileInfo>
@@ -221,6 +223,13 @@ void DatabaseManager::ensureTablesExist() {
         ");"
     );
 
+    // Phase 3 flags: effective domain set for the gated DDL below (stored
+    // keys upgraded by data-detected ON bits, so migrated firms always keep
+    // their domain tables; fresh generic firms get core tables only).
+    // Computed after app_settings exists; detection is existence-guarded,
+    // so position within this function is safe.
+    const FeatureFlags domainFlags = FeatureFlags::resolveEffective();
+
     // -0. GSTIN lookup response cache (one fetch per GSTIN per database, ever).
     executeNonQuery(
         "CREATE TABLE IF NOT EXISTS gstin_lookup_cache ("
@@ -270,6 +279,81 @@ void DatabaseManager::ensureTablesExist() {
         "is_locked INTEGER DEFAULT 0"
         ");"
     );
+
+    // 1b. Year-End Opening Balances (F3 close engine writes these; F4 reports
+    // consume them). Core table: one row per balance-sheet ledger per opening
+    // year. Written only by the close procedure / reversal cleanup.
+    executeNonQuery(
+        "CREATE TABLE IF NOT EXISTS fy_opening_balances ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "fy_id INTEGER NOT NULL,"
+        "party_id INTEGER,"
+        "party_name TEXT NOT NULL,"
+        "amount REAL NOT NULL DEFAULT 0.0,"
+        "balance_type TEXT NOT NULL DEFAULT 'Dr',"
+        "created_at TEXT DEFAULT CURRENT_TIMESTAMP,"
+        "FOREIGN KEY (fy_id) REFERENCES financial_years(id),"
+        "FOREIGN KEY (party_id) REFERENCES parties(id)"
+        ");"
+    );
+
+    // 1b. Voucher Types Master (Phase 1 generic-ERP pivot: single source of
+    // truth for every voucher kind; replaces hardcoded Sale/Purc/… literals
+    // and the never-created voucher_settings table the provider used to read).
+    executeNonQuery(
+        "CREATE TABLE IF NOT EXISTS voucher_types ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "code TEXT UNIQUE NOT NULL,"
+        "name TEXT NOT NULL,"
+        "category TEXT NOT NULL DEFAULT 'OTHER',"
+        "is_system INTEGER DEFAULT 0,"
+        "prefix TEXT DEFAULT '',"
+        "numbering_method TEXT DEFAULT 'AUTO',"
+        "separator TEXT DEFAULT '-',"
+        "number_width INTEGER DEFAULT 4,"
+        "reset_each_fy INTEGER DEFAULT 1,"
+        "affects_stock INTEGER DEFAULT 0,"
+        "requires_party INTEGER DEFAULT 1,"
+        "requires_stock INTEGER DEFAULT 0,"
+        "requires_gst INTEGER DEFAULT 0,"
+        "sort_order INTEGER DEFAULT 0,"
+        "is_active INTEGER DEFAULT 1"
+        ");"
+    );
+
+    // Core seed: Tally-compatible codes, undeletable. Legacy short tokens
+    // (Sale/Purc/Jrnl/…) live on as aliases in canonicalTypeToken only.
+    {
+        struct VoucherTypeSeed {
+            const char* code; const char* name; const char* category;
+            const char* prefix; int width; int affectsStock;
+            int reqParty; int reqStock; int reqGst; int order;
+        };
+        static const VoucherTypeSeed coreTypes[] = {
+            {"SALE",   "Sales Invoice",  "SALES",    "SAL-", 4, 1, 1, 1, 1, 10},
+            {"PURC",   "Purchase Bill",  "PURCHASE", "PUR-", 4, 1, 1, 1, 1, 20},
+            {"PYMT",   "Payment",        "PAYMENT",  "PAY-", 4, 0, 1, 0, 0, 30},
+            {"RCPT",   "Receipt",        "RECEIPT",  "REC-", 4, 0, 1, 0, 0, 40},
+            {"JRNL",   "Journal",        "JOURNAL",  "JNL-", 4, 0, 1, 0, 0, 50},
+            {"CONTRA", "Contra",         "CONTRA",   "CNR-", 4, 0, 1, 0, 0, 60},
+            {"CHPT",   "Cheque Payment", "PAYMENT",  "CHP-", 4, 0, 1, 0, 0, 31},
+            {"CHRT",   "Cheque Receipt", "RECEIPT",  "CHR-", 4, 0, 1, 0, 0, 41},
+        };
+        QVariant vtCount = executeScalar("SELECT COUNT(*) FROM voucher_types;");
+        if (!vtCount.isValid() || vtCount.toLongLong() == 0) {
+            for (const auto& t : coreTypes) {
+                executeNonQuery(
+                    "INSERT INTO voucher_types (code, name, category, is_system, prefix, "
+                    "numbering_method, separator, number_width, reset_each_fy, "
+                    "affects_stock, requires_party, requires_stock, requires_gst, "
+                    "sort_order, is_active) "
+                    "VALUES (?, ?, ?, 1, ?, 'AUTO', '-', ?, 1, ?, ?, ?, ?, ?, 1);",
+                    {t.code, t.name, t.category, t.prefix, t.width,
+                     t.affectsStock, t.reqParty, t.reqStock, t.reqGst, t.order}
+                );
+            }
+        }
+    }
 
     // 2. Parties Master
     executeNonQuery(
@@ -449,49 +533,89 @@ void DatabaseManager::ensureTablesExist() {
         ");"
     );
 
-    // 4. Paddy Procurement Arrivals
+    // 4. Paddy slips, unified (mandi domain; core firms skip them). S7 SSOT:
+    // arrivals + procurement live in ONE table with slip_type; the two
+    // legacy tables are copied over once (setting-guarded) and dropped.
+    if (domainFlags.mandi) {
     executeNonQuery(
-        "CREATE TABLE IF NOT EXISTS paddy_procurement ("
+        "CREATE TABLE IF NOT EXISTS paddy_slips ("
         "id INTEGER PRIMARY KEY AUTOINCREMENT,"
-        "receipt_no TEXT UNIQUE NOT NULL,"
-        "arrival_date TEXT NOT NULL,"
-        "farmer_id INTEGER,"
-        "farmer_name TEXT NOT NULL,"
-        "variety TEXT NOT NULL,"
-        "bag_count INTEGER NOT NULL,"
-        "gross_weight_qtl REAL NOT NULL,"
-        "moisture_pct REAL DEFAULT 14.0,"
-        "deduction_qtl REAL DEFAULT 0.0,"
-        "net_weight_qtl REAL NOT NULL,"
-        "rate_per_qtl REAL NOT NULL,"
-        "total_amount REAL NOT NULL,"
-        "status TEXT DEFAULT 'Unpaid',"
-        "payment_mode TEXT DEFAULT 'Pending',"
-        "FOREIGN KEY (farmer_id) REFERENCES parties(id)"
-        ");"
-    );
-
-    executeNonQuery(
-        "CREATE TABLE IF NOT EXISTS paddy_arrivals ("
-        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
-        "slip_no TEXT NOT NULL,"
+        "slip_type TEXT NOT NULL DEFAULT 'arrival',"
+        "slip_no TEXT,"
         "arrival_date TEXT NOT NULL,"
         "farmer_id INTEGER,"
         "farmer_name TEXT,"
-        "paddy_variety TEXT,"
+        "variety TEXT NOT NULL,"
         "bag_count INTEGER,"
         "gross_weight_qtl REAL,"
-        "moisture_pct REAL,"
-        "moisture_deduction_qtl REAL,"
+        "moisture_pct REAL DEFAULT 14.0,"
+        "moisture_deduction_qtl REAL DEFAULT 0.0,"
         "net_weight_qtl REAL,"
         "rate_per_qtl REAL,"
-        "hamali_charges REAL,"
+        "hamali_charges REAL DEFAULT 0.0,"
         "net_amount REAL,"
-        "payment_status TEXT"
+        "payment_status TEXT DEFAULT 'Unpaid',"
+        "payment_mode TEXT,"
+        "FOREIGN KEY (farmer_id) REFERENCES parties(id)"
         ");"
     );
+    executeNonQuery(
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_paddy_purchase_slip "
+        "ON paddy_slips(slip_no) WHERE slip_type = 'purchase';"
+    );
+    } // domainFlags.mandi (paddy_slips)
 
-    // 5. Milling Batches & Line Items
+    // S7 one-time unification: copy legacy tables into paddy_slips with
+    // verified counts, then drop the olds. Idempotent via the marker;
+    // runs inside ensureTablesExist's transaction (atomic).
+    if (getSetting("schema_paddy_unified_v1", "") != "1"
+        && FeatureFlags::tableExists("paddy_slips")) {
+        bool unifiedOk = true;
+        QVariant hasArrivals = executeScalar(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='paddy_arrivals' LIMIT 1;");
+        if (hasArrivals.isValid() && !hasArrivals.isNull()) {
+            QVariant nArr = executeScalar("SELECT COUNT(*) FROM paddy_arrivals;");
+            unifiedOk = executeNonQuery(
+                "INSERT INTO paddy_slips (slip_type, slip_no, arrival_date, farmer_id, "
+                "farmer_name, variety, bag_count, gross_weight_qtl, moisture_pct, "
+                "moisture_deduction_qtl, net_weight_qtl, rate_per_qtl, hamali_charges, "
+                "net_amount, payment_status) "
+                "SELECT 'arrival', slip_no, arrival_date, farmer_id, farmer_name, paddy_variety, "
+                "bag_count, gross_weight_qtl, moisture_pct, moisture_deduction_qtl, net_weight_qtl, "
+                "rate_per_qtl, hamali_charges, net_amount, payment_status FROM paddy_arrivals;");
+            if (unifiedOk) {
+                QVariant nNew = executeScalar(
+                    "SELECT COUNT(*) FROM paddy_slips WHERE slip_type = 'arrival';");
+                unifiedOk = nNew.isValid() && !nNew.isNull()
+                    && nNew.toLongLong() >= (nArr.isValid() && !nArr.isNull() ? nArr.toLongLong() : 0);
+            }
+            if (unifiedOk) unifiedOk = executeNonQuery("DROP TABLE paddy_arrivals;");
+        }
+        QVariant hasProc = executeScalar(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='paddy_procurement' LIMIT 1;");
+        if (unifiedOk && hasProc.isValid() && !hasProc.isNull()) {
+            QVariant nProc = executeScalar("SELECT COUNT(*) FROM paddy_procurement;");
+            unifiedOk = executeNonQuery(
+                "INSERT INTO paddy_slips (slip_type, slip_no, arrival_date, farmer_id, "
+                "farmer_name, variety, bag_count, gross_weight_qtl, moisture_pct, "
+                "moisture_deduction_qtl, net_weight_qtl, rate_per_qtl, net_amount, "
+                "payment_status, payment_mode) "
+                "SELECT 'purchase', receipt_no, arrival_date, farmer_id, farmer_name, variety, "
+                "bag_count, gross_weight_qtl, moisture_pct, deduction_qtl, net_weight_qtl, "
+                "rate_per_qtl, total_amount, status, payment_mode FROM paddy_procurement;");
+            if (unifiedOk) {
+                QVariant nNew = executeScalar(
+                    "SELECT COUNT(*) FROM paddy_slips WHERE slip_type = 'purchase';");
+                unifiedOk = nNew.isValid() && !nNew.isNull()
+                    && nNew.toLongLong() >= (nProc.isValid() && !nProc.isNull() ? nProc.toLongLong() : 0);
+            }
+            if (unifiedOk) unifiedOk = executeNonQuery("DROP TABLE paddy_procurement;");
+        }
+        if (unifiedOk) setSetting("schema_paddy_unified_v1", "1");
+    }
+
+    // 5. Milling Batches & Line Items (mill domain; core firms skip them)
+    if (domainFlags.mill) {
     executeNonQuery(
         "CREATE TABLE IF NOT EXISTS milling_batches ("
         "id INTEGER PRIMARY KEY AUTOINCREMENT,"
@@ -511,7 +635,9 @@ void DatabaseManager::ensureTablesExist() {
         "FOREIGN KEY (fy_id) REFERENCES financial_years(id)"
         ");"
     );
+    } // domainFlags.mill (milling_batches)
 
+    if (domainFlags.mill) {
     executeNonQuery(
         "CREATE TABLE IF NOT EXISTS milling_voucher_items ("
         "id INTEGER PRIMARY KEY AUTOINCREMENT,"
@@ -533,6 +659,7 @@ void DatabaseManager::ensureTablesExist() {
         "FOREIGN KEY (item_id) REFERENCES stock_items(id)"
         ");"
     );
+    } // domainFlags.mill (milling_voucher_items)
 
     // 6. Sales Invoices
     executeNonQuery(
@@ -694,7 +821,8 @@ void DatabaseManager::ensureTablesExist() {
         ");"
     );
 
-    // 7c. J-Form Mandi Procurement Vouchers
+    // 7c. J-Form Mandi Procurement Vouchers (mandi domain; core firms skip them)
+    if (domainFlags.mandi) {
     executeNonQuery(
         "CREATE TABLE IF NOT EXISTS jform_vouchers ("
         "id INTEGER PRIMARY KEY AUTOINCREMENT,"
@@ -739,8 +867,10 @@ void DatabaseManager::ensureTablesExist() {
         "FOREIGN KEY (fy_id) REFERENCES financial_years(id)"
         ");"
     );
+    } // domainFlags.mandi (jform_vouchers)
 
-    // 8. Transport, Weighbridge (Kanda) & e-Way Dispatches
+    // 8. Transport, Weighbridge (Kanda) & e-Way Dispatches (transport domain)
+    if (domainFlags.transport) {
     executeNonQuery(
         "CREATE TABLE IF NOT EXISTS transport_dispatches ("
         "id INTEGER PRIMARY KEY AUTOINCREMENT,"
@@ -790,6 +920,7 @@ void DatabaseManager::ensureTablesExist() {
     executeNonQuery("CREATE INDEX IF NOT EXISTS idx_transport_date ON transport_dispatches(dispatch_date);");
     executeNonQuery("CREATE INDEX IF NOT EXISTS idx_transport_vehicle ON transport_dispatches(vehicle_no);");
     executeNonQuery("CREATE INDEX IF NOT EXISTS idx_transport_invoice ON transport_dispatches(invoice_no);");
+    } // domainFlags.transport (transport_dispatches)
 
     // 9. GST Debit Notes & Credit Notes (DebitCreditNotes)
     executeNonQuery(
@@ -855,7 +986,8 @@ void DatabaseManager::ensureTablesExist() {
     executeNonQuery("CREATE INDEX IF NOT EXISTS idx_dcn_invoice ON debit_credit_notes(original_invoice_no);");
     executeNonQuery("CREATE INDEX IF NOT EXISTS idx_dcn_party ON debit_credit_notes(party_name);");
 
-    // 7d. J-Form Voucher Line Items
+    // 7d. J-Form Voucher Line Items (mandi domain; core firms skip them)
+    if (domainFlags.mandi) {
     executeNonQuery(
         "CREATE TABLE IF NOT EXISTS jform_voucher_items ("
         "id INTEGER PRIMARY KEY AUTOINCREMENT,"
@@ -872,8 +1004,10 @@ void DatabaseManager::ensureTablesExist() {
         "FOREIGN KEY (voucher_id) REFERENCES jform_vouchers(id) ON DELETE CASCADE"
         ");"
     );
+    } // domainFlags.mandi (jform_voucher_items)
 
-    // 7d-2. I-Form Mandi Buyer Issue Vouchers
+    // 7d-2. I-Form Mandi Buyer Issue Vouchers (mandi domain; core firms skip them)
+    if (domainFlags.mandi) {
     executeNonQuery(
         "CREATE TABLE IF NOT EXISTS iform_vouchers ("
         "id INTEGER PRIMARY KEY AUTOINCREMENT,"
@@ -912,8 +1046,10 @@ void DatabaseManager::ensureTablesExist() {
         "FOREIGN KEY (fy_id) REFERENCES financial_years(id)"
         ");"
     );
+    } // domainFlags.mandi (iform_vouchers)
 
-    // 7d-3. I-Form Voucher Line Items
+    // 7d-3. I-Form Voucher Line Items (mandi domain; core firms skip them)
+    if (domainFlags.mandi) {
     executeNonQuery(
         "CREATE TABLE IF NOT EXISTS iform_voucher_items ("
         "id INTEGER PRIMARY KEY AUTOINCREMENT,"
@@ -939,6 +1075,7 @@ void DatabaseManager::ensureTablesExist() {
         "FOREIGN KEY (voucher_id) REFERENCES iform_vouchers(id) ON DELETE CASCADE"
         ");"
     );
+    } // domainFlags.mandi (iform_voucher_items)
 
     // 7e. TDS Vouchers
     executeNonQuery(
@@ -1259,11 +1396,20 @@ void DatabaseManager::ensureTablesExist() {
         ");"
     );
 
-    // Seed standard Bahi-Khata default account groups matching Data.001 exactly
+    // Seed the generic Tally-compatible chart (fresh firms only: seed-if-empty).
+    // Same-meaning groups keep their Bahi-Khata codes AND names so every
+    // code-driven consumer (classifier, P&L/BS engines, migrators, salary
+    // discovery) works unchanged; domain rows (Trading 18-20/24, Commission
+    // 21, Manufacturing 22-23, Mandi 31-34, Employees 35, Isht Dev -1) are
+    // dropped here and restored per-package by ensureDomainGroups (Phase 3).
+    // New-meaning groups take codes >= 100 (never collide with legacy sync).
+    // NOTE: "Cash-In-Hand" keeps its Bahi spelling on purpose — the cash
+    // report, classifier and migrators all match it; renaming would churn
+    // three subsystems for zero behavior gain.
     QVariant groupCount = executeScalar("SELECT COUNT(*) FROM account_groups;");
     if (!groupCount.isValid() || groupCount.toLongLong() == 0) {
-        struct BahiGroupSeed { int c1, c2, c3, c4; const char* name; const char* parent; const char* nature; int extractBs; };
-        static const BahiGroupSeed defaults[] = {
+        struct GenericGroupSeed { int c1, c2, c3, c4; const char* name; const char* parent; const char* nature; int extractBs; };
+        static const GenericGroupSeed defaults[] = {
             {0, 0, 0, 0, "Primary", "Primary", "Assets", 1},
             {1, 0, 0, 0, "Capital A/c", "Primary", "Liabilities", 1},
             {2, 0, 0, 0, "Current Assets", "Primary", "Assets", 1},
@@ -1272,40 +1418,32 @@ void DatabaseManager::ensureTablesExist() {
             {6, 2, 0, 0, "Loan & Advances (Assets)", "Current Assets", "Assets", 1},
             {7, 2, 0, 0, "Stock-In-Hand", "Current Assets", "Assets", 0},
             {8, 2, 0, 0, "Sundry Debtors", "Current Assets", "Assets", 1},
+            {26, 2, 0, 0, "Deposit (Assets)", "Current Assets", "Assets", 1},
+            {30, 2, 0, 0, "Security A/c", "Current Assets", "Assets", 1},
             {9, 0, 0, 0, "Current Liabilities", "Primary", "Liabilities", 1},
             {10, 9, 0, 0, "Duties & Taxes", "Current Liabilities", "Liabilities", 1},
             {11, 9, 0, 0, "Sundry Creditors", "Current Liabilities", "Liabilities", 1},
             {12, 9, 0, 0, "Provisions", "Current Liabilities", "Liabilities", 1},
             {13, 9, 0, 0, "Loans (Liability)", "Current Liabilities", "Liabilities", 1},
+            {28, 13, 9, 0, "Secured Loans", "Loans (Liability)", "Liabilities", 1},
+            {29, 13, 9, 0, "Unsecured Loans", "Loans (Liability)", "Liabilities", 1},
             {14, 0, 0, 0, "Fixed Assets", "Primary", "Assets", 1},
             {15, 0, 0, 0, "Profit & Loss", "Primary", "Liabilities", 1},
             {16, 15, 0, 0, "Income A/c", "Profit & Loss", "Income", 1},
+            {100, 16, 15, 0, "Direct Income", "Income A/c", "Income", 1},
+            {101, 16, 15, 0, "Indirect Income", "Income A/c", "Income", 1},
             {17, 15, 0, 0, "Expenditure A/c", "Profit & Loss", "Expense", 1},
-            {18, 0, 0, 0, "Trading Items Stock A/c", "Primary", "Assets", 0},
-            {19, 18, 0, 0, "Purchase A/c", "Trading Items Stock A/c", "Expense", 0},
-            {20, 18, 0, 0, "Sale A/c", "Trading Items Stock A/c", "Income", 0},
-            {21, 0, 0, 0, "Commission Basis Parties A/c", "Primary", "Liabilities", 1},
-            {22, 0, 0, 0, "Manufacturing Group", "Primary", "Expense", 0},
-            {23, 22, 0, 0, "Manufacturing Exp.", "Manufacturing Group", "Expense", 0},
-            {24, 18, 0, 0, "Trading Exp.", "Trading Items Stock A/c", "Expense", 0},
+            {200, 17, 15, 0, "Direct Expenses", "Expenditure A/c", "Expense", 1},
+            {201, 17, 15, 0, "Indirect Expenses", "Expenditure A/c", "Expense", 1},
             {25, 0, 0, 0, "Suspense A/c", "Primary", "Liabilities", 1},
-            {26, 2, 0, 0, "Deposit (Assets)", "Current Assets", "Assets", 1},
             {27, 0, 0, 0, "Branches / Divisions", "Primary", "Liabilities", 1},
-            {28, 13, 9, 0, "Secured Loans", "Loans (Liability)", "Liabilities", 1},
-            {29, 13, 9, 0, "Unsecured Loans", "Loans (Liability)", "Liabilities", 1},
-            {30, 2, 0, 0, "Security A/c", "Current Assets", "Assets", 1},
-            {31, 11, 9, 0, "Local Mandi Creditors", "Sundry Creditors", "Liabilities", 1},
-            {32, 8, 2, 0, "Zimidara Debtors", "Sundry Debtors", "Assets", 1},
-            {33, 11, 9, 0, "Zimidara Creditors", "Sundry Creditors", "Liabilities", 1},
-            {34, 8, 2, 0, "Mandi Debtors", "Sundry Debtors", "Assets", 1},
-            {35, 8, 2, 0, "Employees", "Sundry Debtors", "Assets", 1},
-            {-1, 0, 0, 0, "Isht Dev", "Primary", "Liabilities", 1}
+            {102, 0, 0, 0, "Misc. Expenses (Asset)", "Primary", "Assets", 1},
         };
         for (const auto& g : defaults) {
             executeNonQuery(
                 "INSERT INTO account_groups (name, parent_group_name, nature, description, extract_in_balance_sheet, is_system, code1st, code2nd, code3rd, code4th) "
-                "VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?);",
-                {g.name, g.parent, g.nature, QString("Standard Group #%1").arg(g.c1), g.extractBs, g.c1, g.c2, g.c3, g.c4}
+                "VALUES (?, ?, ?, 'Generic Chart v1', ?, 1, ?, ?, ?, ?);",
+                {g.name, g.parent, g.nature, g.extractBs, g.c1, g.c2, g.c3, g.c4}
             );
         }
     }
@@ -1386,7 +1524,8 @@ void DatabaseManager::ensureTablesExist() {
         ");"
     );
 
-    // 14. Bardana (Gunny Bags & Packaging) Transactions
+    // 14. Bardana (Gunny Bags & Packaging) Transactions (bardana domain)
+    if (domainFlags.bardana) {
     executeNonQuery(
         "CREATE TABLE IF NOT EXISTS bardana_transactions ("
         "id INTEGER PRIMARY KEY AUTOINCREMENT,"
@@ -1413,8 +1552,10 @@ void DatabaseManager::ensureTablesExist() {
     );
     executeNonQuery("CREATE INDEX IF NOT EXISTS idx_bardana_party ON bardana_transactions(party_name, voucher_date);");
     executeNonQuery("CREATE INDEX IF NOT EXISTS idx_bardana_type ON bardana_transactions(bardana_type, godown_name);");
+    } // domainFlags.bardana (bardana_transactions)
 
-    // 15. Gate Inward / Outward Register
+    // 15. Gate Inward / Outward Register (transport domain; core firms skip it)
+    if (domainFlags.transport) {
     executeNonQuery(
         "CREATE TABLE IF NOT EXISTS gate_register ("
         "id INTEGER PRIMARY KEY AUTOINCREMENT,"
@@ -1448,8 +1589,10 @@ void DatabaseManager::ensureTablesExist() {
     );
     executeNonQuery("CREATE INDEX IF NOT EXISTS idx_gate_reg_date ON gate_register(entry_date, direction);");
     executeNonQuery("CREATE INDEX IF NOT EXISTS idx_gate_reg_vehicle ON gate_register(vehicle_no);");
+    } // domainFlags.transport (gate_register)
 
-    // 16. Sauda (Forward Broker Contracts)
+    // 16. Sauda (Forward Broker Contracts) (mandi domain; core firms skip them)
+    if (domainFlags.mandi) {
     executeNonQuery(
         "CREATE TABLE IF NOT EXISTS sauda_contracts ("
         "id INTEGER PRIMARY KEY AUTOINCREMENT,"
@@ -1486,8 +1629,10 @@ void DatabaseManager::ensureTablesExist() {
     );
     executeNonQuery("CREATE INDEX IF NOT EXISTS idx_sauda_party ON sauda_contracts(party_name, status);");
     executeNonQuery("CREATE INDEX IF NOT EXISTS idx_sauda_broker ON sauda_contracts(broker_name, sauda_date);");
+    } // domainFlags.mandi (sauda_contracts)
 
-    // 17. Dalali / Brokerage Settlements
+    // 17. Dalali / Brokerage Settlements (mandi domain; core firms skip them)
+    if (domainFlags.mandi) {
     executeNonQuery(
         "CREATE TABLE IF NOT EXISTS dalali_settlements ("
         "id INTEGER PRIMARY KEY AUTOINCREMENT,"
@@ -1521,6 +1666,7 @@ void DatabaseManager::ensureTablesExist() {
         ");"
     );
     executeNonQuery("CREATE INDEX IF NOT EXISTS idx_dalali_broker ON dalali_settlements(broker_name, settlement_date);");
+    } // domainFlags.mandi (dalali_settlements)
 
     QMap<QString, QSet<QString>> tableColsCache;
     auto getCols = [this, &tableColsCache](const QString& table) -> const QSet<QString>& {
@@ -1536,11 +1682,23 @@ void DatabaseManager::ensureTablesExist() {
     };
 
     auto addColumnIfNotExists = [this, &getCols, &tableColsCache](const QString& table, const QString& column, const QString& type) {
+        // Existence guard (Phase 3): on generic DBs the domain table may not
+        // exist at all — skip instead of erroring. Flag checks stay out of
+        // heal/alter paths by design; presence is the only question here.
+        QVariant texists = executeScalar("SELECT 1 FROM sqlite_master WHERE type='table' AND name=? LIMIT 1;", {table});
+        if (!texists.isValid() || texists.isNull()) return;
         if (!getCols(table).contains(column.toLower())) {
             executeNonQuery(QString("ALTER TABLE %1 ADD COLUMN %2 %3;").arg(table, column, type));
             tableColsCache[table].insert(column.toLower());
         }
     };
+
+    // F2 status lifecycle (open/soft_closed/locked). Pure addition: existing
+    // rows default 'open'; legacy locked rows backfill below. is_locked stays
+    // as the mirror (migrators/tests/reports read it; transitions write both).
+    addColumnIfNotExists("financial_years", "status", "TEXT DEFAULT 'open'");
+    executeNonQuery("UPDATE financial_years SET status = 'locked' "
+                    "WHERE is_locked != 0 AND (status IS NULL OR status = '' OR status = 'open');");
 
     // Ensure columns exist on existing databases
     addColumnIfNotExists("sales_invoices", "market_type", "TEXT DEFAULT 'Market Type (With Stock)'");
@@ -1781,16 +1939,26 @@ void DatabaseManager::ensureTablesExist() {
         {47, 11, 9, 0, "Rice Bran Creditors", "Liabilities"}
     };
 
-    QVariant stdGroupCount = executeScalar("SELECT COUNT(*) FROM account_groups WHERE code1st > 0;");
-    if (!stdGroupCount.isValid() || stdGroupCount.toInt() < 40) {
+    // Legacy sync runs ONLY on legacy charts (Standard/Legacy markers). Fresh
+    // generic charts carry 'Generic Chart v1' rows and are never bulk-filled.
+    // Domain codes (mandi 31-34, mill 22-23) are UPDATE-only here: the domain
+    // top-up (ensureDomainGroups, Phase 3) owns their creation, so this sync
+    // can neither re-insert them on generic firms nor strand migrated rows.
+    QVariant legacyChart = executeScalar(
+        "SELECT 1 FROM account_groups WHERE description LIKE 'Standard Group #%' "
+        "OR description LIKE 'Legacy Group Code #%' LIMIT 1;");
+    if (legacyChart.isValid() && !legacyChart.isNull()) {
         for (const auto& sg : stdGroups) {
+            const bool domainOwned = (sg.code1 == 22 || sg.code1 == 23 ||
+                                      sg.code1 == 31 || sg.code1 == 32 ||
+                                      sg.code1 == 33 || sg.code1 == 34);
             QVariant v = executeScalar("SELECT id FROM account_groups WHERE name = ? OR code1st = ? LIMIT 1;", {sg.name, sg.code1});
             if (v.isValid() && !v.isNull()) {
                 executeNonQuery(
                     "UPDATE account_groups SET code1st = ?, code2nd = ?, code3rd = ?, code4th = ?, nature = ? WHERE id = ?;",
                     {sg.code1, sg.code2, sg.code3, sg.code4, sg.nature, v}
                 );
-            } else {
+            } else if (!domainOwned) {
                 executeNonQuery(
                     "INSERT INTO account_groups (name, parent_group_name, nature, code1st, code2nd, code3rd, code4th, is_system, extract_in_balance_sheet) "
                     "VALUES (?, 'Primary', ?, ?, ?, ?, ?, 1, 1);",
@@ -1821,23 +1989,25 @@ void DatabaseManager::ensureTablesExist() {
     addColumnIfNotExists("bardana_transactions", "vehicle_no", "TEXT");
     addColumnIfNotExists("transport_dispatches", "vehicle_no", "TEXT");
 
-    // Deterministic uppercase normalization for all vehicle_no entries
+    // Deterministic uppercase normalization for all vehicle_no entries.
+    // Phase 3: each UPDATE is existence-guarded — generic DBs may not have
+    // the domain tables at all (fail-loud stays for real errors elsewhere).
     executeNonQuery("UPDATE purchase_invoices SET vehicle_no = UPPER(TRIM(vehicle_no)) WHERE vehicle_no IS NOT NULL AND vehicle_no != UPPER(TRIM(vehicle_no));");
     executeNonQuery("UPDATE sales_invoices SET vehicle_no = UPPER(TRIM(vehicle_no)) WHERE vehicle_no IS NOT NULL AND vehicle_no != UPPER(TRIM(vehicle_no));");
     executeNonQuery("UPDATE vouchers SET vehicle_no = UPPER(TRIM(vehicle_no)) WHERE vehicle_no IS NOT NULL AND vehicle_no != UPPER(TRIM(vehicle_no));");
-    executeNonQuery("UPDATE gate_register SET vehicle_no = UPPER(TRIM(vehicle_no)) WHERE vehicle_no IS NOT NULL AND vehicle_no != UPPER(TRIM(vehicle_no));");
-    executeNonQuery("UPDATE bardana_transactions SET vehicle_no = UPPER(TRIM(vehicle_no)) WHERE vehicle_no IS NOT NULL AND vehicle_no != UPPER(TRIM(vehicle_no));");
-    executeNonQuery("UPDATE jform_vouchers SET vehicle_no = UPPER(TRIM(vehicle_no)) WHERE vehicle_no IS NOT NULL AND vehicle_no != UPPER(TRIM(vehicle_no));");
-    executeNonQuery("UPDATE iform_vouchers SET vehicle_no = UPPER(TRIM(vehicle_no)) WHERE vehicle_no IS NOT NULL AND vehicle_no != UPPER(TRIM(vehicle_no));");
-    executeNonQuery("UPDATE transport_dispatches SET vehicle_no = UPPER(TRIM(vehicle_no)) WHERE vehicle_no IS NOT NULL AND vehicle_no != UPPER(TRIM(vehicle_no));");
+    if (FeatureFlags::tableExists("gate_register")) executeNonQuery("UPDATE gate_register SET vehicle_no = UPPER(TRIM(vehicle_no)) WHERE vehicle_no IS NOT NULL AND vehicle_no != UPPER(TRIM(vehicle_no));");
+    if (FeatureFlags::tableExists("bardana_transactions")) executeNonQuery("UPDATE bardana_transactions SET vehicle_no = UPPER(TRIM(vehicle_no)) WHERE vehicle_no IS NOT NULL AND vehicle_no != UPPER(TRIM(vehicle_no));");
+    if (FeatureFlags::tableExists("jform_vouchers")) executeNonQuery("UPDATE jform_vouchers SET vehicle_no = UPPER(TRIM(vehicle_no)) WHERE vehicle_no IS NOT NULL AND vehicle_no != UPPER(TRIM(vehicle_no));");
+    if (FeatureFlags::tableExists("iform_vouchers")) executeNonQuery("UPDATE iform_vouchers SET vehicle_no = UPPER(TRIM(vehicle_no)) WHERE vehicle_no IS NOT NULL AND vehicle_no != UPPER(TRIM(vehicle_no));");
+    if (FeatureFlags::tableExists("transport_dispatches")) executeNonQuery("UPDATE transport_dispatches SET vehicle_no = UPPER(TRIM(vehicle_no)) WHERE vehicle_no IS NOT NULL AND vehicle_no != UPPER(TRIM(vehicle_no));");
 
     // Deterministic indexes for vehicle_no lookups
     executeNonQuery("CREATE INDEX IF NOT EXISTS idx_purchase_vehicle ON purchase_invoices(vehicle_no);");
     executeNonQuery("CREATE INDEX IF NOT EXISTS idx_sales_vehicle ON sales_invoices(vehicle_no);");
     executeNonQuery("CREATE INDEX IF NOT EXISTS idx_vouchers_vehicle ON vouchers(vehicle_no);");
-    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_bardana_vehicle ON bardana_transactions(vehicle_no);");
-    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_jform_vehicle ON jform_vouchers(vehicle_no);");
-    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_iform_vehicle ON iform_vouchers(vehicle_no);");
+    if (FeatureFlags::tableExists("bardana_transactions")) executeNonQuery("CREATE INDEX IF NOT EXISTS idx_bardana_vehicle ON bardana_transactions(vehicle_no);");
+    if (FeatureFlags::tableExists("jform_vouchers")) executeNonQuery("CREATE INDEX IF NOT EXISTS idx_jform_vehicle ON jform_vouchers(vehicle_no);");
+    if (FeatureFlags::tableExists("iform_vouchers")) executeNonQuery("CREATE INDEX IF NOT EXISTS idx_iform_vehicle ON iform_vouchers(vehicle_no);");
     addColumnIfNotExists("jform_vouchers", "driver_name", "TEXT");
     addColumnIfNotExists("jform_vouchers", "gate_pass_no", "TEXT");
     addColumnIfNotExists("jform_vouchers", "eway_bill_no", "TEXT");
@@ -1917,8 +2087,8 @@ void DatabaseManager::ensureTablesExist() {
     executeNonQuery("CREATE INDEX IF NOT EXISTS idx_purchase_broker ON purchase_invoices(broker_name);");
     executeNonQuery("CREATE INDEX IF NOT EXISTS idx_sales_broker ON sales_invoices(broker_name);");
     executeNonQuery("CREATE INDEX IF NOT EXISTS idx_vouchers_broker ON vouchers(broker_name);");
-    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_transport_dispatches_transport ON transport_dispatches(transport);");
-    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_gate_register_transport ON gate_register(transport);");
+    if (FeatureFlags::tableExists("transport_dispatches")) executeNonQuery("CREATE INDEX IF NOT EXISTS idx_transport_dispatches_transport ON transport_dispatches(transport);");
+    if (FeatureFlags::tableExists("gate_register")) executeNonQuery("CREATE INDEX IF NOT EXISTS idx_gate_register_transport ON gate_register(transport);");
 
     // Ensure all Stock Item columns exist for backward compatibility
     addColumnIfNotExists("stock_items", "trading_group", "TEXT");
@@ -1983,97 +2153,43 @@ void DatabaseManager::ensureTablesExist() {
     addColumnIfNotExists("tds_vouchers", "challan_id", "INTEGER");
     addColumnIfNotExists("tds_vouchers", "is_deposited", "INTEGER DEFAULT 0");
 
-    // Ensure Standard Bahi-Khata Default System Ledgers Matching Data.001
-    struct BahiDefLedger { int code, groupCode; const char* name; const char* balType; };
-    static const BahiDefLedger defaultBahiLedgers[] = {
-        {2, 15, "Profit & Loss", "Dr"},
-        {55, 10, "CST A/c", "Dr"},
-        {58, 10, "H.R.D.F. A/c", "Dr"},
-        {57, 10, "Market Fee A/c", "Dr"},
-        {63, 9, "Bonus A/c", "Dr"},
-        {67, 17, "Association Charges A/c", "Dr"},
-        {68, 17, "Gaushala Charges A/c", "Dr"},
-        {69, 16, "Commission A/c", "Dr"},
-        {71, 17, "Insurance Charges A/c", "Dr"},
-        {72, 17, "Jaffery A/c", "Dr"},
-        {74, 17, "Misc. Exp. a/c", "Dr"},
-        {75, 17, "Salary A/c", "Dr"},
-        {78, 17, "Labour A/c", "Dr"},
-        {79, 17, "Interest A/c", "Dr"},
-        {80, 17, "Other Exp. A/c", "Dr"},
-        {61, 10, "T.D.S. Payable (Dami/Commission)", "Cr"},
-        {54, 10, "VAT A/c", "Dr"},
-        {70, 15, "Discount A/c", "Dr"},
-        {44, 17, "Round +/- A/c", "Dr"},
-        {1, 4, "Cash", "Dr"},
-        {377, 25, "Suspense A/c", "Dr"},
-        {77, 17, "Freight Inward A/c", "Dr"},
-        {505, 18, "Bardan Export", "Dr"},
-        {209, 18, "Bardana A/c", "Dr"},
-        {882, 18, "Paddy Basmati A/c", "Dr"},
-        {501, 18, "Paddy Husk A/c", "Dr"},
-        {502, 18, "Rice Broken", "Dr"},
-        {503, 14, "Machinery A/c", "Dr"},
-        {533, 16, "Quality Claim A/c", "Dr"},
-        {542, 17, "Freight Export Rice A/c", "Dr"},
-        {544, 17, "Export Expenses", "Dr"},
-        {545, 17, "General Expenses", "Dr"},
-        {547, 17, "Provident Fund", "Dr"},
-        {548, 12, "Imprest A/c", "Dr"},
-        {571, 12, "Cheque Issued But Not Cleared", "Cr"},
-        {686, -1, "Sh. Ganesh Ji Maharaj", "Cr"},
-        {45, 18, "Paddy Parmal A/c", "Dr"},
-        {680, 18, "Rice A/c", "Dr"},
-        {500, 18, "Rice Bran A/c", "Dr"},
-        {522, 18, "Thread A/C", "Dr"},
-        {675, 9, "Freight Payable A/c", "Cr"},
-        {695, 12, "Provident Fund Payable A/c", "Cr"},
-        {697, 12, "Duties & Taxes Payable", "Cr"},
-        {582, 12, "Interest Payable A/c", "Cr"},
-        {910, 10, "T.D.S. Payable (Labour)", "Cr"},
-        {942, 18, "Rice Basmati", "Dr"},
-        {943, 10, "SGST A/c", "Dr"},
-        {945, 10, "IGST A/c", "Dr"},
-        {946, 10, "CESS A/c", "Dr"},
-        {947, 10, "Reverse Charge Payable A/c", "Dr"},
-        {56, 16, "Dami A/c", "Dr"},
-        {65, 7, "Maal Khata A/c", "Dr"},
-        {73, 17, "Brokerage A/c", "Dr"},
-        {504, 18, "Machinery Repair", "Dr"},
-        {543, 17, "Freight Outward A/C", "Dr"},
-        {546, 17, "Electricity Charges", "Dr"},
-        {76, 17, "Depriciation A/c", "Dr"},
-        {498, 10, "T.D.S. Payable (Interest)", "Cr"},
-        {944, 10, "CGST A/c", "Dr"},
-        {948, 10, "TCS Payable A/c", "Dr"},
-        {949, 2, "TCS Receivable A/c", "Dr"},
-        {66, 9, "Auction Charges A/c", "Dr"},
-        {950, 10, "TDS U/S 194-Q", "Dr"},
-        {951, 10, "TDS Payable A/c", "Cr"},
-        {952, 17, "Interest on Tax A/c", "Dr"},
-        {953, 17, "Penalty on Tax A/c", "Dr"},
-        {954, 17, "Discount Allowed A/c", "Dr"},
-        {955, 16, "Interest Received A/c", "Cr"}
+    // Ensure the six generic system ledgers (fresh, non-migrated firms only).
+    // Groups resolve BY NAME from the live chart (robust to renames); the
+    // legacy Bahi-Khata template list retires with the Bahi chart seed.
+    // (TCS Payable posts Cr like TDS Payable — the template's Dr was a bug.)
+    struct GenDefLedger { int code; const char* groupName; const char* name; const char* balType; };
+    static const GenDefLedger defaultLedgers[] = {
+        {1, "Cash-In-Hand", "Cash", "Dr"},
+        {0, "Bank(s) A/c", "Bank", "Dr"},
+        {2, "Profit & Loss", "Profit & Loss", "Dr"},
+        {951, "Duties & Taxes", "TDS Payable A/c", "Cr"},
+        {948, "Duties & Taxes", "TCS Payable A/c", "Cr"},
+        {0, "Duties & Taxes", "GST Payable A/c", "Cr"},
     };
 
-    // Only insert default Bahi-Khata template ledgers for brand-new, empty, non-migrated databases
+    // Only insert default ledgers for brand-new, empty, non-migrated databases
     int partyCount = executeScalar("SELECT COUNT(*) FROM parties;").toInt();
     QString isMigrated = getSetting("is_migrated", "0");
     QString srcType = getSetting("firm_source_type", "");
     if (partyCount == 0 && isMigrated != "1" && srcType.isEmpty()) {
-        for (const auto& bl : defaultBahiLedgers) {
-            QVariant v = executeScalar("SELECT id FROM parties WHERE name = ? OR legacy_id = ? LIMIT 1;", {bl.name, bl.code});
+        for (const auto& bl : defaultLedgers) {
+            // Name-only existence check: legacy_id 0 is shared by Bank and GST
+            // Payable, so an OR-legacy check would match the earlier row and
+            // silently skip the later one (fresh DBs seeded 5 ledgers, not 6).
+            QVariant v = executeScalar("SELECT id FROM parties WHERE name = ? LIMIT 1;", {bl.name});
             if (!v.isValid() || v.isNull()) {
-                QVariant grp = executeScalar("SELECT id, name FROM account_groups WHERE code1st = ? LIMIT 1;", {bl.groupCode});
-                QString gName = AccountClassifier::getStandardGroupName(bl.groupCode);
                 qint64 gId = 0;
-                if (grp.isValid() && !grp.isNull()) {
-                    gId = grp.toLongLong();
+                int gCode = 0;
+                QVariantList grow = executeQuery("SELECT id, code1st FROM account_groups WHERE name = ? LIMIT 1;", {QString::fromUtf8(bl.groupName)});
+                if (!grow.isEmpty()) {
+                    QVariantMap gm = grow.first().toMap();
+                    gId = gm.value("id").toLongLong();
+                    gCode = gm.value("code1st").toInt();
                 }
                 executeNonQuery(
                     "INSERT INTO parties (name, group_name, group_code, group_id, balance_type, legacy_id) "
                     "VALUES (?, ?, ?, ?, ?, ?);",
-                    {bl.name, gName, bl.groupCode, gId, bl.balType, bl.code}
+                    {bl.name, QString::fromUtf8(bl.groupName), gCode, gId, bl.balType, bl.code}
                 );
             }
         }
@@ -2124,17 +2240,18 @@ void DatabaseManager::ensureTablesExist() {
     executeNonQuery("CREATE INDEX IF NOT EXISTS idx_sales_customer ON sales_invoices(customer_name);");
     executeNonQuery("CREATE INDEX IF NOT EXISTS idx_purchase_inv_nos ON purchase_invoices(invoice_no, voucher_no);");
     executeNonQuery("CREATE INDEX IF NOT EXISTS idx_purchase_supplier ON purchase_invoices(supplier_name);");
-    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_transport_voucher ON transport_dispatches(voucher_no);");
+    if (FeatureFlags::tableExists("transport_dispatches")) executeNonQuery("CREATE INDEX IF NOT EXISTS idx_transport_voucher ON transport_dispatches(voucher_no);");
     executeNonQuery("CREATE INDEX IF NOT EXISTS idx_parties_name ON parties(name COLLATE NOCASE);");
-    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_jform_nos ON jform_vouchers(voucher_no, jform_no);");
-    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_iform_nos ON iform_vouchers(voucher_no, iform_no);");
-    executeNonQuery("CREATE INDEX IF NOT EXISTS idx_milling_batch_no ON milling_batches(batch_no);");
+    if (FeatureFlags::tableExists("jform_vouchers")) executeNonQuery("CREATE INDEX IF NOT EXISTS idx_jform_nos ON jform_vouchers(voucher_no, jform_no);");
+    if (FeatureFlags::tableExists("iform_vouchers")) executeNonQuery("CREATE INDEX IF NOT EXISTS idx_iform_nos ON iform_vouchers(voucher_no, iform_no);");
+    if (FeatureFlags::tableExists("milling_batches")) executeNonQuery("CREATE INDEX IF NOT EXISTS idx_milling_batch_no ON milling_batches(batch_no);");
 
     // One-time transport dedupe (v1): the pre-fix sync re-inserted rows on
     // every view visit, so legacy files can hold thousands of byte-identical
     // dispatches (same slip/voucher/invoice/party/date/vehicle/freight).
     // Keep MIN(id) per identical group; runs once, gated by setting.
-    if (getSetting("transport_deduped_v1", "") != "1") {
+    // Phase 3: skipped entirely when the table was never created.
+    if (getSetting("transport_deduped_v1", "") != "1" && FeatureFlags::tableExists("transport_dispatches")) {
         QVariant dupeGroups = executeScalar(
             "SELECT COUNT(*) FROM (SELECT voucher_type, financial_year, voucher_no, invoice_no, slip_no, "
             "party_name, dispatch_date, vehicle_no, total_freight FROM transport_dispatches "
@@ -2208,8 +2325,78 @@ void DatabaseManager::ensureTablesExist() {
     qDebug() << "[DB] ensureTablesExist finished in" << ddlTimer.elapsed()
              << "ms (db:" << m_dbPath << ")";
 
+    // Phase 3 flags: migrated firms pick up domain flags from detected data
+    // (ON-only, never strands rows, never writes for fresh generic DBs).
+    FeatureFlags::persistDetected();
+
     // Automatically heal and catalog any custom or foreign groups
     AccountClassifier::healAllGroups();
+}
+
+void DatabaseManager::ensureDomainMasters() {
+    // Package master top-ups for migration/engine paths (wizard uses the
+    // model methods instead — same rows, caches handled there). Raw SQL on
+    // purpose: this file links into EVERY target (app, both suites, CLI),
+    // while the Q_OBJECT models do not. Row lists mirror
+    // AccountGroupsModel::ensureDomainGroups and
+    // VoucherTypeModel::ensureDomainTypes 1:1 — change them together.
+    // Idempotent (INSERT-if-absent); never deletes. Cache note: pipeline/
+    // classifier caches refresh on next load or firm switch; migration and
+    // wizard flows both end with the user landing on fresh views.
+    const FeatureFlags eff = FeatureFlags::resolveEffective();
+    struct DomainGroup {
+        const char* name; const char* parent; const char* nature; const char* tag;
+        int c1, c2, c3, c4, extractBs;
+    };
+    auto topUpGroups = [&](std::initializer_list<DomainGroup> list) {
+        for (const auto& g : list) {
+            QVariantList rows = executeQuery(
+                "SELECT id FROM account_groups WHERE name = ? LIMIT 1;", {g.name});
+            if (!rows.isEmpty()) continue;
+            executeNonQuery(
+                "INSERT INTO account_groups (name, parent_group_name, nature, description, "
+                "extract_in_balance_sheet, is_system, code1st, code2nd, code3rd, code4th) "
+                "VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?);",
+                {g.name, g.parent, g.nature, g.tag, g.extractBs, g.c1, g.c2, g.c3, g.c4});
+        }
+    };
+    struct DomainType {
+        const char* code; const char* name; const char* category; const char* prefix; int order;
+    };
+    auto topUpTypes = [&](std::initializer_list<DomainType> list) {
+        for (const auto& t : list) {
+            QVariantList rows = executeQuery(
+                "SELECT id FROM voucher_types WHERE code = ? LIMIT 1;", {t.code});
+            if (!rows.isEmpty()) continue;
+            executeNonQuery(
+                "INSERT INTO voucher_types (code, name, category, is_system, prefix, "
+                "numbering_method, separator, number_width, reset_each_fy, "
+                "affects_stock, requires_party, requires_stock, requires_gst, sort_order, is_active) "
+                "VALUES (?, ?, ?, 0, ?, 'AUTO', '-', 4, 1, 0, 1, 0, 0, ?, 1);",
+                {t.code, t.name, t.category, t.prefix, t.order});
+        }
+    };
+    if (eff.mandi) {
+        topUpGroups({
+            {"Zimidara Debtors", "Sundry Debtors", "Assets", "Domain: mandi", 32, 20, 6, 0, 1},
+            {"Zimidara Creditors", "Sundry Creditors", "Liabilities", "Domain: mandi", 33, 11, 9, 0, 1},
+            {"Mandi Debtors", "Sundry Debtors", "Assets", "Domain: mandi", 34, 20, 6, 0, 1},
+            {"Local Mandi Creditors", "Sundry Creditors", "Liabilities", "Domain: mandi", 31, 11, 9, 0, 1},
+        });
+        topUpTypes({
+            {"JFRM", "J-Form (Mandi Purchase)", "PURCHASE", "JF-", 110},
+            {"IFRM", "I-Form (Mandi Sale)", "SALES", "IF-", 111},
+        });
+    }
+    if (eff.mill) {
+        topUpGroups({
+            {"Manufacturing Group", "Primary", "Expense", "Domain: mill", 22, 0, 0, 0, 0},
+            {"Manufacturing Exp.", "Manufacturing Group", "Expense", "Domain: mill", 23, 22, 0, 0, 0},
+        });
+        topUpTypes({
+            {"MILL", "Milling Production", "OTHER", "ML-", 120},
+        });
+    }
 }
 
 QString DatabaseManager::getSetting(const QString& key, const QString& defaultVal) {

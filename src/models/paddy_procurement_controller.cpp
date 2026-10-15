@@ -89,7 +89,7 @@ void PaddyProcurementController::resetForm(const QString &workingDate) {
     emit farmerNameChanged();
 
     QVariant lastVar = DatabaseManager::instance().executeScalar(
-        "SELECT paddy_variety FROM paddy_arrivals WHERE paddy_variety IS NOT NULL AND TRIM(paddy_variety) != '' ORDER BY id DESC LIMIT 1;"
+        "SELECT variety FROM paddy_slips WHERE slip_type = 'arrival' AND variety IS NOT NULL AND TRIM(variety) != '' ORDER BY id DESC LIMIT 1;"
     );
     if (!lastVar.isValid() || lastVar.isNull()) {
         lastVar = DatabaseManager::instance().executeScalar(

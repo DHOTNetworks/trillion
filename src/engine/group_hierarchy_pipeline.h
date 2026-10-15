@@ -72,6 +72,10 @@ private:
 
     QMutex m_mutex;
     bool m_valid = false;
+    // Firm-aware cache (cross-firm contamination fix): the cache belongs to
+    // the DB path it was loaded from. Firm switches and post-migration
+    // re-opens rebuild automatically — no caller invalidation needed.
+    QString m_cachedDbPath;
     QHash<int, AccountGroupNode> m_byId;
     QHash<QString, AccountGroupNode> m_byName;
     QHash<int, AccountGroupNode> m_byCode;

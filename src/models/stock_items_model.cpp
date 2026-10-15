@@ -798,7 +798,7 @@ QVariantList StockItemsModel::get_stock_register(const QString& param1, const QS
         int legacyCode = item.value("legacy_code").toInt();
         bool isPaddyItem = (itemType.compare("Paddy", Qt::CaseInsensitive) == 0 || legacyCode == 45 || legacyCode == 882);
         if (isPaddyItem) {
-            QString padSql = "SELECT SUM(net_weight_qtl) AS in_wt, SUM(bag_count) AS in_bg FROM paddy_arrivals WHERE paddy_variety = ?";
+            QString padSql = "SELECT SUM(net_weight_qtl) AS in_wt, SUM(bag_count) AS in_bg FROM paddy_slips WHERE slip_type = 'arrival' AND variety = ?";
             QVariantList padParams = {name};
             if (!fDate.isEmpty() && !tDate.isEmpty()) {
                 padSql += " AND arrival_date >= ? AND arrival_date <= ?";

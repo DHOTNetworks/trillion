@@ -34,7 +34,7 @@ dist/
 
 # Local SQLite databases (keep data folder template if needed)
 data/
-*.md
+!*.md
 !README.md
 !THIRD_PARTY_NOTICES.md
 !docs/*.md

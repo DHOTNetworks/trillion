@@ -25,7 +25,20 @@ void GroupHierarchyPipeline::invalidateCache() {
 }
 
 void GroupHierarchyPipeline::ensureLoaded() {
-    if (m_valid) return;
+    // Rebuild when switching firms (or when the DB file was replaced under
+    // us, e.g. post-migration reopen) — m_valid alone would serve the
+    // previous firm's groups. Cleared inline (not via invalidateCache()):
+    // callers may already hold m_mutex and QMutex is not recursive, and no
+    // signal is needed since a load follows immediately.
+    const QString curPath = DatabaseManager::instance().dbPath();
+    if (m_valid && m_cachedDbPath == curPath) return;
+    if (m_valid) {
+        m_byId.clear();
+        m_byName.clear();
+        m_byCode.clear();
+        m_roots.clear();
+        m_valid = false;
+    }
 
     m_byId.clear();
     m_byName.clear();
@@ -82,6 +95,7 @@ void GroupHierarchyPipeline::ensureLoaded() {
     }
 
     m_valid = true;
+    m_cachedDbPath = DatabaseManager::instance().dbPath();
 }
 
 QVector<AccountGroupNode> GroupHierarchyPipeline::getHierarchyTree() {

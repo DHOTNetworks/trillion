@@ -125,7 +125,7 @@ void DayBookWidget::setupUi() {
     FiscalYearInfo initFy = FiscalYearHelper::getActiveFiscalYear();
     QDate initStart = QDate::fromString(initFy.startDate, "yyyy-MM-dd");
     QDate initEnd = QDate::fromString(initFy.endDate, "yyyy-MM-dd");
-    if (!initStart.isValid()) initStart = QDate(QDate::currentDate().month() < 4 ? QDate::currentDate().year() - 1 : QDate::currentDate().year(), 4, 1);
+    if (!initStart.isValid()) initStart = QDate(FiscalCalendar::fyStartYearForDate(QDate::currentDate().year(), QDate::currentDate().month()), FiscalCalendar::startMonth(), 1);
     if (!initEnd.isValid()) initEnd = QDate::currentDate();
 
     m_fromDateEdit = new AccountingDateDisplay(filterCard);
@@ -318,7 +318,7 @@ void DayBookWidget::setupUi() {
     // Initialize with active financial year dates
     QDate sDate = QDate::fromString(activeFy.startDate, "yyyy-MM-dd");
     QDate eDate = QDate::fromString(activeFy.endDate, "yyyy-MM-dd");
-    if (!sDate.isValid()) sDate = QDate(QDate::currentDate().month() < 4 ? QDate::currentDate().year() - 1 : QDate::currentDate().year(), 4, 1);
+    if (!sDate.isValid()) sDate = QDate(FiscalCalendar::fyStartYearForDate(QDate::currentDate().year(), QDate::currentDate().month()), FiscalCalendar::startMonth(), 1);
     if (!eDate.isValid()) eDate = sDate.addYears(1).addDays(-1);
     {
         QSignalBlocker b1(m_fromDateEdit);
@@ -662,7 +662,7 @@ void DayBookWidget::showEvent(QShowEvent* event) {
     FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
     QDate sDate = QDate::fromString(activeFy.startDate, "yyyy-MM-dd");
     QDate eDate = QDate::fromString(activeFy.endDate, "yyyy-MM-dd");
-    if (!sDate.isValid()) sDate = QDate(QDate::currentDate().month() < 4 ? QDate::currentDate().year() - 1 : QDate::currentDate().year(), 4, 1);
+    if (!sDate.isValid()) sDate = QDate(FiscalCalendar::fyStartYearForDate(QDate::currentDate().year(), QDate::currentDate().month()), FiscalCalendar::startMonth(), 1);
     if (!eDate.isValid()) eDate = QDate::currentDate();
 
     if (!m_fromDateEdit->date().isValid() || !m_toDateEdit->date().isValid()) {

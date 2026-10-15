@@ -1,5 +1,6 @@
 #include "tcs_config_dialog.h"
 #include "../database_manager.h"
+#include "../config/settings_registry.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGridLayout>
@@ -112,11 +113,11 @@ void TcsConfigDialog::setupUi()
 void TcsConfigDialog::loadSettings()
 {
     DatabaseManager &db = DatabaseManager::instance();
-    m_thresholdEdit->setText(db.getSetting("tcs_threshold_limit", "5000000.00"));
-    m_rateWithPanEdit->setText(db.getSetting("tcs_rate_with_pan", "0.100"));
-    m_rateWithoutPanEdit->setText(db.getSetting("tcs_rate_without_pan", "1.000"));
+    m_thresholdEdit->setText(db.getSetting(SettingsKeys::tcs_threshold_limit(), "5000000.00"));
+    m_rateWithPanEdit->setText(db.getSetting(SettingsKeys::tcs_rate_with_pan(), "0.100"));
+    m_rateWithoutPanEdit->setText(db.getSetting(SettingsKeys::tcs_rate_without_pan(), "1.000"));
 
-    int tcsLedgerId = db.getSetting("tcs_payable_ledger_id", "0").toInt();
+    int tcsLedgerId = db.getSetting(SettingsKeys::tcs_payable_ledger_id(), "0").toInt();
     if (tcsLedgerId > 0) {
         m_tcsLedgerSearch->setSelectedPartyId(tcsLedgerId);
     } else {
@@ -128,10 +129,10 @@ void TcsConfigDialog::loadSettings()
 void TcsConfigDialog::onSaveClicked()
 {
     DatabaseManager &db = DatabaseManager::instance();
-    db.setSetting("tcs_threshold_limit", m_thresholdEdit->text().trimmed());
-    db.setSetting("tcs_rate_with_pan", m_rateWithPanEdit->text().trimmed());
-    db.setSetting("tcs_rate_without_pan", m_rateWithoutPanEdit->text().trimmed());
-    db.setSetting("tcs_payable_ledger_id", QString::number(m_tcsLedgerSearch->selectedPartyId()));
+    db.setSetting(SettingsKeys::tcs_threshold_limit(), m_thresholdEdit->text().trimmed());
+    db.setSetting(SettingsKeys::tcs_rate_with_pan(), m_rateWithPanEdit->text().trimmed());
+    db.setSetting(SettingsKeys::tcs_rate_without_pan(), m_rateWithoutPanEdit->text().trimmed());
+    db.setSetting(SettingsKeys::tcs_payable_ledger_id(), QString::number(m_tcsLedgerSearch->selectedPartyId()));
 
     accept();
 }

@@ -251,8 +251,8 @@ void PaddyProcurementWidget::populateTable() {
     QString eDate = m_toDateEdit->date().toString("yyyy-MM-dd");
     QString q = m_searchEdit->text();
 
-    QString sql = "SELECT id, slip_no, arrival_date, farmer_name, paddy_variety, bag_count, gross_weight_qtl, moisture_pct, moisture_deduction_qtl, net_weight_qtl, rate_per_qtl, net_amount, payment_status "
-                  "FROM paddy_arrivals WHERE arrival_date >= '" + sDate + "' AND arrival_date <= '" + eDate + "' "
+    QString sql = "SELECT id, slip_no, arrival_date, farmer_name, variety, bag_count, gross_weight_qtl, moisture_pct, moisture_deduction_qtl, net_weight_qtl, rate_per_qtl, net_amount, payment_status "
+                  "FROM paddy_slips WHERE slip_type = 'arrival' AND arrival_date >= '" + sDate + "' AND arrival_date <= '" + eDate + "' "
                   "ORDER BY arrival_date DESC, slip_no DESC;";
     QVariantList rows = DatabaseManager::instance().executeQuery(sql);
 
@@ -269,7 +269,7 @@ void PaddyProcurementWidget::populateTable() {
         QString slipNo = rowMap.value("slip_no").toString();
         QString dateVal = rowMap.value("arrival_date").toString();
         QString farmer = rowMap.value("farmer_name").toString();
-        QString variety = rowMap.value("paddy_variety").toString();
+        QString variety = rowMap.value("variety").toString();
         long long bags = rowMap.value("bag_count").toLongLong();
         double gross = rowMap.value("gross_weight_qtl").toDouble();
         double moist = rowMap.value("moisture_pct").toDouble();

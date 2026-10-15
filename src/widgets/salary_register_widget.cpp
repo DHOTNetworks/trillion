@@ -140,7 +140,7 @@ void SalaryRegisterWidget::setupUi() {
     });
     // Default to April or current month
     int curM = QDate::currentDate().month();
-    int monthIdx = (curM >= 4) ? (curM - 4) : (curM + 8);
+    int monthIdx = FiscalYearHelper::fyMonthIndex(curM);
     m_monthCombo->setCurrentIndex(monthIdx);
     connect(m_monthCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SalaryRegisterWidget::onPeriodChanged);
     filterLayout->addWidget(m_monthCombo);
@@ -323,8 +323,7 @@ void SalaryRegisterWidget::setupUi() {
 int SalaryRegisterWidget::getSelectedMonthNumber() const {
     int idx = m_monthCombo->currentIndex();
     // 0 -> April (4), 1 -> May (5), ..., 8 -> December (12), 9 -> January (1), 10 -> February (2), 11 -> March (3)
-    if (idx < 9) return idx + 4;
-    return idx - 8;
+    return FiscalYearHelper::calendarMonthForFyIndex(idx);
 }
 
 int SalaryRegisterWidget::getSelectedYearNumber() const {

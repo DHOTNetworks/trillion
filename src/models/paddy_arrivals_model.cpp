@@ -5,7 +5,7 @@
 PaddyArrivalsModel::PaddyArrivalsModel(QObject* parent)
     : BaseTableModel(
         {"Slip No", "Date", "Farmer", "Variety", "Bags", "Gross (Qtl)", "Moist %", "Net (Qtl)", "Rate (₹)", "Net Amt (₹)", "Status"},
-        {"slip_no", "arrival_date", "farmer_name", "paddy_variety", "bag_count", "gross_weight_qtl", "moisture_pct", "net_weight_qtl", "rate_per_qtl", "net_amount", "payment_status"},
+        {"slip_no", "arrival_date", "farmer_name", "variety", "bag_count", "gross_weight_qtl", "moisture_pct", "net_weight_qtl", "rate_per_qtl", "net_amount", "payment_status"},
         parent
     )
 {
@@ -13,7 +13,8 @@ PaddyArrivalsModel::PaddyArrivalsModel(QObject* parent)
 
 void PaddyArrivalsModel::reload_data() {
     beginResetModel();
-    m_data = DatabaseManager::instance().executeQuery("SELECT * FROM paddy_arrivals ORDER BY id DESC;");
+    // S7 unified: arrival slips live in paddy_slips (slip_type='arrival').
+    m_data = DatabaseManager::instance().executeQuery("SELECT * FROM paddy_slips WHERE slip_type = 'arrival' ORDER BY id DESC;");
     endResetModel();
     emit dataChangedSignal();
     emit countChanged();
@@ -21,7 +22,7 @@ void PaddyArrivalsModel::reload_data() {
 
 bool PaddyArrivalsModel::add_arrival(const QString& farmer_name, const QString& paddy_variety, const QString& arrival_date, int bags, double gross_qtl, double moisture_pct, double rate_qtl, double hamali, const QString& status) {
     QString dt = arrival_date.isEmpty() ? QDate::currentDate().toString("yyyy-MM-dd") : arrival_date;
-    QVariant maxRow = DatabaseManager::instance().executeScalar("SELECT MAX(id) FROM paddy_arrivals;");
+    QVariant maxRow = DatabaseManager::instance().executeScalar("SELECT MAX(id) FROM paddy_slips WHERE slip_type = 'arrival';");
     long long maxId = maxRow.isValid() ? maxRow.toLongLong() : 1000;
     QString slipNo = QString("SLIP-%1").arg(maxId + 1);
 
@@ -31,8 +32,8 @@ bool PaddyArrivalsModel::add_arrival(const QString& farmer_name, const QString& 
     double netAmt = (netQtl * rate_qtl) - (bags * hamali);
 
     bool ok = DatabaseManager::instance().executeNonQuery(
-        "INSERT INTO paddy_arrivals (slip_no, arrival_date, farmer_id, farmer_name, paddy_variety, bag_count, gross_weight_qtl, moisture_pct, moisture_deduction_qtl, net_weight_qtl, rate_per_qtl, hamali_charges, net_amount, payment_status) "
-        "VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+        "INSERT INTO paddy_slips (slip_type, slip_no, arrival_date, farmer_id, farmer_name, variety, bag_count, gross_weight_qtl, moisture_pct, moisture_deduction_qtl, net_weight_qtl, rate_per_qtl, hamali_charges, net_amount, payment_status) "
+        "VALUES ('arrival', ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
         {slipNo, dt, farmer_name, paddy_variety, bags, gross_qtl, moisture_pct, moistDed, netQtl, rate_qtl, hamali, netAmt, status}
     );
     if (ok) reload_data();

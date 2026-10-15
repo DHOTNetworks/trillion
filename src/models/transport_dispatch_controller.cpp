@@ -1,5 +1,6 @@
 #include "transport_dispatch_controller.h"
 #include "../database_manager.h"
+#include "../config/feature_flags.h"
 #include "../services/financial_math_service.h"
 #include "../services/accounting_date_service.h"
 #include <QDebug>
@@ -251,6 +252,14 @@ QString TransportDispatchController::totalBalancePayableFmt() const {
 }
 
 void TransportDispatchController::reload() {
+    // Phase 3: the table may not exist (generic firm, transport off) — and
+    // this runs in the ctor at every startup. Bail out clean instead of
+    // erroring; the view is unreachable while the domain is off anyway.
+    if (!FeatureFlags::tableExists("transport_dispatches")) {
+        m_model.setAllRecords({});
+        recalculateSummary();
+        return;
+    }
     // Sync any sales/purchase dispatches into transport_dispatches.
     // IDEMPOTENT by voucher identity (safe to call on every view entry):
     // guards match (voucher_type, financial_year, voucher_no), falling back

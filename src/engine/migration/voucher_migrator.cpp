@@ -1,5 +1,6 @@
 #include "voucher_migrator.h"
 #include "../database_manager.h"
+#include "../fiscal_year_helper.h"
 #include "migration_utils.h"
 #include <QDebug>
 #include <cmath>
@@ -44,20 +45,28 @@ static int parseInteger(const std::string& s, int def = 0) {
 }
 
 QString VoucherMigrator::mapVoucherTypeStr(const QString& rawType) {
-    QString t = rawType.trimmed().toLower();
-    if (t == "sale" || t == "sales") return "Sales";
-    if (t == "purc" || t == "purch" || t == "purchase" || t == "purchases") return "Purchase";
-    if (t == "jrnl" || t == "journal" || t == "jv") return "Journal";
-    if (t == "paym" || t == "payment" || t == "pay") return "Payment";
-    if (t == "recp" || t == "receipt" || t == "rcpt") return "Receipt";
-    if (t == "cntra" || t == "contra") return "Contra";
-    if (t == "dbnt" || t == "debit note" || t == "debitnote") return "Debit Note";
-    if (t == "crnt" || t == "credit note" || t == "creditnote") return "Credit Note";
-    if (t == "jfrm" || t == "jform" || t == "j-form") return "J-Form";
-    if (t == "ifrm" || t == "iform" || t == "i-form") return "I-Form";
-    if (t == "mill" || t == "milling") return "Milling";
-    if (t == "bank") return "Bank";
-    if (t == "tds") return "TDS";
+    // Phase 1: alias normalization lives in FiscalYearHelper::canonicalTypeToken.
+    // Display mapping below matches the proven BahiKhataMigrator::mapVoucherTypeStr
+    // (src/engine/bahi_khata_migrator.cpp) that produced the current migrated DB
+    // (vouchers: Payment/Purchase/Sales/Receipt/Journal/...) — verified against
+    // live Data.002 TransType values {ChPt,ChRt,Jrnl,PrRn,Purc,Pymt,Rcpt,Sale,SlRn}.
+    // Cash/bank families merge for STORAGE only; voucher numbering keeps raw
+    // tokens distinct via canonVoucherNo/canonicalVoucherNo — never merge there.
+    QString tok = FiscalYearHelper::canonicalTypeToken(rawType);
+    if (tok == "Sale") return "Sales";
+    if (tok == "Purc") return "Purchase";
+    if (tok == "Pymt" || tok == "ChPt") return "Payment";
+    if (tok == "Rcpt" || tok == "ChRt") return "Receipt";
+    if (tok == "Jrnl") return "Journal";
+    if (tok == "Contra") return "Contra";
+    if (tok == "JFrm") return "J-Form";
+    if (tok == "IFrm") return "I-Form";
+    if (tok == "Mill") return "Milling";
+    if (tok == "Bank") return "Bank";
+    if (tok == "TDS") return "TDS";
+    if (tok == "TCS") return "TCS";
+    if (tok == "DbNt") return "Debit Note";
+    if (tok == "CrNt") return "Credit Note";
     return rawType.trimmed().isEmpty() ? "Journal" : rawType.trimmed();
 }
 

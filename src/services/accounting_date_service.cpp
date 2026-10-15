@@ -1,4 +1,5 @@
 #include "accounting_date_service.h"
+#include "../engine/fiscal_year_helper.h" // FiscalCalendar choke (April fixed)
 #include <QStringList>
 
 AccountingDateService::AccountingDateService(QObject *parent)
@@ -134,8 +135,8 @@ bool AccountingDateService::validateDateInFy(const QString &dmyStr, int fyYearSt
     QDate d = QDate::fromString(iso, "yyyy-MM-dd");
     if (!d.isValid()) return false;
 
-    QDate fyStart(fyYearStart, 4, 1);
-    QDate fyEnd(fyYearStart + 1, 3, 31);
+    QDate fyStart(fyYearStart, FiscalCalendar::startMonth(), 1);
+    QDate fyEnd(fyYearStart + 1, FiscalCalendar::endMonth(), 31);
 
     return (d >= fyStart && d <= fyEnd);
 }
@@ -153,8 +154,8 @@ QString AccountingDateService::getValidationErrorMessage(const QString &dmyStr, 
     }
 
     if (fyYearStart > 0) {
-        QDate fyStart(fyYearStart, 4, 1);
-        QDate fyEnd(fyYearStart + 1, 3, 31);
+        QDate fyStart(fyYearStart, FiscalCalendar::startMonth(), 1);
+        QDate fyEnd(fyYearStart + 1, FiscalCalendar::endMonth(), 31);
         if (d < fyStart) {
             QString label = fyLabel.isEmpty() ? QString("%1-%2").arg(fyYearStart).arg((fyYearStart + 1) % 100, 2, 10, QChar('0')) : fyLabel;
             return QString("Voucher date (%1) is BEFORE active Financial Year %2 (Starts 01/04/%3).")

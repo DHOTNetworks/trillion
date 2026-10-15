@@ -7,6 +7,7 @@
 #include "../engine/accounting_engine.h"
 #include "../database_manager.h"
 #include "../models/menu_tree_manager.h"
+#include "../config/feature_flags.h"
 #include <QSqlQuery>
 #include <QSqlError>
 #include <QDate>
@@ -40,15 +41,7 @@ DashboardWidget::DashboardWidget(DashboardController* dashCtrl,
 
     connect(&MahadevERP::MenuTreeManager::instance(), &MahadevERP::MenuTreeManager::openViewRequested, this, [this](int viewIndex) {
         Q_UNUSED(viewIndex);
-        QString lastMenu = MahadevERP::MenuTreeManager::instance().lastTriggeredMenuId();
-        if (lastMenu == "ledger_master") m_selectedMenuIndex = 0;
-        else if (lastMenu == "stock_master") m_selectedMenuIndex = 1;
-        else if (lastMenu == "add_voucher") m_selectedMenuIndex = 2;
-        else if (lastMenu == "other_voucher" || lastMenu == "tds_tcs_hub" || lastMenu == "tds_options" || lastMenu == "tcs_options" || lastMenu == "mandi_trading_hub") m_selectedMenuIndex = 3;
-        else if (lastMenu == "reports_register" || lastMenu == "cash_book_hub" || lastMenu == "stock_register_hub") m_selectedMenuIndex = 4;
-        else if (lastMenu == "final_accounts" || lastMenu == "final_reports_hub" || lastMenu == "trading_reports_hub" || lastMenu == "trial_balance_options_hub" || lastMenu == "depreciation_options_hub") m_selectedMenuIndex = 5;
-        else m_selectedMenuIndex = 0;
-        updateSelection(m_selectedMenuIndex);
+        selectMenu(MahadevERP::MenuTreeManager::instance().lastTriggeredMenuId());
     });
 }
 
@@ -128,7 +121,7 @@ void DashboardWidget::setupUi() {
     mainTitle->setStyleSheet("font-size: 22px; font-weight: 800; color: #0F172A; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', 'Noto Sans', 'Liberation Sans', Arial, sans-serif; border: none; background: transparent;");
     titleBox->addWidget(mainTitle);
 
-    QLabel* subTitle = new QLabel("Mahadev Rice Milling ERP & Financial Control System", this);
+    QLabel* subTitle = new QLabel("Mahadev ERP & Financial Control System", this);
     subTitle->setStyleSheet("font-size: 12px; font-weight: 500; color: #64748B; border: none; background: transparent;");
     titleBox->addWidget(subTitle);
     topHeaderLayout->addLayout(titleBox);
@@ -365,29 +358,54 @@ QWidget* DashboardWidget::createMiddleSection() {
     menuHeader->setStyleSheet("color: #2563EB; font-size: 11px; font-weight: 800; letter-spacing: 1px;");
     menuSection->addWidget(menuHeader);
 
-    // 5 Interactive Nav Cards
-    m_menuCards.clear();
-
-    auto addCard = [this, menuSection](int idx, const QString& num, const QString& title, const QString& sub,
-                                       const QString& sc, const QString& bBg, const QString& bTxt,
-                                       const QString& aBg, const QString& aBdr) {
-        DashboardMenuCard* card = new DashboardMenuCard(idx, num, title, sub, sc, bBg, bTxt, aBg, aBdr, this);
-        connect(card, &DashboardMenuCard::cardClicked, this, [this](int idx) { triggerMenuIndex(idx); });
-        m_menuCards.append(card);
-        menuSection->addWidget(card);
-    };
-
-    addCard(0, "1", "1. Ledger Master", "New Ledger, Modify, View Ledger, Groups", "Alt+6", "#DBEAFE", "#2563EB", "#EFF6FF", "#2563EB");
-    addCard(1, "2", "2. Stock Master", "Raw Paddy, Rice & By-Product Inventory", "Alt+4", "#DCFCE7", "#16A34A", "#F0FDF4", "#16A34A");
-    addCard(2, "3", "3. Add Vouchers", "Sales, Purchase, Journal, Cheque, Cash, Milling & GST", "F2", "#FEF3C7", "#D97706", "#FEF3C7", "#D97706");
-    addCard(3, "4", "4. Other Vouchers", "J-Form Mandi Procurement & TDS Vouchers", "Alt+5", "#F3E8FF", "#7C3AED", "#F3E8FF", "#7C3AED");
-    addCard(4, "5", "5. Books & Registers", "Day Book, Cash & Bank Book, Sales, Purchase & Stock", "Alt+7", "#DCFCE7", "#059669", "#ECFDF5", "#059669");
-    addCard(5, "6", "6. Final Accounts & Financials", "Balance Sheet, P&L, Trial Bal, GST & Mandi Returns", "Alt+8", "#E0E7FF", "#4F46E5", "#EEF2FF", "#4F46E5");
+    m_menuSection = menuSection;
+    buildMenuCards();
 
     layout->addLayout(menuSection);
     layout->addStretch(1);
 
     return container;
+}
+
+void DashboardWidget::buildMenuCards() {
+    // §23.5 + S3: Ledger, Stock, Add Vouchers, [Mandi iff paddy is
+    // reachable (mandi OR mill — view 1 answers to either)], Other, Books,
+    // Final. Badge numbers are visible positions (no gaps ever); card
+    // titles carry no numeric prefixes.
+    qDeleteAll(m_menuCards);
+    m_menuCards.clear();
+    m_cardMenuIds.clear();
+
+    const bool wantMandi = FeatureFlags::isViewEnabled(1);
+    m_mandiCardShown = wantMandi;
+
+    struct CardDef {
+        const char* menuId; const char* title; const char* sub; const char* sc;
+        const char* bBg; const char* bTxt; const char* aBg; const char* aBdr;
+        bool gated;
+    };
+    const CardDef defs[] = {
+        {"ledger_master", "Ledger Master", "New Ledger, Modify, View Ledger, Groups", "Alt+6", "#DBEAFE", "#2563EB", "#EFF6FF", "#2563EB", false},
+        {"stock_master", "Stock Master", "Raw Paddy, Rice & By-Product Inventory", "Alt+4", "#DCFCE7", "#16A34A", "#F0FDF4", "#16A34A", false},
+        {"add_voucher", "Add Vouchers", "Sales, Purchase, Journal, Cheque, Cash, Milling & GST", "F2", "#FEF3C7", "#D97706", "#FEF3C7", "#D97706", false},
+        {"mandi", "Mandi & Procurement", "J-Form, I-Form, Paddy Slip & Trading Hub", "F11", "#F3E8FF", "#7C3AED", "#F3E8FF", "#7C3AED", true},
+        {"other_voucher", "Other Vouchers", "TDS/TCS, Bank Import, Transport & Payroll", "Alt+5", "#EDE9FE", "#6D28D9", "#EDE9FE", "#6D28D9", false},
+        {"reports_register", "Books & Registers", "Day Book, Cash & Bank Book, Sales, Purchase & Stock", "Alt+7", "#DCFCE7", "#059669", "#ECFDF5", "#059669", false},
+        {"final_accounts", "Final Accounts & Financials", "Balance Sheet, P&L, Trial Bal, GST & Mandi Returns", "Alt+8", "#E0E7FF", "#4F46E5", "#EEF2FF", "#4F46E5", false},
+    };
+    for (const auto& d : defs) {
+        if (d.gated && !wantMandi) continue;
+        const int pos = m_menuCards.size(); // visible position (0-based)
+        DashboardMenuCard* card = new DashboardMenuCard(pos, QString::number(pos + 1),
+            d.title, d.sub, d.sc, d.bBg, d.bTxt, d.aBg, d.aBdr, this);
+        connect(card, &DashboardMenuCard::cardClicked, this, [this](int idx) { triggerMenuIndex(idx); });
+        m_menuCards.append(card);
+        m_cardMenuIds.append(QString::fromLatin1(d.menuId));
+        m_menuSection->addWidget(card);
+    }
+    if (m_selectedMenuIndex >= m_menuCards.size()) {
+        m_selectedMenuIndex = m_menuCards.isEmpty() ? 0 : m_menuCards.size() - 1;
+    }
 }
 
 QWidget* DashboardWidget::createStatCard(const QString& title, QLabel** outValLabel, const QString& subtext, const QString& accentColor) {
@@ -503,48 +521,73 @@ void DashboardWidget::updateSelection(int index) {
 }
 
 void DashboardWidget::triggerMenuIndex(int index, int initialSubmenuIndex) {
+    // Position-free: the visible card's menu id drives the menu (§23.5).
+    if (index < 0 || index >= m_cardMenuIds.size()) return;
     updateSelection(index);
-    if (index == 0) openLedgerMenu(initialSubmenuIndex);
-    else if (index == 1) openStockMenu(initialSubmenuIndex);
-    else if (index == 2) openAddVoucherMenu(initialSubmenuIndex);
-    else if (index == 3) openOtherVoucherMenu(initialSubmenuIndex);
-    else if (index == 4) openReportsMenu(initialSubmenuIndex);
-    else if (index == 5) openFinalAccountsMenu(initialSubmenuIndex);
+    MahadevERP::MenuTreeManager::instance().executeMenu(m_cardMenuIds[index], this, initialSubmenuIndex);
+}
+
+int DashboardWidget::cardForMenu(const QString& menuId) const {
+    // Direct hit first (top-level menus and the mandi node itself).
+    int idx = m_cardMenuIds.indexOf(menuId);
+    if (idx >= 0) return idx;
+    // Hub→card mapping: the hub row lives on exactly one card (§23.4).
+    QString hub = menuId;
+    if (menuId == "mandi_trading_hub") {
+        hub = m_cardMenuIds.contains("mandi") ? "mandi" : "other_voucher";
+    } else if (menuId == "tds_tcs_hub" || menuId == "tds_options" || menuId == "tcs_options") {
+        hub = "other_voucher";
+    } else if (menuId == "cash_book_hub" || menuId == "stock_register_hub"
+               || menuId == "stock_only_menu" || menuId == "stock_amount_menu"
+               || menuId == "stock_profit_menu") {
+        hub = "reports_register";
+    } else if (menuId == "final_reports_hub" || menuId == "trading_reports_hub"
+               || menuId == "trial_balance_options_hub" || menuId == "depreciation_options_hub"
+               || menuId == "auto_closing_stock_hub" || menuId == "done_undone_bsheet_hub") {
+        hub = "final_accounts";
+    } else {
+        return -1;
+    }
+    return m_cardMenuIds.indexOf(hub);
+}
+
+void DashboardWidget::selectMenu(const QString& menuId) {
+    const int idx = cardForMenu(menuId);
+    if (idx >= 0) updateSelection(idx);
 }
 
 void DashboardWidget::openLedgerMenu(int initialIndex) {
-    m_selectedMenuIndex = 0;
-    updateSelection(0);
+    selectMenu("ledger_master");
     MahadevERP::MenuTreeManager::instance().executeMenu("ledger_master", this, initialIndex);
 }
 
 void DashboardWidget::openStockMenu(int initialIndex) {
-    m_selectedMenuIndex = 1;
-    updateSelection(1);
+    selectMenu("stock_master");
     MahadevERP::MenuTreeManager::instance().executeMenu("stock_master", this, initialIndex);
 }
 
 void DashboardWidget::openAddVoucherMenu(int initialIndex) {
-    m_selectedMenuIndex = 2;
-    updateSelection(2);
+    selectMenu("add_voucher");
     MahadevERP::MenuTreeManager::instance().executeMenu("add_voucher", this, initialIndex);
 }
 
+void DashboardWidget::openMandiMenu(int initialIndex) {
+    selectMenu("mandi");
+    MahadevERP::MenuTreeManager::instance().executeMenu("mandi", this, initialIndex);
+}
+
 void DashboardWidget::openOtherVoucherMenu(int initialIndex) {
-    m_selectedMenuIndex = 3;
-    updateSelection(3);
+    selectMenu("other_voucher");
     MahadevERP::MenuTreeManager::instance().executeMenu("other_voucher", this, initialIndex);
 }
 
 void DashboardWidget::openReportsMenu(int initialIndex) {
-    m_selectedMenuIndex = 4;
-    updateSelection(4);
+    selectMenu("reports_register");
     MahadevERP::MenuTreeManager::instance().executeMenu("reports_register", this, initialIndex);
 }
 
 void DashboardWidget::openFinalAccountsMenu(int initialIndex) {
-    m_selectedMenuIndex = 5;
-    updateSelection(5);
+    selectMenu("final_accounts");
     MahadevERP::MenuTreeManager::instance().executeMenu("final_accounts", this, initialIndex);
 }
 
@@ -643,16 +686,14 @@ void DashboardWidget::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
     refreshStats();
 
-    QString lastMenu = MahadevERP::MenuTreeManager::instance().lastTriggeredMenuId();
-    if (lastMenu == "ledger_master") m_selectedMenuIndex = 0;
-    else if (lastMenu == "stock_master") m_selectedMenuIndex = 1;
-    else if (lastMenu == "add_voucher") m_selectedMenuIndex = 2;
-    else if (lastMenu == "other_voucher" || lastMenu == "tds_tcs_hub" || lastMenu == "tds_options" || lastMenu == "tcs_options" || lastMenu == "mandi_trading_hub") m_selectedMenuIndex = 3;
-    else if (lastMenu == "reports_register" || lastMenu == "cash_book_hub" || lastMenu == "stock_register_hub") m_selectedMenuIndex = 4;
-    else if (lastMenu == "final_accounts" || lastMenu == "final_reports_hub" || lastMenu == "trading_reports_hub" || lastMenu == "trial_balance_options_hub" || lastMenu == "depreciation_options_hub") m_selectedMenuIndex = 5;
-    else m_selectedMenuIndex = 0;
-
-    updateSelection(m_selectedMenuIndex);
+    // Rebuild cards when mandi visibility changed (firm switch); then clamp
+    // any stale selection (§23.5: showEvent clamps, never trusts indices).
+    if (FeatureFlags::isViewEnabled(1) != m_mandiCardShown) {
+        buildMenuCards();
+    }
+    int idx = cardForMenu(MahadevERP::MenuTreeManager::instance().lastTriggeredMenuId());
+    if (idx < 0 || idx >= m_menuCards.size()) idx = 0;
+    updateSelection(idx);
     focusMenu();
 }
 
@@ -676,28 +717,10 @@ void DashboardWidget::keyPressEvent(QKeyEvent* event) {
         triggerMenuIndex(m_selectedMenuIndex);
         event->accept();
         return;
-    } else if (event->key() == Qt::Key_1) {
-        triggerMenuIndex(0);
-        event->accept();
-        return;
-    } else if (event->key() == Qt::Key_2) {
-        triggerMenuIndex(1);
-        event->accept();
-        return;
-    } else if (event->key() == Qt::Key_3) {
-        triggerMenuIndex(2);
-        event->accept();
-        return;
-    } else if (event->key() == Qt::Key_4) {
-        triggerMenuIndex(3);
-        event->accept();
-        return;
-    } else if (event->key() == Qt::Key_5) {
-        triggerMenuIndex(4);
-        event->accept();
-        return;
-    } else if (event->key() == Qt::Key_6) {
-        triggerMenuIndex(5);
+    } else if (event->key() >= Qt::Key_1 && event->key() <= Qt::Key_7) {
+        // Digit keys follow VISIBLE positions (§23.5: no gaps ever).
+        const int pos = event->key() - Qt::Key_1;
+        if (pos < m_menuCards.size()) triggerMenuIndex(pos);
         event->accept();
         return;
     } else if (event->key() == Qt::Key_F8) {

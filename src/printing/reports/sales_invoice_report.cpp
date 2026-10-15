@@ -4,6 +4,7 @@
 #include "report_html_chrome.h"
 #include "../../database_manager.h"
 #include "../../engine/accounting_engine.h"
+#include "../../engine/invoice_totals.h"
 #include "../../engine/fiscal_year_helper.h"
 #include "../../engine/profit_loss_calculator.h"
 #include "../../engine/balance_sheet_calculator.h"
@@ -261,7 +262,10 @@ QString renderSalesInvoiceSingleHtml(const QString& invoiceNo, const QString& co
 
     // Clean white sheet: item rows only for entered items — no filler
     // grids on non-existent items. Free space stays blank white.
-    double grandTotal = inv.value("total_amount").toDouble();
+    // S8: single cable for TCS-inclusive totals (migrated bills store
+    // exclusive + tcs_amount; fresh bills store inclusive with TCS206C
+    // legs). The item-based recompute stays as the empty-invoice fallback.
+    double grandTotal = InvoiceTotals::saleTotals(invNum).inclusive;
     if (grandTotal <= 0.0 && totalTaxable > 0.0) {
         grandTotal = totalTaxable + totalGst;
     }

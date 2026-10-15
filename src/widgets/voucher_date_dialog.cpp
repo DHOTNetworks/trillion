@@ -1,6 +1,7 @@
 #include "voucher_date_dialog.h"
 #include <QGraphicsDropShadowEffect>
 #include <QDate>
+#include "../engine/fiscal_year_helper.h" // FiscalCalendar choke (April fixed)
 #include <QApplication>
 
 VoucherDateDialog::VoucherDateDialog(const QString& currentDate, const FiscalYearInfo& fyContext, QWidget* parent)
@@ -350,7 +351,7 @@ DateRangeDialog::DateRangeDialog(const QString& fromDate, const QString& toDate,
     }
 
     QDate defFrom = QDate::fromString(m_contextFy.startDate, "yyyy-MM-dd");
-    if (!defFrom.isValid()) defFrom = QDate(QDate::currentDate().month() < 4 ? QDate::currentDate().year() - 1 : QDate::currentDate().year(), 4, 1);
+    if (!defFrom.isValid()) defFrom = QDate(FiscalCalendar::fyStartYearForDate(QDate::currentDate().year(), QDate::currentDate().month()), FiscalCalendar::startMonth(), 1);
     QDate defTo = QDate::currentDate();
 
     QDate pFrom = parseDateFlexible(m_initialFrom, defFrom);
@@ -654,7 +655,7 @@ void DateRangeDialog::setPresetFullFy() {
     FiscalYearInfo fy = m_contextFy.isValid() ? m_contextFy : FiscalYearHelper::getActiveFiscalYear();
     QDate f = QDate::fromString(fy.startDate, "yyyy-MM-dd");
     QDate t = QDate::fromString(fy.endDate, "yyyy-MM-dd");
-    if (!f.isValid()) f = QDate(QDate::currentDate().month() < 4 ? QDate::currentDate().year() - 1 : QDate::currentDate().year(), 4, 1);
+    if (!f.isValid()) f = QDate(FiscalCalendar::fyStartYearForDate(QDate::currentDate().year(), QDate::currentDate().month()), FiscalCalendar::startMonth(), 1);
     if (!t.isValid()) t = QDate(f.year() + 1, 3, 31);
 
     m_fromInput->setText(f.toString("dd-MM-yyyy"));
@@ -682,11 +683,11 @@ void DateRangeDialog::setPresetToday() {
 void DateRangeDialog::setPresetQuarter(int q) {
     FiscalYearInfo fy = m_contextFy.isValid() ? m_contextFy : FiscalYearHelper::getActiveFiscalYear();
     QDate fyStart = QDate::fromString(fy.startDate, "yyyy-MM-dd");
-    int startYear = fyStart.isValid() ? fyStart.year() : (QDate::currentDate().month() < 4 ? QDate::currentDate().year() - 1 : QDate::currentDate().year());
+    int startYear = fyStart.isValid() ? fyStart.year() : FiscalCalendar::fyStartYearForDate(QDate::currentDate().year(), QDate::currentDate().month());
 
     QDate f, t;
     if (q == 1) { // Apr - Jun
-        f = QDate(startYear, 4, 1);
+        f = QDate(startYear, FiscalCalendar::startMonth(), 1);
         t = QDate(startYear, 6, 30);
     } else if (q == 2) { // Jul - Sep
         f = QDate(startYear, 7, 1);

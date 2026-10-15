@@ -16,6 +16,9 @@
 #include "../src/models/jform_voucher_controller.h"
 #include "../src/models/milling_batch_controller.h"
 #include "../src/models/paddy_procurement_controller.h"
+#include "../src/models/paddy_arrivals_model.h"
+#include "../src/engine/invoice_totals.h"
+#include "../src/engine/fy_close_engine.h"
 #include "../src/models/ledger_master_controller.h"
 #include "../src/models/stock_master_controller.h"
 #include "../src/models/sales_model.h"
@@ -25,6 +28,8 @@
 #include <miniz.h>
 #include <QTemporaryDir>
 #include "../src/models/vouchers_model.h"
+#include "../src/models/voucher_type_model.h"
+#include "../src/config/feature_flags.h"
 #include "../src/models/parties_model.h"
 #include "../src/models/financial_years_model.h"
 #include "../src/models/milling_model.h"
@@ -103,6 +108,15 @@ private slots:
     void testPerFinancialYearVoucherNumbering();
     void testBillSeriesConfig();
     void testGstr1ExcelParity();
+    void testVoucherTypeMaster();
+    void testDomainGroupsTopUp();
+    void testFeatureFlagDetection();
+    void testViewFlagMap();
+    void testPaddySharedView();
+    void testPaddyUnifiedWriteRead();
+    void testInvoiceTotalsTcsShapes();
+    void testFiscalYearStatusLifecycle();
+    void testFyCloseReopen();
 
     // 5. Masters & Regulatory Validations
     void testGstinValidationAndPanExtraction();
@@ -1279,6 +1293,15 @@ void LogicBoardTestSuite::testBankStatementControllerPosting() {
 void LogicBoardTestSuite::testTransportDispatchController() {
     TransportDispatchController ctrl;
 
+    // Phase 3 hermeticity: this test needs transport_dispatches, which is a
+    // gated domain table. Prime the flag + ensure on entry, restore on exit
+    // (empty tables don't trip detection, so only our key changes).
+    auto& dbT = DatabaseManager::instance();
+    QVariant preTransport = dbT.executeScalar(
+        "SELECT value FROM app_settings WHERE key='feature.transport' LIMIT 1;");
+    QVERIFY(dbT.setSetting("feature.transport", "1"));
+    dbT.ensureTablesExist();
+
     // 1. Test Net Weight Calculation Engine
     // Gross: 450.00 Qtl, Tare: 109.40 Qtl, Bags: 680, BagTare: 0 kg
     double net1 = ctrl.calculateNetWeight(450.0, 109.40, 680, 0.0);
@@ -1348,11 +1371,23 @@ void LogicBoardTestSuite::testTransportDispatchController() {
     // Clean up
     bool delOk = ctrl.deleteDispatch(recId);
     QVERIFY(delOk);
+
+    // Restore the flag to its pre-test state (absent stays absent).
+    if (preTransport.isValid() && !preTransport.isNull())
+        QVERIFY(dbT.setSetting("feature.transport", preTransport.toString()));
+    else
+        QVERIFY(dbT.executeNonQuery("DELETE FROM app_settings WHERE key='feature.transport';"));
 }
 
 void LogicBoardTestSuite::testTransportSyncIdempotent() {
     auto& db = DatabaseManager::instance();
     TransportDispatchController ctrl;
+
+    // Phase 3 hermeticity: same priming as testTransportDispatchController.
+    QVariant preTransport = db.executeScalar(
+        "SELECT value FROM app_settings WHERE key='feature.transport' LIMIT 1;");
+    QVERIFY(db.setSetting("feature.transport", "1"));
+    db.ensureTablesExist();
 
     // Seed one sale + one purchase carrying vehicles (FY 2099 sandbox).
     QVERIFY(db.executeNonQuery(
@@ -1380,6 +1415,10 @@ void LogicBoardTestSuite::testTransportSyncIdempotent() {
     db.executeNonQuery("DELETE FROM transport_dispatches WHERE invoice_no IN ('SYNC-S-1','SUP-1');");
     db.executeNonQuery("DELETE FROM sales_invoices WHERE invoice_no = 'SYNC-S-1';");
     db.executeNonQuery("DELETE FROM purchase_invoices WHERE invoice_no = 'SUP-1';");
+    if (preTransport.isValid() && !preTransport.isNull())
+        QVERIFY(db.setSetting("feature.transport", preTransport.toString()));
+    else
+        QVERIFY(db.executeNonQuery("DELETE FROM app_settings WHERE key='feature.transport';"));
 }
 
 void LogicBoardTestSuite::testInvoiceAuditWiring() {
@@ -2688,6 +2727,514 @@ void LogicBoardTestSuite::testBahiKhataJetDbExporterPipeline() {
     QFile::remove(targetExportPath);
 
     qDebug() << "[TEST] Bahi-Khata JetDB Bidirectional Exporter verified successfully!";
+}
+
+void LogicBoardTestSuite::testVoucherTypeMaster() {
+    // Phase 1 generic-ERP pivot: voucher_types is the single source of truth.
+    auto& db = DatabaseManager::instance();
+    // Defensive cleanup of the probe code from any previously aborted run.
+    // (Domain rows JFRM/IFRM are never bulk-deleted: they may be user data.)
+    db.executeNonQuery("DELETE FROM voucher_types WHERE code = 'TSTVT';");
+    VoucherTypeModel m;
+    m.reload_data();
+    const bool hadJfrm = !m.byCode("JFRM").isEmpty();
+    const bool hadIfrm = !m.byCode("IFRM").isEmpty();
+
+    // 1. Core seed: exactly the 8 Tally-compatible system types.
+    const QStringList core = {"SALE", "PURC", "PYMT", "RCPT", "JRNL", "CONTRA", "CHPT", "CHRT"};
+    for (const QString& c : core) {
+        QVariantMap row = m.byCode(c);
+        QVERIFY2(!row.isEmpty(), qPrintable("missing core type " + c));
+        QCOMPARE(row.value("is_system").toInt(), 1);
+        QCOMPARE(row.value("is_active").toInt(), 1);
+    }
+    // Lookup is case-insensitive; system types are never deletable.
+    QCOMPARE(m.byCode("sale").value("code").toString(), QString("SALE"));
+    QVERIFY(!m.isDeletable("SALE"));
+    QVERIFY(!m.deleteType("SALE"));
+    // Same-name save on a system type is a no-op, never a column rewrite.
+    QVERIFY(m.saveType({{"code", "SALE"}, {"name", "Sales Invoice"}}));
+    QCOMPARE(m.byCode("SALE").value("category").toString(), QString("SALES"));
+
+    // 2. Custom type round-trip: insert -> visible -> deletable.
+    QVariantMap custom;
+    custom["code"] = "TSTVT"; custom["name"] = "Test Stock Transfer";
+    custom["category"] = "OTHER"; custom["prefix"] = "TST-";
+    QVERIFY(m.saveType(custom));
+    QVERIFY(!m.byCode("TSTVT").isEmpty());
+    QVERIFY(m.isDeletable("TSTVT"));
+    bool seen = false;
+    for (const QVariant& v : m.activeTypes()) {
+        if (v.toMap().value("code").toString() == "TSTVT") { seen = true; break; }
+    }
+    QVERIFY(seen);
+    QVERIFY(m.deleteType("TSTVT"));
+    QVERIFY(m.byCode("TSTVT").isEmpty());
+
+    // 3. Domain top-up is idempotent; unknown domains are a no-op.
+    VoucherTypeModel::ensureDomainTypes("mandi");
+    VoucherTypeModel::ensureDomainTypes("mandi");
+    m.reload_data();
+    QVERIFY(!m.byCode("JFRM").isEmpty());
+    QVERIFY(!m.byCode("IFRM").isEmpty());
+    QCOMPARE(db.executeScalar(
+        "SELECT COUNT(*) FROM voucher_types WHERE code='JFRM';").toLongLong(), 1);
+    VoucherTypeModel::ensureDomainTypes("bogus-domain");
+    // Remove only rows this test created; pre-existing domain rows are user data.
+    if (!hadJfrm) {
+        QVERIFY(m.deleteType("JFRM"));
+        QVERIFY(m.byCode("JFRM").isEmpty());
+    }
+    if (!hadIfrm) {
+        QVERIFY(m.deleteType("IFRM"));
+        QVERIFY(m.byCode("IFRM").isEmpty());
+    }
+    db.executeNonQuery("DELETE FROM voucher_types WHERE code = 'TSTVT';");
+}
+
+void LogicBoardTestSuite::testDomainGroupsTopUp() {
+    // Phase 2 pivot: mandi/mill groups seed only via ensureDomainGroups,
+    // idempotently by name. Respects pre-existing rows (legacy charts and
+    // migrated firms already carry these names — never deletes user data).
+    auto& db = DatabaseManager::instance();
+    QVariantMap preMandi = AccountGroupsModel().get_group_by_name("Mandi Debtors");
+    QVariantMap preMill = AccountGroupsModel().get_group_by_name("Manufacturing Group");
+
+    AccountGroupsModel::ensureDomainGroups("mandi");
+    AccountGroupsModel::ensureDomainGroups("mandi");
+    AccountGroupsModel::ensureDomainGroups("bogus-domain"); // no-op, must not crash
+    AccountGroupsModel m;
+    m.reload_data();
+    QVERIFY(!m.get_group_by_name("Mandi Debtors").isEmpty());
+    QVERIFY(!m.get_group_by_name("Zimidara Debtors").isEmpty());
+    QVERIFY(!m.get_group_by_name("Zimidara Creditors").isEmpty());
+    QVERIFY(!m.get_group_by_name("Local Mandi Creditors").isEmpty());
+    QCOMPARE(db.executeScalar(
+        "SELECT COUNT(*) FROM account_groups WHERE name='Mandi Debtors';").toLongLong(), 1);
+    // Legacy Bahi-Khata codes preserved so classifier math keeps working.
+    QVERIFY(m.get_group_by_name("Mandi Debtors").value("id").toLongLong() > 0);
+    QVariant code = db.executeScalar(
+        "SELECT code1st FROM account_groups WHERE name='Mandi Debtors';");
+    QCOMPARE(code.toInt(), 34);
+
+    if (preMandi.isEmpty()) {
+        QVERIFY(db.executeNonQuery("DELETE FROM account_groups WHERE name IN "
+            "('Mandi Debtors','Zimidara Debtors','Zimidara Creditors','Local Mandi Creditors');"));
+    }
+    Q_UNUSED(preMill);
+    AccountClassifier::invalidateCache();
+}
+
+void LogicBoardTestSuite::testFeatureFlagDetection() {
+    // Phase 3 flags: detection is data-driven and ON-only. The test recomputes
+    // expectations live from table contents, so it holds on migrated, legacy
+    // and fresh-generic databases alike. Pre-existing keys are restored.
+    auto& db = DatabaseManager::instance();
+    const QStringList keys = {"feature.mandi", "feature.mill",
+                              "feature.bardana", "feature.transport"};
+    QMap<QString, QString> snapshot;
+    for (const QString& k : keys) {
+        QVariant v = db.executeScalar(
+            "SELECT value FROM app_settings WHERE key = ? LIMIT 1;", {k});
+        if (v.isValid() && !v.isNull()) snapshot[k] = v.toString();
+    }
+    QVERIFY(db.executeNonQuery("DELETE FROM app_settings WHERE key LIKE 'feature.%';"));
+
+    auto hasRows = [&](const QString& table) -> bool {
+        QVariant present = db.executeScalar(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=? LIMIT 1;", {table});
+        if (!present.isValid() || present.isNull()) return false;
+        QVariant n = db.executeScalar(QString("SELECT COUNT(*) FROM \"%1\";").arg(table));
+        return n.isValid() && !n.isNull() && n.toLongLong() > 0;
+    };
+    auto anyRows = [&](const QStringList& tables) -> bool {
+        for (const QString& t : tables) { if (hasRows(t)) return true; }
+        return false;
+    };
+    const bool expMandi = anyRows({"jform_vouchers", "jform_voucher_items",
+        "iform_vouchers", "iform_voucher_items", "paddy_slips",
+        "sauda_contracts", "dalali_settlements"});
+    const bool expMill = anyRows({"milling_batches", "milling_voucher_items"});
+    const bool expBardana = anyRows({"bardana_transactions"});
+    const bool expTransport = anyRows({"gate_register", "transport_dispatches"});
+
+    FeatureFlags det = FeatureFlags::detectFromData();
+    QCOMPARE(det.mandi, expMandi);
+    QCOMPARE(det.mill, expMill);
+    QCOMPARE(det.bardana, expBardana);
+    QCOMPARE(det.transport, expTransport);
+
+    // resolveEffective: stored keys (currently cleared) upgraded by detection.
+    FeatureFlags eff = FeatureFlags::resolveEffective();
+    QCOMPARE(eff.mandi, expMandi);
+    QCOMPARE(eff.mill, expMill);
+    QCOMPARE(eff.bardana, expBardana);
+    QCOMPARE(eff.transport, expTransport);
+
+    FeatureFlags::persistDetected();
+    auto keyIs = [&](const QString& k) -> QString {
+        QVariant v = db.executeScalar(
+            "SELECT value FROM app_settings WHERE key = ? LIMIT 1;", {k});
+        return (v.isValid() && !v.isNull()) ? v.toString() : QString("");
+    };
+    QCOMPARE(keyIs("feature.mandi"), expMandi ? QString("1") : QString(""));
+    QCOMPARE(keyIs("feature.mill"), expMill ? QString("1") : QString(""));
+    QCOMPARE(keyIs("feature.bardana"), expBardana ? QString("1") : QString(""));
+    QCOMPARE(keyIs("feature.transport"), expTransport ? QString("1") : QString(""));
+    // Explicit load() round-trip through save().
+    FeatureFlags f = FeatureFlags::load();
+    QCOMPARE(f.mandi, expMandi);
+    f.bardana = true;
+    FeatureFlags::save(f);
+    QCOMPARE(FeatureFlags::load().bardana, true);
+
+    // Restore pre-existing keys byte-identical (absent stays absent).
+    QVERIFY(db.executeNonQuery("DELETE FROM app_settings WHERE key LIKE 'feature.%';"));
+    for (auto it = snapshot.constBegin(); it != snapshot.constEnd(); ++it) {
+        QVERIFY(db.setSetting(it.key(), it.value()));
+    }
+}
+
+void LogicBoardTestSuite::testViewFlagMap() {
+    // Phase 3 navigation gating: stacked-view indices map to required
+    // feature keys; core views map to "". Hermetic: snapshot, force all
+    // flags off, assert, restore.
+    auto& db = DatabaseManager::instance();
+    const QStringList keys = {"feature.mandi", "feature.mill",
+                              "feature.bardana", "feature.transport"};
+    QMap<QString, QString> snapshot;
+    for (const QString& k : keys) {
+        QVariant v = db.executeScalar(
+            "SELECT value FROM app_settings WHERE key = ? LIMIT 1;", {k});
+        if (v.isValid() && !v.isNull()) snapshot[k] = v.toString();
+    }
+    for (const QString& k : keys) QVERIFY(db.setSetting(k, "0"));
+
+    for (int v : {1, 18, 19, 20, 72}) {
+        QCOMPARE(FeatureFlags::requiredFlagForView(v), QString("feature.mandi"));
+        QVERIFY(!FeatureFlags::isViewEnabled(v));
+    }
+    for (int v : {31, 35}) {
+        QCOMPARE(FeatureFlags::requiredFlagForView(v), QString("feature.mill"));
+        QVERIFY(!FeatureFlags::isViewEnabled(v));
+    }
+    QCOMPARE(FeatureFlags::requiredFlagForView(70), QString("feature.bardana"));
+    QVERIFY(!FeatureFlags::isViewEnabled(70));
+    for (int v : {27, 71}) {
+        QCOMPARE(FeatureFlags::requiredFlagForView(v), QString("feature.transport"));
+        QVERIFY(!FeatureFlags::isViewEnabled(v));
+    }
+    // Core views (dashboard, registers, vouchers, reports) stay reachable.
+    for (int v : {0, 3, 4, 13, 14, 15, 16, 17, 22, 26, 28, 29, 30, 33, 64}) {
+        QVERIFY2(FeatureFlags::isViewEnabled(v), qPrintable(QString::number(v)));
+    }
+    QCOMPARE(FeatureFlags::domainLabelForFlag("feature.mandi"), QString("Mandi"));
+
+    QVERIFY(db.executeNonQuery("DELETE FROM app_settings WHERE key LIKE 'feature.%';"));
+    for (auto it = snapshot.constBegin(); it != snapshot.constEnd(); ++it) {
+        QVERIFY(db.setSetting(it.key(), it.value()));
+    }
+}
+
+void LogicBoardTestSuite::testPaddySharedView() {
+    // S3: paddy (view 1) answers to mandi OR mill. Mill-only firms keep the
+    // paddy slip reachable while J/I-Form stay hidden; mandi-only firms keep
+    // everything. Hermetic: snapshot, drive both combos, restore.
+    auto& db = DatabaseManager::instance();
+    const QStringList keys = {"feature.mandi", "feature.mill",
+                              "feature.bardana", "feature.transport"};
+    QMap<QString, QString> snapshot;
+    for (const QString& k : keys) {
+        QVariant v = db.executeScalar(
+            "SELECT value FROM app_settings WHERE key = ? LIMIT 1;", {k});
+        if (v.isValid() && !v.isNull()) snapshot[k] = v.toString();
+    }
+    auto setFlags = [&](const char* mandi, const char* mill) {
+        QVERIFY(db.setSetting("feature.mandi", mandi));
+        QVERIFY(db.setSetting("feature.mill", mill));
+        QVERIFY(db.setSetting("feature.bardana", "0"));
+        QVERIFY(db.setSetting("feature.transport", "0"));
+    };
+
+    // Mill-only: paddy + mill views on; mandi views off.
+    setFlags("0", "1");
+    QVERIFY(FeatureFlags::isViewEnabled(1));
+    QVERIFY(FeatureFlags::isViewEnabled(31));
+    QVERIFY(FeatureFlags::isViewEnabled(35));
+    for (int v : {18, 19, 20, 72}) QVERIFY(!FeatureFlags::isViewEnabled(v));
+
+    // Mandi-only: paddy + mandi views on; mill views off.
+    setFlags("1", "0");
+    QVERIFY(FeatureFlags::isViewEnabled(1));
+    for (int v : {18, 19, 20, 72}) QVERIFY(FeatureFlags::isViewEnabled(v));
+    QVERIFY(!FeatureFlags::isViewEnabled(31));
+    QVERIFY(!FeatureFlags::isViewEnabled(35));
+
+    QVERIFY(db.executeNonQuery("DELETE FROM app_settings WHERE key LIKE 'feature.%';"));
+    for (auto it = snapshot.constBegin(); it != snapshot.constEnd(); ++it) {
+        QVERIFY(db.setSetting(it.key(), it.value()));
+    }
+}
+
+void LogicBoardTestSuite::testPaddyUnifiedWriteRead() {
+    // S7 SSOT: arrivals + purchases share paddy_slips, filtered by slip_type.
+    // Hermetic: prime mandi + ensure on entry (empty tables don't trip
+    // detection), delete probe rows + restore flag on exit.
+    auto& db = DatabaseManager::instance();
+    QVariant preMandi = db.executeScalar(
+        "SELECT value FROM app_settings WHERE key='feature.mandi' LIMIT 1;");
+    QVERIFY(db.setSetting("feature.mandi", "1"));
+    db.ensureTablesExist();
+    db.executeNonQuery("DELETE FROM paddy_slips WHERE farmer_name = 'S7 Farmer';");
+
+    PaddyArrivalsModel m;
+    QVERIFY(m.add_arrival("S7 Farmer", "S7 Basmati", "2099-08-15",
+                          10, 5.0, 17.0, 2000.0, 5.0, "Unpaid"));
+    QVERIFY(db.executeNonQuery(
+        "INSERT INTO paddy_slips (slip_type, slip_no, arrival_date, farmer_name, "
+        "variety, bag_count, gross_weight_qtl, net_weight_qtl, rate_per_qtl, net_amount) "
+        "VALUES ('purchase', 'S7-PUR-1', '2099-08-15', 'S7 Farmer', 'S7 Basmati', "
+        "20, 10.0, 10.0, 2000.0, 20000.0);"));
+    m.reload_data();
+
+    // Model sees arrivals only, under the unified column name.
+    bool sawArrival = false;
+    for (const QVariant& v : m.get_all_data()) {
+        QVariantMap row = v.toMap();
+        if (row.value("farmer_name").toString() == "S7 Farmer") {
+            sawArrival = true;
+            QCOMPARE(row.value("variety").toString(), QString("S7 Basmati"));
+        }
+    }
+    QVERIFY(sawArrival);
+    // Per-type sums stay separated.
+    QCOMPARE(db.executeScalar(
+        "SELECT COUNT(*) FROM paddy_slips WHERE farmer_name='S7 Farmer' "
+        "AND slip_type='arrival';").toLongLong(), 1);
+    QCOMPARE(db.executeScalar(
+        "SELECT COUNT(*) FROM paddy_slips WHERE farmer_name='S7 Farmer' "
+        "AND slip_type='purchase';").toLongLong(), 1);
+    QCOMPARE(db.executeScalar(
+        "SELECT SUM(net_weight_qtl) FROM paddy_slips WHERE farmer_name='S7 Farmer' "
+        "AND slip_type='purchase';").toDouble(), 10.0);
+
+    db.executeNonQuery("DELETE FROM paddy_slips WHERE farmer_name = 'S7 Farmer';");
+    if (preMandi.isValid() && !preMandi.isNull())
+        QVERIFY(db.setSetting("feature.mandi", preMandi.toString()));
+    else
+        QVERIFY(db.executeNonQuery("DELETE FROM app_settings WHERE key='feature.mandi';"));
+}
+
+void LogicBoardTestSuite::testInvoiceTotalsTcsShapes() {
+    // S8/D11: one cable distinguishes fresh (inclusive + TCS206C legs) from
+    // migrated (exclusive + tcs_amount, no legs) stored shapes. Bit-exact
+    // case: 1628875 x 0.1% = 1628.88. Hermetic FY-2099 sandbox + cleanup.
+    auto& db = DatabaseManager::instance();
+    const QString fy = "FY 2099-00";
+    db.executeNonQuery("DELETE FROM transactions WHERE invoice_no IN ('S8-MIG-1','S8-FRSH-1');");
+    db.executeNonQuery("DELETE FROM sales_invoices WHERE invoice_no IN ('S8-MIG-1','S8-FRSH-1');");
+
+    // Migrated shape: tcs_amount set, no TCS legs.
+    QVERIFY(db.executeNonQuery(
+        "INSERT INTO sales_invoices (financial_year, invoice_no, invoice_date, customer_name, "
+        "item_name, taxable_amount, total_amount, tcs_amount, tcs_rate) "
+        "VALUES ('FY 2099-00','S8-MIG-1','2099-08-15','S8 C','S8 I',1628875.0,1628875.0,1628.88,0.1);"));
+    QVERIFY(db.executeNonQuery(
+        "INSERT INTO transactions (financial_year, voucher_no, voucher_date, voucher_type, "
+        "trans_type, party_name, dr_cr, amount, invoice_no, narration) "
+        "VALUES ('FY 2099-00','S8-MIG-1','2099-08-15','Sales','Sale','S8 C','Dr',1628875.0,'S8-MIG-1','dr');"));
+    QVERIFY(db.executeNonQuery(
+        "INSERT INTO transactions (financial_year, voucher_no, voucher_date, voucher_type, "
+        "trans_type, party_name, dr_cr, amount, invoice_no, narration) "
+        "VALUES ('FY 2099-00','S8-MIG-1','2099-08-15','Sales','Sale','S8 I','Cr',1628875.0,'S8-MIG-1','cr');"));
+    InvoiceTotals::Totals mig = InvoiceTotals::saleTotals("S8-MIG-1");
+    QCOMPARE(mig.stored, 1628875.0);
+    QCOMPARE(mig.tcs, 1628.88);
+    QVERIFY(!mig.includedAlready);
+    QVERIFY(qAbs(mig.inclusive - 1630503.88) < 0.005);
+
+    // Fresh shape: same stored values plus the TCS206C leg.
+    QVERIFY(db.executeNonQuery(
+        "INSERT INTO sales_invoices (financial_year, invoice_no, invoice_date, customer_name, "
+        "item_name, taxable_amount, total_amount, tcs_amount, tcs_rate) "
+        "VALUES ('FY 2099-00','S8-FRSH-1','2099-08-15','S8 C','S8 I',1628875.0,1630503.88,1628.88,0.1);"));
+    QVERIFY(db.executeNonQuery(
+        "INSERT INTO transactions (financial_year, voucher_no, voucher_date, voucher_type, "
+        "trans_type, party_name, dr_cr, amount, invoice_no, entry_type, narration) "
+        "VALUES ('FY 2099-00','S8-FRSH-1','2099-08-15','Sales','Sale','TCS Payable A/c','Cr',1628.88,'S8-FRSH-1','TCS206C','tcs');"));
+    InvoiceTotals::Totals frsh = InvoiceTotals::saleTotals("S8-FRSH-1");
+    QCOMPARE(frsh.stored, 1630503.88);
+    QVERIFY(frsh.includedAlready);
+    QVERIFY(qAbs(frsh.inclusive - 1630503.88) < 0.005);
+
+    // Unknown invoice: all zeros (report falls back to item recompute).
+    InvoiceTotals::Totals missing = InvoiceTotals::saleTotals("S8-NOPE-0");
+    QCOMPARE(missing.inclusive, 0.0);
+
+    db.executeNonQuery("DELETE FROM transactions WHERE invoice_no IN ('S8-MIG-1','S8-FRSH-1');");
+    db.executeNonQuery("DELETE FROM sales_invoices WHERE invoice_no IN ('S8-MIG-1','S8-FRSH-1');");
+}
+
+void LogicBoardTestSuite::testFiscalYearStatusLifecycle() {
+    // F2: open <-> soft_closed <-> locked, explicit reopen only. Hermetic:
+    // dedicated FY 2099-00 row, status snapshot/restore, audit cleanup.
+    auto& db = DatabaseManager::instance();
+    QVERIFY(db.executeNonQuery(
+        "INSERT OR IGNORE INTO financial_years (year_name, start_date, end_date, is_active, is_locked) "
+        "VALUES ('FY 2099-00', '2099-04-01', '2100-03-31', 0, 0);"));
+    QVariantMap pre = db.executeQuery(
+        "SELECT status, is_locked FROM financial_years WHERE year_name='FY 2099-00';").first().toMap();
+    const QString preStatus = pre.value("status").toString();
+    const int preLocked = pre.value("is_locked").toInt();
+    auto setStatus = [&](const QString& st) {
+        return db.executeNonQuery("UPDATE financial_years SET status=?, is_locked=? WHERE year_name='FY 2099-00';",
+                                  {st, st == "locked" ? 1 : 0});
+    };
+    QVERIFY(setStatus("open"));
+
+    QString err;
+    // open -> soft_closed -> locked, then back down.
+    QVERIFY(FiscalYearHelper::setYearStatus("FY 2099-00", "soft_closed", "test", "review", &err));
+    QCOMPARE(FiscalYearHelper::writeBlockReason("2099-08-15"), QString(""));
+    QVERIFY(!FiscalYearHelper::writeSoftWarning("2099-08-15").isEmpty());
+    QVERIFY(FiscalYearHelper::setYearStatus("FY 2099-00", "locked", "test", "close", &err));
+    QVERIFY(!FiscalYearHelper::writeBlockReason("2099-08-15").isEmpty());
+    // locked -> soft_closed refused; locked -> open (reopen) allowed.
+    QVERIFY(!FiscalYearHelper::setYearStatus("FY 2099-00", "soft_closed", "test", "x", &err));
+    QVERIFY(!err.isEmpty());
+    QVERIFY(FiscalYearHelper::setYearStatus("FY 2099-00", "open", "test", "reopen", &err));
+    QCOMPARE(FiscalYearHelper::writeBlockReason("2099-08-15"), QString(""));
+    // Unknown status + unknown year refused.
+    QVERIFY(!FiscalYearHelper::setYearStatus("FY 2099-00", "archived", "test", "x", &err));
+    QVERIFY(!FiscalYearHelper::setYearStatus("FY 0000-00", "locked", "test", "x", &err));
+    // Mirror check: status and is_locked move together.
+    QCOMPARE(db.executeScalar(
+        "SELECT is_locked FROM financial_years WHERE year_name='FY 2099-00';").toInt(), 0);
+
+    // Restore byte-identical originals (a legacy locked row without status
+    // comes back as status='locked', exactly what the backfill would write).
+    const QString restoreSt = preStatus.isEmpty()
+        ? (preLocked != 0 ? QString("locked") : QString("open")) : preStatus;
+    QVERIFY(setStatus(restoreSt));
+    QVERIFY(db.executeNonQuery("UPDATE financial_years SET is_locked=? WHERE year_name='FY 2099-00';", {preLocked}));
+    db.executeNonQuery("DELETE FROM audit_log WHERE table_name='financial_years' AND row_id='FY 2099-00';");
+}
+
+void LogicBoardTestSuite::testFyCloseReopen() {
+    // F3 engine: close posts ONE balanced journal + snapshot + lock; reopen
+    // reverses only that voucher. Hermetic FY-2199 sandbox (far from every
+    // fixture), full cleanup. Needs: Capital A/c group, Income A/c group
+    // (both standard), temp parties + legs which this test owns end to end.
+    auto& db = DatabaseManager::instance();
+    QVERIFY(db.executeNonQuery(
+        "INSERT OR IGNORE INTO financial_years (year_name, start_date, end_date, is_active, is_locked, status) "
+        "VALUES ('FY 2199-00', '2199-04-01', '2200-03-31', 0, 0, 'open');"));
+    // Rerun-after-abort safety (2199 is test-owned): clear stale close state.
+    QVERIFY(db.executeNonQuery("UPDATE financial_years SET status='open', is_locked=0 WHERE year_name='FY 2199-00';"));
+    QVERIFY(db.executeNonQuery("DELETE FROM app_settings WHERE key='fy_close_voucher/FY 2199-00';"));
+    const QString t0 = db.executeScalar(
+        "SELECT strftime('%Y-%m-%dT%H:%M:%fZ','now');").toString();
+    const bool preHad2200 = db.executeScalar(
+        "SELECT 1 FROM financial_years WHERE year_name='FY 2200-00' LIMIT 1;").isValid();
+    // The P&L transfer ledger must exist (seeded on fresh DBs, template on
+    // migrated ones); ensure + track for cleanup.
+    bool createdPl = false;
+    if (!db.executeScalar("SELECT id FROM parties WHERE name='Profit & Loss' LIMIT 1;").isValid()) {
+        QVariantList grow = db.executeQuery(
+            "SELECT id, code1st FROM account_groups WHERE name='Profit & Loss' LIMIT 1;");
+        QVERIFY(!grow.isEmpty());
+        QVERIFY(db.executeNonQuery(
+            "INSERT INTO parties (name, group_name, group_code, group_id, balance_type, opening_balance) "
+            "VALUES ('Profit & Loss','Profit & Loss',15,?, 'Dr',0.0);",
+            {grow.first().toMap().value("id")}));
+        createdPl = true;
+    }
+    QVERIFY(db.executeNonQuery("DELETE FROM transactions WHERE voucher_no LIKE 'F3-%';"));
+    QVERIFY(db.executeNonQuery("DELETE FROM vouchers WHERE voucher_no LIKE 'F3-%';"));
+    QVERIFY(db.executeNonQuery("DELETE FROM fy_opening_balances WHERE fy_id IN "
+                               "(SELECT id FROM financial_years WHERE year_name LIKE 'FY 2199%' OR year_name LIKE 'FY 2200%');"));
+    QVERIFY(db.executeNonQuery("DELETE FROM parties WHERE name IN ('F3CAP','F3INC','F3CASH');"));
+    auto groupOf = [&](const QString& gname) -> QVariantMap {
+        QVariantList r = db.executeQuery(
+            "SELECT id, code1st FROM account_groups WHERE name = ? LIMIT 1;", {gname});
+        if (r.isEmpty()) return QVariantMap(); // QVERIFY can't void-return here; checked below
+        return r.first().toMap();
+    };
+    QVariantMap capG = groupOf("Capital A/c");
+    QVariantMap incG = groupOf("Income A/c");
+    QVariantMap cashG = groupOf("Cash-In-Hand");
+    QVERIFY2(!capG.isEmpty(), "missing group Capital A/c");
+    QVERIFY2(!incG.isEmpty(), "missing group Income A/c");
+    QVERIFY2(!cashG.isEmpty(), "missing group Cash-In-Hand");
+    QVERIFY(db.executeNonQuery(
+        "INSERT INTO parties (name, group_name, group_code, group_id, balance_type, opening_balance) "
+        "VALUES ('F3CAP','Capital A/c',1,?, 'Cr',0.0), ('F3INC','Income A/c',16,?, 'Cr',0.0), "
+        "('F3CASH','Cash-In-Hand',4,?, 'Dr',0.0);",
+        {capG.value("id"), incG.value("id"), cashG.value("id")}));
+    // Balanced income legs in FY 2199: Dr Cash 1000 / Cr F3INC 1000.
+    QVERIFY(db.executeNonQuery(
+        "INSERT INTO transactions (financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
+        "party_name, dr_cr, amount, narration) VALUES "
+        "('FY 2199-00','F3-1','2199-08-15','Receipt','Rcpt','F3CASH','Dr',1000.0,'f3'),"
+        "('FY 2199-00','F3-1','2199-08-15','Receipt','Rcpt','F3INC','Cr',1000.0,'f3');"));
+
+    FyCloseResult closed = FyCloseEngine::closeYear("FY 2199-00", "F3CAP", "test");
+    QVERIFY2(closed.ok, qPrintable(closed.error));
+    QCOMPARE(closed.plNet, 1000.0);
+    QVERIFY(!closed.closingVoucherNo.isEmpty());
+    QVERIFY(closed.snapshotRows >= 2); // F3CASH + F3CAP at minimum
+    // Journal balances and lands on the right sides.
+    QCOMPARE(db.executeScalar(
+        "SELECT COUNT(*) FROM transactions WHERE voucher_no = ? AND financial_year = 'FY 2199-00';",
+        {closed.closingVoucherNo}).toLongLong(), 2);
+    QCOMPARE(db.executeScalar(
+        "SELECT SUM(CASE WHEN dr_cr='Dr' THEN amount ELSE -amount END) FROM transactions "
+        "WHERE voucher_no = ?;", {closed.closingVoucherNo}).toDouble(), 0.0);
+    QCOMPARE(db.executeScalar(
+        "SELECT party_name FROM transactions WHERE voucher_no = ? AND dr_cr = 'Dr';",
+        {closed.closingVoucherNo}).toString(), QString("Profit & Loss"));
+    // Locked + marker + next FY + snapshot linkage.
+    QCOMPARE(db.executeScalar(
+        "SELECT status FROM financial_years WHERE year_name='FY 2199-00';").toString(), QString("locked"));
+    QVERIFY(!db.executeScalar(
+        "SELECT value FROM app_settings WHERE key='fy_close_voucher/FY 2199-00' LIMIT 1;").toString().isEmpty());
+    QVERIFY(db.executeScalar(
+        "SELECT id FROM financial_years WHERE year_name='FY 2200-00';").isValid());
+    QVERIFY(db.executeScalar(
+        "SELECT COUNT(*) FROM fy_opening_balances WHERE party_name IN ('F3CASH','F3CAP');").toLongLong() >= 2);
+    // Double close refused.
+    QVERIFY(!FyCloseEngine::closeYear("FY 2199-00", "F3CAP", "test").ok);
+
+    FyCloseResult opened = FyCloseEngine::reopenYear("FY 2199-00", "test");
+    QVERIFY2(opened.ok, qPrintable(opened.error));
+    QVERIFY(!opened.closingVoucherNo.isEmpty());
+    QCOMPARE(db.executeScalar(
+        "SELECT status FROM financial_years WHERE year_name='FY 2199-00';").toString(), QString("open"));
+    // Reversal mirrors the original legs exactly.
+    QCOMPARE(db.executeScalar(
+        "SELECT COUNT(*) FROM transactions WHERE voucher_no = ?;", {opened.closingVoucherNo}).toLongLong(), 2);
+    QCOMPARE(db.executeScalar(
+        "SELECT SUM(CASE WHEN dr_cr='Dr' THEN amount ELSE -amount END) FROM transactions "
+        "WHERE voucher_no = ?;", {opened.closingVoucherNo}).toDouble(), 0.0);
+    QVERIFY(!db.executeScalar(
+        "SELECT 1 FROM app_settings WHERE key='fy_close_voucher/FY 2199-00' LIMIT 1;").isValid());
+
+    // Full cleanup (shared DB left exactly as found; snapshot rows scoped by
+    // creation timestamp so pre-existing years are never touched).
+    db.executeNonQuery("DELETE FROM transactions WHERE voucher_no LIKE 'F3-%' OR voucher_no = ? OR voucher_no = ?;",
+                       {closed.closingVoucherNo, opened.closingVoucherNo});
+    db.executeNonQuery("DELETE FROM vouchers WHERE voucher_no LIKE 'F3-%' OR voucher_no = ? OR voucher_no = ?;",
+                       {closed.closingVoucherNo, opened.closingVoucherNo});
+    db.executeNonQuery("DELETE FROM fy_opening_balances WHERE fy_id IN "
+                       "(SELECT id FROM financial_years WHERE year_name LIKE 'FY 2199%' OR year_name LIKE 'FY 2200%') "
+                       "AND created_at >= ?;", {t0});
+    db.executeNonQuery("DELETE FROM parties WHERE name IN ('F3CAP','F3INC','F3CASH');");
+    if (createdPl) db.executeNonQuery("DELETE FROM parties WHERE name = 'Profit & Loss';");
+    if (!preHad2200) db.executeNonQuery("DELETE FROM financial_years WHERE year_name = 'FY 2200-00';");
+    db.executeNonQuery("DELETE FROM financial_years WHERE year_name = 'FY 2199-00';");
+    db.executeNonQuery("DELETE FROM audit_log WHERE (table_name='financial_years' AND row_id LIKE 'FY 2199%') "
+                       "OR voucher_no LIKE 'F3-%' OR voucher_no = ? OR voucher_no = ?;",
+                       {closed.closingVoucherNo, opened.closingVoucherNo});
 }
 
 QTEST_MAIN(LogicBoardTestSuite)

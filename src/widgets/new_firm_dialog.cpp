@@ -2,6 +2,12 @@
 #include "../services/gstin_autofill_service.h"
 #include "../services/gst_state_codes.h"
 #include "../services/master_data_provider.h"
+#include "../config/feature_flags.h"
+#include "../config/settings_registry.h"
+#include "../database_manager.h"
+#include "../engine/fiscal_year_helper.h"
+#include "../models/account_groups_model.h"
+#include "../models/voucher_type_model.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGridLayout>
@@ -151,16 +157,12 @@ void NewFirmDialog::setupUi() {
     );
     grid1->addWidget(m_firmTypeCombo, 1, 1);
 
-    grid1->addWidget(makeFieldLabel("Nature of Business / Trade"), 2, 0);
-    m_businessEdit = makeLineEdit("e.g. Rice Mill & Grain Processing, Commission Agent");
-    grid1->addWidget(m_businessEdit, 3, 0);
-
-    grid1->addWidget(makeFieldLabel("Books Beginning Date"), 2, 1);
+    grid1->addWidget(makeFieldLabel("Books Beginning Date"), 2, 0);
     QDate cur = QDate::currentDate();
-    int fyStartYear = (cur.month() >= 4) ? cur.year() : cur.year() - 1;
-    QString defaultBooksFrom = QString("%1-04-01").arg(fyStartYear);
+    int fyStartYear = FiscalCalendar::fyStartYearForDate(cur.year(), cur.month());
+    QString defaultBooksFrom = FiscalCalendar::fyStartDate(fyStartYear);
     m_booksFromEdit = makeLineEdit("YYYY-MM-DD", defaultBooksFrom);
-    grid1->addWidget(m_booksFromEdit, 3, 1);
+    grid1->addWidget(m_booksFromEdit, 3, 0);
 
     formLayout->addLayout(grid1);
 
@@ -244,6 +246,58 @@ void NewFirmDialog::setupUi() {
 
     formLayout->addLayout(grid4);
 
+    // --- Section 5: Business Package (S6 wizard) ---
+    // Asked once at firm creation; migrators never ask (source data
+    // auto-detects and wins — this dialog is only for brand-new firms).
+    // Base package radio + valid add-ons → firm.business_type +
+    // FeatureFlags::save() → ensureTablesExist() after save (see
+    // onCreateClicked). Core (masters, sale/purchase, registers, GST,
+    // reports) is always on; only domain flags are chosen here.
+    formLayout->addWidget(makeSectionHeader("5. BUSINESS PACKAGE (WHAT THIS FIRM DOES)"));
+
+    auto makeRadio = [&](const QString& text) -> QRadioButton* {
+        QRadioButton* r = new QRadioButton(text);
+        r->setStyleSheet("QRadioButton { font-size: 12px; color: #0F172A; spacing: 8px; }");
+        return r;
+    };
+    auto makeCheck = [&](const QString& text) -> QCheckBox* {
+        QCheckBox* c = new QCheckBox(text);
+        c->setStyleSheet("QCheckBox { font-size: 12px; color: #0F172A; spacing: 8px; }");
+        return c;
+    };
+
+    m_packageGroup = new QButtonGroup(this);
+    m_pkgAgent = makeRadio("Commission Agent (Mandi) — mandi + bardana + transport");
+    m_pkgMill = makeRadio("Rice Mill / Manufacturer — mill + bardana");
+    m_pkgTrader = makeRadio("Trader — core + transport");
+    m_pkgTransporter = makeRadio("Transporter — core + transport");
+    m_pkgGeneral = makeRadio("General / Other (Kirana etc.) — core only");
+    m_packageGroup->addButton(m_pkgAgent, 0);
+    m_packageGroup->addButton(m_pkgMill, 1);
+    m_packageGroup->addButton(m_pkgTrader, 2);
+    m_packageGroup->addButton(m_pkgTransporter, 3);
+    m_packageGroup->addButton(m_pkgGeneral, 4);
+    formLayout->addWidget(m_pkgAgent);
+    formLayout->addWidget(m_pkgMill);
+    formLayout->addWidget(m_pkgTrader);
+    formLayout->addWidget(m_pkgTransporter);
+    formLayout->addWidget(m_pkgGeneral);
+
+    QLabel* addOnLabel = makeFieldLabel("Add-ons (only valid extras stay enabled)");
+    formLayout->addWidget(addOnLabel);
+    m_addMandi = makeCheck("Mandi forms (J-Form / I-Form / paddy)");
+    m_addMill = makeCheck("Milling production");
+    m_addBardana = makeCheck("Bardana (gunny bags)");
+    m_addTransport = makeCheck("Transport dispatch & gate register");
+    formLayout->addWidget(m_addMandi);
+    formLayout->addWidget(m_addMill);
+    formLayout->addWidget(m_addBardana);
+    formLayout->addWidget(m_addTransport);
+
+    connect(m_packageGroup, &QButtonGroup::idClicked, this, [this](int) { updatePackageAddOns(); });
+    m_pkgGeneral->setChecked(true);
+    updatePackageAddOns();
+
     scrollArea->setWidget(formContainer);
     rootLayout->addWidget(scrollArea, 1);
 
@@ -294,8 +348,6 @@ void NewFirmDialog::setupUi() {
             m_pinEdit->setText(p.pincode);
         if (p.gstin.length() == 15 && m_gstinEdit->text().trimmed().toUpper() == p.gstin)
             applyDerivedPan(p.gstin);
-        if (!p.legalName.isEmpty() && m_businessEdit->text().trimmed().isEmpty())
-            m_businessEdit->setText(p.legalName);
         if (p.status.compare("Cancelled", Qt::CaseInsensitive) == 0)
             m_errorLabel->setText("Warning: this GSTIN is Cancelled — invoices under it carry no ITC.");
         else if (m_errorLabel->text().startsWith("GSTIN lookup:"))
@@ -362,6 +414,99 @@ void NewFirmDialog::autoDetectFromPan(const QString& panStr) {
     }
 }
 
+void NewFirmDialog::updatePackageAddOns() {
+    // §23.8 package map. Base domains come checked + locked; only valid
+    // add-ons stay enabled. Core needs no flag (always on).
+    const int id = m_packageGroup ? m_packageGroup->checkedId() : 4;
+    auto lock = [](QCheckBox* c, bool on) {
+        if (!c) return;
+        c->setChecked(on);
+        c->setEnabled(false);
+    };
+    auto offer = [](QCheckBox* c, bool on) {
+        if (!c) return;
+        c->setEnabled(true);
+        if (!on) c->setChecked(false);
+    };
+    // Reset all to offered-off first (additive choices never linger across
+    // package switches — the user re-confirms extras per package).
+    offer(m_addMandi, false);
+    offer(m_addMill, false);
+    offer(m_addBardana, false);
+    offer(m_addTransport, false);
+    switch (id) {
+    case 0: // Commission Agent (Mandi): mandi + bardana + transport
+        lock(m_addMandi, true);
+        lock(m_addBardana, true);
+        lock(m_addTransport, true);
+        if (m_addMill) m_addMill->setEnabled(false);
+        break;
+    case 1: // Rice Mill: mill + bardana; add-ons: mandi forms, transport
+        lock(m_addMill, true);
+        lock(m_addBardana, true);
+        break; // mandi + transport stay offered
+    case 2: // Trader: core + transport; add-on: bardana
+        lock(m_addTransport, true);
+        if (m_addMandi) m_addMandi->setEnabled(false);
+        if (m_addMill) m_addMill->setEnabled(false);
+        break; // bardana stays offered
+    case 3: // Transporter: core + transport
+        lock(m_addTransport, true);
+        if (m_addMandi) m_addMandi->setEnabled(false);
+        if (m_addMill) m_addMill->setEnabled(false);
+        if (m_addBardana) m_addBardana->setEnabled(false);
+        break;
+    case 4: // General: core only; any package as add-on
+    default:
+        break; // all four stay offered
+    }
+}
+
+QString NewFirmDialog::selectedPackageKey() const {
+    const int id = m_packageGroup ? m_packageGroup->checkedId() : 4;
+    switch (id) {
+    case 0: return "commission_agent";
+    case 1: return "rice_mill";
+    case 2: return "trader";
+    case 3: return "transporter";
+    case 4:
+    default: return "general";
+    }
+}
+
+QString NewFirmDialog::selectedPackageLabel() const {
+    // Display label for company_info.business_type (dashboard shows it).
+    const int id = m_packageGroup ? m_packageGroup->checkedId() : 4;
+    switch (id) {
+    case 0: return "Commission Agent (Mandi)";
+    case 1: return "Rice Mill / Manufacturer";
+    case 2: return "Trader";
+    case 3: return "Transporter";
+    case 4:
+    default: return "General / Other";
+    }
+}
+
+FeatureFlags NewFirmDialog::selectedPackageFlags() const {
+    // Base package + checked add-ons. Menus/dropdowns/wizards consume the
+    // same isViewEnabled choke — no second mechanism.
+    FeatureFlags f;
+    const int id = m_packageGroup ? m_packageGroup->checkedId() : 4;
+    switch (id) {
+    case 0: f.mandi = true; f.bardana = true; f.transport = true; break;
+    case 1: f.mill = true; f.bardana = true; break;
+    case 2: f.transport = true; break;
+    case 3: f.transport = true; break;
+    case 4:
+    default: break;
+    }
+    if (m_addMandi && m_addMandi->isChecked()) f.mandi = true;
+    if (m_addMill && m_addMill->isChecked()) f.mill = true;
+    if (m_addBardana && m_addBardana->isChecked()) f.bardana = true;
+    if (m_addTransport && m_addTransport->isChecked()) f.transport = true;
+    return f;
+}
+
 void NewFirmDialog::onCreateClicked() {
     QString name = m_compNameEdit->text().trimmed();
     if (name.isEmpty()) {
@@ -374,7 +519,7 @@ void NewFirmDialog::onCreateClicked() {
     QVariantMap info;
     info["company_name"] = name;
     info["firm_type"] = m_firmTypeCombo->currentText();
-    info["business_type"] = m_businessEdit->text().trimmed();
+    info["business_type"] = selectedPackageLabel(); // package display; free text retired (W6)
     info["gstin"] = m_gstinEdit->text().trimmed();
     info["pan_no"] = m_panEdit->text().trimmed();
     info["ml_no"] = m_mlNoEdit->text().trimmed();
@@ -392,9 +537,9 @@ void NewFirmDialog::onCreateClicked() {
     info["ifsc_code"] = m_ifscEdit->text().trimmed();
 
     QDate cur = QDate::currentDate();
-    int startYr = (cur.month() >= 4) ? cur.year() : (cur.year() - 1);
-    QString booksFrom = QString("%1-04-01").arg(startYr);
-    QString accYearTo = QString("%1-03-31").arg(startYr + 1);
+    int startYr = FiscalCalendar::fyStartYearForDate(cur.year(), cur.month());
+    QString booksFrom = FiscalCalendar::fyStartDate(startYr);
+    QString accYearTo = FiscalCalendar::fyEndDate(startYr);
     QString fyName = QString("FY %1-%2").arg(startYr).arg(QString::number((startYr + 1) % 100).rightJustified(2, '0'));
 
     info["books_from"] = booksFrom;
@@ -405,6 +550,32 @@ void NewFirmDialog::onCreateClicked() {
     if (m_firmMgr) {
         bool ok = m_firmMgr->create_new_firm(info);
         if (ok) {
+            // S6 flow (new firms only — migrators never pass through here):
+            // persist the package, merge flags ADDITIVELY (OR, never clear),
+            // then ensure tables so gated domain tables exist for the
+            // enabled package. Menus filter via the isViewEnabled choke.
+            DatabaseManager::instance().setSetting(
+                SettingsKeys::firm_business_type(), selectedPackageKey());
+            FeatureFlags sel = selectedPackageFlags();
+            FeatureFlags eff = FeatureFlags::load();
+            eff.mandi = eff.mandi || sel.mandi;
+            eff.mill = eff.mill || sel.mill;
+            eff.bardana = eff.bardana || sel.bardana;
+            eff.transport = eff.transport || sel.transport;
+            FeatureFlags::save(eff);
+            DatabaseManager::instance().ensureTablesExist();
+            // Package masters (S6 completion): domain groups + voucher types
+            // for the enabled package, via the models (caches handled there).
+            // Idempotent; migrators cover their own path via
+            // DatabaseManager::ensureDomainMasters().
+            if (eff.mandi) {
+                AccountGroupsModel::ensureDomainGroups("mandi");
+                VoucherTypeModel::ensureDomainTypes("mandi");
+            }
+            if (eff.mill) {
+                AccountGroupsModel::ensureDomainGroups("mill");
+                VoucherTypeModel::ensureDomainTypes("mill");
+            }
             emit firmCreated(m_firmMgr->currentFirmId(), name);
             accept();
         } else {

@@ -1,5 +1,7 @@
 #include "busy_data_migrator.h"
 #include "../database_manager.h"
+#include "../config/settings_registry.h"
+#include "../config/feature_flags.h"
 #include "../models/account_classifier.h"
 #include <QCoreApplication>
 #include <QFileInfo>
@@ -653,7 +655,13 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
     }
 
 #if HAS_LIBMDB
+    // Phase 3 flags: mandi records imply the mandi bundle (D12) so the gated
+    // domain tables exist before this path's DELETEs/INSERTs touch them.
+    // (Busy has no mill/transport-only sources; core tables are unconditional.)
+    FeatureFlags::primeFromSource(insp.value("mandi_records_count").toInt() > 0, false,
+        insp.value("mandi_records_count").toInt() > 0, insp.value("mandi_records_count").toInt() > 0);
     DatabaseManager& db = DatabaseManager::instance();
+    db.ensureTablesExist();
     db.beginTransaction();
 
     // Clear initial database tables before migrating so default seed placeholders do not duplicate
@@ -667,8 +675,7 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
     db.executeNonQuery("DELETE FROM jform_voucher_items;");
     db.executeNonQuery("DELETE FROM iform_vouchers;");
     db.executeNonQuery("DELETE FROM iform_voucher_items;");
-    db.executeNonQuery("DELETE FROM paddy_procurement;");
-    db.executeNonQuery("DELETE FROM paddy_arrivals;");
+    db.executeNonQuery("DELETE FROM paddy_slips;");
     db.executeNonQuery("DELETE FROM stock_transactions;");
     db.executeNonQuery("DELETE FROM inventory;");
     db.executeNonQuery("DELETE FROM stock_items;");
@@ -679,8 +686,8 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
     db.executeNonQuery("DELETE FROM financial_years;");
     db.executeNonQuery("DELETE FROM company_info;");
     AccountClassifier::invalidateCache();
-    db.setSetting("firm_source_type", "busy");
-    db.setSetting("is_migrated", "1");
+    db.setSetting(SettingsKeys::firm_source_type(), "busy");
+    db.setSetting(SettingsKeys::is_migrated(), "1");
 
     BusyMigrationStats stats;
     stats.companyName = insp.value("company_name").toString();
@@ -1499,8 +1506,8 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
                     );
 
                     db.executeNonQuery(
-                        "INSERT OR REPLACE INTO paddy_procurement (receipt_no, arrival_date, farmer_id, farmer_name, variety, bag_count, gross_weight_qtl, net_weight_qtl, rate_per_qtl, total_amount) "
-                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+                        "INSERT OR REPLACE INTO paddy_slips (slip_type, slip_no, arrival_date, farmer_id, farmer_name, variety, bag_count, gross_weight_qtl, net_weight_qtl, rate_per_qtl, net_amount) "
+                        "VALUES ('purchase', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
                         {vNo, vDate, farmerId, farmerName, itName, bQty, calcWt, calcWt, rate, itAmt}
                     );
 
@@ -2013,8 +2020,8 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
             }
 
             db.executeNonQuery(
-                "INSERT OR REPLACE INTO paddy_procurement (receipt_no, arrival_date, farmer_id, farmer_name, variety, bag_count, gross_weight_qtl, net_weight_qtl, rate_per_qtl, total_amount) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+                "INSERT OR REPLACE INTO paddy_slips (slip_type, slip_no, arrival_date, farmer_id, farmer_name, variety, bag_count, gross_weight_qtl, net_weight_qtl, rate_per_qtl, net_amount) "
+                "VALUES ('purchase', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
                 {vNo, vDate, pCode, pName, itName, static_cast<int>(bagQty), looseWt, buyerWt, 0.0, 0.0}
             );
         } // end STEP6 per-file fallback
@@ -2090,10 +2097,10 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
             }
         }
 
-        // Seed bill_series/sale from the dominant Busy sale series (only when
-        // the fresh database has no series configured yet).
+        // Seed the sale bill series from the dominant Busy sale series
+        // (only when the fresh database has no series configured yet).
         seriesNote.clear();
-        if (!seriesSaleCount.empty() && db.getSetting("bill_series/sale").trimmed().isEmpty()) {
+        if (!seriesSaleCount.empty() && db.getSetting(SettingsKeys::bill_series("sale")).trimmed().isEmpty()) {
             int best = 0, bestN = -1;
             for (const auto& kv : seriesSaleCount) {
                 if (kv.second > bestN) { bestN = kv.second; best = kv.first; }
@@ -2107,8 +2114,8 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
             QString sName = seriesNames.count(best) ? seriesNames[best] : QString("Series %1").arg(best);
             QString json = QString("{\"prefix\":\"%1\",\"sepAfterPrefix\":\"%2\",\"fyStyle\":\"none\",\"sepBeforeSeq\":\"\",\"seqWidth\":1,\"startNumber\":%3,\"resetEachFy\":false,\"suffix\":\"\"}")
                 .arg(pfx).arg(sep).arg(nextNo);
-            db.setSetting("bill_series/sale", json);
-            seriesNote = QString("Seeded bill_series/sale from Busy %1 (prefix '%2', next %3)").arg(sName).arg(pfx + sep).arg(nextNo);
+            db.setSetting(SettingsKeys::bill_series("sale"), json);
+            seriesNote = QString("Seeded %1 from Busy %2 (prefix '%3', next %4)").arg(SettingsKeys::bill_series("sale")).arg(sName).arg(pfx + sep).arg(nextNo);
         }
         purcNote.clear();
         for (const auto& kv : seriesPurcMaxNo) {
@@ -2120,6 +2127,7 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
     }
 
     db.commit();
+    db.ensureDomainMasters();
 
     stats.glDiscrepancy = std::abs(stats.totalDebitSum - stats.totalCreditSum);
     stats.isBalanced = (stats.glDiscrepancy < 0.01);

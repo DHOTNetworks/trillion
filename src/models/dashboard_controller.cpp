@@ -1,5 +1,6 @@
 #include "dashboard_controller.h"
 #include "../database_manager.h"
+#include "../config/feature_flags.h"
 #include "../engine/accounting_engine.h"
 #include "../engine/fiscal_year_helper.h"
 
@@ -85,14 +86,18 @@ void DashboardController::refresh_stats(const QString& fromDate, const QString& 
         }
     }
 
-    // Single-pass milling aggregation
-    QVariantList millRows = DatabaseManager::instance().executeQuery(
-        "SELECT item_code, item_name, drcr, SUM(weight_qtl) as tot_weight "
-        "FROM milling_voucher_items "
-        "WHERE batch_date > ? AND batch_date <= ? "
-        "GROUP BY item_code, item_name, drcr;",
-        {cDate, targetDate}
-    );
+    // Single-pass milling aggregation (Phase 3: table may not exist on
+    // generic firms — skip silently instead of logging SQL errors).
+    QVariantList millRows;
+    if (FeatureFlags::tableExists("milling_voucher_items")) {
+        millRows = DatabaseManager::instance().executeQuery(
+            "SELECT item_code, item_name, drcr, SUM(weight_qtl) as tot_weight "
+            "FROM milling_voucher_items "
+            "WHERE batch_date > ? AND batch_date <= ? "
+            "GROUP BY item_code, item_name, drcr;",
+            {cDate, targetDate}
+        );
+    }
     double inMilling = 0.0;
     for (const auto& mr : millRows) {
         QVariantMap m = mr.toMap();
@@ -151,8 +156,9 @@ void DashboardController::refresh_stats(const QString& fromDate, const QString& 
     }
     m_totalProcurement = AccountingEngine::formatIndianCurrency(procVal);
 
-    // 5. Avg Milling Efficiency
+    // 5. Avg Milling Efficiency (Phase 3: skip silently without the table).
     double effVal = 65.3;
+    if (FeatureFlags::tableExists("milling_batches")) {
     if (!fDate.isEmpty() && !tDate.isEmpty()) {
         QVariant effRow = DatabaseManager::instance().executeScalar(
             "SELECT AVG(yield_pct) FROM milling_batches WHERE batch_date >= ? AND batch_date <= ?;",
@@ -162,6 +168,7 @@ void DashboardController::refresh_stats(const QString& fromDate, const QString& 
     } else {
         QVariant effRow = DatabaseManager::instance().executeScalar("SELECT AVG(yield_pct) FROM milling_batches;");
         if (effRow.isValid()) effVal = effRow.toDouble();
+    }
     }
     m_millingEfficiency = QString::number(effVal, 'f', 1) + "%";
 

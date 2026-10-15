@@ -5,9 +5,14 @@
 #include <QComboBox>
 #include <QLabel>
 #include <QPushButton>
+#include <QRadioButton>
+#include <QCheckBox>
+#include <QButtonGroup>
 #include "kbd_badge_button.h"
 #include "erp_theme.h"
 #include "../models/firm_manager.h"
+
+struct FeatureFlags; // config/feature_flags.h (included in the .cpp)
 
 class NewFirmDialog : public QDialog {
     Q_OBJECT
@@ -37,7 +42,6 @@ private:
 
     QLineEdit* m_compNameEdit = nullptr;
     QComboBox* m_firmTypeCombo = nullptr;
-    QLineEdit* m_businessEdit = nullptr;
     QLineEdit* m_booksFromEdit = nullptr;
 
     QLineEdit* m_gstinEdit = nullptr;
@@ -55,6 +59,24 @@ private:
     QLineEdit* m_bankNameEdit = nullptr;
     QLineEdit* m_bankAccEdit = nullptr;
     QLineEdit* m_ifscEdit = nullptr;
+
+    // Section 5: business package (S6 wizard). Radios pick the base
+    // package; checkboxes add valid add-ons. Never restructured — the
+    // section appends after banking and only feeds onCreateClicked.
+    QButtonGroup* m_packageGroup = nullptr;
+    QRadioButton* m_pkgAgent = nullptr;
+    QRadioButton* m_pkgMill = nullptr;
+    QRadioButton* m_pkgTrader = nullptr;
+    QRadioButton* m_pkgTransporter = nullptr;
+    QRadioButton* m_pkgGeneral = nullptr;
+    QCheckBox* m_addMandi = nullptr;
+    QCheckBox* m_addMill = nullptr;
+    QCheckBox* m_addBardana = nullptr;
+    QCheckBox* m_addTransport = nullptr;
+    void updatePackageAddOns();
+    QString selectedPackageKey() const;
+    QString selectedPackageLabel() const;
+    FeatureFlags selectedPackageFlags() const;
 
     QLabel* m_errorLabel = nullptr;
     KbdBadgeButton* m_createBtn = nullptr;

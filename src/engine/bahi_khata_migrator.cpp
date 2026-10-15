@@ -1,5 +1,6 @@
 #include "bahi_khata_migrator.h"
 #include "../database_manager.h"
+#include "../config/feature_flags.h"
 #include "../models/account_classifier.h"
 #include "fiscal_year_helper.h"
 #include <QCoreApplication>
@@ -153,15 +154,28 @@ static QString computeFinancialYear(const QString& isoDate) {
 }
 
 static QString mapVoucherTypeStr(const std::string& raw) {
-    QString t = QString::fromStdString(raw).trimmed().toUpper();
-    if (t == "SL" || t == "SALE" || t == "SALES" || t == "SALEVOUCHER" || t == "SLRN") return "Sales";
-    if (t == "PU" || t == "PURC" || t == "PURCHASE" || t == "PURCHASEVOUCHER" || t == "PR" || t == "PRRN") return "Purchase";
-    if (t == "PY" || t == "PAYMENT" || t == "PYMT" || t == "P" || t == "CHPT" || t == "CHQPYMT") return "Payment";
-    if (t == "RC" || t == "RECEIPT" || t == "RCPT" || t == "R" || t == "CHRT" || t == "CHQRCPT") return "Receipt";
-    if (t == "CN" || t == "CONTRA" || t == "CNTR" || t == "C") return "Contra";
-    if (t == "JFRM" || t == "J.FORM" || t == "JFORM" || t == "J FORM") return "JFrm";
-    if (t == "JV" || t == "JOURNAL" || t == "JRNL" || t == "J") return "Journal";
-    return "Journal";
+    // Phase 1 (SSOT): alias normalization via FiscalYearHelper::canonicalTypeToken,
+    // display names identical to VoucherMigrator::mapVoucherTypeStr — one map,
+    // one output per input on every path. Verified identical on all live
+    // Data.002 TransTypes {ChPt,ChRt,Jrnl,PrRn,Purc,Pymt,Rcpt,Sale,SlRn};
+    // J-Form/DbNt/CrNt spellings now yield display names (were raw tokens).
+    QString tok = FiscalYearHelper::canonicalTypeToken(QString::fromStdString(raw));
+    if (tok == "Sale") return "Sales";
+    if (tok == "Purc") return "Purchase";
+    if (tok == "Pymt" || tok == "ChPt") return "Payment";
+    if (tok == "Rcpt" || tok == "ChRt") return "Receipt";
+    if (tok == "Jrnl") return "Journal";
+    if (tok == "Contra") return "Contra";
+    if (tok == "JFrm") return "J-Form";
+    if (tok == "IFrm") return "I-Form";
+    if (tok == "Mill") return "Milling";
+    if (tok == "Bank") return "Bank";
+    if (tok == "TDS") return "TDS";
+    if (tok == "TCS") return "TCS";
+    if (tok == "DbNt") return "Debit Note";
+    if (tok == "CrNt") return "Credit Note";
+    QString t = QString::fromStdString(raw).trimmed();
+    return t.isEmpty() ? "Journal" : t;
 }
 
 static std::string classifyStockItemStr(const std::string& name) {
@@ -810,6 +824,41 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
     auto saudaTxRows = readTableRows(mdb, "SaudaTransactions");
     auto brokerageRows = readTableRows(mdb, "BrokerageVouchers");
 
+    // Phase 3 flags: prime domain flags from SOURCE data before
+    // ensureTablesExist creates the gated domain tables (same rules as the
+    // new pipeline: JFrm/IFrm TransTypes, sauda/brokerage rows, or
+    // paddy/dheri items evidence mandi business; ON-only, package-aligned).
+    {
+        auto hasTransType = [&](const char* tok) {
+            for (const auto& r : transRows) {
+                auto it = r.find("TransType");
+                if (it != r.end() && QString::fromStdString(it->second).trimmed().compare(tok, Qt::CaseInsensitive) == 0) return true;
+            }
+            return false;
+        };
+        auto hasItemNamed = [&](const char* needle) {
+            const QString n = QString::fromUtf8(needle);
+            for (const auto& r : itemRows) {
+                for (const auto& kv : r) {
+                    if (QString::fromStdString(kv.second).contains(n, Qt::CaseInsensitive)) return true;
+                }
+            }
+            for (const auto& r : ledgerRows) {
+                for (const auto& kv : r) {
+                    if (QString::fromStdString(kv.second).contains(n, Qt::CaseInsensitive)) return true;
+                }
+            }
+            return false;
+        };
+        const bool mandi = hasTransType("JFrm") || hasTransType("IFrm")
+            || !saudaVchRows.empty() || !saudaTxRows.empty() || !brokerageRows.empty()
+            || hasItemNamed("paddy") || hasItemNamed("dheri");
+        const bool mill = !millingRows.empty();
+        FeatureFlags::primeFromSource(mandi, mill,
+            mandi || mill || !bardanaRows.empty(),
+            mandi || !transportRows.empty() || !gatePassRows.empty() || !gateRegRows.empty());
+    }
+
     auto& db = DatabaseManager::instance();
     db.ensureTablesExist();
     db.executeNonQuery("PRAGMA foreign_keys = OFF;");
@@ -824,7 +873,7 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
     db.executeNonQuery("DELETE FROM transactions;");
     db.executeNonQuery("DELETE FROM sales_invoices;");
     db.executeNonQuery("DELETE FROM purchase_invoices;");
-    db.executeNonQuery("DELETE FROM paddy_arrivals;");
+    db.executeNonQuery("DELETE FROM paddy_slips;");
     db.executeNonQuery("DELETE FROM milling_voucher_items;");
     db.executeNonQuery("DELETE FROM milling_batches;");
     db.executeNonQuery("DELETE FROM stock_transactions;");
@@ -1797,7 +1846,7 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
     db.executeNonQuery("DELETE FROM sales_invoice_items;");
     db.executeNonQuery("DELETE FROM purchase_invoices;");
     db.executeNonQuery("DELETE FROM purchase_invoice_items;");
-    db.executeNonQuery("DELETE FROM paddy_arrivals;");
+    db.executeNonQuery("DELETE FROM paddy_slips;");
     db.executeNonQuery("DELETE FROM jform_vouchers;");
     db.executeNonQuery("DELETE FROM jform_voucher_items;");
 
@@ -2393,11 +2442,11 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
             std::string itemLower = toLowerStr(itemName);
             if (itemLower.find("paddy") != std::string::npos || itemLower.find("dheri") != std::string::npos) {
                 db.executeNonQuery(
-                    "INSERT INTO paddy_arrivals ("
-                    "slip_no, arrival_date, farmer_id, farmer_name, paddy_variety, "
+                    "INSERT INTO paddy_slips (slip_type, "
+                    "slip_no, arrival_date, farmer_id, farmer_name, variety, "
                     "bag_count, gross_weight_qtl, moisture_pct, moisture_deduction_qtl, net_weight_qtl, "
                     "rate_per_qtl, hamali_charges, net_amount, payment_status) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, 17.0, 0.0, ?, ?, 0.0, ?, 'Unpaid');",
+                    "VALUES ('arrival', ?, ?, ?, ?, ?, ?, ?, 17.0, 0.0, ?, ?, 0.0, ?, 'Unpaid');",
                     {
                         QString::fromStdString(invNo),
                         vDate,
@@ -3446,6 +3495,7 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
 
     db.commit();
     db.executeNonQuery("PRAGMA foreign_keys = ON;");
+    db.ensureDomainMasters();
     mdb_close(mdb);
 
     updateProgress(100, "Migration Completed Successfully!");

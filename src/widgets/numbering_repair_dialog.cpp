@@ -4,6 +4,7 @@
 #include "../models/vouchers_model.h"
 #include "../services/audit_helper.h"
 #include "../database_manager.h"
+#include "../config/settings_registry.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -98,7 +99,7 @@ void NumberingRepairDialog::reloadGroups() {
     }
     if (m_groups.isEmpty()) {
         m_statusLabel->setText("Numbering is clean — no duplicate voucher numbers.");
-        DatabaseManager::instance().setSetting("numbering_repair_needed", "0");
+        DatabaseManager::instance().setSetting(SettingsKeys::numbering_repair_needed(), "0");
     } else {
         m_statusLabel->setText(QString("%1 duplicate group(s). Oldest posting in each group is kept.").arg(m_groups.size()));
     }

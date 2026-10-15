@@ -1,5 +1,6 @@
 #include "tally_data_migrator.h"
 #include "../database_manager.h"
+#include "../config/settings_registry.h"
 #include "../models/account_classifier.h"
 #include "../engine/fiscal_year_helper.h"
 #include <QFile>
@@ -235,7 +236,7 @@ QString TallyDataMigrator::computeFy(const QString& isoDate) {
     if (!d.isValid()) return "FY 2026-27";
 
     int y = d.year();
-    if (d.month() >= 4) {
+    if (FiscalCalendar::isNewFiscalYear(d.month())) {
         return QString("FY %1-%2").arg(y).arg(QString::number((y + 1) % 100).rightJustified(2, '0'));
     } else {
         return QString("FY %1-%2").arg(y - 1).arg(QString::number(y % 100).rightJustified(2, '0'));
@@ -789,8 +790,8 @@ bool TallyDataMigrator::migrate_tally_data(const QString& tallyPath, const QStri
     db.executeNonQuery("DELETE FROM financial_years;");
     db.executeNonQuery("DELETE FROM company_info;");
     AccountClassifier::invalidateCache();
-    db.setSetting("firm_source_type", "tally");
-    db.setSetting("is_migrated", "1");
+    db.setSetting(SettingsKeys::firm_source_type(), "tally");
+    db.setSetting(SettingsKeys::is_migrated(), "1");
 
     db.executeNonQuery(
         "INSERT OR REPLACE INTO company_info (id, company_name, gstin, state, state_code) VALUES (1, ?, ?, ?, ?);",
@@ -805,8 +806,8 @@ bool TallyDataMigrator::migrate_tally_data(const QString& tallyPath, const QStri
         QString sYrStr = fy.mid(3, 4);
         int sYr = sYrStr.toInt();
         if (sYr >= 2000) {
-            QString sDate = QString("%1-04-01").arg(sYr);
-            QString eDate = QString("%1-03-31").arg(sYr + 1);
+            QString sDate = FiscalCalendar::fyStartDate(sYr);
+            QString eDate = FiscalCalendar::fyEndDate(sYr);
             db.executeNonQuery(
                 "INSERT OR IGNORE INTO financial_years (year_name, start_date, end_date, is_active) VALUES (?, ?, ?, 1);",
                 {fy, sDate, eDate}
@@ -927,8 +928,8 @@ bool TallyDataMigrator::migrate_tally_data(const QString& tallyPath, const QStri
             QString sYrStr = fy.mid(3, 4);
             int sYr = sYrStr.toInt();
             if (sYr >= 2000) {
-                QString sDate = QString("%1-04-01").arg(sYr);
-                QString eDate = QString("%1-03-31").arg(sYr + 1);
+                QString sDate = FiscalCalendar::fyStartDate(sYr);
+                QString eDate = FiscalCalendar::fyEndDate(sYr);
                 db.executeNonQuery(
                     "INSERT OR IGNORE INTO financial_years (year_name, start_date, end_date, is_active) VALUES (?, ?, ?, 1);",
                     {fy, sDate, eDate}

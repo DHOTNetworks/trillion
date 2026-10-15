@@ -193,7 +193,12 @@ QStringList VoucherPipeline::getAvailableVoucherTypes() {
         types << r.toMap().value("voucher_type").toString();
     }
     if (types.isEmpty()) {
-        types << "Sales" << "Purchase" << "Payment" << "Receipt" << "Journal" << "Contra" << "JFrm" << "IFrm";
+        // Fall back to master display names (never hardcoded literals).
+        QVariantList master = DatabaseManager::instance().executeQuery(
+            "SELECT name FROM voucher_types WHERE is_active != 0 ORDER BY sort_order ASC;");
+        for (const auto& r : master) {
+            types << r.toMap().value("name").toString();
+        }
     }
     return types;
 }

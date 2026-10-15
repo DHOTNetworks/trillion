@@ -480,10 +480,15 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
-    if (args.contains("--export-bahi-khata")) {
-        int idx = args.indexOf("--export-bahi-khata");
+    // D8: --export-legacy-jetdb is the canonical flag; --export-bahi-khata
+    // stays as a hidden alias. One shared block, no duplicate logic.
+    QString exportFlag;
+    if (args.contains("--export-legacy-jetdb")) exportFlag = "--export-legacy-jetdb";
+    else if (args.contains("--export-bahi-khata")) exportFlag = "--export-bahi-khata";
+    if (!exportFlag.isEmpty()) {
+        int idx = args.indexOf(exportFlag);
         if (idx + 2 >= args.size()) {
-            std::cerr << "Error: --export-bahi-khata requires <sqlite_db_path> <target_mdb_path> [financial_year]\n";
+            std::cerr << "Error: " << exportFlag.toStdString() << " requires <sqlite_db_path> <target_mdb_path> [financial_year]\n";
             return 1;
         }
         QString dbPath = args[idx + 1];
@@ -889,11 +894,11 @@ int main(int argc, char* argv[]) {
     if (args.contains("--selftest-enc")) {
         int idx = args.indexOf("--selftest-enc");
         if (idx + 1 >= args.size()) {
-            std::cerr << "Error: --selftest-enc requires <scratch_mdb_path> (/tmp/ only, never live)\n";
+            std::cerr << "Error: --selftest-enc requires <scratch_mdb_path> (system temp dir only, never live)\n";
             return 1;
         }
         QString mdbPath = args[idx + 1];
-        if (!mdbPath.startsWith("/tmp/")) { std::cerr << "Refusing: scratch path must be under /tmp/\n"; return 1; }
+        if (!mdbPath.startsWith("/tmp/") && !mdbPath.startsWith(QDir::tempPath())) { std::cerr << "Refusing: scratch path must be under the system temp dir\n"; return 1; }
         QByteArray pb = QFile::encodeName(mdbPath);
         MdbHandle* mdb = mdb_open(pb.constData(), MDB_WRITABLE);
         if (!mdb) { std::cerr << "Cannot open scratch\n"; return 1; }

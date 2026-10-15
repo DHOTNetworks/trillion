@@ -1,5 +1,6 @@
 #include "gst_portal_service.h"
 #include "../database_manager.h"
+#include "../config/settings_registry.h"
 #include <QNetworkRequest>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -12,7 +13,7 @@ GstPortalService::GstPortalService(QObject* parent)
     : QObject(parent),
       m_netManager(new QNetworkAccessManager(this))
 {
-    m_accessToken = DatabaseManager::instance().getSetting("gsp_access_token", "");
+    m_accessToken = DatabaseManager::instance().getSetting(SettingsKeys::gsp_access_token(), "");
 }
 
 void GstPortalService::ensureAccessToken(std::function<void(bool success, const QString& token, const QString& error)> callback)
@@ -22,10 +23,10 @@ void GstPortalService::ensureAccessToken(std::function<void(bool success, const 
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
 
     QJsonObject body;
-    body["username"] = DatabaseManager::instance().getSetting("gsp_username", "");
-    body["password"] = DatabaseManager::instance().getSetting("gsp_password", "");
-    body["client_id"] = DatabaseManager::instance().getSetting("gsp_client_id", "");
-    body["client_secret"] = DatabaseManager::instance().getSetting("gsp_client_secret", "");
+    body["username"] = DatabaseManager::instance().getSetting(SettingsKeys::gsp_username(), "");
+    body["password"] = DatabaseManager::instance().getSetting(SettingsKeys::gsp_password(), "");
+    body["client_id"] = DatabaseManager::instance().getSetting(SettingsKeys::gsp_client_id(), "");
+    body["client_secret"] = DatabaseManager::instance().getSetting(SettingsKeys::gsp_client_secret(), "");
     body["grant_type"] = "password";
 
     QNetworkReply* reply = m_netManager->post(request, QJsonDocument(body).toJson(QJsonDocument::Compact));
@@ -41,7 +42,7 @@ void GstPortalService::ensureAccessToken(std::function<void(bool success, const 
         QJsonDocument doc = QJsonDocument::fromJson(data);
         if (doc.isObject() && doc.object().contains("access_token")) {
             m_accessToken = doc.object().value("access_token").toString().trimmed();
-            DatabaseManager::instance().setSetting("gsp_access_token", m_accessToken);
+            DatabaseManager::instance().setSetting(SettingsKeys::gsp_access_token(), m_accessToken);
             callback(true, m_accessToken, "");
         } else {
             callback(true, m_accessToken, "");

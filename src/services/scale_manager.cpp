@@ -1,5 +1,6 @@
 #include "scale_manager.h"
 #include "../database_manager.h"
+#include "../config/settings_registry.h"
 #include <QApplication>
 #include <QGuiApplication>
 #include <QScreen>
@@ -59,7 +60,7 @@ ScaleManager& ScaleManager::instance() {
 void ScaleManager::init() {
     int percent = getSavedScalePercent();
     if (percent < 80 || percent > 250) {
-        QString dbSetting = DatabaseManager::instance().getSetting("ui_scale_percent", "");
+        QString dbSetting = DatabaseManager::instance().getSetting(SettingsKeys::ui_scale_percent(), "");
         if (!dbSetting.trimmed().isEmpty()) {
             percent = dbSetting.trimmed().toInt();
         }
@@ -105,7 +106,7 @@ void ScaleManager::setScalePercent(int percent, bool persist) {
 
     if (persist) {
         saveScaleConfigFile(percent);
-        DatabaseManager::instance().setSetting("ui_scale_percent", QString::number(percent));
+        DatabaseManager::instance().setSetting(SettingsKeys::ui_scale_percent(), QString::number(percent));
         qputenv("QT_SCALE_FACTOR", QByteArray::number(m_scaleFactor, 'f', 2));
     }
 

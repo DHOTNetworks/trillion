@@ -4,6 +4,7 @@
 #include <QVariantMap>
 #include <cmath>
 #include "../database_manager.h"
+#include "fiscal_year_helper.h" // FiscalCalendar choke (April fixed)
 #include "../services/financial_math_service.h"
 #include <QRegularExpression>
 #include <QDate>
@@ -41,7 +42,7 @@ public:
             QVariant lastFy = DatabaseManager::instance().executeScalar("SELECT year_name FROM financial_years ORDER BY start_date DESC LIMIT 1;");
             if (lastFy.isValid() && !lastFy.toString().trimmed().isEmpty()) return lastFy.toString().trimmed();
             QDate cur = QDate::currentDate();
-            int startYr = (cur.month() >= 4) ? cur.year() : (cur.year() - 1);
+            int startYr = FiscalCalendar::fyStartYearForDate(cur.year(), cur.month());
             return QString("FY %1-%2").arg(startYr).arg(QString::number((startYr + 1) % 100).rightJustified(2, '0'));
         }
 

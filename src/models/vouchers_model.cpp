@@ -27,7 +27,10 @@ void VouchersModel::reload_data() {
 }
 
 QString VouchersModel::get_next_voucher_no(const QString& v_type, const QString& fy) {
-    QString prefix = v_type.isEmpty() ? "ChPt" : v_type;
+    // Phase 1: family normalization via FiscalYearHelper::canonicalTypeToken.
+    // Alias expansion below stays for query coverage (legacy rows store
+    // display + short variants); same family in = same token out.
+    QString prefix = FiscalYearHelper::canonicalTypeToken(v_type.isEmpty() ? "ChPt" : v_type);
     QString targetFy = AccountingEngine::resolveFinancialYear(fy);
     QString fyPattern = "%" + targetFy.mid(3).trimmed() + "%";
 
@@ -883,21 +886,25 @@ bool VouchersModel::save_multi_row_voucher(
         }
     }
 
+    // Phase 1: UI-label normalization via FiscalYearHelper::canonicalTypeToken
+    // (single alias map). Outputs byte-identical to the previous if-chain:
+    // raw token kept in legacy_type, display name in voucher_type.
     QString rawType = vch_type;
     QString normalizedVType = vch_type;
-    if (vch_type == "Cash Payment" || vch_type == "Pymt") {
+    const QString typeTok = FiscalYearHelper::canonicalTypeToken(vch_type);
+    if (typeTok == "Pymt") {
         rawType = "Pymt";
         normalizedVType = "Payment";
-    } else if (vch_type == "Cash Receipt" || vch_type == "Rcpt") {
+    } else if (typeTok == "Rcpt") {
         rawType = "Rcpt";
         normalizedVType = "Receipt";
-    } else if (vch_type == "Cheque Payment" || vch_type == "Payment" || vch_type == "ChPt") {
+    } else if (typeTok == "ChPt") {
         rawType = "ChPt";
         normalizedVType = "Payment";
-    } else if (vch_type == "Cheque Receipt" || vch_type == "Receipt" || vch_type == "ChRt") {
+    } else if (typeTok == "ChRt") {
         rawType = "ChRt";
         normalizedVType = "Receipt";
-    } else if (vch_type == "Journal" || vch_type == "Jrnl") {
+    } else if (typeTok == "Jrnl") {
         rawType = "Jrnl";
         normalizedVType = "Journal";
     }

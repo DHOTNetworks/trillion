@@ -1,4 +1,7 @@
 #include "main_window.h"
+#include "../config/feature_flags.h"
+#include <QStatusBar>
+#include <QStringList>
 #include "accounting_period_dialog.h"
 #include "weighbridge_kanda_dialog.h"
 #include "../engine/fiscal_year_helper.h"
@@ -31,7 +34,7 @@ MainWindow::MainWindow(const MainWindowDependencies& deps, QWidget* parent)
     , m_transportDispatchCtrl(deps.transportDispatchCtrl)
     , m_debitCreditNoteCtrl(deps.debitCreditNoteCtrl)
 {
-    setWindowTitle("Mahadev Rice Mill ERP & Accounting");
+    setWindowTitle("Mahadev ERP & Accounting");
     resize(1280, 800);
     setMinimumSize(1024, 680);
     setStyleSheet(
@@ -163,21 +166,29 @@ MainWindow::MainWindow(const MainWindowDependencies& deps, QWidget* parent)
     m_stackedWidget->addWidget(m_modifyLedgerWidget);
 
     // Index 11: Native C++ J-Form Mandi Procurement Widget (View 18)
+    // Phase 3 flags: built only with the mandi domain (member stays null
+    // otherwise; every deref site null-guards or sits behind the nav guard).
+    if (FeatureFlags::isOn(SettingsKeys::feature_mandi())) {
     m_jformVoucherWidget = new JFormVoucherWidget(m_printExportCtrl, this);
     connect(m_jformVoucherWidget, &JFormVoucherWidget::backRequested, this, &MainWindow::navigateBack);
     connect(m_jformVoucherWidget, &JFormVoucherWidget::voucherSaved, this, &MainWindow::navigateBack);
     m_stackedWidget->addWidget(m_jformVoucherWidget);
+    }
 
     // Index 12: Native C++ I-Form Mandi Buyer Issue Widget (View 19)
+    if (FeatureFlags::isOn(SettingsKeys::feature_mandi())) {
     m_iformVoucherWidget = new IFormVoucherWidget(m_printExportCtrl, this);
     connect(m_iformVoucherWidget, &IFormVoucherWidget::backRequested, this, &MainWindow::navigateBack);
     connect(m_iformVoucherWidget, &IFormVoucherWidget::voucherSaved, this, &MainWindow::navigateBack);
     m_stackedWidget->addWidget(m_iformVoucherWidget);
+    }
 
     // Index 13: Native C++ Mandi Operations & Reports Widget (View 20)
+    if (FeatureFlags::isOn(SettingsKeys::feature_mandi())) {
     m_mandiReportsWidget = new MandiReportsWidget(m_printExportCtrl, this);
     connect(m_mandiReportsWidget, &MandiReportsWidget::backRequested, this, &MainWindow::navigateBack);
     m_stackedWidget->addWidget(m_mandiReportsWidget);
+    }
 
     // Index 14: Native C++ Day Book Widget (View 33)
     m_dayBookWidget = new MahadevERP::DayBookWidget(m_printExportCtrl, this);
@@ -192,11 +203,14 @@ MainWindow::MainWindow(const MainWindowDependencies& deps, QWidget* parent)
     m_stackedWidget->addWidget(m_gstrReportsWidget);
 
     // Index 16: Native C++ Milling Statement & Out-turn Register (View 35)
+    // Phase 3 flags: mill domain only (see View 18 note on null-safety).
+    if (FeatureFlags::isOn(SettingsKeys::feature_mill())) {
     m_millingStatementWidget = new MahadevERP::MillingStatementWidget(m_printExportCtrl, this);
     connect(m_millingStatementWidget, &MahadevERP::MillingStatementWidget::backRequested, this, &MainWindow::navigateBack);
     connect(m_millingStatementWidget, &MahadevERP::MillingStatementWidget::newBatchRequested, this, [this]() { navigateToView(31); });
     connect(m_millingStatementWidget, &MahadevERP::MillingStatementWidget::alterBatchRequested, this, &MainWindow::onLedgerAlterVoucherRequested);
     m_stackedWidget->addWidget(m_millingStatementWidget);
+    }
 
     // Index 17: Native C++ Custom Closing Stock & Valuation Register (View 36)
     m_customClosingStockWidget = new MahadevERP::CustomClosingStockWidget(m_printExportCtrl, this);
@@ -261,11 +275,16 @@ MainWindow::MainWindow(const MainWindowDependencies& deps, QWidget* parent)
     m_stackedWidget->addWidget(m_stockDetailWidget);
 
     // Index 25: Native C++ Paddy Procurement Widget (View 1)
+    // Phase 3 flags: mandi domain only (see View 18 note on null-safety).
+    if (FeatureFlags::isOn(SettingsKeys::feature_mandi())) {
     m_paddyProcurementWidget = new MahadevERP::PaddyProcurementWidget(m_paddyModel, m_paddyProcurementCtrl, m_printExportCtrl, this);
     connect(m_paddyProcurementWidget, &MahadevERP::PaddyProcurementWidget::backRequested, this, &MainWindow::navigateBack);
     m_stackedWidget->addWidget(m_paddyProcurementWidget);
+    }
 
     // Index 26: Native C++ Milling Voucher Widget (View 31)
+    // Phase 3 flags: mill domain only (see View 18 note on null-safety).
+    if (FeatureFlags::isOn(SettingsKeys::feature_mill())) {
     m_millingVoucherWidget = new MahadevERP::MillingVoucherWidget(m_millingBatchCtrl, m_millingModel, m_printExportCtrl, this);
     connect(m_millingVoucherWidget, &MahadevERP::MillingVoucherWidget::backRequested, this, &MainWindow::navigateBack);
     connect(m_millingVoucherWidget, &MahadevERP::MillingVoucherWidget::batchSaved, this, [this](const QString& batchNo) {
@@ -274,6 +293,7 @@ MainWindow::MainWindow(const MainWindowDependencies& deps, QWidget* parent)
         navigateBack();
     });
     m_stackedWidget->addWidget(m_millingVoucherWidget);
+    }
 
     // Index 27: Native C++ TDS Voucher Widget (View 24)
     m_tdsVoucherWidget = new MahadevERP::TdsVoucherWidget(m_tdsVoucherCtrl, m_printExportCtrl, this);
@@ -300,10 +320,13 @@ MainWindow::MainWindow(const MainWindowDependencies& deps, QWidget* parent)
     m_stackedWidget->addWidget(m_bankStatementWidget);
 
     // Index 30: Native C++ Transport Dispatch Widget (View 27)
+    // Phase 3 flags: transport domain only (see View 18 note on null-safety).
+    if (FeatureFlags::isOn(SettingsKeys::feature_transport())) {
     m_transportDispatchWidget = new MahadevERP::TransportDispatchWidget(m_transportDispatchCtrl, m_printExportCtrl, this);
     connect(m_transportDispatchWidget, &MahadevERP::TransportDispatchWidget::backRequested, this, &MainWindow::navigateBack);
     connect(m_transportDispatchWidget, &MahadevERP::TransportDispatchWidget::entriesChanged, this, &MainWindow::markAllStatementsDirty);
     m_stackedWidget->addWidget(m_transportDispatchWidget);
+    }
 
     // Index 31: Native C++ Debit / Credit Note Widget (View 28)
     m_debitCreditNoteWidget = new MahadevERP::DebitCreditNoteWidget(m_debitCreditNoteCtrl, m_printExportCtrl, this);
@@ -440,13 +463,19 @@ MainWindow::MainWindow(const MainWindowDependencies& deps, QWidget* parent)
     m_stackedWidget->addWidget(m_cashVoucherWidget);
 
     // Index 45: Bardana (Gunny Bag Management) Widget (View 70)
+    // Phase 3 flags: widget gated on the bardana domain; the controller
+    // stays unconditional (cheap, and owned by the widget when built).
     m_bardanaCtrl = new BardanaController(this);
+    if (FeatureFlags::isOn(SettingsKeys::feature_bardana())) {
     m_bardanaWidget = new BardanaWidget(m_bardanaCtrl, m_printExportCtrl, this);
     connect(m_bardanaWidget, &BardanaWidget::backRequested, this, &MainWindow::navigateBack);
     m_stackedWidget->addWidget(m_bardanaWidget);
+    }
 
     // Index 46: Gate Inward / Outward Register Widget (View 71)
+    // Phase 3 flags: transport domain only (see View 70 note).
     m_gateRegisterCtrl = new GateRegisterController(this);
+    if (FeatureFlags::isOn(SettingsKeys::feature_transport())) {
     m_gateRegisterWidget = new GateRegisterWidget(m_gateRegisterCtrl, m_printExportCtrl, this);
     connect(m_gateRegisterWidget, &GateRegisterWidget::backRequested, this, &MainWindow::navigateBack);
     connect(m_gateRegisterWidget, &GateRegisterWidget::openWeighbridgeRequested, this, [this](const QString& passNo, const QString& vehNo, const QString& party) {
@@ -456,12 +485,16 @@ MainWindow::MainWindow(const MainWindowDependencies& deps, QWidget* parent)
         MahadevERP::WeighbridgeKandaDialog::openKandaSlip(m_transportDispatchCtrl, 0, this);
     });
     m_stackedWidget->addWidget(m_gateRegisterWidget);
+    }
 
     // Index 47: Sauda (Broker Contracts) & Dalali Widget (View 72)
+    // Phase 3 flags: mandi domain only (see View 70 note).
     m_saudaCtrl = new SaudaController(this);
+    if (FeatureFlags::isOn(SettingsKeys::feature_mandi())) {
     m_saudaContractWidget = new SaudaContractWidget(m_saudaCtrl, m_printExportCtrl, this);
     connect(m_saudaContractWidget, &SaudaContractWidget::backRequested, this, &MainWindow::navigateBack);
     m_stackedWidget->addWidget(m_saudaContractWidget);
+    }
 
     // Index 48: Employee Payroll & Salary Crediting Register Widget (View 80)
     m_salaryRegisterCtrl = new MahadevERP::SalaryRegisterController(this);
@@ -514,6 +547,12 @@ MainWindow::MainWindow(const MainWindowDependencies& deps, QWidget* parent)
     // Bill Series (index 7 in add_voucher)
     menuMgr.setItemCallback("add_voucher", 7, [this]() {
         MahadevERP::BillSeriesDialog dlg(this);
+        dlg.exec();
+    });
+    // Close Financial Year checklist (index 9 in final_accounts; F3 skeleton,
+    // Agent 2 — single launcher line per shared-file protocol).
+    menuMgr.setItemCallback("final_accounts", 9, [this]() {
+        MahadevERP::CloseYearDialog dlg(this);
         dlg.exec();
     });
 
@@ -947,6 +986,19 @@ void MainWindow::navigateToView(int viewIndex) {
 }
 
 void MainWindow::navigateToView(int viewIndex, bool pushToHistory) {
+    // Phase 3 flags: domain views are unreachable while their flag is off.
+    // Menus hide them and F-keys fall through here; this guard is the single
+    // choke point covering menus, keyboard, dashboard links and history-back.
+    const QStringList needFlags = FeatureFlags::requiredFlagsForView(viewIndex);
+    if (!needFlags.isEmpty() && !FeatureFlags::isViewEnabled(viewIndex)) {
+        QStringList labels;
+        for (const QString& f : needFlags) labels.append(FeatureFlags::domainLabelForFlag(f));
+        statusBar()->showMessage(
+            QString("%1 is not enabled for this firm. Turn it on in Settings to use this view.")
+                .arg(labels.join(" / ")),
+            6000);
+        return;
+    }
     if (m_isNavigating) return;
     m_isNavigating = true;
 

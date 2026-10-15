@@ -1,5 +1,6 @@
 #include "sales_model.h"
 #include "../database_manager.h"
+#include "../config/settings_registry.h"
 #include "../engine/accounting_engine.h"
 #include "../engine/bill_series.h"
 #include "../engine/fiscal_year_helper.h"
@@ -35,7 +36,7 @@ struct Tcs206CAccountInfo {
 Tcs206CAccountInfo resolveTcs206CLedger() {
     Tcs206CAccountInfo info;
     QVariantList cfgRows = DatabaseManager::instance().executeQuery(
-        "SELECT value FROM app_settings WHERE key = 'tcs_payable_ledger_id' LIMIT 1;"
+        "SELECT value FROM app_settings WHERE key = '" + SettingsKeys::tcs_payable_ledger_id() + "' LIMIT 1;"
     );
     if (!cfgRows.isEmpty()) {
         int cfgId = cfgRows.first().toMap().value("value").toInt();
@@ -117,7 +118,7 @@ QString SalesModel::get_next_voucher_no(const QString& fy) {
 
 QString SalesModel::get_next_invoice_no(const QString& fy) {
     // Auto-invoice number comes from the user's Bill Series config
-    // (app_settings "bill_series/sale" in this .db file). No prefix is
+    // (the sale series row in this .db file). No prefix is
     // hardcoded here: unsaved firms adopt their own history's dominant shape.
     return BillSeriesManager::nextNumber("sale", "sales_invoices", fy);
 }

@@ -6,6 +6,7 @@
 #include "mandi_migrator.h"
 #include "migration_utils.h"
 #include "../database_manager.h"
+#include "../config/feature_flags.h"
 #include <QFileInfo>
 #include <QDir>
 #include <QUrl>
@@ -161,6 +162,42 @@ bool MigrationManager::runBahiKhataPipeline(MigrationContext& ctx) {
 
     mdb_close(mdb);
 
+    // Phase 3 flags: prime domain flags from SOURCE data before
+    // ensureTablesExist creates the gated domain tables. ON-only, package-
+    // aligned (D12: mandi implies bardana+transport, mill implies bardana).
+    // JFrm/IFrm TransTypes, sauda/brokerage rows, or paddy/dheri items all
+    // evidence mandi business (paddy arrivals register off purchase items).
+    {
+        auto hasTransType = [&](const char* tok) {
+            for (const auto& r : transRows) {
+                auto it = r.find("TransType");
+                if (it != r.end() && QString::fromStdString(it->second).trimmed().compare(tok, Qt::CaseInsensitive) == 0) return true;
+            }
+            return false;
+        };
+        auto hasItemNamed = [&](const char* needle) {
+            const QString n = QString::fromUtf8(needle);
+            for (const auto& r : itemRows) {
+                for (const auto& kv : r) {
+                    if (QString::fromStdString(kv.second).contains(n, Qt::CaseInsensitive)) return true;
+                }
+            }
+            for (const auto& r : ledgerRows) {
+                for (const auto& kv : r) {
+                    if (QString::fromStdString(kv.second).contains(n, Qt::CaseInsensitive)) return true;
+                }
+            }
+            return false;
+        };
+        const bool mandi = hasTransType("JFrm") || hasTransType("IFrm")
+            || !saudaVchRows.empty() || !saudaTxRows.empty() || !brokerageRows.empty()
+            || hasItemNamed("paddy") || hasItemNamed("dheri");
+        const bool mill = !millingRows.empty();
+        FeatureFlags::primeFromSource(mandi, mill,
+            mandi || mill || !bardanaRows.empty(),
+            mandi || !transportRows.empty() || !gatePassRows.empty() || !gateRegRows.empty());
+    }
+
     auto& db = DatabaseManager::instance();
     db.ensureTablesExist();
     db.executeNonQuery("PRAGMA foreign_keys = OFF;");
@@ -175,7 +212,7 @@ bool MigrationManager::runBahiKhataPipeline(MigrationContext& ctx) {
     db.executeNonQuery("DELETE FROM transactions;");
     db.executeNonQuery("DELETE FROM sales_invoices;");
     db.executeNonQuery("DELETE FROM purchase_invoices;");
-    db.executeNonQuery("DELETE FROM paddy_arrivals;");
+    db.executeNonQuery("DELETE FROM paddy_slips;");
     db.executeNonQuery("DELETE FROM milling_voucher_items;");
     db.executeNonQuery("DELETE FROM milling_batches;");
     db.executeNonQuery("DELETE FROM stock_transactions;");
@@ -283,6 +320,7 @@ bool MigrationManager::runBahiKhataPipeline(MigrationContext& ctx) {
 
     db.commit();
     db.executeNonQuery("PRAGMA foreign_keys = ON;");
+    db.ensureDomainMasters();
 
     ctx.updateProgress(100, "Bahi-Khata Migration Completed Successfully!");
     emit migrationFinished(true, "Bahi-Khata Migration Completed Successfully!");
@@ -331,6 +369,10 @@ bool MigrationManager::runBusyPipeline(MigrationContext& ctx) {
     auto tran3Rows = readTableRows(mdb, "Tran3");
     auto mandiRows = readTableRows(mdb, "MandiForms");
     mdb_close(mdb);
+
+    // Phase 3 flags: Busy mandi forms imply the mandi bundle (D12).
+    FeatureFlags::primeFromSource(!mandiRows.empty(), false,
+        !mandiRows.empty(), !mandiRows.empty());
 
     auto& db = DatabaseManager::instance();
     db.ensureTablesExist();
@@ -390,6 +432,7 @@ bool MigrationManager::runBusyPipeline(MigrationContext& ctx) {
 
     db.commit();
     db.executeNonQuery("PRAGMA foreign_keys = ON;");
+    db.ensureDomainMasters();
 
     ctx.updateProgress(100, "Busy Migration Completed Successfully!");
     emit migrationFinished(true, "Busy Migration Completed Successfully!");
@@ -502,6 +545,7 @@ bool MigrationManager::runTallyPipeline(MigrationContext& ctx) {
 
     db.commit();
     db.executeNonQuery("PRAGMA foreign_keys = ON;");
+    db.ensureDomainMasters();
 
     ctx.updateProgress(100, "Tally Migration Completed Successfully!");
     emit migrationFinished(true, "Tally Migration Completed Successfully!");

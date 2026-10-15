@@ -115,6 +115,8 @@ set(SOURCES
     src/engine/accounting_engine.h
     src/engine/fiscal_year_helper.h
     src/engine/fiscal_year_helper.cpp
+    src/engine/fy_close_engine.h
+    src/engine/fy_close_engine.cpp
     src/engine/bill_series.h
     src/engine/bill_series.cpp
     src/engine/voucher_numbering.h
@@ -134,6 +136,8 @@ set(SOURCES
     src/models/purchase_model.cpp
     src/models/vouchers_model.h
     src/models/vouchers_model.cpp
+    src/models/voucher_type_model.h
+    src/models/voucher_type_model.cpp
     src/models/stock_items_model.h
     src/models/stock_items_model.cpp
     src/models/parties_model.h
@@ -407,6 +411,8 @@ set(SOURCES
     src/widgets/tds_acknowledgement_dialog.cpp
     src/widgets/tcs_config_dialog.h
     src/widgets/tcs_config_dialog.cpp
+    src/widgets/close_year_dialog.h
+    src/widgets/close_year_dialog.cpp
     src/widgets/bill_series_dialog.h
     src/widgets/bill_series_dialog.cpp
     src/widgets/navigation_menu_dialog.h
@@ -590,6 +596,8 @@ set(TEST_SOURCES
     src/models/purchase_model.cpp
     src/models/vouchers_model.h
     src/models/vouchers_model.cpp
+    src/models/voucher_type_model.h
+    src/models/voucher_type_model.cpp
     src/engine/gst_tax_engine.h
     src/engine/gst_tax_engine.cpp
     src/engine/gstr1_engine.h
@@ -631,6 +639,8 @@ set(TEST_SOURCES
     src/engine/accounting_engine.h
     src/engine/fiscal_year_helper.h
     src/engine/fiscal_year_helper.cpp
+    src/engine/fy_close_engine.h
+    src/engine/fy_close_engine.cpp
     src/engine/bill_series.h
     src/engine/bill_series.cpp
     src/engine/voucher_numbering.h

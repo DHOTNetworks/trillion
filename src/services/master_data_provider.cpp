@@ -273,43 +273,44 @@ double MasterDataProvider::getUnitConversionFactor(const QString& fromUnit, cons
     return 1.0;
 }
 
-// 5. Dynamic Voucher Types & Configurations
+// 5. Dynamic Voucher Types & Configurations — served from the voucher_types
+// master (generic-ERP single source of truth). Empty table = empty result;
+// never fake types.
 QVariantList MasterDataProvider::getAvailableVoucherTypes() {
-    QString sql = "SELECT * FROM voucher_settings;";
+    QString sql = "SELECT id, code, name, category, is_system, prefix, numbering_method, "
+                  "separator, number_width, reset_each_fy, affects_stock, requires_party, "
+                  "requires_stock, requires_gst, sort_order, is_active "
+                  "FROM voucher_types WHERE is_active != 0 ORDER BY sort_order ASC, name ASC;";
     QVariantList rows = DatabaseManager::instance().executeQuery(sql);
-    if (rows.isEmpty()) {
-        // Fallback default list
-        qWarning() << "[MasterDataProvider] voucher_settings table missing/empty — using built-in voucher fallback.";
-        QVariantList defaults;
-        QVariantMap vSale; vSale["voucher_type"] = "Sale"; defaults.append(vSale);
-        QVariantMap vPurc; vPurc["voucher_type"] = "Purc"; defaults.append(vPurc);
-        QVariantMap vPymt; vPymt["voucher_type"] = "Pymt"; defaults.append(vPymt);
-        QVariantMap vRcpt; vRcpt["voucher_type"] = "Rcpt"; defaults.append(vRcpt);
-        QVariantMap vJrnl; vJrnl["voucher_type"] = "Jrnl"; defaults.append(vJrnl);
-        return defaults;
+    // Compat: historic callers read ["voucher_type"]; keep it alongside code.
+    for (QVariant& r : rows) {
+        QVariantMap m = r.toMap();
+        m["voucher_type"] = m.value("code").toString();
+        r = m;
     }
     return rows;
 }
 
 QVariantMap MasterDataProvider::getVoucherTypeByCode(const QString& code) {
-    QString sql = "SELECT * FROM voucher_settings WHERE LOWER(voucher_type) = LOWER(?);";
-    QVariantList rows = DatabaseManager::instance().executeQuery(sql, { code.trimmed() });
+    QString sql = "SELECT id, code, name, category, is_system, prefix, numbering_method, "
+                  "separator, number_width, reset_each_fy, affects_stock, requires_party, "
+                  "requires_stock, requires_gst, sort_order, is_active "
+                  "FROM voucher_types WHERE UPPER(code) = ? LIMIT 1;";
+    QVariantList rows = DatabaseManager::instance().executeQuery(sql, { code.trimmed().toUpper() });
     if (!rows.isEmpty()) {
-        return rows.first().toMap();
+        QVariantMap m = rows.first().toMap();
+        m["voucher_type"] = m.value("code").toString();
+        return m;
     }
     return QVariantMap();
 }
 
 QStringList MasterDataProvider::getVoucherTypeCodes() {
-    QString sql = "SELECT voucher_type FROM voucher_settings ORDER BY voucher_type ASC;";
+    QString sql = "SELECT code FROM voucher_types WHERE is_active != 0 ORDER BY sort_order ASC, code ASC;";
     QVariantList rows = DatabaseManager::instance().executeQuery(sql);
     QStringList codes;
     for (const auto& r : rows) {
-        codes << r.toMap().value("voucher_type").toString();
-    }
-    if (codes.isEmpty()) {
-        qWarning() << "[MasterDataProvider] voucher_settings table missing/empty — using built-in code fallback.";
-        codes << "Sale" << "Purc" << "Pymt" << "Rcpt" << "Jrnl" << "ChPt" << "ChRt" << "JFrm" << "IFrm";
+        codes << r.toMap().value("code").toString();
     }
     return codes;
 }

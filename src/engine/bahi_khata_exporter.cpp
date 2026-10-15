@@ -204,25 +204,20 @@ static QByteArray toJet4TextForCol(const QString& str, MdbColumn* col) {
 }
 
 static QString normalizeTxType(const QString& raw) {
-    QString t = raw.trimmed();
-    if (t.compare("Journal", Qt::CaseInsensitive) == 0) return "Jrnl";
-    if (t.compare("Jrnl", Qt::CaseInsensitive) == 0) return "Jrnl";
-    if (t.compare("TDS", Qt::CaseInsensitive) == 0) return "Jrnl";
-    if (t.compare("Payment", Qt::CaseInsensitive) == 0) return "ChPt";
-    if (t.compare("ChPt", Qt::CaseInsensitive) == 0) return "ChPt";
-    if (t.compare("Receipt", Qt::CaseInsensitive) == 0) return "ChRt";
-    if (t.compare("ChRt", Qt::CaseInsensitive) == 0) return "ChRt";
-    if (t.compare("Sales", Qt::CaseInsensitive) == 0) return "Sale";
-    if (t.compare("Sale", Qt::CaseInsensitive) == 0) return "Sale";
-    if (t.compare("Purchase", Qt::CaseInsensitive) == 0) return "Purc";
-    if (t.compare("Purc", Qt::CaseInsensitive) == 0) return "Purc";
-    if (t.compare("Contra", Qt::CaseInsensitive) == 0) return "Jrnl";
-    if (t.compare("Pymt", Qt::CaseInsensitive) == 0) return "Pymt";
-    if (t.compare("Rcpt", Qt::CaseInsensitive) == 0) return "Rcpt";
-    if (t.compare("PrRn", Qt::CaseInsensitive) == 0) return "PrRn";
-    if (t.compare("SlRn", Qt::CaseInsensitive) == 0) return "SlRn";
-    if (t.length() > 5) return t.left(5);
-    return t;
+    // Phase 1: single alias map lives in FiscalYearHelper::canonicalTypeToken.
+    // Only export-specific quirk kept here: Bahi-Khata has no Contra/TDS
+    // voucher kinds, so both export as Jrnl (documented, not a parallel map).
+    // -main deviation from the reference port: Bahi-Khata return kinds pass
+    // through byte-identical. The keeper folds SlRn into Sale ("Sale" family
+    // for numbering/display), but export must preserve the native token so a
+    // re-import round-trips instead of reclassifying returns as sales.
+    if (raw.compare("SlRn", Qt::CaseInsensitive) == 0) return "SlRn";
+    if (raw.compare("PrRn", Qt::CaseInsensitive) == 0) return "PrRn";
+    QString tok = FiscalYearHelper::canonicalTypeToken(raw);
+    if (tok.compare("Contra", Qt::CaseInsensitive) == 0) return "Jrnl";
+    if (tok.compare("TDS", Qt::CaseInsensitive) == 0) return "Jrnl";
+    if (tok.length() > 5) return tok.left(5);
+    return tok;
 }
 
 /* Shared FY filter builder. Empty/"ALL" -> no filter (export all years).

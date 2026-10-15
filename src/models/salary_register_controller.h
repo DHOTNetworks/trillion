@@ -6,6 +6,7 @@
 #include <QVector>
 #include <QVariantMap>
 #include <QVariantList>
+#include "../engine/fiscal_year_helper.h" // FiscalCalendar choke (April fixed)
 
 namespace MahadevERP {
 
@@ -107,7 +108,7 @@ signals:
 
 private:
     int m_currentYear = 2025;
-    int m_currentMonth = 4; // April
+    int m_currentMonth = FiscalCalendar::startMonth(); // April (F1 choke, fixed)
     QVector<EmployeeSalaryItem> m_items;
     SalaryRegisterSummary m_summary;
 

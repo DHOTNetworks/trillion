@@ -519,8 +519,8 @@ QString PartiesModel::get_financial_year_start() const {
         return FiscalYearHelper::formatDisplayDate(fy.startDate);
     }
     QDate cur = QDate::currentDate();
-    int currentFyStartYear = (cur.month() >= 4) ? cur.year() : (cur.year() - 1);
-    return QString("01-04-%1").arg(currentFyStartYear);
+    int currentFyStartYear = FiscalCalendar::fyStartYearForDate(cur.year(), cur.month());
+    return QString("01-%1-%2").arg(FiscalCalendar::startMonth(), 2, 10, QChar('0')).arg(currentFyStartYear);
 }
 
 bool PartiesModel::add_ledger_extended(const QVariantMap& data) {

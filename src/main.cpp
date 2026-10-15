@@ -53,7 +53,7 @@
 int main(int argc, char* argv[]) {
     QElapsedTimer startupTimer;
     startupTimer.start();
-    std::cout << "[INIT] Starting Mahadev Rice Mill ERP native executable..." << std::endl << std::flush;
+    std::cout << "[INIT] Starting Mahadev ERP native executable..." << std::endl << std::flush;
 
     // High-DPI Desktop Scaling (scales all coordinates, fonts, tables, cards for 27" and 4K screens)
     int savedScalePercent = ScaleManager::getSavedScalePercent();
@@ -65,7 +65,7 @@ int main(int argc, char* argv[]) {
     }
 
     QApplication app(argc, argv);
-    app.setApplicationName("Mahadev Rice Mill ERP & Accounting");
+    app.setApplicationName("Mahadev ERP & Accounting");
     app.setApplicationVersion("0.2.5");
     app.setOrganizationName("MahadevAgro");
 
@@ -311,9 +311,9 @@ int main(int argc, char* argv[]) {
 
     for (int i = 1; i < argc; ++i) {
         if (QString(argv[i]) == "--render-preview") {
-            QString origPdf = "/tmp/final_sales_preview.pdf";
+            QString origPdf = QDir::tempPath() + "/final_sales_preview.pdf";
             printExportCtrl.export_sales_invoice_pdf("12640", origPdf, "ORIGINAL FOR RECIPIENT");
-            QString dupPdf = "/tmp/duplicate_sales_preview.pdf";
+            QString dupPdf = QDir::tempPath() + "/duplicate_sales_preview.pdf";
             printExportCtrl.export_sales_invoice_duplicate_pdf("12640", dupPdf);
             std::cout << "[RENDER] Exported previews to " << origPdf.toStdString() << " and " << dupPdf.toStdString() << std::endl;
             return 0;

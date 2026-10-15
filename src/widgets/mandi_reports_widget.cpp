@@ -84,7 +84,7 @@ void MandiReportsWidget::setupFormMTab() {
     // Filter Bar
     FiscalYearInfo fy = FiscalYearHelper::getActiveFiscalYear();
     QDate defStart = QDate::fromString(fy.startDate, "yyyy-MM-dd");
-    if (!defStart.isValid()) defStart = QDate(QDate::currentDate().month() < 4 ? QDate::currentDate().year() - 1 : QDate::currentDate().year(), 4, 1);
+    if (!defStart.isValid()) defStart = QDate(FiscalCalendar::fyStartYearForDate(QDate::currentDate().year(), QDate::currentDate().month()), FiscalCalendar::startMonth(), 1);
     QDate defEnd = QDate::fromString(fy.endDate, "yyyy-MM-dd");
     if (!defEnd.isValid()) defEnd = QDate::currentDate();
 
@@ -174,7 +174,7 @@ void MandiReportsWidget::setupJFormRegisterTab() {
 
     FiscalYearInfo fy = FiscalYearHelper::getActiveFiscalYear();
     QDate defStart = QDate::fromString(fy.startDate, "yyyy-MM-dd");
-    if (!defStart.isValid()) defStart = QDate(QDate::currentDate().month() < 4 ? QDate::currentDate().year() - 1 : QDate::currentDate().year(), 4, 1);
+    if (!defStart.isValid()) defStart = QDate(FiscalCalendar::fyStartYearForDate(QDate::currentDate().year(), QDate::currentDate().month()), FiscalCalendar::startMonth(), 1);
     QDate defEnd = QDate::fromString(fy.endDate, "yyyy-MM-dd");
     if (!defEnd.isValid()) defEnd = QDate::currentDate();
 
@@ -231,7 +231,7 @@ void MandiReportsWidget::setupIFormRegisterTab() {
 
     FiscalYearInfo fy = FiscalYearHelper::getActiveFiscalYear();
     QDate defStart = QDate::fromString(fy.startDate, "yyyy-MM-dd");
-    if (!defStart.isValid()) defStart = QDate(QDate::currentDate().month() < 4 ? QDate::currentDate().year() - 1 : QDate::currentDate().year(), 4, 1);
+    if (!defStart.isValid()) defStart = QDate(FiscalCalendar::fyStartYearForDate(QDate::currentDate().year(), QDate::currentDate().month()), FiscalCalendar::startMonth(), 1);
     QDate defEnd = QDate::fromString(fy.endDate, "yyyy-MM-dd");
     if (!defEnd.isValid()) defEnd = QDate::currentDate();
 
@@ -358,7 +358,7 @@ void MandiReportsWidget::setupDamiRegisterTab() {
 
     FiscalYearInfo fy = FiscalYearHelper::getActiveFiscalYear();
     QDate defStart = QDate::fromString(fy.startDate, "yyyy-MM-dd");
-    if (!defStart.isValid()) defStart = QDate(QDate::currentDate().month() < 4 ? QDate::currentDate().year() - 1 : QDate::currentDate().year(), 4, 1);
+    if (!defStart.isValid()) defStart = QDate(FiscalCalendar::fyStartYearForDate(QDate::currentDate().year(), QDate::currentDate().month()), FiscalCalendar::startMonth(), 1);
     QDate defEnd = QDate::fromString(fy.endDate, "yyyy-MM-dd");
     if (!defEnd.isValid()) defEnd = QDate::currentDate();
 

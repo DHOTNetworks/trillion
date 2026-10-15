@@ -172,8 +172,7 @@ void GstrReportsWidget::setupUi() {
         QList<FiscalYearInfo> fys = FiscalYearHelper::getAllFiscalYears();
         if (fys.isEmpty()) {
             // No FY master rows (fresh file): synthesize around today.
-            int y = QDate::currentDate().month() >= 4 ? QDate::currentDate().year()
-                                                      : QDate::currentDate().year() - 1;
+            int y = FiscalCalendar::fyStartYearForDate(QDate::currentDate().year(), QDate::currentDate().month());
             for (int s = y - 2; s <= y + 1; ++s)
                 fys.append({QString("FY %1-%2").arg(s).arg(QString::number((s + 1) % 100).rightJustified(2, '0')), "", "", false, false});
         }
