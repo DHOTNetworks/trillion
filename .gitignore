@@ -38,7 +38,7 @@ data/
 !README.md
 !THIRD_PARTY_NOTICES.md
 !docs/*.md
-docs/**/*.md
+!docs/**/*.md
 !decompiled-data/*.md
 !impl*.md
 !SCRATCH.md

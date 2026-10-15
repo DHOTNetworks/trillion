@@ -5,6 +5,7 @@
 #include "erp_theme.h"
 #include "custom_dialogs.h"
 #include "../engine/fiscal_year_helper.h"
+#include "../engine/stock_pipeline.h"
 #include "../database_manager.h"
 #include "../models/parties_model.h"
 #include <QVBoxLayout>
@@ -20,6 +21,35 @@
 
 namespace MahadevERP {
 
+// Non-editable combo text is painted from the widget palette on some
+// styles (macOS dark mode), ignoring stylesheet color — so white-on-white
+// happens no matter what the stylesheet says. Belt and suspenders: force
+// the palette roles AND an explicit focus policy on every header combo.
+static void hardenComboText(QComboBox* cb, const QColor& textColor, bool lockTyping = true) {
+    if (!cb) return;
+    QPalette pal = cb->palette();
+    pal.setColor(QPalette::WindowText, textColor);
+    pal.setColor(QPalette::ButtonText, textColor);
+    pal.setColor(QPalette::Text, textColor);
+    pal.setColor(QPalette::BrightText, textColor);
+    cb->setPalette(pal);
+    cb->setFocusPolicy(Qt::StrongFocus);
+    // Display-locked editable: the value paints through a real line edit
+    // (fully styleable on every platform theme) while staying untypable —
+    // the same rendering path as the invoice combo, which reads fine.
+    // The dropdown, Enter/Backspace/arrow contract is unchanged.
+    // (The invoice combo keeps typing: it resolves typed numbers.)
+    if (!lockTyping) return;
+    cb->setEditable(true);
+    if (QLineEdit* le = cb->lineEdit()) {
+        le->setReadOnly(true);
+        le->setFocusPolicy(Qt::StrongFocus);
+        QPalette lp = le->palette();
+        lp.setColor(QPalette::Text, textColor);
+        le->setPalette(lp);
+    }
+}
+
 DebitCreditNoteWidget::DebitCreditNoteWidget(DebitCreditNoteController* controller,
                                              PrintExportController* printExportCtrl,
                                              QWidget* parent)
@@ -33,8 +63,7 @@ DebitCreditNoteWidget::DebitCreditNoteWidget(DebitCreditNoteController* controll
 }
 
 void DebitCreditNoteWidget::setupUi() {
-    setAttribute(Qt::WA_StyledBackground, true);
-    setStyleSheet(
+    setAttribute(Qt::WA_StyledBackground, true);    setStyleSheet(
         "DebitCreditNoteWidget { background-color: #F8FAFC; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif; }"
         "QLabel { border: none; background: transparent; color: #1E293B; font-size: 11px; font-weight: 700; }"
         "QLineEdit { background-color: #FFFFFF; color: #0F172A; border: 1px solid #CBD5E1; border-radius: 5px; padding: 2px 6px; font-size: 11.5px; font-weight: 700; }"
@@ -46,181 +75,193 @@ void DebitCreditNoteWidget::setupUi() {
     rootLayout->setSpacing(6);
 
     // ========================================================================
-    // TIER 1: STICKY HEADER BAR CARD
+    // 1. TOP HEADER BAR (Sale-voucher mirror): badge + No. + title + date/day
     // ========================================================================
-    auto* headerCard = new QFrame(this);
-    headerCard->setMinimumHeight(50);
-    headerCard->setStyleSheet("QFrame { background-color: #FFFFFF; border: 1px solid #E2D5C8; border-radius: 6px; }");
-    auto* headerLayout = new QHBoxLayout(headerCard);
-    headerLayout->setContentsMargins(12, 4, 12, 4);
-    headerLayout->setSpacing(10);
+    QHBoxLayout* topHeaderLayout = new QHBoxLayout();
+    topHeaderLayout->setContentsMargins(0, 0, 0, 0);
+    topHeaderLayout->setSpacing(6);
 
-    auto* titleCol = new QVBoxLayout();
-    titleCol->setSpacing(1);
-    auto* titleLabel = new QLabel("GST Debit & Credit Notes Entry (Section 34)", headerCard);
-    titleLabel->setStyleSheet("font-size: 15px; font-weight: 800; color: #0F172A; border: none; background: transparent;");
-    auto* subLabel = new QLabel("Credit Notes (Sales Return / Rate Cut) & Debit Notes (Purchase Return / Rate Difference). F4: Alter  PgUp/PgDn: Browse  F2: Date", headerCard);
-    subLabel->setStyleSheet("font-size: 11px; color: #64748B; border: none; background: transparent;");
-    titleCol->addWidget(titleLabel);
-    titleCol->addWidget(subLabel);
-    headerLayout->addLayout(titleCol);
-    headerLayout->addStretch(1);
+    m_noteBadge = new QLabel("Credit Note", this);
+    m_noteBadge->setAlignment(Qt::AlignCenter);
+    m_noteBadge->setMinimumHeight(22);
+    m_noteBadge->setStyleSheet(ErpTheme::badgeStyle("info"));
+    topHeaderLayout->addWidget(m_noteBadge);
 
-    m_voucherNoDisplay = new QLabel("", headerCard);
-    m_voucherNoDisplay->setStyleSheet("background-color: #F1F5F9; color: #1E293B; border: 1px solid #CBD5E1; border-radius: 4px; padding: 4px 10px; font-size: 12px; font-weight: 700;");
-    m_voucherNoDisplay->setVisible(false);
-    headerLayout->addWidget(m_voucherNoDisplay);
+    m_voucherNoDisplay = new QLabel("No. CN-0001", this);
+    m_voucherNoDisplay->setStyleSheet(ErpTheme::headerTitleStyle(13));
+    topHeaderLayout->addWidget(m_voucherNoDisplay);
 
-    m_newBtn = new KbdBadgeButton("+ New Note", "F9", headerCard);
-    m_newBtn->setPrimaryColor("#0284C7", "#0369A1");
-    m_newBtn->setTextColor("#FFFFFF");
-    headerLayout->addWidget(m_newBtn);
+    topHeaderLayout->addStretch(1);
 
-    auto* backBtn = new KbdBadgeButton("← Back to Dashboard", "Esc", headerCard);
-    backBtn->setPrimaryColor("#F1F5F9", "#E2E8F0");
-    backBtn->setTextColor("#475569");
-    connect(backBtn, &QPushButton::clicked, this, &DebitCreditNoteWidget::backRequested);
-    headerLayout->addWidget(backBtn);
+    auto* titleLabel = new QLabel("F9 : Debit & Credit Note", this);
+    titleLabel->setAlignment(Qt::AlignCenter);
+    titleLabel->setStyleSheet(ErpTheme::headerTitleStyle(15));
+    topHeaderLayout->addWidget(titleLabel);
 
-    rootLayout->addWidget(headerCard);
+    topHeaderLayout->addStretch(1);
 
-    // ========================================================================
-    // TIER 2: TOP METADATA & PARTY DETAILS CARDS (2 SIDE-BY-SIDE COLUMNS)
-    // ========================================================================
-    auto* metaRowLayout = new QHBoxLayout();
-    metaRowLayout->setSpacing(10);
+    // Date & Day of Week (stacked, right-aligned — exactly like Sale).
+    QVBoxLayout* dateBox = new QVBoxLayout();
+    dateBox->setSpacing(0);
+    dateBox->setAlignment(Qt::AlignRight);
 
-    const QString cardStyle =
-        "QFrame { background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; }"
-        "QLabel { color: #475569; font-size: 11.5px; font-weight: 700; border: none; background: transparent; }"
-        "QLineEdit, QComboBox { background-color: #FFFFFF; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 4px 8px; font-size: 12px; color: #0F172A; font-weight: 600; }"
-        "QLineEdit:focus, QComboBox:focus { border-color: #2563EB; background-color: #F8FAFC; }";
+    auto* dateRow = new QHBoxLayout();
+    dateRow->setSpacing(4);
+    dateRow->setContentsMargins(0, 0, 0, 0);
+    m_noteDateEdit = new AccountingDateEdit(this);
+    m_noteDateEdit->setMinimumHeight(22);
+    m_noteDateEdit->setMinimumWidth(105);
+    dateRow->addWidget(m_noteDateEdit);
 
-    // --- Left Card: Note Identification & Invoice Reference ---
-    auto* leftCard = new QFrame(this);
-    leftCard->setStyleSheet(cardStyle);
-    auto* leftLayout = new QVBoxLayout(leftCard);
-    leftLayout->setContentsMargins(12, 10, 12, 10);
-    leftLayout->setSpacing(8);
-
-    auto* leftHeader = new QLabel("NOTE IDENTIFICATION & ORIGINAL INVOICE LINK", leftCard);
-    leftHeader->setStyleSheet("color: #2563EB; font-size: 10.5px; font-weight: 800; letter-spacing: 0.5px; border: none; background: transparent;");
-    leftLayout->addWidget(leftHeader);
-
-    auto* leftGrid = new QGridLayout();
-    leftGrid->setHorizontalSpacing(10);
-    leftGrid->setVerticalSpacing(6);
-
-    // Row 0: Note Type, Date
-    leftGrid->addWidget(new QLabel("Note Type *:", leftCard), 0, 0);
-    m_noteTypeCombo = new QComboBox(leftCard);
-    m_noteTypeCombo->addItems({"Credit Note (Sales Return / Rate Cut)", "Debit Note (Purchase Return / Rate Difference)"});
-    m_noteTypeCombo->setStyleSheet("background-color: #EFF6FF; border: 1.5px solid #93C5FD; border-radius: 6px; padding: 4px 8px; font-weight: bold; color: #1D4ED8;");
-    leftGrid->addWidget(m_noteTypeCombo, 0, 1);
-
-    leftGrid->addWidget(new QLabel("Date (F2) *:", leftCard), 0, 2);
-    auto* dateBox = new QHBoxLayout();
-    dateBox->setSpacing(5);
-    dateBox->setContentsMargins(0, 0, 0, 0);
-    m_noteDateEdit = new AccountingDateEdit(leftCard);
-    m_noteDateEdit->setMinimumWidth(100);
-    m_noteDateEdit->setMaximumWidth(110);
-    dateBox->addWidget(m_noteDateEdit);
-
-    auto* dateBtn = new QPushButton("…", leftCard);
+    auto* dateBtn = new QPushButton("…", this);
     dateBtn->setFixedSize(26, 26);
     dateBtn->setCursor(Qt::PointingHandCursor);
     dateBtn->setToolTip("Pick date (F2)");
     dateBtn->setStyleSheet("background-color: #EFF6FF; border: 1px solid #93C5FD; border-radius: 4px; font-weight: bold; color: #1D4ED8;");
     connect(dateBtn, &QPushButton::clicked, this, [this]() { openDateDialog(false); });
-    dateBox->addWidget(dateBtn);
+    dateRow->addWidget(dateBtn);
+    dateBox->addLayout(dateRow);
 
-    m_dayLabel = new QLabel("", leftCard);
-    m_dayLabel->setStyleSheet("color: #0284C7; font-weight: 800; font-size: 11px;");
+    m_dayLabel = new QLabel("", this);
+    m_dayLabel->setAlignment(Qt::AlignRight);
+    m_dayLabel->setStyleSheet(QString("font-size: 10.5px; font-weight: 700; color: %1; border: none; background: transparent;").arg(ErpTheme::kSky.name()));
     dateBox->addWidget(m_dayLabel);
+    topHeaderLayout->addLayout(dateBox);
 
-    m_fyBadge = new QLabel(FiscalYearHelper::getActiveFiscalYear().name, leftCard);
+    rootLayout->addLayout(topHeaderLayout);
+
+    // Sub-header shortcut / help line + FY badge (sale mirror).
+    QHBoxLayout* subBarLayout = new QHBoxLayout();
+    subBarLayout->setContentsMargins(0, 0, 0, 0);
+    subBarLayout->setSpacing(16);
+
+    auto* helpHintLabel = new QLabel("(Change Date - F2 : Alter Note - F4 : Prev/Next - PgUp/PgDn : New Note - F9 : Print - Ctrl+P : PDF - Ctrl+E)", this);
+    helpHintLabel->setStyleSheet(ErpTheme::mutedLabelStyle(10));
+    subBarLayout->addWidget(helpHintLabel);
+
+    subBarLayout->addStretch(1);
+
+    m_fyBadge = new QLabel(FiscalYearHelper::getActiveFiscalYear().name, this);
     m_fyBadge->setStyleSheet("background-color: #F1F5F9; color: #475569; border: 1px solid #CBD5E1; border-radius: 4px; padding: 2px 6px; font-size: 10.5px; font-weight: 800;");
-    dateBox->addWidget(m_fyBadge);
-    dateBox->addStretch();
+    subBarLayout->addWidget(m_fyBadge);
 
-    leftGrid->addLayout(dateBox, 0, 3);
+    rootLayout->addLayout(subBarLayout);
 
-    // Row 1: Note No, Orig Doc Type
-    leftGrid->addWidget(new QLabel("Note No:", leftCard), 1, 0);
-    m_noteNoEdit = new QLineEdit(leftCard);
+    // ========================================================================
+    // 2. PARTY ROW + SUB-ROW — entry starts here: party first, the
+    //    invoice-link fields below all react to it.
+    // ========================================================================
+    QHBoxLayout* partyRow = new QHBoxLayout();
+    partyRow->setSpacing(6);
+
+    auto* partyTagLabel = new QLabel("Party / Account *:", this);
+    partyTagLabel->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: 800; border: none; background: transparent;").arg(ErpTheme::kNavy.name()));
+    partyRow->addWidget(partyTagLabel);
+
+    m_partySearch = new AccountSearchBox(this);
+    m_partySearch->setMinimumHeight(26);
+    partyRow->addWidget(m_partySearch, 1);
+
+    rootLayout->addLayout(partyRow);
+
+    // Sub-row under party: Date Bal + GSTIN (display mirrors, sale pattern).
+    QHBoxLayout* partySubRow = new QHBoxLayout();
+    partySubRow->setSpacing(20);
+    partySubRow->setContentsMargins(10, 0, 0, 0);
+
+    m_partyBalLabel = new QLabel("Date Bal. 0.00", this);
+    m_partyBalLabel->setStyleSheet(ErpTheme::mutedLabelStyle(11));
+    partySubRow->addWidget(m_partyBalLabel);
+
+    QHBoxLayout* gstinLayout = new QHBoxLayout();
+    gstinLayout->setSpacing(4);
+    gstinLayout->addWidget(new QLabel("GSTIN :", this));
+    m_partyGstinEdit = new QLineEdit(this);
+    m_partyGstinEdit->setReadOnly(true);
+    // Display mirror of the party master GSTIN: mouse-only, no Tab stop.
+    m_partyGstinEdit->setFocusPolicy(Qt::ClickFocus);
+    m_partyGstinEdit->setMinimumHeight(20);
+    m_partyGstinEdit->setMinimumWidth(160);
+    m_partyGstinEdit->setStyleSheet(QString("QLineEdit { background: transparent; border: none; font-weight: 800; color: %1; }").arg(ErpTheme::kNavy.name()));
+    gstinLayout->addWidget(m_partyGstinEdit);
+    partySubRow->addLayout(gstinLayout);
+
+    partySubRow->addStretch(1);
+
+    rootLayout->addLayout(partySubRow);
+
+    // ========================================================================
+    // 3. META ROW: note type, numbers, orig-invoice link, reason, POS
+    //    (single flow row below the party — all party-driven fields).
+    QHBoxLayout* metaRow = new QHBoxLayout();
+    metaRow->setContentsMargins(0, 0, 0, 0);
+    metaRow->setSpacing(6);
+
+    metaRow->addWidget(new QLabel("Note Type *:", this));
+    m_noteTypeCombo = new QComboBox(this);
+    m_noteTypeCombo->addItems({"Credit Note (Sales Return / Rate Cut)", "Debit Note (Purchase Return / Rate Difference)"});
+    m_noteTypeCombo->setMinimumHeight(24);
+    m_noteTypeCombo->setStyleSheet("background-color: #EFF6FF; border: 1.5px solid #93C5FD; border-radius: 6px; padding: 4px 8px; font-weight: bold; color: #1D4ED8;"
+        " QComboBox:focus { border: 2px solid #1D4ED8; background-color: #FFFFF0; }"
+        " QComboBox QLineEdit { background-color: #EFF6FF; color: #1D4ED8; border: none; font-weight: bold; }"
+        " QComboBox QAbstractItemView { background-color: #FFFFFF; color: #0F172A; selection-background-color: #2563EB; selection-color: #FFFFFF; }");
+    hardenComboText(m_noteTypeCombo, QColor("#1D4ED8"));
+    metaRow->addWidget(m_noteTypeCombo);
+
+    metaRow->addWidget(new QLabel("Note No:", this));
+    m_noteNoEdit = new QLineEdit(this);
     m_noteNoEdit->setReadOnly(true);
     // Auto-generated: never a keyboard stop (click still selects).
     m_noteNoEdit->setFocusPolicy(Qt::ClickFocus);
+    m_noteNoEdit->setMinimumHeight(24);
+    m_noteNoEdit->setMinimumWidth(90);
     m_noteNoEdit->setStyleSheet("background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 4px 8px; font-weight: 800; color: #1D4ED8; font-family: 'Consolas', monospace;");
-    leftGrid->addWidget(m_noteNoEdit, 1, 1);
+    metaRow->addWidget(m_noteNoEdit);
 
-    leftGrid->addWidget(new QLabel("Orig Doc Type:", leftCard), 1, 2);
-    m_origInvoiceTypeCombo = new QComboBox(leftCard);
+    metaRow->addWidget(new QLabel("Orig Type:", this));
+    m_origInvoiceTypeCombo = new QComboBox(this);
     m_origInvoiceTypeCombo->addItems({"Sale Invoice", "Purchase Bill", "Other / Manual"});
-    leftGrid->addWidget(m_origInvoiceTypeCombo, 1, 3);
+    m_origInvoiceTypeCombo->setMinimumHeight(24);
+    // Explicit text color: non-editable combos otherwise paint with the
+    // system palette (white-on-white in dark mode) instead of the widget
+    // stylesheet. Same treatment for Reason / POS below.
+    m_origInvoiceTypeCombo->setStyleSheet(
+        "QComboBox { background-color: #FFFFFF; color: #0F172A; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 4px 8px; font-size: 12px; font-weight: 600; }"
+        "QComboBox:focus { border: 2px solid #2563EB; background-color: #FFFFF0; }"
+        "QComboBox QAbstractItemView { background-color: #FFFFFF; color: #0F172A; selection-background-color: #2563EB; selection-color: #FFFFFF; border: 1px solid #CBD5E1; outline: none; }");
+    hardenComboText(m_origInvoiceTypeCombo, QColor("#0F172A"));
+    metaRow->addWidget(m_origInvoiceTypeCombo);
 
-    // Row 2: Original Inv No (party-fed combo), Original Inv Date (auto)
-    leftGrid->addWidget(new QLabel("Orig Invoice No *:", leftCard), 2, 0);
-    m_origInvoiceCombo = new QComboBox(leftCard);
+    metaRow->addWidget(new QLabel("Orig Invoice *:", this));
+    m_origInvoiceCombo = new QComboBox(this);
     m_origInvoiceCombo->setEditable(true);
+    m_origInvoiceCombo->setMinimumHeight(24);
     if (m_origInvoiceCombo->lineEdit())
         m_origInvoiceCombo->lineEdit()->setPlaceholderText("Select party first, then pick invoice");
-    m_origInvoiceCombo->setStyleSheet("background-color: #EFF6FF; border: 1.5px solid #93C5FD; border-radius: 6px; padding: 4px 8px; font-weight: bold; color: #1D4ED8;");
-    leftGrid->addWidget(m_origInvoiceCombo, 2, 1);
+    m_origInvoiceCombo->setStyleSheet("background-color: #EFF6FF; border: 1.5px solid #93C5FD; border-radius: 6px; padding: 4px 8px; font-weight: bold; color: #1D4ED8;"
+        " QComboBox:focus { border: 2px solid #1D4ED8; background-color: #FFFFF0; }"
+        " QComboBox QLineEdit { background-color: #EFF6FF; color: #1D4ED8; border: none; font-weight: bold; }"
+        " QComboBox QAbstractItemView { background-color: #FFFFFF; color: #0F172A; selection-background-color: #2563EB; selection-color: #FFFFFF; }");
+    hardenComboText(m_origInvoiceCombo, QColor("#1D4ED8"), false);
+    metaRow->addWidget(m_origInvoiceCombo, 1);
 
-    leftGrid->addWidget(new QLabel("Orig Inv Date:", leftCard), 2, 2);
-    m_origInvoiceDateEdit = new QLineEdit(leftCard);
+    metaRow->addWidget(new QLabel("Orig Date:", this));
+    m_origInvoiceDateEdit = new QLineEdit(this);
     m_origInvoiceDateEdit->setPlaceholderText("auto from invoice");
     m_origInvoiceDateEdit->setReadOnly(true);
     // Display-only mirror of the linked invoice date: no keyboard stop.
     m_origInvoiceDateEdit->setFocusPolicy(Qt::ClickFocus);
-    leftGrid->addWidget(m_origInvoiceDateEdit, 2, 3);
+    m_origInvoiceDateEdit->setMinimumHeight(24);
+    m_origInvoiceDateEdit->setMinimumWidth(90);
+    metaRow->addWidget(m_origInvoiceDateEdit);
 
-    leftLayout->addLayout(leftGrid);
-    metaRowLayout->addWidget(leftCard, 1);
-
-    // --- Right Card: Party Details & GST Reason ---
-    auto* rightCard = new QFrame(this);
-    rightCard->setStyleSheet(cardStyle);
-    auto* rightLayout = new QVBoxLayout(rightCard);
-    rightLayout->setContentsMargins(12, 10, 12, 10);
-    rightLayout->setSpacing(8);
-
-    auto* rightHeader = new QLabel("PARTY DETAILS & GST STATUTORY MATRIX", rightCard);
-    rightHeader->setStyleSheet("color: #2563EB; font-size: 10.5px; font-weight: 800; letter-spacing: 0.5px; border: none; background: transparent;");
-    rightLayout->addWidget(rightHeader);
-
-    auto* rightGrid = new QGridLayout();
-    rightGrid->setHorizontalSpacing(10);
-    rightGrid->setVerticalSpacing(6);
-    rightGrid->setColumnStretch(0, 0);
-    rightGrid->setColumnStretch(1, 1);
-    rightGrid->setColumnStretch(2, 0);
-    rightGrid->setColumnStretch(3, 1);
-
-    leftGrid->setColumnStretch(0, 0);
-    leftGrid->setColumnStretch(1, 1);
-    leftGrid->setColumnStretch(2, 0);
-    leftGrid->setColumnStretch(3, 1);
-
-    // Row 0: Party Account & GSTIN
-    rightGrid->addWidget(new QLabel("Party / Account *:", rightCard), 0, 0);
-    m_partySearch = new AccountSearchBox(rightCard);
-    rightGrid->addWidget(m_partySearch, 0, 1);
-
-    rightGrid->addWidget(new QLabel("Party GSTIN:", rightCard), 0, 2);
-    m_partyGstinEdit = new QLineEdit(rightCard);
-    m_partyGstinEdit->setPlaceholderText("Unregistered / GSTIN");
-    // Display mirror of the party master GSTIN (editable for manual
-    // corrections): mouse-only, never a Tab/Enter stop.
-    m_partyGstinEdit->setFocusPolicy(Qt::ClickFocus);
-    m_partyGstinEdit->setStyleSheet("background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 4px 8px; font-weight: bold; font-family: 'Consolas', monospace; color: #334155;");
-    rightGrid->addWidget(m_partyGstinEdit, 0, 3);
-
-    // Row 1: Reason Code & Place of Supply
-    rightGrid->addWidget(new QLabel("Reason Code *:", rightCard), 1, 0);
-    m_reasonCodeCombo = new QComboBox(rightCard);
+    metaRow->addWidget(new QLabel("Reason *:", this));
+    m_reasonCodeCombo = new QComboBox(this);
+    m_reasonCodeCombo->setMinimumHeight(24);
+    m_reasonCodeCombo->setStyleSheet(
+        "QComboBox { background-color: #FFFFFF; color: #0F172A; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 4px 8px; font-size: 12px; font-weight: 600; }"
+        "QComboBox:focus { border: 2px solid #2563EB; background-color: #FFFFF0; }"
+        "QComboBox QAbstractItemView { background-color: #FFFFFF; color: #0F172A; selection-background-color: #2563EB; selection-color: #FFFFFF; border: 1px solid #CBD5E1; outline: none; }");
     m_reasonCodeCombo->addItems({
         "01 - Sales / Purchase Return",
         "02 - Post-Sale / Purchase Rate Difference (Rate Cut)",
@@ -228,23 +269,23 @@ void DebitCreditNoteWidget::setupUi() {
         "04 - Correction in Original Invoice",
         "05 - Change in Place of Supply (POS)"
     });
-    rightGrid->addWidget(m_reasonCodeCombo, 1, 1);
+    hardenComboText(m_reasonCodeCombo, QColor("#0F172A"));
+    metaRow->addWidget(m_reasonCodeCombo);
 
-    rightGrid->addWidget(new QLabel("Place of Supply:", rightCard), 1, 2);
-    m_posCombo = new QComboBox(rightCard);
+    metaRow->addWidget(new QLabel("POS:", this));
+    m_posCombo = new QComboBox(this);
+    m_posCombo->setMinimumHeight(24);
+    m_posCombo->setStyleSheet(
+        "QComboBox { background-color: #FFFFFF; color: #0F172A; border: 1.5px solid #CBD5E1; border-radius: 6px; padding: 4px 8px; font-size: 12px; font-weight: 600; }"
+        "QComboBox:focus { border: 2px solid #2563EB; background-color: #FFFFF0; }"
+        "QComboBox QAbstractItemView { background-color: #FFFFFF; color: #0F172A; selection-background-color: #2563EB; selection-color: #FFFFFF; border: 1px solid #CBD5E1; outline: none; }");
     populateStates();
-    rightGrid->addWidget(m_posCombo, 1, 3);
+    hardenComboText(m_posCombo, QColor("#0F172A"));
+    metaRow->addWidget(m_posCombo);
 
-    // Row 2: running party balance (display only, mirrors sale voucher).
-    rightGrid->addWidget(new QLabel("Date Balance:", rightCard), 2, 0);
-    m_partyBalLabel = new QLabel("Date Bal. 0.00", rightCard);
-    m_partyBalLabel->setStyleSheet("color: #0284C7; font-weight: 800; font-size: 11.5px; border: none; background: transparent;");
-    rightGrid->addWidget(m_partyBalLabel, 2, 1);
+    rootLayout->addLayout(metaRow);
 
-    rightLayout->addLayout(rightGrid);
-    metaRowLayout->addWidget(rightCard, 1);
-
-    rootLayout->addLayout(metaRowLayout);
+    // (Party row lives above the meta row — entry starts with the party.)
 
     // ========================================================================
     // TIER 3: ITEM PARTICULARS & TAX BREAKUP MATRIX TABLE
@@ -262,7 +303,7 @@ void DebitCreditNoteWidget::setupUi() {
 
     tableTopRow->addStretch(1);
 
-    m_addRowBtn = new KbdBadgeButton("+ Add Item Row", "F4", tableCard);
+    m_addRowBtn = new KbdBadgeButton("+ Add Item Row", "", tableCard);
     connect(m_addRowBtn, &QPushButton::clicked, this, &DebitCreditNoteWidget::onAddItemRow);
     tableTopRow->addWidget(m_addRowBtn);
 
@@ -279,7 +320,7 @@ void DebitCreditNoteWidget::setupUi() {
         "Commodity / Item Name (Press Space to Search)", "HSN Code", "Unit", "Bags",
         "Weight (Qtl)", "Rate (₹)", "Taxable Amount (₹)", "GST %", "GST Amt (₹)", "Total (₹)"
     });
-    m_itemsTable->setSelectionBehavior(QAbstractItemView::SelectRows);
+    m_itemsTable->setSelectionBehavior(QAbstractItemView::SelectItems);
     m_itemsTable->setSelectionMode(QAbstractItemView::SingleSelection);
     m_itemsTable->setAlternatingRowColors(true);
     m_itemsTable->setShowGrid(true);
@@ -287,15 +328,24 @@ void DebitCreditNoteWidget::setupUi() {
     m_itemsTable->verticalHeader()->setDefaultSectionSize(28);
 
     m_itemsTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
-    m_itemsTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
-    m_itemsTable->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
-    m_itemsTable->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
-    m_itemsTable->horizontalHeader()->setSectionResizeMode(4, QHeaderView::ResizeToContents);
-    m_itemsTable->horizontalHeader()->setSectionResizeMode(5, QHeaderView::ResizeToContents);
-    m_itemsTable->horizontalHeader()->setSectionResizeMode(6, QHeaderView::ResizeToContents);
-    m_itemsTable->horizontalHeader()->setSectionResizeMode(7, QHeaderView::ResizeToContents);
-    m_itemsTable->horizontalHeader()->setSectionResizeMode(8, QHeaderView::ResizeToContents);
-    m_itemsTable->horizontalHeader()->setSectionResizeMode(9, QHeaderView::ResizeToContents);
+    m_itemsTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Fixed);
+    m_itemsTable->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Fixed);
+    m_itemsTable->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Fixed);
+    m_itemsTable->horizontalHeader()->setSectionResizeMode(4, QHeaderView::Fixed);
+    m_itemsTable->horizontalHeader()->setSectionResizeMode(5, QHeaderView::Fixed);
+    m_itemsTable->horizontalHeader()->setSectionResizeMode(6, QHeaderView::Fixed);
+    m_itemsTable->horizontalHeader()->setSectionResizeMode(7, QHeaderView::Fixed);
+    m_itemsTable->horizontalHeader()->setSectionResizeMode(8, QHeaderView::Fixed);
+    m_itemsTable->horizontalHeader()->setSectionResizeMode(9, QHeaderView::Fixed);
+    m_itemsTable->setColumnWidth(1, 90);
+    m_itemsTable->setColumnWidth(2, 60);
+    m_itemsTable->setColumnWidth(3, 60);
+    m_itemsTable->setColumnWidth(4, 90);
+    m_itemsTable->setColumnWidth(5, 95);
+    m_itemsTable->setColumnWidth(6, 110);
+    m_itemsTable->setColumnWidth(7, 55);
+    m_itemsTable->setColumnWidth(8, 95);
+    m_itemsTable->setColumnWidth(9, 110);
 
     m_itemsTable->setStyleSheet(
         "QTableWidget {"
@@ -331,7 +381,10 @@ void DebitCreditNoteWidget::setupUi() {
     );
 
     m_itemDelegate = new ItemSearchDelegate(this);
-    m_itemsTable->setItemDelegateForColumn(0, m_itemDelegate);
+    // Table-wide delegate (sale pattern): every cell — item search or plain
+    // numeric editor — gets the same Enter/Backspace/Left/Right/PgUp/PgDn
+    // contract. Column-scoped delegates leave numeric cells on default keys.
+    m_itemsTable->setItemDelegate(m_itemDelegate);
     connect(m_itemDelegate, &ItemSearchDelegate::stockItemConfigured, this, &DebitCreditNoteWidget::onStockItemConfigured);
     connect(m_itemDelegate, &ItemSearchDelegate::moveNextRequested, this, &DebitCreditNoteWidget::advanceCell);
     connect(m_itemDelegate, &ItemSearchDelegate::movePrevRequested, this, &DebitCreditNoteWidget::retreatCell);
@@ -408,6 +461,12 @@ void DebitCreditNoteWidget::setupUi() {
     m_statusLabel->setStyleSheet("font-weight: 700; font-size: 11px; color: #475569; border: none; background: transparent;");
     footerLayout->addWidget(m_statusLabel);
 
+    m_newBtn = new KbdBadgeButton("New", "F9", footerCard);
+    m_newBtn->setPrimaryColor("#0284C7", "#0369A1");
+    m_newBtn->setTextColor("#FFFFFF");
+    connect(m_newBtn, &QPushButton::clicked, this, &DebitCreditNoteWidget::resetForm);
+    footerLayout->addWidget(m_newBtn);
+
     m_cancelBtn = new KbdBadgeButton("Cancel", "Esc", footerCard);
     m_cancelBtn->setPrimaryColor("#F1F5F9", "#E2E8F0");
     m_cancelBtn->setTextColor("#475569");
@@ -422,7 +481,7 @@ void DebitCreditNoteWidget::setupUi() {
     connect(m_pdfBtn, &QPushButton::clicked, this, &DebitCreditNoteWidget::exportPdf);
     footerLayout->addWidget(m_pdfBtn);
 
-    m_deleteBtn = new KbdBadgeButton("Delete Note", "Del", footerCard);
+    m_deleteBtn = new KbdBadgeButton("Delete Note", "Ctrl+D", footerCard);
     m_deleteBtn->setPrimaryColor("#FEF2F2", "#FEE2E2");
     m_deleteBtn->setTextColor("#DC2626");
     m_deleteBtn->setVisible(false);
@@ -454,9 +513,12 @@ void DebitCreditNoteWidget::setupConnections() {
     connect(m_partySearch, &AccountSearchBox::partyDataSelected, this, &DebitCreditNoteWidget::onPartyDataSelected);
     connect(m_origInvoiceTypeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this]() { refreshOrigInvoiceCombo(); });
     connect(m_origInvoiceCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &DebitCreditNoteWidget::onOrigInvoiceChosen);
-    connect(m_itemsTable, &QTableWidget::cellChanged, this, &DebitCreditNoteWidget::onRecalculateTotals);
+    // Tab-out commits typed numbers too (Tab never fires currentIndexChanged).
+    if (m_origInvoiceCombo->lineEdit()) {
+        connect(m_origInvoiceCombo->lineEdit(), &QLineEdit::editingFinished, this, &DebitCreditNoteWidget::commitOrigInvoiceText);
+    }
+    connect(m_itemsTable, &QTableWidget::cellChanged, this, &DebitCreditNoteWidget::onGridCellChanged);
     connect(m_posCombo, &QComboBox::currentIndexChanged, this, &DebitCreditNoteWidget::onRecalculateTotals);
-    connect(m_newBtn, &QPushButton::clicked, this, &DebitCreditNoteWidget::resetForm);
     if (m_saveBtn) m_saveBtn->installEventFilter(this);
     // Function keys must be caught here: QComboBox and the grid natively
     // swallow PgUp/PgDn (and F4 toggles combo dropdowns), so propagation
@@ -466,7 +528,14 @@ void DebitCreditNoteWidget::setupConnections() {
         m_reasonCodeCombo, m_posCombo, m_partyGstinEdit, m_itemsTable, m_narrationEdit
     };
     for (QWidget* w : fnInputs) {
-        if (w) w->installEventFilter(this);
+        if (!w) continue;
+        w->installEventFilter(this);
+        // Typing focus lives in a combo's line edit (all header combos
+        // are editable now) — propagated keys never consult the combo's
+        // own filters, so cover the edit directly.
+        if (auto* cb = qobject_cast<QComboBox*>(w)) {
+            if (cb->lineEdit()) cb->lineEdit()->installEventFilter(this);
+        }
     }
 
     setupNavigationChains();
@@ -486,23 +555,23 @@ void DebitCreditNoteWidget::setupNavigationChains() {
     auto stepBackToGrid = [this]() {
         if (!m_itemsTable || m_itemsTable->rowCount() == 0) return;
         int r = m_itemsTable->rowCount() - 1;
-        m_itemsTable->setCurrentCell(r, 7);
+        m_itemsTable->setCurrentCell(r, 6);
         m_itemsTable->edit(m_itemsTable->currentIndex());
     };
-    VoucherCommon::installGridNavigation(m_noteTypeCombo, nullptr, m_partySearch,
-        [this, go]() { go(m_partySearch); });
-    VoucherCommon::installGridNavigation(m_partySearch, m_noteTypeCombo, m_origInvoiceTypeCombo,
+    // Entry starts at the party (top row); the link fields below all
+    // react to it. Single Enter-forward declaration per field.
+    VoucherCommon::installGridNavigation(m_partySearch, nullptr, m_noteTypeCombo,
+        [this, go]() { go(m_noteTypeCombo); });
+    VoucherCommon::installGridNavigation(m_noteTypeCombo, m_partySearch, m_origInvoiceTypeCombo,
         [this, go]() { go(m_origInvoiceTypeCombo); });
-    VoucherCommon::installGridNavigation(m_origInvoiceTypeCombo, m_partySearch, m_origInvoiceCombo,
+    VoucherCommon::installGridNavigation(m_origInvoiceTypeCombo, m_noteTypeCombo, m_origInvoiceCombo,
         [this, go]() { go(m_origInvoiceCombo); });
     VoucherCommon::installGridNavigation(m_origInvoiceCombo, m_origInvoiceTypeCombo, m_reasonCodeCombo,
-        [this, go]() { go(m_reasonCodeCombo); });
+        [this]() { commitOrigInvoiceText(); if (m_reasonCodeCombo) { m_reasonCodeCombo->setFocus(); } });
     VoucherCommon::installGridNavigation(m_reasonCodeCombo, m_origInvoiceCombo, m_posCombo,
         [this, go]() { go(m_posCombo); });
     VoucherCommon::installGridNavigation(m_posCombo, m_reasonCodeCombo, nullptr,
         [this]() { focusTableAt(0, 0); }, stepBackToGrid);
-    VoucherCommon::installGridNavigation(m_partyGstinEdit, m_partySearch, m_reasonCodeCombo,
-        [this, go]() { go(m_reasonCodeCombo); });
     VoucherCommon::installGridNavigation(m_narrationEdit, nullptr, nullptr,
         [this]() { if (m_saveBtn) m_saveBtn->setFocus(); }, stepBackToGrid);
 }
@@ -626,6 +695,11 @@ void DebitCreditNoteWidget::keyPressEvent(QKeyEvent* event) {
         event->accept();
         return;
     }
+    if (event->modifiers() & Qt::ControlModifier && event->key() == Qt::Key_D) {
+        onDeleteClicked();
+        event->accept();
+        return;
+    }
     if (event->modifiers() & Qt::ControlModifier && event->key() == Qt::Key_P) {
         printNote();
         event->accept();
@@ -647,12 +721,20 @@ void DebitCreditNoteWidget::keyPressEvent(QKeyEvent* event) {
 void DebitCreditNoteWidget::resetForm() {
     m_editNoteId = 0;
     m_deleteBtn->setVisible(false);
-    if (m_voucherNoDisplay) m_voucherNoDisplay->setVisible(false);
 
     FiscalYearInfo activeFy = FiscalYearHelper::getActiveFiscalYear();
+    // Strictly inside the selected fiscal year (sale pattern): today when
+    // it falls in-year, otherwise the year's first day.
     QDate cur = QDate::currentDate();
-    m_noteDateEdit->setDate(cur);
-    m_dayLabel->setText(cur.toString("dddd"));
+    QDate fyStart = QDate::fromString(activeFy.startDate, "yyyy-MM-dd");
+    QDate fyEnd = QDate::fromString(activeFy.endDate, "yyyy-MM-dd");
+    QDate activeDate = cur;
+    if (activeFy.isValid() && fyStart.isValid() && fyEnd.isValid()
+        && (cur < fyStart || cur > fyEnd)) {
+        activeDate = fyStart;
+    }
+    m_noteDateEdit->setDate(activeDate);
+    m_dayLabel->setText(activeDate.toString("dddd"));
     m_fyBadge->setText(activeFy.name);
 
     if (m_controller) {
@@ -660,6 +742,11 @@ void DebitCreditNoteWidget::resetForm() {
         m_noteNoEdit->setText(m_controller->draftNoteNo());
     } else {
         m_noteNoEdit->setText("CN-0001");
+    }
+    if (m_noteBadge) m_noteBadge->setText("Credit Note");
+    if (m_voucherNoDisplay) m_voucherNoDisplay->setText(QString("No. %1").arg(m_noteNoEdit->text().trimmed()));
+    if (m_noteTypeCombo && m_noteTypeCombo->currentIndex() != 0) {
+        m_noteTypeCombo->setCurrentIndex(0);
     }
 
     m_suppressInvoiceFetch = true;
@@ -714,6 +801,10 @@ void DebitCreditNoteWidget::onNoteTypeChanged(int index) {
     if (m_controller && m_editNoteId == 0) {
         m_controller->setDraftNoteType(index == 0 ? "Credit Note" : "Debit Note");
         m_noteNoEdit->setText(m_controller->draftNoteNo());
+    }
+    if (m_noteBadge) m_noteBadge->setText(index == 0 ? "Credit Note" : "Debit Note");
+    if (m_voucherNoDisplay && m_noteNoEdit) {
+        m_voucherNoDisplay->setText(QString("No. %1").arg(m_noteNoEdit->text().trimmed()));
     }
     if (index == 0) {
         m_origInvoiceTypeCombo->setCurrentIndex(0); // Sale Invoice
@@ -774,6 +865,8 @@ QString DebitCreditNoteWidget::currentOrigInvType() const {
 void DebitCreditNoteWidget::refreshOrigInvoiceCombo(bool preserveSelection) {
     if (!m_origInvoiceCombo) return;
     QString keep = preserveSelection ? m_origInvoiceCombo->currentText().trimmed() : QString();
+    // The list is being rebuilt — the applied-number guard restarts with it.
+    m_lastAppliedInvNo.clear();
     m_suppressInvoiceFetch = true;
     m_origInvoiceCombo->clear();
     int keepIdx = -1;
@@ -784,13 +877,11 @@ void DebitCreditNoteWidget::refreshOrigInvoiceCombo(bool preserveSelection) {
             QVariantMap r = rows.at(i).toMap();
             QString invNo = r.value("invoice_no").toString();
             QString invDate = r.value("invoice_date").toString();
-            double tot = r.value("total_amount").toDouble();
-            QDate d = QDate::fromString(invDate, "yyyy-MM-dd");
-            QString label = QString("%1  |  %2  |  ₹ %3").arg(invNo, d.isValid() ? d.toString("dd-MM-yyyy") : invDate, QString::number(tot, 'f', 2));
-            m_origInvoiceCombo->addItem(label, invNo);
-            // Stash the ISO date on the item for instant date fill.
+            // Display is the bare invoice number only; the ISO date rides
+            // along as item data and auto-fills Orig Date on selection.
+            m_origInvoiceCombo->addItem(invNo, invNo);
             m_origInvoiceCombo->setItemData(i, invDate, Qt::UserRole + 1);
-            if (!keep.isEmpty() && (invNo == keep || label == keep)) keepIdx = i;
+            if (!keep.isEmpty() && invNo == keep) keepIdx = i;
         }
     }
     if (keepIdx >= 0) {
@@ -821,14 +912,42 @@ void DebitCreditNoteWidget::onOrigInvoiceChosen(int index) {
     if (m_suppressInvoiceFetch || !m_controller || index < 0) return;
     QString invNo = m_origInvoiceCombo->itemData(index).toString();
     if (invNo.isEmpty()) invNo = m_origInvoiceCombo->currentText().trimmed();
-    // Strip the "no | date | total" label back to the bare invoice number.
-    if (invNo.contains("  |  ")) invNo = invNo.section("  |  ", 0, 0).trimmed();
-    if (invNo.isEmpty() || currentOrigInvType() == "Manual") return;
+    applyOrigInvoice(invNo);
+}
 
-    if (!m_controller->fetchAndLoadOriginalInvoice(currentOrigInvType(), invNo)) {
-        setStatusMessage(QString("Invoice \"%1\" not found — kept manual entry").arg(invNo), true);
+void DebitCreditNoteWidget::commitOrigInvoiceText() {
+    if (m_suppressInvoiceFetch || !m_controller) return;
+    QString typed = m_origInvoiceCombo ? m_origInvoiceCombo->currentText().trimmed() : "";
+    if (typed.isEmpty() || currentOrigInvType() == "Manual") return;
+    if (typed.compare(m_lastAppliedInvNo, Qt::CaseInsensitive) == 0) return;
+    // Exact list match first (selects the row + its stashed date) ...
+    for (int i = 0; i < m_origInvoiceCombo->count(); ++i) {
+        QString invNo = m_origInvoiceCombo->itemData(i).toString();
+        if (invNo.isEmpty()) invNo = m_origInvoiceCombo->itemText(i).trimmed();
+        if (invNo.compare(typed, Qt::CaseInsensitive) == 0) {
+            if (i != m_origInvoiceCombo->currentIndex()) {
+                m_origInvoiceCombo->setCurrentIndex(i);
+            } else {
+                applyOrigInvoice(invNo);
+            }
+            return;
+        }
+    }
+    // ... otherwise fetch the typed number straight from the books.
+    applyOrigInvoice(typed);
+}
+
+void DebitCreditNoteWidget::applyOrigInvoice(const QString& invNo) {
+    QString bareNo = invNo.trimmed();
+    if (bareNo.isEmpty() || !m_controller || currentOrigInvType() == "Manual") return;
+
+    if (!m_controller->fetchAndLoadOriginalInvoice(currentOrigInvType(), bareNo)) {
+        setStatusMessage(QString("Invoice \"%1\" not found — kept manual entry").arg(bareNo), true);
         return;
     }
+    // Remember the applied number so focus churn (Enter advance + Tab-out
+    // editingFinished) doesn't re-fetch the same invoice twice.
+    m_lastAppliedInvNo = bareNo;
     QDate d = QDate::fromString(m_controller->draftOrigInvDate(), "yyyy-MM-dd");
     m_origInvoiceDateEdit->setText(d.isValid() ? d.toString("dd-MM-yyyy") : m_controller->draftOrigInvDate());
     if (!m_controller->draftPartyName().isEmpty() && m_partySearch->text().trimmed().isEmpty()) {
@@ -836,6 +955,24 @@ void DebitCreditNoteWidget::onOrigInvoiceChosen(int index) {
     }
     if (!m_controller->draftPartyGstin().isEmpty()) {
         m_partyGstinEdit->setText(m_controller->draftPartyGstin());
+    }
+    // The invoice's state drives Place of Supply (and therefore the
+    // CGST+SGST vs IGST split) — no manual POS correction needed.
+    QString invState = m_controller->draftStateCode().trimmed();
+    if (invState.isEmpty() && m_controller->draftPartyGstin().length() >= 2) {
+        invState = m_controller->draftPartyGstin().left(2);
+    }
+    if (!invState.isEmpty()) {
+        int posIdx = -1;
+        for (int i = 0; i < m_posCombo->count(); ++i) {
+            if (m_posCombo->itemText(i).startsWith(invState)) { posIdx = i; break; }
+        }
+        if (posIdx < 0) {
+            for (int i = 0; i < m_posCombo->count(); ++i) {
+                if (m_posCombo->itemText(i).contains(invState, Qt::CaseInsensitive)) { posIdx = i; break; }
+            }
+        }
+        if (posIdx >= 0) m_posCombo->setCurrentIndex(posIdx);
     }
     syncTableFromDraft();
     onRecalculateTotals();
@@ -877,33 +1014,71 @@ void DebitCreditNoteWidget::syncTableFromDraft() {
         m_itemsTable->setItem(r, 4, createCell(QString::number(m.value("weightQtl").toDouble(), 'f', 2), Qt::AlignRight, true));
         m_itemsTable->setItem(r, 5, createCell(QString::number(m.value("rate").toDouble(), 'f', 2), Qt::AlignRight, true));
         m_itemsTable->setItem(r, 6, createCell(QString::number(taxable, 'f', 2), Qt::AlignRight, true));
-        m_itemsTable->setItem(r, 7, createCell(QString::number(gst, 'f', 1), Qt::AlignRight, true));
+        m_itemsTable->setItem(r, 7, createCell(QString::number(gst, 'f', 1), Qt::AlignRight, false));
         m_itemsTable->setItem(r, 8, createCell(QString::number(gstAmt, 'f', 2), Qt::AlignRight, false));
         m_itemsTable->setItem(r, 9, createCell(QString::number(tot, 'f', 2), Qt::AlignRight, false));
     }
     m_isUpdatingTable = false;
 }
 
+void DebitCreditNoteWidget::onGridCellChanged(int row, int column) {
+    if (m_isUpdatingTable) return;
+    // Typed-and-committed item names fetch master details exactly like a
+    // popup pick does (Tab-out commits without any signal otherwise).
+    if (column == 0) fillItemDetailsFromMaster(row, false);
+    onRecalculateTotals();
+}
+
+void DebitCreditNoteWidget::fillItemDetailsFromMaster(int row, bool focusNext) {
+    if (!m_itemsTable || row < 0 || row >= m_itemsTable->rowCount()) return;
+    QString name = m_itemsTable->item(row, 0) ? m_itemsTable->item(row, 0)->text().trimmed() : "";
+    if (name.isEmpty()) return;
+
+    QVariantMap found;
+    const QVariantList rows = StockPipeline::instance().searchItems(name, 10);
+    for (const QVariant& v : rows) {
+        QVariantMap m = v.toMap();
+        if (m.value("name").toString().compare(name, Qt::CaseInsensitive) == 0) {
+            found = m;
+            break;
+        }
+    }
+    if (found.isEmpty()) return;
+
+    double rate = (m_noteTypeCombo && m_noteTypeCombo->currentIndex() == 0)
+        ? found.value("sale_rate", 0.0).toDouble()
+        : found.value("purchase_rate", 0.0).toDouble();
+
+    m_isUpdatingTable = true;
+    auto setIf = [&](int col, const QString& text) {
+        QTableWidgetItem* it = m_itemsTable->item(row, col);
+        if (it && it->text() != text) it->setText(text);
+    };
+    setIf(1, found.value("hsn_code").toString());
+    QString unit = found.value("unit").toString().trimmed();
+    setIf(2, unit.isEmpty() ? "QTL" : unit);
+    if (rate > 0.0) setIf(5, QString::number(rate, 'f', 2));
+    // GST always follows the item master (the column is display-only).
+    setIf(7, QString::number(found.value("gst_rate", 0.0).toDouble(), 'f', 1));
+    m_isUpdatingTable = false;
+
+    if (focusNext) focusTableAt(row, 1);
+}
+
 void DebitCreditNoteWidget::onStockItemConfigured(int row, const QVariantMap& itemData) {
     if (row < 0 || row >= m_itemsTable->rowCount()) return;
 
     m_isUpdatingTable = true;
-
-    QString name = itemData.value("name").toString();
-    QString hsn = itemData.value("hsn_code").toString();
-    QString unit = itemData.value("unit", "QTL").toString();
-    double gst = itemData.value("gst_rate", 5.0).toDouble();
-    double rate = (m_noteTypeCombo->currentIndex() == 0)
-        ? itemData.value("sale_rate", 0.0).toDouble()
-        : itemData.value("purchase_rate", 0.0).toDouble();
-
-    if (m_itemsTable->item(row, 0)) m_itemsTable->item(row, 0)->setText(name);
-    if (m_itemsTable->item(row, 1)) m_itemsTable->item(row, 1)->setText(hsn);
-    if (m_itemsTable->item(row, 2)) m_itemsTable->item(row, 2)->setText(unit);
-    if (m_itemsTable->item(row, 5) && rate > 0.0) m_itemsTable->item(row, 5)->setText(QString::number(rate, 'f', 2));
-    if (m_itemsTable->item(row, 7)) m_itemsTable->item(row, 7)->setText(QString::number(gst, 'f', 1));
-
+    if (m_itemsTable->item(row, 0)) {
+        QString name = itemData.value("name").toString();
+        if (m_itemsTable->item(row, 0)->text() != name) {
+            m_itemsTable->item(row, 0)->setText(name);
+        }
+    }
     m_isUpdatingTable = false;
+    // Unit/HSN/rate/GST all come from the same master lookup, so a popup
+    // pick and a typed name converge on identical row content.
+    fillItemDetailsFromMaster(row, true);
     onRecalculateTotals();
 }
 
@@ -933,7 +1108,9 @@ void DebitCreditNoteWidget::onAddItemRow() {
     m_itemsTable->setItem(r, 4, createCell("0.00", Qt::AlignRight, true)); // Weight
     m_itemsTable->setItem(r, 5, createCell("0.00", Qt::AlignRight, true)); // Rate
     m_itemsTable->setItem(r, 6, createCell("0.00", Qt::AlignRight, true)); // Taxable
-    m_itemsTable->setItem(r, 7, createCell("5.0", Qt::AlignRight, true)); // GST %
+    // GST % follows the item master and is display-only (sale pattern:
+    // computed columns are never keyboard stops).
+    m_itemsTable->setItem(r, 7, createCell("0.0", Qt::AlignRight, false)); // GST %
     m_itemsTable->setItem(r, 8, createCell("0.00", Qt::AlignRight, false)); // GST Amt (computed)
     m_itemsTable->setItem(r, 9, createCell("0.00", Qt::AlignRight, false)); // Total (computed)
 
@@ -1040,10 +1217,11 @@ void DebitCreditNoteWidget::advanceCell() {
         return;
     }
 
-    // Columns 8 (GST Amt) and 9 (Total) are computed — never edited.
+    // Columns 7 (GST %), 8 (GST Amt) and 9 (Total) are master-driven or
+    // computed — never keyboard stops.
     int nextCol = curCol + 1;
-    if (nextCol == 8) nextCol = 10;
-    if (nextCol <= 7) {
+    if (nextCol >= 7) nextCol = 10;
+    if (nextCol <= 6) {
         m_itemsTable->setCurrentCell(curRow, nextCol);
         m_itemsTable->edit(m_itemsTable->currentIndex());
     } else if (!isItemEmpty) {
@@ -1064,12 +1242,12 @@ void DebitCreditNoteWidget::retreatCell() {
     int curRow = m_itemsTable->currentRow();
     int curCol = m_itemsTable->currentColumn();
     int prevCol = curCol - 1;
-    if (prevCol == 8 || prevCol == 9) prevCol = 7;
+    if (prevCol >= 7) prevCol = 6; // GST % / GST Amt / Total are display-only
     if (prevCol >= 0) {
         m_itemsTable->setCurrentCell(curRow, prevCol);
         m_itemsTable->edit(m_itemsTable->currentIndex());
     } else if (curRow > 0) {
-        m_itemsTable->setCurrentCell(curRow - 1, 7);
+        m_itemsTable->setCurrentCell(curRow - 1, 6);
         m_itemsTable->edit(m_itemsTable->currentIndex());
     } else if (m_posCombo) {
         m_posCombo->setFocus();
@@ -1085,8 +1263,8 @@ bool DebitCreditNoteWidget::loadNoteForEditing(int noteId, bool popupDateOnLoad)
     m_deleteBtn->setVisible(true);
 
     QString noteTitle = QString("%1 • %2").arg(m_controller->draftNoteNo(), m_controller->draftNoteType());
-    m_voucherNoDisplay->setText(noteTitle);
-    m_voucherNoDisplay->setVisible(true);
+    m_voucherNoDisplay->setText(QString("No. %1").arg(m_controller->draftNoteNo()));
+    if (m_noteBadge) m_noteBadge->setText(m_controller->draftNoteType());
 
     m_noteTypeCombo->setCurrentIndex(m_controller->draftNoteType() == "Credit Note" ? 0 : 1);
     m_noteNoEdit->setText(m_controller->draftNoteNo());
@@ -1107,6 +1285,7 @@ bool DebitCreditNoteWidget::loadNoteForEditing(int noteId, bool popupDateOnLoad)
     m_origInvoiceCombo->clear();
     QString storedInv = m_controller->draftOrigInvNo();
     if (!storedInv.isEmpty()) m_origInvoiceCombo->addItem(storedInv, storedInv);
+    m_lastAppliedInvNo = storedInv;
     m_suppressInvoiceFetch = false;
     refreshOrigInvoiceCombo(true);
     QDate od = QDate::fromString(m_controller->draftOrigInvDate(), "yyyy-MM-dd");

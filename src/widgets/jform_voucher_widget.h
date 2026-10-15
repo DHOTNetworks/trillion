@@ -115,6 +115,8 @@ private:
     // Table
     QTableWidget* m_table = nullptr;
     ItemSearchDelegate* m_itemDelegate = nullptr;
+    // Guards cellChanged reentrancy during programmatic fills (sale pattern).
+    bool m_isUpdatingTable = false;
 
     // Calculations Summary
     QLabel* m_totalBagsLabel = nullptr;

@@ -15,6 +15,7 @@
 #include <QMessageBox>
 #include <QDate>
 #include <QApplication>
+#include <QBrush>
 #include <QLocale>
 #include <QTimer>
 #include <cmath>
@@ -120,20 +121,30 @@ void JFormVoucherWidget::setupUi() {
 
     m_table = new QTableWidget(1, 7, this);
     m_table->setHorizontalHeaderLabels({"Item Description", "Bags", "Packing (Kg)", "Loose (Qtl)", "Total Weight (Qtl)", "Rate (₹/Qtl)", "Goods Amount (₹)"});
+    // Sale-voucher grid contract: the item column stretches, numeric
+    // columns hold fixed widths (no ResizeToContents jumping).
     m_table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
-    m_table->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
-    m_table->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
-    m_table->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
-    m_table->horizontalHeader()->setSectionResizeMode(4, QHeaderView::ResizeToContents);
-    m_table->horizontalHeader()->setSectionResizeMode(5, QHeaderView::ResizeToContents);
-    m_table->horizontalHeader()->setSectionResizeMode(6, QHeaderView::ResizeToContents);
+    for (int c = 1; c < 7; ++c) {
+        m_table->horizontalHeader()->setSectionResizeMode(c, QHeaderView::Fixed);
+    }
+    m_table->setColumnWidth(1, 65);
+    m_table->setColumnWidth(2, 80);
+    m_table->setColumnWidth(3, 85);
+    m_table->setColumnWidth(4, 95);
+    m_table->setColumnWidth(5, 95);
+    m_table->setColumnWidth(6, 115);
     m_table->verticalHeader()->setVisible(false);
     m_table->horizontalHeader()->setHighlightSections(false);
     m_table->setAlternatingRowColors(true);
+    m_table->setSelectionBehavior(QAbstractItemView::SelectItems);
+    m_table->setSelectionMode(QAbstractItemView::SingleSelection);
     m_table->setShowGrid(true);
 
+    // Table-wide delegate (sale pattern): every cell — item search or plain
+    // numeric editor — gets the same Enter/Backspace/Left/Right/PgUp/PgDn
+    // contract. Column-scoped delegates leave numeric cells on default keys.
     m_itemDelegate = new ItemSearchDelegate(this);
-    m_table->setItemDelegateForColumn(0, m_itemDelegate);
+    m_table->setItemDelegate(m_itemDelegate);
 
     mainLayout->addWidget(m_table, 1);
 
@@ -517,7 +528,16 @@ void JFormVoucherWidget::resetForm() {
     m_editingVoucherNo.clear();
     m_deleteButton->setEnabled(false);
 
+    // Strictly inside the selected fiscal year (sale pattern): today when
+    // it falls in-year, otherwise the year's first day.
     QDate cur = QDate::currentDate();
+    FiscalYearInfo afy = FiscalYearHelper::getActiveFiscalYear();
+    QDate fyStart = QDate::fromString(afy.startDate, "yyyy-MM-dd");
+    QDate fyEnd = QDate::fromString(afy.endDate, "yyyy-MM-dd");
+    if (afy.isValid() && fyStart.isValid() && fyEnd.isValid()
+        && (cur < fyStart || cur > fyEnd)) {
+        cur = fyStart;
+    }
     m_dateEdit->setDate(cur);
     updateDayOfWeek(cur);
     updateFiscalYearBadge();
@@ -595,21 +615,67 @@ void JFormVoucherWidget::onFarmerSelected(const QVariantMap& partyData) {
     }
 }
 
+void JFormVoucherWidget::populateRow(int row, const QString& itemName, int bags, double packing, double loose, double weight, double rate, double amount) {
+    if (row >= m_table->rowCount()) {
+        m_table->insertRow(row);
+    }
+    m_isUpdatingTable = true;
+
+    // Sale-voucher cell contract: explicit foregrounds on every cell
+    // (dark-mode hardening); computed Weight/Amount are display-only.
+    const QBrush navyFg(ErpTheme::kNavy);
+    const QBrush grayFg(ErpTheme::kMuted);
+    const QBrush greenFg(ErpTheme::kGreenDark);
+    const QBrush editBg(ErpTheme::kEditableBg);
+    const QBrush whiteBg(ErpTheme::kPaper);
+
+    auto editCell = [&](int col, const QString& text) {
+        auto* it = new QTableWidgetItem(text);
+        it->setTextAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+        it->setForeground(navyFg);
+        it->setBackground(editBg);
+        m_table->setItem(row, col, it);
+    };
+    auto numCell = [&](int col, const QString& text) {
+        auto* it = new QTableWidgetItem(text);
+        it->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        it->setForeground(navyFg);
+        it->setBackground(editBg);
+        m_table->setItem(row, col, it);
+    };
+    auto roCell = [&](int col, const QString& text, const QBrush& fg) {
+        auto* it = new QTableWidgetItem(text);
+        it->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        it->setForeground(fg);
+        it->setBackground(whiteBg);
+        it->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
+        m_table->setItem(row, col, it);
+    };
+
+    editCell(0, itemName);
+    numCell(1, bags > 0 ? QString::number(bags) : "");
+    numCell(2, packing > 0.0 ? QString::number(packing, 'f', 3) : "0.500");
+    numCell(3, loose > 0.0 ? QString::number(loose, 'f', 3) : "");
+    roCell(4, weight > 0.0 ? QString::number(weight, 'f', 3) : "", navyFg);
+    numCell(5, rate > 0.0 ? QString::number(rate, 'f', 2) : "");
+    roCell(6, amount > 0.0 ? QString::number(amount, 'f', 2) : "", greenFg);
+
+    m_isUpdatingTable = false;
+}
+
 void JFormVoucherWidget::addNewLineRow() {
     int r = m_table->rowCount();
+    m_isUpdatingTable = true;
     m_table->insertRow(r);
-    for (int c = 0; c < 7; ++c) {
-        auto* it = new QTableWidgetItem();
-        if (c == 1 || c == 2) it->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        else if (c >= 3) it->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        m_table->setItem(r, c, it);
-    }
-    m_table->item(r, 2)->setText("0.500"); // Standard packing deduction
+    m_isUpdatingTable = false;
+    populateRow(r, "", 0, 0.500, 0.0, 0.0, 0.0, 0.0);
 }
 
 void JFormVoucherWidget::removeLineRow(int row) {
     if (row >= 0 && row < m_table->rowCount()) {
+        m_isUpdatingTable = true;
         m_table->removeRow(row);
+        m_isUpdatingTable = false;
         if (m_table->rowCount() == 0) addNewLineRow();
         recalculateTotals();
     }
@@ -617,6 +683,7 @@ void JFormVoucherWidget::removeLineRow(int row) {
 
 void JFormVoucherWidget::onStockItemConfigured(int row, const QVariantMap& itemData) {
     if (row < 0 || row >= m_table->rowCount()) return;
+    m_isUpdatingTable = true;
     QString name = itemData.value("name").toString().trimmed();
     if (name.isEmpty()) name = itemData.value("item_name").toString().trimmed();
     if (m_table->item(row, 0)) {
@@ -630,11 +697,15 @@ void JFormVoucherWidget::onStockItemConfigured(int row, const QVariantMap& itemD
     if (prate > 0 && m_table->item(row, 5)) {
         m_table->item(row, 5)->setText(QString::number(prate, 'f', 2));
     }
+    m_isUpdatingTable = false;
     recalculateTotals();
+    focusTableAt(row, 1);
 }
 
 void JFormVoucherWidget::onTableCellChanged(int row, int column) {
+    if (m_isUpdatingTable) return;
     if (row < 0 || row >= m_table->rowCount()) return;
+    m_isUpdatingTable = true;
 
     // Recalculate row weight & amount if Bags/Packing/Loose/Rate changed
     if (column == 1 || column == 2 || column == 3 || column == 5) {
@@ -654,7 +725,18 @@ void JFormVoucherWidget::onTableCellChanged(int row, int column) {
         if (m_table->item(row, 6)) m_table->item(row, 6)->setText(QString::number(amt, 'f', 2));
     }
 
+    m_isUpdatingTable = false;
     recalculateTotals();
+
+    // Auto-append the next blank row only when the user actually typed the
+    // amount here (sale pattern: last row + committed amount + item set).
+    if (row == m_table->rowCount() - 1 && column == 5) {
+        auto* rateIt = m_table->item(row, 5);
+        if (rateIt && !rateIt->text().trimmed().isEmpty() &&
+            m_table->item(row, 0) && !m_table->item(row, 0)->text().trimmed().isEmpty()) {
+            addNewLineRow();
+        }
+    }
 }
 
 void JFormVoucherWidget::recalculateTotals() {
@@ -797,18 +879,20 @@ bool JFormVoucherWidget::loadVoucherForEditing(const QVariant& vchNoOrId, const 
     m_roundOffEdit->setText(QString::number(vch.value("round_off").toDouble(), 'f', 2));
 
     QVariantList items = vch.value("items").toList();
+    m_isUpdatingTable = true;
     m_table->setRowCount(0);
+    m_isUpdatingTable = false;
     for (const auto& itVar : items) {
         QVariantMap it = itVar.toMap();
         int r = m_table->rowCount();
-        m_table->insertRow(r);
-        m_table->setItem(r, 0, new QTableWidgetItem(it.value("item_name").toString()));
-        m_table->setItem(r, 1, new QTableWidgetItem(QString::number(it.value("bags").toInt())));
-        m_table->setItem(r, 2, new QTableWidgetItem(QString::number(it.value("packing").toDouble(), 'f', 3)));
-        m_table->setItem(r, 3, new QTableWidgetItem(QString::number(it.value("loose_weight").toDouble(), 'f', 3)));
-        m_table->setItem(r, 4, new QTableWidgetItem(QString::number(it.value("weight").toDouble(), 'f', 3)));
-        m_table->setItem(r, 5, new QTableWidgetItem(QString::number(it.value("rate").toDouble(), 'f', 2)));
-        m_table->setItem(r, 6, new QTableWidgetItem(QString::number(it.value("amount").toDouble(), 'f', 2)));
+        populateRow(r,
+            it.value("item_name").toString(),
+            it.value("bags").toInt(),
+            it.value("packing", 0.500).toDouble(),
+            it.value("loose_weight").toDouble(),
+            it.value("weight").toDouble(),
+            it.value("rate").toDouble(),
+            it.value("amount").toDouble());
     }
     if (m_table->rowCount() == 0) addNewLineRow();
 
@@ -902,10 +986,11 @@ void JFormVoucherWidget::exportPdf() {
 }
 
 void JFormVoucherWidget::focusTableAt(int row, int col) {
-    if (!m_table) return;
-    if (row < 0 || row >= m_table->rowCount()) return;
-    if (col < 0 || col >= m_table->columnCount()) return;
-    m_table->setCurrentCell(row, col);
+    if (!m_table || m_table->rowCount() == 0) return;
+    int r = qBound(0, row, m_table->rowCount() - 1);
+    int c = qBound(0, col, m_table->columnCount() - 1);
+    m_table->setCurrentCell(r, c);
+    m_table->setFocus(Qt::OtherFocusReason);
     m_table->edit(m_table->currentIndex());
 }
 

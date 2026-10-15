@@ -49,7 +49,7 @@ QVariantMap JFormModel::get_zimidar_balance(int zimidarId) {
 
     auto& db = DatabaseManager::instance();
     QVariant balVar = db.executeScalar(
-        "SELECT SUM(CASE WHEN UPPER(drcr) = 'DR' THEN amount ELSE -amount END) "
+        "SELECT SUM(CASE WHEN UPPER(account_type) = 'DR' THEN amount ELSE -amount END) "
         "FROM vouchers WHERE ledger_id = ?;",
         {zimidarId}
     );
@@ -144,6 +144,12 @@ bool JFormModel::save_jform_voucher(const QVariantMap& data, const QVariantList&
     QString kandaWeight = data.value("kanda_weight").toString().trimmed();
     int editId = data.value("id", 0).toInt();
 
+    // FK-safe ids: the schema enforces zimidar_id/party_id → parties(id)
+    // with foreign_keys=ON, and 0 matches no party — bind NULL (exempt)
+    // instead of 0 (violation) whenever the ledger didn't resolve.
+    QVariant zimidarIdVar = zimidarId > 0 ? QVariant(zimidarId) : QVariant();
+    QVariant partyIdVar = partyId > 0 ? QVariant(partyId) : QVariant();
+
     int voucherId = 0;
     if (editId > 0) {
         voucherId = editId;
@@ -156,7 +162,7 @@ bool JFormModel::save_jform_voucher(const QVariantMap& data, const QVariantList&
             "relief_amount = ?, subtotal_amount = ?, labour_amount = ?, round_off = ?, grand_total = ?, narration = ? "
             "WHERE id = ?;",
             {
-                vchNo, vchDate, fy, jformNo, zimidarId, zimidarName, partyId, partyName,
+                vchNo, vchDate, fy, jformNo, zimidarIdVar, zimidarName, partyIdVar, partyName,
                 auctionSaleStatus, dueDays, vehicleNo, driverName, gatePassNo, ewayBillNo,
                 billTime, saudaDate, mandiPlace, procurementMode, lotNo, grade, transport,
                 brokerName, challanNo, kandaWeight, totalBags, totalWeight, goodsAmount, bonusAmount,
@@ -167,11 +173,8 @@ bool JFormModel::save_jform_voucher(const QVariantMap& data, const QVariantList&
             db.rollback();
             return false;
         }
-        // Delete old items and transaction records
+        // Old items cleared here; old legs were already cleared above (2b).
         db.executeNonQuery("DELETE FROM jform_voucher_items WHERE voucher_id = ?;", {editId});
-        db.executeNonQuery("DELETE FROM stock_transactions WHERE trans_type = 'JFrm' AND voucher_no = ?;", {vchNo});
-        db.executeNonQuery("DELETE FROM vouchers WHERE voucher_type = 'JFrm' AND voucher_no = ?;", {vchNo});
-        db.executeNonQuery("DELETE FROM transactions WHERE (voucher_type = 'JFrm' OR trans_type = 'JFrm') AND voucher_no = ?;", {vchNo});
     } else {
         // 1. Insert into jform_vouchers
         bool ok = db.executeNonQuery(
@@ -183,7 +186,7 @@ bool JFormModel::save_jform_voucher(const QVariantMap& data, const QVariantList&
             "relief_amount, subtotal_amount, labour_amount, round_off, grand_total, narration"
             ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
             {
-                vchNo, vchDate, fy, jformNo, zimidarId, zimidarName, partyId, partyName,
+                vchNo, vchDate, fy, jformNo, zimidarIdVar, zimidarName, partyIdVar, partyName,
                 auctionSaleStatus, dueDays, vehicleNo, driverName, gatePassNo, ewayBillNo,
                 billTime, saudaDate, mandiPlace, procurementMode, lotNo, grade, transport,
                 brokerName, challanNo, kandaWeight, totalBags, totalWeight, goodsAmount, bonusAmount,
@@ -200,7 +203,13 @@ bool JFormModel::save_jform_voucher(const QVariantMap& data, const QVariantList&
         voucherId = newIdVar.toInt();
     }
 
-    // 2. Insert items into jform_voucher_items & stock_transactions
+    // 2b. Clear any prior postings for this voucher number (idempotent
+    // re-save: the vouchers table enforces one row per voucher).
+    db.executeNonQuery("DELETE FROM stock_transactions WHERE trans_type = 'JFrm' AND voucher_no = ?;", {vchNo});
+    db.executeNonQuery("DELETE FROM vouchers WHERE voucher_type = 'JFrm' AND voucher_no = ?;", {vchNo});
+    db.executeNonQuery("DELETE FROM transactions WHERE (voucher_type = 'JFrm' OR trans_type = 'JFrm') AND voucher_no = ?;", {vchNo});
+
+    // 2c. Insert items into jform_voucher_items & stock_transactions
     for (const auto& itemVar : items) {
         QVariantMap it = itemVar.toMap();
         int itemId = it.value("item_id").toInt();
@@ -220,67 +229,65 @@ bool JFormModel::save_jform_voucher(const QVariantMap& data, const QVariantList&
             {voucherId, vchNo, itemId, itemName, bags, loose, packing, weight, rate, amount}
         );
 
-        // Add to stock transactions as IN (Procurement)
+        // Add to stock transactions as IN (Procurement). item_code is
+        // NOT NULL in the schema — bind empty when the code is unknown.
         db.executeNonQuery(
             "INSERT INTO stock_transactions ("
-            "voucher_no, voucher_date, trans_type, item_id, item_name, bags, weight_qtl, rate, amount, "
+            "voucher_no, voucher_date, trans_type, item_id, item_name, item_code, bags, weight_qtl, rate, amount, "
             "party_id, party_name, narration"
-            ") VALUES (?, ?, 'JFrm', ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+            ") VALUES (?, ?, 'JFrm', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
             {
-                vchNo, vchDate, itemId, itemName, bags, weight, rate, amount,
-                zimidarId, zimidarName, "J-Form No. " + jformNo + " - " + narration
+                vchNo, vchDate, itemId, itemName, QString(""), bags, weight, rate, amount,
+                zimidarIdVar, zimidarName, "J-Form No. " + jformNo + " - " + narration
             }
         );
     }
 
-    // 3. Insert Double-Entry Bookkeeping Vouchers
-    // A. Credit Farmer / Zimidar account with Grand Total payable
+    // 3. Postings. The vouchers table holds ONE row per voucher (unique
+    // index), so the double-entry legs live in transactions — the same
+    // split the sale/purchase writers use (daybook reads transactions).
+    // A. Vouchers summary row: farmer payable.
     db.executeNonQuery(
         "INSERT INTO vouchers ("
-        "voucher_no, voucher_date, voucher_type, ledger_id, party_id, party_name, "
-        "amount, drcr, narration"
-        ") VALUES (?, ?, 'JFrm', ?, ?, ?, ?, 'Cr', ?);",
-        {vchNo, vchDate, zimidarId, zimidarId, zimidarName, grandTotal, "J-Form No. " + jformNo + " - " + narration}
+        "financial_year, voucher_no, voucher_date, voucher_type, ledger_id, party_id, party_name, "
+        "account_type, amount, narration"
+        ") VALUES (?, ?, ?, 'JFrm', ?, ?, ?, 'Cr', ?, ?);",
+        {fy, vchNo, vchDate, zimidarIdVar, zimidarIdVar, zimidarName, grandTotal, "J-Form No. " + jformNo + " - " + narration}
     );
 
-    // B. Debit Purchase / Stock A/c with Goods Amount
-    db.executeNonQuery(
-        "INSERT INTO vouchers ("
-        "voucher_no, voucher_date, voucher_type, ledger_id, party_id, party_name, "
-        "amount, drcr, narration"
-        ") VALUES (?, ?, 'JFrm', ?, ?, ?, ?, 'Dr', ?);",
-        {vchNo, vchDate, partyId, partyId, partyName, goodsAmount, "J-Form No. " + jformNo + " Goods Amount"}
-    );
-
-    // C. Credit Labour deduction if > 0
-    if (labourAmount > 0.001) {
-        QVariant labourLedgerId = db.executeScalar(
-            "SELECT id FROM parties WHERE name LIKE '%Labour%' OR name LIKE '%Majduri%' LIMIT 1;"
-        );
-        int lId = labourLedgerId.isValid() && !labourLedgerId.isNull() ? labourLedgerId.toInt() : 0;
+    // Opposing head for the goods legs: the first line item (purchase
+    // vouchers oppose the item account the same way — no invented heads).
+    QString goodsHead = "J-Form Purchase A/c";
+    if (!items.isEmpty()) {
+        QString firstItem = items.first().toMap().value("item_name").toString().trimmed();
+        if (!firstItem.isEmpty()) goodsHead = firstItem;
+    }
+    auto postLeg = [&](const QString& party, const QVariant& pidVar, const QString& opp,
+                        const QString& drcr, double amt, const QString& narr) {
         db.executeNonQuery(
-            "INSERT INTO vouchers ("
-            "voucher_no, voucher_date, voucher_type, ledger_id, party_id, party_name, "
-            "amount, drcr, narration"
-            ") VALUES (?, ?, 'JFrm', ?, ?, 'Labour Charges', ?, 'Cr', ?);",
-            {vchNo, vchDate, lId, lId, labourAmount, "Labour deduction on J-Form No. " + jformNo}
+            "INSERT INTO transactions ("
+            "financial_year, voucher_no, voucher_date, voucher_type, trans_type, party_id, party_name, "
+            "opposing_account, dr_cr, amount, narration"
+            ") VALUES (?, ?, ?, 'JFrm', 'JFrm', ?, ?, ?, ?, ?, ?);",
+            {fy, vchNo, vchDate, pidVar, party, opp, drcr, amt, narr}
         );
+    };
+
+    // B. Credit Farmer / Zimidar with Grand Total payable
+    postLeg(zimidarName, zimidarIdVar, goodsHead, "Cr", grandTotal, "J-Form No. " + jformNo + " - " + narration);
+    // C. Debit goods head with Goods Amount
+    postLeg(goodsHead, QVariant(), zimidarName, "Dr", goodsAmount, "J-Form No. " + jformNo + " Goods Amount");
+
+    // D. Credit Labour deduction if > 0
+    if (labourAmount > 0.001) {
+        postLeg("Labour Charges", QVariant(), zimidarName, "Cr", labourAmount,
+                "Labour deduction on J-Form No. " + jformNo);
     }
 
-    // D. Round Off if any
+    // E. Round Off if any
     if (std::abs(roundOff) > 0.001) {
-        QString rDrcr = roundOff > 0 ? "Dr" : "Cr";
-        QVariant roundLedgerId = db.executeScalar(
-            "SELECT id FROM parties WHERE name LIKE '%Round Off%' LIMIT 1;"
-        );
-        int rId = roundLedgerId.isValid() && !roundLedgerId.isNull() ? roundLedgerId.toInt() : 0;
-        db.executeNonQuery(
-            "INSERT INTO vouchers ("
-            "voucher_no, voucher_date, voucher_type, ledger_id, party_id, party_name, "
-            "amount, drcr, narration"
-            ") VALUES (?, ?, 'JFrm', ?, ?, 'Round Off', ?, ?, 'Round off on J-Form No. ' || ?);",
-            {vchNo, vchDate, rId, rId, std::abs(roundOff), rDrcr, jformNo}
-        );
+        postLeg("Round Off", QVariant(), zimidarName, roundOff > 0 ? "Dr" : "Cr", std::abs(roundOff),
+                "Round off on J-Form No. " + jformNo);
     }
 
     db.commit();

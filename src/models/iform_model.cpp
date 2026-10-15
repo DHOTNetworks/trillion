@@ -50,7 +50,7 @@ QVariantMap IFormModel::get_buyer_balance(int buyerId) {
 
     auto& db = DatabaseManager::instance();
     QVariant balVar = db.executeScalar(
-        "SELECT SUM(CASE WHEN UPPER(drcr) = 'DR' THEN amount ELSE -amount END) "
+        "SELECT SUM(CASE WHEN UPPER(account_type) = 'DR' THEN amount ELSE -amount END) "
         "FROM vouchers WHERE ledger_id = ?;",
         {buyerId}
     );
@@ -215,35 +215,51 @@ bool IFormModel::save_iform_voucher(const QVariantMap& data, const QVariantList&
         );
     }
 
-    // Double Entry Postings:
+    // Clear prior postings (idempotent re-save: one vouchers row per voucher).
+    db.executeNonQuery("DELETE FROM vouchers WHERE voucher_type = 'IFrm' AND voucher_no = ?;", {vchNo});
+    db.executeNonQuery("DELETE FROM transactions WHERE (voucher_type = 'IFrm' OR trans_type = 'IFrm') AND voucher_no = ?;", {vchNo});
+
+    // Double Entry Postings. The vouchers table holds ONE row per voucher
+    // (unique index); legs live in transactions like sale/purchase.
+    // Vouchers summary row: buyer receivable.
+    QVariant buyerIdVar = (buyerId > 0) ? QVariant(buyerId) : QVariant();
+    db.executeNonQuery(
+        "INSERT INTO vouchers (financial_year, voucher_no, voucher_date, voucher_type, ledger_id, party_id, party_name, account_type, amount, narration) "
+        "VALUES (?, ?, ?, 'IFrm', ?, ?, ?, 'Dr', ?, ?);",
+        {fy, vchNo, vchDate, buyerIdVar, buyerIdVar, buyerName, grandTotal, narration.isEmpty() ? QString("I-Form No. %1").arg(iformNo) : narration}
+    );
+
+    QString goodsHead = "Maal Khata A/c";
+    if (!items.isEmpty()) {
+        QString firstItem = items.first().toMap().value("item_name").toString().trimmed();
+        if (!firstItem.isEmpty()) goodsHead = firstItem;
+    }
+    auto postLeg = [&](const QString& party, const QVariant& pidVar, const QString& opp,
+                        const QString& drcr, double amt, const QString& narr) {
+        db.executeNonQuery(
+            "INSERT INTO transactions (financial_year, voucher_no, voucher_date, voucher_type, trans_type, party_id, party_name, "
+            "opposing_account, dr_cr, amount, narration) "
+            "VALUES (?, ?, ?, 'IFrm', 'IFrm', ?, ?, ?, ?, ?, ?);",
+            {fy, vchNo, vchDate, pidVar, party, opp, drcr, amt, narr}
+        );
+    };
+
     // 1. Debit Buyer Account with Grand Total
     if (buyerId > 0 && grandTotal > 0.001) {
-        db.executeNonQuery(
-            "INSERT INTO vouchers (financial_year, voucher_no, voucher_date, voucher_type, ledger_id, ledger_name, drcr, amount, narration) "
-            "VALUES (?, ?, ?, 'IFrm', ?, ?, 'Dr', ?, ?);",
-            {fy, vchNo, vchDate, buyerId, buyerName, grandTotal, narration.isEmpty() ? QString("I-Form No. %1").arg(iformNo) : narration}
-        );
+        postLeg(buyerName, buyerIdVar, goodsHead, "Dr", grandTotal, narration.isEmpty() ? QString("I-Form No. %1").arg(iformNo) : narration);
     }
 
     // 2. Credit Maal Khata / Sale with Goods Amount
     QVariant maalKhataId = db.executeScalar("SELECT id FROM parties WHERE name = 'Maal Khata A/c' OR name LIKE '%Maal Khata%' LIMIT 1;");
     if (maalKhataId.isValid() && !maalKhataId.isNull() && goodsAmount > 0.001) {
-        db.executeNonQuery(
-            "INSERT INTO vouchers (financial_year, voucher_no, voucher_date, voucher_type, ledger_id, ledger_name, drcr, amount, narration) "
-            "VALUES (?, ?, ?, 'IFrm', ?, 'Maal Khata A/c', 'Cr', ?, ?);",
-            {fy, vchNo, vchDate, maalKhataId.toInt(), goodsAmount, QString("I-Form No. %1 - %2").arg(iformNo, buyerName)}
-        );
+        postLeg("Maal Khata A/c", maalKhataId, buyerName, "Cr", goodsAmount, QString("I-Form No. %1 - %2").arg(iformNo, buyerName));
     }
 
     // 3. Credit Dami A/c
     if (damiAmount > 0.001) {
         QVariant damiId = db.executeScalar("SELECT id FROM parties WHERE name = 'Dami A/c' OR name LIKE '%Commission%' LIMIT 1;");
         if (damiId.isValid() && !damiId.isNull()) {
-            db.executeNonQuery(
-                "INSERT INTO vouchers (financial_year, voucher_no, voucher_date, voucher_type, ledger_id, ledger_name, drcr, amount, narration) "
-                "VALUES (?, ?, ?, 'IFrm', ?, 'Dami A/c', 'Cr', ?, ?);",
-                {fy, vchNo, vchDate, damiId.toInt(), damiAmount, QString("Dami on I-Form %1").arg(iformNo)}
-            );
+            postLeg("Dami A/c", damiId, buyerName, "Cr", damiAmount, QString("Dami on I-Form %1").arg(iformNo));
         }
     }
 
@@ -251,11 +267,7 @@ bool IFormModel::save_iform_voucher(const QVariantMap& data, const QVariantList&
     if (mandiFeeAmount > 0.001) {
         QVariant mfId = db.executeScalar("SELECT id FROM parties WHERE name = 'Market Fee A/c' OR name LIKE '%Market Fee%' LIMIT 1;");
         if (mfId.isValid() && !mfId.isNull()) {
-            db.executeNonQuery(
-                "INSERT INTO vouchers (financial_year, voucher_no, voucher_date, voucher_type, ledger_id, ledger_name, drcr, amount, narration) "
-                "VALUES (?, ?, ?, 'IFrm', ?, 'Market Fee A/c', 'Cr', ?, ?);",
-                {fy, vchNo, vchDate, mfId.toInt(), mandiFeeAmount, QString("Market Fee on I-Form %1").arg(iformNo)}
-            );
+            postLeg("Market Fee A/c", mfId, buyerName, "Cr", mandiFeeAmount, QString("Market Fee on I-Form %1").arg(iformNo));
         }
     }
 
@@ -263,11 +275,7 @@ bool IFormModel::save_iform_voucher(const QVariantMap& data, const QVariantList&
     if (hrdfAmount > 0.001) {
         QVariant hrdfId = db.executeScalar("SELECT id FROM parties WHERE name = 'H.R.D.F. A/c' OR name LIKE '%HRDF%' LIMIT 1;");
         if (hrdfId.isValid() && !hrdfId.isNull()) {
-            db.executeNonQuery(
-                "INSERT INTO vouchers (financial_year, voucher_no, voucher_date, voucher_type, ledger_id, ledger_name, drcr, amount, narration) "
-                "VALUES (?, ?, ?, 'IFrm', ?, 'H.R.D.F. A/c', 'Cr', ?, ?);",
-                {fy, vchNo, vchDate, hrdfId.toInt(), hrdfAmount, QString("HRDF on I-Form %1").arg(iformNo)}
-            );
+            postLeg("H.R.D.F. A/c", hrdfId, buyerName, "Cr", hrdfAmount, QString("HRDF on I-Form %1").arg(iformNo));
         }
     }
 
@@ -275,12 +283,14 @@ bool IFormModel::save_iform_voucher(const QVariantMap& data, const QVariantList&
     if (labourAmount > 0.001) {
         QVariant labourId = db.executeScalar("SELECT id FROM parties WHERE name = 'Labour A/c' OR name LIKE '%Labour%' LIMIT 1;");
         if (labourId.isValid() && !labourId.isNull()) {
-            db.executeNonQuery(
-                "INSERT INTO vouchers (financial_year, voucher_no, voucher_date, voucher_type, ledger_id, ledger_name, drcr, amount, narration) "
-                "VALUES (?, ?, ?, 'IFrm', ?, 'Labour A/c', 'Cr', ?, ?);",
-                {fy, vchNo, vchDate, labourId.toInt(), labourAmount, QString("Labour on I-Form %1").arg(iformNo)}
-            );
+            postLeg("Labour A/c", labourId, buyerName, "Cr", labourAmount, QString("Labour on I-Form %1").arg(iformNo));
         }
+    }
+
+    // 7. Round Off (balances the buyer Dr against the Cr legs).
+    if (std::abs(roundOff) > 0.001) {
+        postLeg("Round Off", QVariant(), buyerName, roundOff > 0 ? "Dr" : "Cr", std::abs(roundOff),
+                "Round off on I-Form " + iformNo);
     }
 
     db.commit();

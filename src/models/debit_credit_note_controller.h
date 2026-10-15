@@ -259,6 +259,8 @@ public:
     QString draftPartyGstin() const { return m_draftPartyGstin; }
     void setDraftPartyGstin(const QString &val);
 
+    QString draftStateCode() const { return m_draftStateCode; }
+
     bool draftIsInterstate() const { return m_draftIsInterstate; }
     void setDraftIsInterstate(bool val);
 

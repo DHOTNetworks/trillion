@@ -75,6 +75,7 @@ private:
     void updateNextNumbers();
     void updateFiscalYearBadge();
     void updateDayOfWeek(const QDate& date);
+    void populateRow(int row, const QString& itemName, int bags, double weight, double rate, double goodsAmt, double dami, double mfee, double hrdf, double lineTotal);
     void setStatusMessage(const QString& message, bool isError);
 
     IFormModel m_iformModel;
@@ -106,6 +107,8 @@ private:
     // Table
     QTableWidget* m_table = nullptr;
     ItemSearchDelegate* m_itemDelegate = nullptr;
+    // Guards cellChanged reentrancy during programmatic fills (sale pattern).
+    bool m_isUpdatingTable = false;
 
     // Summary Frame
     QLabel* m_totalBagsLabel = nullptr;

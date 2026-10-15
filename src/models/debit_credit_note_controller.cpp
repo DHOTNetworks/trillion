@@ -1,5 +1,7 @@
 #include "debit_credit_note_controller.h"
 #include "../database_manager.h"
+#include "../engine/accounting_engine.h"
+#include "../engine/fiscal_year_helper.h"
 #include "../services/financial_math_service.h"
 #include "../services/accounting_date_service.h"
 #include "../services/master_data_provider.h"
@@ -458,13 +460,41 @@ QVariantMap DebitCreditNoteController::fetchOriginalInvoice(const QString &invTy
     QString qInvNo = invNo.trimmed();
     if (qInvNo.isEmpty()) return res;
 
+    // The invoice tables carry no state_code/is_interstate columns — derive
+    // both from the GSTIN (or place_of_supply) against the company state.
+    auto deriveInvoiceState = [](const QString& gstin, const QString& pos, QVariantMap& out) {
+        QString code;
+        if (gstin.trimmed().length() >= 2 && gstin.trimmed().left(2).at(0).isDigit()) {
+            code = gstin.trimmed().left(2);
+        } else if (pos.trimmed().length() >= 2) {
+            code = pos.trimmed().left(2);
+        }
+        QString compCode = "06";
+        QVariant csc = DatabaseManager::instance().executeScalar("SELECT state_code FROM company_info LIMIT 1;");
+        if (csc.isValid() && !csc.toString().trimmed().isEmpty()) {
+            compCode = csc.toString().trimmed().left(2);
+        }
+        out["stateCode"] = code;
+        out["isInterstate"] = (!code.isEmpty() && code != compCode);
+    };
+
     if (invType == "Purchase") {
         QVariantList rows = DatabaseManager::instance().executeQuery(
-            "SELECT id, invoice_no, invoice_date, supplier_name, gstin, state_code, is_interstate, "
-            "       gst_pct, item_name, hsn_code, bag_count, weight_qtl, rate_per_qtl, taxable_amount, total_amount "
+            "SELECT id, invoice_no, invoice_date, supplier_name, gstin, place_of_supply, "
+            "       gst_pct, item_name, bag_count, weight_qtl, rate_per_qtl, taxable_amount, total_amount "
             "FROM purchase_invoices WHERE invoice_no = ? LIMIT 1;",
             {qInvNo}
         );
+        if (rows.isEmpty()) {
+            // Users quote voucher numbers (2627/Purc-1); the books key the
+            // supplier bill separately — resolve either form.
+            rows = DatabaseManager::instance().executeQuery(
+                "SELECT id, invoice_no, invoice_date, supplier_name, gstin, place_of_supply, "
+                "       gst_pct, item_name, bag_count, weight_qtl, rate_per_qtl, taxable_amount, total_amount "
+                "FROM purchase_invoices WHERE voucher_no = ? LIMIT 1;",
+                {qInvNo}
+            );
+        }
 
         if (!rows.isEmpty()) {
             auto map = rows.first().toMap();
@@ -474,10 +504,9 @@ QVariantMap DebitCreditNoteController::fetchOriginalInvoice(const QString &invTy
             res["invoiceDate"] = map.value("invoice_date").toString();
             res["partyName"] = map.value("supplier_name").toString();
             res["partyGstin"] = map.value("gstin").toString();
-            res["stateCode"] = map.value("state_code").toString();
-            res["isInterstate"] = map.value("is_interstate").toInt() == 1;
+            deriveInvoiceState(map.value("gstin").toString(), map.value("place_of_supply").toString(), res);
             res["itemName"] = map.value("item_name").toString();
-            res["hsnCode"] = map.value("hsn_code").toString();
+            res["hsnCode"] = MasterDataProvider::instance().getItemHsnCode(res["itemName"].toString());
             double gstRate = map.value("gst_pct", -1.0).toDouble();
             if (gstRate < 0.0) gstRate = MasterDataProvider::instance().getItemGstRate(res["itemName"].toString());
             res["gstPct"] = gstRate;
@@ -489,7 +518,7 @@ QVariantMap DebitCreditNoteController::fetchOriginalInvoice(const QString &invTy
 
             // Check if line items exist in purchase_invoice_items
             QVariantList itemRows = DatabaseManager::instance().executeQuery(
-                "SELECT item_name, hsn_code, unit, bag_count, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, total_amount "
+                "SELECT item_name, bag_count, grade, packing, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, total_amount "
                 "FROM purchase_invoice_items WHERE invoice_id = ?;",
                 {map.value("id").toInt()}
             );
@@ -500,8 +529,8 @@ QVariantMap DebitCreditNoteController::fetchOriginalInvoice(const QString &invTy
                     auto itMap = it.toMap();
                     QVariantMap line;
                     line["itemName"] = itMap.value("item_name").toString();
-                    line["hsnCode"] = itMap.value("hsn_code").toString();
-                    line["unit"] = itMap.value("unit", "QTL").toString();
+                    line["hsnCode"] = MasterDataProvider::instance().getItemHsnCode(line["itemName"].toString());
+                    line["unit"] = "QTL";
                     line["bags"] = itMap.value("bag_count").toInt();
                     line["weightQtl"] = itMap.value("weight_qtl").toDouble();
                     line["rate"] = itMap.value("rate_per_qtl").toDouble();
@@ -530,11 +559,21 @@ QVariantMap DebitCreditNoteController::fetchOriginalInvoice(const QString &invTy
         }
     } else { // "Sale"
         QVariantList rows = DatabaseManager::instance().executeQuery(
-            "SELECT id, invoice_no, invoice_date, customer_name, gstin, state_code, is_interstate, "
-            "       gst_pct, item_name, hsn_code, bag_count, weight_qtl, rate_per_qtl, taxable_amount, total_amount "
+            "SELECT id, invoice_no, invoice_date, customer_name, gstin, place_of_supply, "
+            "       gst_pct, item_name, bag_count, weight_qtl, rate_per_qtl, taxable_amount, total_amount "
             "FROM sales_invoices WHERE invoice_no = ? LIMIT 1;",
             {qInvNo}
         );
+        if (rows.isEmpty()) {
+            // Users quote voucher numbers (2627/Sale-1); the books key the
+            // printed bill number separately — resolve either form.
+            rows = DatabaseManager::instance().executeQuery(
+                "SELECT id, invoice_no, invoice_date, customer_name, gstin, place_of_supply, "
+                "       gst_pct, item_name, bag_count, weight_qtl, rate_per_qtl, taxable_amount, total_amount "
+                "FROM sales_invoices WHERE voucher_no = ? LIMIT 1;",
+                {qInvNo}
+            );
+        }
 
         if (!rows.isEmpty()) {
             auto map = rows.first().toMap();
@@ -544,10 +583,9 @@ QVariantMap DebitCreditNoteController::fetchOriginalInvoice(const QString &invTy
             res["invoiceDate"] = map.value("invoice_date").toString();
             res["partyName"] = map.value("customer_name").toString();
             res["partyGstin"] = map.value("gstin").toString();
-            res["stateCode"] = map.value("state_code").toString();
-            res["isInterstate"] = map.value("is_interstate").toInt() == 1;
+            deriveInvoiceState(map.value("gstin").toString(), map.value("place_of_supply").toString(), res);
             res["itemName"] = map.value("item_name").toString();
-            res["hsnCode"] = map.value("hsn_code").toString();
+            res["hsnCode"] = MasterDataProvider::instance().getItemHsnCode(res["itemName"].toString());
             double gstRate = map.value("gst_pct", -1.0).toDouble();
             if (gstRate < 0.0) gstRate = MasterDataProvider::instance().getItemGstRate(res["itemName"].toString());
             res["gstPct"] = gstRate;
@@ -559,7 +597,7 @@ QVariantMap DebitCreditNoteController::fetchOriginalInvoice(const QString &invTy
 
             // Check if line items exist in sales_invoice_items
             QVariantList itemRows = DatabaseManager::instance().executeQuery(
-                "SELECT item_name, hsn_code, unit, bag_count, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, total_amount "
+                "SELECT item_name, bag_count, grade, packing, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, total_amount "
                 "FROM sales_invoice_items WHERE invoice_id = ?;",
                 {map.value("id").toInt()}
             );
@@ -570,8 +608,8 @@ QVariantMap DebitCreditNoteController::fetchOriginalInvoice(const QString &invTy
                     auto itMap = it.toMap();
                     QVariantMap line;
                     line["itemName"] = itMap.value("item_name").toString();
-                    line["hsnCode"] = itMap.value("hsn_code").toString();
-                    line["unit"] = itMap.value("unit", "QTL").toString();
+                    line["hsnCode"] = MasterDataProvider::instance().getItemHsnCode(line["itemName"].toString());
+                    line["unit"] = "QTL";
                     line["bags"] = itMap.value("bag_count").toInt();
                     line["weightQtl"] = itMap.value("weight_qtl").toDouble();
                     line["rate"] = itMap.value("rate_per_qtl").toDouble();
@@ -694,22 +732,51 @@ QVariantList DebitCreditNoteController::searchInvoices(const QString &invType, c
 QVariantList DebitCreditNoteController::partyInvoices(const QString &invType, const QString &partyName) {
     QString party = partyName.trimmed();
     if (party.isEmpty()) return QVariantList();
+    // Strictly the active fiscal year first; fall back to all years so a
+    // note can still link older bills (the list never shows empty while
+    // the party has bills at all).
+    FiscalYearInfo fy = FiscalYearHelper::getActiveFiscalYear();
+    QString fStart = fy.isValid() ? fy.startDate : "0000-00-00";
+    QString fEnd = fy.isValid() ? fy.endDate : "9999-99-99";
+    QVariantList scoped;
     if (invType == "Purchase") {
-        return DatabaseManager::instance().executeQuery(
+        scoped = DatabaseManager::instance().executeQuery(
             "SELECT id, invoice_no, invoice_date, supplier_name AS party_name, total_amount "
             "FROM purchase_invoices "
             "WHERE supplier_name = ? COLLATE NOCASE "
+            "  AND invoice_date >= ? AND invoice_date <= ? "
+            "ORDER BY invoice_date DESC, id DESC LIMIT 100;",
+            {party, fStart, fEnd}
+        );
+        if (scoped.isEmpty()) {
+            scoped = DatabaseManager::instance().executeQuery(
+                "SELECT id, invoice_no, invoice_date, supplier_name AS party_name, total_amount "
+                "FROM purchase_invoices "
+                "WHERE supplier_name = ? COLLATE NOCASE "
+                "ORDER BY invoice_date DESC, id DESC LIMIT 100;",
+                {party}
+            );
+        }
+        return scoped;
+    }
+    scoped = DatabaseManager::instance().executeQuery(
+        "SELECT id, invoice_no, invoice_date, customer_name AS party_name, total_amount "
+        "FROM sales_invoices "
+        "WHERE customer_name = ? COLLATE NOCASE "
+        "  AND invoice_date >= ? AND invoice_date <= ? "
+        "ORDER BY invoice_date DESC, id DESC LIMIT 100;",
+        {party, fStart, fEnd}
+    );
+    if (scoped.isEmpty()) {
+        scoped = DatabaseManager::instance().executeQuery(
+            "SELECT id, invoice_no, invoice_date, customer_name AS party_name, total_amount "
+            "FROM sales_invoices "
+            "WHERE customer_name = ? COLLATE NOCASE "
             "ORDER BY invoice_date DESC, id DESC LIMIT 100;",
             {party}
         );
     }
-    return DatabaseManager::instance().executeQuery(
-        "SELECT id, invoice_no, invoice_date, customer_name AS party_name, total_amount "
-        "FROM sales_invoices "
-        "WHERE customer_name = ? COLLATE NOCASE "
-        "ORDER BY invoice_date DESC, id DESC LIMIT 100;",
-        {party}
-    );
+    return scoped;
 }
 
 QVariantMap DebitCreditNoteController::saveNote(const QVariantMap &data) {
@@ -883,6 +950,7 @@ QVariantMap DebitCreditNoteController::saveNote(const QVariantMap &data) {
     // Post Double-Entry Vouchers
     DebitCreditNoteRecord noteRec;
     noteRec.id = id;
+    noteRec.financialYear = AccountingEngine::resolveFinancialYear(noteDate);
     noteRec.noteType = noteType;
     noteRec.noteNo = noteNo;
     noteRec.noteDate = noteDate;
@@ -914,10 +982,14 @@ void DebitCreditNoteController::deleteDoubleEntryVouchers(int noteId) {
 }
 
 void DebitCreditNoteController::postDoubleEntryVoucher(const DebitCreditNoteRecord &note) {
-    // 1. Delete prior double entry postings for this note
+    // Clear prior postings for this note (tight scope: type + number only).
     DatabaseManager::instance().executeNonQuery(
-        "DELETE FROM vouchers WHERE voucher_type IN ('Credit Note', 'Debit Note') AND (voucher_no = ? OR narration LIKE ?);",
-        {note.noteNo, QString("%%1%").arg(note.noteNo)}
+        "DELETE FROM vouchers WHERE voucher_type IN ('Credit Note', 'Debit Note') AND voucher_no = ?;",
+        {note.noteNo}
+    );
+    DatabaseManager::instance().executeNonQuery(
+        "DELETE FROM transactions WHERE voucher_type IN ('Credit Note', 'Debit Note') AND voucher_no = ?;",
+        {note.noteNo}
     );
 
     QString vchDate = note.noteDate;
@@ -927,89 +999,56 @@ void DebitCreditNoteController::postDoubleEntryVoucher(const DebitCreditNoteReco
         baseNarr += " - " + note.narration;
     }
 
-    if (note.noteType == "Credit Note") {
-        // CREDIT NOTE (Sales Return / Quality Deduction / Rebate)
-        // 1. Credit Party (Customer) with Grand Total (reduces receivable)
+    auto postLeg = [&](const QString& party, const QString& opp,
+                        const QString& drcr, double amt) {
         DatabaseManager::instance().executeNonQuery(
-            "INSERT INTO vouchers (voucher_type, voucher_no, voucher_date, party_name, account_type, amount, narration) "
-            "VALUES (?, ?, ?, ?, 'Cr', ?, ?);",
-            {"Credit Note", refNo, vchDate, note.partyName, note.grandTotal, baseNarr}
+            "INSERT INTO transactions (financial_year, voucher_no, voucher_date, voucher_type, trans_type, party_id, party_name, "
+            "opposing_account, dr_cr, amount, narration) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+            {note.financialYear, refNo, vchDate, note.noteType, note.noteType, QVariant(), party, opp, drcr, amt, baseNarr}
+        );
+    };
+
+    if (note.noteType == "Credit Note") {
+        // CREDIT NOTE (Sales Return / Rate Cut / Rebate)
+        // Vouchers summary row: customer credited (one row per voucher —
+        // the table's unique index forbids multi-leg inserts here).
+        DatabaseManager::instance().executeNonQuery(
+            "INSERT INTO vouchers (financial_year, voucher_type, voucher_no, voucher_date, party_name, account_type, amount, narration) "
+            "VALUES (?, ?, ?, ?, ?, 'Cr', ?, ?);",
+            {note.financialYear, "Credit Note", refNo, vchDate, note.partyName, note.grandTotal, baseNarr}
         );
 
-        // 2. Debit Sales Return / Deduction Account with Taxable Amount
         QString salesReturnAcct = (note.adjustmentType.contains("Rate Cut", Qt::CaseInsensitive))
                                       ? "Quality Deduction / Rate Cut on Sales"
                                       : "Sales Return Account";
-        DatabaseManager::instance().executeNonQuery(
-            "INSERT INTO vouchers (voucher_type, voucher_no, voucher_date, party_name, account_type, amount, narration) "
-            "VALUES (?, ?, ?, ?, 'Dr', ?, ?);",
-            {"Credit Note", refNo, vchDate, salesReturnAcct, note.taxableAmount, baseNarr}
-        );
-
-        // 3. Debit Output GST (reversing output liability)
+        postLeg(note.partyName, salesReturnAcct, "Cr", note.grandTotal);
+        postLeg(salesReturnAcct, note.partyName, "Dr", note.taxableAmount);
         if (note.isInterstate && note.igstAmount > 0.0) {
-            DatabaseManager::instance().executeNonQuery(
-                "INSERT INTO vouchers (voucher_type, voucher_no, voucher_date, party_name, account_type, amount, narration) "
-                "VALUES (?, ?, ?, 'Output IGST Account', 'Dr', ?, ?);",
-                {"Credit Note", refNo, vchDate, note.igstAmount, baseNarr}
-            );
+            postLeg("Output IGST Account", note.partyName, "Dr", note.igstAmount);
         } else {
-            if (note.cgstAmount > 0.0) {
-                DatabaseManager::instance().executeNonQuery(
-                    "INSERT INTO vouchers (voucher_type, voucher_no, voucher_date, party_name, account_type, amount, narration) "
-                    "VALUES (?, ?, ?, 'Output CGST Account', 'Dr', ?, ?);",
-                    {"Credit Note", refNo, vchDate, note.cgstAmount, baseNarr}
-                );
-            }
-            if (note.sgstAmount > 0.0) {
-                DatabaseManager::instance().executeNonQuery(
-                    "INSERT INTO vouchers (voucher_type, voucher_no, voucher_date, party_name, account_type, amount, narration) "
-                    "VALUES (?, ?, ?, 'Output SGST Account', 'Dr', ?, ?);",
-                    {"Credit Note", refNo, vchDate, note.sgstAmount, baseNarr}
-                );
-            }
+            if (note.cgstAmount > 0.0) postLeg("Output CGST Account", note.partyName, "Dr", note.cgstAmount);
+            if (note.sgstAmount > 0.0) postLeg("Output SGST Account", note.partyName, "Dr", note.sgstAmount);
         }
     } else {
         // DEBIT NOTE (Purchase Return / Purchase Rate Cut)
-        // 1. Debit Party (Supplier) with Grand Total (reduces payable)
+        // Vouchers summary row: supplier debited.
         DatabaseManager::instance().executeNonQuery(
-            "INSERT INTO vouchers (voucher_type, voucher_no, voucher_date, party_name, account_type, amount, narration) "
-            "VALUES (?, ?, ?, ?, 'Dr', ?, ?);",
-            {"Debit Note", refNo, vchDate, note.partyName, note.grandTotal, baseNarr}
+            "INSERT INTO vouchers (financial_year, voucher_type, voucher_no, voucher_date, party_name, account_type, amount, narration) "
+            "VALUES (?, ?, ?, ?, ?, 'Dr', ?, ?);",
+            {note.financialYear, "Debit Note", refNo, vchDate, note.partyName, note.grandTotal, baseNarr}
         );
 
-        // 2. Credit Purchase Return / Rate Cut Account with Taxable Amount
         QString purReturnAcct = (note.adjustmentType.contains("Rate Cut", Qt::CaseInsensitive))
                                     ? "Quality Deduction / Purchase Rate Cut"
                                     : "Purchase Return Account";
-        DatabaseManager::instance().executeNonQuery(
-            "INSERT INTO vouchers (voucher_type, voucher_no, voucher_date, party_name, account_type, amount, narration) "
-            "VALUES (?, ?, ?, ?, 'Cr', ?, ?);",
-            {"Debit Note", refNo, vchDate, purReturnAcct, note.taxableAmount, baseNarr}
-        );
-
-        // 3. Credit Input GST ITC (reversing ITC)
+        postLeg(note.partyName, purReturnAcct, "Dr", note.grandTotal);
+        postLeg(purReturnAcct, note.partyName, "Cr", note.taxableAmount);
         if (note.isInterstate && note.igstAmount > 0.0) {
-            DatabaseManager::instance().executeNonQuery(
-                "INSERT INTO vouchers (voucher_type, voucher_no, voucher_date, party_name, account_type, amount, narration) "
-                "VALUES (?, ?, ?, 'Input IGST ITC Account', 'Cr', ?, ?);",
-                {"Debit Note", refNo, vchDate, note.igstAmount, baseNarr}
-            );
+            postLeg("Input IGST ITC Account", note.partyName, "Cr", note.igstAmount);
         } else {
-            if (note.cgstAmount > 0.0) {
-                DatabaseManager::instance().executeNonQuery(
-                    "INSERT INTO vouchers (voucher_type, voucher_no, voucher_date, party_name, account_type, amount, narration) "
-                    "VALUES (?, ?, ?, 'Input CGST ITC Account', 'Cr', ?, ?);",
-                    {"Debit Note", refNo, vchDate, note.cgstAmount, baseNarr}
-                );
-            }
-            if (note.sgstAmount > 0.0) {
-                DatabaseManager::instance().executeNonQuery(
-                    "INSERT INTO vouchers (voucher_type, voucher_no, voucher_date, party_name, account_type, amount, narration) "
-                    "VALUES (?, ?, ?, 'Input SGST ITC Account', 'Cr', ?, ?);",
-                    {"Debit Note", refNo, vchDate, note.sgstAmount, baseNarr}
-                );
-            }
+            if (note.cgstAmount > 0.0) postLeg("Input CGST ITC Account", note.partyName, "Cr", note.cgstAmount);
+            if (note.sgstAmount > 0.0) postLeg("Input SGST ITC Account", note.partyName, "Cr", note.sgstAmount);
         }
     }
 }

@@ -60,6 +60,7 @@ private slots:
     void onNoteTypeChanged(int index);
     void onPartyDataSelected(const QVariantMap& partyData);
     void onOrigInvoiceChosen(int index);
+    void onGridCellChanged(int row, int column);
     void onStockItemConfigured(int row, const QVariantMap& itemData);
     void onAddItemRow();
     void onRemoveItemRow();
@@ -74,6 +75,10 @@ private:
     void populateStates();
     void refreshOrigInvoiceCombo(bool preserveSelection = false);
     void syncTableFromDraft();
+    // Pulls unit/HSN/rate/GST for the row's item name from the stock-item
+    // master (exact name match). Runs on popup-pick AND on typed+committed
+    // names, so Tab-out fills exactly like Space-search does.
+    void fillItemDetailsFromMaster(int row, bool focusNext);
     QString currentOrigInvType() const;
     int findNoteRow(int noteId) const;
     void setStatusMessage(const QString& message, bool isError);
@@ -86,6 +91,7 @@ private:
     bool m_isUpdatingTable = false;
 
     // Header & Meta Controls
+    QLabel* m_noteBadge = nullptr;
     QComboBox* m_noteTypeCombo = nullptr;
     QLineEdit* m_noteNoEdit = nullptr;
     AccountingDateEdit* m_noteDateEdit = nullptr;
@@ -99,6 +105,14 @@ private:
     QComboBox* m_origInvoiceCombo = nullptr;
     QLineEdit* m_origInvoiceDateEdit = nullptr;
     bool m_suppressInvoiceFetch = false;
+    // Last invoice number fully applied (date + party + items). Tab-out
+    // re-fires editingFinished after a dropdown pick — this skips the
+    // duplicate fetch while still retrying numbers that failed before.
+    QString m_lastAppliedInvNo;
+    // Commits typed (not picked) invoice text: exact list match selects
+    // the row, otherwise the number is fetched straight from the books.
+    void commitOrigInvoiceText();
+    void applyOrigInvoice(const QString& invNo);
 
     // Party & Statutory Controls
     AccountSearchBox* m_partySearch = nullptr;
