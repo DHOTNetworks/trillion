@@ -803,9 +803,9 @@ bool TallyDataMigrator::migrate_tally_data(const QString& tallyPath, const QStri
     }
     for (const QString& fy : encounteredFiscalYears) {
         // e.g. FY 2026-27 -> 2026-04-01 to 2027-03-31
-        QString sYrStr = fy.mid(3, 4);
-        int sYr = sYrStr.toInt();
-        if (sYr >= 2000) {
+        // F6: start-year extraction via the choke (kills mid(3,4) slicing).
+        int sYr = FiscalYearHelper::fyStartYear(fy);
+        if (sYr > 0) {
             QString sDate = FiscalCalendar::fyStartDate(sYr);
             QString eDate = FiscalCalendar::fyEndDate(sYr);
             db.executeNonQuery(
@@ -912,6 +912,7 @@ bool TallyDataMigrator::migrate_tally_data(const QString& tallyPath, const QStri
 
     // STEP 6: Vouchers, Invoices & Double-Entry Transactions (90%)
     updateProgress(90, "Writing Double-Entry Transactions and Invoices...");
+    int unmappedFyVouchers = 0; // F5/F6: fail-loud skip counter (no default-1)
     for (const auto& v : vouchers) {
         QString vNo = v.vchNo;
         if (vNo.isEmpty()) vNo = QString("TLY-%1").arg(stats.totalVouchers + 1);
@@ -921,13 +922,19 @@ bool TallyDataMigrator::migrate_tally_data(const QString& tallyPath, const QStri
         // invoice_no keeps the Tally original (incl. "TLY-N" fallback marker).
         QString vchRaw = vNo.startsWith("TLY-") ? vNo.mid(4) : vNo;
         QString vchCanon = FiscalYearHelper::canonicalVoucherNo(fy, v.vchType, vchRaw);
+        if (vchCanon.isEmpty()) {
+            // Fail loud (§2/F6): no fabricated numbers, no active-FY borrow.
+            qWarning() << "[Migration] unnumbered Tally voucher skipped (FY token unresolvable):"
+                       << vchRaw << fy;
+            continue;
+        }
 
         QVariant fyIdVar = db.executeScalar("SELECT id FROM financial_years WHERE year_name = ?;", {fy});
         int fyId = fyIdVar.toInt();
         if (fyId <= 0) {
-            QString sYrStr = fy.mid(3, 4);
-            int sYr = sYrStr.toInt();
-            if (sYr >= 2000) {
+            // F6: start-year extraction via the choke (kills mid(3,4) slicing).
+            int sYr = FiscalYearHelper::fyStartYear(fy);
+            if (sYr > 0) {
                 QString sDate = FiscalCalendar::fyStartDate(sYr);
                 QString eDate = FiscalCalendar::fyEndDate(sYr);
                 db.executeNonQuery(
@@ -937,7 +944,14 @@ bool TallyDataMigrator::migrate_tally_data(const QString& tallyPath, const QStri
                 fyIdVar = db.executeScalar("SELECT id FROM financial_years WHERE year_name = ?;", {fy});
                 fyId = fyIdVar.toInt();
             }
-            if (fyId <= 0) fyId = 1;
+            if (fyId <= 0) {
+                // F5/F6: silent default-1 banned — skip with row context.
+                ++unmappedFyVouchers;
+                qWarning() << "[F6] Tally voucher" << vNo << "dated" << dateStr
+                           << "cannot resolve a financial year (" << fy
+                           << ") - voucher skipped (not filed into FY 1)";
+                continue;
+            }
         }
 
         double totalAmt = 0.0;
@@ -1122,6 +1136,11 @@ bool TallyDataMigrator::migrate_tally_data(const QString& tallyPath, const QStri
             if (s.drCr == "Dr") stats.totalDr += s.amount;
             else stats.totalCr += s.amount;
         }
+    }
+
+    if (unmappedFyVouchers > 0) {
+        qWarning() << "[F6] Tally migration skipped" << unmappedFyVouchers
+                   << "voucher(s) with unresolvable financial years - fix the source dates and re-run";
     }
 
     db.commit();

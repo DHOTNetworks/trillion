@@ -33,6 +33,7 @@ signals:
 public slots:
     void openSelectedFirm();
     void openNewFirmDialog();
+    void openEditFirmDialog();
 
 protected:
     void keyPressEvent(QKeyEvent* event) override;
@@ -78,5 +79,6 @@ private:
 
     // Footer
     KbdBadgeButton* m_newFirmBtn = nullptr;
+    KbdBadgeButton* m_editFirmBtn = nullptr;
     KbdBadgeButton* m_openFirmBtn = nullptr;
 };

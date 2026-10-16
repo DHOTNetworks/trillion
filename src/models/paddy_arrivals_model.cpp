@@ -31,10 +31,23 @@ bool PaddyArrivalsModel::add_arrival(const QString& farmer_name, const QString& 
     double netQtl = qMax(0.1, gross_qtl - moistDed);
     double netAmt = (netQtl * rate_qtl) - (bags * hamali);
 
+    // S7 accepted follow-up: the hardcoded farmer_id=1 violated the
+    // parties FK on every DB whose ids don't start at 1 (fixture-migrated
+    // charts start at 9). Resolve the farmer by name; NULL when unknown —
+    // farmer_name remains the display key, and real farmers still link.
+    QVariant farmerIdVar;
+    const QString farmerKey = farmer_name.trimmed();
+    if (!farmerKey.isEmpty()) {
+        QVariant fRow = DatabaseManager::instance().executeScalar(
+            "SELECT id FROM parties WHERE name = ? COLLATE NOCASE LIMIT 1;",
+            {farmerKey});
+        if (fRow.isValid() && !fRow.isNull()) farmerIdVar = fRow.toLongLong();
+    }
+
     bool ok = DatabaseManager::instance().executeNonQuery(
         "INSERT INTO paddy_slips (slip_type, slip_no, arrival_date, farmer_id, farmer_name, variety, bag_count, gross_weight_qtl, moisture_pct, moisture_deduction_qtl, net_weight_qtl, rate_per_qtl, hamali_charges, net_amount, payment_status) "
-        "VALUES ('arrival', ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-        {slipNo, dt, farmer_name, paddy_variety, bags, gross_qtl, moisture_pct, moistDed, netQtl, rate_qtl, hamali, netAmt, status}
+        "VALUES ('arrival', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+        {slipNo, dt, farmerIdVar, farmer_name, paddy_variety, bags, gross_qtl, moisture_pct, moistDed, netQtl, rate_qtl, hamali, netAmt, status}
     );
     if (ok) reload_data();
     return ok;

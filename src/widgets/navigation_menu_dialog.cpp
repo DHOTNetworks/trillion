@@ -51,13 +51,14 @@ void NavigationMenuDialog::setupUi()
     header->addWidget(hint);
     root->addLayout(header);
 
-    // Item Rows (disabled rows render grey and are never selectable)
+    // Item Rows (contract: every row is enabled — the manager sends
+    // enabled rows only, so all render actionable).
     for (int i = 0; i < m_items.size(); ++i) {
         const MenuItem& itm = m_items[i];
         auto* row = new QFrame(this);
         row->setObjectName("menuRow");
         row->setMinimumHeight(44);
-        row->setCursor(itm.enabled ? Qt::PointingHandCursor : Qt::ForbiddenCursor);
+        row->setCursor(Qt::PointingHandCursor);
         row->installEventFilter(this);
 
         auto* rowLayout = new QHBoxLayout(row);
@@ -65,9 +66,8 @@ void NavigationMenuDialog::setupUi()
 
         auto* label = new QLabel(itm.title, row);
         label->setAttribute(Qt::WA_TransparentForMouseEvents, true);
-        label->setStyleSheet(itm.enabled
-            ? "font-size: 13px; font-weight: 700; color: #0F172A; border: none; background: transparent;"
-            : "font-size: 13px; font-weight: 700; color: #94A3B8; border: none; background: transparent;");
+        label->setStyleSheet(
+            "font-size: 13px; font-weight: 700; color: #0F172A; border: none; background: transparent;");
         rowLayout->addWidget(label, 1);
 
         if (!itm.shortcut.isEmpty()) {
@@ -87,7 +87,6 @@ void NavigationMenuDialog::setupUi()
     if (m_selectedIndex < 0 || m_selectedIndex >= m_itemFrames.size()) {
         m_selectedIndex = 0;
     }
-    m_selectedIndex = firstEnabledFrom(m_selectedIndex);
     updateSelection(m_selectedIndex);
 }
 
@@ -113,10 +112,8 @@ bool NavigationMenuDialog::eventFilter(QObject* watched, QEvent* event)
     for (int i = 0; i < m_itemFrames.size(); ++i) {
         if (m_itemFrames[i] == watched) {
             if (event->type() == QEvent::MouseButtonPress) {
-                if (isEnabled(i)) {
-                    m_selectedIndex = i;
-                    triggerCurrent();
-                }
+                m_selectedIndex = i;
+                triggerCurrent();
                 return true;
             } else if (event->type() == QEvent::MouseMove || event->type() == QEvent::Enter) {
                 QPoint currentPos = QCursor::pos();
@@ -138,7 +135,6 @@ bool NavigationMenuDialog::eventFilter(QObject* watched, QEvent* event)
 void NavigationMenuDialog::updateSelection(int idx)
 {
     if (idx < 0 || idx >= m_itemFrames.size()) return;
-    if (!isEnabled(idx)) return; // disabled rows never take selection
     m_selectedIndex = idx;
 
     for (int i = 0; i < m_itemFrames.size(); ++i) {
@@ -158,37 +154,7 @@ void NavigationMenuDialog::updateSelection(int idx)
 
 void NavigationMenuDialog::triggerCurrent()
 {
-    if (isEnabled(m_selectedIndex)) {
-        accept();
-    }
-}
-
-bool NavigationMenuDialog::isEnabled(int idx) const
-{
-    return idx >= 0 && idx < m_items.size() && m_items[idx].enabled;
-}
-
-int NavigationMenuDialog::firstEnabledFrom(int start) const
-{
-    const int n = m_items.size();
-    if (n == 0) return 0;
-    const int s = ((start % n) + n) % n;
-    for (int k = 0; k < n; ++k) {
-        const int i = (s + k) % n;
-        if (m_items[i].enabled) return i;
-    }
-    return start; // all rows disabled: hold position, trigger stays blocked
-}
-
-int NavigationMenuDialog::nextEnabled(int from, int dir) const
-{
-    const int n = m_items.size();
-    if (n == 0) return from;
-    for (int k = 1; k <= n; ++k) {
-        const int i = ((from + dir * k) % n + n) % n;
-        if (m_items[i].enabled) return i;
-    }
-    return from;
+    accept();
 }
 
 const MenuItem* NavigationMenuDialog::selectedItem() const
@@ -204,11 +170,15 @@ void NavigationMenuDialog::keyPressEvent(QKeyEvent* event)
     int key = event->key();
 
     if (key == Qt::Key_Up) {
-        updateSelection(nextEnabled(m_selectedIndex, -1));
+        if (!m_itemFrames.isEmpty()) {
+            updateSelection((m_selectedIndex - 1 + m_itemFrames.size()) % m_itemFrames.size());
+        }
         event->accept();
         return;
     } else if (key == Qt::Key_Down) {
-        updateSelection(nextEnabled(m_selectedIndex, +1));
+        if (!m_itemFrames.isEmpty()) {
+            updateSelection((m_selectedIndex + 1) % m_itemFrames.size());
+        }
         event->accept();
         return;
     } else if (key == Qt::Key_Return || key == Qt::Key_Enter) {
@@ -221,7 +191,7 @@ void NavigationMenuDialog::keyPressEvent(QKeyEvent* event)
         return;
     } else if (key >= Qt::Key_1 && key <= Qt::Key_9) {
         int num = key - Qt::Key_1;
-        if (num < m_itemFrames.size() && isEnabled(num)) {
+        if (num < m_itemFrames.size()) {
             m_selectedIndex = num;
             triggerCurrent();
             event->accept();
@@ -235,7 +205,6 @@ void NavigationMenuDialog::keyPressEvent(QKeyEvent* event)
     QString eventText = event->text().toUpper();
     for (int i = 0; i < m_items.size(); ++i) {
         const MenuItem& itm = m_items[i];
-        if (!itm.enabled) continue;
         if (itm.hotkey != 0 && itm.hotkey == key) {
             m_selectedIndex = i;
             triggerCurrent();

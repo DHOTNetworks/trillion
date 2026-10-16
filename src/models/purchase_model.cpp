@@ -51,6 +51,7 @@ QString PurchaseModel::get_next_voucher_no(const QString& fy) {
         }
     }
     QString next = FiscalYearHelper::canonicalVoucherNo(targetFy, "Purc", QString::number(maxId + 1));
+    if (next.isEmpty()) return QString(); // fail loud (§2): unnumbered voucher must block, never mint a bare number
     if (!next.contains('/')) next = "Purc-" + next; // degenerate fallback: no FY resolvable, keep legacy shape
     return next;
 }

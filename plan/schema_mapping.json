@@ -1,0 +1,3254 @@
+{
+  "meta": {
+    "version": "0.3-draft",
+    "status": "S9 complete (derived J/I/paddy read_filters, domain_flags arrays, manufacturing items, Busy Master4/MandiForms); nothing in src/ consumes this yet - promotion is plan/21 stage C2-C4",
+    "copy_on_read": true,
+    "marker_key": "migration_source_mdb",
+    "rule": "exporter refuses any DB whose marker points at a live source",
+    "read_filter_decision": "Family discriminator is Transactions.TransType (JFrm/IFrm), NOT EntryType: live Data.004 shows 521+228 JFormIFormLedger legs, 449+226 Labour legs etc. all under TransType JFrm/IFrm, while EntryType on those rows is leg-level detail (Ledger/Labour/Round Off/VAT). mandi_migrator.cpp filters TransType. EntryType stays documented under code_maps.entry_type_labels.",
+    "columns_location": "per-table entries only (Batch 10 SSOT: top-level columns{} retired into entries; loader reads source/target, transform is validator+human info)."
+  },
+  "sources": {
+    "bahikhata": {
+      "reader": "libmdb (native) / ucanaccess-bridge (inspect)",
+      "files": [
+        "Data.002",
+        "Data.004",
+        "Data.007",
+        "Data.018"
+      ],
+      "jet_version": "4.x"
+    },
+    "busy": {
+      "reader": "libmdb",
+      "files": [
+        "db.bds",
+        "db12026.bds"
+      ],
+      "year_grouping": "db*.bds",
+      "direction": "import"
+    },
+    "tally": {
+      "reader": "tally-xml",
+      "files": [
+        "tally-data/*.zip"
+      ],
+      "direction": "import"
+    }
+  },
+  "tables": [
+    {
+      "source": "CompanyInfo",
+      "target": "company_info",
+      "direction": "both",
+      "provider": "bahikhata",
+      "fy_scoped": false,
+      "columns": [
+        {
+          "source": "CompanyName",
+          "target": "company_name",
+          "transform": "trim"
+        },
+        {
+          "source": "FirmType",
+          "target": "firm_type",
+          "transform": "derived"
+        },
+        {
+          "source": "Business",
+          "target": "business_type",
+          "transform": "trim"
+        },
+        {
+          "source": "Address",
+          "target": "address",
+          "transform": "trim"
+        },
+        {
+          "source": "MyStation",
+          "target": "city",
+          "transform": "trim"
+        },
+        {
+          "source": "MySTATE",
+          "target": "state",
+          "transform": "trim"
+        },
+        {
+          "source": "derived:GSTIN+MySTATE",
+          "target": "state_code",
+          "transform": "derived"
+        },
+        {
+          "source": "derived:Address",
+          "target": "pincode",
+          "transform": "derived"
+        },
+        {
+          "source": "Phone_O",
+          "target": "phone",
+          "transform": "trim"
+        },
+        {
+          "source": "Phone_F|Mobile1",
+          "target": "mobile",
+          "transform": "trim"
+        },
+        {
+          "source": "const:''",
+          "target": "email",
+          "transform": "const"
+        },
+        {
+          "source": "GSTIN",
+          "target": "gstin",
+          "transform": "trim"
+        },
+        {
+          "source": "PAN_No",
+          "target": "pan_no",
+          "transform": "trim"
+        },
+        {
+          "source": "derived:Business+Address",
+          "target": "fssai_no",
+          "transform": "derived"
+        },
+        {
+          "source": "ML_No",
+          "target": "ml_no",
+          "transform": "trim"
+        },
+        {
+          "source": "derived:Bank2-block",
+          "target": "bank_name",
+          "transform": "derived"
+        },
+        {
+          "source": "derived:Bank3-block",
+          "target": "bank_account",
+          "transform": "derived"
+        },
+        {
+          "source": "derived:Bank-block",
+          "target": "ifsc_code",
+          "transform": "derived"
+        },
+        {
+          "source": "BooksBeginingFrom",
+          "target": "books_from",
+          "transform": "iso_date"
+        },
+        {
+          "source": "AccYearFrom",
+          "target": "acc_year_from",
+          "transform": "iso_date"
+        },
+        {
+          "source": "AccYearTo",
+          "target": "acc_year_to",
+          "transform": "iso_date"
+        },
+        {
+          "source": "const:file-name",
+          "target": "data_file_source",
+          "transform": "const"
+        }
+      ]
+    },
+    {
+      "source": "Groups",
+      "target": "account_groups",
+      "direction": "both",
+      "provider": "bahikhata",
+      "fy_scoped": false,
+      "dedup_key": [
+        "legacy_id"
+      ],
+      "columns": [
+        {
+          "source": "GroupName",
+          "target": "name"
+        },
+        {
+          "source": "Code1st",
+          "target": "code1st"
+        },
+        {
+          "source": "Code2nd",
+          "target": "code2nd"
+        },
+        {
+          "source": "Code3rd",
+          "target": "code3rd"
+        },
+        {
+          "source": "Code4th",
+          "target": "code4th"
+        },
+        {
+          "source": "ExtractInBalanceSheet",
+          "target": "extract_in_balance_sheet"
+        }
+      ]
+    },
+    {
+      "source": "StockGroups",
+      "target": "stock_groups",
+      "direction": "both",
+      "provider": "bahikhata",
+      "fy_scoped": false,
+      "dedup_key": [
+        "legacy_id"
+      ],
+      "columns": [
+        {
+          "source": "GroupName",
+          "target": "group_name",
+          "transform": "trim"
+        },
+        {
+          "source": "Code1st",
+          "target": "legacy_code",
+          "transform": "int"
+        },
+        {
+          "source": "QtyNotShowInTrading",
+          "target": "qty_not_show_in_trading",
+          "transform": "int"
+        },
+        {
+          "source": "ClStockRate",
+          "target": "cl_stock_rate",
+          "transform": "round2_half_away"
+        }
+      ]
+    },
+    {
+      "source": "StockUnits",
+      "target": "stock_units",
+      "direction": "both",
+      "provider": "bahikhata",
+      "fy_scoped": false,
+      "dedup_key": [
+        "legacy_id"
+      ],
+      "columns": [
+        {
+          "source": "UnitName",
+          "target": "unit_name",
+          "transform": "trim"
+        },
+        {
+          "source": "Code1st",
+          "target": "legacy_code",
+          "transform": "int"
+        },
+        {
+          "source": "DecimalPlaces",
+          "target": "decimal_places",
+          "transform": "int"
+        }
+      ]
+    },
+    {
+      "source": "Ledgers",
+      "target": "parties",
+      "direction": "both",
+      "provider": "bahikhata",
+      "fy_scoped": false,
+      "dedup_key": [
+        "legacy_id"
+      ],
+      "columns": [
+        {
+          "source": "LedgerName",
+          "target": "name"
+        },
+        {
+          "source": "LedgerAlais",
+          "target": "alias"
+        },
+        {
+          "source": "Prefix",
+          "target": "prefix"
+        },
+        {
+          "source": "GroupCode",
+          "target": "group_code"
+        },
+        {
+          "source": "OpeningBal",
+          "target": "opening_balance"
+        },
+        {
+          "source": "OpeningType",
+          "target": "balance_type"
+        },
+        {
+          "source": "MailingName",
+          "target": "mailing_name"
+        },
+        {
+          "source": "MailingAdd",
+          "target": "address"
+        },
+        {
+          "source": "PartyStation",
+          "target": "party_station"
+        },
+        {
+          "source": "Station",
+          "target": "station"
+        },
+        {
+          "source": "PartyState",
+          "target": "party_state"
+        },
+        {
+          "source": "GSTIN",
+          "target": "gstin"
+        },
+        {
+          "source": "IncomeTaxNo",
+          "target": "pan"
+        },
+        {
+          "source": "PartyTAN",
+          "target": "tan"
+        },
+        {
+          "source": "AadharNo",
+          "target": "aadhaar"
+        },
+        {
+          "source": "PartyPINcode",
+          "target": "pincode"
+        },
+        {
+          "source": "Route",
+          "target": "route"
+        },
+        {
+          "source": "Phone_O",
+          "target": "phone"
+        },
+        {
+          "source": "MobNoForSMS",
+          "target": "mobile"
+        },
+        {
+          "source": "SaleTaxNo",
+          "target": "tin"
+        },
+        {
+          "source": "WhatsappNo",
+          "target": "whatsapp"
+        },
+        {
+          "source": "Email",
+          "target": "email"
+        },
+        {
+          "source": "ConcernedPerson",
+          "target": "contact_person"
+        },
+        {
+          "source": "GSTPartyType",
+          "target": "gst_party_type"
+        },
+        {
+          "source": "BankName",
+          "target": "bank_name"
+        },
+        {
+          "source": "BankAccount",
+          "target": "bank_account"
+        },
+        {
+          "source": "IFSCCode",
+          "target": "ifsc_code"
+        },
+        {
+          "source": "CreditLimit",
+          "target": "credit_limit"
+        },
+        {
+          "source": "InterestRate",
+          "target": "interest_rate"
+        },
+        {
+          "source": "Percentage",
+          "target": "commission_rate"
+        },
+        {
+          "source": "SalaryPerMonth",
+          "target": "salary_per_month"
+        },
+        {
+          "source": "CommnCalcOn",
+          "target": "commission_on"
+        },
+        {
+          "source": "ApplyTCSForParty",
+          "target": "apply_tcs"
+        },
+        {
+          "source": "TCSNotApplyInSale",
+          "target": "tcs_exempt"
+        },
+        {
+          "source": "PartyType",
+          "target": "party_type"
+        },
+        {
+          "source": "SpecialPartyType",
+          "target": "special_type"
+        },
+        {
+          "source": "ShopNo",
+          "target": "shop_no"
+        },
+        {
+          "source": "VAT",
+          "target": "tin_alt"
+        },
+        {
+          "source": "URN",
+          "target": "urn"
+        },
+        {
+          "source": "BRN",
+          "target": "urn_alt"
+        },
+        {
+          "source": "StockNotCalculateInLedger",
+          "target": "stock_not_calc"
+        },
+        {
+          "source": "ShowDateTotals",
+          "target": "show_date_totals"
+        },
+        {
+          "source": "CalculateInJointTrading",
+          "target": "calc_direct_expense"
+        },
+        {
+          "source": "Code1st",
+          "target": "legacy_id"
+        },
+        {
+          "source": "STATE",
+          "target": "state_raw"
+        }
+      ]
+    },
+    {
+      "source": "StockItems",
+      "target": "stock_items",
+      "direction": "both",
+      "provider": "bahikhata",
+      "fy_scoped": false,
+      "dedup_key": [
+        "legacy_id"
+      ],
+      "columns": [
+        {
+          "source": "ItemName",
+          "target": "name",
+          "transform": "trim"
+        },
+        {
+          "source": "Code1st",
+          "target": "code",
+          "transform": "trim"
+        },
+        {
+          "source": "Code1st",
+          "target": "legacy_code",
+          "transform": "int"
+        },
+        {
+          "source": "ItemType",
+          "target": "item_type",
+          "transform": "trim"
+        },
+        {
+          "source": "GoodsType",
+          "target": "goods_type",
+          "transform": "trim"
+        },
+        {
+          "source": "GroupCode",
+          "target": "group_code",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "UnitCode",
+          "target": "unit",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "UnitCode",
+          "target": "unit_code",
+          "transform": "int"
+        },
+        {
+          "source": "RateCalcOn",
+          "target": "rate_calc_on",
+          "transform": "trim"
+        },
+        {
+          "source": "AutoSplitUpdate",
+          "target": "auto_adjust_name",
+          "transform": "int"
+        },
+        {
+          "source": "ItemNarration",
+          "target": "item_narration",
+          "transform": "trim"
+        },
+        {
+          "source": "CapitalGoods",
+          "target": "capital_goods",
+          "transform": "int"
+        },
+        {
+          "source": "HSNCode",
+          "target": "hsn_code",
+          "transform": "trim"
+        },
+        {
+          "source": "GSTRateSlab",
+          "target": "gst_rate",
+          "transform": "trim"
+        },
+        {
+          "source": "CessRate",
+          "target": "cess_rate",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "VAT",
+          "target": "vat_rate",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "VATLedger",
+          "target": "vat_ledger",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "VATLedger",
+          "target": "vat_ledger_id",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "Surcharge",
+          "target": "surcharge_on_vat",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "VATLowerRate",
+          "target": "vat_against_d1",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "CST",
+          "target": "cst_rate",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "CSTLedger",
+          "target": "cst_ledger",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "CSTLedger",
+          "target": "cst_ledger_id",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "CSTWithoutCForm",
+          "target": "cst_without_cform",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "Dami",
+          "target": "dami_rate",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "DamiLedger",
+          "target": "dami_ledger",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "DamiLedger",
+          "target": "dami_ledger_id",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "MarketFee",
+          "target": "market_fee_rate",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "MarketFeeLedger",
+          "target": "market_fee_ledger",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "MarketFeeLedger",
+          "target": "market_fee_ledger_id",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "HRDF",
+          "target": "hrdf_rate",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "HRDFLedger",
+          "target": "hrdf_ledger",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "HRDFLedger",
+          "target": "hrdf_ledger_id",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "MarketCommttFormApply",
+          "target": "market_commtt_form_apply",
+          "transform": "int"
+        },
+        {
+          "source": "MarketCommttCouponApply",
+          "target": "market_commtt_coupon_apply",
+          "transform": "int"
+        },
+        {
+          "source": "DamiCalcOnWeight",
+          "target": "dami_calc_on_weight",
+          "transform": "int"
+        },
+        {
+          "source": "TaxPayable",
+          "target": "tax_on_qty",
+          "transform": "int"
+        },
+        {
+          "source": "PurchaseLedger",
+          "target": "purchase_ledger",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "PurchaseLedger",
+          "target": "purchase_ledger_id",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "PurchaseReturnLedger",
+          "target": "purchase_return_ledger",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "SaleLedger",
+          "target": "sale_ledger",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "SaleLedger",
+          "target": "sale_ledger_id",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "SaleReturnLedger",
+          "target": "sale_return_ledger",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "StockLedger",
+          "target": "stock_ledger",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "StockLedger",
+          "target": "stock_ledger_id",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "MillingItem",
+          "target": "is_manufacturing_item",
+          "transform": "int"
+        },
+        {
+          "source": "CalculateInTrading",
+          "target": "include_in_trading",
+          "transform": "int"
+        },
+        {
+          "source": "StockCalculate",
+          "target": "calculate_stock",
+          "transform": "int"
+        },
+        {
+          "source": "LabourRateUnit",
+          "target": "labour_rate_unit",
+          "transform": "trim"
+        },
+        {
+          "source": "PurcRate",
+          "target": "purchase_rate",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "SaleRate",
+          "target": "sale_rate",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "DDInsentive",
+          "target": "bonus_approved",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "MRP",
+          "target": "mrp",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "Discount",
+          "target": "discount",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "Packing",
+          "target": "packing_kg",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "OpeningBags",
+          "target": "opening_bags",
+          "transform": "int"
+        },
+        {
+          "source": "OpeningQty",
+          "target": "opening_qty",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "OpeningRate",
+          "target": "opening_rate",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "OpeningValue",
+          "target": "opening_value",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "CompanyName",
+          "target": "company_name",
+          "transform": "trim"
+        },
+        {
+          "source": "UtraiRate1",
+          "target": "utrai_rate_1",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "JharaiRate1",
+          "target": "jharai_rate_1",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "BharaiRate1",
+          "target": "bharai_rate_1",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "TulaiRate1",
+          "target": "tulai_rate_1",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "KhichaiRate1",
+          "target": "khichai_rate_1",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "SilaiRate1",
+          "target": "silai_rate_1",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "LoadingRate1",
+          "target": "loading_rate_1",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "UtraiRate2",
+          "target": "utrai_rate_2",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "JharaiRate2",
+          "target": "jharai_rate_2",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "BharaiRate2",
+          "target": "bharai_rate_2",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "TulaiRate2",
+          "target": "tulai_rate_2",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "KhichaiRate2",
+          "target": "khichai_rate_2",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "SilaiRate2",
+          "target": "silai_rate_2",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "LoadingRate2",
+          "target": "loading_rate_2",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "UtraiRate3",
+          "target": "utrai_rate_3",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "JharaiRate3",
+          "target": "jharai_rate_3",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "BharaiRate3",
+          "target": "bharai_rate_3",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "TulaiRate3",
+          "target": "tulai_rate_3",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "KhichaiRate3",
+          "target": "khichai_rate_3",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "SilaiRate3",
+          "target": "silai_rate_3",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "LoadingRate3",
+          "target": "loading_rate_3",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "PurchaseReturnLedger",
+          "target": "purchase_return_ledger_id",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "SaleReturnLedger",
+          "target": "sale_return_ledger_id",
+          "transform": "id_lookup"
+        }
+      ]
+    },
+    {
+      "source": "StockTransactions",
+      "target": "stock_transactions",
+      "direction": "both",
+      "provider": "bahikhata",
+      "fy_scoped": true,
+      "columns": [
+        {
+          "source": "VoucherNumber",
+          "target": "voucher_no",
+          "transform": "trim"
+        },
+        {
+          "source": "VoucherDate",
+          "target": "voucher_date",
+          "transform": "iso_date"
+        },
+        {
+          "source": "TransType",
+          "target": "trans_type",
+          "transform": "trim"
+        },
+        {
+          "source": "VoucherType",
+          "target": "voucher_type",
+          "transform": "trim"
+        },
+        {
+          "source": "PartyCode",
+          "target": "party_id",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "derived:ledger-map",
+          "target": "party_name",
+          "transform": "derived"
+        },
+        {
+          "source": "InvoiceNo|TaxInvoiceNo",
+          "target": "bill_no",
+          "transform": "trim"
+        },
+        {
+          "source": "ItemCode",
+          "target": "item_id",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "ItemCode",
+          "target": "item_code",
+          "transform": "int"
+        },
+        {
+          "source": "derived:item-name",
+          "target": "item_name",
+          "transform": "derived"
+        },
+        {
+          "source": "Bags",
+          "target": "bags",
+          "transform": "int"
+        },
+        {
+          "source": "Packing",
+          "target": "packing",
+          "transform": "trim"
+        },
+        {
+          "source": "Weight",
+          "target": "weight_qtl",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "Rate",
+          "target": "rate",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "Amount",
+          "target": "amount",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "TaxableAmount",
+          "target": "taxable_amount",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "Tax",
+          "target": "tax",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "TaxType",
+          "target": "tax_type",
+          "transform": "trim"
+        },
+        {
+          "source": "Narration|Narrtn",
+          "target": "narration",
+          "transform": "trim"
+        },
+        {
+          "source": "RowNo",
+          "target": "row_no",
+          "transform": "int"
+        }
+      ]
+    },
+    {
+      "source": "SaleTransportationDetail",
+      "target": "transport_dispatches",
+      "direction": "both",
+      "provider": "bahikhata",
+      "fy_scoped": true,
+      "domain_flags": [
+        "feature.transport"
+      ],
+      "columns": [
+        {
+          "source": "VoucherNumber",
+          "target": "dispatch_no",
+          "transform": "trim"
+        },
+        {
+          "source": "VoucherDate",
+          "target": "dispatch_date",
+          "transform": "iso_date"
+        },
+        {
+          "source": "AccountCode",
+          "target": "consignee_name",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "Amount",
+          "target": "total_freight",
+          "transform": "round2_half_away"
+        }
+      ]
+    },
+    {
+      "source": "Transactions",
+      "target": "vouchers+transactions",
+      "direction": "both",
+      "provider": "bahikhata",
+      "fy_scoped": true,
+      "dedup_key": [
+        "canonical_voucher_no",
+        "trans_type"
+      ],
+      "columns": [
+        {
+          "source": "derived:VoucherDate",
+          "target": "fy_id",
+          "transform": "fy_lookup"
+        },
+        {
+          "source": "derived:VoucherDate",
+          "target": "financial_year",
+          "transform": "derived"
+        },
+        {
+          "source": "VoucherNumber",
+          "target": "voucher_no",
+          "transform": "trim"
+        },
+        {
+          "source": "VoucherDate",
+          "target": "voucher_date",
+          "transform": "iso_date"
+        },
+        {
+          "source": "TransType",
+          "target": "voucher_type",
+          "transform": "derived"
+        },
+        {
+          "source": "TransType",
+          "target": "trans_type",
+          "transform": "trim"
+        },
+        {
+          "source": "AccountCode",
+          "target": "account_code",
+          "transform": "int"
+        },
+        {
+          "source": "AccountCode",
+          "target": "party_id",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "derived:ledger-map",
+          "target": "party_name",
+          "transform": "derived"
+        },
+        {
+          "source": "derived:double-entry",
+          "target": "opposing_account",
+          "transform": "derived"
+        },
+        {
+          "source": "DrCr",
+          "target": "dr_cr",
+          "transform": "trim"
+        },
+        {
+          "source": "Amount",
+          "target": "amount",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "InvoiceNo|TaxInvoiceNo",
+          "target": "invoice_no",
+          "transform": "trim"
+        },
+        {
+          "source": "Narration|Narrtn",
+          "target": "narration",
+          "transform": "trim"
+        },
+        {
+          "source": "SaudaDate",
+          "target": "sauda_date",
+          "transform": "iso_date"
+        },
+        {
+          "source": "BankDate",
+          "target": "bank_date",
+          "transform": "iso_date"
+        },
+        {
+          "source": "BrokerName",
+          "target": "broker_name",
+          "transform": "trim"
+        },
+        {
+          "source": "VehicleNo",
+          "target": "vehicle_no",
+          "transform": "trim"
+        },
+        {
+          "source": "GRNo",
+          "target": "gr_no",
+          "transform": "trim"
+        },
+        {
+          "source": "Taxable194Q",
+          "target": "taxable_amount",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "derived:TDS194Q",
+          "target": "tds_amount",
+          "transform": "derived"
+        },
+        {
+          "source": "TDSRate194Q",
+          "target": "tds_rate",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "RowNo",
+          "target": "row_no",
+          "transform": "int"
+        },
+        {
+          "source": "derived:VoucherDate",
+          "target": "fy_id",
+          "transform": "fy_lookup"
+        },
+        {
+          "source": "derived:VoucherDate",
+          "target": "financial_year",
+          "transform": "derived"
+        },
+        {
+          "source": "VoucherNumber",
+          "target": "voucher_no",
+          "transform": "derived"
+        },
+        {
+          "source": "VoucherDate",
+          "target": "voucher_date",
+          "transform": "iso_date"
+        },
+        {
+          "source": "TransType",
+          "target": "voucher_type",
+          "transform": "derived"
+        },
+        {
+          "source": "TransType",
+          "target": "legacy_type",
+          "transform": "trim"
+        },
+        {
+          "source": "derived:party-resolution",
+          "target": "ledger_id",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "derived:party-resolution",
+          "target": "party_name",
+          "transform": "derived"
+        },
+        {
+          "source": "derived:double-entry",
+          "target": "account_type",
+          "transform": "derived"
+        },
+        {
+          "source": "derived:leg-sum",
+          "target": "amount",
+          "transform": "derived"
+        },
+        {
+          "source": "Narration|Narrtn",
+          "target": "narration",
+          "transform": "trim"
+        },
+        {
+          "source": "VehicleNo",
+          "target": "vehicle_no",
+          "transform": "trim"
+        },
+        {
+          "source": "GRNo",
+          "target": "gr_no",
+          "transform": "trim"
+        },
+        {
+          "source": "DriverName",
+          "target": "driver_name",
+          "transform": "trim"
+        },
+        {
+          "source": "EWayBillNo",
+          "target": "eway_bill_no",
+          "transform": "trim"
+        },
+        {
+          "source": "BrokerName",
+          "target": "broker_name",
+          "transform": "trim"
+        },
+        {
+          "source": "ZimidarName",
+          "target": "farmer_name",
+          "transform": "trim"
+        },
+        {
+          "source": "BankDate",
+          "target": "bank_date",
+          "transform": "iso_date"
+        },
+        {
+          "source": "SaudaDate",
+          "target": "sauda_date",
+          "transform": "iso_date"
+        },
+        {
+          "source": "DueDays",
+          "target": "due_days",
+          "transform": "int"
+        },
+        {
+          "source": "derived:stock-presence",
+          "target": "market_type",
+          "transform": "derived"
+        },
+        {
+          "source": "IFormTaxStatus",
+          "target": "tax_status",
+          "transform": "trim"
+        },
+        {
+          "source": "PlaceOfSupply",
+          "target": "place_of_supply",
+          "transform": "trim"
+        },
+        {
+          "source": "ChallanVchNo",
+          "target": "challan_no",
+          "transform": "trim"
+        }
+      ]
+    },
+    {
+      "source": "Transactions",
+      "target": "jform_vouchers+jform_voucher_items",
+      "direction": "both",
+      "provider": "bahikhata",
+      "fy_scoped": true,
+      "read_filter": {
+        "TransType": [
+          "JFrm"
+        ]
+      },
+      "note": "Bahi-Khata has NO separate J-Form source table: rows derive from Transactions with TransType=JFrm (verified in mandi_migrator.cpp).",
+      "domain_flags": [
+        "feature.mandi"
+      ],
+      "columns": [
+        {
+          "source": "VoucherNumber",
+          "target": "voucher_no",
+          "transform": "trim"
+        },
+        {
+          "source": "VoucherDate",
+          "target": "voucher_date",
+          "transform": "iso_date"
+        },
+        {
+          "source": "InvoiceNo",
+          "target": "jform_no",
+          "transform": "trim"
+        },
+        {
+          "source": "derived:zimidar-resolution",
+          "target": "zimidar_id",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "ZimidarName",
+          "target": "zimidar_name",
+          "transform": "trim"
+        },
+        {
+          "source": "JFormSaleStatus",
+          "target": "auction_sale_status",
+          "transform": "trim"
+        },
+        {
+          "source": "DueDays",
+          "target": "due_days",
+          "transform": "int"
+        },
+        {
+          "source": "derived:item-sums",
+          "target": "total_bags|total_weight|goods_amount",
+          "transform": "derived"
+        },
+        {
+          "source": "Narration",
+          "target": "narration",
+          "transform": "trim"
+        },
+        {
+          "source": "ItemCode",
+          "target": "item_id",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "derived:item-name",
+          "target": "item_name",
+          "transform": "derived"
+        },
+        {
+          "source": "Bags",
+          "target": "bags",
+          "transform": "int"
+        },
+        {
+          "source": "LooseWeight",
+          "target": "loose_weight",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "Packing",
+          "target": "packing",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "Weight",
+          "target": "weight",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "Rate",
+          "target": "rate",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "Amount",
+          "target": "amount",
+          "transform": "round2_half_away"
+        }
+      ]
+    },
+    {
+      "source": "Transactions",
+      "target": "iform_vouchers+iform_voucher_items",
+      "direction": "both",
+      "provider": "bahikhata",
+      "fy_scoped": true,
+      "read_filter": {
+        "TransType": [
+          "IFrm"
+        ]
+      },
+      "note": "Bahi-Khata has NO separate I-Form source table: rows derive from Transactions with TransType=IFrm (verified in mandi_migrator.cpp).",
+      "domain_flags": [
+        "feature.mandi"
+      ],
+      "columns": [
+        {
+          "source": "VoucherNumber",
+          "target": "voucher_no",
+          "transform": "trim"
+        },
+        {
+          "source": "VoucherDate",
+          "target": "voucher_date",
+          "transform": "iso_date"
+        },
+        {
+          "source": "InvoiceNo",
+          "target": "iform_no",
+          "transform": "trim"
+        },
+        {
+          "source": "derived:buyer-resolution",
+          "target": "buyer_id",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "derived:buyer-name",
+          "target": "buyer_name",
+          "transform": "derived"
+        },
+        {
+          "source": "BrokerName",
+          "target": "broker_name",
+          "transform": "trim"
+        },
+        {
+          "source": "DueDays",
+          "target": "due_days",
+          "transform": "int"
+        },
+        {
+          "source": "derived:item-sums",
+          "target": "total_bags|total_weight|goods_amount",
+          "transform": "derived"
+        },
+        {
+          "source": "MarketFeeRate",
+          "target": "mandi_fee_rate",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "HRDFRate",
+          "target": "hrdf_rate",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "Narration",
+          "target": "narration",
+          "transform": "trim"
+        },
+        {
+          "source": "ItemCode",
+          "target": "item_id",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "derived:item-name",
+          "target": "item_name",
+          "transform": "derived"
+        },
+        {
+          "source": "Bags",
+          "target": "bags",
+          "transform": "int"
+        },
+        {
+          "source": "LooseWeight",
+          "target": "loose_weight",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "Packing",
+          "target": "packing",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "Weight",
+          "target": "weight",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "Rate",
+          "target": "rate",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "Amount",
+          "target": "amount",
+          "transform": "round2_half_away"
+        }
+      ]
+    },
+    {
+      "source": "Transactions",
+      "target": "paddy_slips",
+      "direction": "both",
+      "provider": "bahikhata",
+      "fy_scoped": true,
+      "read_filter": {
+        "derived": "purchase-item-name contains paddy|dheri -> slip_type='arrival'"
+      },
+      "note": "CORRECTED Batch 7: no PaddySlip token exists in Data.002/Data.004 Transactions (Batch 8 proof). Rows derive from purchase-invoice items whose item name contains 'paddy'/'dheri' (bahi_khata_migrator.cpp:2458-2475).",
+      "domain_flags": [
+        "feature.mandi",
+        "feature.manufacturer"
+      ],
+      "columns": [
+        {
+          "source": "derived:item-name-contains-paddy|dheri",
+          "target": "slip_type",
+          "transform": "const"
+        },
+        {
+          "source": "InvoiceNo",
+          "target": "slip_no",
+          "transform": "trim"
+        },
+        {
+          "source": "VoucherDate",
+          "target": "arrival_date",
+          "transform": "iso_date"
+        },
+        {
+          "source": "derived:party-resolution",
+          "target": "farmer_id",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "derived:party-resolution",
+          "target": "farmer_name",
+          "transform": "derived"
+        },
+        {
+          "source": "ItemName",
+          "target": "variety",
+          "transform": "trim"
+        },
+        {
+          "source": "Bags",
+          "target": "bag_count",
+          "transform": "int"
+        },
+        {
+          "source": "Weight",
+          "target": "gross_weight_qtl",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "const:17.0",
+          "target": "moisture_pct",
+          "transform": "const"
+        },
+        {
+          "source": "const:0.0",
+          "target": "moisture_deduction_qtl",
+          "transform": "const"
+        },
+        {
+          "source": "Weight",
+          "target": "net_weight_qtl",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "Rate",
+          "target": "rate_per_qtl",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "const:0.0",
+          "target": "hamali_charges",
+          "transform": "const"
+        },
+        {
+          "source": "Amount",
+          "target": "net_amount",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "const:'Unpaid'",
+          "target": "payment_status",
+          "transform": "const"
+        }
+      ]
+    },
+    {
+      "source": "MillingVouchers",
+      "target": "manufacturing_batches+manufacturing_voucher_items",
+      "direction": "both",
+      "provider": "bahikhata",
+      "fy_scoped": true,
+      "domain_flags": [
+        "feature.manufacturer"
+      ],
+      "columns": [
+        {
+          "source": "VoucherNumber",
+          "target": "batch_no",
+          "transform": "trim"
+        },
+        {
+          "source": "VoucherDate",
+          "target": "batch_date",
+          "transform": "iso_date"
+        },
+        {
+          "source": "derived:paddy-sum",
+          "target": "paddy_variety",
+          "transform": "derived"
+        },
+        {
+          "source": "derived:input-sum",
+          "target": "paddy_input_qtl",
+          "transform": "derived"
+        },
+        {
+          "source": "derived:output-split",
+          "target": "head_rice_qtl|broken_rice_qtl|bran_qtl|husk_qtl",
+          "transform": "derived"
+        },
+        {
+          "source": "derived:input-output",
+          "target": "wastage_qtl",
+          "transform": "derived"
+        },
+        {
+          "source": "derived:yield",
+          "target": "yield_pct",
+          "transform": "derived"
+        },
+        {
+          "source": "Narrtn",
+          "target": "narration",
+          "transform": "trim"
+        },
+        {
+          "source": "RowNo",
+          "target": "row_no",
+          "transform": "int"
+        },
+        {
+          "source": "DrCr",
+          "target": "drcr",
+          "transform": "trim"
+        },
+        {
+          "source": "ItemCode",
+          "target": "item_id",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "ItemCode",
+          "target": "item_code",
+          "transform": "int"
+        },
+        {
+          "source": "ItemName",
+          "target": "item_name",
+          "transform": "trim"
+        },
+        {
+          "source": "Percentage",
+          "target": "percentage",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "Weight",
+          "target": "weight_qtl",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "Bags",
+          "target": "bags",
+          "transform": "int"
+        },
+        {
+          "source": "derived:rate",
+          "target": "rate",
+          "transform": "derived"
+        },
+        {
+          "source": "Amount",
+          "target": "amount",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "Narrtn",
+          "target": "narration",
+          "transform": "trim"
+        }
+      ]
+    },
+    {
+      "source": "CustomClosingStocks",
+      "target": "custom_closing_stocks",
+      "direction": "both",
+      "provider": "bahikhata",
+      "fy_scoped": true,
+      "columns": [
+        {
+          "source": "ClosingStockDate",
+          "target": "closing_date",
+          "transform": "iso_date"
+        },
+        {
+          "source": "ItemCode",
+          "target": "item_id",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "ItemCode",
+          "target": "item_code",
+          "transform": "trim"
+        },
+        {
+          "source": "derived:item-name",
+          "target": "item_name",
+          "transform": "derived"
+        },
+        {
+          "source": "Bags",
+          "target": "bags",
+          "transform": "int"
+        },
+        {
+          "source": "Weight",
+          "target": "weight_qtl",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "Amount",
+          "target": "amount",
+          "transform": "round2_half_away"
+        }
+      ]
+    },
+    {
+      "source": "TDSDeductions",
+      "target": "tds_vouchers",
+      "direction": "both",
+      "provider": "bahikhata",
+      "fy_scoped": true,
+      "dedup_key": [
+        "voucher_no",
+        "account_code"
+      ],
+      "columns": [
+        {
+          "source": "derived:VoucherDate",
+          "target": "fy_id",
+          "transform": "fy_lookup"
+        },
+        {
+          "source": "derived:VoucherDate",
+          "target": "financial_year",
+          "transform": "derived"
+        },
+        {
+          "source": "VoucherNumber",
+          "target": "voucher_no",
+          "transform": "int"
+        },
+        {
+          "source": "VoucherDate",
+          "target": "voucher_date",
+          "transform": "iso_date"
+        },
+        {
+          "source": "derived:weekday",
+          "target": "day_of_week",
+          "transform": "derived"
+        },
+        {
+          "source": "PostInBooks",
+          "target": "post_in_books",
+          "transform": "int"
+        },
+        {
+          "source": "IncomeType",
+          "target": "tds_type",
+          "transform": "trim"
+        },
+        {
+          "source": "AccountCode",
+          "target": "ledger_id",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "derived:ledger-map|const:'TDS Deductee'",
+          "target": "ledger_name",
+          "transform": "derived"
+        },
+        {
+          "source": "IncomeAmount",
+          "target": "income_amount",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "PrevIncomeAmount",
+          "target": "previous_amount",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "derived:sum",
+          "target": "total_for_tds",
+          "transform": "derived"
+        },
+        {
+          "source": "IncomeNarration",
+          "target": "narration",
+          "transform": "trim"
+        },
+        {
+          "source": "RateTDS|TDSRate",
+          "target": "rate_tds",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "TDS",
+          "target": "tax_amount_tds",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "RateSurcharge",
+          "target": "rate_surcharge",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "Surcharge",
+          "target": "tax_amount_surcharge",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "RateEducation",
+          "target": "rate_cess",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "Education",
+          "target": "tax_amount_cess",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "const:1",
+          "target": "use_rounded_total",
+          "transform": "const"
+        },
+        {
+          "source": "derived:sum",
+          "target": "total_tax_rate",
+          "transform": "derived"
+        },
+        {
+          "source": "derived:sum",
+          "target": "total_tax_amount",
+          "transform": "derived"
+        },
+        {
+          "source": "derived:net",
+          "target": "net_amount",
+          "transform": "derived"
+        },
+        {
+          "source": "ReasonForNonDeduction",
+          "target": "non_deduction_reason",
+          "transform": "trim"
+        },
+        {
+          "source": "derived:jrnl-EntryType",
+          "target": "exp_ledger_id|tds_ledger_id",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "derived:incType-expense|const:'T D S PEYABAL'",
+          "target": "exp_ledger_name|tds_ledger_name",
+          "transform": "derived"
+        }
+      ]
+    },
+    {
+      "source": "BardanaTransactions",
+      "target": "bardana_transactions",
+      "direction": "both",
+      "provider": "bahikhata",
+      "fy_scoped": true,
+      "domain_flags": [
+        "feature.bardana"
+      ],
+      "columns": [
+        {
+          "source": "VoucherNumber",
+          "target": "voucher_no",
+          "transform": "derived"
+        },
+        {
+          "source": "VoucherDate",
+          "target": "voucher_date",
+          "transform": "iso_date"
+        },
+        {
+          "source": "VchType",
+          "target": "vch_type",
+          "transform": "trim"
+        },
+        {
+          "source": "AccountCode",
+          "target": "party_id",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "derived:ledger-map",
+          "target": "party_name",
+          "transform": "derived"
+        },
+        {
+          "source": "BardanaType",
+          "target": "bardana_type",
+          "transform": "trim"
+        },
+        {
+          "source": "GodownName",
+          "target": "godown_name",
+          "transform": "trim"
+        },
+        {
+          "source": "derived:DrCr",
+          "target": "dr_cr",
+          "transform": "derived"
+        },
+        {
+          "source": "Qty",
+          "target": "qty",
+          "transform": "int"
+        },
+        {
+          "source": "Rate",
+          "target": "rate",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "derived:qty-rate",
+          "target": "amount",
+          "transform": "derived"
+        },
+        {
+          "source": "VehNo",
+          "target": "vehicle_no",
+          "transform": "trim"
+        },
+        {
+          "source": "InvoiceNo",
+          "target": "bill_no",
+          "transform": "trim"
+        },
+        {
+          "source": "Narration",
+          "target": "narration",
+          "transform": "trim"
+        }
+      ]
+    },
+    {
+      "source": "GatePassVouchers",
+      "target": "gate_register",
+      "direction": "both",
+      "provider": "bahikhata",
+      "fy_scoped": true,
+      "domain_flags": [
+        "feature.transport"
+      ],
+      "note": "Shares one columns[] with its sibling entry (same source-target pair split across two roster rows).",
+      "columns": [
+        {
+          "source": "GatePassNo",
+          "target": "gate_pass_no",
+          "transform": "int"
+        },
+        {
+          "source": "GatePassDate|VoucherDate",
+          "target": "entry_date",
+          "transform": "iso_date"
+        },
+        {
+          "source": "const:'10:00'|const:'OUTWARD'",
+          "target": "entry_time|direction",
+          "transform": "const"
+        },
+        {
+          "source": "VehNo",
+          "target": "vehicle_no",
+          "transform": "trim"
+        },
+        {
+          "source": "DriverName",
+          "target": "driver_name",
+          "transform": "trim"
+        },
+        {
+          "source": "AccountCode",
+          "target": "party_id",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "derived:ledger-map",
+          "target": "party_name",
+          "transform": "derived"
+        },
+        {
+          "source": "ItemCode",
+          "target": "commodity",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "Bags",
+          "target": "bag_count",
+          "transform": "int"
+        },
+        {
+          "source": "TotalWeight|Weight",
+          "target": "gross_weight_qtl",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "Weight",
+          "target": "net_weight_qtl",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "Narration",
+          "target": "remarks",
+          "transform": "trim"
+        }
+      ]
+    },
+    {
+      "source": "GateRegister",
+      "target": "gate_register",
+      "direction": "both",
+      "provider": "bahikhata",
+      "fy_scoped": true,
+      "domain_flags": [
+        "feature.transport"
+      ],
+      "note": "Shares one columns[] with its sibling entry (same source-target pair split across two roster rows).",
+      "columns": [
+        {
+          "source": "GatePassNo",
+          "target": "gate_pass_no",
+          "transform": "int"
+        },
+        {
+          "source": "GatePassDate|VoucherDate",
+          "target": "entry_date",
+          "transform": "iso_date"
+        },
+        {
+          "source": "const:'10:00'|const:'OUTWARD'",
+          "target": "entry_time|direction",
+          "transform": "const"
+        },
+        {
+          "source": "VehNo",
+          "target": "vehicle_no",
+          "transform": "trim"
+        },
+        {
+          "source": "DriverName",
+          "target": "driver_name",
+          "transform": "trim"
+        },
+        {
+          "source": "AccountCode",
+          "target": "party_id",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "derived:ledger-map",
+          "target": "party_name",
+          "transform": "derived"
+        },
+        {
+          "source": "ItemCode",
+          "target": "commodity",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "Bags",
+          "target": "bag_count",
+          "transform": "int"
+        },
+        {
+          "source": "TotalWeight|Weight",
+          "target": "gross_weight_qtl",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "Weight",
+          "target": "net_weight_qtl",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "Narration",
+          "target": "remarks",
+          "transform": "trim"
+        }
+      ]
+    },
+    {
+      "source": "SaudaVouchers",
+      "target": "sauda_contracts",
+      "direction": "both",
+      "provider": "bahikhata",
+      "fy_scoped": true,
+      "domain_flags": [
+        "feature.mandi"
+      ],
+      "note": "Shares one columns[] with its sibling entry (same source-target pair split across two roster rows).",
+      "columns": [
+        {
+          "source": "SaudaNo",
+          "target": "sauda_no",
+          "transform": "trim"
+        },
+        {
+          "source": "VoucherDate",
+          "target": "sauda_date",
+          "transform": "iso_date"
+        },
+        {
+          "source": "SaudaType",
+          "target": "sauda_type",
+          "transform": "trim"
+        },
+        {
+          "source": "AccountCode",
+          "target": "party_id",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "derived:ledger-map",
+          "target": "party_name",
+          "transform": "derived"
+        },
+        {
+          "source": "Broker",
+          "target": "broker_name",
+          "transform": "trim"
+        },
+        {
+          "source": "ItemCode",
+          "target": "item_id",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "ItemName",
+          "target": "item_name",
+          "transform": "trim"
+        },
+        {
+          "source": "Weight",
+          "target": "contracted_weight_qtl",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "Rate",
+          "target": "rate_per_qtl",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "Condition",
+          "target": "condition_notes",
+          "transform": "trim"
+        },
+        {
+          "source": "DueDt",
+          "target": "delivery_to",
+          "transform": "iso_date"
+        }
+      ]
+    },
+    {
+      "source": "SaudaTransactions",
+      "target": "sauda_contracts",
+      "direction": "both",
+      "provider": "bahikhata",
+      "fy_scoped": true,
+      "domain_flags": [
+        "feature.mandi"
+      ],
+      "note": "Shares one columns[] with its sibling entry (same source-target pair split across two roster rows).",
+      "columns": [
+        {
+          "source": "SaudaNo",
+          "target": "sauda_no",
+          "transform": "trim"
+        },
+        {
+          "source": "VoucherDate",
+          "target": "sauda_date",
+          "transform": "iso_date"
+        },
+        {
+          "source": "SaudaType",
+          "target": "sauda_type",
+          "transform": "trim"
+        },
+        {
+          "source": "AccountCode",
+          "target": "party_id",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "derived:ledger-map",
+          "target": "party_name",
+          "transform": "derived"
+        },
+        {
+          "source": "Broker",
+          "target": "broker_name",
+          "transform": "trim"
+        },
+        {
+          "source": "ItemCode",
+          "target": "item_id",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "ItemName",
+          "target": "item_name",
+          "transform": "trim"
+        },
+        {
+          "source": "Weight",
+          "target": "contracted_weight_qtl",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "Rate",
+          "target": "rate_per_qtl",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "Condition",
+          "target": "condition_notes",
+          "transform": "trim"
+        },
+        {
+          "source": "DueDt",
+          "target": "delivery_to",
+          "transform": "iso_date"
+        }
+      ]
+    },
+    {
+      "source": "BrokerageVouchers",
+      "target": "dalali_settlements",
+      "direction": "both",
+      "provider": "bahikhata",
+      "fy_scoped": true,
+      "domain_flags": [
+        "feature.mandi"
+      ],
+      "columns": [
+        {
+          "source": "VoucherNumber",
+          "target": "settlement_no",
+          "transform": "derived"
+        },
+        {
+          "source": "VoucherDate",
+          "target": "settlement_date",
+          "transform": "iso_date"
+        },
+        {
+          "source": "PartyCode",
+          "target": "broker_id",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "derived:ledger-map",
+          "target": "broker_name",
+          "transform": "derived"
+        },
+        {
+          "source": "const:'SD-MIGRATED'",
+          "target": "sauda_no",
+          "transform": "const"
+        },
+        {
+          "source": "const:'SALE'",
+          "target": "voucher_type",
+          "transform": "const"
+        },
+        {
+          "source": "VoucherNumber",
+          "target": "voucher_no",
+          "transform": "trim"
+        },
+        {
+          "source": "InvoiceNo",
+          "target": "invoice_no",
+          "transform": "trim"
+        },
+        {
+          "source": "derived:party-name",
+          "target": "party_name",
+          "transform": "derived"
+        },
+        {
+          "source": "const:'Rice Basmati'",
+          "target": "item_name",
+          "transform": "const"
+        },
+        {
+          "source": "ItemWeight",
+          "target": "weight_qtl",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "ItemRate",
+          "target": "rate_per_qtl",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "Rate",
+          "target": "dalali_rate",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "Amount",
+          "target": "dalali_amount",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "const:5.0",
+          "target": "tds_pct",
+          "transform": "const"
+        },
+        {
+          "source": "derived:5pct",
+          "target": "tds_amount",
+          "transform": "derived"
+        },
+        {
+          "source": "derived:net",
+          "target": "net_dalali_payable",
+          "transform": "derived"
+        },
+        {
+          "source": "derived:JV-DAL-series",
+          "target": "journal_voucher_no",
+          "transform": "derived"
+        },
+        {
+          "source": "Narration",
+          "target": "narration",
+          "transform": "trim"
+        }
+      ]
+    },
+    {
+      "source": "Master1",
+      "target": "parties+account_groups+stock_items",
+      "direction": "import",
+      "provider": "busy",
+      "export_supported": false,
+      "note": "CORRECTED Batch 7: migrator reads Master1 only (busy_data_migrator.cpp:532,774); no Master2/Master3 reads. MasterAddressInfo/Folio1 enrich address/balances (see columns).",
+      "columns": [
+        {
+          "source": "Name",
+          "target": "name",
+          "transform": "trim"
+        },
+        {
+          "source": "Alias",
+          "target": "alias",
+          "transform": "trim"
+        },
+        {
+          "source": "MasterType",
+          "target": "master-kind",
+          "transform": "derived"
+        },
+        {
+          "source": "ParentGrp",
+          "target": "group_name",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "Code",
+          "target": "legacy_code",
+          "transform": "int"
+        },
+        {
+          "source": "Address1|Address2|Address3|Address4",
+          "target": "address",
+          "transform": "trim"
+        },
+        {
+          "source": "City",
+          "target": "city",
+          "transform": "trim"
+        },
+        {
+          "source": "PinCode",
+          "target": "pincode",
+          "transform": "trim"
+        },
+        {
+          "source": "ITPAN",
+          "target": "pan",
+          "transform": "trim"
+        },
+        {
+          "source": "GSTNo",
+          "target": "gstin",
+          "transform": "trim"
+        },
+        {
+          "source": "BankName",
+          "target": "bank_name",
+          "transform": "trim"
+        },
+        {
+          "source": "BankAcNo",
+          "target": "bank_account",
+          "transform": "trim"
+        },
+        {
+          "source": "IFSCCode",
+          "target": "ifsc_code",
+          "transform": "trim"
+        },
+        {
+          "source": "MobileNo",
+          "target": "mobile",
+          "transform": "trim"
+        },
+        {
+          "source": "Email",
+          "target": "email",
+          "transform": "trim"
+        },
+        {
+          "source": "D1|D2|D3|D4|D6|D7",
+          "target": "opening-balance-fields",
+          "transform": "derived"
+        },
+        {
+          "source": "MasterAddressInfo:Address1-4|City|PinCode|GSTNo|ITPAN",
+          "target": "address-enrichment",
+          "transform": "derived"
+        },
+        {
+          "source": "Folio1:balances",
+          "target": "balance-enrichment",
+          "transform": "derived"
+        },
+        {
+          "source": "HSNCode",
+          "target": "hsn_code",
+          "transform": "trim"
+        },
+        {
+          "source": "CM2|CM3|CM4",
+          "target": "posting-ledgers",
+          "transform": "id_lookup"
+        }
+      ]
+    },
+    {
+      "source": "Tran1/Tran2/Tran3",
+      "target": "vouchers+transactions",
+      "direction": "import",
+      "provider": "busy",
+      "export_supported": false,
+      "columns": [
+        {
+          "source": "VchCode",
+          "target": "voucher_no",
+          "transform": "derived"
+        },
+        {
+          "source": "Date",
+          "target": "voucher_date",
+          "transform": "iso_date"
+        },
+        {
+          "source": "VchType",
+          "target": "voucher_type",
+          "transform": "derived"
+        },
+        {
+          "source": "VchNo",
+          "target": "voucher_no",
+          "transform": "trim"
+        },
+        {
+          "source": "AutoVchNo",
+          "target": "voucher_no",
+          "transform": "trim"
+        },
+        {
+          "source": "MasterCode1|MasterCode2",
+          "target": "party_id",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "Type",
+          "target": "dr_cr",
+          "transform": "derived"
+        },
+        {
+          "source": "Amount|Value1|Value3",
+          "target": "amount",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "D1|D2|D5",
+          "target": "date-aux",
+          "transform": "iso_date"
+        },
+        {
+          "source": "Narration|ShortNar",
+          "target": "narration",
+          "transform": "trim"
+        },
+        {
+          "source": "SrNo",
+          "target": "row_no",
+          "transform": "int"
+        },
+        {
+          "source": "RecType",
+          "target": "record-kind",
+          "transform": "derived"
+        },
+        {
+          "source": "VchSeriesCode",
+          "target": "bill-series",
+          "transform": "trim"
+        },
+        {
+          "source": "Cancelled|VchCancelled",
+          "target": "cancelled-skip",
+          "transform": "derived"
+        }
+      ]
+    },
+    {
+      "source": "MandiVchItemDet/MandiVchConfig/MandiItemWiseExpense",
+      "target": "jform_vouchers+jform_voucher_items+iform_vouchers+iform_voucher_items",
+      "direction": "import",
+      "provider": "busy",
+      "export_supported": false,
+      "domain_flags": [
+        "feature.mandi"
+      ],
+      "note": "CORRECTED Batch 7: busy path writes J AND I families (busy_data_migrator.cpp:1509,1631); never paddy (post-S7 paddy_slips is Bahi-derived only).",
+      "columns": [
+        {
+          "source": "derived:series-config",
+          "target": "voucher-family-J|I",
+          "transform": "derived"
+        },
+        {
+          "source": "VchCode",
+          "target": "voucher_no",
+          "transform": "derived"
+        },
+        {
+          "source": "ItemCode:BSCode",
+          "target": "item_id",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "PurcDefVal|SaleDefVal",
+          "target": "rate",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "D1|D3|D5|Value1",
+          "target": "qty|weight|amount",
+          "transform": "derived"
+        },
+        {
+          "source": "Narration1|Narration2",
+          "target": "narration",
+          "transform": "trim"
+        },
+        {
+          "source": "VehicleNo",
+          "target": "vehicle_no",
+          "transform": "trim"
+        },
+        {
+          "source": "PurchaseBillNo|PurchaseBillDate",
+          "target": "bill-ref",
+          "transform": "trim"
+        },
+        {
+          "source": "VchGSTSumItemWise:HSNCode|TaxCatCode|TaxRate|PartyStateCode",
+          "target": "gst-split",
+          "transform": "derived"
+        }
+      ]
+    },
+    {
+      "source": "VchGSTSumItemWise",
+      "target": "transactions",
+      "direction": "import",
+      "provider": "busy",
+      "export_supported": false,
+      "columns": [
+        {
+          "source": "VchCode",
+          "target": "voucher_no",
+          "transform": "derived"
+        },
+        {
+          "source": "PartyCode",
+          "target": "party_id",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "PartyStateCode|PartyStateTinDigit",
+          "target": "place_of_supply",
+          "transform": "derived"
+        },
+        {
+          "source": "HSNCode|TaxCatCode|TaxRate",
+          "target": "gst-split",
+          "transform": "derived"
+        }
+      ]
+    },
+    {
+      "source": "TallyTag:GROUP/LEDGER",
+      "target": "account_groups+parties",
+      "direction": "import",
+      "provider": "tally",
+      "export_supported": false,
+      "columns": [
+        {
+          "source": "NAME",
+          "target": "name",
+          "transform": "trim"
+        },
+        {
+          "source": "PARENT",
+          "target": "group_name",
+          "transform": "trim"
+        },
+        {
+          "source": "OPENINGBALANCE",
+          "target": "opening_balance",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "ISDEEMEDPOSITIVE",
+          "target": "balance_type",
+          "transform": "derived"
+        },
+        {
+          "source": "ADDRESS|PINCODE|STATENAME|LEDSTATENAME",
+          "target": "address-block",
+          "transform": "trim"
+        },
+        {
+          "source": "INCOMETAXNUMBER|PAN",
+          "target": "pan",
+          "transform": "trim"
+        },
+        {
+          "source": "GSTIN|GSTREGISTRATIONNUMBER|PARTYGSTIN",
+          "target": "gstin",
+          "transform": "trim"
+        },
+        {
+          "source": "CREDITLIMIT",
+          "target": "credit_limit",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "BILLCREDITPERIOD",
+          "target": "credit_days",
+          "transform": "int"
+        },
+        {
+          "source": "PARTYNAME|PARTYLEDGERNAME",
+          "target": "party-link",
+          "transform": "derived"
+        },
+        {
+          "source": "ISREVENUE|AFFECTSGROSSPROFIT",
+          "target": "nature",
+          "transform": "derived"
+        }
+      ]
+    },
+    {
+      "source": "TallyTag:STOCKGROUP/STOCKITEM",
+      "target": "stock_groups+stock_items",
+      "direction": "import",
+      "provider": "tally",
+      "export_supported": false,
+      "columns": [
+        {
+          "source": "NAME",
+          "target": "name",
+          "transform": "trim"
+        },
+        {
+          "source": "PARENT",
+          "target": "group_name",
+          "transform": "trim"
+        },
+        {
+          "source": "BASEUNITS|UNIT",
+          "target": "unit",
+          "transform": "trim"
+        },
+        {
+          "source": "OPENINGRATE|OPENINGVALUE",
+          "target": "opening-rate-value",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "GSTRATE",
+          "target": "gst_rate",
+          "transform": "trim"
+        },
+        {
+          "source": "HSNCODE",
+          "target": "hsn_code",
+          "transform": "trim"
+        }
+      ]
+    },
+    {
+      "source": "TallyTag:VOUCHER+ALLLEDGERENTRIES.LIST",
+      "target": "vouchers+transactions",
+      "direction": "import",
+      "provider": "tally",
+      "export_supported": false,
+      "columns": [
+        {
+          "source": "VOUCHERNUMBER",
+          "target": "voucher_no",
+          "transform": "trim"
+        },
+        {
+          "source": "DATE",
+          "target": "voucher_date",
+          "transform": "iso_date"
+        },
+        {
+          "source": "VOUCHERTYPENAME|VCHTYPE",
+          "target": "voucher_type",
+          "transform": "derived"
+        },
+        {
+          "source": "NARRATION",
+          "target": "narration",
+          "transform": "trim"
+        },
+        {
+          "source": "ALLINVENTORYENTRIES.LIST:STOCKITEM",
+          "target": "item_name",
+          "transform": "derived"
+        },
+        {
+          "source": "PARTYLEDGERNAME|PARTYNAME",
+          "target": "party_name",
+          "transform": "derived"
+        },
+        {
+          "source": "PARTYGSTIN|PARTYSTATE|PARTYPINCODE",
+          "target": "party-block",
+          "transform": "trim"
+        }
+      ]
+    },
+    {
+      "source": "Transactions+StockTransactions",
+      "target": "sales_invoices+sales_invoice_items",
+      "direction": "import",
+      "provider": "bahikhata",
+      "fy_scoped": true,
+      "note": "Batch 10 split: headers from Transactions, lines from StockTransactions (same voucher pass, migrator.cpp:2223-2340).",
+      "domain_flags": [],
+      "columns": [
+        {
+          "source": "VoucherNumber",
+          "target": "voucher_no",
+          "transform": "derived"
+        },
+        {
+          "source": "VoucherDate",
+          "target": "invoice_date",
+          "transform": "iso_date"
+        },
+        {
+          "source": "InvoiceNo",
+          "target": "invoice_no",
+          "transform": "trim"
+        },
+        {
+          "source": "ZimidarName|BrokerName",
+          "target": "customer_name",
+          "transform": "trim"
+        },
+        {
+          "source": "ItemName",
+          "target": "item_name",
+          "transform": "trim"
+        },
+        {
+          "source": "ItemCode",
+          "target": "item_id",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "Bags",
+          "target": "bag_count",
+          "transform": "int"
+        },
+        {
+          "source": "Weight",
+          "target": "weight_qtl",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "Rate",
+          "target": "rate_per_qtl",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "Amount",
+          "target": "taxable_amount",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "VehicleNo",
+          "target": "vehicle_no",
+          "transform": "trim"
+        },
+        {
+          "source": "DueDays",
+          "target": "due_days",
+          "transform": "int"
+        },
+        {
+          "source": "Narration|Narrtn",
+          "target": "narration",
+          "transform": "trim"
+        },
+        {
+          "source": "KandaWeight",
+          "target": "kanda_weight",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "PlaceOfSupply",
+          "target": "place_of_supply",
+          "transform": "trim"
+        },
+        {
+          "source": "TCSRate",
+          "target": "tcs_rate",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "TCSTaxable",
+          "target": "tcs_amount",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "ChallanVchNo",
+          "target": "challan_no",
+          "transform": "trim"
+        },
+        {
+          "source": "GRNo",
+          "target": "gr_no",
+          "transform": "trim"
+        },
+        {
+          "source": "DriverName",
+          "target": "driver_name",
+          "transform": "trim"
+        },
+        {
+          "source": "BrokerName",
+          "target": "broker_name",
+          "transform": "trim"
+        },
+        {
+          "source": "SaudaDate",
+          "target": "sauda_date",
+          "transform": "iso_date"
+        },
+        {
+          "source": "derived:GST-split",
+          "target": "cgst_amount|sgst_amount|igst_amount",
+          "transform": "derived"
+        },
+        {
+          "source": "ItemCode",
+          "target": "item_id",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "derived:item-name",
+          "target": "item_name",
+          "transform": "derived"
+        },
+        {
+          "source": "derived:grade",
+          "target": "grade",
+          "transform": "derived"
+        },
+        {
+          "source": "Bags",
+          "target": "bag_count",
+          "transform": "int"
+        },
+        {
+          "source": "Packing",
+          "target": "packing",
+          "transform": "trim"
+        },
+        {
+          "source": "Weight",
+          "target": "weight_qtl",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "Rate",
+          "target": "rate_per_qtl",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "Amount",
+          "target": "taxable_amount",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "derived:GST-slab",
+          "target": "gst_pct",
+          "transform": "derived"
+        },
+        {
+          "source": "derived:line-total",
+          "target": "total_amount",
+          "transform": "derived"
+        }
+      ]
+    },
+    {
+      "source": "Transactions+StockTransactions",
+      "target": "purchase_invoices+purchase_invoice_items",
+      "direction": "import",
+      "provider": "bahikhata",
+      "fy_scoped": true,
+      "note": "Batch 10 split: mirror of the sales family (migrator.cpp:2341-2455).",
+      "domain_flags": [],
+      "columns": [
+        {
+          "source": "VoucherNumber",
+          "target": "voucher_no",
+          "transform": "derived"
+        },
+        {
+          "source": "VoucherDate",
+          "target": "invoice_date",
+          "transform": "iso_date"
+        },
+        {
+          "source": "InvoiceNo",
+          "target": "invoice_no",
+          "transform": "trim"
+        },
+        {
+          "source": "ZimidarName|BrokerName",
+          "target": "supplier_name",
+          "transform": "trim"
+        },
+        {
+          "source": "ItemName",
+          "target": "item_name",
+          "transform": "trim"
+        },
+        {
+          "source": "ItemCode",
+          "target": "item_id",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "Bags",
+          "target": "bag_count",
+          "transform": "int"
+        },
+        {
+          "source": "Weight",
+          "target": "weight_qtl",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "Rate",
+          "target": "rate_per_qtl",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "Amount",
+          "target": "taxable_amount",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "VehicleNo",
+          "target": "vehicle_no",
+          "transform": "trim"
+        },
+        {
+          "source": "DueDays",
+          "target": "due_days",
+          "transform": "int"
+        },
+        {
+          "source": "Narration|Narrtn",
+          "target": "narration",
+          "transform": "trim"
+        },
+        {
+          "source": "KandaWeight",
+          "target": "kanda_weight",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "PlaceOfSupply",
+          "target": "place_of_supply",
+          "transform": "trim"
+        },
+        {
+          "source": "TCSRate",
+          "target": "tcs_rate",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "TCSTaxable",
+          "target": "tcs_amount",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "ChallanVchNo",
+          "target": "challan_no",
+          "transform": "trim"
+        },
+        {
+          "source": "GRNo",
+          "target": "gr_no",
+          "transform": "trim"
+        },
+        {
+          "source": "DriverName",
+          "target": "driver_name",
+          "transform": "trim"
+        },
+        {
+          "source": "BrokerName",
+          "target": "broker_name",
+          "transform": "trim"
+        },
+        {
+          "source": "SaudaDate",
+          "target": "sauda_date",
+          "transform": "iso_date"
+        },
+        {
+          "source": "derived:GST-split",
+          "target": "cgst_amount|sgst_amount|igst_amount",
+          "transform": "derived"
+        },
+        {
+          "source": "ItemCode",
+          "target": "item_id",
+          "transform": "id_lookup"
+        },
+        {
+          "source": "derived:item-name",
+          "target": "item_name",
+          "transform": "derived"
+        },
+        {
+          "source": "derived:grade",
+          "target": "grade",
+          "transform": "derived"
+        },
+        {
+          "source": "Bags",
+          "target": "bag_count",
+          "transform": "int"
+        },
+        {
+          "source": "Packing",
+          "target": "packing",
+          "transform": "trim"
+        },
+        {
+          "source": "Weight",
+          "target": "weight_qtl",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "Rate",
+          "target": "rate_per_qtl",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "Amount",
+          "target": "taxable_amount",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "derived:GST-slab",
+          "target": "gst_pct",
+          "transform": "derived"
+        },
+        {
+          "source": "derived:line-total",
+          "target": "total_amount",
+          "transform": "derived"
+        }
+      ]
+    },
+    {
+      "source": "tds_vouchers",
+      "target": "TDSDeductions",
+      "direction": "export",
+      "provider": "bahikhata",
+      "fy_scoped": true,
+      "note": "Exporter write-back (exporter.cpp:2742+). Positional Jet reads are a C3 exception; pairs document the SQLite side.",
+      "domain_flags": [],
+      "columns": [
+        {
+          "source": "note:positional-Jet-read",
+          "target": "col-2|col-9|col-10|col-17",
+          "transform": "derived"
+        },
+        {
+          "source": "note:see-C3-exceptions",
+          "target": "index-based-not-named",
+          "transform": "derived"
+        }
+      ]
+    },
+    {
+      "source": "transactions",
+      "target": "Transactions",
+      "direction": "export",
+      "provider": "bahikhata",
+      "fy_scoped": true,
+      "note": "Exporter write-back EntryType leg labels via the resolveDetailEntryType rule chain (exporter.cpp:747, C3 exception).",
+      "domain_flags": [],
+      "columns": [
+        {
+          "source": "note:resolveDetailEntryType-rule-chain",
+          "target": "EntryType-per-leg",
+          "transform": "derived"
+        },
+        {
+          "source": "note:see-C3-exceptions",
+          "target": "ordered-rules-not-columns",
+          "transform": "derived"
+        }
+      ]
+    }
+  ],
+  "never_migrate": [
+    "Temp* (~60 tables)",
+    "per-commodity voucher explosion tables",
+    "VerifiedVouchers (superseded by audit_log + FY lock)"
+  ],
+  "code_maps": {
+    "group_codes": {
+      "_note": "Code1st fixed native legs; TCS ledger resolves by NAME (code 948 collides across firms)",
+      "943": "SGST",
+      "944": "CGST",
+      "945": "IGST",
+      "44": "Round Off",
+      "2176": "TDS 194-Q",
+      "1729": "TCS",
+      "61": "Dami TDS",
+      "57": "Mandi Fee",
+      "80": "Other Expenses"
+    },
+    "trans_type_tokens": {
+      "_note": "canonicalTypeToken table moves here; function becomes a lookup. Contra/TDS->Jrnl is an export-only quirk.",
+      "core": [
+        "SALE",
+        "PURC",
+        "PYMT",
+        "RCPT",
+        "JRNL",
+        "CONTRA",
+        "CHPT",
+        "CHRT"
+      ],
+      "export_alias": {
+        "Contra": "Jrnl",
+        "TDS": "Jrnl"
+      }
+    },
+    "entry_type_labels": {
+      "importer_literals": [
+        "Exp.",
+        "TDS",
+        "TCS",
+        "Ledger",
+        "Goods Amount"
+      ],
+      "detail_fallback": [
+        "Tulai",
+        "Commission",
+        "Freight",
+        "Labour",
+        "MktFee",
+        "Cess",
+        "CessTax",
+        "Bardana",
+        "Sutli",
+        "Welfare",
+        "Dharmada",
+        "Gaushala",
+        "OtherExp",
+        "Auction"
+      ]
+    },
+    "tcs_tds_rates": {
+      "tcs_206c_rate": 0.001,
+      "tcs_entry_type": "TCS206C",
+      "bit_exact_case": {
+        "taxable": 1628875,
+        "expected": 1628.88,
+        "rounding": "half_away",
+        "bill": "MRI/2526-1089"
+      }
+    },
+    "voucher_number": {
+      "canonical": "FY/Type-raw",
+      "bare_rule": "strip FY prefix + TransType on import; re-attach on export via same regex",
+      "bare_exception": [
+        "JFrm",
+        "IFrm"
+      ]
+    }
+  },
+  "identity": {
+    "ledger": "legacy_id <-> Code1st/AccountCode",
+    "voucher": "canonical_voucher_no <-> bare number + TransType + date",
+    "tcs_ledger_rule": "match parties.name, else create; never assume code 948"
+  },
+  "roundtrip_asserts": [
+    "trial_balance_diff < 0.01 after import->export->reimport",
+    "per-table row-count parity both directions",
+    "per-voucher Dr == Cr on reimport",
+    "tcs bit-exact case 1628875 x 0.1% == 1628.88",
+    "tds column bijection: every source column lands, nothing invented"
+  ]
+}

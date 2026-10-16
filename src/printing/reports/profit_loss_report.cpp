@@ -41,7 +41,7 @@ QString renderProfitLossHtml(const QString& fromDate, const QString& toDate) {
             "<table width='100%' border='0' cellspacing='1' cellpadding='4' bgcolor='#94A3B8' style='font-size:9pt'>"
             "<tr><td bgcolor='#FFFFFF'>To Opening Stock</td><td align='right' bgcolor='#FFFFFF'>%1</td></tr>"
             "<tr><td bgcolor='#FFFFFF'>To Paddy Procurement / Purchases</td><td align='right' bgcolor='#FFFFFF'>%2</td></tr>"
-            "<tr><td bgcolor='#FFFFFF'>To Direct &amp; Milling Expenses</td><td align='right' bgcolor='#FFFFFF'>%3</td></tr>"
+            "<tr><td bgcolor='#FFFFFF'>To Direct &amp; Manufacturing Expenses</td><td align='right' bgcolor='#FFFFFF'>%3</td></tr>"
             "<tr bgcolor='#F1F5F9'><td bgcolor='#F1F5F9'>To Gross Profit c/d</td><td align='right' bgcolor='#F1F5F9'>%4</td></tr>"
             "<tr><td colspan='2' bgcolor='#FFFFFF'><b>Indirect Expenses</b></td></tr>"
             "<tr><td bgcolor='#FFFFFF'>To Administrative &amp; Office Expenses</td><td align='right' bgcolor='#FFFFFF'>%5</td></tr>"

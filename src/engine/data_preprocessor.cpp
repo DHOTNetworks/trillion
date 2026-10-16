@@ -1,4 +1,5 @@
 #include "data_preprocessor.h"
+#include <QMap>
 #include <QRegularExpression>
 #include <QDate>
 #include <QDateTime>
@@ -291,4 +292,96 @@ QVariantMap DataPreprocessor::parseInvoiceDetailsString(const QString& detailsSt
         }
     }
     return map;
+}
+
+QString DataPreprocessor::getStateNameFromCode(const QString& code) {
+    static const QMap<QString, QString> codeToState = {
+        {"01", "Jammu & Kashmir"},
+        {"02", "Himachal Pradesh"},
+        {"03", "Punjab"},
+        {"04", "Chandigarh"},
+        {"05", "Uttarakhand"},
+        {"06", "Haryana"},
+        {"07", "Delhi"},
+        {"08", "Rajasthan"},
+        {"09", "Uttar Pradesh"},
+        {"10", "Bihar"},
+        {"11", "Sikkim"},
+        {"12", "Arunachal Pradesh"},
+        {"13", "Nagaland"},
+        {"14", "Manipur"},
+        {"15", "Mizoram"},
+        {"16", "Tripura"},
+        {"17", "Meghalaya"},
+        {"18", "Assam"},
+        {"19", "West Bengal"},
+        {"20", "Jharkhand"},
+        {"21", "Odisha"},
+        {"22", "Chhattisgarh"},
+        {"23", "Madhya Pradesh"},
+        {"24", "Gujarat"},
+        {"26", "Dadra & Nagar Haveli and Daman & Diu"},
+        {"27", "Maharashtra"},
+        {"29", "Karnataka"},
+        {"30", "Goa"},
+        {"31", "Lakshadweep"},
+        {"32", "Kerala"},
+        {"33", "Tamil Nadu"},
+        {"34", "Puducherry"},
+        {"36", "Telangana"},
+        {"37", "Andhra Pradesh"},
+        {"38", "Ladakh"}
+    };
+    return codeToState.value(code, "");
+}
+
+QString DataPreprocessor::extractStateCode(const QString& gstin, const QString& state) {
+    QString g = gstin.trimmed();
+    if (g.length() >= 2 && g.at(0).isDigit() && g.at(1).isDigit()) {
+        return g.left(2);
+    }
+    QString s = state.trimmed().toLower();
+    if (s.contains("jammu") || s.contains("kashmir")) return "01";
+    if (s.contains("himachal")) return "02";
+    if (s.contains("punjab")) return "03";
+    if (s.contains("chandigarh")) return "04";
+    if (s.contains("uttarakhand") || s.contains("uttaranchal")) return "05";
+    if (s.contains("haryana")) return "06";
+    if (s.contains("delhi")) return "07";
+    if (s.contains("rajasthan")) return "08";
+    if (s.contains("uttar pradesh") || s == "up") return "09";
+    if (s.contains("bihar")) return "10";
+    if (s.contains("sikkim")) return "11";
+    if (s.contains("arunachal")) return "12";
+    if (s.contains("nagaland")) return "13";
+    if (s.contains("manipur")) return "14";
+    if (s.contains("mizoram")) return "15";
+    if (s.contains("tripura")) return "16";
+    if (s.contains("meghalaya")) return "17";
+    if (s.contains("assam")) return "18";
+    if (s.contains("bengal")) return "19";
+    if (s.contains("jharkhand")) return "20";
+    if (s.contains("odisha") || s.contains("orissa")) return "21";
+    if (s.contains("chhattisgarh")) return "22";
+    if (s.contains("madhya pradesh") || s == "mp") return "23";
+    if (s.contains("gujarat")) return "24";
+    if (s.contains("maharashtra")) return "27";
+    if (s.contains("karnataka")) return "29";
+    if (s.contains("goa")) return "30";
+    if (s.contains("kerala")) return "32";
+    if (s.contains("tamil nadu") || s.contains("tamilnadu")) return "33";
+    if (s.contains("puducherry") || s.contains("pondicherry")) return "34";
+    if (s.contains("telangana")) return "36";
+    if (s.contains("andhra")) return "37";
+    if (s.contains("ladakh")) return "38";
+    return "06";
+}
+
+QString DataPreprocessor::extractPincode(const QString& address, const QString& fallback) {
+    QRegularExpression pinRegex(R"(\b(1\d{5}|[2-8]\d{5})\b)");
+    auto match = pinRegex.match(address);
+    if (match.hasMatch()) {
+        return match.captured(1);
+    }
+    return fallback;
 }

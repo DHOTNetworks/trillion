@@ -45,7 +45,8 @@ struct StockItemRecord {
     double openingQty = 0.0;
     double openingRate = 0.0;
     double openingValue = 0.0;
-    bool isMillingItem = false;
+    bool isManufacturingItem = false;
+    QString manufacturingRole;
     bool includeInTrading = true;
     bool calculateStock = true;
 };
@@ -66,12 +67,12 @@ struct StockItemBalanceResult {
     double openingRate = 0.0;
     double openingValue = 0.0;
 
-    // Inward (Purchases / Milling Output)
+    // Inward (Purchases / Manufacturing Output)
     double inwardBags = 0.0;
     double inwardWeightQtl = 0.0;
     double inwardValue = 0.0;
 
-    // Outward (Sales / Milling Input)
+    // Outward (Sales / Manufacturing Input)
     double outwardBags = 0.0;
     double outwardWeightQtl = 0.0;
     double outwardValue = 0.0;

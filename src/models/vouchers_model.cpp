@@ -27,7 +27,7 @@ void VouchersModel::reload_data() {
 }
 
 QString VouchersModel::get_next_voucher_no(const QString& v_type, const QString& fy) {
-    // Phase 1: family normalization via FiscalYearHelper::canonicalTypeToken.
+    // Keeper-based family normalization via FiscalYearHelper::canonicalTypeToken.
     // Alias expansion below stays for query coverage (legacy rows store
     // display + short variants); same family in = same token out.
     QString prefix = FiscalYearHelper::canonicalTypeToken(v_type.isEmpty() ? "ChPt" : v_type);
@@ -88,6 +88,7 @@ QString VouchersModel::get_next_voucher_no(const QString& v_type, const QString&
         }
     }
     QString next = FiscalYearHelper::canonicalVoucherNo(targetFy, prefix, QString::number(maxId + 1));
+    if (next.isEmpty()) return QString(); // fail loud (§2): unnumbered voucher must block, never mint a bare number
     if (!next.contains('/')) next = prefix + "-" + QString::number(maxId + 1); // degenerate fallback
     return next;
 }
@@ -886,7 +887,7 @@ bool VouchersModel::save_multi_row_voucher(
         }
     }
 
-    // Phase 1: UI-label normalization via FiscalYearHelper::canonicalTypeToken
+    // Keeper-based UI-label normalization via FiscalYearHelper::canonicalTypeToken
     // (single alias map). Outputs byte-identical to the previous if-chain:
     // raw token kept in legacy_type, display name in voucher_type.
     QString rawType = vch_type;

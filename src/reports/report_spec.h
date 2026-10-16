@@ -35,7 +35,7 @@ enum class ReportId {
     CashBankFlow,
     InterestStatement,   // Aank / interest calculator
     DepreciationChart,
-    MillingStatement,
+    ManufacturingStatement,
     MandiReport,         // Form M / Form 9 / RDF / Market fee (parameterized by reportType)
     GstrReport,          // GSTR-1 / 2 / 3B (parameterized by gstrType)
     AuditRegister,

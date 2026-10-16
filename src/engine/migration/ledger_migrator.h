@@ -1,6 +1,7 @@
 #pragma once
 
 #include "migration_types.h"
+#include "../jet4_reader.h"
 #include <QMap>
 #include <QString>
 #include <map>
@@ -11,14 +12,22 @@ namespace MahadevERP {
 
 class LedgerMigrator {
 public:
-    // Bahi-Khata Ledger & Party Migration
+    // Bahi-Khata Ledger & Party Migration (C3 strangler slice L: field keys
+    // come from the schema map via MigrationColumns, not literals — the JSON
+    // entry Ledgers->parties is the reviewed source; the compiled fallback
+    // is byte-identical and drift-checked by testLedgerStranglerColumns).
     static bool migrate_ledgers_bahikhata(
         MigrationContext& ctx,
         const std::vector<std::map<std::string, std::string>>& ledgerRows,
+        const QString& globalBooksFrom,
         const std::map<int, std::string>& groupCodeMap,
+        const std::map<int, std::vector<int>>& groupLineageMap,
         const std::map<int, qint64>& groupCodeToIdMap,
-        std::map<int, std::string>& outLedgerCodeToName,
-        std::map<int, qint64>& outLedgerCodeToId
+        MdbHandle* mdb,
+        std::map<int, std::string>& outLedgerCodeMap,
+        std::map<int, PartyDetail>& outLedgerDetailMap,
+        std::map<int, int>& outLegacyIdToPartyId,
+        std::map<int, std::string>& outDeletedNameMap
     );
 
     // Busy Ledger & Party Migration

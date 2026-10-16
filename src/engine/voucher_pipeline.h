@@ -48,7 +48,7 @@ struct VoucherStockLine {
 struct UnifiedVoucherData {
     int id = 0;
     int voucherNumber = 0;
-    QString voucherType; // "Sale", "Purc", "Pymt", "Rcpt", "Jrnl", "Contra", "Milling", "JFrm", "IFrm"
+    QString voucherType; // "Sale", "Purc", "Pymt", "Rcpt", "Jrnl", "Contra", "Manufacturing", "JFrm", "IFrm"
     QString voucherDate;
     int financialYearId = 0;
     QString financialYearName;

@@ -33,10 +33,8 @@ private:
     void setupUi();
     void updateSelection(int idx);
     void triggerCurrent();
-    // Phase 3 flags: disabled rows are unreachable but keep their indices.
-    bool isEnabled(int idx) const;
-    int firstEnabledFrom(int start) const;
-    int nextEnabled(int from, int dir) const;
+    // Enabled-rows-only contract: the manager filters before constructing
+    // this dialog, so every row here is actionable.
 
     QString m_menuTitle;
     QString m_borderColor;

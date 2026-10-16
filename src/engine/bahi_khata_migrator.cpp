@@ -1,6 +1,14 @@
 #include "bahi_khata_migrator.h"
 #include "../database_manager.h"
 #include "../config/feature_flags.h"
+#include "migration/migration_utils.h"
+#include "migration/migration_types.h"
+#include "migration/group_migrator.h"
+#include "migration/ledger_migrator.h"
+#include "migration/stock_migrator.h"
+#include "migration/voucher_migrator.h"
+#include "migration/mandi_migrator.h"
+#include "data_preprocessor.h"
 #include "../models/account_classifier.h"
 #include "fiscal_year_helper.h"
 #include <QCoreApplication>
@@ -154,7 +162,7 @@ static QString computeFinancialYear(const QString& isoDate) {
 }
 
 static QString mapVoucherTypeStr(const std::string& raw) {
-    // Phase 1 (SSOT): alias normalization via FiscalYearHelper::canonicalTypeToken,
+    // Keeper-based (SSOT): alias normalization via FiscalYearHelper::canonicalTypeToken,
     // display names identical to VoucherMigrator::mapVoucherTypeStr — one map,
     // one output per input on every path. Verified identical on all live
     // Data.002 TransTypes {ChPt,ChRt,Jrnl,PrRn,Purc,Pymt,Rcpt,Sale,SlRn};
@@ -168,7 +176,7 @@ static QString mapVoucherTypeStr(const std::string& raw) {
     if (tok == "Contra") return "Contra";
     if (tok == "JFrm") return "J-Form";
     if (tok == "IFrm") return "I-Form";
-    if (tok == "Mill") return "Milling";
+    if (tok == "Manu") return "Manufacturing";
     if (tok == "Bank") return "Bank";
     if (tok == "TDS") return "TDS";
     if (tok == "TCS") return "TCS";
@@ -407,98 +415,6 @@ static QString toTitleCase(const QString& str) {
     return words.join(" ");
 }
 
-static QString getStateNameFromCode(const QString& code) {
-    static const QMap<QString, QString> codeToState = {
-        {"01", "Jammu & Kashmir"},
-        {"02", "Himachal Pradesh"},
-        {"03", "Punjab"},
-        {"04", "Chandigarh"},
-        {"05", "Uttarakhand"},
-        {"06", "Haryana"},
-        {"07", "Delhi"},
-        {"08", "Rajasthan"},
-        {"09", "Uttar Pradesh"},
-        {"10", "Bihar"},
-        {"11", "Sikkim"},
-        {"12", "Arunachal Pradesh"},
-        {"13", "Nagaland"},
-        {"14", "Manipur"},
-        {"15", "Mizoram"},
-        {"16", "Tripura"},
-        {"17", "Meghalaya"},
-        {"18", "Assam"},
-        {"19", "West Bengal"},
-        {"20", "Jharkhand"},
-        {"21", "Odisha"},
-        {"22", "Chhattisgarh"},
-        {"23", "Madhya Pradesh"},
-        {"24", "Gujarat"},
-        {"26", "Dadra & Nagar Haveli and Daman & Diu"},
-        {"27", "Maharashtra"},
-        {"29", "Karnataka"},
-        {"30", "Goa"},
-        {"31", "Lakshadweep"},
-        {"32", "Kerala"},
-        {"33", "Tamil Nadu"},
-        {"34", "Puducherry"},
-        {"36", "Telangana"},
-        {"37", "Andhra Pradesh"},
-        {"38", "Ladakh"}
-    };
-    return codeToState.value(code, "");
-}
-
-QString BahiKhataMigrator::extractStateCode(const QString& gstin, const QString& state) {
-    QString g = gstin.trimmed();
-    if (g.length() >= 2 && g.at(0).isDigit() && g.at(1).isDigit()) {
-        return g.left(2);
-    }
-    QString s = state.trimmed().toLower();
-    if (s.contains("jammu") || s.contains("kashmir")) return "01";
-    if (s.contains("himachal")) return "02";
-    if (s.contains("punjab")) return "03";
-    if (s.contains("chandigarh")) return "04";
-    if (s.contains("uttarakhand") || s.contains("uttaranchal")) return "05";
-    if (s.contains("haryana")) return "06";
-    if (s.contains("delhi")) return "07";
-    if (s.contains("rajasthan")) return "08";
-    if (s.contains("uttar pradesh") || s == "up") return "09";
-    if (s.contains("bihar")) return "10";
-    if (s.contains("sikkim")) return "11";
-    if (s.contains("arunachal")) return "12";
-    if (s.contains("nagaland")) return "13";
-    if (s.contains("manipur")) return "14";
-    if (s.contains("mizoram")) return "15";
-    if (s.contains("tripura")) return "16";
-    if (s.contains("meghalaya")) return "17";
-    if (s.contains("assam")) return "18";
-    if (s.contains("bengal")) return "19";
-    if (s.contains("jharkhand")) return "20";
-    if (s.contains("odisha") || s.contains("orissa")) return "21";
-    if (s.contains("chhattisgarh")) return "22";
-    if (s.contains("madhya pradesh") || s == "mp") return "23";
-    if (s.contains("gujarat")) return "24";
-    if (s.contains("maharashtra")) return "27";
-    if (s.contains("karnataka")) return "29";
-    if (s.contains("goa")) return "30";
-    if (s.contains("kerala")) return "32";
-    if (s.contains("tamil nadu") || s.contains("tamilnadu")) return "33";
-    if (s.contains("puducherry") || s.contains("pondicherry")) return "34";
-    if (s.contains("telangana")) return "36";
-    if (s.contains("andhra")) return "37";
-    if (s.contains("ladakh")) return "38";
-    return "06";
-}
-
-QString BahiKhataMigrator::extractPincode(const QString& address, const QString& fallback) {
-    QRegularExpression pinRegex(R"(\b(1\d{5}|[2-8]\d{5})\b)");
-    auto match = pinRegex.match(address);
-    if (match.hasMatch()) {
-        return match.captured(1);
-    }
-    return fallback;
-}
-
 QVariantMap BahiKhataMigrator::inspect_mdb_file(const QString& mdbFilePath) {
     QVariantMap result;
     result["valid"] = false;
@@ -542,13 +458,13 @@ QVariantMap BahiKhataMigrator::inspect_mdb_file(const QString& mdbFilePath) {
     auto stockItems = readTableRows(mdb, "StockItems");
     auto ledgers = readTableRows(mdb, "Ledgers");
     auto stockTx = readTableRows(mdb, "StockTransactions");
-    auto milling = readTableRows(mdb, "MillingVouchers");
+    auto manufacturing = readTableRows(mdb, "MillingVouchers");
     auto transRows = readTableRows(mdb, "Transactions");
 
     result["stockItemsCount"] = static_cast<int>(stockItems.size());
     result["ledgersCount"] = static_cast<int>(ledgers.size());
     result["stockTxCount"] = static_cast<int>(stockTx.size());
-    result["millingCount"] = static_cast<int>(milling.size());
+    result["manufacturingCount"] = static_cast<int>(manufacturing.size());
     result["transactionsCount"] = static_cast<int>(transRows.size());
 
     auto compRows = readTableRows(mdb, "CompanyInfo");
@@ -583,8 +499,8 @@ QVariantMap BahiKhataMigrator::inspect_mdb_file(const QString& mdbFilePath) {
         result["pan"] = pan;
         result["station"] = station;
         result["state"] = state;
-        result["stateCode"] = extractStateCode(gstin, state);
-        result["pincode"] = extractPincode(address);
+        result["stateCode"] = DataPreprocessor::extractStateCode(gstin, state);
+        result["pincode"] = DataPreprocessor::extractPincode(address);
         result["address"] = address;
         result["phone"] = phone;
         result["mobile"] = mobile;
@@ -606,26 +522,8 @@ QVariantMap BahiKhataMigrator::inspect_mdb_file(const QString& mdbFilePath) {
     return result;
 }
 
-struct PartyDetail {
-    int id = 0;
-    std::string name;
-    std::string group_name;
-    std::string party_type;
-    int legacy_id = 0;
-    std::string gstin;
-    std::string address;
-    std::string city;
-    std::string state;
-    std::string phone;
-};
-
-struct ItemDetail {
-    int id = 0;
-    std::string name;
-    std::string hsn;
-    double gst_rate = 5.0;
-    double packing_kg = 50.0;
-};
+using MahadevERP::PartyDetail;
+using MahadevERP::ItemDetail;
 
 struct StockMovementEntry {
     int item_id = 0;
@@ -814,7 +712,7 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
     auto stockTransRows = readTableRows(mdb, "StockTransactions");
     auto transportRows = readTableRows(mdb, "SaleTransportationDetail");
     auto transRows = readTableRows(mdb, "Transactions");
-    auto millingRows = readTableRows(mdb, "MillingVouchers");
+    auto manufacturingRows = readTableRows(mdb, "MillingVouchers");
     auto customRows = readTableRows(mdb, "CustomClosingStocks");
     auto tdsRows = readTableRows(mdb, "TDSDeductions");
     auto bardanaRows = readTableRows(mdb, "BardanaTransactions");
@@ -824,7 +722,7 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
     auto saudaTxRows = readTableRows(mdb, "SaudaTransactions");
     auto brokerageRows = readTableRows(mdb, "BrokerageVouchers");
 
-    // Phase 3 flags: prime domain flags from SOURCE data before
+    // Flag-primed: prime domain flags from SOURCE data before
     // ensureTablesExist creates the gated domain tables (same rules as the
     // new pipeline: JFrm/IFrm TransTypes, sauda/brokerage rows, or
     // paddy/dheri items evidence mandi business; ON-only, package-aligned).
@@ -853,9 +751,9 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
         const bool mandi = hasTransType("JFrm") || hasTransType("IFrm")
             || !saudaVchRows.empty() || !saudaTxRows.empty() || !brokerageRows.empty()
             || hasItemNamed("paddy") || hasItemNamed("dheri");
-        const bool mill = !millingRows.empty();
-        FeatureFlags::primeFromSource(mandi, mill,
-            mandi || mill || !bardanaRows.empty(),
+        const bool manufacturer = !manufacturingRows.empty();
+        FeatureFlags::primeFromSource(mandi, manufacturer,
+            mandi || manufacturer || !bardanaRows.empty(),
             mandi || !transportRows.empty() || !gatePassRows.empty() || !gateRegRows.empty());
     }
 
@@ -874,8 +772,8 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
     db.executeNonQuery("DELETE FROM sales_invoices;");
     db.executeNonQuery("DELETE FROM purchase_invoices;");
     db.executeNonQuery("DELETE FROM paddy_slips;");
-    db.executeNonQuery("DELETE FROM milling_voucher_items;");
-    db.executeNonQuery("DELETE FROM milling_batches;");
+    db.executeNonQuery("DELETE FROM manufacturing_voucher_items;");
+    db.executeNonQuery("DELETE FROM manufacturing_batches;");
     db.executeNonQuery("DELETE FROM stock_transactions;");
     db.executeNonQuery("DELETE FROM jform_vouchers;");
     db.executeNonQuery("DELETE FROM jform_voucher_items;");
@@ -913,8 +811,8 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
         QString business = QString::fromStdString(getField(c, "Business"));
         QString station = QString::fromStdString(getField(c, "MyStation"));
         QString state = QString::fromStdString(getField(c, "MySTATE"));
-        QString stateCode = extractStateCode(gstin, state);
-        QString pincode = extractPincode(address);
+        QString stateCode = DataPreprocessor::extractStateCode(gstin, state);
+        QString pincode = DataPreprocessor::extractPincode(address);
         QString phone = QString::fromStdString(getField(c, "Phone_O"));
         QString mobile = QString::fromStdString(getField(c, "Phone_F", getField(c, "Mobile1")));
         QString mlNo = QString::fromStdString(getField(c, "ML_No"));
@@ -1089,2408 +987,318 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
     std::map<int, std::string> groupCodeMap;
     std::map<int, qint64> groupCodeToIdMap;
     std::map<int, std::vector<int>> groupLineageMap;
-
-    // First collect all group names and codes
-    for (const auto& g : groupRows) {
-        std::string gName = cleanText(getField(g, "GroupName"));
-        if (gName.empty()) continue;
-        int code1 = parseIntVal(getField(g, "Code1st"));
-        int code2 = parseIntVal(getField(g, "Code2nd"));
-        int code3 = parseIntVal(getField(g, "Code3rd"));
-        int code4 = parseIntVal(getField(g, "Code4th"));
-
-        // If custom group in older Bahi-Khata firm has code2 == 0, infer root ancestor
-        if (code2 == 0 && code1 > 35) {
-            StandardGroupCode root = AccountClassifier::inferRootCodeFromName(QString::fromStdString(gName));
-            int rootCode = static_cast<int>(root);
-            if (rootCode > 0) {
-                code2 = rootCode;
-                code3 = AccountClassifier::getStandardGroupParent(rootCode);
-            }
+    // C3 strangler slice G: PASS 1 lives in GroupMigrator now (JSON-driven
+    // field keys via MigrationColumns). This stays a thin wrapper — no new
+    // logic here (file frozen read-only for new logic from this slice on).
+    {
+        MahadevERP::MigrationContext gctx;
+        gctx.provider = MahadevERP::MigrationProvider::BahiKhata;
+        gctx.sourcePath = mdbFilePath;
+        gctx.progressCallback = [this](int p, const QString& s) { updateProgress(p, s); };
+        if (!MahadevERP::GroupMigrator::migrate_groups_bahikhata(
+                gctx, groupRows, groupCodeMap, groupCodeToIdMap, &groupLineageMap)) {
+            qWarning() << "[Migration] group pass failed for" << mdbFilePath;
+            return false;
         }
-
-        groupCodeMap[code1] = gName;
-        groupLineageMap[code1] = {code1, code2, code3, code4};
-    }
-
-    for (const auto& g : groupRows) {
-        std::string gName = cleanText(getField(g, "GroupName"));
-        if (gName.empty()) continue;
-        int code1 = parseIntVal(getField(g, "Code1st"));
-        int code2 = parseIntVal(getField(g, "Code2nd"));
-        int code3 = parseIntVal(getField(g, "Code3rd"));
-        int code4 = parseIntVal(getField(g, "Code4th"));
-        int extractBs = parseIntVal(getField(g, "ExtractInBalanceSheet", "1"), 1);
-
-        // If custom group in older Bahi-Khata firm has code2 == 0, infer root ancestor
-        if (code2 == 0 && code1 > 35) {
-            StandardGroupCode root = AccountClassifier::inferRootCodeFromName(QString::fromStdString(gName));
-            int rootCode = static_cast<int>(root);
-            if (rootCode > 0) {
-                code2 = rootCode;
-                code3 = AccountClassifier::getStandardGroupParent(rootCode);
-            }
-        }
-
-        QString nature = AccountClassifier::getNatureForGroup(code1, code2, code3, code4);
-        if (nature.isEmpty()) {
-            nature = "Assets";
-        }
-
-        std::string parentName = "Primary";
-        if (code2 > 0 && groupCodeMap.count(code2)) {
-            parentName = groupCodeMap[code2];
-        } else if (code2 > 0) {
-            parentName = AccountClassifier::getStandardGroupName(code2).toStdString();
-            if (parentName.empty()) parentName = "Primary";
-        }
-
-        int isSys = (code1 >= -1 && code1 <= 35) ? 1 : 0;
-
-        db.executeNonQuery(
-            "INSERT INTO account_groups (name, parent_group_name, nature, description, extract_in_balance_sheet, is_system, code1st, code2nd, code3rd, code4th) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-            {
-                QString::fromStdString(gName),
-                QString::fromStdString(parentName),
-                nature,
-                QString("Legacy Group Code #%1").arg(code1),
-                extractBs,
-                isSys,
-                code1,
-                code2,
-                code3,
-                code4
-            }
-        );
-        qint64 gid = db.lastInsertedId();
-        groupCodeToIdMap[code1] = gid;
     }
 
     // =========================================================
-    // PASS 1.5: STOCK GROUPS & STOCK UNITS
-    // =========================================================
+    // PASS 1.5: STOCK GROUPS & STOCK UNITS (C3 strangler slice S —
+    // lives in StockMigrator now, JSON-driven keys via MigrationColumns).
+    // Thin wrapper — no new logic here.
     std::map<int, std::string> stockGroupMap;
     std::map<int, std::string> stockUnitMap;
-
-    for (const auto& sg : stockGroupRows) {
-        int code = parseIntVal(getField(sg, "Code1st"));
-        std::string name = cleanText(getField(sg, "GroupName"));
-        if (name.empty()) continue;
-        int qtyNotShow = parseIntVal(getField(sg, "QtyNotShowInTrading"));
-        double clRate = parseDoubleVal(getField(sg, "ClStockRate"));
-        db.executeNonQuery(
-            "INSERT INTO stock_groups (group_name, legacy_code, qty_not_show_in_trading, cl_stock_rate) "
-            "VALUES (?, ?, ?, ?);",
-            {QString::fromStdString(name), code, qtyNotShow, clRate}
-        );
-        stockGroupMap[code] = name;
-    }
-
-    for (const auto& su : stockUnitRows) {
-        int code = parseIntVal(getField(su, "Code1st"));
-        std::string name = cleanText(getField(su, "UnitName"));
-        if (name.empty()) continue;
-        int decimals = parseIntVal(getField(su, "DecimalPlaces", "2"), 2);
-        db.executeNonQuery(
-            "INSERT INTO stock_units (unit_name, legacy_code, decimal_places) "
-            "VALUES (?, ?, ?);",
-            {QString::fromStdString(name), code, decimals}
-        );
-        stockUnitMap[code] = name;
+    {
+        MahadevERP::MigrationContext sctx;
+        sctx.provider = MahadevERP::MigrationProvider::BahiKhata;
+        sctx.sourcePath = mdbFilePath;
+        sctx.progressCallback = [this](int p, const QString& s) { updateProgress(p, s); };
+        if (!MahadevERP::StockMigrator::migrate_stock_masters_bahikhata(
+                sctx, stockGroupRows, stockUnitRows,
+                stockGroupMap, stockUnitMap)) {
+            qWarning() << "[Migration] stock masters pass failed for" << mdbFilePath;
+            return false;
+        }
     }
 
     // =========================================================
     // PASS 2: LEDGERS (PARTIES & ACCOUNTS)
     // =========================================================
     updateProgress(30, QString("Migrating %1 Ledgers & Parties...").arg(ledgerRows.size()));
-    db.executeNonQuery("DELETE FROM parties;");
+    // C3 strangler slice L: PASS 2 lives in LedgerMigrator now (JSON-driven
+    // field keys via MigrationColumns). This stays a thin wrapper — no new
+    // logic here (file frozen read-only for new logic from slice G on).
     std::map<int, std::string> ledgerCodeMap;
-    std::map<int, PartyDetail> ledgerDetailMap;
+    std::map<int, MahadevERP::PartyDetail> ledgerDetailMap;
     std::map<int, int> legacyIdToPartyId;
-
-    for (const auto& l : ledgerRows) {
-        std::string lName = cleanText(getField(l, "LedgerName"));
-        if (lName.empty()) continue;
-
-        int legacyId = parseIntVal(getField(l, "Code1st"));
-        std::string alias = cleanText(getField(l, "LedgerAlais"));
-        std::string prefix = cleanText(getField(l, "Prefix", "M/s"));
-        if (prefix.empty()) prefix = "M/s";
-
-        int gCode = parseIntVal(getField(l, "GroupCode"));
-        std::string groupName = groupCodeMap.count(gCode) ? groupCodeMap[gCode] : "Sundry Debtors";
-
-        double opBal = parseDoubleVal(getField(l, "OpeningBal"));
-        std::string balType = cleanText(getField(l, "OpeningType", "Dr"));
-        if (balType.empty()) balType = "Dr";
-
-        std::string rawMailing = cleanText(getField(l, "MailingName"));
-        std::string booksStartFrom = "";
-        static const std::regex datePattern(R"(^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}$)");
-        if (std::regex_match(rawMailing, datePattern)) {
-            booksStartFrom = rawMailing;
-            std::replace(booksStartFrom.begin(), booksStartFrom.end(), '/', '-');
-        }
-        if (booksStartFrom.empty()) {
-            booksStartFrom = globalBooksFrom.toStdString();
-        }
-
-        std::string mailingName = rawMailing;
-        if (mailingName.empty() || mailingName == "None" || mailingName == "none" || std::regex_match(mailingName, datePattern)) {
-            // Strip [Station] from lName for clean business mailing name
-            size_t bStart = lName.rfind('[');
-            if (bStart != std::string::npos && bStart > 0) {
-                mailingName = cleanText(lName.substr(0, bStart));
-            } else {
-                mailingName = lName;
-            }
-        }
-        std::string address = cleanText(getField(l, "MailingAdd"));
-
-        // 1. Station / City resolution
-        std::string partyStation = cleanText(getField(l, "PartyStation"));
-        std::string rawStation = cleanText(getField(l, "Station"));
-        std::string city = "";
-        if (!partyStation.empty() && partyStation != "None" && partyStation != "none") {
-            city = partyStation;
-        } else if (!rawStation.empty() && rawStation != "None" && rawStation != "none") {
-            city = rawStation;
-        } else {
-            // Check if lName ends with or contains [StationName]
-            size_t bStart = lName.rfind('[');
-            size_t bEnd = lName.rfind(']');
-            if (bStart != std::string::npos && bEnd != std::string::npos && bEnd > bStart + 1) {
-                city = cleanText(lName.substr(bStart + 1, bEnd - bStart - 1));
-            }
-        }
-        city = toTitleCase(QString::fromStdString(city)).toStdString();
-
-        // 2. District (deprecated/omitted)
-        std::string district = "";
-
-        // 3. GSTIN, PAN, Aadhaar, TAN
-        std::string gstin = cleanText(getField(l, "GSTIN"));
-        std::string pan = cleanText(getField(l, "IncomeTaxNo"));
-        std::string tan = cleanText(getField(l, "PartyTAN"));
-        std::string aadhaar = cleanText(getField(l, "AadharNo"));
-
-        // 4. State & State Code
-        std::string partyState = cleanText(getField(l, "PartyState"));
-        std::string state = "";
-        if (!partyState.empty() && partyState != "None" && partyState != "none" && 
-            partyState != "STATE" && partyState != "INTER-STATE") {
-            state = toTitleCase(QString::fromStdString(partyState)).toStdString();
-        } else if (!gstin.empty() && gstin.length() >= 2 && isdigit(gstin[0]) && isdigit(gstin[1])) {
-            QString sc = QString::fromStdString(gstin.substr(0, 2));
-            state = getStateNameFromCode(sc).toStdString();
-        }
-        if (state.empty()) {
-            std::string rawState = cleanText(getField(l, "STATE"));
-            if (rawState == "INTER-STATE") {
-                if (city == "Delhi") state = "Delhi";
-                else if (city == "Ludhiana" || city == "Ludhiyana" || city == "Moga" || city == "Jalandhar") state = "Punjab";
-                else if (city == "Jaipur" || city == "Alwar" || city == "Kota") state = "Rajasthan";
-                else state = "Haryana";
-            } else {
-                state = "Haryana";
-            }
-        }
-        std::string stateCode = extractStateCode(QString::fromStdString(gstin), QString::fromStdString(state)).toStdString();
-
-        // 5. PIN Code & Route
-        std::string pincode = cleanText(getField(l, "PartyPINcode"));
-        if (pincode == "None" || pincode == "none") pincode = "";
-        if (pincode.empty() && !address.empty()) {
-            pincode = extractPincode(QString::fromStdString(address)).toStdString();
-        }
-        std::string route = cleanText(getField(l, "Route"));
-        if (route == "None" || route == "none") route = "";
-        else route = toTitleCase(QString::fromStdString(route)).toStdString();
-
-        std::string phone = cleanText(getField(l, "Phone_O"));
-        std::string mobile = cleanText(getField(l, "MobNoForSMS"));
-        std::string saleTaxNo = cleanText(getField(l, "SaleTaxNo"));
-        if (mobile.empty() && !saleTaxNo.empty() && saleTaxNo.find_first_of("0123456789") != std::string::npos && saleTaxNo.length() >= 8) {
-            mobile = saleTaxNo;
-        }
-        if (mobile.empty()) mobile = phone;
-        std::string whatsapp = cleanText(getField(l, "WhatsappNo"));
-        if (whatsapp.empty()) whatsapp = mobile;
-        std::string email = cleanText(getField(l, "Email"));
-        std::string contactPerson = cleanText(getField(l, "ConcernedPerson"));
-        if (contactPerson.empty() || contactPerson == "None") {
-            // Strip [Station] from lName for clean contact person
-            size_t bStart = lName.rfind('[');
-            if (bStart != std::string::npos && bStart > 0) {
-                contactPerson = cleanText(lName.substr(0, bStart));
-            } else {
-                contactPerson = lName;
-            }
-        }
-
-        std::string gstPartyType = cleanText(getField(l, "GSTPartyType"));
-        if (gstPartyType.empty()) gstPartyType = gstin.empty() ? "Unregistered" : "Registered";
-
-        std::string bankName = cleanText(getField(l, "BankName"));
-        std::string bankAccount = cleanText(getField(l, "BankAccount"));
-        std::string ifscCode = cleanText(getField(l, "IFSCCode"));
-
-        double creditLimit = parseDoubleVal(getField(l, "CreditLimit"));
-        double interestRate = parseDoubleVal(getField(l, "InterestRate"));
-        double commissionRate = parseDoubleVal(getField(l, "Percentage"));
-        double salaryPerMonth = parseDoubleVal(getField(l, "SalaryPerMonth"));
-        std::string commissionOn = cleanText(getField(l, "CommnCalcOn"));
-
-        std::string applyTcsStr = toLowerStr(getField(l, "ApplyTCSForParty"));
-        int applyTcs = (applyTcsStr == "true" || applyTcsStr == "1" || applyTcsStr == "yes") ? 1 : 0;
-        std::string tcsExemptStr = toLowerStr(getField(l, "TCSNotApplyInSale"));
-        int tcsExempt = (tcsExemptStr == "true" || tcsExemptStr == "1" || tcsExemptStr == "yes") ? 1 : 0;
-
-        std::string partyType = cleanText(getField(l, "PartyType"));
-        if (partyType.empty()) {
-            if (groupLineageMap.count(gCode)) {
-                const auto& lin = groupLineageMap[gCode];
-                partyType = AccountClassifier::classifyPartyType(lin[0], lin[1], lin[2], lin[3]).toStdString();
-            } else {
-                partyType = "General";
-            }
-        }
-        std::string specialType = cleanText(getField(l, "SpecialPartyType"));
-        if (specialType.empty()) {
-            specialType = (partyType == "Buyer") ? "Rice Buyer" : ((partyType == "Vendor") ? "Paddy Seller" : partyType);
-        }
-
-        std::string shopNo = cleanText(getField(l, "ShopNo"));
-        std::string tin = cleanText(getField(l, "SaleTaxNo"));
-        if (tin.empty()) tin = cleanText(getField(l, "VAT"));
-        std::string urn = cleanText(getField(l, "URN"));
-        if (urn.empty()) urn = cleanText(getField(l, "BRN"));
-
-        std::string sncStr = toLowerStr(getField(l, "StockNotCalculateInLedger"));
-        int stockNotCalc = (sncStr == "1" || sncStr == "true" || sncStr == "yes") ? 1 : 0;
-        std::string sdtStr = toLowerStr(getField(l, "ShowDateTotals"));
-        int showDateTotals = (sdtStr == "1" || sdtStr == "true" || sdtStr == "yes") ? 1 : 0;
-        std::string cjtStr = toLowerStr(getField(l, "CalculateInJointTrading"));
-        int calcDirectExpense = (cjtStr == "1" || cjtStr == "true" || cjtStr == "yes") ? 1 : 0;
-        int useCreditLimit = (creditLimit > 0.0) ? 1 : 0;
-        qint64 targetGroupId = groupCodeToIdMap.count(gCode) ? groupCodeToIdMap[gCode] : 0;
-
-        db.executeNonQuery(
-            "INSERT INTO parties ("
-            "name, alias, prefix, group_name, group_code, group_id, party_type, special_type, "
-            "opening_balance, balance_type, mailing_name, address, city, district, state, state_code, pincode, route, "
-            "mobile, whatsapp, phone, email, contact_person, pan, aadhaar, tan, gstin, gst_party_type, "
-            "bank_name, bank_account, ifsc_code, credit_limit, credit_days, interest_rate, commission_rate, commission_on, "
-            "apply_tcs, tcs_exempt, party_station, use_routes, shop_no, tin, urn, stock_not_calc, use_credit_limit, "
-            "show_date_totals, calc_direct_expense, set_title_case, books_start_from, salary_per_month, legacy_id) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 30, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?);",
-            {
-                QString::fromStdString(lName),
-                QString::fromStdString(alias),
-                QString::fromStdString(prefix),
-                QString::fromStdString(groupName),
-                gCode,
-                targetGroupId,
-                QString::fromStdString(partyType),
-                QString::fromStdString(specialType),
-                opBal,
-                QString::fromStdString(balType),
-                QString::fromStdString(mailingName),
-                QString::fromStdString(address),
-                QString::fromStdString(city),
-                QString::fromStdString(district),
-                QString::fromStdString(state),
-                QString::fromStdString(stateCode),
-                QString::fromStdString(pincode),
-                QString::fromStdString(route),
-                QString::fromStdString(mobile),
-                QString::fromStdString(whatsapp),
-                QString::fromStdString(phone),
-                QString::fromStdString(email),
-                QString::fromStdString(contactPerson),
-                QString::fromStdString(pan),
-                QString::fromStdString(aadhaar),
-                QString::fromStdString(tan),
-                QString::fromStdString(gstin),
-                QString::fromStdString(gstPartyType),
-                QString::fromStdString(bankName),
-                QString::fromStdString(bankAccount),
-                QString::fromStdString(ifscCode),
-                creditLimit,
-                interestRate,
-                commissionRate,
-                QString::fromStdString(commissionOn),
-                applyTcs,
-                tcsExempt,
-                QString::fromStdString(city),
-                (route.empty() || route == "None") ? 0 : 1,
-                QString::fromStdString(shopNo),
-                QString::fromStdString(tin),
-                QString::fromStdString(urn),
-                stockNotCalc,
-                useCreditLimit,
-                showDateTotals,
-                calcDirectExpense,
-                QString::fromStdString(booksStartFrom),
-                salaryPerMonth,
-                legacyId
-            }
-        );
-
-        int partyDbId = static_cast<int>(db.lastInsertedId());
-        legacyIdToPartyId[legacyId] = partyDbId;
-        ledgerCodeMap[legacyId] = lName;
-        ledgerDetailMap[legacyId] = {partyDbId, lName, groupName, partyType, legacyId, gstin, address, city, state, phone};
-    }
-
-    // Deleted-ledger display fallback: vouchers may reference ledgers that
-    // were later deleted in Bahi-Khata (their slots stay on disk until the
-    // file is compacted). Collect their names for display only — never for
-    // party creation, balances, or counts. Codes present in the live map win.
     std::map<int, std::string> ledgerDeletedNameMap;
     {
-        auto delRows = Jet4Reader::readDeletedRows(mdb, "Ledgers");
-        for (const auto& d : delRows) {
-            int dCode = parseIntVal(getField(d, "Code1st"));
-            if (dCode <= 0 || ledgerDetailMap.count(dCode) || ledgerDeletedNameMap.count(dCode)) continue;
-            std::string dName = cleanText(getField(d, "LedgerName"));
-            if (!dName.empty()) ledgerDeletedNameMap[dCode] = dName;
+        MahadevERP::MigrationContext lctx;
+        lctx.provider = MahadevERP::MigrationProvider::BahiKhata;
+        lctx.sourcePath = mdbFilePath;
+        lctx.progressCallback = [this](int p, const QString& s) { updateProgress(p, s); };
+        if (!MahadevERP::LedgerMigrator::migrate_ledgers_bahikhata(
+                lctx, ledgerRows, globalBooksFrom, groupCodeMap, groupLineageMap,
+                groupCodeToIdMap, mdb, ledgerCodeMap, ledgerDetailMap,
+                legacyIdToPartyId, ledgerDeletedNameMap)) {
+            qWarning() << "[Migration] ledger pass failed for" << mdbFilePath;
+            return false;
         }
     }
 
-    // Auto-heal any uncoded or missing groups from imported data
-    AccountClassifier::healAllGroups();
-
     // =========================================================
-    // PASS 3: STOCK ITEMS & INVENTORY
-    // =========================================================
+    // PASS 3: STOCK ITEMS & INVENTORY (C3 strangler slice S — lives in
+    // StockMigrator now, JSON-driven keys via MigrationColumns).
+    // Thin wrapper — no new logic here.
     updateProgress(40, QString("Migrating %1 Stock Items & Inventory...").arg(itemRows.size()));
-    db.executeNonQuery("DELETE FROM stock_items;");
-    db.executeNonQuery("DELETE FROM inventory;");
-    std::map<int, ItemDetail> itemCodeMap;
-
-    for (const auto& item : itemRows) {
-        std::string iName = cleanText(getField(item, "ItemName"));
-        if (iName.empty()) continue;
-
-        int legacyCode = parseIntVal(getField(item, "Code1st"));
-        std::string code = cleanText(getField(item, "Code1st"));
-
-        // 1. Item Types
-        std::string rawItemType = cleanText(getField(item, "ItemType", "Both"));
-        std::string itemType = "Both";
-        if (toLowerStr(rawItemType).find("mandi") != std::string::npos) itemType = "Mandi";
-        else if (toLowerStr(rawItemType).find("market") != std::string::npos) itemType = "Market";
-
-        std::string goodsType = cleanText(getField(item, "GoodsType", "Goods"));
-        if (goodsType.empty()) goodsType = "Goods";
-
-        // 2. Trading Group & Unit
-        int groupCode = parseIntVal(getField(item, "GroupCode"));
-        std::string tradingGroup = "";
-        auto itGrp = stockGroupMap.find(groupCode);
-        if (itGrp != stockGroupMap.end()) tradingGroup = itGrp->second;
-        else tradingGroup = "Primary";
-
-        int unitCode = parseIntVal(getField(item, "UnitCode"));
-        std::string unit = "Qtl.";
-        auto itUnit = stockUnitMap.find(unitCode);
-        if (itUnit != stockUnitMap.end()) unit = itUnit->second;
-
-        std::string rateCalcOn = cleanText(getField(item, "RateCalcOn", "N/A"));
-        if (rateCalcOn.empty()) rateCalcOn = "N/A";
-
-        int autoAdjustName = parseIntVal(getField(item, "AutoSplitUpdate", "1"), 1);
-        int calculateStock = parseIntVal(getField(item, "StockCalculate", "1"), 1);
-        int calculateInTrading = parseIntVal(getField(item, "CalculateInTrading", "1"), 1);
-        std::string itemNarration = cleanText(getField(item, "ItemNarration"));
-        int capitalGoods = parseIntVal(getField(item, "CapitalGoods", "0"), 0);
-
-        // 3. Taxes: VAT, CST, GST, HSN
-        double vatRate = parseDoubleVal(getField(item, "VAT"));
-        int vatLedgerCode = parseIntVal(getField(item, "VATLedger"));
-        std::string vatLedger = "VAT A/c";
-        if (ledgerCodeMap.count(vatLedgerCode)) vatLedger = ledgerCodeMap[vatLedgerCode];
-
-        double surchargeOnVat = parseDoubleVal(getField(item, "Surcharge"));
-        double vatAgainstD1 = parseDoubleVal(getField(item, "VATLowerRate"));
-
-        double cstRate = parseDoubleVal(getField(item, "CST"));
-        int cstLedgerCode = parseIntVal(getField(item, "CSTLedger"));
-        std::string cstLedger = "CST A/c";
-        if (ledgerCodeMap.count(cstLedgerCode)) cstLedger = ledgerCodeMap[cstLedgerCode];
-
-        double cstWithoutCForm = parseDoubleVal(getField(item, "CSTWithoutCForm"));
-
-        std::string hsn = cleanText(getField(item, "HSNCode", ""));
-
-        std::string gstSlab = cleanText(getField(item, "GSTRateSlab"));
-        std::string gstSlabLower = toLowerStr(gstSlab);
-        double gstRate = 0.0;
-        if (gstSlabLower.find("exempt") != std::string::npos || gstSlabLower == "0" || gstSlabLower == "0%") {
-            gstRate = 0.0;
-        } else if (!gstSlab.empty()) {
-            gstRate = parseDoubleVal(gstSlab);
-        } else if (vatRate > 0.01) {
-            gstRate = vatRate;
+    std::map<int, MahadevERP::ItemDetail> itemCodeMap;
+    {
+        MahadevERP::MigrationContext sctx;
+        sctx.provider = MahadevERP::MigrationProvider::BahiKhata;
+        sctx.sourcePath = mdbFilePath;
+        sctx.progressCallback = [this](int p, const QString& s) { updateProgress(p, s); };
+        std::map<int, std::string> itemCodeToName;
+        std::map<int, qint64> itemCodeToId;
+        if (!MahadevERP::StockMigrator::migrate_stock_items_bahikhata(
+                sctx, itemRows, ledgerCodeMap, legacyIdToPartyId,
+                stockGroupMap, stockUnitMap,
+                itemCodeMap, itemCodeToName, itemCodeToId)) {
+            qWarning() << "[Migration] stock items pass failed for" << mdbFilePath;
+            return false;
         }
-        double cessRate = parseDoubleVal(getField(item, "CessRate"));
-
-        // 4. Mandi Rates & Ledgers
-        double damiRate = parseDoubleVal(getField(item, "Dami"));
-        int damiLedgerCode = parseIntVal(getField(item, "DamiLedger"));
-        std::string damiLedger = "Dami A/c";
-        if (ledgerCodeMap.count(damiLedgerCode)) damiLedger = ledgerCodeMap[damiLedgerCode];
-        int damiLedgerId = legacyIdToPartyId.count(damiLedgerCode) ? legacyIdToPartyId[damiLedgerCode] : 0;
-
-        double marketFeeRate = parseDoubleVal(getField(item, "MarketFee"));
-        int mFeeLedgerCode = parseIntVal(getField(item, "MarketFeeLedger"));
-        std::string mFeeLedger = "Market Fee A/c";
-        if (ledgerCodeMap.count(mFeeLedgerCode)) mFeeLedger = ledgerCodeMap[mFeeLedgerCode];
-        int mFeeLedgerId = legacyIdToPartyId.count(mFeeLedgerCode) ? legacyIdToPartyId[mFeeLedgerCode] : 0;
-
-        double hrdfRate = parseDoubleVal(getField(item, "HRDF"));
-        int hrdfLedgerCode = parseIntVal(getField(item, "HRDFLedger"));
-        std::string hrdfLedger = "H.R.D.F. A/c";
-        if (ledgerCodeMap.count(hrdfLedgerCode)) hrdfLedger = ledgerCodeMap[hrdfLedgerCode];
-        int hrdfLedgerId = legacyIdToPartyId.count(hrdfLedgerCode) ? legacyIdToPartyId[hrdfLedgerCode] : 0;
-
-        int mktCommttFormApply = parseIntVal(getField(item, "MarketCommttFormApply"));
-        int mktCommttCouponApply = parseIntVal(getField(item, "MarketCommttCouponApply"));
-        int damiCalcOnWeight = parseIntVal(getField(item, "DamiCalcOnWeight"));
-        int taxOnQty = parseIntVal(getField(item, "TaxPayable", getField(item, "CessCalcOnQty")));
-
-        // 5. Trading Posting Accounts
-        int purcLedgerCode = parseIntVal(getField(item, "PurchaseLedger"));
-        std::string purcLedger = "";
-        if (ledgerCodeMap.count(purcLedgerCode)) purcLedger = ledgerCodeMap[purcLedgerCode];
-        int purcLedgerId = legacyIdToPartyId.count(purcLedgerCode) ? legacyIdToPartyId[purcLedgerCode] : 0;
-
-        int purcRetLedgerCode = parseIntVal(getField(item, "PurchaseReturnLedger"));
-        std::string purcRetLedger = purcLedger;
-        if (ledgerCodeMap.count(purcRetLedgerCode)) purcRetLedger = ledgerCodeMap[purcRetLedgerCode];
-        int purcRetLedgerId = legacyIdToPartyId.count(purcRetLedgerCode) ? legacyIdToPartyId[purcRetLedgerCode] : purcLedgerId;
-
-        int saleLedgerCode = parseIntVal(getField(item, "SaleLedger"));
-        std::string saleLedger = "";
-        if (ledgerCodeMap.count(saleLedgerCode)) saleLedger = ledgerCodeMap[saleLedgerCode];
-        int saleLedgerId = legacyIdToPartyId.count(saleLedgerCode) ? legacyIdToPartyId[saleLedgerCode] : 0;
-
-        int saleRetLedgerCode = parseIntVal(getField(item, "SaleReturnLedger"));
-        std::string saleRetLedger = saleLedger;
-        if (ledgerCodeMap.count(saleRetLedgerCode)) saleRetLedger = ledgerCodeMap[saleRetLedgerCode];
-        int saleRetLedgerId = legacyIdToPartyId.count(saleRetLedgerCode) ? legacyIdToPartyId[saleRetLedgerCode] : saleLedgerId;
-
-        int stockLedgerCode = parseIntVal(getField(item, "StockLedger"));
-        std::string stockLedger = "";
-        if (ledgerCodeMap.count(stockLedgerCode)) stockLedger = ledgerCodeMap[stockLedgerCode];
-        int stockLedgerId = legacyIdToPartyId.count(stockLedgerCode) ? legacyIdToPartyId[stockLedgerCode] : 0;
-
-        int vatLedgerId = legacyIdToPartyId.count(vatLedgerCode) ? legacyIdToPartyId[vatLedgerCode] : 0;
-        int cstLedgerId = legacyIdToPartyId.count(cstLedgerCode) ? legacyIdToPartyId[cstLedgerCode] : 0;
-
-        // 6. Pricing & Packing
-        double packingKg = parseDoubleVal(getField(item, "Packing", "50.0"), 50.0);
-        double purRate = parseDoubleVal(getField(item, "PurcRate"));
-        double saleRate = parseDoubleVal(getField(item, "SaleRate"));
-        double bonusApproved = parseDoubleVal(getField(item, "DDInsentive"));
-        double mrp = parseDoubleVal(getField(item, "MRP"));
-        double discount = parseDoubleVal(getField(item, "Discount"));
-
-        // 7. Opening stock
-        int opBags = parseIntVal(getField(item, "OpeningBags"));
-        double opQty = parseDoubleVal(getField(item, "OpeningQty"));
-        double opRate = parseDoubleVal(getField(item, "OpeningRate"));
-        if (opRate <= 0.0) opRate = purRate;
-        double opVal = parseDoubleVal(getField(item, "OpeningValue"));
-        if (opVal <= 0.0) opVal = std::round(opQty * opRate * 100.0) / 100.0;
-
-        std::string millStr = toLowerStr(getField(item, "MillingItem"));
-        int isMillingItem = (millStr == "true" || millStr == "1" || millStr == "yes") ? 1 : 0;
-
-        // 8. Labour Rates (3 slabs x 7 operations)
-        std::string labourRateUnit = cleanText(getField(item, "LabourRateUnit", "Packing"));
-        if (labourRateUnit.empty()) labourRateUnit = "Packing";
-
-        double utrai1 = parseDoubleVal(getField(item, "UtraiRate1"));
-        double jharai1 = parseDoubleVal(getField(item, "JharaiRate1"));
-        double bharai1 = parseDoubleVal(getField(item, "BharaiRate1"));
-        double tulai1 = parseDoubleVal(getField(item, "TulaiRate1"));
-        double khichai1 = parseDoubleVal(getField(item, "KhichaiRate1"));
-        double silai1 = parseDoubleVal(getField(item, "SilaiRate1"));
-        double loading1 = parseDoubleVal(getField(item, "LoadingRate1"));
-
-        double utrai2 = parseDoubleVal(getField(item, "UtraiRate2"));
-        double jharai2 = parseDoubleVal(getField(item, "JharaiRate2"));
-        double bharai2 = parseDoubleVal(getField(item, "BharaiRate2"));
-        double tulai2 = parseDoubleVal(getField(item, "TulaiRate2"));
-        double khichai2 = parseDoubleVal(getField(item, "KhichaiRate2"));
-        double silai2 = parseDoubleVal(getField(item, "SilaiRate2"));
-        double loading2 = parseDoubleVal(getField(item, "LoadingRate2"));
-
-        double utrai3 = parseDoubleVal(getField(item, "UtraiRate3"));
-        double jharai3 = parseDoubleVal(getField(item, "JharaiRate3"));
-        double bharai3 = parseDoubleVal(getField(item, "BharaiRate3"));
-        double tulai3 = parseDoubleVal(getField(item, "TulaiRate3"));
-        double khichai3 = parseDoubleVal(getField(item, "KhichaiRate3"));
-        double silai3 = parseDoubleVal(getField(item, "SilaiRate3"));
-        double loading3 = parseDoubleVal(getField(item, "LoadingRate3"));
-
-        std::string companyName = cleanText(getField(item, "CompanyName"));
-
-        db.executeNonQuery(
-            "INSERT INTO stock_items ("
-            "name, code, item_type, goods_type, trading_group, group_code, company_name, category_name, unit, unit_code, "
-            "rate_calc_on, auto_adjust_name, item_narration, capital_goods, hsn_code, gst_rate, cess_rate, "
-            "vat_rate, vat_ledger, vat_ledger_id, surcharge_on_vat, vat_against_d1, cst_rate, cst_ledger, cst_ledger_id, cst_without_cform, "
-            "dami_rate, dami_ledger, dami_ledger_id, market_fee_rate, market_fee_ledger, market_fee_ledger_id, hrdf_rate, hrdf_ledger, hrdf_ledger_id, "
-            "market_commtt_form_apply, market_commtt_coupon_apply, dami_calc_on_weight, tax_on_qty, "
-            "purchase_rate, sale_rate, bonus_approved, mrp, discount, packing_kg, "
-            "opening_bags, opening_qty, opening_rate, opening_value, "
-            "purchase_ledger, purchase_ledger_id, purchase_return_ledger, purchase_return_ledger_id, "
-            "sale_ledger, sale_ledger_id, sale_return_ledger, sale_return_ledger_id, stock_ledger, stock_ledger_id, "
-            "is_milling_item, include_in_trading, calculate_stock, labour_rate_unit, "
-            "utrai_rate_1, jharai_rate_1, bharai_rate_1, tulai_rate_1, khichai_rate_1, silai_rate_1, loading_rate_1, "
-            "utrai_rate_2, jharai_rate_2, bharai_rate_2, tulai_rate_2, khichai_rate_2, silai_rate_2, loading_rate_2, "
-            "utrai_rate_3, jharai_rate_3, bharai_rate_3, tulai_rate_3, khichai_rate_3, silai_rate_3, loading_rate_3, "
-            "legacy_code) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-            {
-                QString::fromStdString(iName),
-                QString::fromStdString(code),
-                QString::fromStdString(itemType),
-                QString::fromStdString(goodsType),
-                QString::fromStdString(tradingGroup),
-                groupCode,
-                QString::fromStdString(companyName),
-                QString::fromStdString(tradingGroup),
-                QString::fromStdString(unit),
-                unitCode,
-                QString::fromStdString(rateCalcOn),
-                autoAdjustName,
-                QString::fromStdString(itemNarration),
-                capitalGoods,
-                QString::fromStdString(hsn),
-                gstRate,
-                cessRate,
-                vatRate,
-                QString::fromStdString(vatLedger),
-                vatLedgerId,
-                surchargeOnVat,
-                vatAgainstD1,
-                cstRate,
-                QString::fromStdString(cstLedger),
-                cstLedgerId,
-                cstWithoutCForm,
-                damiRate,
-                QString::fromStdString(damiLedger),
-                damiLedgerId,
-                marketFeeRate,
-                QString::fromStdString(mFeeLedger),
-                mFeeLedgerId,
-                hrdfRate,
-                QString::fromStdString(hrdfLedger),
-                hrdfLedgerId,
-                mktCommttFormApply,
-                mktCommttCouponApply,
-                damiCalcOnWeight,
-                taxOnQty,
-                purRate,
-                saleRate,
-                bonusApproved,
-                mrp,
-                discount,
-                packingKg,
-                opBags,
-                opQty,
-                opRate,
-                opVal,
-                QString::fromStdString(purcLedger),
-                purcLedgerId,
-                QString::fromStdString(purcRetLedger),
-                purcRetLedgerId,
-                QString::fromStdString(saleLedger),
-                saleLedgerId,
-                QString::fromStdString(saleRetLedger),
-                saleRetLedgerId,
-                QString::fromStdString(stockLedger),
-                stockLedgerId,
-                isMillingItem,
-                calculateInTrading,
-                calculateStock,
-                QString::fromStdString(labourRateUnit),
-                utrai1, jharai1, bharai1, tulai1, khichai1, silai1, loading1,
-                utrai2, jharai2, bharai2, tulai2, khichai2, silai2, loading2,
-                utrai3, jharai3, bharai3, tulai3, khichai3, silai3, loading3,
-                legacyCode
-            }
-        );
-
-        int itemDbId = static_cast<int>(db.lastInsertedId());
-        itemCodeMap[legacyCode] = {itemDbId, iName, hsn, gstRate, packingKg};
-
-        db.executeNonQuery(
-            "INSERT INTO inventory (item_code, item_name, category, current_stock_qtl, sale_rate, gst_rate, packing_kg) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?);",
-            {
-                QString("ITEM-%1").arg(legacyCode),
-                QString::fromStdString(iName),
-                QString::fromStdString(itemType),
-                opQty,
-                saleRate,
-                QString("%1%").arg(gstRate),
-                static_cast<int>(packingKg)
-            }
-        );
     }
 
     // =========================================================
     // PASS 4: STOCK MOVEMENTS & LOGISTICS CACHING
     // =========================================================
-    updateProgress(50, "Caching Stock Movements & Logistics...");
-    std::map<std::string, std::vector<StockMovementEntry>> stockTransMap;
-
-    for (const auto& st : stockTransRows) {
-        std::string vNo = cleanText(getField(st, "VoucherNumber"));
-        QString vType = mapVoucherTypeStr(getField(st, "TransType"));
-        QString vDate = parseDateFormatted(QString::fromStdString(getField(st, "VoucherDate")));
-        std::string key = QString("%1-%2-%3").arg(vType).arg(QString::fromStdString(vNo)).arg(vDate).toStdString();
-
-        int iCode = parseIntVal(getField(st, "ItemCode"));
-        auto itItem = itemCodeMap.find(iCode);
-        int itemId = (itItem != itemCodeMap.end()) ? itItem->second.id : 1;
-        std::string itemName = (itItem != itemCodeMap.end()) ? itItem->second.name : "Commodity";
-        std::string hsn = (itItem != itemCodeMap.end()) ? itItem->second.hsn : "";
-        double defaultGst = (itItem != itemCodeMap.end()) ? itItem->second.gst_rate : 5.0;
-
-        int bags = parseIntVal(getField(st, "Bags"));
-        double packing = parseDoubleVal(getField(st, "Packing"), 0.500);
-        double wt = parseDoubleVal(getField(st, "Weight"));
-        double rate = parseDoubleVal(getField(st, "Rate"));
-        double amt = parseDoubleVal(getField(st, "Amount"));
-        double taxable = parseDoubleVal(getField(st, "TaxableAmount"));
-        if (taxable <= 0.0) taxable = amt;
-
-        double vatcst = parseDoubleVal(getField(st, "VATCST"));
-        double gstPct = (vatcst > 0.0) ? vatcst : defaultGst;
-        double cgst = parseDoubleVal(getField(st, "CGSTTax"));
-        double sgst = parseDoubleVal(getField(st, "SGSTTax"));
-        double igst = parseDoubleVal(getField(st, "IGSTTax"));
-        double cess = parseDoubleVal(getField(st, "CESSTax"));
-        std::string dheriBill = cleanText(getField(st, "DheriBillNo"));
-        std::string itemGrade = dheriBill;
-        if (itemGrade.empty()) itemGrade = cleanText(getField(st, "Grade"));
-        if (itemGrade.empty()) itemGrade = cleanText(getField(st, "Quality"));
-        if (itemGrade.empty()) itemGrade = cleanText(getField(st, "ItemQuality"));
-        if (itemGrade.empty()) itemGrade = cleanText(getField(st, "Variety"));
-        std::string vchTypeStr = cleanText(getField(st, "VoucherType"));
-
-        StockMovementEntry entry;
-        entry.item_id = itemId;
-        entry.item_name = itemName;
-        entry.grade = itemGrade;
-        entry.hsn_code = hsn;
-        entry.bags = bags;
-        entry.packing = packing;
-        entry.weight_qtl = wt;
-        entry.rate = rate;
-        entry.amount = amt;
-        entry.taxable_amount = taxable;
-        entry.gst_pct = gstPct;
-        entry.cgst = cgst;
-        entry.sgst = sgst;
-        entry.igst = igst;
-        entry.cess = cess;
-        entry.dheri_bill_no = dheriBill;
-        entry.voucher_type = vchTypeStr;
-
-        stockTransMap[key].push_back(entry);
-    }
-
-    std::map<std::string, LogisticsEntry> transportMap;
-    for (const auto& tr : transportRows) {
-        std::string vNo = cleanText(getField(tr, "VoucherNumber"));
-        QString vType = mapVoucherTypeStr(getField(tr, "TransType"));
-        QString vDate = parseDateFormatted(QString::fromStdString(getField(tr, "VoucherDate")));
-        std::string key = QString("%1-%2-%3").arg(vType).arg(QString::fromStdString(vNo)).arg(vDate).toStdString();
-
-        LogisticsEntry log;
-        log.vehicle_no = cleanText(getField(tr, "VehicleNo"));
-        log.gr_no = cleanText(getField(tr, "GRNo"));
-        log.driver = cleanText(getField(tr, "DriverName"));
-        log.eway_bill_no = cleanText(getField(tr, "EWayBillNo"));
-        if (log.eway_bill_no.empty()) log.eway_bill_no = cleanText(getField(tr, "ST38No"));
-        log.shipping_address = cleanText(getField(tr, "ShippingAddress"));
-        log.po_no = cleanText(getField(tr, "PurchaseOrderNo"));
-        log.distance = parseIntVal(getField(tr, "Distance"));
-        log.irn_no = cleanText(getField(tr, "IRNNo"));
-        log.bill_time = cleanText(getField(tr, "DispatchTime"));
-        log.grade = cleanText(getField(tr, "Grade"));
-        log.challan_no = cleanText(getField(tr, "ChallanNo"));
-        log.kanda_weight = cleanText(getField(tr, "KandaWeight"));
-        log.transport = cleanText(getField(tr, "BillItemName"));
-        if (log.transport.empty()) log.transport = cleanText(getField(tr, "TransporterName"));
-        log.broker_name = cleanText(getField(tr, "OtherInfo"));
-
-        transportMap[key] = log;
+    // C3 strangler slice V: PASS 4 lives in VoucherMigrator now
+    // (JSON-driven field keys via MigrationColumns). Thin wrapper — no
+    // new logic here. MahadevERP::-qualified maps: later passes only
+    // read through identical field names.
+    std::map<std::string, std::vector<MahadevERP::StockMovementEntry>> stockTransMap;
+    std::map<std::string, MahadevERP::LogisticsEntry> transportMap;
+    {
+        MahadevERP::MigrationContext vctx;
+        vctx.provider = MahadevERP::MigrationProvider::BahiKhata;
+        vctx.sourcePath = mdbFilePath;
+        vctx.progressCallback = [this](int p, const QString& s) { updateProgress(p, s); };
+        if (!MahadevERP::VoucherMigrator::migrate_movements_bahikhata(
+                vctx, stockTransRows, transportRows, itemCodeMap,
+                stockTransMap, transportMap)) {
+            qWarning() << "[Migration] movements pass failed for" << mdbFilePath;
+            return false;
+        }
     }
 
     // =========================================================
     // PASS 5: TRANSACTIONS & VOUCHERS (100% DOUBLE-ENTRY PARITY)
     // =========================================================
-    updateProgress(60, "Migrating All Transactions & Reconstructing Double-Entry Invoices...");
-    db.executeNonQuery("DELETE FROM transactions;");
-    db.executeNonQuery("DELETE FROM vouchers;");
-    db.executeNonQuery("DELETE FROM sales_invoices;");
-    db.executeNonQuery("DELETE FROM sales_invoice_items;");
-    db.executeNonQuery("DELETE FROM purchase_invoices;");
-    db.executeNonQuery("DELETE FROM purchase_invoice_items;");
-    db.executeNonQuery("DELETE FROM paddy_slips;");
-    db.executeNonQuery("DELETE FROM jform_vouchers;");
-    db.executeNonQuery("DELETE FROM jform_voucher_items;");
-
+    // C3 strangler slice V: PASS 5 sections 1-2 live in VoucherMigrator
+    // now (JSON-driven field keys via MigrationColumns). Thin wrapper —
+    // no new logic here. voucherGroups + invoice counts flow back out
+    // for the summary + later mandi passes.
+    std::map<std::string, std::vector<std::map<std::string, std::string>>> voucherGroups;
     int salesInvoiceCount = 0;
     int purchaseInvoiceCount = 0;
-
-    // Group transactions by (rawType, vNo, vDate)
-    std::map<std::string, std::vector<std::map<std::string, std::string>>> voucherGroups;
-    for (const auto& r : transRows) {
-        std::string vNo = cleanText(getField(r, "VoucherNumber"));
-        if (vNo.empty()) continue;
-        std::string rawType = cleanText(getField(r, "TransType"));
-        std::string pType = cleanText(getField(r, "PurchaseType"));
-        std::string eType = cleanText(getField(r, "EntryType"));
-        std::string narr = cleanText(getField(r, "Narration"));
-        if (rawType == "Jrnl" && (pType.rfind("TDS", 0) == 0 || eType == "TDS" || eType == "PartyTDS" || narr.find("T.D.S.") != std::string::npos)) {
-            rawType = "TDS";
-        }
-        QString vType = (rawType == "TDS") ? "TDS" : mapVoucherTypeStr(rawType);
-        QString vDate = parseDateFormatted(QString::fromStdString(getField(r, "VoucherDate")));
-        std::string key = QString("%1-%2-%3").arg(vType).arg(QString::fromStdString(vNo)).arg(vDate).toStdString();
-        voucherGroups[key].push_back(r);
-    }
-
-    // 1. Direct 1-to-1 Migration of every Transaction row into 'transactions' table
-    for (const auto& r : transRows) {
-        std::string vNo = cleanText(getField(r, "VoucherNumber"));
-        if (vNo.empty()) continue;
-        std::string rawType = cleanText(getField(r, "TransType"));
-        std::string pType = cleanText(getField(r, "PurchaseType"));
-        std::string eType = cleanText(getField(r, "EntryType"));
-        std::string narr = cleanText(getField(r, "Narration"));
-        if (rawType == "Jrnl" && (pType.rfind("TDS", 0) == 0 || eType == "TDS" || eType == "PartyTDS" || narr.find("T.D.S.") != std::string::npos)) {
-            rawType = "TDS";
-        }
-        QString vType = (rawType == "TDS") ? "TDS" : mapVoucherTypeStr(rawType);
-        QString vDate = parseDateFormatted(QString::fromStdString(getField(r, "VoucherDate")));
-        QString fyVal = computeFinancialYear(vDate);
-        int fyId = fyNameToId.count(fyVal) ? fyNameToId[fyVal] : 1;
-
-        int acCode = parseIntVal(getField(r, "AccountCode"));
-        auto itDetail = ledgerDetailMap.find(acCode);
-        std::string partyName = lookupLedgerName(acCode, ledgerDetailMap, ledgerCodeMap, ledgerDeletedNameMap);
-        if (partyName.empty()) partyName = "Party #" + std::to_string(acCode);
-        int partyId = (itDetail != ledgerDetailMap.end()) ? itDetail->second.id : 0;
-        QString vchCanon = canonVoucherNo(fyVal, rawType, vNo);
-
-        std::string drCr = cleanText(getField(r, "DrCr"));
-        double amt = parseDoubleVal(getField(r, "Amount"));
-        std::string invNo = cleanText(getField(r, "InvoiceNo"));
-        if (invNo.empty()) invNo = cleanText(getField(r, "TaxInvoiceNo"));
-        std::string narration = cleanText(getField(r, "Narration"));
-        if (narration.empty()) narration = cleanText(getField(r, "Narrtn"));
-
-        std::string saudaDate = cleanText(getField(r, "SaudaDate"));
-        std::string bankDate = parseDateFormatted(QString::fromStdString(getField(r, "BankDate"))).toStdString();
-        std::string brokerName = cleanText(getField(r, "BrokerName"));
-        std::string vehicleNo = cleanText(getField(r, "VehicleNo"));
-        std::string grNo = cleanText(getField(r, "GRNo"));
-        int rowNo = parseIntVal(getField(r, "RowNo"), 1);
-
-        std::string key = QString("%1-%2-%3").arg(vType).arg(QString::fromStdString(vNo)).arg(vDate).toStdString();
-        double taxableAmt = parseDoubleVal(getField(r, "Taxable194Q"));
-        double tdsRate = parseDoubleVal(getField(r, "TDSRate194Q"));
-        double tdsAmt = 0.0;
-        if (tdsRate > 0.0 || taxableAmt > 0.0) {
-            auto itSt = stockTransMap.find(key);
-            if (itSt != stockTransMap.end() && !itSt->second.empty()) {
-                double stockTotal = 0.0;
-                for (const auto& sl : itSt->second) {
-                    stockTotal += sl.amount;
-                }
-                if (stockTotal > amt) {
-                    tdsAmt = std::round((stockTotal - amt) * 100.0) / 100.0;
-                }
-            }
-            if (tdsAmt <= 0.0 && tdsRate > 0.0 && taxableAmt > 0.0) {
-                tdsAmt = std::round(taxableAmt * tdsRate / 100.0);
-            }
-        }
-        const auto& group = voucherGroups[key];
-        std::vector<std::string> opposingList;
-        for (const auto& other : group) {
-            int otherCode = parseIntVal(getField(other, "AccountCode"));
-            if (otherCode != acCode) {
-                auto itO = ledgerDetailMap.find(otherCode);
-                std::string oName = (itO != ledgerDetailMap.end()) ? itO->second.name : ("Account #" + std::to_string(otherCode));
-                opposingList.push_back(oName);
-            }
-        }
-        std::string opposingStr;
-        if (!opposingList.empty()) {
-            opposingStr = opposingList[0];
-            if (opposingList.size() > 1) opposingStr += " & Others";
-        } else {
-            if (rawType == "Sale" || rawType == "SLRN") opposingStr = "Sales Accounts";
-            else if (rawType == "Purc" || rawType == "PRRN") opposingStr = "Purchase Accounts";
-            else if (rawType == "JFrm") opposingStr = "Paddy Purchase";
-            else opposingStr = "Bank/Cash";
-        }
-
-        db.executeNonQuery(
-            "INSERT INTO transactions ("
-            "fy_id, financial_year, voucher_no, voucher_date, voucher_type, trans_type, "
-            "account_code, party_id, party_name, opposing_account, dr_cr, amount, "
-            "invoice_no, narration, sauda_date, bank_date, broker_name, vehicle_no, gr_no, "
-            "taxable_amount, tds_amount, tds_rate, row_no) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-            {
-                (fyId > 0 ? QVariant(fyId) : QVariant()),
-                fyVal,
-                vchCanon,
-                vDate,
-                vType,
-                QString::fromStdString(rawType),
-                acCode,
-                (partyId > 0 ? QVariant(partyId) : QVariant()),
-                QString::fromStdString(partyName),
-                QString::fromStdString(opposingStr),
-                QString::fromStdString(drCr),
-                amt,
-                QString::fromStdString(invNo),
-                QString::fromStdString(narration),
-                QString::fromStdString(saudaDate),
-                QString::fromStdString(bankDate),
-                QString::fromStdString(brokerName),
-                QString::fromStdString(vehicleNo),
-                QString::fromStdString(grNo),
-                taxableAmt,
-                tdsAmt,
-                tdsRate,
-                rowNo
-            }
-        );
-    }
-
-    // 2. Reconstruct Invoices & Vouchers for Edit Entry Pages
-    for (const auto& pair : voucherGroups) {
-        const std::string& key = pair.first;
-        const auto& rows = pair.second;
-        const auto& firstR = rows[0];
-        std::string vNo = cleanText(getField(firstR, "VoucherNumber"));
-        std::string rawType = cleanText(getField(firstR, "TransType"));
-        std::string pType = cleanText(getField(firstR, "PurchaseType"));
-        std::string eType = cleanText(getField(firstR, "EntryType"));
-        std::string narr = cleanText(getField(firstR, "Narration"));
-        if (rawType == "Jrnl" && (pType.rfind("TDS", 0) == 0 || eType == "TDS" || eType == "PartyTDS" || narr.find("T.D.S.") != std::string::npos)) {
-            rawType = "TDS";
-        }
-        QString vType = (rawType == "TDS") ? "TDS" : mapVoucherTypeStr(rawType);
-        QString vDate = parseDateFormatted(QString::fromStdString(getField(firstR, "VoucherDate")));
-        QString fyVal = computeFinancialYear(vDate);
-        int fyId = fyNameToId.count(fyVal) ? fyNameToId[fyVal] : 1;
-
-        QString vchNumStr = canonVoucherNo(fyVal, rawType, vNo);
-        std::string narration = cleanText(getField(firstR, "Narration"));
-        if (narration.empty()) narration = cleanText(getField(firstR, "Narrtn"));
-
-        std::string invNo = cleanText(getField(firstR, "InvoiceNo"));
-        if (invNo.empty()) invNo = cleanText(getField(firstR, "TaxInvoiceNo"));
-        if (invNo.empty()) invNo = vNo;
-
-        ResolvedVoucherParty partyRes = resolveVoucherParty(vType, rows, ledgerDetailMap, ledgerCodeMap, ledgerDeletedNameMap);
-
-        double totalAmount = 0.0;
-        double partyAmount = 0.0;
-        for (const auto& itemRow : rows) {
-            double amt = parseDoubleVal(getField(itemRow, "Amount"));
-            int acCode = parseIntVal(getField(itemRow, "AccountCode"));
-            totalAmount = std::max(totalAmount, amt);
-            if (partyRes.primary_party_legacy_code != 0 && acCode == partyRes.primary_party_legacy_code) {
-                partyAmount = amt;
-            }
-        }
-        if (partyAmount <= 0.0) partyAmount = totalAmount;
-
-        auto itStockLines = stockTransMap.find(key);
-        auto itLog = transportMap.find(key);
-        std::string vehicleNo = (itLog != transportMap.end() && !itLog->second.vehicle_no.empty()) ? itLog->second.vehicle_no : cleanText(getField(firstR, "VehicleNo"));
-        std::string grNo = (itLog != transportMap.end() && !itLog->second.gr_no.empty()) ? itLog->second.gr_no : cleanText(getField(firstR, "GRNo"));
-        std::string driverName = (itLog != transportMap.end() && !itLog->second.driver.empty()) ? itLog->second.driver : cleanText(getField(firstR, "DriverName"));
-        std::string ewayBill = (itLog != transportMap.end() && !itLog->second.eway_bill_no.empty()) ? itLog->second.eway_bill_no : cleanText(getField(firstR, "EWayBillNo"));
-        if (ewayBill.empty()) ewayBill = cleanText(getField(firstR, "ST38No"));
-        std::string brokerName = (itLog != transportMap.end() && !itLog->second.broker_name.empty()) ? itLog->second.broker_name : cleanText(getField(firstR, "BrokerName"));
-        std::string farmerName = cleanText(getField(firstR, "ZimidarName"));
-        std::string bankDate = parseDateFormatted(QString::fromStdString(getField(firstR, "BankDate"))).toStdString();
-        std::string saudaDate = cleanText(getField(firstR, "SaudaDate"));
-        std::string billTime = (itLog != transportMap.end() && !itLog->second.bill_time.empty()) ? itLog->second.bill_time : cleanText(getField(firstR, "DispatchTime"));
-        std::string shippingAddress = (itLog != transportMap.end() && !itLog->second.shipping_address.empty()) ? itLog->second.shipping_address : cleanText(getField(firstR, "ShippingAddress"));
-        std::string poNo = (itLog != transportMap.end() && !itLog->second.po_no.empty()) ? itLog->second.po_no : cleanText(getField(firstR, "PurchaseOrderNo"));
-        std::string grade = (itLog != transportMap.end() && !itLog->second.grade.empty()) ? itLog->second.grade : (itStockLines != stockTransMap.end() && !itStockLines->second.empty() ? itStockLines->second[0].dheri_bill_no : "");
-        std::string transport = (itLog != transportMap.end() && !itLog->second.transport.empty()) ? itLog->second.transport : cleanText(getField(firstR, "BillItemName"));
-        std::string challanNo = (itLog != transportMap.end() && !itLog->second.challan_no.empty()) ? itLog->second.challan_no : cleanText(getField(firstR, "ChallanVchNo"));
-        std::string kandaWeight = (itLog != transportMap.end() && !itLog->second.kanda_weight.empty()) ? itLog->second.kanda_weight : cleanText(getField(firstR, "KandaWeight"));
-
-        // 1. Identify Market Type across all 3 types
-        std::string rawPurchaseType = cleanText(getField(firstR, "PurchaseType"));
-        for (const auto& rItem : rows) {
-            std::string pt = cleanText(getField(rItem, "PurchaseType"));
-            if (!pt.empty()) { rawPurchaseType = pt; break; }
-        }
-        std::string marketType = "Market Type (With Stock)";
-        if (rawPurchaseType.find("Without Stock") != std::string::npos) {
-            marketType = "Market Type (Without Stock)";
-        } else if (rawPurchaseType.find("Mandi") != std::string::npos || rawType == "JFrm") {
-            marketType = "Mandi Type";
-        } else if (rawPurchaseType.find("With Stock") != std::string::npos) {
-            marketType = "Market Type (With Stock)";
-        } else if (itStockLines == stockTransMap.end() || itStockLines->second.empty()) {
-            marketType = "Market Type (Without Stock)";
-        }
-
-        // 2. Identify Due Days, Tax Status & GSTIN
-        int dueDays = parseIntVal(getField(firstR, "DueDays"), 0);
-        std::string taxStatus = cleanText(getField(firstR, "IFormTaxStatus"));
-        if (taxStatus.empty()) taxStatus = (vType == "Sales") ? "GST / Exempt" : "GST";
-        std::string placeOfSupply = cleanText(getField(firstR, "PlaceOfSupply"));
-        std::string gstinVal = cleanText(getField(firstR, "ECommGSTIN"));
-        if (gstinVal.empty() || gstinVal == "0") gstinVal = partyRes.primary_party_gstin;
-
-        // 3. Aggregated Expenses & Calculations
-        double freightCharges = 0.0;
-        double otherExpenses = 0.0;
-        double discountAmount = 0.0;
-        double tcsAmount = 0.0;
-        double tcsRate = parseDoubleVal(getField(firstR, "TCSRate"), 0.0);
-        double roundOff = 0.0;
-        double cgstTax = 0.0, sgstTax = 0.0, igstTax = 0.0, cessTax = 0.0;
-        double damiAmt = 0.0, labourAmt = 0.0, auctionAmt = 0.0, mFeeAmt = 0.0, hrdfAmt = 0.0, welfareAmt = 0.0, dhrmdAmt = 0.0, sutliAmt = 0.0;
-
-        for (const auto& rItem : rows) {
-            std::string entryT = cleanText(getField(rItem, "EntryType"));
-            double rAmt = parseDoubleVal(getField(rItem, "Amount"));
-            std::string rDrCr = cleanText(getField(rItem, "DrCr"));
-            if (entryT == "Freight" || entryT == "FreightBeforeVAT") {
-                freightCharges += rAmt;
-            } else if (entryT == "Discount") {
-                discountAmount += rAmt;
-            } else if (entryT == "TCS") {
-                tcsAmount += rAmt;
-            } else if (entryT == "RoundOff" || entryT == "ROUND" || entryT == "Round Off") {
-                roundOff += (rDrCr == "Cr" && vType == "Sales") ? -rAmt : rAmt;
-            } else if (entryT == "CGST") {
-                cgstTax += rAmt;
-            } else if (entryT == "SGST") {
-                sgstTax += rAmt;
-            } else if (entryT == "IGST") {
-                igstTax += rAmt;
-            } else if (entryT == "CessTax" || entryT == "Cess") {
-                cessTax += rAmt;
-            } else if (entryT == "Dami") {
-                damiAmt += rAmt;
-            } else if (entryT == "Labour" || entryT == "Loading") {
-                labourAmt += rAmt;
-            } else if (entryT == "Auction") {
-                auctionAmt += rAmt;
-            } else if (entryT == "MFee" || entryT == "MktFee" || entryT == "MFees") {
-                mFeeAmt += rAmt;
-            } else if (entryT == "CessHRDF") {
-                hrdfAmt += rAmt;
-            } else if (entryT == "Welfare") {
-                welfareAmt += rAmt;
-            } else if (entryT == "Dharmada" || entryT == "Gaushala") {
-                dhrmdAmt += rAmt;
-            } else if (entryT == "Sutli" || entryT == "Bardana") {
-                sutliAmt += rAmt;
-            } else if (entryT == "OtherExp" || entryT == "Exp." || entryT == "QualityClaim") {
-                otherExpenses += rAmt;
-            }
-        }
-        if (tcsAmount <= 0.0 && tcsRate > 0.0) {
-            double tcsTaxable = parseDoubleVal(getField(firstR, "TCSTaxable"));
-            if (tcsTaxable > 0.0) tcsAmount = std::round((tcsTaxable * tcsRate / 100.0) * 100.0) / 100.0;
-        }
-
-        // Insert Header Voucher
-        db.executeNonQuery(
-            "INSERT INTO vouchers ("
-            "fy_id, financial_year, voucher_no, voucher_date, voucher_type, legacy_type, "
-            "ledger_id, party_name, account_type, amount, narration, "
-            "vehicle_no, gr_no, driver_name, eway_bill_no, broker_name, farmer_name, bank_date, sauda_date, "
-            "due_days, market_type, tax_status, place_of_supply, challan_no) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-            {
-                fyId,
-                fyVal,
-                vchNumStr,
-                vDate,
-                vType,
-                QString::fromStdString(rawType),
-                partyRes.primary_party_id,
-                QString::fromStdString(partyRes.primary_party),
-                QString::fromStdString(partyRes.opposing_account),
-                partyAmount,
-                QString::fromStdString(narration),
-                QString::fromStdString(vehicleNo),
-                QString::fromStdString(grNo),
-                QString::fromStdString(driverName),
-                QString::fromStdString(ewayBill),
-                QString::fromStdString(brokerName),
-                QString::fromStdString(farmerName),
-                QString::fromStdString(bankDate),
-                QString::fromStdString(saudaDate),
-                dueDays,
-                QString::fromStdString(marketType),
-                QString::fromStdString(taxStatus),
-                QString::fromStdString(placeOfSupply),
-                QString::fromStdString(challanNo)
-            }
-        );
-
-        // Line Items from StockTransactions
-        int itemId = 0;
-        std::string itemName = "";
-        std::string hsnCode = "";
-        int bagCount = 0;
-        double weightQtl = 0.0;
-        double ratePerQtl = 0.0;
-        double gstPct = 0.0;
-        double cgstAmt = cgstTax, sgstAmt = sgstTax, igstAmt = igstTax;
-        double taxableAmt = partyAmount;
-
-        if (itStockLines != stockTransMap.end() && !itStockLines->second.empty()) {
-            const auto& lines = itStockLines->second;
-            itemId = lines[0].item_id;
-            itemName = lines[0].item_name;
-            hsnCode = lines[0].hsn_code;
-            gstPct = lines[0].gst_pct;
-            ratePerQtl = lines[0].rate;
-
-            weightQtl = 0.0;
-            taxableAmt = 0.0;
-            double stCgst = 0.0, stSgst = 0.0, stIgst = 0.0;
-            for (const auto& line : lines) {
-                bagCount += line.bags;
-                weightQtl += line.weight_qtl;
-                taxableAmt += line.taxable_amount;
-                stCgst += line.cgst;
-                stSgst += line.sgst;
-                stIgst += line.igst;
-            }
-            if (stCgst > 0.0) cgstAmt = stCgst;
-            if (stSgst > 0.0) sgstAmt = stSgst;
-            if (stIgst > 0.0) igstAmt = stIgst;
-
-            if (taxableAmt <= 0.0) taxableAmt = partyAmount;
-            if (ratePerQtl <= 0.0 && weightQtl > 0.0) {
-                ratePerQtl = std::round((taxableAmt / weightQtl) * 100.0) / 100.0;
-            }
-        } else if (marketType == "Market Type (Without Stock)") {
-            bagCount = 0;
-            weightQtl = 0.0;
-            ratePerQtl = partyAmount;
-            taxableAmt = partyAmount;
-        }
-
-        if (vType == "Sales") {
-            db.executeNonQuery(
-                "INSERT INTO sales_invoices ("
-                "fy_id, financial_year, voucher_no, invoice_no, invoice_date, customer_id, customer_name, gstin, "
-                "item_id, item_name, hsn_code, "
-                "bag_count, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, "
-                "cgst_amount, sgst_amount, igst_amount, round_off, gst_amount, "
-                "total_amount, payment_mode, vehicle_no, eway_bill_no, narration, sale_status, market_fee_status, "
-                "dami, labour, auction, m_fee, hrdf, other_exp, welfare, dhrmd, sutli, less_amount, "
-                "gr_no, driver_name, broker_name, sauda_date, bill_time, shipping_address, po_no, grade, "
-                "kanda_weight, transport, market_type, due_days, tax_status, challan_no, freight_charges, tcs_amount, tcs_rate, place_of_supply) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Credit', ?, ?, ?, 'Self Sale', 'Paid', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-                {
-                    (fyId > 0 ? QVariant(fyId) : QVariant()),
-                    fyVal,
-                    vchNumStr,
-                    QString::fromStdString(invNo),
-                    vDate,
-                    (partyRes.primary_party_id > 0 ? QVariant(partyRes.primary_party_id) : QVariant()),
-                    QString::fromStdString(partyRes.primary_party),
-                    QString::fromStdString(gstinVal),
-                    (itemId > 0 ? QVariant(itemId) : QVariant()),
-                    QString::fromStdString(itemName),
-                    QString::fromStdString(hsnCode),
-                    bagCount,
-                    weightQtl,
-                    ratePerQtl,
-                    taxableAmt,
-                    gstPct,
-                    cgstAmt,
-                    sgstAmt,
-                    igstAmt,
-                    roundOff,
-                    (cgstAmt + sgstAmt + igstAmt),
-                    partyAmount,
-                    QString::fromStdString(vehicleNo),
-                    QString::fromStdString(ewayBill),
-                    QString::fromStdString(narration),
-                    damiAmt,
-                    labourAmt,
-                    auctionAmt,
-                    mFeeAmt,
-                    hrdfAmt,
-                    otherExpenses,
-                    welfareAmt,
-                    dhrmdAmt,
-                    sutliAmt,
-                    discountAmount,
-                    QString::fromStdString(grNo),
-                    QString::fromStdString(driverName),
-                    QString::fromStdString(brokerName),
-                    QString::fromStdString(saudaDate),
-                    QString::fromStdString(billTime),
-                    QString::fromStdString(shippingAddress),
-                    QString::fromStdString(poNo),
-                    QString::fromStdString(grade),
-                    QString::fromStdString(kandaWeight),
-                    QString::fromStdString(transport),
-                    QString::fromStdString(marketType),
-                    dueDays,
-                    QString::fromStdString(taxStatus),
-                    QString::fromStdString(challanNo),
-                    freightCharges,
-                    tcsAmount,
-                    tcsRate,
-                    QString::fromStdString(placeOfSupply)
-                }
-            );
-            long long salesInvId = db.lastInsertedId();
-
-            // Insert line items
-            if (itStockLines != stockTransMap.end() && !itStockLines->second.empty()) {
-                for (const auto& sLine : itStockLines->second) {
-                    std::string lineGrade = sLine.grade;
-                    if (lineGrade.empty()) lineGrade = grade;
-                    db.executeNonQuery(
-                        "INSERT INTO sales_invoice_items ("
-                        "invoice_id, invoice_no, item_id, item_name, grade, bag_count, packing, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, total_amount) "
-                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-                        {
-                            salesInvId,
-                            QString::fromStdString(invNo),
-                            (sLine.item_id > 0 ? QVariant(sLine.item_id) : QVariant()),
-                            QString::fromStdString(sLine.item_name),
-                            QString::fromStdString(lineGrade),
-                            sLine.bags,
-                            QString::number(sLine.packing, 'f', 3),
-                            sLine.weight_qtl,
-                            sLine.rate,
-                            sLine.taxable_amount,
-                            sLine.gst_pct,
-                            sLine.amount
-                        }
-                    );
-                }
-            } else {
-                db.executeNonQuery(
-                    "INSERT INTO sales_invoice_items ("
-                    "invoice_id, invoice_no, item_id, item_name, grade, bag_count, packing, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, total_amount) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-                    {
-                        salesInvId,
-                        QString::fromStdString(invNo),
-                        (itemId > 0 ? QVariant(itemId) : QVariant()),
-                        QString::fromStdString(itemName),
-                        QString::fromStdString(grade),
-                        bagCount,
-                        (marketType == "Market Type (Without Stock)" ? "" : "0.500"),
-                        weightQtl,
-                        ratePerQtl,
-                        taxableAmt,
-                        gstPct,
-                        partyAmount
-                    }
-                );
-            }
-            salesInvoiceCount++;
-        } else if (vType == "Purchase") {
-            purchaseInvoiceCount++;
-            db.executeNonQuery(
-                "INSERT INTO purchase_invoices ("
-                "fy_id, financial_year, voucher_no, invoice_no, invoice_date, supplier_id, supplier_name, gstin, "
-                "item_id, item_name, hsn_code, "
-                "bag_count, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, "
-                "cgst_amount, sgst_amount, igst_amount, round_off, gst_amount, "
-                "total_amount, payment_mode, vehicle_no, eway_bill_no, narration, sale_status, market_fee_status, "
-                "dami, labour, auction, m_fee, hrdf, other_exp, welfare, dhrmd, sutli, less_amount, "
-                "gr_no, driver_name, broker_name, sauda_date, bill_time, shipping_address, po_no, grade, "
-                "kanda_weight, transport, market_type, due_days, tax_status, challan_no, freight_charges, tcs_amount, tcs_rate, place_of_supply) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Credit', ?, ?, ?, 'Self Purchase', 'Paid', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-                {
-                    (fyId > 0 ? QVariant(fyId) : QVariant()),
-                    fyVal,
-                    vchNumStr,
-                    QString::fromStdString(invNo),
-                    vDate,
-                    (partyRes.primary_party_id > 0 ? QVariant(partyRes.primary_party_id) : QVariant()),
-                    QString::fromStdString(partyRes.primary_party),
-                    QString::fromStdString(gstinVal),
-                    (itemId > 0 ? QVariant(itemId) : QVariant()),
-                    QString::fromStdString(itemName),
-                    QString::fromStdString(hsnCode),
-                    bagCount,
-                    weightQtl,
-                    ratePerQtl,
-                    taxableAmt,
-                    gstPct,
-                    cgstAmt,
-                    sgstAmt,
-                    igstAmt,
-                    roundOff,
-                    (cgstAmt + sgstAmt + igstAmt),
-                    partyAmount,
-                    QString::fromStdString(vehicleNo),
-                    QString::fromStdString(ewayBill),
-                    QString::fromStdString(narration),
-                    damiAmt,
-                    labourAmt,
-                    auctionAmt,
-                    mFeeAmt,
-                    hrdfAmt,
-                    otherExpenses,
-                    welfareAmt,
-                    dhrmdAmt,
-                    sutliAmt,
-                    discountAmount,
-                    QString::fromStdString(grNo),
-                    QString::fromStdString(driverName),
-                    QString::fromStdString(brokerName),
-                    QString::fromStdString(saudaDate),
-                    QString::fromStdString(billTime),
-                    QString::fromStdString(shippingAddress),
-                    QString::fromStdString(poNo),
-                    QString::fromStdString(grade),
-                    QString::fromStdString(kandaWeight),
-                    QString::fromStdString(transport),
-                    QString::fromStdString(marketType),
-                    dueDays,
-                    QString::fromStdString(taxStatus),
-                    QString::fromStdString(challanNo),
-                    freightCharges,
-                    tcsAmount,
-                    tcsRate,
-                    QString::fromStdString(placeOfSupply)
-                }
-            );
-            long long purcInvId = db.lastInsertedId();
-
-            // Insert line items
-            if (itStockLines != stockTransMap.end() && !itStockLines->second.empty()) {
-                for (const auto& pLine : itStockLines->second) {
-                    std::string lineGrade = pLine.grade;
-                    if (lineGrade.empty()) lineGrade = grade;
-                    db.executeNonQuery(
-                        "INSERT INTO purchase_invoice_items ("
-                        "invoice_id, invoice_no, item_id, item_name, grade, bag_count, packing, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, total_amount) "
-                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-                        {
-                            purcInvId,
-                            QString::fromStdString(invNo),
-                            (pLine.item_id > 0 ? QVariant(pLine.item_id) : QVariant()),
-                            QString::fromStdString(pLine.item_name),
-                            QString::fromStdString(lineGrade),
-                            pLine.bags,
-                            QString::number(pLine.packing, 'f', 3),
-                            pLine.weight_qtl,
-                            pLine.rate,
-                            pLine.taxable_amount,
-                            pLine.gst_pct,
-                            pLine.amount
-                        }
-                    );
-                }
-            } else {
-                db.executeNonQuery(
-                    "INSERT INTO purchase_invoice_items ("
-                    "invoice_id, invoice_no, item_id, item_name, grade, bag_count, packing, weight_qtl, rate_per_qtl, taxable_amount, gst_pct, total_amount) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-                    {
-                        purcInvId,
-                        QString::fromStdString(invNo),
-                        (itemId > 0 ? QVariant(itemId) : QVariant()),
-                        QString::fromStdString(itemName),
-                        QString::fromStdString(grade),
-                        bagCount,
-                        (marketType == "Market Type (Without Stock)" ? "" : "0.500"),
-                        weightQtl,
-                        ratePerQtl,
-                        taxableAmt,
-                        gstPct,
-                        partyAmount
-                    }
-                );
-            }
-
-            // Register in paddy arrivals if purchase item is Paddy
-            std::string itemLower = toLowerStr(itemName);
-            if (itemLower.find("paddy") != std::string::npos || itemLower.find("dheri") != std::string::npos) {
-                db.executeNonQuery(
-                    "INSERT INTO paddy_slips (slip_type, "
-                    "slip_no, arrival_date, farmer_id, farmer_name, variety, "
-                    "bag_count, gross_weight_qtl, moisture_pct, moisture_deduction_qtl, net_weight_qtl, "
-                    "rate_per_qtl, hamali_charges, net_amount, payment_status) "
-                    "VALUES ('arrival', ?, ?, ?, ?, ?, ?, ?, 17.0, 0.0, ?, ?, 0.0, ?, 'Unpaid');",
-                    {
-                        QString::fromStdString(invNo),
-                        vDate,
-                        (partyRes.primary_party_id > 0 ? QVariant(partyRes.primary_party_id) : QVariant()),
-                        QString::fromStdString(partyRes.primary_party),
-                        QString::fromStdString(itemName),
-                        bagCount,
-                        weightQtl,
-                        weightQtl,
-                        ratePerQtl,
-                        partyAmount
-                    }
-                );
-            }
+    {
+        MahadevERP::MigrationContext vctx;
+        vctx.provider = MahadevERP::MigrationProvider::BahiKhata;
+        vctx.sourcePath = mdbFilePath;
+        vctx.progressCallback = [this](int p, const QString& s) { updateProgress(p, s); };
+        if (!MahadevERP::VoucherMigrator::migrate_transactions_bahikhata(
+                vctx, transRows, stockTransMap, transportMap,
+                ledgerCodeMap, ledgerDetailMap, ledgerDeletedNameMap, fyNameToId,
+                voucherGroups, salesInvoiceCount, purchaseInvoiceCount)) {
+            qWarning() << "[Migration] transactions pass failed for" << mdbFilePath;
+            return false;
         }
     }
+
+    // (§2 invoice/voucher reconstruction moved into
+    // VoucherMigrator::migrate_transactions_bahikhata — PASS 5 wrapper above.)
 
     // =========================================================
-    // PASS 5.2: MILLING PRODUCTION BATCHES & LINE ITEMS
+    // PASS 5.2: manufacturING PRODUCTION BATCHES & LINE ITEMS
     // =========================================================
-    updateProgress(75, QString("Migrating Milling Production Batches & Line Items..."));
-    std::map<std::pair<std::string, std::string>, std::vector<std::map<std::string, std::string>>> millingGroups;
-    for (const auto& mr : millingRows) {
-        std::string mvNo = cleanText(getField(mr, "VoucherNumber"));
-        std::string mvDate = parseDateFormatted(QString::fromStdString(getField(mr, "VoucherDate"))).toStdString();
-        millingGroups[{mvNo, mvDate}].push_back(mr);
+    // C3 slice M1: PASS 5.2 lives in MandiMigrator now (JSON-driven
+    // field keys via MigrationColumns). Thin wrapper — no new logic
+    // here. The group count flows back out for the summary
+    // (value-identical: skips never incremented either counter).
+    size_t manufacturingGroupCount = 0;
+    {
+        MahadevERP::MigrationContext mctx;
+        mctx.provider = MahadevERP::MigrationProvider::BahiKhata;
+        mctx.sourcePath = mdbFilePath;
+        mctx.progressCallback = [this](int p, const QString& s) { updateProgress(p, s); };
+        if (!MahadevERP::MandiMigrator::migrate_manufacturing_bahikhata(
+                mctx, manufacturingRows, itemCodeMap, fyNameToId,
+                manufacturingGroupCount)) {
+            qWarning() << "[Migration] manufacturing pass failed for" << mdbFilePath;
+            return false;
+        }
     }
-
-    db.executeNonQuery("DELETE FROM milling_batches;");
-    db.executeNonQuery("DELETE FROM milling_voucher_items;");
-
-    int batchCount = 0;
-    for (const auto& pair : millingGroups) {
-        std::string mvNo = pair.first.first;
-        std::string mvDate = pair.first.second;
-        const auto& mRows = pair.second;
-
-        QString batchNoStr = QString("Mill-%1").arg(QString::fromStdString(mvNo));
-        QString fyVal = computeFinancialYear(QString::fromStdString(mvDate));
-        int fyId = fyNameToId.count(fyVal) ? fyNameToId[fyVal] : 1;
-
-        double paddyIn = 0.0;
-        std::string paddyVariety = "Paddy Basmati";
-        double headRice = 0.0;
-        double brokenRice = 0.0;
-        double bran = 0.0;
-        double husk = 0.0;
-        std::string batchNarration;
-
-        for (const auto& r : mRows) {
-            int iCode = parseIntVal(getField(r, "ItemCode"));
-            auto itItem = itemCodeMap.find(iCode);
-            std::string iName = (itItem != itemCodeMap.end()) ? itItem->second.name : cleanText(getField(r, "ItemName"));
-            if (iName.empty()) iName = "Item #" + std::to_string(iCode);
-
-            std::string iLower = toLowerStr(iName);
-            double wt = parseDoubleVal(getField(r, "Weight"));
-            std::string drcr = cleanText(getField(r, "DrCr"));
-            std::string narr = cleanText(getField(r, "Narrtn"));
-            if (!narr.empty() && batchNarration.empty()) batchNarration = narr;
-
-            if (drcr == "Cr") {
-                paddyIn += wt;
-                paddyVariety = iName;
-            } else {
-                if (iLower.find("bran") != std::string::npos && iLower.find("brand") == std::string::npos) {
-                    bran += wt;
-                } else if (iLower.find("broken") != std::string::npos || iLower.find("nakku") != std::string::npos || iLower.find("tibar") != std::string::npos || iLower.find("dubar") != std::string::npos || iLower.find("mogra") != std::string::npos || iLower.find("kinki") != std::string::npos) {
-                    brokenRice += wt;
-                } else if (iLower.find("husk") != std::string::npos || iLower.find("phak") != std::string::npos || iLower.find("bhusa") != std::string::npos) {
-                    husk += wt;
-                } else {
-                    headRice += wt;
-                }
-            }
-        }
-
-        double totalOut = headRice + brokenRice + bran + husk;
-        double wastage = std::max(0.0, std::round((paddyIn - totalOut) * 1000.0) / 1000.0);
-        double yieldPct = (paddyIn > 0.0) ? std::round((headRice / paddyIn * 100.0) * 100.0) / 100.0 : 0.0;
-
-        db.executeNonQuery(
-            "INSERT INTO milling_batches ("
-            "fy_id, financial_year, batch_no, batch_date, paddy_variety, paddy_input_qtl, "
-            "head_rice_qtl, broken_rice_qtl, bran_qtl, husk_qtl, "
-            "wastage_qtl, yield_pct, narration) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-            {
-                (fyId > 0 ? QVariant(fyId) : QVariant()),
-                fyVal,
-                batchNoStr,
-                QString::fromStdString(mvDate),
-                QString::fromStdString(paddyVariety),
-                paddyIn,
-                headRice,
-                brokenRice,
-                bran,
-                husk,
-                wastage,
-                yieldPct,
-                QString::fromStdString(batchNarration)
-            }
-        );
-        int batchDbId = static_cast<int>(db.lastInsertedId());
-
-        for (const auto& r : mRows) {
-            int rowNo = parseIntVal(getField(r, "RowNo", "1"), 1);
-            std::string drcr = cleanText(getField(r, "DrCr"));
-            int iCode = parseIntVal(getField(r, "ItemCode"));
-            auto itItem = itemCodeMap.find(iCode);
-            int iId = (itItem != itemCodeMap.end()) ? itItem->second.id : 0;
-            std::string iName = (itItem != itemCodeMap.end()) ? itItem->second.name : cleanText(getField(r, "ItemName"));
-            if (iName.empty()) iName = "Item #" + std::to_string(iCode);
-
-            double pct = parseDoubleVal(getField(r, "Percentage"));
-            double wt = parseDoubleVal(getField(r, "Weight"));
-            int bags = parseIntVal(getField(r, "Bags"));
-            double amt = parseDoubleVal(getField(r, "Amount"));
-            double rate = (wt > 0.0) ? std::round((amt / wt) * 100.0) / 100.0 : 0.0;
-            std::string narr = cleanText(getField(r, "Narrtn"));
-
-            db.executeNonQuery(
-                "INSERT INTO milling_voucher_items ("
-                "batch_id, batch_no, batch_date, row_no, drcr, "
-                "item_id, item_code, item_name, percentage, "
-                "weight_qtl, bags, rate, amount, narration) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-                {
-                    batchDbId,
-                    batchNoStr,
-                    QString::fromStdString(mvDate),
-                    rowNo,
-                    QString::fromStdString(drcr),
-                    (iId > 0 ? QVariant(iId) : QVariant()),
-                    QString::number(iCode),
-                    QString::fromStdString(iName),
-                    pct,
-                    wt,
-                    bags,
-                    rate,
-                    amt,
-                    QString::fromStdString(narr)
-                }
-            );
-        }
-
-        QString vchNarr = QString("Milling Batch %1: Input %2 Qtl %3 -> Produced %4 Qtl (%5% Yield)")
-            .arg(batchNoStr)
-            .arg(paddyIn, 0, 'f', 2)
-            .arg(QString::fromStdString(paddyVariety))
-            .arg(totalOut, 0, 'f', 2)
-            .arg(yieldPct, 0, 'f', 1);
-        if (!batchNarration.empty()) {
-            vchNarr += " | " + QString::fromStdString(batchNarration);
-        }
-
-        db.executeNonQuery(
-            "INSERT INTO vouchers ("
-            "fy_id, financial_year, voucher_no, voucher_date, voucher_type, legacy_type, "
-            "party_name, account_type, amount, narration) "
-            "VALUES (?, ?, ?, ?, 'Milling', 'Mill', 'Milling / Production Account', 'Production Account', 0.0, ?);",
-            {
-                (fyId > 0 ? QVariant(fyId) : QVariant()),
-                fyVal,
-                batchNoStr,
-                QString::fromStdString(mvDate),
-                vchNarr
-            }
-        );
-        batchCount++;
-    }
-    std::cout << "[INFO] Migrated " << batchCount << " Milling production batches!" << std::endl;
 
     // =========================================================
     // PASS 5.3: STOCK TRANSACTIONS (INVENTORY LEDGER)
     // =========================================================
-    updateProgress(85, QString("Migrating %1 Stock Movements (Inventory Ledger)...").arg(stockTransRows.size()));
-    db.executeNonQuery("DELETE FROM stock_transactions;");
-
-    // Key by {VoucherNumber, TransType, VoucherDate} and strictly filter EntryType == "Ledger"
-    std::map<std::tuple<std::string, std::string, std::string>, std::tuple<std::string, int, std::string>> txLookup;
-    std::map<std::pair<std::string, std::string>, std::tuple<std::string, int, std::string>> txLookupFallback;
-
-    for (const auto& tr : transRows) {
-        std::string entryType = cleanText(getField(tr, "EntryType"));
-        if (entryType != "Ledger") continue; // Counter-party ledger ONLY (prevents Goods Amount / TDS overwrite)
-
-        std::string vNo = cleanText(getField(tr, "VoucherNumber"));
-        std::string tType = cleanText(getField(tr, "TransType"));
-        QString vDate = parseDateFormatted(QString::fromStdString(getField(tr, "VoucherDate")));
-        int pCode = parseIntVal(getField(tr, "PartyCode"));
-        if (pCode == 0) pCode = parseIntVal(getField(tr, "AccountCode"));
-        std::string invNo = cleanText(getField(tr, "InvoiceNo"));
-        if (invNo.empty()) invNo = cleanText(getField(tr, "TaxInvoiceNo"));
-        if (invNo.empty()) invNo = vNo;
-
-        auto itParty = ledgerDetailMap.find(pCode);
-        if (itParty != ledgerDetailMap.end()) {
-            txLookup[{vNo, tType, vDate.toStdString()}] = {invNo, itParty->second.id, itParty->second.name};
-            txLookupFallback[{vNo, tType}] = {invNo, itParty->second.id, itParty->second.name};
+    // C3 strangler slice V: PASS 5.3 lives in VoucherMigrator now
+    // (JSON-driven field keys via MigrationColumns). Thin wrapper — no
+    // new logic here.
+    {
+        MahadevERP::MigrationContext vctx;
+        vctx.provider = MahadevERP::MigrationProvider::BahiKhata;
+        vctx.sourcePath = mdbFilePath;
+        vctx.progressCallback = [this](int p, const QString& s) { updateProgress(p, s); };
+        if (!MahadevERP::VoucherMigrator::migrate_stock_ledger_bahikhata(
+                vctx, transRows, stockTransRows,
+                ledgerDetailMap, itemCodeMap, fyNameToId)) {
+            qWarning() << "[Migration] stock-ledger pass failed for" << mdbFilePath;
+            return false;
         }
-    }
-
-    for (const auto& st : stockTransRows) {
-        QString stDate = parseDateFormatted(QString::fromStdString(getField(st, "VoucherDate")));
-        if (stDate.isEmpty()) continue;
-
-        std::string stVno = cleanText(getField(st, "VoucherNumber"));
-        std::string stTt = cleanText(getField(st, "TransType"));
-        std::string stVt = cleanText(getField(st, "VoucherType"));
-        std::string stIcode = cleanText(getField(st, "ItemCode"));
-        int iCode = parseIntVal(stIcode);
-
-        auto itItem = itemCodeMap.find(iCode);
-        if (itItem == itemCodeMap.end()) continue;
-        int stItemId = itItem->second.id;
-        std::string stItemName = itItem->second.name;
-
-        int stBags = parseIntVal(getField(st, "Bags"));
-        double stPack = parseDoubleVal(getField(st, "Packing"));
-        double stWt = parseDoubleVal(getField(st, "Weight"));
-        double stRate = parseDoubleVal(getField(st, "Rate"));
-        double stAmt = parseDoubleVal(getField(st, "Amount"));
-        double stTaxable = parseDoubleVal(getField(st, "TaxableAmount"));
-        double stTax = parseDoubleVal(getField(st, "Tax"));
-        std::string stTaxtype = cleanText(getField(st, "TaxType"));
-        std::string stNarr = cleanText(getField(st, "Narration"));
-        int stRow = parseIntVal(getField(st, "RowNo", "1"), 1);
-
-        std::string stBill = stVno;
-        int stPid = 0;
-        std::string stPname;
-
-        auto itTx = txLookup.find({stVno, stTt, stDate.toStdString()});
-        if (itTx != txLookup.end()) {
-            stBill = std::get<0>(itTx->second);
-            stPid = std::get<1>(itTx->second);
-            stPname = std::get<2>(itTx->second);
-        } else {
-            auto itFb = txLookupFallback.find({stVno, stTt});
-            if (itFb != txLookupFallback.end()) {
-                stBill = std::get<0>(itFb->second);
-                stPid = std::get<1>(itFb->second);
-                stPname = std::get<2>(itFb->second);
-            }
-        }
-
-        QString stFy = computeFinancialYear(stDate);
-        int stFyId = fyNameToId.count(stFy) ? fyNameToId[stFy] : 1;
-
-        db.executeNonQuery(
-            "INSERT INTO stock_transactions ("
-            "fy_id, financial_year, voucher_no, voucher_date, trans_type, voucher_type, "
-            "party_id, party_name, bill_no, item_id, item_code, item_name, "
-            "bags, packing, weight_qtl, rate, amount, taxable_amount, tax, "
-            "tax_type, narration, row_no) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-            {
-                (stFyId > 0 ? QVariant(stFyId) : QVariant()),
-                stFy,
-                canonVoucherNo(stFy, stTt, stVno),
-                stDate,
-                QString::fromStdString(stTt),
-                QString::fromStdString(stVt),
-                (stPid > 0 ? QVariant(stPid) : QVariant()),
-                QString::fromStdString(stPname),
-                QString::fromStdString(stBill),
-                (stItemId > 0 ? QVariant(stItemId) : QVariant()),
-                QString::fromStdString(stIcode),
-                QString::fromStdString(stItemName),
-                stBags,
-                stPack,
-                stWt,
-                stRate,
-                stAmt,
-                stTaxable,
-                stTax,
-                QString::fromStdString(stTaxtype),
-                QString::fromStdString(stNarr),
-                stRow
-            }
-        );
     }
 
     // =========================================================
     // PASS 3.5: J-FORM PROCUREMENT VOUCHERS (TransType == 'JFrm')
     // =========================================================
-    updateProgress(88, "Migrating J-Form Mandi Procurement Vouchers...");
-    
-    // Group StockTransactions where TransType == 'JFrm' by (VoucherNumber, VoucherDate)
-    std::map<std::pair<std::string, std::string>, std::vector<std::map<std::string, std::string>>> jformStockGroups;
-    for (const auto& st : stockTransRows) {
-        std::string tt = cleanText(getField(st, "TransType"));
-        if (tt != "JFrm") continue;
-        std::string vNo = cleanText(getField(st, "VoucherNumber"));
-        QString vDate = parseDateFormatted(QString::fromStdString(getField(st, "VoucherDate")));
-        jformStockGroups[{vNo, vDate.toStdString()}].push_back(st);
-    }
-
-    // Group Transactions where TransType == 'JFrm' by (VoucherNumber, VoucherDate)
-    std::map<std::pair<std::string, std::string>, std::vector<std::map<std::string, std::string>>> jformTxGroups;
-    for (const auto& tr : transRows) {
-        std::string tt = cleanText(getField(tr, "TransType"));
-        if (tt != "JFrm") continue;
-        std::string vNo = cleanText(getField(tr, "VoucherNumber"));
-        QString vDate = parseDateFormatted(QString::fromStdString(getField(tr, "VoucherDate")));
-        jformTxGroups[{vNo, vDate.toStdString()}].push_back(tr);
-    }
-
-    int jformCount = 0;
-    std::set<std::pair<std::string, std::string>> allJFormKeys;
-    for (const auto& p : jformStockGroups) allJFormKeys.insert(p.first);
-    for (const auto& p : jformTxGroups) allJFormKeys.insert(p.first);
-
-    for (const auto& k : allJFormKeys) {
-        std::string vNo = k.first;
-        QString vDate = QString::fromStdString(k.second);
-        int vchNum = parseIntVal(vNo, 1);
-        QString fyVal = computeFinancialYear(vDate);
-        int fyId = fyNameToId.count(fyVal) ? fyNameToId[fyVal] : 1;
-
-        QString jformNo = QString::fromStdString(vNo);
-        int zimidarId = 0;
-        QString zimidarName = "";
-        int partyId = 0;
-        QString partyName = "Self Purchase";
-        QString auctionStatus = "Zimidara Self Purchase";
-        int dueDays = 0;
-        double goodsAmount = 0.0;
-        double labourAmount = 0.0;
-        double roundOff = 0.0;
-        double grandTotal = 0.0;
-        QString narration = "";
-
-        // Check Transactions for header details
-        auto itTx = jformTxGroups.find(k);
-        if (itTx != jformTxGroups.end()) {
-            for (const auto& tr : itTx->second) {
-                std::string invNo = cleanText(getField(tr, "InvoiceNo"));
-                if (!invNo.empty()) jformNo = QString::fromStdString(invNo);
-
-                std::string stNarr = cleanText(getField(tr, "Narration"));
-                if (!stNarr.empty() && narration.isEmpty()) narration = QString::fromStdString(stNarr);
-
-                std::string zName = cleanText(getField(tr, "ZimidarName"));
-                if (!zName.empty() && zimidarName.isEmpty()) zimidarName = QString::fromStdString(zName);
-
-                std::string jStatus = cleanText(getField(tr, "JFormSaleStatus"));
-                if (!jStatus.empty()) auctionStatus = QString::fromStdString(jStatus);
-
-                int dDays = parseIntVal(getField(tr, "DueDays"));
-                if (dDays > 0) dueDays = dDays;
-
-                std::string entryType = cleanText(getField(tr, "EntryType"));
-                std::string drCr = cleanText(getField(tr, "DrCr"));
-                double amt = parseDoubleVal(getField(tr, "Amount"));
-                int acCode = parseIntVal(getField(tr, "AccountCode"));
-
-                if (entryType == "Ledger" && drCr == "Cr") {
-                    grandTotal = amt;
-                    auto itP = ledgerDetailMap.find(acCode);
-                    if (itP != ledgerDetailMap.end()) {
-                        zimidarId = itP->second.id;
-                        if (zimidarName.isEmpty()) zimidarName = QString::fromStdString(itP->second.name);
-                    }
-                } else if (entryType == "JFormIFormLedger" || drCr == "Dr") {
-                    goodsAmount = amt;
-                    auto itP = ledgerDetailMap.find(acCode);
-                    if (itP != ledgerDetailMap.end()) {
-                        partyId = itP->second.id;
-                        partyName = QString::fromStdString(itP->second.name);
-                    }
-                } else if (entryType == "Labour") {
-                    labourAmount = amt;
-                } else if (entryType == "Round Off") {
-                    roundOff = (drCr == "Dr" ? amt : -amt);
-                }
-            }
+    // C3 slice M1: PASS 3.5 lives in MandiMigrator now (JSON-driven
+    // field keys via MigrationColumns). Thin wrapper — no new logic here.
+    {
+        MahadevERP::MigrationContext mctx;
+        mctx.provider = MahadevERP::MigrationProvider::BahiKhata;
+        mctx.sourcePath = mdbFilePath;
+        mctx.progressCallback = [this](int p, const QString& s) { updateProgress(p, s); };
+        if (!MahadevERP::MandiMigrator::migrate_jform_bahikhata(
+                mctx, transRows, stockTransRows,
+                ledgerDetailMap, itemCodeMap, fyNameToId)) {
+            qWarning() << "[Migration] J-Form pass failed for" << mdbFilePath;
+            return false;
         }
-
-        // Sum items from stock transactions
-        int totalBags = 0;
-        double totalWeight = 0.0;
-        double stockGoodsAmount = 0.0;
-
-        auto itStock = jformStockGroups.find(k);
-        if (itStock != jformStockGroups.end()) {
-            for (const auto& st : itStock->second) {
-                totalBags += parseIntVal(getField(st, "Bags"));
-                totalWeight += parseDoubleVal(getField(st, "Weight"));
-                stockGoodsAmount += parseDoubleVal(getField(st, "Amount"));
-                if (zimidarId == 0) {
-                    int dpCode = parseIntVal(getField(st, "DheriPurchaseFrom"));
-                    if (dpCode == 0) dpCode = parseIntVal(getField(st, "CommissionPartyCode"));
-                    auto itP = ledgerDetailMap.find(dpCode);
-                    if (itP != ledgerDetailMap.end()) {
-                        zimidarId = itP->second.id;
-                        if (zimidarName.isEmpty()) zimidarName = QString::fromStdString(itP->second.name);
-                    }
-                }
-            }
-        }
-
-        if (goodsAmount <= 0.001) goodsAmount = stockGoodsAmount;
-        if (grandTotal <= 0.001) grandTotal = goodsAmount - labourAmount + roundOff;
-        if (zimidarName.isEmpty()) zimidarName = "Farmer / Zimidar";
-
-        db.executeNonQuery(
-            "INSERT INTO jform_vouchers ("
-            "fy_id, financial_year, voucher_no, voucher_date, jform_no, zimidar_id, zimidar_name, "
-            "party_id, party_name, auction_sale_status, due_days, total_bags, total_weight, "
-            "goods_amount, bonus_amount, relief_amount, subtotal_amount, labour_amount, "
-            "round_off, grand_total, narration) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0.0, 0.0, ?, ?, ?, ?, ?);",
-            {
-                (fyId > 0 ? QVariant(fyId) : QVariant()), fyVal, vchNum, vDate, jformNo,
-                (zimidarId > 0 ? QVariant(zimidarId) : QVariant()), zimidarName,
-                (partyId > 0 ? QVariant(partyId) : QVariant()), partyName,
-                auctionStatus, dueDays, totalBags, totalWeight,
-                goodsAmount, goodsAmount, labourAmount, roundOff, grandTotal, narration
-            }
-        );
-
-        QVariant newJFormId = db.executeScalar("SELECT last_insert_rowid();");
-        int jfVoucherId = newJFormId.toInt();
-
-        // Insert line items
-        if (itStock != jformStockGroups.end()) {
-            for (const auto& st : itStock->second) {
-                int iCode = parseIntVal(getField(st, "ItemCode"));
-                int itemId = 0;
-                std::string itemName = "Paddy";
-                auto itItem = itemCodeMap.find(iCode);
-                if (itItem != itemCodeMap.end()) {
-                    itemId = itItem->second.id;
-                    itemName = itItem->second.name;
-                }
-
-                int bags = parseIntVal(getField(st, "Bags"));
-                double loose = parseDoubleVal(getField(st, "LooseWeight"));
-                double packing = parseDoubleVal(getField(st, "Packing"), 0.500);
-                double wt = parseDoubleVal(getField(st, "Weight"));
-                double rate = parseDoubleVal(getField(st, "Rate"));
-                double amt = parseDoubleVal(getField(st, "Amount"));
-
-                db.executeNonQuery(
-                    "INSERT INTO jform_voucher_items ("
-                    "voucher_id, voucher_no, item_id, item_name, bags, loose_weight, packing, weight, rate, amount) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-                    {
-                        jfVoucherId, vchNum, (itemId > 0 ? QVariant(itemId) : QVariant()), QString::fromStdString(itemName),
-                        bags, loose, packing, wt, rate, amt
-                    }
-                );
-            }
-        }
-        jformCount++;
     }
-    std::cout << "[INFO] Migrated " << jformCount << " J-Form vouchers!" << std::endl;
 
 
     // =========================================================
     // PASS 3.6: I-FORM MANDI ISSUE VOUCHERS (TransType == 'IFrm')
     // =========================================================
-    updateProgress(90, "Migrating I-Form Mandi Buyer Issue Vouchers...");
-
-    // Group StockTransactions where TransType == 'IFrm' by (VoucherNumber, VoucherDate)
-    std::map<std::pair<std::string, std::string>, std::vector<std::map<std::string, std::string>>> iformStockGroups;
-    for (const auto& st : stockTransRows) {
-        std::string tt = cleanText(getField(st, "TransType"));
-        if (tt != "IFrm") continue;
-        std::string vNo = cleanText(getField(st, "VoucherNumber"));
-        QString vDate = parseDateFormatted(QString::fromStdString(getField(st, "VoucherDate")));
-        iformStockGroups[{vNo, vDate.toStdString()}].push_back(st);
-    }
-
-    // Group Transactions where TransType == 'IFrm' by (VoucherNumber, VoucherDate)
-    std::map<std::pair<std::string, std::string>, std::vector<std::map<std::string, std::string>>> iformTxGroups;
-    for (const auto& tr : transRows) {
-        std::string tt = cleanText(getField(tr, "TransType"));
-        if (tt != "IFrm") continue;
-        std::string vNo = cleanText(getField(tr, "VoucherNumber"));
-        QString vDate = parseDateFormatted(QString::fromStdString(getField(tr, "VoucherDate")));
-        iformTxGroups[{vNo, vDate.toStdString()}].push_back(tr);
-    }
-
-    int iformCount = 0;
-    std::set<std::pair<std::string, std::string>> allIFormKeys;
-    for (const auto& p : iformStockGroups) allIFormKeys.insert(p.first);
-    for (const auto& p : iformTxGroups) allIFormKeys.insert(p.first);
-
-    for (const auto& k : allIFormKeys) {
-        std::string vNo = k.first;
-        QString vDate = QString::fromStdString(k.second);
-        int vchNum = parseIntVal(vNo, 1);
-        QString fyVal = computeFinancialYear(vDate);
-        int fyId = fyNameToId.count(fyVal) ? fyNameToId[fyVal] : 1;
-
-        QString iformNo = QString::fromStdString(vNo);
-        int buyerId = 0;
-        QString buyerName = "";
-        QString brokerName = "";
-        QString vehicleNo = "";
-        int dueDays = 0;
-        double goodsAmount = 0.0;
-        double damiAmount = 0.0;
-        double damiRate = 2.5;
-        double mandiFeeAmount = 0.0;
-        double mandiFeeRate = 2.0;
-        double hrdfAmount = 0.0;
-        double hrdfRate = 0.5;
-        double labourAmount = 0.0;
-        double taxAmount = 0.0;
-        double roundOff = 0.0;
-        double grandTotal = 0.0;
-        QString narration = "";
-
-        // Check Transactions for header and breakdown details
-        auto itTx = iformTxGroups.find(k);
-        if (itTx != iformTxGroups.end()) {
-            for (const auto& tr : itTx->second) {
-                std::string invNo = cleanText(getField(tr, "InvoiceNo"));
-                if (!invNo.empty()) iformNo = QString::fromStdString(invNo);
-
-                std::string stNarr = cleanText(getField(tr, "Narration"));
-                if (!stNarr.empty() && narration.isEmpty()) narration = QString::fromStdString(stNarr);
-
-                std::string bName = cleanText(getField(tr, "BrokerName"));
-                if (!bName.empty() && brokerName.isEmpty()) brokerName = QString::fromStdString(bName);
-
-                int dDays = parseIntVal(getField(tr, "DueDays"));
-                if (dDays > 0) dueDays = dDays;
-
-                std::string entryType = cleanText(getField(tr, "EntryType"));
-                std::string drCr = cleanText(getField(tr, "DrCr"));
-                double amt = parseDoubleVal(getField(tr, "Amount"));
-                int acCode = parseIntVal(getField(tr, "AccountCode"));
-                std::string acName = "";
-                auto itP = ledgerDetailMap.find(acCode);
-                if (itP != ledgerDetailMap.end()) {
-                    acName = itP->second.name;
-                }
-                std::string acNameLower = toLowerStr(acName);
-
-                if (drCr == "Dr") {
-                    grandTotal = amt;
-                    if (buyerId == 0 && itP != ledgerDetailMap.end()) {
-                        buyerId = itP->second.id;
-                        buyerName = QString::fromStdString(itP->second.name);
-                    }
-                } else if (drCr == "Cr") {
-                    if (acNameLower.find("dami") != std::string::npos || acNameLower.find("commission") != std::string::npos) {
-                        damiAmount += amt;
-                    } else if (acNameLower.find("market fee") != std::string::npos || acNameLower.find("mkt fee") != std::string::npos) {
-                        mandiFeeAmount += amt;
-                    } else if (acNameLower.find("h.r.d.f") != std::string::npos || acNameLower.find("hrdf") != std::string::npos) {
-                        hrdfAmount += amt;
-                    } else if (acNameLower.find("labour") != std::string::npos || acNameLower.find("hamali") != std::string::npos) {
-                        labourAmount += amt;
-                    } else if (acNameLower.find("vat") != std::string::npos || acNameLower.find("gst") != std::string::npos || acNameLower.find("tax") != std::string::npos) {
-                        taxAmount += amt;
-                    } else if (acNameLower.find("maal") != std::string::npos || acNameLower.find("sale") != std::string::npos || acNameLower.find("purchase") != std::string::npos) {
-                        goodsAmount += amt;
-                    } else if (entryType == "Round Off") {
-                        roundOff -= amt;
-                    }
-                }
-            }
+    // C3 slice M1: PASS 3.6 lives in MandiMigrator now (JSON-driven
+    // field keys via MigrationColumns). Thin wrapper — no new logic here.
+    {
+        MahadevERP::MigrationContext mctx;
+        mctx.provider = MahadevERP::MigrationProvider::BahiKhata;
+        mctx.sourcePath = mdbFilePath;
+        mctx.progressCallback = [this](int p, const QString& s) { updateProgress(p, s); };
+        if (!MahadevERP::MandiMigrator::migrate_iform_bahikhata(
+                mctx, transRows, stockTransRows,
+                ledgerDetailMap, itemCodeMap, fyNameToId)) {
+            qWarning() << "[Migration] I-Form pass failed for" << mdbFilePath;
+            return false;
         }
-
-        // Sum items from stock transactions
-        int totalBags = 0;
-        double totalWeight = 0.0;
-        double stockGoodsAmount = 0.0;
-
-        auto itStock = iformStockGroups.find(k);
-        if (itStock != iformStockGroups.end()) {
-            for (const auto& st : itStock->second) {
-                totalBags += parseIntVal(getField(st, "Bags"));
-                totalWeight += parseDoubleVal(getField(st, "Weight"));
-                stockGoodsAmount += parseDoubleVal(getField(st, "Amount"));
-                double mfRate = parseDoubleVal(getField(st, "MarketFeeRate"));
-                if (mfRate > 0) mandiFeeRate = mfRate;
-                double hrRate = parseDoubleVal(getField(st, "HRDFRate"));
-                if (hrRate > 0) hrdfRate = hrRate;
-            }
-        }
-
-        if (goodsAmount <= 0.001) goodsAmount = stockGoodsAmount;
-        if (grandTotal <= 0.001) grandTotal = goodsAmount + damiAmount + mandiFeeAmount + hrdfAmount + labourAmount + taxAmount + roundOff;
-        if (buyerName.isEmpty()) buyerName = "Mandi Buyer";
-
-        db.executeNonQuery(
-            "INSERT INTO iform_vouchers ("
-            "fy_id, financial_year, voucher_no, voucher_date, iform_no, buyer_id, buyer_name, "
-            "broker_name, due_days, vehicle_no, total_bags, total_weight, "
-            "goods_amount, dami_rate, dami_amount, mandi_fee_rate, mandi_fee_amount, "
-            "hrdf_rate, hrdf_amount, labour_amount, taxable_amount, tax_amount, "
-            "round_off, grand_total, narration) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-            {
-                (fyId > 0 ? QVariant(fyId) : QVariant()), fyVal, vchNum, vDate, iformNo,
-                (buyerId > 0 ? QVariant(buyerId) : QVariant()), buyerName,
-                brokerName, dueDays, vehicleNo, totalBags, totalWeight,
-                goodsAmount, damiRate, damiAmount, mandiFeeRate, mandiFeeAmount,
-                hrdfRate, hrdfAmount, labourAmount, goodsAmount, taxAmount,
-                roundOff, grandTotal, narration
-            }
-        );
-
-        QVariant newIFormId = db.executeScalar("SELECT last_insert_rowid();");
-        int ifVoucherId = newIFormId.toInt();
-
-        // Insert line items
-        if (itStock != iformStockGroups.end()) {
-            for (const auto& st : itStock->second) {
-                int iCode = parseIntVal(getField(st, "ItemCode"));
-                int itemId = 0;
-                std::string itemName = "Paddy";
-                auto itItem = itemCodeMap.find(iCode);
-                if (itItem != itemCodeMap.end()) {
-                    itemId = itItem->second.id;
-                    itemName = itItem->second.name;
-                }
-
-                int bags = parseIntVal(getField(st, "Bags"));
-                double loose = parseDoubleVal(getField(st, "LooseWeight"));
-                double packing = parseDoubleVal(getField(st, "Packing"), 0.500);
-                double wt = parseDoubleVal(getField(st, "Weight"));
-                double rate = parseDoubleVal(getField(st, "Rate"));
-                double amt = parseDoubleVal(getField(st, "Amount"));
-                double lineDami = (amt * damiRate) / 100.0;
-                double lineMFee = (amt * mandiFeeRate) / 100.0;
-                double lineHRDF = (amt * hrdfRate) / 100.0;
-
-                db.executeNonQuery(
-                    "INSERT INTO iform_voucher_items ("
-                    "voucher_id, voucher_no, item_id, item_name, bags, loose_weight, packing, weight, rate, amount, "
-                    "dami_rate, dami_amount, mandi_fee_rate, mandi_fee_amount, hrdf_rate, hrdf_amount, labour_amount, tax_rate, tax_amount) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0.0, 0.0, 0.0);",
-                    {
-                        ifVoucherId, vchNum, (itemId > 0 ? QVariant(itemId) : QVariant()), QString::fromStdString(itemName),
-                        bags, loose, packing, wt, rate, amt,
-                        damiRate, lineDami, mandiFeeRate, lineMFee, hrdfRate, lineHRDF
-                    }
-                );
-            }
-        }
-        iformCount++;
     }
-    std::cout << "[INFO] Migrated " << iformCount << " I-Form vouchers!" << std::endl;
 
 
     // =========================================================
     // PASS 5.4: TDS VOUCHERS (TDSDeductions)
     // =========================================================
-    updateProgress(93, QString("Migrating %1 Historical TDS Vouchers...").arg(tdsRows.size()));
-
-    // Group Transactions where TransType == 'Jrnl' by (VoucherNumber, VoucherDate)
-    std::map<std::pair<int, std::string>, std::vector<std::map<std::string, std::string>>> jrnlTxGroups;
-    for (const auto& tr : transRows) {
-        std::string tt = cleanText(getField(tr, "TransType"));
-        if (tt != "Jrnl") continue;
-        int vNo = parseIntVal(getField(tr, "VoucherNumber"));
-        QString vDate = parseDateFormatted(QString::fromStdString(getField(tr, "VoucherDate")));
-        jrnlTxGroups[{vNo, vDate.toStdString()}].push_back(tr);
-    }
-
-    int tdsCount = 0;
-    for (const auto& tr : tdsRows) {
-        QString vDate = parseDateFormatted(QString::fromStdString(getField(tr, "VoucherDate")));
-        if (vDate.isEmpty()) continue;
-
-        int vchNum = parseIntVal(getField(tr, "VoucherNumber"));
-        int partyCode = parseIntVal(getField(tr, "AccountCode"));
-        int partyId = 0;
-        QString partyName = "";
-        auto itP = ledgerDetailMap.find(partyCode);
-        if (itP != ledgerDetailMap.end()) {
-            partyId = itP->second.id;
-            partyName = QString::fromStdString(itP->second.name);
+    // C3 slice M2: PASS 5.4 lives in MandiMigrator now (JSON-driven
+    // field keys via MigrationColumns). Thin wrapper — no new logic here.
+    {
+        MahadevERP::MigrationContext mctx;
+        mctx.provider = MahadevERP::MigrationProvider::BahiKhata;
+        mctx.sourcePath = mdbFilePath;
+        mctx.progressCallback = [this](int p, const QString& s) { updateProgress(p, s); };
+        if (!MahadevERP::MandiMigrator::migrate_tds_bahikhata(
+                mctx, transRows, tdsRows, ledgerDetailMap, fyNameToId)) {
+            qWarning() << "[Migration] TDS pass failed for" << mdbFilePath;
+            return false;
         }
-        if (partyName.isEmpty()) partyName = "TDS Deductee";
-
-        double incAmt = parseDoubleVal(getField(tr, "IncomeAmount"));
-        double prevAmt = parseDoubleVal(getField(tr, "PrevIncomeAmount"));
-        double totTds = incAmt + prevAmt;
-        double rateTds = parseDoubleVal(getField(tr, "RateTDS", getField(tr, "TDSRate")));
-        double amtTds = parseDoubleVal(getField(tr, "TDS"));
-        double rateSur = parseDoubleVal(getField(tr, "RateSurcharge"));
-        double amtSur = parseDoubleVal(getField(tr, "Surcharge"));
-        double rateCess = parseDoubleVal(getField(tr, "RateEducation"));
-        double amtCess = parseDoubleVal(getField(tr, "Education"));
-        double totTaxRate = rateTds + rateSur + rateCess;
-        double totTaxAmt = amtTds + amtSur + amtCess;
-        double netAmt = incAmt - totTaxAmt;
-        if (netAmt < 0.0) netAmt = 0.0;
-
-        QString incType = QString::fromStdString(cleanText(getField(tr, "IncomeType"))).trimmed().toUpper();
-        if (incType.isEmpty()) incType = "RENT";
-
-        QString nonDeductReason = QString::fromStdString(cleanText(getField(tr, "ReasonForNonDeduction")));
-        int postInBooks = parseIntVal(getField(tr, "PostInBooks"), 1);
-        QString narration = QString::fromStdString(cleanText(getField(tr, "IncomeNarration")));
-
-        QDate dt = QDate::fromString(vDate, "yyyy-MM-dd");
-        QString dayOfWeek = dt.toString("dddd");
-
-        QString fyVal = computeFinancialYear(vDate);
-        int fyId = fyNameToId.count(fyVal) ? fyNameToId[fyVal] : 1;
-
-        // Find Expense Dr Ledger and TDS Cr Ledger from Transactions if present
-        int expLedgerId = 0;
-        QString expLedgerName = incType + " Expense";
-        int tdsLedgerId = 0;
-        QString tdsLedgerName = "T D S PEYABAL";
-
-        auto itTrGroup = jrnlTxGroups.find({vchNum, vDate.toStdString()});
-        if (itTrGroup != jrnlTxGroups.end()) {
-            for (const auto& tx : itTrGroup->second) {
-                std::string entryType = cleanText(getField(tx, "EntryType"));
-                int acCode = parseIntVal(getField(tx, "AccountCode"));
-                auto itLedger = ledgerDetailMap.find(acCode);
-                if (itLedger != ledgerDetailMap.end()) {
-                    if (entryType == "Exp.") {
-                        expLedgerId = itLedger->second.id;
-                        expLedgerName = QString::fromStdString(itLedger->second.name);
-                    } else if (entryType == "TDS") {
-                        tdsLedgerId = itLedger->second.id;
-                        tdsLedgerName = QString::fromStdString(itLedger->second.name);
-                    }
-                }
-            }
-        }
-
-        db.executeNonQuery(
-            "INSERT INTO tds_vouchers ("
-            "fy_id, financial_year, voucher_no, voucher_date, day_of_week, post_in_books, tds_type, "
-            "ledger_id, ledger_name, income_amount, previous_amount, total_for_tds, narration, "
-            "rate_tds, tax_amount_tds, rate_surcharge, tax_amount_surcharge, rate_cess, tax_amount_cess, "
-            "use_rounded_total, total_tax_rate, total_tax_amount, net_amount, non_deduction_reason, "
-            "exp_ledger_id, exp_ledger_name, tds_ledger_id, tds_ledger_name) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?);",
-            {
-                (fyId > 0 ? QVariant(fyId) : QVariant()), fyVal, vchNum, vDate, dayOfWeek, postInBooks, incType,
-                (partyId > 0 ? QVariant(partyId) : QVariant()), partyName, incAmt, prevAmt, totTds, narration,
-                rateTds, amtTds, rateSur, amtSur, rateCess, amtCess,
-                totTaxRate, totTaxAmt, netAmt, nonDeductReason,
-                (expLedgerId > 0 ? QVariant(expLedgerId) : QVariant()), expLedgerName, (tdsLedgerId > 0 ? QVariant(tdsLedgerId) : QVariant()), tdsLedgerName
-            }
-        );
-        tdsCount++;
     }
-    std::cout << "[INFO] Migrated " << tdsCount << " TDS vouchers!" << std::endl;
 
 
     // =========================================================
     // PASS 5.5: CUSTOM CLOSING STOCKS
     // =========================================================
-    updateProgress(95, QString("Migrating %1 Audited Custom Closing Stock Records...").arg(customRows.size()));
-    db.executeNonQuery("DELETE FROM custom_closing_stocks;");
-
-    for (const auto& cr : customRows) {
-        QString cDate = parseDateFormatted(QString::fromStdString(getField(cr, "ClosingStockDate")));
-        if (cDate.isEmpty()) continue;
-
-        QString cFy = computeFinancialYear(cDate);
-        int cFyId = fyNameToId.count(cFy) ? fyNameToId[cFy] : 1;
-
-        std::string cItemCode = cleanText(getField(cr, "ItemCode"));
-        int iCode = parseIntVal(cItemCode);
-        auto itItem = itemCodeMap.find(iCode);
-        int cItemId = (itItem != itemCodeMap.end()) ? itItem->second.id : 0;
-        std::string cItemName = (itItem != itemCodeMap.end()) ? itItem->second.name : ("Item #" + cItemCode);
-
-        int cBags = parseIntVal(getField(cr, "Bags"));
-        double cWt = parseDoubleVal(getField(cr, "Weight"));
-        double cAmt = parseDoubleVal(getField(cr, "Amount"));
-        double cRate = (cWt > 0.0) ? std::round((cAmt / cWt) * 100.0) / 100.0 : 0.0;
-
-        db.executeNonQuery(
-            "INSERT INTO custom_closing_stocks ("
-            "fy_id, financial_year, closing_date, item_id, item_code, item_name, bags, weight_qtl, rate, amount) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-            {
-                (cFyId > 0 ? QVariant(cFyId) : QVariant()),
-                cFy,
-                cDate,
-                (cItemId > 0 ? QVariant(cItemId) : QVariant()),
-                QString::fromStdString(cItemCode),
-                QString::fromStdString(cItemName),
-                cBags,
-                cWt,
-                cRate,
-                cAmt
-            }
-        );
+    // C3 slice M2: PASS 5.5 lives in MandiMigrator now (JSON-driven
+    // field keys via MigrationColumns). Thin wrapper — no new logic here.
+    {
+        MahadevERP::MigrationContext mctx;
+        mctx.provider = MahadevERP::MigrationProvider::BahiKhata;
+        mctx.sourcePath = mdbFilePath;
+        mctx.progressCallback = [this](int p, const QString& s) { updateProgress(p, s); };
+        if (!MahadevERP::MandiMigrator::migrate_closing_bahikhata(
+                mctx, customRows, itemCodeMap, fyNameToId)) {
+            qWarning() << "[Migration] closing-stock pass failed for" << mdbFilePath;
+            return false;
+        }
     }
 
     // =========================================================
     // PASS 5.6: BARDANA TRANSACTIONS (BardanaTransactions)
     // =========================================================
-    int bardanaCount = 0;
-    if (!bardanaRows.empty()) {
-        updateProgress(96, QString("Migrating %1 Historical Bardana (Gunny Bag) Transactions...").arg(bardanaRows.size()));
-        for (const auto& br : bardanaRows) {
-            QString vDate = parseDateFormatted(QString::fromStdString(getField(br, "VoucherDate")));
-            if (vDate.isEmpty()) continue;
-
-            QString fyVal = computeFinancialYear(vDate);
-            int vchNum = parseIntVal(getField(br, "VoucherNumber"));
-            QString vchNoStr = vchNum > 0 ? QString("BD-%1").arg(vchNum) : QString::fromStdString(cleanText(getField(br, "InvoiceNo")));
-            if (vchNoStr.isEmpty()) vchNoStr = QString("BD-%1").arg(bardanaCount + 1);
-
-            QString vchType = QString::fromStdString(cleanText(getField(br, "VchType")));
-            if (vchType.isEmpty()) vchType = "ISSUE";
-
-            int acCode = parseIntVal(getField(br, "AccountCode"));
-            int partyId = 0;
-            QString partyName = "";
-            auto itP = ledgerDetailMap.find(acCode);
-            if (itP != ledgerDetailMap.end()) {
-                partyId = itP->second.id;
-                partyName = QString::fromStdString(itP->second.name);
-            }
-            if (partyName.isEmpty()) {
-                std::string delName = lookupLedgerName(acCode, ledgerDetailMap, ledgerCodeMap, ledgerDeletedNameMap);
-                partyName = delName.empty() ? QString("Party #%1").arg(acCode)
-                                            : QString::fromStdString(delName);
-            }
-
-            QString bardanaType = QString::fromStdString(cleanText(getField(br, "BardanaType", "Jute 50kg (Pukka)")));
-            if (bardanaType.isEmpty()) bardanaType = "Jute 50kg (Pukka)";
-
-            QString godownName = QString::fromStdString(cleanText(getField(br, "GodownName", "Main Godown")));
-            if (godownName.isEmpty()) godownName = "Main Godown";
-
-            QString drCr = (vchType.toUpper().contains("ISSUE") || vchType.toUpper().contains("SALE")) ? "Dr" : "Cr";
-            int qty = parseIntVal(getField(br, "Qty"));
-            double rate = parseDoubleVal(getField(br, "Rate", "0.0"));
-            double amount = std::round((qty * rate) * 100.0) / 100.0;
-            QString vehNo = QString::fromStdString(cleanText(getField(br, "VehNo")));
-            QString billNo = QString::fromStdString(cleanText(getField(br, "InvoiceNo")));
-            QString narration = QString::fromStdString(cleanText(getField(br, "Narration")));
-
-            db.executeNonQuery(
-                "INSERT INTO bardana_transactions ("
-                "  financial_year, voucher_no, voucher_date, vch_type, party_id, party_name, "
-                "  bardana_type, godown_name, dr_cr, qty, rate, amount, vehicle_no, bill_no, narration"
-                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-                {
-                    fyVal, vchNoStr, vDate, vchType,
-                    (partyId > 0 ? QVariant(partyId) : QVariant()), partyName,
-                    bardanaType, godownName, drCr, qty, rate, amount, vehNo, billNo, narration
-                }
-            );
-            bardanaCount++;
+    // C3 slice M2: PASS 5.6 lives in MandiMigrator now (JSON-driven
+    // field keys via MigrationColumns). Thin wrapper — no new logic here.
+    {
+        MahadevERP::MigrationContext mctx;
+        mctx.provider = MahadevERP::MigrationProvider::BahiKhata;
+        mctx.sourcePath = mdbFilePath;
+        mctx.progressCallback = [this](int p, const QString& s) { updateProgress(p, s); };
+        if (!MahadevERP::MandiMigrator::migrate_bardana_bahikhata(
+                mctx, bardanaRows, ledgerCodeMap, ledgerDetailMap,
+                ledgerDeletedNameMap, fyNameToId)) {
+            qWarning() << "[Migration] bardana pass failed for" << mdbFilePath;
+            return false;
         }
-        std::cout << "[INFO] Migrated " << bardanaCount << " Bardana transactions!" << std::endl;
     }
 
     // =========================================================
     // PASS 5.7: GATE PASS & GATE REGISTER (GatePassVouchers & GateRegister)
     // =========================================================
-    int gatePassCount = 0;
-    if (!gatePassRows.empty() || !gateRegRows.empty()) {
-        updateProgress(97, QString("Migrating %1 Gate Pass Records & Gate Log...").arg(gatePassRows.size() + gateRegRows.size()));
-        for (const auto& gr : gatePassRows) {
-            QString gDate = parseDateFormatted(QString::fromStdString(getField(gr, "GatePassDate", getField(gr, "VoucherDate"))));
-            if (gDate.isEmpty()) continue;
-
-            QString fyVal = computeFinancialYear(gDate);
-            int gpNo = parseIntVal(getField(gr, "GatePassNo"));
-            QString passNoStr = gpNo > 0 ? QString("GP-%1").arg(gpNo, 5, 10, QChar('0')) : QString("GP-%1").arg(gatePassCount + 1, 5, 10, QChar('0'));
-
-            int pCode = parseIntVal(getField(gr, "PartyCode"));
-            int partyId = 0;
-            QString partyName = "";
-            auto itP = ledgerDetailMap.find(pCode);
-            if (itP != ledgerDetailMap.end()) {
-                partyId = itP->second.id;
-                partyName = QString::fromStdString(itP->second.name);
-            }
-            if (partyName.isEmpty()) partyName = "Consignee Party";
-
-            int iCode = parseIntVal(getField(gr, "ItemCode"));
-            QString commodity = "Paddy / Rice";
-            auto itI = itemCodeMap.find(iCode);
-            if (itI != itemCodeMap.end()) {
-                commodity = QString::fromStdString(itI->second.name);
-            }
-
-            int bags = parseIntVal(getField(gr, "Bags"));
-            double grossWt = parseDoubleVal(getField(gr, "TotalWeight", getField(gr, "Weight")));
-            double netWt = grossWt;
-            QString vehNo = QString::fromStdString(cleanText(getField(gr, "VehNo")));
-            QString driver = QString::fromStdString(cleanText(getField(gr, "DriverName")));
-            QString narr = QString::fromStdString(cleanText(getField(gr, "Narration")));
-
-            db.executeNonQuery(
-                "INSERT INTO gate_register ("
-                "  financial_year, gate_pass_no, entry_date, entry_time, direction, purpose, "
-                "  vehicle_no, driver_name, driver_phone, transport, party_id, party_name, "
-                "  commodity, bag_count, gross_weight_qtl, tare_weight_qtl, net_weight_qtl, status, remarks"
-                ") VALUES (?, ?, ?, '10:00', 'OUTWARD', 'Dispatch Delivery', ?, ?, '', 'Self', ?, ?, ?, ?, ?, 0.0, ?, 'COMPLETED', ?);",
-                {
-                    fyVal, passNoStr, gDate, vehNo, driver,
-                    (partyId > 0 ? QVariant(partyId) : QVariant()), partyName,
-                    commodity, bags, grossWt, netWt, narr
-                }
-            );
-            gatePassCount++;
+    // C3 slice M2: PASS 5.7 lives in MandiMigrator now (JSON-driven
+    // field keys via MigrationColumns). Thin wrapper — no new logic here.
+    // GateRegister source rows stay unread (verify-only JSON coverage).
+    {
+        MahadevERP::MigrationContext mctx;
+        mctx.provider = MahadevERP::MigrationProvider::BahiKhata;
+        mctx.sourcePath = mdbFilePath;
+        mctx.progressCallback = [this](int p, const QString& s) { updateProgress(p, s); };
+        if (!MahadevERP::MandiMigrator::migrate_gate_bahikhata(
+                mctx, gatePassRows, ledgerDetailMap, itemCodeMap)) {
+            qWarning() << "[Migration] gate pass failed for" << mdbFilePath;
+            return false;
         }
-        std::cout << "[INFO] Migrated " << gatePassCount << " Gate passes!" << std::endl;
     }
 
     // =========================================================
     // PASS 5.8: SAUDA FORWARD CONTRACTS (SaudaVouchers & SaudaTransactions)
     // =========================================================
-    int saudaCount = 0;
-    if (!saudaVchRows.empty()) {
-        updateProgress(98, QString("Migrating %1 Sauda Forward Contracts...").arg(saudaVchRows.size()));
-        for (const auto& sv : saudaVchRows) {
-            QString sDate = parseDateFormatted(QString::fromStdString(getField(sv, "VoucherDate")));
-            if (sDate.isEmpty()) continue;
-
-            QString fyVal = computeFinancialYear(sDate);
-            QString sNo = QString::fromStdString(cleanText(getField(sv, "SaudaNo")));
-            if (sNo.isEmpty()) {
-                int vNum = parseIntVal(getField(sv, "VoucherNumber"));
-                sNo = vNum > 0 ? QString("SD-%1").arg(vNum, 5, 10, QChar('0')) : QString("SD-%1").arg(saudaCount + 1, 5, 10, QChar('0'));
-            }
-
-            QString sType = QString::fromStdString(cleanText(getField(sv, "SaudaType"))).toUpper();
-            if (!sType.contains("BUY") && !sType.contains("PURCHASE")) sType = "SALE";
-            else sType = "BUY";
-
-            int pCode = parseIntVal(getField(sv, "AccountCode"));
-            int partyId = 0;
-            QString partyName = "";
-            auto itP = ledgerDetailMap.find(pCode);
-            if (itP != ledgerDetailMap.end()) {
-                partyId = itP->second.id;
-                partyName = QString::fromStdString(itP->second.name);
-            }
-            if (partyName.isEmpty()) partyName = "Party Trader";
-
-            QString broker = QString::fromStdString(cleanText(getField(sv, "Broker")));
-            QString itemName = QString::fromStdString(cleanText(getField(sv, "ItemName")));
-            if (itemName.isEmpty()) {
-                int iCode = parseIntVal(getField(sv, "ItemCode"));
-                auto itI = itemCodeMap.find(iCode);
-                if (itI != itemCodeMap.end()) itemName = QString::fromStdString(itI->second.name);
-                else itemName = "Basmati Rice 1121";
-            }
-
-            double weight = parseDoubleVal(getField(sv, "Weight"));
-            double rate = parseDoubleVal(getField(sv, "Rate"));
-            int bags = static_cast<int>(weight * 2.0);
-            QString condition = QString::fromStdString(cleanText(getField(sv, "Condition")));
-            QString dueDt = parseDateFormatted(QString::fromStdString(getField(sv, "DueDt")));
-            if (dueDt.isEmpty()) dueDt = sDate;
-
-            db.executeNonQuery(
-                "INSERT INTO sauda_contracts ("
-                "  financial_year, sauda_no, sauda_date, sauda_type, party_id, party_name, "
-                "  broker_id, broker_name, item_id, item_name, grade, contracted_bags, "
-                "  contracted_weight_qtl, rate_per_qtl, dalali_rate_per_qtl, dalali_pct, "
-                "  delivery_from, delivery_to, payment_terms, condition_notes, "
-                "  fulfilled_weight_qtl, fulfilled_bags, status"
-                ") VALUES (?, ?, ?, ?, ?, ?, NULL, ?, NULL, ?, 'Grade-A', ?, ?, ?, 10.0, 0.0, ?, ?, 'Standard', ?, ?, ?, 'FULFILLED');",
-                {
-                    fyVal, sNo, sDate, sType,
-                    (partyId > 0 ? QVariant(partyId) : QVariant()), partyName,
-                    broker, itemName, bags, weight, rate,
-                    sDate, dueDt, condition, weight, bags
-                }
-            );
-            saudaCount++;
+    // C3 slice M2: PASS 5.8 lives in MandiMigrator now (JSON-driven
+    // field keys via MigrationColumns). Thin wrapper — no new logic here.
+    // SaudaTransactions rows stay unread (verify-only JSON coverage).
+    {
+        MahadevERP::MigrationContext mctx;
+        mctx.provider = MahadevERP::MigrationProvider::BahiKhata;
+        mctx.sourcePath = mdbFilePath;
+        mctx.progressCallback = [this](int p, const QString& s) { updateProgress(p, s); };
+        if (!MahadevERP::MandiMigrator::migrate_sauda_bahikhata(
+                mctx, saudaVchRows, ledgerDetailMap, itemCodeMap, fyNameToId)) {
+            qWarning() << "[Migration] sauda pass failed for" << mdbFilePath;
+            return false;
         }
-        std::cout << "[INFO] Migrated " << saudaCount << " Sauda contracts!" << std::endl;
     }
 
     // =========================================================
     // PASS 5.9: BROKERAGE / DALALI SETTLEMENTS (BrokerageVouchers)
     // =========================================================
-    int dalaliCount = 0;
-    if (!brokerageRows.empty()) {
-        updateProgress(99, QString("Migrating %1 Brokerage (Dalali) Settlements...").arg(brokerageRows.size()));
-        for (const auto& bv : brokerageRows) {
-            QString vDate = parseDateFormatted(QString::fromStdString(getField(bv, "VoucherDate")));
-            if (vDate.isEmpty()) continue;
-
-            QString fyVal = computeFinancialYear(vDate);
-            int vNum = parseIntVal(getField(bv, "VoucherNumber"));
-            QString settNo = QString("DAL-%1").arg(vNum > 0 ? vNum : (dalaliCount + 1), 5, 10, QChar('0'));
-
-            int crLedger = parseIntVal(getField(bv, "CrLedger"));
-            int brokerId = 0;
-            QString brokerName = "";
-            auto itBr = ledgerDetailMap.find(crLedger);
-            if (itBr != ledgerDetailMap.end()) {
-                brokerId = itBr->second.id;
-                brokerName = QString::fromStdString(itBr->second.name);
-            }
-            if (brokerName.isEmpty()) brokerName = "Dalal / Broker";
-
-            int pCode = parseIntVal(getField(bv, "PartyCode"));
-            QString partyName = "Party";
-            auto itP = ledgerDetailMap.find(pCode);
-            if (itP != ledgerDetailMap.end()) {
-                partyName = QString::fromStdString(itP->second.name);
-            }
-
-            QString invNo = QString::fromStdString(cleanText(getField(bv, "InvoiceNo")));
-            double itemWt = parseDoubleVal(getField(bv, "ItemWeight"));
-            double itemRate = parseDoubleVal(getField(bv, "ItemRate"));
-            double dRate = parseDoubleVal(getField(bv, "Rate"));
-            double dAmt = parseDoubleVal(getField(bv, "Amount"));
-            if (dAmt <= 0.0 && itemWt > 0.0 && dRate > 0.0) {
-                dAmt = std::round((itemWt * dRate) * 100.0) / 100.0;
-            }
-            double tdsAmt = std::round((dAmt * 0.05) * 100.0) / 100.0;
-            double netPayable = dAmt - tdsAmt;
-            QString narr = QString::fromStdString(cleanText(getField(bv, "Narration")));
-
-            db.executeNonQuery(
-                "INSERT INTO dalali_settlements ("
-                "  financial_year, settlement_no, settlement_date, broker_id, broker_name, "
-                "  sauda_id, sauda_no, voucher_type, voucher_no, invoice_no, party_name, "
-                "  item_name, weight_qtl, rate_per_qtl, dalali_rate, dalali_amount, "
-                "  tds_pct, tds_amount, net_dalali_payable, is_posted_to_jv, journal_voucher_no, narration"
-                ") VALUES (?, ?, ?, ?, ?, NULL, 'SD-MIGRATED', 'SALE', ?, ?, ?, 'Rice Basmati', ?, ?, ?, ?, 5.0, ?, ?, 1, ?, ?);",
-                {
-                    fyVal, settNo, vDate,
-                    (brokerId > 0 ? QVariant(brokerId) : QVariant()), brokerName,
-                    invNo, invNo, partyName,
-                    itemWt, itemRate, dRate, dAmt,
-                    tdsAmt, netPayable, QString("JV-DAL-%1").arg(vNum > 0 ? vNum : (dalaliCount + 1)), narr
-                }
-            );
-            dalaliCount++;
+    // C3 slice M2: PASS 5.9 lives in MandiMigrator now (JSON-driven
+    // field keys via MigrationColumns). Thin wrapper — no new logic here.
+    {
+        MahadevERP::MigrationContext mctx;
+        mctx.provider = MahadevERP::MigrationProvider::BahiKhata;
+        mctx.sourcePath = mdbFilePath;
+        mctx.progressCallback = [this](int p, const QString& s) { updateProgress(p, s); };
+        if (!MahadevERP::MandiMigrator::migrate_dalali_bahikhata(
+                mctx, brokerageRows, ledgerDetailMap, fyNameToId)) {
+            qWarning() << "[Migration] dalali pass failed for" << mdbFilePath;
+            return false;
         }
-        std::cout << "[INFO] Migrated " << dalaliCount << " Brokerage settlements!" << std::endl;
     }
 
     db.commit();
@@ -3502,7 +1310,7 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
     m_isMigrating = false;
     emit migratingChanged();
 
-    QString summary = QString("Successfully imported %1 Financial Years, %2 Groups, %3 Parties, %4 Items, %5 Vouchers (%6 Sales, %7 Purchases), %8 Milling Batches, and %9 Audited Closing Stocks from %10")
+    QString summary = QString("Successfully imported %1 Financial Years, %2 Groups, %3 Parties, %4 Items, %5 Vouchers (%6 Sales, %7 Purchases), %8 Manufacturing Batches, and %9 Audited Closing Stocks from %10")
         .arg(seenFys.size())
         .arg(groupRows.size())
         .arg(ledgerRows.size())
@@ -3510,7 +1318,7 @@ bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
         .arg(voucherGroups.size())
         .arg(salesInvoiceCount)
         .arg(purchaseInvoiceCount)
-        .arg(millingGroups.size())
+        .arg(manufacturingGroupCount)
         .arg(customRows.size())
         .arg(fi.fileName());
 

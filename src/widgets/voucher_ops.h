@@ -40,7 +40,7 @@ enum class Kind {
     Cash,       // view 60 (PYMT/RCPT)
     Cheque,     // view 16 (CHPT/CHRT/BANK)
     Journal,    // view 17
-    Milling,    // view 31 (no delete backend — see deleteEntry)
+    Manufacturing,    // view 31 (no delete backend — see deleteEntry)
     DebitNote,  // view 28
 };
 
@@ -71,8 +71,8 @@ inline Kind kindForEntry(const QVariantMap& e) {
     if (vType.contains("JOURNAL") || vType == "JRNL" || vType == "JV" || vType == "JL" || vType == "JRN"
         || raw.contains("JOURNAL") || raw == "JRNL" || raw == "JV" || raw == "JL" || raw == "JRN"
         || starts("JRNL") || starts("JV-") || starts("JL-") || starts("JOURNAL")) return Kind::Journal;
-    if (vType.contains("MILLING") || raw.contains("MILL") || raw == "PROD" || raw == "ML"
-        || starts("MILL") || starts("ML-") || starts("PROD")) return Kind::Milling;
+    if (vType.contains("MANUFACTURING") || raw.contains("MANU") || raw == "PROD" || raw == "MF"
+        || starts("MANU") || starts("MF-") || starts("PROD")) return Kind::Manufacturing;
     if (vType.contains("DEBIT NOTE") || vType.contains("CREDIT NOTE") || raw == "DBNT" || raw == "CRNT"
         || raw == "DN" || raw == "CN" || starts("DBNT") || starts("CRNT") || starts("DN-") || starts("CN-")) return Kind::DebitNote;
     return Kind::Unknown;
@@ -88,7 +88,7 @@ inline int viewIndexForKind(Kind k) {
     case Kind::Cash:      return 60;
     case Kind::Cheque:    return 16;
     case Kind::Journal:   return 17;
-    case Kind::Milling:   return 31;
+    case Kind::Manufacturing:   return 31;
     case Kind::DebitNote: return 28;
     case Kind::Unknown:   return -1;
     }
@@ -114,7 +114,7 @@ inline QString describeEntry(const QVariantMap& e) {
     case Kind::Cash:      return QString("Cash Voucher %1").arg(no);
     case Kind::Cheque:    return QString("Bank Voucher %1").arg(no);
     case Kind::Journal:   return QString("Journal Voucher %1").arg(no);
-    case Kind::Milling:   return QString("Milling Batch %1").arg(no);
+    case Kind::Manufacturing:   return QString("Manufacturing Batch %1").arg(no);
     case Kind::DebitNote: return QString("Note %1").arg(no);
     case Kind::Unknown:   return no.isEmpty() ? QString("this entry") : no;
     }
@@ -130,8 +130,8 @@ inline bool deleteEntry(QWidget* parent, const QVariantMap& e, QString* error) {
         if (error) *error = QString("Cannot identify the voucher type for this row.");
         return false;
     }
-    if (k == Kind::Milling) {
-        if (error) *error = QString("Milling batches cannot be deleted yet — no delete backend (see Doc 01).");
+    if (k == Kind::Manufacturing) {
+        if (error) *error = QString("Manufacturing batches cannot be deleted yet — no delete backend (see Doc 01).");
         return false;
     }
     if (!CustomMessageBox::question(parent, QString("Confirm Delete"),

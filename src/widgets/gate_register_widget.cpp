@@ -197,7 +197,7 @@ void GateRegisterWidget::setupUi() {
 
     // Row 1
     m_purposeCombo = new QComboBox(m_entryCard);
-    m_purposeCombo->addItems({"Paddy Procurement Purchase", "Rice Sales Dispatch", "Bardana Packaging Movement", "Bran/Husk Sales", "Milling Jobwork", "General"});
+    m_purposeCombo->addItems({"Paddy Procurement Purchase", "Rice Sales Dispatch", "Bardana Packaging Movement", "Bran/Husk Sales", "Manufacturing Jobwork", "General"});
 
     m_vehicleEdit = new QLineEdit(m_entryCard);
     m_vehicleEdit->setPlaceholderText("e.g. HR-57-A-1234");

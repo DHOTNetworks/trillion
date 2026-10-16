@@ -94,7 +94,7 @@ private:
     QVector<DashboardMenuCard*> m_menuCards;
     QStringList m_cardMenuIds; // parallel to m_menuCards: menu id per visible card
     QVBoxLayout* m_menuSection = nullptr;
-    bool m_mandiCardShown = false; // true while the mandi card is built (S3: mandi OR mill)
+    bool m_mandiCardShown = false; // true while the mandi card is built (S3: mandi OR manufacturer)
 
     // Header elements
     KbdBadgeButton* m_openFirmBtn = nullptr;

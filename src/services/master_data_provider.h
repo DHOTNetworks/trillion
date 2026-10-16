@@ -41,7 +41,7 @@ public:
     QVariantMap getAccountDetailsByName(const QString& accountName);
     QStringList getAccountNames(const QString& filterGroup = "");
 
-    // 3. Stock Items & Categories Data Feeding (used by ItemSearchDelegate, Milling, Invoices)
+    // 3. Stock Items & Categories Data Feeding (used by ItemSearchDelegate, Manufacturing, Invoices)
     QVariantList searchStockItems(const QString& query, int limit = 50);
     QVariantList getAllStockItems();
     QVariantMap getStockItemDetails(int itemId);

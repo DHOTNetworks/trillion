@@ -12,7 +12,7 @@
 #include "../widgets/tds_voucher_widget.h"
 #include "../widgets/jform_voucher_widget.h"
 #include "../widgets/iform_voucher_widget.h"
-#include "../widgets/milling_voucher_widget.h"
+#include "../widgets/manufacturing_voucher_widget.h"
 #include "../widgets/debit_credit_note_widget.h"
 #include "../widgets/keyboard_shortcuts_dialog.h"
 #include <QTimer>
@@ -245,7 +245,7 @@ bool AppKeyboardController::openDateForView(int vIdx) {
     case 17: if (m_mainWindow->journalVoucherWidget()) { m_mainWindow->journalVoucherWidget()->openDateDialog(false); return true; } break;
     case 18: if (m_mainWindow->jformVoucherWidget()) { m_mainWindow->jformVoucherWidget()->openDateDialog(false); return true; } break;
     case 19: if (m_mainWindow->iformVoucherWidget()) { m_mainWindow->iformVoucherWidget()->openDateDialog(false); return true; } break;
-    case 31: if (m_mainWindow->millingVoucherWidget()) { m_mainWindow->millingVoucherWidget()->openDateDialog(false); return true; } break;
+    case 31: if (m_mainWindow->manufacturingVoucherWidget()) { m_mainWindow->manufacturingVoucherWidget()->openDateDialog(false); return true; } break;
     case 28: if (m_mainWindow->debitCreditNoteWidget()) { m_mainWindow->debitCreditNoteWidget()->openDateDialog(); return true; } break;
     case 24: if (m_mainWindow->tdsVoucherWidget()) { m_mainWindow->tdsVoucherWidget()->openDateDialog(); return true; } break;
     case 14: if (m_mainWindow->salesVoucherWidget()) { m_mainWindow->salesVoucherWidget()->openDateDialog(false); return true; } break;
@@ -273,13 +273,13 @@ bool AppKeyboardController::saveActiveVoucher(int vIdx) {
     case 60: if (m_mainWindow->cashVoucherWidget()) { m_mainWindow->cashVoucherWidget()->saveVoucher(); return true; } break;
     case 24: if (m_mainWindow->tdsVoucherWidget()) { m_mainWindow->tdsVoucherWidget()->onSaveClicked(); return true; } break;
     case 28: if (m_mainWindow->debitCreditNoteWidget()) { m_mainWindow->debitCreditNoteWidget()->saveVoucher(); return true; } break;
-    case 31: if (m_mainWindow->millingVoucherWidget()) { m_mainWindow->millingVoucherWidget()->saveVoucher(); return true; } break;
+    case 31: if (m_mainWindow->manufacturingVoucherWidget()) { m_mainWindow->manufacturingVoucherWidget()->saveVoucher(); return true; } break;
     default: break;
     }
     return false;
 }
 
-// Single dispatch for Ctrl+D. Milling (31) intentionally excluded: batches are
+// Single dispatch for Ctrl+D. Manufacturing (31) intentionally excluded: batches are
 // never hard-deleted, only re-milled via a new batch.
 bool AppKeyboardController::deleteActiveVoucher(int vIdx) {
     if (!m_mainWindow) return false;

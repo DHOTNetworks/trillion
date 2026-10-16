@@ -124,7 +124,7 @@ void FiscalYearHelper::ensureFiscalYearsDiscovered() {
 
     // 4. Scan transaction tables for min/max dates. Domain tables may not
     // exist on generic firms — skip absent tables instead of erroring
-    // (Phase 3 gating; core tables always exist).
+    // (domain-gated probes; core tables always exist).
     struct DateProbe { const char* table; const char* sql; };
     static const DateProbe dateQueries[] = {
         {"vouchers", "SELECT MIN(voucher_date), MAX(voucher_date) FROM vouchers WHERE voucher_date IS NOT NULL AND voucher_date != '';"},
@@ -132,7 +132,7 @@ void FiscalYearHelper::ensureFiscalYearsDiscovered() {
         {"sales_invoices", "SELECT MIN(invoice_date), MAX(invoice_date) FROM sales_invoices WHERE invoice_date IS NOT NULL AND invoice_date != '';"},
         {"purchase_invoices", "SELECT MIN(invoice_date), MAX(invoice_date) FROM purchase_invoices WHERE invoice_date IS NOT NULL AND invoice_date != '';"},
         {"paddy_slips", "SELECT MIN(arrival_date), MAX(arrival_date) FROM paddy_slips WHERE arrival_date IS NOT NULL AND arrival_date != '';"},
-        {"milling_batches", "SELECT MIN(batch_date), MAX(batch_date) FROM milling_batches WHERE batch_date IS NOT NULL AND batch_date != '';"},
+        {"manufacturing_batches", "SELECT MIN(batch_date), MAX(batch_date) FROM manufacturing_batches WHERE batch_date IS NOT NULL AND batch_date != '';"},
         {"jform_vouchers", "SELECT MIN(voucher_date), MAX(voucher_date) FROM jform_vouchers WHERE voucher_date IS NOT NULL AND voucher_date != '';"},
         {"tds_vouchers", "SELECT MIN(voucher_date), MAX(voucher_date) FROM tds_vouchers WHERE voucher_date IS NOT NULL AND voucher_date != '';"},
         {"transport_dispatches", "SELECT MIN(dispatch_date), MAX(dispatch_date) FROM transport_dispatches WHERE dispatch_date IS NOT NULL AND dispatch_date != '';"},
@@ -318,21 +318,29 @@ FiscalYearInfo FiscalYearHelper::getFiscalYearForDate(const QString& dateStr) {
         return info;
     }
 
-    // Calculate Indian FY from date components
+    // Calculate Indian FY from date components — ONLY for genuinely
+    // parseable dates. Anything that reached here with 3 dash-parts that
+    // are not a real date (e.g. an echoed "not-a-date" in the old code)
+    // must return an INVALID FY so callers fail loud. The previous path
+    // fabricated a valid, unlocked window from y=0/m=0 and
+    // writeBlockReason let the garbage post through (§2 fail-loud).
     QStringList p = iso.split('-');
     if (p.size() == 3) {
-        int y = p[0].toInt();
-        int m = p[1].toInt();
-        int startY = FiscalCalendar::fyStartYearForDate(y, m);
-        int endY = startY + 1;
-        FiscalYearInfo info;
-        info.name = QString("FY %1-%2").arg(startY).arg(QString::number(endY).right(2));
-        info.startDate = FiscalCalendar::fyStartDate(startY);
-        info.endDate = FiscalCalendar::fyEndDate(startY);
-        return info;
+        const int y = p[0].toInt();
+        const int m = p[1].toInt();
+        const int d = p[2].toInt();
+        if (y > 0 && m >= 1 && m <= 12 && d >= 1 && d <= 31 && QDate(y, m, d).isValid()) {
+            int startY = FiscalCalendar::fyStartYearForDate(y, m);
+            int endY = startY + 1;
+            FiscalYearInfo info;
+            info.name = QString("FY %1-%2").arg(startY).arg(QString::number(endY).right(2));
+            info.startDate = FiscalCalendar::fyStartDate(startY);
+            info.endDate = FiscalCalendar::fyEndDate(startY);
+            return info;
+        }
     }
 
-    return getActiveFiscalYear();
+    return FiscalYearInfo();
 }
 
 QString FiscalYearHelper::writeBlockReason(const QString& dateStr) {
@@ -503,13 +511,21 @@ FiscalYearInfo FiscalYearHelper::resolveFiscalYear(const QString& invOrVchStr, c
 QString FiscalYearHelper::fyShortToken(const QString& fyName) {
     QString s = fyName.trimmed();
     // Accept "FY 2026-27", "2026-27", "2026/27", "2627", "FY 26-27".
-    static const QRegularExpression fullRe(R"(20(\d{2})\D*(\d{2}))");
+    // Any 4-digit start year qualifies (not just 20xx): the (y1+1)%100==y2
+    // guard is what rejects garbage. The old 20xx-only pattern made FY
+    // 2199-00 / 19xx-YY labels unparseable, pushing callers onto the
+    // active-FY fallback (wrong-series voucher numbers, cross-FY
+    // collisions). 20xx output stays byte-identical ("FY 2026-27" -> "2627").
+    // Documented tradeoff: tokens repeat across centuries ("FY 1999-00" and
+    // "FY 2199-00" both -> "9900"); the financial_year column is the
+    // authoritative key (unique index is (type, fy, no)).
+    static const QRegularExpression fullRe(R"((\d{4})\D*(\d{2}))");
     auto m = fullRe.match(s);
     if (m.hasMatch()) {
         int y1 = m.captured(1).toInt();
         int y2 = m.captured(2).toInt();
         if ((y1 + 1) % 100 == y2) {
-            return QString("%1%2").arg(y1, 2, 10, QChar('0')).arg(y2, 2, 10, QChar('0'));
+            return QString("%1%2").arg(y1 % 100, 2, 10, QChar('0')).arg(y2, 2, 10, QChar('0'));
         }
     }
     static const QRegularExpression shortRe(R"(^(\d{2})(\d{2})$)");
@@ -548,7 +564,7 @@ QString FiscalYearHelper::canonicalTypeToken(const QString& type) {
     if (t.startsWith("tcs")) return "TCS";
     if (t.startsWith("crnt") || t.startsWith("creditnote") || t == "cr") return "CrNt";
     if (t.startsWith("dbnt") || t.startsWith("debitnote") || t == "db") return "DbNt";
-    if (t.startsWith("mill")) return "Mill";
+    if (t.startsWith("manu")) return "Manu";
     // Unknown family: reuse verbatim (capitalized) so the transform is lossless.
     QString out = type.trimmed();
     if (!out.isEmpty()) out[0] = out[0].toUpper();
@@ -589,15 +605,18 @@ QString FiscalYearHelper::canonicalVoucherNo(const QString& fyNameOrToken, const
     if (raw.isEmpty()) return rawNo.trimmed();
     QString tok = fyShortToken(fyNameOrToken);
     if (tok.isEmpty()) {
-        // Last resort: derive from embedded token, else active FY.
+        // Last resort: derive from the raw number's embedded token ONLY.
         tok = extractFiscalYearToken(raw);
         if (!tok.isEmpty()) tok = fyShortToken(tok);
-        if (tok.isEmpty()) {
-            FiscalYearInfo afy = getActiveFiscalYear();
-            tok = fyShortToken(afy.name);
-        }
     }
-    if (tok.isEmpty()) return raw;
+    if (tok.isEmpty()) {
+        // Fail loud (§2): NEVER borrow the ACTIVE FY's token. That minted
+        // vouchers in the wrong year's series — the FY 2199-00 sandbox
+        // closing journal came out "2627/Jrnl-1" (the active year's token)
+        // and collided with real FY 2026-27 numbers. Callers must propagate
+        // empty and block the write; a number is never fabricated.
+        return QString();
+    }
     return QString("%1/%2-%3").arg(tok, typeTok, raw);
 }
 
@@ -612,7 +631,7 @@ QString FiscalYearHelper::rawVoucherNo(const QString& vchNo) {
     static const QStringList tokens = {
         "Purchase", "Contra", "Journal", "Payment", "Receipt",
         "Sale", "Purc", "Jrnl", "ChPt", "ChRt", "Pymt", "Rcpt",
-        "JFrm", "IFrm", "CrNt", "DbNt", "Mill", "TDS", "TCS",
+        "JFrm", "IFrm", "CrNt", "DbNt", "Manu", "TDS", "TCS",
         "Pur", "Jr", "J"
     };
     for (const QString& tk : tokens) {
@@ -695,6 +714,53 @@ PartitionedLedgerData FiscalYearHelper::partitionPartyTransactions(
         return result;
     }
 
+    // F4 snapshot short-circuit: a locked year is immutable, so its audited
+    // snapshot IS the opening at its start date — no history scan needed.
+    // Strict guards keep it equivalent: only when fromDt is exactly the FY
+    // start, the year is locked, AND a snapshot row exists for this party
+    // (legacy locked years without snapshots fall through to the old path).
+    // Hit or miss, execution continues below so the period's own entries
+    // always load; only the prior computation is skipped on a hit.
+    double snapDr = 0.0, snapCr = 0.0;
+    bool snapHit = false;
+    if (!result.effectiveFromDate.isEmpty()
+        && result.effectiveFromDate == result.activeFy.startDate
+        && result.activeFy.status == "locked") {
+        QVariant fyIdRow = DatabaseManager::instance().executeScalar(
+            "SELECT id FROM financial_years WHERE year_name = ? LIMIT 1;",
+            {result.activeFy.name});
+        if (fyIdRow.isValid() && !fyIdRow.isNull()) {
+            QVariantList snapRows = DatabaseManager::instance().executeQuery(
+                "SELECT amount, balance_type FROM fy_opening_balances "
+                "WHERE fy_id = ? AND (party_name = ? COLLATE NOCASE) LIMIT 1;",
+                {fyIdRow.toLongLong(), cleanName});
+            // NOTE: id-match preferred where available; ledgers created before
+            // the snapshot carry stable ids, name match covers the rest.
+            if (snapRows.isEmpty()) {
+                QVariantList idRows = DatabaseManager::instance().executeQuery(
+                    "SELECT id FROM parties WHERE name = ? COLLATE NOCASE LIMIT 1;",
+                    {cleanName});
+                if (!idRows.isEmpty()) {
+                    snapRows = DatabaseManager::instance().executeQuery(
+                        "SELECT amount, balance_type FROM fy_opening_balances "
+                        "WHERE fy_id = ? AND party_id = ? LIMIT 1;",
+                        {fyIdRow.toLongLong(),
+                         idRows.first().toMap().value("id").toLongLong()});
+                }
+            }
+            if (!snapRows.isEmpty()) {
+                QVariantMap sm = snapRows.first().toMap();
+                const double amt = sm.value("amount").toDouble();
+                if (sm.value("balance_type").toString().compare("Dr", Qt::CaseInsensitive) == 0) {
+                    snapDr = amt;
+                } else {
+                    snapCr = amt;
+                }
+                snapHit = true;
+            }
+        }
+    }
+
     QString namePattern = cleanName;
     namePattern.replace(QChar(0x00A0), '%');
     namePattern.replace(' ', '%');
@@ -716,9 +782,14 @@ PartitionedLedgerData FiscalYearHelper::partitionPartyTransactions(
         initialOpType = pRows.first().toMap().value("balance_type").toString();
     }
 
-    // 2. Compute Prior Transactions (All vouchers strictly before effectiveFromDate)
+    // 2. Compute Prior Transactions (All vouchers strictly before effectiveFromDate),
+    // or take the audited snapshot on an F4 hit (equivalent by construction).
     double priorDr = 0.0;
     double priorCr = 0.0;
+    if (snapHit) {
+        priorDr = snapDr;
+        priorCr = snapCr;
+    } else {
     if (initialOpType.compare("Dr", Qt::CaseInsensitive) == 0) {
         priorDr += initialOp;
     } else {
@@ -751,6 +822,7 @@ PartitionedLedgerData FiscalYearHelper::partitionPartyTransactions(
             }
         }
     }
+    } // end snapHit else (prior computation; entries below always load)
 
     result.priorDebit = priorDr;
     result.priorCredit = priorCr;

@@ -33,7 +33,7 @@ inline QVariantList findDuplicateVoucherNos() {
 inline QString familyTokenFor(const QString& voucherType, const QString& voucherNo) {
     static const QStringList kFamilies = {
         "ChPt", "Pymt", "ChRt", "Rcpt", "Jrnl", "JFrm", "IFrm",
-        "Sale", "Purc", "TDS", "TCS", "DbNt", "CrNt", "Mill",
+        "Sale", "Purc", "TDS", "TCS", "DbNt", "CrNt", "Manu",
     };
     for (const QString& fam : kFamilies) {
         if (voucherNo.contains(fam, Qt::CaseInsensitive)) return fam;

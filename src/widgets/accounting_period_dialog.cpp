@@ -179,6 +179,11 @@ void AccountingPeriodDialog::setupUi() {
     m_presetsLayout->setSpacing(8);
     mainLayout->addLayout(m_presetsLayout);
 
+    // X1 status line: locked/soft-closed feedback under the chips.
+    m_fyMessageLabel = new QLabel("", cardFrame);
+    m_fyMessageLabel->setStyleSheet("font-size: 11px; font-weight: 700; color: #B45309; border: none; background: transparent;");
+    mainLayout->addWidget(m_fyMessageLabel);
+
     // ================= 3. 2-COLUMN DATE SELECTION (From & To) =================
     QHBoxLayout* columnsLayout = new QHBoxLayout();
     columnsLayout->setSpacing(12);
@@ -317,20 +322,38 @@ void AccountingPeriodDialog::loadYearsFromDatabase() {
     m_presetButtons.clear();
 
     for (const auto& fy : m_availableFys) {
-        QPushButton* chip = new QPushButton(fy.name, this);
+        // X1 status badges: status rides the FiscalYearInfo readers (F2
+        // populates everywhere; empty/unknown = open). Locked chips stay
+        // clickable so the refusal is explicit, never silent.
+        const QString st = fy.status.trimmed().toLower();
+        const bool isLocked = (st == "locked") || fy.isLocked;
+        const bool isSoft = (!isLocked && st == "soft_closed");
+        const QString suffix = isLocked ? " · Locked" : (isSoft ? " · Soft-closed" : "");
+        QPushButton* chip = new QPushButton(fy.name + suffix, this);
         chip->setMinimumHeight(32);
         chip->setCursor(Qt::PointingHandCursor);
+        chip->setProperty("fyName", fy.name);
 
         bool isCurrentSelected = (fy.name == m_selectedFyLabel);
+        QString bg = isCurrentSelected ? "#047857" : "#F8FAFC";
+        QString fg = isCurrentSelected ? "#FFFFFF" : "#1E293B";
+        QString bd = isCurrentSelected ? "#047857" : "#E2E8F0";
+        QString hov = isCurrentSelected ? "#065F46" : "#F1F5F9";
+        if (isLocked) {
+            bg = isCurrentSelected ? "#57534E" : "#F5F5F4";
+            fg = isCurrentSelected ? "#FFFFFF" : "#A8A29E";
+            bd = "#D6D3D1";
+            hov = bg;
+        } else if (isSoft) {
+            bd = "#F59E0B";
+            if (!isCurrentSelected) fg = "#92400E";
+        }
         chip->setStyleSheet(QString(
             "QPushButton {"
             "  background-color: %1; color: %2; border: 1px solid %3; border-radius: 6px; font-size: 11px; font-weight: bold; padding: 4px 10px;"
             "}"
             "QPushButton:hover { background-color: %4; }"
-        ).arg(isCurrentSelected ? "#047857" : "#F8FAFC",
-              isCurrentSelected ? "#FFFFFF" : "#1E293B",
-              isCurrentSelected ? "#047857" : "#E2E8F0",
-              isCurrentSelected ? "#065F46" : "#F1F5F9"));
+        ).arg(bg, fg, bd, hov));
 
         connect(chip, &QPushButton::clicked, this, [this, fy]() {
             setPreset(fy.name);
@@ -338,6 +361,21 @@ void AccountingPeriodDialog::loadYearsFromDatabase() {
 
         m_presetsLayout->addWidget(chip);
         m_presetButtons.append(chip);
+    }
+
+    // X1 edge: the active year itself may be locked on open — show it
+    // selected + grey with the reason stated, never silently moved away.
+    if (m_fyMessageLabel) {
+        const QString st = activeFy.status.trimmed().toLower();
+        if (st == "locked" || activeFy.isLocked) {
+            m_fyMessageLabel->setText(
+                QString("%1 is locked — writes are refused. Select an open year to work in.").arg(activeFy.name));
+        } else if (st == "soft_closed") {
+            m_fyMessageLabel->setText(
+                QString("%1 is soft-closed — writes warn. Prefer the active year.").arg(activeFy.name));
+        } else {
+            m_fyMessageLabel->setText("");
+        }
     }
 
     // Build From Date items (01-04-YYYY) and To Date items (31-03-YYYY)
@@ -423,19 +461,33 @@ void AccountingPeriodDialog::updateCheckedStates() {
         }
     }
 
-    // Update preset chip styling
+    // Update preset chip styling (X1: preserves locked/soft-closed
+    // styling — selection highlight layers on top of status colors).
     for (int k = 0; k < m_presetButtons.size(); ++k) {
         if (k < m_availableFys.size()) {
+            const QString st = m_availableFys[k].status.trimmed().toLower();
+            const bool isLocked = (st == "locked") || m_availableFys[k].isLocked;
+            const bool isSoft = (!isLocked && st == "soft_closed");
             bool isPresetActive = (m_availableFys[k].name == m_selectedFyLabel);
+            QString bg = isPresetActive ? "#047857" : "#F8FAFC";
+            QString fg = isPresetActive ? "#FFFFFF" : "#1E293B";
+            QString bd = isPresetActive ? "#047857" : "#E2E8F0";
+            QString hov = isPresetActive ? "#065F46" : "#F1F5F9";
+            if (isLocked) {
+                bg = isPresetActive ? "#57534E" : "#F5F5F4";
+                fg = isPresetActive ? "#FFFFFF" : "#A8A29E";
+                bd = "#D6D3D1";
+                hov = bg;
+            } else if (isSoft) {
+                bd = "#F59E0B";
+                if (!isPresetActive) fg = "#92400E";
+            }
             m_presetButtons[k]->setStyleSheet(QString(
                 "QPushButton {"
                 "  background-color: %1; color: %2; border: 1px solid %3; border-radius: 6px; font-size: 11px; font-weight: bold; padding: 4px 10px;"
                 "}"
                 "QPushButton:hover { background-color: %4; }"
-            ).arg(isPresetActive ? "#047857" : "#F8FAFC",
-                  isPresetActive ? "#FFFFFF" : "#1E293B",
-                  isPresetActive ? "#047857" : "#E2E8F0",
-                  isPresetActive ? "#065F46" : "#F1F5F9"));
+            ).arg(bg, fg, bd, hov));
         }
     }
 }
@@ -477,6 +529,18 @@ void AccountingPeriodDialog::onToRowChanged(int row) {
 void AccountingPeriodDialog::setPreset(const QString& fyName) {
     for (int i = 0; i < m_availableFys.size(); ++i) {
         if (m_availableFys[i].name == fyName) {
+            // X1 guard: locked years are never selectable-as-active (the
+            // global apply path would write is_active onto them). Soft-closed
+            // selects with a warning; open is unchanged.
+            const QString st = m_availableFys[i].status.trimmed().toLower();
+            const bool isLocked = (st == "locked") || m_availableFys[i].isLocked;
+            if (isLocked) {
+                if (m_fyMessageLabel) {
+                    m_fyMessageLabel->setText(
+                        QString("%1 is locked — select an open year to work in.").arg(fyName));
+                }
+                return;
+            }
             m_updating = true;
             m_selectedFromIso = m_availableFys[i].startDate;
             m_selectedToIso = m_availableFys[i].endDate;
@@ -486,6 +550,12 @@ void AccountingPeriodDialog::setPreset(const QString& fyName) {
             m_toList->setCurrentRow(i);
             m_updating = false;
 
+            if (m_fyMessageLabel) {
+                m_fyMessageLabel->setText(
+                    (st == "soft_closed")
+                        ? QString("%1 is soft-closed — writes warn. Prefer the active year.").arg(fyName)
+                        : "");
+            }
             updatePreview();
             updateCheckedStates();
             break;

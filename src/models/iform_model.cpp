@@ -250,7 +250,9 @@ bool IFormModel::save_iform_voucher(const QVariantMap& data, const QVariantList&
     }
 
     // 2. Credit Maal Khata / Sale with Goods Amount
-    QVariant maalKhataId = db.executeScalar("SELECT id FROM parties WHERE name = 'Maal Khata A/c' OR name LIKE '%Maal Khata%' LIMIT 1;");
+    // C6 (folded into C3-M1): deterministic ORDER BY id — the LIKE branch
+    // made the pick nondeterministic when several ledgers match.
+    QVariant maalKhataId = db.executeScalar("SELECT id FROM parties WHERE name = 'Maal Khata A/c' OR name LIKE '%Maal Khata%' ORDER BY id LIMIT 1;");
     if (maalKhataId.isValid() && !maalKhataId.isNull() && goodsAmount > 0.001) {
         postLeg("Maal Khata A/c", maalKhataId, buyerName, "Cr", goodsAmount, QString("I-Form No. %1 - %2").arg(iformNo, buyerName));
     }

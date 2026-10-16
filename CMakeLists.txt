@@ -142,8 +142,8 @@ set(SOURCES
     src/models/stock_items_model.cpp
     src/models/parties_model.h
     src/models/parties_model.cpp
-    src/models/milling_model.h
-    src/models/milling_model.cpp
+    src/models/manufacturing_model.h
+    src/models/manufacturing_model.cpp
     src/models/financial_years_model.h
     src/models/financial_years_model.cpp
     src/models/firm_manager.h
@@ -162,8 +162,8 @@ set(SOURCES
     src/models/sales_register_model.cpp
     src/models/stock_register_model.h
     src/models/stock_register_model.cpp
-    src/models/milling_statement_model.h
-    src/models/milling_statement_model.cpp
+    src/models/manufacturing_statement_model.h
+    src/models/manufacturing_statement_model.cpp
     src/services/accounting_date_service.h
     src/services/accounting_date_service.cpp
     src/services/financial_math_service.h
@@ -188,8 +188,8 @@ set(SOURCES
     src/models/tcs_receipt_voucher_controller.cpp
     src/models/jform_voucher_controller.h
     src/models/jform_voucher_controller.cpp
-    src/models/milling_batch_controller.h
-    src/models/milling_batch_controller.cpp
+    src/models/manufacturing_batch_controller.h
+    src/models/manufacturing_batch_controller.cpp
     src/models/paddy_procurement_controller.h
     src/models/paddy_procurement_controller.cpp
     src/models/menu_tree_manager.h
@@ -236,6 +236,8 @@ set(SOURCES
     src/engine/migration/ledger_migrator.cpp
     src/engine/migration/stock_migrator.h
     src/engine/migration/stock_migrator.cpp
+    src/config/schema_mapping.h
+    src/config/schema_mapping.cpp
     src/engine/migration/voucher_migrator.h
     src/engine/migration/voucher_migrator.cpp
     src/engine/migration/mandi_migrator.h
@@ -327,6 +329,8 @@ set(SOURCES
     src/widgets/purchase_voucher_widget.cpp
     src/widgets/new_firm_dialog.h
     src/widgets/new_firm_dialog.cpp
+    src/widgets/edit_firm_dialog.h
+    src/widgets/edit_firm_dialog.cpp
     src/widgets/mdb_migration_dialog.h
     src/widgets/mdb_migration_dialog.cpp
     src/widgets/firm_selector_widget.h
@@ -353,8 +357,8 @@ set(SOURCES
     src/widgets/day_book_widget.cpp
     src/widgets/gstr_reports_widget.h
     src/widgets/gstr_reports_widget.cpp
-    src/widgets/milling_statement_widget.h
-    src/widgets/milling_statement_widget.cpp
+    src/widgets/manufacturing_statement_widget.h
+    src/widgets/manufacturing_statement_widget.cpp
     src/widgets/keyboard_shortcuts_dialog.h
     src/widgets/keyboard_shortcuts_dialog.cpp
     src/widgets/print_copy_options_dialog.h
@@ -379,8 +383,8 @@ set(SOURCES
     src/widgets/stock_detail_widget.cpp
     src/widgets/paddy_procurement_widget.h
     src/widgets/paddy_procurement_widget.cpp
-    src/widgets/milling_voucher_widget.h
-    src/widgets/milling_voucher_widget.cpp
+    src/widgets/manufacturing_voucher_widget.h
+    src/widgets/manufacturing_voucher_widget.cpp
     src/widgets/tds_voucher_widget.h
     src/widgets/tds_voucher_widget.cpp
     src/widgets/tds_tcs_hub_dialog.h
@@ -431,8 +435,8 @@ set(SOURCES
     src/engine/aank_interest_engine.cpp
     src/engine/gst_tax_engine.h
     src/engine/gst_tax_engine.cpp
-    src/engine/milling_yield_engine.h
-    src/engine/milling_yield_engine.cpp
+    src/engine/manufacturing_yield_engine.h
+    src/engine/manufacturing_yield_engine.cpp
     src/engine/gstr1_engine.h
     src/engine/gstr1_engine.cpp
     src/engine/gstr1_excel_writer.h
@@ -580,8 +584,8 @@ set(TEST_SOURCES
     src/models/tcs_receipt_voucher_controller.cpp
     src/models/jform_voucher_controller.h
     src/models/jform_voucher_controller.cpp
-    src/models/milling_batch_controller.h
-    src/models/milling_batch_controller.cpp
+    src/models/manufacturing_batch_controller.h
+    src/models/manufacturing_batch_controller.cpp
     src/models/paddy_procurement_controller.h
     src/models/paddy_procurement_controller.cpp
     src/models/ledger_master_controller.h
@@ -614,8 +618,8 @@ set(TEST_SOURCES
     src/models/tds_model.cpp
     src/models/interest_model.h
     src/models/interest_model.cpp
-    src/models/milling_model.h
-    src/models/milling_model.cpp
+    src/models/manufacturing_model.h
+    src/models/manufacturing_model.cpp
     src/models/account_groups_model.h
     src/models/account_groups_model.cpp
     src/models/account_classifier.h
@@ -628,8 +632,8 @@ set(TEST_SOURCES
     src/models/sales_register_model.cpp
     src/models/stock_register_model.h
     src/models/stock_register_model.cpp
-    src/models/milling_statement_model.h
-    src/models/milling_statement_model.cpp
+    src/models/manufacturing_statement_model.h
+    src/models/manufacturing_statement_model.cpp
     src/models/dashboard_controller.h
     src/models/dashboard_controller.cpp
     src/models/firm_manager.h
@@ -641,6 +645,20 @@ set(TEST_SOURCES
     src/engine/fiscal_year_helper.cpp
     src/engine/fy_close_engine.h
     src/engine/fy_close_engine.cpp
+    src/engine/migration/migration_utils.h
+    src/engine/migration/migration_utils.cpp
+    src/engine/migration/group_migrator.h
+    src/engine/migration/group_migrator.cpp
+    src/engine/migration/ledger_migrator.h
+    src/engine/migration/ledger_migrator.cpp
+    src/engine/migration/stock_migrator.h
+    src/engine/migration/stock_migrator.cpp
+    src/engine/migration/voucher_migrator.h
+    src/engine/migration/voucher_migrator.cpp
+    src/engine/migration/mandi_migrator.h
+    src/engine/migration/mandi_migrator.cpp
+    src/config/schema_mapping.h
+    src/config/schema_mapping.cpp
     src/engine/bill_series.h
     src/engine/bill_series.cpp
     src/engine/voucher_numbering.h
@@ -766,8 +784,8 @@ set(ENGINE_TEST_SOURCES
     src/engine/aank_interest_engine.cpp
     src/engine/gst_tax_engine.h
     src/engine/gst_tax_engine.cpp
-    src/engine/milling_yield_engine.h
-    src/engine/milling_yield_engine.cpp
+    src/engine/manufacturing_yield_engine.h
+    src/engine/manufacturing_yield_engine.cpp
     src/engine/gstr1_engine.h
     src/engine/gstr1_engine.cpp
     src/engine/gstr1_excel_writer.h
@@ -795,6 +813,22 @@ set(ENGINE_TEST_SOURCES
     src/engine/stock_valuation_engine.cpp
     src/engine/fiscal_year_helper.h
     src/engine/fiscal_year_helper.cpp
+    src/engine/migration/migration_utils.h
+    src/engine/migration/migration_utils.cpp
+    src/engine/migration/group_migrator.h
+    src/engine/migration/group_migrator.cpp
+    src/engine/migration/ledger_migrator.h
+    src/engine/migration/ledger_migrator.cpp
+    src/engine/migration/stock_migrator.h
+    src/engine/migration/stock_migrator.cpp
+    src/engine/migration/voucher_migrator.h
+    src/engine/migration/voucher_migrator.cpp
+    src/engine/migration/mandi_migrator.h
+    src/engine/migration/mandi_migrator.cpp
+    src/engine/data_preprocessor.h
+    src/engine/data_preprocessor.cpp
+    src/config/schema_mapping.h
+    src/config/schema_mapping.cpp
     src/services/accounting_date_service.h
     src/services/accounting_date_service.cpp
     src/services/financial_math_service.h
@@ -887,6 +921,20 @@ set(CLI_SOURCES
     src/engine/stock_valuation_engine.cpp
     src/engine/fiscal_year_helper.h
     src/engine/fiscal_year_helper.cpp
+    src/engine/migration/migration_utils.h
+    src/engine/migration/migration_utils.cpp
+    src/engine/migration/group_migrator.h
+    src/engine/migration/group_migrator.cpp
+    src/engine/migration/ledger_migrator.h
+    src/engine/migration/ledger_migrator.cpp
+    src/engine/migration/stock_migrator.h
+    src/engine/migration/stock_migrator.cpp
+    src/engine/migration/voucher_migrator.h
+    src/engine/migration/voucher_migrator.cpp
+    src/engine/migration/mandi_migrator.h
+    src/engine/migration/mandi_migrator.cpp
+    src/config/schema_mapping.h
+    src/config/schema_mapping.cpp
     src/engine/accounting_engine.h
     src/services/accounting_date_service.h
     src/services/accounting_date_service.cpp

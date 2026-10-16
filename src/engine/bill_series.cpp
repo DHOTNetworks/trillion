@@ -130,7 +130,13 @@ QString BillSeriesConfig::fyToken(const QString& fyLongName) const {
 QString BillSeriesConfig::staticHead(const QString& fyLongName) const {
     QString head = prefix;
     QString fy = fyToken(fyLongName);
-    if (!head.isEmpty() && !fy.isEmpty()) head += sepAfterPrefix;
+    // sepAfterPrefix separates the prefix from what follows — the FY token
+    // when present, the sequence itself in the no-FY style. Dropping it in
+    // the none-style broke the round-trip: head "TST" vs printed "TST/1"
+    // made the gap finder and the next-number claimer mis-parse every row
+    // (rest "/1" failed the ^\d+ anchor). Auto-derived none-style configs
+    // carry sepAfterPrefix == "" so their rendering is unchanged.
+    if (!head.isEmpty() && (!fy.isEmpty() || !sepAfterPrefix.isEmpty())) head += sepAfterPrefix;
     head += fy;
     if (!head.isEmpty()) head += sepBeforeSeq;
     return head;

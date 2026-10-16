@@ -369,7 +369,7 @@ QWidget* DashboardWidget::createMiddleSection() {
 
 void DashboardWidget::buildMenuCards() {
     // §23.5 + S3: Ledger, Stock, Add Vouchers, [Mandi iff paddy is
-    // reachable (mandi OR mill — view 1 answers to either)], Other, Books,
+    // reachable (mandi OR manufacturer — view 1 answers to either)], Other, Books,
     // Final. Badge numbers are visible positions (no gaps ever); card
     // titles carry no numeric prefixes.
     qDeleteAll(m_menuCards);
@@ -387,7 +387,7 @@ void DashboardWidget::buildMenuCards() {
     const CardDef defs[] = {
         {"ledger_master", "Ledger Master", "New Ledger, Modify, View Ledger, Groups", "Alt+6", "#DBEAFE", "#2563EB", "#EFF6FF", "#2563EB", false},
         {"stock_master", "Stock Master", "Raw Paddy, Rice & By-Product Inventory", "Alt+4", "#DCFCE7", "#16A34A", "#F0FDF4", "#16A34A", false},
-        {"add_voucher", "Add Vouchers", "Sales, Purchase, Journal, Cheque, Cash, Milling & GST", "F2", "#FEF3C7", "#D97706", "#FEF3C7", "#D97706", false},
+        {"add_voucher", "Add Vouchers", "Sales, Purchase, Journal, Cheque, Cash, Manufacturing & GST", "F2", "#FEF3C7", "#D97706", "#FEF3C7", "#D97706", false},
         {"mandi", "Mandi & Procurement", "J-Form, I-Form, Paddy Slip & Trading Hub", "F11", "#F3E8FF", "#7C3AED", "#F3E8FF", "#7C3AED", true},
         {"other_voucher", "Other Vouchers", "TDS/TCS, Bank Import, Transport & Payroll", "Alt+5", "#EDE9FE", "#6D28D9", "#EDE9FE", "#6D28D9", false},
         {"reports_register", "Books & Registers", "Day Book, Cash & Bank Book, Sales, Purchase & Stock", "Alt+7", "#DCFCE7", "#059669", "#ECFDF5", "#059669", false},

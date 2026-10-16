@@ -496,7 +496,7 @@ void BardanaWidget::loadDynamicGodowns() {
     }
 
     if (godowns.isEmpty()) {
-        godowns << "Main Godown" << "Godown No. 1" << "Godown No. 2" << "Mill Yard" << "Shed A";
+        godowns << "Main Godown" << "Godown No. 1" << "Godown No. 2" << "Manufacturing Yard" << "Shed A";
     } else if (!godowns.contains("Main Godown")) {
         godowns.prepend("Main Godown");
     }
@@ -586,7 +586,7 @@ void BardanaWidget::updateSummaryKpis() {
     }
 
     long long netParty = totalIssued - totalReceived;
-    long long godownStock = totalReceived - totalIssued; // If mill acts as holder
+    long long godownStock = totalReceived - totalIssued; // If manufacturing acts as holder
     if (godownStock < 0) godownStock = 0;
 
     if (m_lblTotalIssued) m_lblTotalIssued->setText(QString("%1 Bags").arg(QLocale(QLocale::English).toString(totalIssued)));
@@ -717,7 +717,7 @@ void BardanaWidget::populatePartySummary() {
             statusText = QString("Party Owes %1 Bags").arg(netBal);
             balItem->setForeground(QColor("#2563EB"));
         } else if (netBal < 0) {
-            statusText = QString("Mill Owes %1 Bags").arg(-netBal);
+            statusText = QString("Manufacturer Owes %1 Bags").arg(-netBal);
             balItem->setForeground(QColor("#D97706"));
         } else {
             balItem->setForeground(QColor("#059669"));

@@ -655,9 +655,9 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
     }
 
 #if HAS_LIBMDB
-    // Phase 3 flags: mandi records imply the mandi bundle (D12) so the gated
+    // Flag-primed: mandi records imply the mandi bundle (D12) so the gated
     // domain tables exist before this path's DELETEs/INSERTs touch them.
-    // (Busy has no mill/transport-only sources; core tables are unconditional.)
+    // (Busy has no manufacturing/transport-only sources; core tables are unconditional.)
     FeatureFlags::primeFromSource(insp.value("mandi_records_count").toInt() > 0, false,
         insp.value("mandi_records_count").toInt() > 0, insp.value("mandi_records_count").toInt() > 0);
     DatabaseManager& db = DatabaseManager::instance();
@@ -1245,14 +1245,22 @@ bool BusyDataMigrator::migrate_busy_data(const QString& busyPath) {
             QString vFy = computeFy(vDate);
             // Canonical identity for every voucher_no stored below.
             QString vchCanon = busyCanonVoucherNo(vFy, rawType, vNo);
+            if (vchCanon.isEmpty()) {
+                // Fail loud (§2/F6): no fabricated numbers, no active-FY borrow.
+                qWarning() << "[Migration] unnumbered Busy voucher skipped (FY token unresolvable):"
+                           << vNo << vFy;
+                continue;
+            }
 
             // Ensure the voucher's financial year exists (multi-year imports).
             {
-                int fyStart = vFy.mid(3, 4).toInt();
-                if (fyStart > 1900) {
+                // F6: start-year extraction via the choke (kills mid(3,4) slicing).
+                // April-fixed dates come from FiscalCalendar (single choke).
+                int fyStart = FiscalYearHelper::fyStartYear(vFy);
+                if (fyStart > 0) {
                     db.executeNonQuery(
                         "INSERT OR IGNORE INTO financial_years (year_name, start_date, end_date, is_active) VALUES (?, ?, ?, 0);",
-                        {vFy, QString("%1-04-01").arg(fyStart), QString("%1-03-31").arg(fyStart + 1)}
+                        {vFy, FiscalCalendar::fyStartDate(fyStart), FiscalCalendar::fyEndDate(fyStart)}
                     );
                 }
             }

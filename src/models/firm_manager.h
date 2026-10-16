@@ -27,6 +27,10 @@ public:
     Q_INVOKABLE bool prepare_firm_for_import(const QString& mdbFilePath, const QString& customFirmName = "", const QString& explicitFirmId = "");
     Q_INVOKABLE bool import_bahi_khata_firm(const QString& mdbFilePath, const QString& customFirmName = "");
     Q_INVOKABLE bool create_new_firm(const QVariantMap& firmInfo);
+    // Edit-dialog support (user-ordered): sync the selector-list display
+    // name after a rename. Registry only; the DB row is written by the
+    // caller through its own connection. Id stays stable.
+    Q_INVOKABLE bool rename_firm(const QString& firmId, const QString& newName);
     Q_INVOKABLE QVariantMap get_current_firm_info();
     /// Registry entry (id/db_name/source_file/bahi_khata_file/...) for the
     /// active firm, or {} if none. Unlike currentFirmInfo() (company_info

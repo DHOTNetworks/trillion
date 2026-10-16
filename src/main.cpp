@@ -19,7 +19,7 @@
 #include "models/stock_items_model.h"
 #include "models/parties_model.h"
 #include "models/account_groups_model.h"
-#include "models/milling_model.h"
+#include "models/manufacturing_model.h"
 #include "models/financial_years_model.h"
 #include "models/firm_manager.h"
 #include "models/jform_model.h"
@@ -29,7 +29,7 @@
 #include "models/purchase_register_model.h"
 #include "models/sales_register_model.h"
 #include "models/stock_register_model.h"
-#include "models/milling_statement_model.h"
+#include "models/manufacturing_statement_model.h"
 #include "services/print_export_controller.h"
 #include "services/accounting_date_service.h"
 #include "services/financial_math_service.h"
@@ -39,7 +39,7 @@
 #include "models/cheque_voucher_controller.h"
 #include "models/tds_voucher_controller.h"
 #include "models/jform_voucher_controller.h"
-#include "models/milling_batch_controller.h"
+#include "models/manufacturing_batch_controller.h"
 #include "models/paddy_procurement_controller.h"
 #include "models/ledger_master_controller.h"
 #include "models/stock_master_controller.h"
@@ -274,7 +274,7 @@ int main(int argc, char* argv[]) {
     modelsTimer.start();
     DashboardController dashboardCtrl;
     PaddyArrivalsModel paddyModel;
-    MillingModel millingModel;
+    ManufacturingModel manufacturingModel;
     SalesModel salesModel;
     PurchaseModel purchaseModel;
     VouchersModel vouchersModel;
@@ -290,7 +290,7 @@ int main(int argc, char* argv[]) {
     PurchaseRegisterController purchaseRegisterCtrl;
     SalesRegisterController salesRegisterCtrl;
     StockRegisterController stockRegisterCtrl;
-    MillingStatementController millingStatementCtrl;
+    ManufacturingStatementController manufacturingStatementCtrl;
     PrintExportController printExportCtrl;
     AccountingDateService dateService;
     FinancialMathService mathService;
@@ -300,7 +300,7 @@ int main(int argc, char* argv[]) {
     ChequeVoucherController chequeVoucherCtrl;
     TdsVoucherController tdsVoucherCtrl;
     JFormVoucherController jformVoucherCtrl;
-    MillingBatchController millingBatchCtrl;
+    ManufacturingBatchController manufacturingBatchCtrl;
     PaddyProcurementController paddyProcurementCtrl;
     LedgerMasterController ledgerMasterCtrl;
     StockMasterController stockMasterCtrl;
@@ -355,7 +355,7 @@ int main(int argc, char* argv[]) {
             std::cout << "[STATS] Stock Items count: " << stockItemsModel.rowCount() << std::endl;
             std::cout << "[STATS] Sales Invoices count: " << salesModel.rowCount() << std::endl;
             std::cout << "[STATS] Purchase Invoices count: " << purchaseModel.rowCount() << std::endl;
-            std::cout << "[STATS] Milling Batches count: " << millingModel.rowCount() << std::endl;
+            std::cout << "[STATS] Manufacturing Batches count: " << manufacturingModel.rowCount() << std::endl;
             return 0;
         }
         if (arg == "--test-custom-period") {
@@ -389,8 +389,8 @@ int main(int argc, char* argv[]) {
     deps.stockRegisterCtrl = &stockRegisterCtrl;
     deps.paddyModel = &paddyModel;
     deps.paddyProcurementCtrl = &paddyProcurementCtrl;
-    deps.millingBatchCtrl = &millingBatchCtrl;
-    deps.millingModel = &millingModel;
+    deps.manufacturingBatchCtrl = &manufacturingBatchCtrl;
+    deps.manufacturingModel = &manufacturingModel;
     deps.tdsVoucherCtrl = &tdsVoucherCtrl;
     deps.interestModel = &interestModel;
     deps.bankStatementCtrl = &bankStatementCtrl;

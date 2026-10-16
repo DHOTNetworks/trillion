@@ -204,7 +204,7 @@ static QByteArray toJet4TextForCol(const QString& str, MdbColumn* col) {
 }
 
 static QString normalizeTxType(const QString& raw) {
-    // Phase 1: single alias map lives in FiscalYearHelper::canonicalTypeToken.
+    // Keeper-based: single alias map lives in FiscalYearHelper::canonicalTypeToken.
     // Only export-specific quirk kept here: Bahi-Khata has no Contra/TDS
     // voucher kinds, so both export as Jrnl (documented, not a parallel map).
     // -main deviation from the reference port: Bahi-Khata return kinds pass
@@ -1554,7 +1554,7 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaOdbc(const ExportOp
             QSqlQuery q(mdb);
             q.prepare("UPDATE CompanyInfo SET CompanyName = ?, Business = ?, Address = ?, Phone_O = ?, Mobile1 = ?, PAN_No = ?, GSTIN = ?;");
             q.addBindValue(c.value("company_name").toString());
-            q.addBindValue(c.value("business_type", "Rice Milling & Trading").toString());
+            q.addBindValue(c.value("business_type", "Rice Manufacturing & Trading").toString());
             q.addBindValue(c.value("address").toString());
             q.addBindValue(c.value("phone").toString());
             q.addBindValue(c.value("mobile").toString());
@@ -1751,7 +1751,7 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaOdbc(const ExportOp
         }
 
         // 5. Export Stock Items
-        if (options.exportMillingAndStock) {
+        if (options.exportManufacturingAndStock) {
             updateProgress(85, "Exporting Stock Items & Commodity Masters...");
             QVariantList stockRows = appDb.executeQuery("SELECT code, name, category_name, opening_bags, opening_qty, opening_value, hsn_code FROM stock_items;");
             QSqlQuery qDel(mdb);
@@ -2388,7 +2388,7 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
             // so Jet4Writer maintains them like Transactions).
             MdbTableDef* stkTxTbl = nullptr;
             std::set<std::tuple<int, QString, QString>> existingStockSig;
-            if (options.exportMillingAndStock) {
+            if (options.exportManufacturingAndStock) {
                 stkTxTbl = mdb_read_table_by_name(mdb, (char*)"StockTransactions", MDB_TABLE);
                 if (stkTxTbl) {
                     mdb_read_columns(stkTxTbl);
@@ -2950,7 +2950,7 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
     }
 
     // 4. Sync Stock Items
-    if (options.exportMillingAndStock) {
+    if (options.exportManufacturingAndStock) {
         updateProgress(90, "Syncing Commodity & Stock Items...");
         MdbTableDef* stkTbl = mdb_read_table_by_name(mdb, (char*)"StockItems", MDB_TABLE);
         if (stkTbl) {

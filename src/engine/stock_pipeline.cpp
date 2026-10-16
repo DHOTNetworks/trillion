@@ -52,7 +52,7 @@ void StockPipeline::ensureLoaded() {
         "SELECT id, legacy_code, code, name, print_name, item_type, group_code, trading_group, "
         "       unit, alt_unit, conversion_factor, packing_kg, hsn_code, gst_rate, "
         "       purchase_rate, sale_rate, opening_bags, opening_qty, opening_rate, opening_value, "
-        "       is_milling_item, include_in_trading, calculate_stock "
+        "       is_manufacturing_item, manufacturing_role, include_in_trading, calculate_stock "
         "FROM stock_items;"
     );
 
@@ -79,7 +79,8 @@ void StockPipeline::ensureLoaded() {
         ir.openingQty = i.value("opening_qty").toDouble();
         ir.openingRate = i.value("opening_rate").toDouble();
         ir.openingValue = i.value("opening_value").toDouble();
-        ir.isMillingItem = (i.value("is_milling_item").toInt() == 1);
+        ir.isManufacturingItem = (i.value("is_manufacturing_item").toInt() == 1);
+        ir.manufacturingRole = i.value("manufacturing_role").toString();
         ir.includeInTrading = (i.value("include_in_trading").toInt() == 1);
         ir.calculateStock = (i.value("calculate_stock").toInt() == 1);
 
@@ -182,26 +183,26 @@ QVector<StockItemBalanceResult> StockPipeline::calculateStockBalances(
         aggByItem[itId].outwardVal += r.value("tot_val").toDouble();
     }
 
-    // 3. Milling Movements
-    QString millSql = "SELECT item_id, drcr, SUM(bags) as tot_bags, SUM(weight_qtl) as tot_qtl, SUM(amount) as tot_val "
-                      "FROM milling_voucher_items WHERE 1=1 ";
-    QVariantList millParams;
-    if (!fromDateIso.isEmpty()) { millSql += " AND batch_date >= ?"; millParams << fromDateIso; }
-    if (!toDateIso.isEmpty()) { millSql += " AND batch_date <= ?"; millParams << toDateIso; }
-    millSql += " AND item_id IS NOT NULL AND item_id > 0 GROUP BY item_id, drcr;";
+    // 3. manufacturing Movements
+    QString manufacturerSql = "SELECT item_id, drcr, SUM(bags) as tot_bags, SUM(weight_qtl) as tot_qtl, SUM(amount) as tot_val "
+                      "FROM manufacturing_voucher_items WHERE 1=1 ";
+    QVariantList manufacturerParams;
+    if (!fromDateIso.isEmpty()) { manufacturerSql += " AND batch_date >= ?"; manufacturerParams << fromDateIso; }
+    if (!toDateIso.isEmpty()) { manufacturerSql += " AND batch_date <= ?"; manufacturerParams << toDateIso; }
+    manufacturerSql += " AND item_id IS NOT NULL AND item_id > 0 GROUP BY item_id, drcr;";
 
-    QVariantList millRows = DatabaseManager::instance().executeQuery(millSql, millParams);
-    for (const auto& rVar : millRows) {
+    QVariantList manufacturerRows = DatabaseManager::instance().executeQuery(manufacturerSql, manufacturerParams);
+    for (const auto& rVar : manufacturerRows) {
         QVariantMap r = rVar.toMap();
         int itId = r.value("item_id").toInt();
         QString drcr = r.value("drcr").toString().trimmed();
         if (drcr.compare("Cr", Qt::CaseInsensitive) == 0) {
-            // Output from mill = Inward finished product
+            // Output from manufacturer = Inward finished product
             aggByItem[itId].inwardBags += r.value("tot_bags").toDouble();
             aggByItem[itId].inwardQtl += r.value("tot_qtl").toDouble();
             aggByItem[itId].inwardVal += r.value("tot_val").toDouble();
         } else {
-            // Input to mill = Outward raw paddy consumed
+            // Input to manufacturer = Outward raw paddy consumed
             aggByItem[itId].outwardBags += r.value("tot_bags").toDouble();
             aggByItem[itId].outwardQtl += r.value("tot_qtl").toDouble();
             aggByItem[itId].outwardVal += r.value("tot_val").toDouble();
@@ -375,22 +376,22 @@ bool StockPipeline::saveStockItem(const StockItemRecord& item, QString* outError
         success = DatabaseManager::instance().executeNonQuery(
             "UPDATE stock_items SET name = ?, code = ?, print_name = ?, item_type = ?, trading_group = ?, "
             "unit = ?, alt_unit = ?, conversion_factor = ?, packing_kg = ?, hsn_code = ?, gst_rate = ?, "
-            "purchase_rate = ?, sale_rate = ?, is_milling_item = ?, include_in_trading = ?, calculate_stock = ? "
+            "purchase_rate = ?, sale_rate = ?, is_manufacturing_item = ?, include_in_trading = ?, calculate_stock = ? "
             "WHERE id = ?;",
             { trimmedName, item.code, item.printName, item.itemType, item.groupName,
               item.unit, item.altUnit, item.conversionFactor, item.packingKg, item.hsnCode, item.gstRate,
-              item.purchaseRate, item.saleRate, item.isMillingItem ? 1 : 0, item.includeInTrading ? 1 : 0,
+              item.purchaseRate, item.saleRate, item.isManufacturingItem ? 1 : 0, item.includeInTrading ? 1 : 0,
               item.calculateStock ? 1 : 0, item.id }
         );
     } else {
         success = DatabaseManager::instance().executeNonQuery(
             "INSERT INTO stock_items (name, code, print_name, item_type, trading_group, unit, alt_unit, "
-            "conversion_factor, packing_kg, hsn_code, gst_rate, purchase_rate, sale_rate, is_milling_item, "
+            "conversion_factor, packing_kg, hsn_code, gst_rate, purchase_rate, sale_rate, is_manufacturing_item, "
             "include_in_trading, calculate_stock) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
             { trimmedName, item.code, item.printName, item.itemType, item.groupName,
               item.unit, item.altUnit, item.conversionFactor, item.packingKg, item.hsnCode, item.gstRate,
-              item.purchaseRate, item.saleRate, item.isMillingItem ? 1 : 0, item.includeInTrading ? 1 : 0,
+              item.purchaseRate, item.saleRate, item.isManufacturingItem ? 1 : 0, item.includeInTrading ? 1 : 0,
               item.calculateStock ? 1 : 0 }
         );
     }

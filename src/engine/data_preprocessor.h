@@ -49,6 +49,9 @@ public:
     static QString extractPan(const QString& text);
     static bool isValidGstin(const QString& gstin);
     static bool isValidPan(const QString& pan);
+    static QString getStateNameFromCode(const QString& code);
+    static QString extractStateCode(const QString& gstin, const QString& state);
+    static QString extractPincode(const QString& address, const QString& fallback = "125055");
 
     // Narration & Invoice Details Unpacker
     static QVariantMap parseInvoiceDetailsString(const QString& detailsStr);

@@ -56,7 +56,7 @@ PrintExportController::PrintExportController(QObject* parent)
 #include "../printing/reports/stock_register_report.h"
 #include "../printing/reports/item_movement_report.h"
 #include "../printing/reports/closing_stock_report.h"
-#include "../printing/reports/milling_statement_report.h"
+#include "../printing/reports/manufacturing_statement_report.h"
 #include "../printing/reports/mandi_report_report.h"
 #include "../printing/reports/gstr_report_report.h"
 QString PrintExportController::get_default_reports_dir() const {
@@ -962,28 +962,28 @@ bool PrintExportController::print_closing_stock(const QString& asOnDate) {
     return printHtml(html, "Closing Stock Valuation", false);
 }
 
-// 4.6 Milling Production Statement
-QString PrintExportController::renderMillingStatementHtml(const QString& fromDate, const QString& toDate) {
-    return PrintReports::renderMillingStatementHtml(fromDate, toDate);
+// 4.6 Manufacturing Production Statement
+QString PrintExportController::renderManufacturingStatementHtml(const QString& fromDate, const QString& toDate) {
+    return PrintReports::renderManufacturingStatementHtml(fromDate, toDate);
 }
-QString PrintExportController::export_milling_statement_pdf(const QString& fromDate, const QString& toDate, const QString& customPath) {
-    QString html = PrintReports::renderMillingStatementHtml(fromDate, toDate);
-    return exportHtmlToPdf(html, "MillingStatement.pdf", customPath, false);
-}
-
-QString PrintExportController::export_milling_statement_odf(const QString& fromDate, const QString& toDate, const QString& customPath) {
-    QString html = PrintReports::renderMillingStatementHtml(fromDate, toDate);
-    return exportHtmlToOdf(html, "MillingStatement.odt", customPath, true);
+QString PrintExportController::export_manufacturing_statement_pdf(const QString& fromDate, const QString& toDate, const QString& customPath) {
+    QString html = PrintReports::renderManufacturingStatementHtml(fromDate, toDate);
+    return exportHtmlToPdf(html, "ManufacturingStatement.pdf", customPath, false);
 }
 
-QString PrintExportController::export_milling_statement_excel(const QString& fromDate, const QString& toDate, const QString& customPath) {
-    QString html = PrintReports::renderMillingStatementExcelHtml(fromDate, toDate);
-    return exportHtmlToExcel(html, "MillingStatement.xls", customPath);
+QString PrintExportController::export_manufacturing_statement_odf(const QString& fromDate, const QString& toDate, const QString& customPath) {
+    QString html = PrintReports::renderManufacturingStatementHtml(fromDate, toDate);
+    return exportHtmlToOdf(html, "ManufacturingStatement.odt", customPath, true);
 }
 
-bool PrintExportController::print_milling_statement(const QString& fromDate, const QString& toDate) {
-    QString html = PrintReports::renderMillingStatementHtml(fromDate, toDate);
-    return printHtml(html, "Milling Statement", false);
+QString PrintExportController::export_manufacturing_statement_excel(const QString& fromDate, const QString& toDate, const QString& customPath) {
+    QString html = PrintReports::renderManufacturingStatementExcelHtml(fromDate, toDate);
+    return exportHtmlToExcel(html, "ManufacturingStatement.xls", customPath);
+}
+
+bool PrintExportController::print_manufacturing_statement(const QString& fromDate, const QString& toDate) {
+    QString html = PrintReports::renderManufacturingStatementHtml(fromDate, toDate);
+    return printHtml(html, "Manufacturing Statement", false);
 }
 
 // 4.7 Mandi Reports (Form M, Form 9, RDF, Market Fee)

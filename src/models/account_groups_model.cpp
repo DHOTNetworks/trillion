@@ -81,7 +81,7 @@ void AccountGroupsModel::ensureDomainGroups(const QString& domain) {
         {"Mandi Debtors", "Sundry Debtors", "Assets", 34, 20, 6, 0, 1},
         {"Local Mandi Creditors", "Sundry Creditors", "Liabilities", 31, 11, 9, 0, 1},
     };
-    static const DomainGroup mill[] = {
+    static const DomainGroup manufacturer[] = {
         {"Manufacturing Group", "Primary", "Expense", 22, 0, 0, 0, 0},
         {"Manufacturing Exp.", "Manufacturing Group", "Expense", 23, 22, 0, 0, 0},
     };
@@ -89,7 +89,7 @@ void AccountGroupsModel::ensureDomainGroups(const QString& domain) {
     int count = 0;
     QString tag;
     if (d == "mandi") { list = mandi; count = 4; tag = "Domain: mandi"; }
-    else if (d == "mill") { list = mill; count = 2; tag = "Domain: mill"; }
+    else if (d == "manufacturer") { list = manufacturer; count = 2; tag = "Domain: manufacturer"; }
     else return;
     auto& db = DatabaseManager::instance();
     for (int i = 0; i < count; ++i) {

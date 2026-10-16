@@ -846,7 +846,7 @@ Status BTreeEngine::eraseRowRefs(MdbHandle* mdb, MdbTableDef* table, MdbIndex* i
         if (!pg) return Status::Fail("eraseRowRefs: null child");
         if (d == 11) return Status::Fail("eraseRowRefs: too deep");
     }
-    // Phase 1: Collect all matching hits across leaves without modifying tree
+    // Step 1: Collect all matching hits across leaves without modifying tree
     std::vector<std::vector<uint8_t>> allHits;
     for (int hops = 0; hops < 1000000; ++hops) {
         if (!UsageMapManager::readPage(mdb, pg)) return Status::Fail("eraseRowRefs: leaf read failed");
@@ -868,7 +868,7 @@ Status BTreeEngine::eraseRowRefs(MdbHandle* mdb, MdbTableDef* table, MdbIndex* i
         if (!nextPg) break;
         pg = nextPg;
     }
-    // Phase 2: Safely erase collected entries
+    // Step 2: Safely erase collected entries
     for (auto& h : allHits) {
         Status st = eraseEntry(mdb, table, idx, h.data(), h.size());
         if (!st.ok) return st;

@@ -190,11 +190,11 @@ public:
     Q_INVOKABLE QString export_closing_stock_excel(const QString& asOnDate = "", const QString& customPath = "");
     Q_INVOKABLE bool print_closing_stock(const QString& asOnDate = "");
 
-    // Milling Production Statement
-    Q_INVOKABLE QString export_milling_statement_pdf(const QString& fromDate = "", const QString& toDate = "", const QString& customPath = "");
-    Q_INVOKABLE QString export_milling_statement_odf(const QString& fromDate = "", const QString& toDate = "", const QString& customPath = "");
-    Q_INVOKABLE QString export_milling_statement_excel(const QString& fromDate = "", const QString& toDate = "", const QString& customPath = "");
-    Q_INVOKABLE bool print_milling_statement(const QString& fromDate = "", const QString& toDate = "");
+    // Manufacturing Production Statement
+    Q_INVOKABLE QString export_manufacturing_statement_pdf(const QString& fromDate = "", const QString& toDate = "", const QString& customPath = "");
+    Q_INVOKABLE QString export_manufacturing_statement_odf(const QString& fromDate = "", const QString& toDate = "", const QString& customPath = "");
+    Q_INVOKABLE QString export_manufacturing_statement_excel(const QString& fromDate = "", const QString& toDate = "", const QString& customPath = "");
+    Q_INVOKABLE bool print_manufacturing_statement(const QString& fromDate = "", const QString& toDate = "");
 
     // Mandi Reports (Form M, Form 9, RDF, Market Fee)
     Q_INVOKABLE QString export_mandi_report_pdf(const QString& reportType, const QString& fromDate = "", const QString& toDate = "", const QString& customPath = "");
@@ -246,7 +246,7 @@ public:
     QString renderStockRegisterHtml(const QString& fromDate, const QString& toDate);
     QString renderItemMovementHtml(int itemId, const QString& fromDate, const QString& toDate);
     QString renderClosingStockHtml(const QString& asOnDate);
-    QString renderMillingStatementHtml(const QString& fromDate, const QString& toDate);
+    QString renderManufacturingStatementHtml(const QString& fromDate, const QString& toDate);
     QString renderMandiReportHtml(const QString& reportType, const QString& fromDate, const QString& toDate);
     QString renderGstrReportHtml(const QString& gstrType, const QString& fromDate, const QString& toDate);
 

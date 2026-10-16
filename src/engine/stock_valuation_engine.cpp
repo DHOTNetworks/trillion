@@ -234,10 +234,10 @@ StockValuationReport StockValuationEngine::calculateLivePhysicalStock(const QStr
         }
     }
 
-    // 4. Batch query milling voucher items
+    // 4. Batch query manufacturing voucher items
     QVariantList millList = DatabaseManager::instance().executeQuery(
         "SELECT item_code, drcr, batch_date, bags, weight_qtl "
-        "FROM milling_voucher_items WHERE batch_date <= ?;",
+        "FROM manufacturing_voucher_items WHERE batch_date <= ?;",
         {targetDate}
     );
 

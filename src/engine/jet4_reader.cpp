@@ -4,6 +4,8 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <set>
+#include <vector>
 
 extern "C" {
 int mdb_find_row(MdbHandle* mdb, int row_number, int* row_start, size_t* row_size);
@@ -192,91 +194,126 @@ static void scanTable(MdbHandle* mdb, const char* tableName, bool wantLive,
         return true;
     };
 
-    for (uint32_t p : ownedPages) {
-        curPg = 0; /* force physical re-read: guards against any pg_buf use
-                    * between tables (catalog reads, memo alt-buffer trails). */
-        if (!ensurePage(p)) continue;
-        const auto* b0 = static_cast<const uint8_t*>(mdb->pg_buf);
-        if (b0[0] != kPageData) continue;
-        if (Jet4Writer::UsageMapManager::getU32(mdb, kOffTableDefPg) != tdefPg)
-            continue;
-        const int nrows =
-            Jet4Writer::UsageMapManager::getU16(mdb, mdb->fmt->row_count_offset);
-        if (nrows <= 0 || nrows > 1000) continue;
-
-        for (int s = 0; s < nrows; ++s) {
-            if (!ensurePage(p)) break;
-            int rs = 0;
-            size_t rsz = 0;
-            if (mdb_find_row(mdb, s, &rs, &rsz) != 0) {
-                local.invalidSlots++;
+    auto scanPass = [&](const std::vector<uint32_t>& pages, int& ownerMismatchOut) {
+        for (uint32_t p : pages) {
+            curPg = 0; /* force physical re-read: guards against any pg_buf use
+                        * between tables (catalog reads, memo alt-buffer trails). */
+            if (!ensurePage(p)) continue;
+            const auto* b0 = static_cast<const uint8_t*>(mdb->pg_buf);
+            if (b0[0] != kPageData
+                || Jet4Writer::UsageMapManager::getU32(mdb, kOffTableDefPg) != tdefPg) {
+                ++ownerMismatchOut; /* stale usage map: page not owned by this table */
                 continue;
             }
-            if (rsz == 0) {
-                local.emptySlots++;
-                continue;
-            }
-            int flags = rs & (kDeletedMask | kOverflowMask);
-            int off = rs & kOffsetMask;
-
-            if (flags & kDeletedMask) {
-                /* Jackcess positionAtRowHeader -> DELETED (covers 0xC000
-                 * tombstones and overflow targets): never a live row. */
-                local.deletedSkipped++;
-                if (wantDeleted && deletedOut) {
-                    emitRow(off, rsz, deletedOut);
+            const int nrows =
+                Jet4Writer::UsageMapManager::getU16(mdb, mdb->fmt->row_count_offset);
+            if (nrows <= 0 || nrows > 1000) continue;
+            for (int s = 0; s < nrows; ++s) {
+                if (!ensurePage(p)) break;
+                int rs = 0;
+                size_t rsz = 0;
+                if (mdb_find_row(mdb, s, &rs, &rsz) != 0) {
+                    local.invalidSlots++;
+                    continue;
                 }
-                continue;
-            }
-
-            if (!wantLive) continue;
-
-            int crackOff = off;
-            size_t crackSz = rsz;
-
-            /* Jackcess positionAtRowData: follow the overflow-pointer chain.
-             * The header row decides DELETED first (0x8000, incl. 0xC000);
-             * once following, ONLY the 0x4000 bit matters — subsequent
-             * DELETED bits are ignored (overflow targets are always marked
-             * deleted). Hop cap so a corrupt cycle can never spin. */
-            int hops = 0;
-            while ((flags & kOverflowMask) != 0) {
-                if (++hops > 8 || crackSz < 4) {
-                    crackSz = 0;
-                    break;
+                if (rsz == 0) {
+                    local.emptySlots++;
+                    continue;
                 }
-                const uint8_t* rb = static_cast<const uint8_t*>(mdb->pg_buf);
-                const uint8_t ovSlot = rb[crackOff];
-                const uint32_t ovPg =
-                    static_cast<uint32_t>(rb[crackOff + 1]) |
-                    (static_cast<uint32_t>(rb[crackOff + 2]) << 8) |
-                    (static_cast<uint32_t>(rb[crackOff + 3]) << 16);
-                if (ovPg == 0 || !ensurePage(ovPg)) {
-                    crackSz = 0;
-                    break;
-                }
-                int ovRs = 0;
-                size_t ovRsz = 0;
-                if (mdb_find_row(mdb, static_cast<int>(ovSlot), &ovRs, &ovRsz) != 0 ||
-                    ovRsz == 0) {
-                    crackSz = 0;
-                    break;
-                }
-                flags = ovRs & (kDeletedMask | kOverflowMask);
-                crackOff = ovRs & kOffsetMask;
-                crackSz = ovRsz;
-            }
-            if (crackSz == 0) {
-                local.overflowBroken++;
-                continue;
-            }
-            if (hops > 0) local.overflowFollowed++;
+                int flags = rs & (kDeletedMask | kOverflowMask);
+                int off = rs & kOffsetMask;
 
-            if (liveOut) {
-                const size_t before = liveOut->size();
-                emitRow(crackOff, crackSz, liveOut);
-                if (liveOut->size() != before) local.liveRows++;
+                if (flags & kDeletedMask) {
+                    /* Jackcess positionAtRowHeader -> DELETED (covers 0xC000
+                     * tombstones and overflow targets): never a live row. */
+                    local.deletedSkipped++;
+                    if (wantDeleted && deletedOut) {
+                        emitRow(off, rsz, deletedOut);
+                    }
+                    continue;
+                }
+
+                if (!wantLive) continue;
+
+                int crackOff = off;
+                size_t crackSz = rsz;
+
+                /* Jackcess positionAtRowData: follow the overflow-pointer chain.
+                 * The header row decides DELETED first (0x8000, incl. 0xC000);
+                 * once following, ONLY the 0x4000 bit matters — subsequent
+                 * DELETED bits are ignored (overflow targets are always marked
+                 * deleted). Hop cap so a corrupt cycle can never spin. */
+                int hops = 0;
+                while ((flags & kOverflowMask) != 0) {
+                    if (++hops > 8 || crackSz < 4) {
+                        crackSz = 0;
+                        break;
+                    }
+                    const uint8_t* rb = static_cast<const uint8_t*>(mdb->pg_buf);
+                    const uint8_t ovSlot = rb[crackOff];
+                    const uint32_t ovPg =
+                        static_cast<uint32_t>(rb[crackOff + 1]) |
+                        (static_cast<uint32_t>(rb[crackOff + 2]) << 8) |
+                        (static_cast<uint32_t>(rb[crackOff + 3]) << 16);
+                    if (ovPg == 0 || !ensurePage(ovPg)) {
+                        crackSz = 0;
+                        break;
+                    }
+                    int ovRs = 0;
+                    size_t ovRsz = 0;
+                    if (mdb_find_row(mdb, static_cast<int>(ovSlot), &ovRs, &ovRsz) != 0 ||
+                        ovRsz == 0) {
+                        crackSz = 0;
+                        break;
+                    }
+                    flags = ovRs & (kDeletedMask | kOverflowMask);
+                    crackOff = ovRs & kOffsetMask;
+                    crackSz = ovRsz;
+                }
+                if (crackSz == 0) {
+                    local.overflowBroken++;
+                    continue;
+                }
+                if (hops > 0) local.overflowFollowed++;
+
+                if (liveOut) {
+                    const size_t before = liveOut->size();
+                    emitRow(crackOff, crackSz, liveOut);
+                    if (liveOut->size() != before) local.liveRows++;
+                }
             }
+        }
+    };
+
+    int ownerMismatch = 0;
+    scanPass(ownedPages, ownerMismatch);
+
+    /* mdbtools' "defaulting to brute force read" equivalent: a stale usage map
+     * (files saved by other Jet writers) can claim pages for this table that
+     * another table owns, so the map walk yields nothing while the real data
+     * pages sit untouched. Linear-scan the file once and keep the pages this
+     * table actually owns. Healthy files never reach the second pass (rows
+     * already found, zero mismatches) — migration still observes exactly the
+     * row set the exporter writes. */
+    const bool mapStarved = (wantLive && liveOut && liveOut->empty())
+                        || (wantDeleted && deletedOut && deletedOut->empty())
+                        || ownerMismatch > 0;
+    if (mapStarved) {
+        const std::set<uint32_t> seen(ownedPages.begin(), ownedPages.end());
+        std::vector<uint32_t> salvaged;
+        for (uint32_t pg = 1; ; ++pg) {
+            if (!Jet4Writer::UsageMapManager::readPage(mdb, pg)) break; /* past EOF */
+            const auto* b = static_cast<const uint8_t*>(mdb->pg_buf);
+            if (b[0] != kPageData) continue;
+            if (Jet4Writer::UsageMapManager::getU32(mdb, kOffTableDefPg) != tdefPg) continue;
+            if (seen.count(pg)) continue;
+            salvaged.push_back(pg);
+        }
+        curPg = 0;
+        if (!salvaged.empty()) {
+            int salvageMismatch = 0;
+            scanPass(salvaged, salvageMismatch);
+            local.brutePages += static_cast<long>(salvaged.size());
         }
     }
 

@@ -252,7 +252,7 @@ QString TransportDispatchController::totalBalancePayableFmt() const {
 }
 
 void TransportDispatchController::reload() {
-    // Phase 3: the table may not exist (generic firm, transport off) — and
+    // Domain-gated: the table may not exist (generic firm, transport off) — and
     // this runs in the ctor at every startup. Bail out clean instead of
     // erroring; the view is unreachable while the domain is off anyway.
     if (!FeatureFlags::tableExists("transport_dispatches")) {

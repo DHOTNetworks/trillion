@@ -1,5 +1,6 @@
 #include "firm_selector_widget.h"
 #include "new_firm_dialog.h"
+#include "edit_firm_dialog.h"
 #include "mdb_migration_dialog.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -271,6 +272,11 @@ void FirmSelectorWidget::setupUi() {
     connect(m_newFirmBtn, &QPushButton::clicked, this, &FirmSelectorWidget::openNewFirmDialog);
     footerLayout->addWidget(m_newFirmBtn);
 
+    m_editFirmBtn = new KbdBadgeButton("Edit Firm Info", "Alt+E", this);
+    m_editFirmBtn->setMinimumHeight(36);
+    connect(m_editFirmBtn, &QPushButton::clicked, this, &FirmSelectorWidget::openEditFirmDialog);
+    footerLayout->addWidget(m_editFirmBtn);
+
     footerLayout->addStretch(1);
 
     m_openFirmBtn = new KbdBadgeButton("Open Selected Firm", "Enter", this);
@@ -539,6 +545,24 @@ void FirmSelectorWidget::openNewFirmDialog() {
     dlg.exec();
 }
 
+void FirmSelectorWidget::openEditFirmDialog() {
+    // Edit works on registered app-data firms only (import-scan rows are
+    // source files, not databases).
+    if (!isViewingAppData()) return;
+    int row = m_table ? m_table->currentRow() : -1;
+    if (row < 0 || row >= m_firmsList.size()) return;
+    QVariantMap map = m_firmsList[row].toMap();
+    const QString firmId = map.value("id").toString();
+    QString dbPath = map.value("db_path").toString();
+    if (dbPath.isEmpty()) dbPath = "data/" + map.value("db_name", firmId + ".db").toString();
+    if (firmId.isEmpty() || !QFile::exists(dbPath)) return;
+    EditFirmDialog dlg(m_firmMgr, firmId, dbPath, this);
+    connect(&dlg, &EditFirmDialog::firmUpdated, this, [this](const QString&, const QString&) {
+        refreshFirms();
+    });
+    dlg.exec();
+}
+
 void FirmSelectorWidget::keyPressEvent(QKeyEvent* event) {
     if (event->key() == Qt::Key_Escape) {
         if (!isViewingAppData()) {
@@ -550,6 +574,10 @@ void FirmSelectorWidget::keyPressEvent(QKeyEvent* event) {
         return;
     } else if (event->modifiers() & Qt::ControlModifier && event->key() == Qt::Key_N) {
         openNewFirmDialog();
+        event->accept();
+        return;
+    } else if (event->modifiers() & Qt::AltModifier && event->key() == Qt::Key_E) {
+        openEditFirmDialog();
         event->accept();
         return;
     } else if (event->key() == Qt::Key_F3 || event->key() == Qt::Key_F4) {

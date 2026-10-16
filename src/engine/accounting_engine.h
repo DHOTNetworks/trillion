@@ -91,7 +91,7 @@ public:
         return FinancialMathService::round2(baseAmt + hamaliCharges);
     }
 
-    static QVariantMap calculateMillingYield(double paddyInputQtl, double headRiceQtl, double brokenRiceQtl, double branQtl, double huskQtl) {
+    static QVariantMap calculateManufacturingYield(double paddyInputQtl, double headRiceQtl, double brokenRiceQtl, double branQtl, double huskQtl) {
         double totalOutput = headRiceQtl + brokenRiceQtl + branQtl + huskQtl;
         double wastageQtl = std::max(0.0, FinancialMathService::round2(paddyInputQtl - totalOutput));
         double yieldPct = paddyInputQtl > 0 ? FinancialMathService::round2((headRiceQtl / paddyInputQtl) * 100.0) : 0.0;

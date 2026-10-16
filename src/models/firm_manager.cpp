@@ -152,7 +152,7 @@ void FirmManager::loadRegistry() {
     QFile regFile(registryFilePath());
     QVariantList registeredFirms;
 
-    QSettings settings("MahadevAgro", "Mahadev Rice Mill ERP");
+    QSettings settings("MahadevAgro", "Mahadev ERP");
     QString settingsFirmId = settings.value("active_firm_id").toString();
 
     if (regFile.exists() && regFile.open(QIODevice::ReadOnly)) {
@@ -301,7 +301,7 @@ void FirmManager::saveRegistry(const QVariantList& firms) {
         regFile.close();
     }
 
-    QSettings settings("MahadevAgro", "Mahadev Rice Mill ERP");
+    QSettings settings("MahadevAgro", "Mahadev ERP");
     if (!m_activeFirmId.isEmpty()) {
         settings.setValue("active_firm_id", m_activeFirmId);
     }
@@ -769,6 +769,24 @@ bool FirmManager::import_bahi_khata_firm(const QString& mdbFilePath, const QStri
         return true;
     }
     return false;
+}
+
+bool FirmManager::rename_firm(const QString& firmId, const QString& newName) {
+    const QString nm = newName.trimmed();
+    if (firmId.trimmed().isEmpty() || nm.isEmpty()) return false;
+    QVariantList firms = get_registered_firms();
+    bool found = false;
+    for (QVariant& f : firms) {
+        QVariantMap m = f.toMap();
+        if (m.value("id").toString() == firmId.trimmed()) {
+            m["name"] = nm;
+            f = m;
+            found = true;
+        }
+    }
+    if (!found) return false;
+    saveRegistry(firms);
+    return true;
 }
 
 bool FirmManager::create_new_firm(const QVariantMap& firmInfo) {

@@ -18,7 +18,7 @@ namespace MahadevERP {
  *  - Native Windows ODBC (Microsoft Access Driver / Jet 4.0 engine) for transactional SQL fidelity.
  *  - Embedded cross-platform libmdb engine for macOS / Linux direct page & record insertion.
  *  - Comprehensive table coverage: CompanyInfo, Groups, Ledgers, Transactions, StockItems,
- *    MillingVouchers, GateRegister, BardanaTransactions, SaudaVouchers, TDSDeductions.
+ *    ManufacturingVouchers, GateRegister, BardanaTransactions, SaudaVouchers, TDSDeductions.
  */
 class BahiKhataExporter : public QObject {
     Q_OBJECT
@@ -34,7 +34,7 @@ public:
         bool createBackup = true;     // Create .bak before overwriting target
         bool exportTransactions = true;
         bool exportMastersOnly = false;
-        bool exportMillingAndStock = true;
+        bool exportManufacturingAndStock = true;
     };
 
     struct ExportSummary {
@@ -44,7 +44,7 @@ public:
         int ledgersExported = 0;
         int transactionsExported = 0;
         int stockItemsExported = 0;
-        int millingExported = 0;
+        int manufacturingExported = 0;
         int bardanaExported = 0;
         int gateRegisterExported = 0;
         double totalDebitAmount = 0.0;

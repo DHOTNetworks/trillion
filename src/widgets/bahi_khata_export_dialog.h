@@ -83,7 +83,7 @@ private:
     QComboBox* m_fyCombo = nullptr;
     QCheckBox* m_backupCheck = nullptr;
     QCheckBox* m_txCheck = nullptr;
-    QCheckBox* m_millingStockCheck = nullptr;
+    QCheckBox* m_manufacturingStockCheck = nullptr;
     QCheckBox* m_verifyCheck = nullptr;
     QProgressBar* m_progressBar = nullptr;
     QLabel* m_statusLabel = nullptr;

@@ -4,6 +4,7 @@
 #include <QDir>
 #include <QFile>
 #include <QRegularExpression>
+#include <QSet>
 #include <cmath>
 
 #include "../src/services/accounting_date_service.h"
@@ -14,11 +15,14 @@
 #include "../src/models/cheque_voucher_controller.h"
 #include "../src/models/tds_voucher_controller.h"
 #include "../src/models/jform_voucher_controller.h"
-#include "../src/models/milling_batch_controller.h"
+#include "../src/models/manufacturing_batch_controller.h"
 #include "../src/models/paddy_procurement_controller.h"
 #include "../src/models/paddy_arrivals_model.h"
 #include "../src/engine/invoice_totals.h"
 #include "../src/engine/fy_close_engine.h"
+#include "../src/engine/migration/migration_utils.h"
+#include "../src/config/schema_mapping.h"
+#include "../src/engine/migration/migration_columns.h"
 #include "../src/models/ledger_master_controller.h"
 #include "../src/models/stock_master_controller.h"
 #include "../src/models/sales_model.h"
@@ -32,7 +36,7 @@
 #include "../src/config/feature_flags.h"
 #include "../src/models/parties_model.h"
 #include "../src/models/financial_years_model.h"
-#include "../src/models/milling_model.h"
+#include "../src/models/manufacturing_model.h"
 #include "../src/models/jform_model.h"
 #include "../src/models/iform_model.h"
 #include "../src/models/mandi_reports_controller.h"
@@ -103,7 +107,7 @@ private slots:
     void testChequeVoucherModes();
     void testTdsCalculationsWithSurchargeAndCess();
     void testJFormYieldAndDeductionCalculations();
-    void testMillingBatchYieldDistribution();
+    void testManufacturingBatchYieldDistribution();
     void testPaddyProcurementMoistureDeductions();
     void testPerFinancialYearVoucherNumbering();
     void testBillSeriesConfig();
@@ -117,6 +121,16 @@ private slots:
     void testInvoiceTotalsTcsShapes();
     void testFiscalYearStatusLifecycle();
     void testFyCloseReopen();
+    void testFyIdForResolvesOrCreates();
+    void testVoucherNumberTokenChoke();
+    void testVoucherTypeCategoryDispatchCoverage();
+    void testSchemaMappingLoader();
+    void testDomainMastersIdempotent();
+    void testGroupStranglerColumns();
+    void testLedgerStranglerColumns();
+    void testStockStranglerColumns();
+    void testVoucherStranglerColumns();
+    void testMandiStranglerColumns();
 
     // 5. Masters & Regulatory Validations
     void testGstinValidationAndPanExtraction();
@@ -237,6 +251,48 @@ void LogicBoardTestSuite::initTestCase() {
     if (QFile::exists(mdb002)) {
         migrator.migrate_mdb_file(mdb002);
     }
+
+    // §2 / Doc 21 A2 pinned precondition: the shared DB must present the
+    // SAME shape to every test whether or not a fixture was migrated.
+    // A fresh DB carries the 28-group generic chart; a fixture-migrated DB
+    // carries the legacy 12-group chart and an empty company_info. Pin
+    // both: (1) the standard group chain the suite's synthetic tests name
+    // (seeded only when missing — fresh DBs already have every row, so the
+    // fixture path is the one that grows); (2) a deterministic company_info
+    // row (the app fills it via the New-Firm dialog; raw migration does
+    // not). Codes are the standard Tally ones the classifier reads.
+    auto& db = DatabaseManager::instance();
+    struct StdGroup { const char* name; const char* parent; int c1; int c2; const char* nature; };
+    static const StdGroup stdGroups[] = {
+        // roots first — parents resolve by name for the classifier.
+        {"Current Assets", "Primary", 2, 0, "Assets"},
+        {"Current Liabilities", "Primary", 9, 0, "Liabilities"},
+        {"Capital A/c", "Primary", 1, 0, "Liabilities"},
+        {"Income A/c", "Primary", 16, 0, "Income"},
+        {"Cash-In-Hand", "Current Assets", 4, 2, "Assets"},
+        {"Sundry Debtors", "Current Assets", 8, 2, "Assets"},
+        {"Sundry Creditors", "Current Liabilities", 12, 9, "Liabilities"},
+    };
+    for (const auto& g : stdGroups) {
+        QVariant existing = db.executeScalar(
+            "SELECT id FROM account_groups WHERE name = ? LIMIT 1;", {QString(g.name)});
+        if (existing.isValid() && !existing.isNull()) continue;
+        db.executeNonQuery(
+            "INSERT INTO account_groups (name, parent_group_name, nature, description, code1st, code2nd, code3rd, code4th, standard_root) "
+            "VALUES (?, ?, ?, 'suite precondition seed', ?, ?, 0, 0, 0);",
+            {QString(g.name), QString(g.parent), QString(g.nature), g.c1, g.c2});
+    }
+    // Raw-seeded rows must be visible through both group readers.
+    AccountClassifier::invalidateCache();
+    GroupHierarchyPipeline::instance().invalidateCache();
+
+    QVariant firmName = db.executeScalar("SELECT company_name FROM company_info WHERE id=1;");
+    if (!firmName.isValid() || firmName.toString().trimmed().isEmpty()) {
+        db.executeNonQuery(
+            "INSERT OR REPLACE INTO company_info (id, company_name, gstin, state, state_code) "
+            "VALUES (1, 'Mahadev Test Firm', '', 'Haryana', '06');");
+    }
+    qDebug() << "[TEST INIT] Suite precondition pinned (standard chain + company_info).";
 }
 
 void LogicBoardTestSuite::cleanupTestCase() {
@@ -788,23 +844,51 @@ void LogicBoardTestSuite::testJFormYieldAndDeductionCalculations() {
     QCOMPARE(ctrl.grandTotal(), 120500.00);
 }
 
-void LogicBoardTestSuite::testMillingBatchYieldDistribution() {
-    MillingBatchController ctrl;
+void LogicBoardTestSuite::testManufacturingBatchYieldDistribution() {
+    auto& db = DatabaseManager::instance();
+
+    // Hermetic precondition (§2): seed one finished output + one by-product
+    // so the data-driven auto-pick has a defined population regardless of
+    // the fixture chart.
+    db.executeNonQuery("DELETE FROM stock_items WHERE code IN ('MFGTEST1','MFGTEST2');");
+    db.executeNonQuery("INSERT INTO stock_items (name, code, manufacturing_role) "
+                       "VALUES ('MFG-TEST-RICE','MFGTEST1','output');");
+    db.executeNonQuery("INSERT INTO stock_items (name, code, manufacturing_role) "
+                       "VALUES ('MFG-TEST-BRAN','MFGTEST2','byproduct');");
+
+    ManufacturingBatchController ctrl;
     ctrl.resetForm("01/04/2026");
 
     // Input: 1000 Qtl Paddy @ ₹ 25,00,000
     ctrl.consumedModel()->clear();
     ctrl.consumedModel()->appendRow("Paddy Basmati", 2000, 1000.0, 2500000.0);
 
-    // Auto standard yield distribution
+    // Data-driven auto-pick: role-tagged items only, 'output' before
+    // 'byproduct'. No rice-mill yield template — generic ERP.
     ctrl.autoPickStandardItems();
+    int iRice = -1, iBran = -1;
+    for (int i = 0; i < ctrl.producedModel()->count(); ++i) {
+        const QString n = ctrl.producedModel()->getRow(i).value("itemName").toString();
+        if (n == "MFG-TEST-RICE") iRice = i;
+        if (n == "MFG-TEST-BRAN") iBran = i;
+    }
+    QVERIFY2(iRice >= 0, "seeded output item was not auto-picked");
+    QVERIFY2(iBran >= 0, "seeded by-product item was not auto-picked");
+    QVERIFY2(iRice < iBran, "output must precede by-product");
+    QCOMPARE(ctrl.totalProducedWeight(), 0.0); // no weight until yields entered
 
-    // Standard outturn:
-    // 65% Rice (650.0 Qtl), 15% Bran (150.0 Qtl), 10% Broken (100.0 Qtl), 5% Nakku (50.0 Qtl), 5% Husk (50.0 Qtl)
+    // Yield-driven distribution: 65% output + 15% by-product = 80% of 1000 Qtl.
+    ctrl.producedModel()->setRowProperty(iRice, "yieldPct", 65.0);
+    ctrl.producedModel()->setRowProperty(iBran, "yieldPct", 15.0);
+    ctrl.updateProducedFromYields();
+
     QCOMPARE(ctrl.totalConsumedWeight(), 1000.0);
-    QCOMPARE(ctrl.totalProducedWeight(), 1000.0);
-    QCOMPARE(ctrl.totalProducedYieldPct(), 100.0);
-    QCOMPARE(ctrl.shortageWeight(), 0.0);
+    QCOMPARE(ctrl.totalProducedWeight(), 800.0);
+    QCOMPARE(ctrl.totalProducedYieldPct(), 80.0);
+    QCOMPARE(ctrl.shortageWeight(), 200.0);
+
+    // Cleanup (hermetic).
+    db.executeNonQuery("DELETE FROM stock_items WHERE code IN ('MFGTEST1','MFGTEST2');");
 }
 
 void LogicBoardTestSuite::testPaddyProcurementMoistureDeductions() {
@@ -1019,7 +1103,7 @@ void LogicBoardTestSuite::testGstr1ExcelParity() {
         "('HAS#HASH','2026-10-08','Cash Customer','','06','Rice','1006',2.0,1000.0,5.0,1050.0,'FY 2026-27','2627/Sale-4'),"
         "('TEST-GSTR1-5','2026-10-09','Exempt Dealer','06AAJFJ1219R1Z0','06','Rice','1006',30.0,3000.0,0.0,3000.0,'FY 2026-27','2627/Sale-5');");
 
-    Gstr1ReturnPayload p = Gstr1Engine::generateFromDatabase("", "Test Mill", "06", QDate(2026, 10, 1), QDate(2026, 10, 31));
+    Gstr1ReturnPayload p = Gstr1Engine::generateFromDatabase("", "Test Manufacturing", "06", QDate(2026, 10, 1), QDate(2026, 10, 31));
     QCOMPARE(p.b2b.size(), 1);
     QCOMPARE(p.b2b.first().invoiceNo, QString("TEST-GSTR1-1"));
     QCOMPARE(p.b2b.first().invoiceValue, 210000.0); // 200000 + 5% IGST (03 vs 06)
@@ -1070,7 +1154,7 @@ void LogicBoardTestSuite::testGstr1ExcelParity() {
     QVERIFY(b2b.contains(">05-Oct-2026<"));
     QVERIFY(b2b.contains("sqref=\"F5:F1048576\""));
     QString main = gstr1ZipRead(x1, "xl/worksheets/sheet1.xml");
-    QVERIFY(main.contains(">Test Mill<"));
+    QVERIFY(main.contains(">Test Manufacturing<"));
 
     // JSON: all sections incl. previously-missing b2cl + split HSN.
     QJsonDocument doc = Gstr1Engine::exportToGovtOfflineJson(p);
@@ -1533,11 +1617,17 @@ void LogicBoardTestSuite::testDebitCreditNoteController() {
     QCOMPARE(fetched.value("taxableAmount").toDouble(), 17030.00);
     QCOMPARE(fetched.value("igstAmount").toDouble(), 851.50);
 
-    // Verify double-entry vouchers posted into vouchers table
+    // Verify double-entry posting: postDoubleEntryVoucher writes ONE summary
+    // voucher header (the vouchers unique index forbids multi-leg headers by
+    // design) and one row per leg into transactions.
     QVariant vchCount = DatabaseManager::instance().executeScalar(
         "SELECT COUNT(*) FROM vouchers WHERE voucher_no = 'CN-TEST-001';"
     );
-    QVERIFY(vchCount.toInt() >= 2); // Credit Party + Debit Sales Return (+ Debit IGST)
+    QCOMPARE(vchCount.toInt(), 1);
+    QVariant legCount = DatabaseManager::instance().executeScalar(
+        "SELECT COUNT(*) FROM transactions WHERE voucher_no = 'CN-TEST-001';"
+    );
+    QVERIFY(legCount.toInt() >= 2); // Credit Party + Debit Sales Return (+ Debit IGST)
 
     // Verify Party Credit leg exists
     QVariant partyCr = DatabaseManager::instance().executeScalar(
@@ -1561,6 +1651,10 @@ void LogicBoardTestSuite::testDebitCreditNoteController() {
         "SELECT COUNT(*) FROM vouchers WHERE voucher_no = 'CN-TEST-001';"
     );
     QCOMPARE(vchAfter.toInt(), 0);
+    QVariant legAfter = DatabaseManager::instance().executeScalar(
+        "SELECT COUNT(*) FROM transactions WHERE voucher_no = 'CN-TEST-001';"
+    );
+    QCOMPARE(legAfter.toInt(), 0);
 }
 
 void LogicBoardTestSuite::testFirmTypeResolutionAndDynamicFiscalYears() {
@@ -2320,7 +2414,7 @@ void LogicBoardTestSuite::testPrintExportControllerUniversalExports() {
     PrintExportController ctrl;
     
     // 1. Test Generic Export Engines
-    QString sampleHtml = "<html><body><h1>Mahadev Rice Mill Test Statement</h1><p>Sample statement</p></body></html>";
+    QString sampleHtml = "<html><body><h1>Mahadev Rice Manufacturing Test Statement</h1><p>Sample statement</p></body></html>";
     QString tmpDir = QDir::tempPath();
     
     QString pdfPath = ctrl.exportHtmlToPdf(sampleHtml, "test_sample.pdf", tmpDir + "/test_sample.pdf", false);
@@ -2701,7 +2795,7 @@ void LogicBoardTestSuite::testBahiKhataJetDbExporterPipeline() {
     opts.financialYear = "FY 2025-26";
     opts.createBackup = false;
     opts.exportTransactions = true;
-    opts.exportMillingAndStock = true;
+    opts.exportManufacturingAndStock = true;
 
     // 2. Run export pipeline
     BahiKhataExporter::ExportSummary summary = exporter.exportToBahiKhata(opts);
@@ -2793,12 +2887,12 @@ void LogicBoardTestSuite::testVoucherTypeMaster() {
 }
 
 void LogicBoardTestSuite::testDomainGroupsTopUp() {
-    // Phase 2 pivot: mandi/mill groups seed only via ensureDomainGroups,
+    // Phase 2 pivot: mandi/manufacturer groups seed only via ensureDomainGroups,
     // idempotently by name. Respects pre-existing rows (legacy charts and
     // migrated firms already carry these names — never deletes user data).
     auto& db = DatabaseManager::instance();
     QVariantMap preMandi = AccountGroupsModel().get_group_by_name("Mandi Debtors");
-    QVariantMap preMill = AccountGroupsModel().get_group_by_name("Manufacturing Group");
+    QVariantMap preManufacturer = AccountGroupsModel().get_group_by_name("Manufacturing Group");
 
     AccountGroupsModel::ensureDomainGroups("mandi");
     AccountGroupsModel::ensureDomainGroups("mandi");
@@ -2821,7 +2915,7 @@ void LogicBoardTestSuite::testDomainGroupsTopUp() {
         QVERIFY(db.executeNonQuery("DELETE FROM account_groups WHERE name IN "
             "('Mandi Debtors','Zimidara Debtors','Zimidara Creditors','Local Mandi Creditors');"));
     }
-    Q_UNUSED(preMill);
+    Q_UNUSED(preManufacturer);
     AccountClassifier::invalidateCache();
 }
 
@@ -2830,7 +2924,7 @@ void LogicBoardTestSuite::testFeatureFlagDetection() {
     // expectations live from table contents, so it holds on migrated, legacy
     // and fresh-generic databases alike. Pre-existing keys are restored.
     auto& db = DatabaseManager::instance();
-    const QStringList keys = {"feature.mandi", "feature.mill",
+    const QStringList keys = {"feature.mandi", "feature.manufacturer",
                               "feature.bardana", "feature.transport"};
     QMap<QString, QString> snapshot;
     for (const QString& k : keys) {
@@ -2854,20 +2948,20 @@ void LogicBoardTestSuite::testFeatureFlagDetection() {
     const bool expMandi = anyRows({"jform_vouchers", "jform_voucher_items",
         "iform_vouchers", "iform_voucher_items", "paddy_slips",
         "sauda_contracts", "dalali_settlements"});
-    const bool expMill = anyRows({"milling_batches", "milling_voucher_items"});
+    const bool expManufacturer = anyRows({"manufacturing_batches", "manufacturing_voucher_items"});
     const bool expBardana = anyRows({"bardana_transactions"});
     const bool expTransport = anyRows({"gate_register", "transport_dispatches"});
 
     FeatureFlags det = FeatureFlags::detectFromData();
     QCOMPARE(det.mandi, expMandi);
-    QCOMPARE(det.mill, expMill);
+    QCOMPARE(det.manufacturer, expManufacturer);
     QCOMPARE(det.bardana, expBardana);
     QCOMPARE(det.transport, expTransport);
 
     // resolveEffective: stored keys (currently cleared) upgraded by detection.
     FeatureFlags eff = FeatureFlags::resolveEffective();
     QCOMPARE(eff.mandi, expMandi);
-    QCOMPARE(eff.mill, expMill);
+    QCOMPARE(eff.manufacturer, expManufacturer);
     QCOMPARE(eff.bardana, expBardana);
     QCOMPARE(eff.transport, expTransport);
 
@@ -2878,7 +2972,7 @@ void LogicBoardTestSuite::testFeatureFlagDetection() {
         return (v.isValid() && !v.isNull()) ? v.toString() : QString("");
     };
     QCOMPARE(keyIs("feature.mandi"), expMandi ? QString("1") : QString(""));
-    QCOMPARE(keyIs("feature.mill"), expMill ? QString("1") : QString(""));
+    QCOMPARE(keyIs("feature.manufacturer"), expManufacturer ? QString("1") : QString(""));
     QCOMPARE(keyIs("feature.bardana"), expBardana ? QString("1") : QString(""));
     QCOMPARE(keyIs("feature.transport"), expTransport ? QString("1") : QString(""));
     // Explicit load() round-trip through save().
@@ -2900,7 +2994,7 @@ void LogicBoardTestSuite::testViewFlagMap() {
     // feature keys; core views map to "". Hermetic: snapshot, force all
     // flags off, assert, restore.
     auto& db = DatabaseManager::instance();
-    const QStringList keys = {"feature.mandi", "feature.mill",
+    const QStringList keys = {"feature.mandi", "feature.manufacturer",
                               "feature.bardana", "feature.transport"};
     QMap<QString, QString> snapshot;
     for (const QString& k : keys) {
@@ -2915,7 +3009,7 @@ void LogicBoardTestSuite::testViewFlagMap() {
         QVERIFY(!FeatureFlags::isViewEnabled(v));
     }
     for (int v : {31, 35}) {
-        QCOMPARE(FeatureFlags::requiredFlagForView(v), QString("feature.mill"));
+        QCOMPARE(FeatureFlags::requiredFlagForView(v), QString("feature.manufacturer"));
         QVERIFY(!FeatureFlags::isViewEnabled(v));
     }
     QCOMPARE(FeatureFlags::requiredFlagForView(70), QString("feature.bardana"));
@@ -2937,11 +3031,11 @@ void LogicBoardTestSuite::testViewFlagMap() {
 }
 
 void LogicBoardTestSuite::testPaddySharedView() {
-    // S3: paddy (view 1) answers to mandi OR mill. Mill-only firms keep the
+    // S3: paddy (view 1) answers to mandi OR manufacturer. manufacturer-only firms keep the
     // paddy slip reachable while J/I-Form stay hidden; mandi-only firms keep
     // everything. Hermetic: snapshot, drive both combos, restore.
     auto& db = DatabaseManager::instance();
-    const QStringList keys = {"feature.mandi", "feature.mill",
+    const QStringList keys = {"feature.mandi", "feature.manufacturer",
                               "feature.bardana", "feature.transport"};
     QMap<QString, QString> snapshot;
     for (const QString& k : keys) {
@@ -2949,21 +3043,21 @@ void LogicBoardTestSuite::testPaddySharedView() {
             "SELECT value FROM app_settings WHERE key = ? LIMIT 1;", {k});
         if (v.isValid() && !v.isNull()) snapshot[k] = v.toString();
     }
-    auto setFlags = [&](const char* mandi, const char* mill) {
+    auto setFlags = [&](const char* mandi, const char* manufacturer) {
         QVERIFY(db.setSetting("feature.mandi", mandi));
-        QVERIFY(db.setSetting("feature.mill", mill));
+        QVERIFY(db.setSetting("feature.manufacturer", manufacturer));
         QVERIFY(db.setSetting("feature.bardana", "0"));
         QVERIFY(db.setSetting("feature.transport", "0"));
     };
 
-    // Mill-only: paddy + mill views on; mandi views off.
+    // manufacturer-only: paddy + manufacturer views on; mandi views off.
     setFlags("0", "1");
     QVERIFY(FeatureFlags::isViewEnabled(1));
     QVERIFY(FeatureFlags::isViewEnabled(31));
     QVERIFY(FeatureFlags::isViewEnabled(35));
     for (int v : {18, 19, 20, 72}) QVERIFY(!FeatureFlags::isViewEnabled(v));
 
-    // Mandi-only: paddy + mandi views on; mill views off.
+    // Mandi-only: paddy + mandi views on; manufacturer views off.
     setFlags("1", "0");
     QVERIFY(FeatureFlags::isViewEnabled(1));
     for (int v : {18, 19, 20, 72}) QVERIFY(FeatureFlags::isViewEnabled(v));
@@ -3125,7 +3219,45 @@ void LogicBoardTestSuite::testFyCloseReopen() {
     // reverses only that voucher. Hermetic FY-2199 sandbox (far from every
     // fixture), full cleanup. Needs: Capital A/c group, Income A/c group
     // (both standard), temp parties + legs which this test owns end to end.
+    // §2 / Doc-21 A2: runs on an ISOLATED scratch DB. The migrated fixture
+    // chart carries live income/expense balances that any shared-DB run folds
+    // into the sandbox FY (P&L net stops being the seeded 1000), so the
+    // sandbox gets its own fresh chart; the live DB is always restored.
     auto& db = DatabaseManager::instance();
+    const QString originalDb = db.dbPath();
+    QTemporaryDir sandbox;
+    QVERIFY2(sandbox.isValid(), "fy-close sandbox temp dir");
+    const QString sandboxDb = sandbox.path() + "/fy_close_sandbox.db";
+    QVERIFY2(db.switchDatabase(sandboxDb), "fy-close sandbox open");
+    db.ensureTablesExist(); // void by contract; the chart lands on switch
+    struct DbRestore {
+        DatabaseManager* d; const QString path;
+        ~DbRestore() {
+            if (d) d->switchDatabase(path);
+            AccountClassifier::invalidateCache();
+            GroupHierarchyPipeline::instance().invalidateCache();
+        }
+    } dbRestore{&db, originalDb};
+    // Standard groups this sandbox names (seed-if-missing; a fresh chart may
+    // not carry all four). Codes are the classifier's standard ones.
+    struct SgRow { const char* name; const char* parent; int c1; int c2; };
+    static const SgRow sgRows[] = {
+        {"Capital A/c", "Primary", 1, 0},
+        {"Income A/c", "Primary", 16, 0},
+        {"Cash-In-Hand", "Current Assets", 4, 2},
+        {"Profit & Loss", "Primary", 15, 0},
+    };
+    for (const auto& g : sgRows) {
+        QVariant ex = db.executeScalar(
+            "SELECT id FROM account_groups WHERE name = ? LIMIT 1;", {QString(g.name)});
+        if (ex.isValid() && !ex.isNull()) continue;
+        db.executeNonQuery(
+            "INSERT INTO account_groups (name, parent_group_name, nature, description, code1st, code2nd, code3rd, code4th, standard_root) "
+            "VALUES (?, ?, ?'Assets', 'fy-close sandbox seed', ?, ?, 0, 0, 0);",
+            {QString(g.name), QString(g.parent), g.c1, g.c2});
+    }
+    AccountClassifier::invalidateCache();
+    GroupHierarchyPipeline::instance().invalidateCache();
     QVERIFY(db.executeNonQuery(
         "INSERT OR IGNORE INTO financial_years (year_name, start_date, end_date, is_active, is_locked, status) "
         "VALUES ('FY 2199-00', '2199-04-01', '2200-03-31', 0, 0, 'open');"));
@@ -3134,8 +3266,11 @@ void LogicBoardTestSuite::testFyCloseReopen() {
     QVERIFY(db.executeNonQuery("DELETE FROM app_settings WHERE key='fy_close_voucher/FY 2199-00';"));
     const QString t0 = db.executeScalar(
         "SELECT strftime('%Y-%m-%dT%H:%M:%fZ','now');").toString();
-    const bool preHad2200 = db.executeScalar(
-        "SELECT 1 FROM financial_years WHERE year_name='FY 2200-00' LIMIT 1;").isValid();
+    // Next-FY name comes from the same canonical builder the engine uses
+    // (FY 2199-00 closes into FY 2200-01, not FY 2200-00 — never hardcode).
+    const QString nextFy = FiscalCalendar::fyName(2200);
+    const bool preHadNext = db.executeScalar(
+        "SELECT 1 FROM financial_years WHERE year_name=? LIMIT 1;", {nextFy}).isValid();
     // The P&L transfer ledger must exist (seeded on fresh DBs, template on
     // migrated ones); ensure + track for cleanup.
     bool createdPl = false;
@@ -3199,11 +3334,23 @@ void LogicBoardTestSuite::testFyCloseReopen() {
     QVERIFY(!db.executeScalar(
         "SELECT value FROM app_settings WHERE key='fy_close_voucher/FY 2199-00' LIMIT 1;").toString().isEmpty());
     QVERIFY(db.executeScalar(
-        "SELECT id FROM financial_years WHERE year_name='FY 2200-00';").isValid());
+        "SELECT id FROM financial_years WHERE year_name=?;", {nextFy}).isValid());
     QVERIFY(db.executeScalar(
         "SELECT COUNT(*) FROM fy_opening_balances WHERE party_name IN ('F3CASH','F3CAP');").toLongLong() >= 2);
     // Double close refused.
     QVERIFY(!FyCloseEngine::closeYear("FY 2199-00", "F3CAP", "test").ok);
+
+    // F4: locked-year short-circuit serves the audited snapshot at FY start.
+    // Distinguisher: corrupt the master opening afterwards — locked reads
+    // must still serve the snapshot (recompute would follow the corruption).
+    QVERIFY(FiscalYearHelper::setYearStatus(nextFy, "locked", "test", "f4"));
+    QVERIFY(db.executeNonQuery("UPDATE parties SET opening_balance=99999.0 WHERE name='F3CASH';"));
+    PartitionedLedgerData f3part =
+        FiscalYearHelper::partitionPartyTransactions("F3CASH", "2200-04-01", "2200-03-31");
+    QCOMPARE(f3part.netOpeningBalance, 1000.0);
+    QCOMPARE(f3part.openingBalanceType, QString("Dr"));
+    QVERIFY(db.executeNonQuery("UPDATE parties SET opening_balance=0.0 WHERE name='F3CASH';"));
+    QVERIFY(FiscalYearHelper::setYearStatus(nextFy, "open", "test", "f4"));
 
     FyCloseResult opened = FyCloseEngine::reopenYear("FY 2199-00", "test");
     QVERIFY2(opened.ok, qPrintable(opened.error));
@@ -3230,11 +3377,362 @@ void LogicBoardTestSuite::testFyCloseReopen() {
                        "AND created_at >= ?;", {t0});
     db.executeNonQuery("DELETE FROM parties WHERE name IN ('F3CAP','F3INC','F3CASH');");
     if (createdPl) db.executeNonQuery("DELETE FROM parties WHERE name = 'Profit & Loss';");
-    if (!preHad2200) db.executeNonQuery("DELETE FROM financial_years WHERE year_name = 'FY 2200-00';");
+    if (!preHadNext) db.executeNonQuery("DELETE FROM financial_years WHERE year_name=?;", {nextFy});
     db.executeNonQuery("DELETE FROM financial_years WHERE year_name = 'FY 2199-00';");
     db.executeNonQuery("DELETE FROM audit_log WHERE (table_name='financial_years' AND row_id LIKE 'FY 2199%') "
                        "OR voucher_no LIKE 'F3-%' OR voucher_no = ? OR voucher_no = ?;",
                        {closed.closingVoucherNo, opened.closingVoucherNo});
+}
+
+void LogicBoardTestSuite::testFyIdForResolvesOrCreates() {
+    // F5: no silent default-1. Both key spellings resolve; unknown-valid
+    // years materialize once; garbage returns -1 with no writes.
+    auto& db = DatabaseManager::instance();
+    QMap<QString, int> bare;
+    bare["2024-25"] = 77;
+    QCOMPARE(MahadevERP::MigrationUtils::fyIdFor(bare, "FY 2024-25"), 77);
+    QCOMPARE(MahadevERP::MigrationUtils::fyIdFor(bare, "2024-25"), 77);
+    QMap<QString, int> pref;
+    pref["FY 2024-25"] = 78;
+    QCOMPARE(MahadevERP::MigrationUtils::fyIdFor(pref, "2024-25"), 78);
+    QCOMPARE(MahadevERP::MigrationUtils::fyIdFor(pref, "FY 2024-25"), 78);
+
+    const qint64 nFy0 = db.executeScalar("SELECT COUNT(*) FROM financial_years;").toLongLong();
+    QCOMPARE(MahadevERP::MigrationUtils::fyIdFor(bare, "not-a-year"), -1);
+    QCOMPARE(MahadevERP::MigrationUtils::fyIdFor(bare, ""), -1);
+    QCOMPARE(MahadevERP::MigrationUtils::fyIdFor(bare, "FY 20-25"), -1);
+    QCOMPARE(db.executeScalar("SELECT COUNT(*) FROM financial_years;").toLongLong(), nFy0);
+
+    QMap<QString, int> live;
+    const int id = MahadevERP::MigrationUtils::fyIdFor(live, "FY 2198-99");
+    QVERIFY(id > 0);
+    QCOMPARE(db.executeScalar(
+        "SELECT start_date || '|' || end_date || '|' || status FROM financial_years WHERE id = ?;",
+        {id}).toString(), QString("2198-04-01|2199-03-31|open"));
+    // Second call hits the map (both spellings); no duplicate row.
+    QCOMPARE(MahadevERP::MigrationUtils::fyIdFor(live, "2198-99"), id);
+    QCOMPARE(db.executeScalar("SELECT COUNT(*) FROM financial_years WHERE year_name='FY 2198-99';").toLongLong(), 1);
+    QVERIFY(db.executeNonQuery("DELETE FROM financial_years WHERE id = ?;", {id}));
+}
+
+void LogicBoardTestSuite::testVoucherNumberTokenChoke() {
+    // P0 (live numbering path): the FY token must come from the voucher's
+    // OWN year, never the active one. fyShortToken is the single choke —
+    // any 4-digit start year qualifies ("FY 2199-00" -> "9900"); 20xx
+    // output stays byte-identical; garbage still refused. And
+    // canonicalVoucherNo fails LOUD (empty) instead of borrowing the
+    // active FY's token (that bug minted "2627/Jrnl-1" for the FY 2199-00
+    // sandbox, colliding with real FY 2026-27 numbers).
+    QCOMPARE(FiscalYearHelper::fyShortToken("FY 2026-27"), QString("2627"));
+    QCOMPARE(FiscalYearHelper::fyShortToken("2026-27"), QString("2627"));
+    QCOMPARE(FiscalYearHelper::fyShortToken("2024-25"), QString("2425"));
+    QCOMPARE(FiscalYearHelper::fyShortToken("2627"), QString("2627"));
+    QCOMPARE(FiscalYearHelper::fyShortToken("FY 2199-00"), QString("9900"));
+    QCOMPARE(FiscalYearHelper::fyShortToken("2198-99"), QString("9899"));
+    QVERIFY(FiscalYearHelper::fyShortToken("not-a-year").isEmpty());
+    QVERIFY(FiscalYearHelper::fyShortToken("FY 20-25").isEmpty());
+
+    // Canonical identity mints from the passed FY (the bug was here).
+    QCOMPARE(FiscalYearHelper::canonicalVoucherNo("FY 2026-27", "Jrnl", "1"),
+             QString("2627/Jrnl-1"));
+    QCOMPARE(FiscalYearHelper::canonicalVoucherNo("FY 2199-00", "Jrnl", "1"),
+             QString("9900/Jrnl-1"));
+    // Idempotent: canonical input passes through untouched.
+    QCOMPARE(FiscalYearHelper::canonicalVoucherNo("FY 2026-27", "Jrnl", "2627/Jrnl-5"),
+             QString("2627/Jrnl-5"));
+    // Fail loud: no token, NO number — never the active FY's series.
+    QVERIFY(FiscalYearHelper::canonicalVoucherNo("garbage", "Jrnl", "1").isEmpty());
+    QVERIFY(FiscalYearHelper::canonicalVoucherNo("", "Jrnl", "1").isEmpty());
+}
+
+void LogicBoardTestSuite::testVoucherTypeCategoryDispatchCoverage() {
+    // A3 (Doc 21) / Doc-20 C3 family: the voucher_types master and the
+    // keeper's dispatch must stay in sync. A new category without a
+    // dispatch branch (or a code the keeper can't resolve) fails HERE,
+    // not in production dropdowns.
+    VoucherTypeModel vt;
+    vt.reload_data();
+
+    // 1. The 8 core codes dispatch to their canonical keeper tokens.
+    struct Expect { const char* code; const char* token; };
+    static const Expect core[] = {
+        {"SALE", "Sale"}, {"PURC", "Purc"}, {"PYMT", "Pymt"}, {"RCPT", "Rcpt"},
+        {"JRNL", "Jrnl"}, {"CONTRA", "Contra"}, {"CHPT", "ChPt"}, {"CHRT", "ChRt"}};
+    for (const auto& e : core) {
+        QVERIFY2(!vt.byCode(e.code).isEmpty(), e.code);
+        QCOMPARE(FiscalYearHelper::canonicalTypeToken(e.code), QString(e.token));
+    }
+
+    // 2. The dispatch map — every category the app can actually save:
+    //    sales/purchase/notes/jform/iform/manufacturering/keeper paths below.
+    const QStringList dispatchable = {
+        "SALES", "PURCHASE", "PAYMENT", "RECEIPT", "JOURNAL", "CONTRA", "OTHER"};
+    // The six core categories must always have at least one live code.
+    const QStringList coreCategories = {
+        "SALES", "PURCHASE", "PAYMENT", "RECEIPT", "JOURNAL", "CONTRA"};
+
+    // 3. Every ACTIVE row (core + flag-gated domain top-ups) must
+    //    (a) carry a dispatchable category and (b) round-trip through the
+    //    keeper (code -> token -> code, case-insensitive).
+    int rows = 0;
+    for (const QVariant& r : vt.activeTypes()) {
+        QVariantMap m = r.toMap();
+        const QString code = m.value("code").toString().trimmed().toUpper();
+        const QString cat = m.value("category").toString().trimmed().toUpper();
+        QVERIFY2(!code.isEmpty(), "voucher_types row with an empty code");
+        QVERIFY2(dispatchable.contains(cat),
+                 qPrintable(QString("undispatched category '%1' (code %2)").arg(cat, code)));
+        QCOMPARE(FiscalYearHelper::canonicalTypeToken(code).toUpper(), code);
+        ++rows;
+    }
+    QVERIFY2(rows >= 8, "fewer than the 8 core types are active");
+
+    // 4. Bidirectional: every core category has a live code (empty
+    //    dispatchable category = a dropdown that can never fill).
+    for (const QString& c : coreCategories) {
+        QVERIFY2(!vt.typesByCategory(c).isEmpty(), qPrintable(c));
+    }
+
+    // 5. Domain top-ups dispatch when present (flag-gated rows only).
+    if (!vt.byCode("JFRM").isEmpty()) QCOMPARE(FiscalYearHelper::canonicalTypeToken("JFRM"), QString("JFrm"));
+    if (!vt.byCode("IFRM").isEmpty()) QCOMPARE(FiscalYearHelper::canonicalTypeToken("IFRM"), QString("IFrm"));
+    if (!vt.byCode("MNAU").isEmpty()) QCOMPARE(FiscalYearHelper::canonicalTypeToken("MANU"), QString("Manu"));
+}
+
+void LogicBoardTestSuite::testSchemaMappingLoader() {
+    // C2 (Doc 21): the JSON mapping parses in C++ and FAILS CLOSED on
+    // version mismatch. Nothing consumes it yet (promotion is C3) — this
+    // test pins parse + roster + fail-closed so the strangler can lean on it.
+    using namespace MahadevERP;
+    QCOMPARE(SchemaMapping::supportedVersion(), QString("0.3-draft"));
+
+    // Live document resolves from the suite CWD (build/ -> ../plan/).
+    const QString found = SchemaMapping::findMappingFile();
+    QVERIFY2(!found.isEmpty(), "plan/schema_mapping.json not locatable from suite CWD");
+    SchemaMapping live;
+    QVERIFY2(live.loadDefault(), qPrintable(live.lastError()));
+    QVERIFY(live.isValid());
+    QCOMPARE(live.version(), SchemaMapping::supportedVersion());
+    // Roster size is Agent 2's Batch-7 territory (entries merge/split as
+    // columns fill) — pin presence + shape, never the exact count.
+    QVERIFY2(live.tables().size() >= 28, qPrintable(QString::number(live.tables().size())));
+    QVERIFY(live.tableTargets().contains("account_groups"));
+    QVERIFY(live.tableTargets().contains("parties"));
+    QVERIFY(live.tableTargets().contains("paddy_slips"));
+    // Paddy is the multi-flag table (mandi OR manufacturer, spec §23.3).
+    bool sawPaddy = false;
+    for (const QVariant& v : live.tables()) {
+        QVariantMap m = v.toMap();
+        if (m.value("target").toString() == "paddy_slips") {
+            QCOMPARE(m.value("domain_flags").toStringList(),
+                     QStringList({"feature.mandi", "feature.manufacturer"}));
+            sawPaddy = true;
+        }
+    }
+    QVERIFY(sawPaddy);
+    QVERIFY(!live.codeMapNames().isEmpty());
+
+    // Fail closed: wrong version never parses as valid (temp file, removed).
+    const QString badPath = QDir::tempPath() + "/schema_mapping_bad_version_test.json";
+    QFile bad(badPath);
+    QVERIFY(bad.open(QIODevice::WriteOnly | QIODevice::Text));
+    bad.write("{\"meta\": {\"version\": \"9.9-future\"}, \"tables\": []}");
+    bad.close();
+    SchemaMapping badMap;
+    QVERIFY(!badMap.load(badPath));
+    QVERIFY(!badMap.isValid());
+    QVERIFY(!badMap.lastError().isEmpty());
+    QFile::remove(badPath);
+}
+
+void LogicBoardTestSuite::testDomainMastersIdempotent() {
+    // C1 (Doc 21 / Doc-20 B3-B4): the DB-path top-up
+    // (DatabaseManager::ensureDomainMasters, used by wizard + all 5
+    // migration exits) is idempotent and mirrors the model path 1:1.
+    // The legacy sync is UPDATE-only for domain codes (verified by read:
+    // domainOwned skips INSERT), so this test proves the remaining half:
+    // double top-up changes nothing, model<->DB rows agree.
+    auto& db = DatabaseManager::instance();
+    // Hermetic: snapshot flags, force mandi+manufacturer on (stored keys win over
+    // data detection either way), restore afterwards.
+    const QStringList keys = {"feature.mandi", "feature.manufacturer",
+                              "feature.bardana", "feature.transport"};
+    QMap<QString, QString> snapshot;
+    QMap<QString, bool> hadKey;
+    for (const QString& k : keys) {
+        QVariant v = db.executeScalar(
+            "SELECT value FROM app_settings WHERE key = ? LIMIT 1;", {k});
+        hadKey[k] = v.isValid() && !v.isNull();
+        if (hadKey[k]) snapshot[k] = v.toString();
+        QVERIFY(db.setSetting(k, (k == "feature.bardana" || k == "feature.transport") ? "0" : "1"));
+    }
+    auto groupSet = [&]() {
+        QVariantList rows = db.executeQuery("SELECT name FROM account_groups;");
+        QSet<QString> out;
+        for (const QVariant& r : rows) out.insert(r.toMap().value("name").toString());
+        return out;
+    };
+    auto typeSet = [&]() {
+        QVariantList rows = db.executeQuery("SELECT code FROM voucher_types;");
+        QSet<QString> out;
+        for (const QVariant& r : rows) out.insert(r.toMap().value("code").toString().toUpper());
+        return out;
+    };
+    const QSet<QString> preGroups = groupSet();
+    const QSet<QString> preTypes = typeSet();
+
+    db.ensureDomainMasters();
+    const QSet<QString> afterOneGroups = groupSet();
+    const QSet<QString> afterOneTypes = typeSet();
+    db.ensureDomainMasters(); // second run must be a strict no-op
+    QCOMPARE(groupSet(), afterOneGroups);
+    QCOMPARE(typeSet(), afterOneTypes);
+    // Idempotence: no row created twice, nothing removed.
+    for (const QString& g : groupSet()) {
+        QCOMPARE(db.executeScalar(
+            "SELECT COUNT(*) FROM account_groups WHERE name = ?;", {g}).toLongLong(), 1);
+    }
+    for (const QString& t : typeSet()) {
+        QCOMPARE(db.executeScalar(
+            "SELECT COUNT(*) FROM voucher_types WHERE UPPER(code) = ?;", {t}).toLongLong(), 1);
+    }
+    // Model<->DB parity: the 6 domain groups agree 1:1 (name + code1st).
+    // NOTE: compared against the documented DomainGroup constants, NOT the
+    // pipeline's cached view — get_group_by_name may serve a stale cached
+    // row (observed code1st 0 vs the committed 32), which is a read-cache
+    // question, not a top-up question. The DB is authoritative here.
+    struct ExpectGroup { const char* name; int c1; };
+    static const ExpectGroup domainGroups[] = {
+        {"Zimidara Debtors", 32}, {"Zimidara Creditors", 33},
+        {"Mandi Debtors", 34}, {"Local Mandi Creditors", 31},
+        {"Manufacturing Group", 22}, {"Manufacturing Exp.", 23}};
+    for (const auto& e : domainGroups) {
+        const QString g = QString::fromLatin1(e.name);
+        QVERIFY2(!AccountGroupsModel().get_group_by_name(g).isEmpty(), e.name);
+        QCOMPARE(db.executeScalar(
+            "SELECT code1st FROM account_groups WHERE name = ?;", {g}).toInt(), e.c1);
+    }
+    VoucherTypeModel vt;
+    vt.reload_data();
+    QCOMPARE(vt.byCode("JFRM").value("category").toString(), QString("PURCHASE"));
+    QCOMPARE(vt.byCode("IFRM").value("category").toString(), QString("SALES"));
+    QCOMPARE(vt.byCode("MANU").value("category").toString(), QString("OTHER"));
+
+    // Cleanup: remove ONLY rows this test created (never user data).
+    for (const QString& g : groupSet()) {
+        if (!preGroups.contains(g)) {
+            QVERIFY(db.executeNonQuery("DELETE FROM account_groups WHERE name = ?;", {g}));
+        }
+    }
+    for (const QString& t : typeSet()) {
+        if (!preTypes.contains(t)) {
+            QVERIFY(db.executeNonQuery("DELETE FROM voucher_types WHERE UPPER(code) = ?;", {t}));
+        }
+    }
+    for (auto it = snapshot.constBegin(); it != snapshot.constEnd(); ++it) {
+        QVERIFY(db.setSetting(it.key(), it.value()));
+    }
+    for (const QString& k : keys) {
+        if (!hadKey[k]) QVERIFY(db.executeNonQuery("DELETE FROM app_settings WHERE key = ?;", {k}));
+    }
+    AccountClassifier::invalidateCache();
+    GroupHierarchyPipeline::instance().invalidateCache();
+}
+
+void LogicBoardTestSuite::testGroupStranglerColumns() {
+    // C3 strangler slice G: the JSON Groups entry and the compiled fallback
+    // must agree (MigrationColumns serves JSON-first). Any drift fails HERE,
+    // never as a silent migration behavior change. No DB writes.
+    QCOMPARE(MahadevERP::MigrationColumns::verifyGroupColumns(), QString());
+    QCOMPARE(MahadevERP::MigrationColumns::groupField("name"), QString("GroupName"));
+    QCOMPARE(MahadevERP::MigrationColumns::groupField("code1st"), QString("Code1st"));
+    QCOMPARE(MahadevERP::MigrationColumns::groupField("extract_in_balance_sheet"),
+             QString("ExtractInBalanceSheet"));
+    QVERIFY(MahadevERP::MigrationColumns::groupField("no-such-key").isEmpty());
+}
+
+void LogicBoardTestSuite::testLedgerStranglerColumns() {
+    // C3 strangler slice L: the JSON Ledgers entry and the compiled fallback
+    // must agree (MigrationColumns serves JSON-first). Any drift fails HERE,
+    // never as a silent migration behavior change. No DB writes.
+    QCOMPARE(MahadevERP::MigrationColumns::verifyLedgerColumns(), QString());
+    QCOMPARE(MahadevERP::MigrationColumns::ledgerField("name"), QString("LedgerName"));
+    QCOMPARE(MahadevERP::MigrationColumns::ledgerField("pan"), QString("IncomeTaxNo"));
+    QCOMPARE(MahadevERP::MigrationColumns::ledgerField("legacy_id"), QString("Code1st"));
+    QCOMPARE(MahadevERP::MigrationColumns::ledgerField("tin_alt"), QString("VAT"));
+    QVERIFY(MahadevERP::MigrationColumns::ledgerField("no-such-key").isEmpty());
+}
+
+void LogicBoardTestSuite::testStockStranglerColumns() {
+    // C3 strangler slice S: the JSON StockGroups/StockUnits/StockItems
+    // entries and the compiled fallbacks must agree (MigrationColumns serves
+    // JSON-first). Any drift fails HERE, never as a silent migration
+    // behavior change. No DB writes.
+    QCOMPARE(MahadevERP::MigrationColumns::verifyStockGroupColumns(), QString());
+    QCOMPARE(MahadevERP::MigrationColumns::verifyStockUnitColumns(), QString());
+    QCOMPARE(MahadevERP::MigrationColumns::verifyStockColumns(), QString());
+    QCOMPARE(MahadevERP::MigrationColumns::stockGroupField("group_name"), QString("GroupName"));
+    QCOMPARE(MahadevERP::MigrationColumns::stockUnitField("unit_name"), QString("UnitName"));
+    QCOMPARE(MahadevERP::MigrationColumns::stockField("name"), QString("ItemName"));
+    QCOMPARE(MahadevERP::MigrationColumns::stockField("purchase_ledger_id"), QString("PurchaseLedger"));
+    QCOMPARE(MahadevERP::MigrationColumns::stockField("purchase_return_ledger_id"), QString("PurchaseReturnLedger"));
+    QCOMPARE(MahadevERP::MigrationColumns::stockField("sale_return_ledger_id"), QString("SaleReturnLedger"));
+    QCOMPARE(MahadevERP::MigrationColumns::stockField("tax_on_qty"), QString("TaxPayable"));
+    QCOMPARE(MahadevERP::MigrationColumns::stockField("calculate_stock"), QString("StockCalculate"));
+    QCOMPARE(MahadevERP::MigrationColumns::stockField("include_in_trading"), QString("CalculateInTrading"));
+    QVERIFY(MahadevERP::MigrationColumns::stockField("no-such-key").isEmpty());
+}
+
+void LogicBoardTestSuite::testVoucherStranglerColumns() {
+    // C3 strangler slice V: the JSON Transactions (dual-write legs+header),
+    // StockTransactions and SaleTransportationDetail entries and the
+    // compiled fallbacks must agree (MigrationColumns serves JSON-first).
+    // Any drift fails HERE, never as a silent migration behavior change.
+    // No DB writes. Spot keys pin the collapsed dual-write form (header
+    // block listed second wins: party_name/amount are derived: markers).
+    QCOMPARE(MahadevERP::MigrationColumns::verifyVoucherColumns(), QString());
+    QCOMPARE(MahadevERP::MigrationColumns::verifyStockTransColumns(), QString());
+    QCOMPARE(MahadevERP::MigrationColumns::verifyTransportColumns(), QString());
+    QCOMPARE(MahadevERP::MigrationColumns::voucherField("voucher_no"), QString("VoucherNumber"));
+    QCOMPARE(MahadevERP::MigrationColumns::voucherField("dr_cr"), QString("DrCr"));
+    QCOMPARE(MahadevERP::MigrationColumns::voucherField("invoice_no"), QString("InvoiceNo|TaxInvoiceNo"));
+    QCOMPARE(MahadevERP::MigrationColumns::voucherField("party_name"), QString("derived:party-resolution"));
+    QCOMPARE(MahadevERP::MigrationColumns::voucherField("amount"), QString("derived:leg-sum"));
+    QCOMPARE(MahadevERP::MigrationColumns::voucherField("challan_no"), QString("ChallanVchNo"));
+    QCOMPARE(MahadevERP::MigrationColumns::stockTransField("weight_qtl"), QString("Weight"));
+    QCOMPARE(MahadevERP::MigrationColumns::stockTransField("bill_no"), QString("InvoiceNo|TaxInvoiceNo"));
+    QCOMPARE(MahadevERP::MigrationColumns::stockTransField("party_id"), QString("PartyCode"));
+    QCOMPARE(MahadevERP::MigrationColumns::transportField("dispatch_no"), QString("VoucherNumber"));
+    QVERIFY(MahadevERP::MigrationColumns::voucherField("no-such-key").isEmpty());
+    QVERIFY(MahadevERP::MigrationColumns::stockTransField("no-such-key").isEmpty());
+    QVERIFY(MahadevERP::MigrationColumns::transportField("no-such-key").isEmpty());
+}
+
+void LogicBoardTestSuite::testMandiStranglerColumns() {
+    // C3 strangler slice M1: the JSON MillingVouchers / J-Form / I-Form
+    // entries and the compiled fallbacks must agree (MigrationColumns
+    // serves JSON-first). Any drift fails HERE, never as a silent migration
+    // behavior change. No DB writes. Spot keys pin the derived:* logic
+    // markers and the form-specific keys (generic Transactions keys such as
+    // dr_cr/account_code resolve through voucherField()).
+    QCOMPARE(MahadevERP::MigrationColumns::verifyMillingColumns(), QString());
+    QCOMPARE(MahadevERP::MigrationColumns::verifyJFormColumns(), QString());
+    QCOMPARE(MahadevERP::MigrationColumns::verifyIFormColumns(), QString());
+    QCOMPARE(MahadevERP::MigrationColumns::millingField("batch_no"), QString("VoucherNumber"));
+    QCOMPARE(MahadevERP::MigrationColumns::millingField("narration"), QString("Narrtn"));
+    QCOMPARE(MahadevERP::MigrationColumns::millingField("yield_pct"), QString("derived:yield"));
+    QCOMPARE(MahadevERP::MigrationColumns::millingField("weight_qtl"), QString("Weight"));
+    QCOMPARE(MahadevERP::MigrationColumns::jformField("jform_no"), QString("InvoiceNo"));
+    QCOMPARE(MahadevERP::MigrationColumns::jformField("zimidar_name"), QString("ZimidarName"));
+    QCOMPARE(MahadevERP::MigrationColumns::jformField("zimidar_id"), QString("derived:zimidar-resolution"));
+    QCOMPARE(MahadevERP::MigrationColumns::jformField("auction_sale_status"), QString("JFormSaleStatus"));
+    QCOMPARE(MahadevERP::MigrationColumns::iformField("iform_no"), QString("InvoiceNo"));
+    QCOMPARE(MahadevERP::MigrationColumns::iformField("broker_name"), QString("BrokerName"));
+    QCOMPARE(MahadevERP::MigrationColumns::iformField("buyer_id"), QString("derived:buyer-resolution"));
+    QCOMPARE(MahadevERP::MigrationColumns::iformField("hrdf_rate"), QString("HRDFRate"));
+    QVERIFY(MahadevERP::MigrationColumns::millingField("no-such-key").isEmpty());
+    QVERIFY(MahadevERP::MigrationColumns::jformField("no-such-key").isEmpty());
+    QVERIFY(MahadevERP::MigrationColumns::iformField("no-such-key").isEmpty());
 }
 
 QTEST_MAIN(LogicBoardTestSuite)

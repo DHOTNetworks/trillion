@@ -27,8 +27,6 @@ public:
     static void cleanBankingDetails(const QString& m2, const QString& b2, const QString& b3,
                                    QString& outBankName, QString& outAccountNo, QString& outIfsc);
     static QString extractFssai(const QString& business, const QString& address);
-    static QString extractStateCode(const QString& gstin, const QString& state);
-    static QString extractPincode(const QString& address, const QString& fallback = "125055");
 
     // Full in-process migration of MDB into target SQLite database
     Q_INVOKABLE bool migrate_mdb_file(const QString& mdbFilePath);

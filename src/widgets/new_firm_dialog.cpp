@@ -126,7 +126,7 @@ void NewFirmDialog::setupUi() {
     grid1->setVerticalSpacing(6);
 
     grid1->addWidget(makeFieldLabel("Company / Firm Full Name *"), 0, 0);
-    m_compNameEdit = makeLineEdit("e.g. M/s Shree Ganesh Rice Mills");
+    m_compNameEdit = makeLineEdit("e.g. M/s ABC Pvt Ltd");
     grid1->addWidget(m_compNameEdit, 1, 0);
 
     grid1->addWidget(makeFieldLabel("Legal Entity Type"), 0, 1);
@@ -267,18 +267,18 @@ void NewFirmDialog::setupUi() {
     };
 
     m_packageGroup = new QButtonGroup(this);
-    m_pkgAgent = makeRadio("Commission Agent (Mandi) — mandi + bardana + transport");
-    m_pkgMill = makeRadio("Rice Mill / Manufacturer — mill + bardana");
-    m_pkgTrader = makeRadio("Trader — core + transport");
-    m_pkgTransporter = makeRadio("Transporter — core + transport");
-    m_pkgGeneral = makeRadio("General / Other (Kirana etc.) — core only");
+    m_pkgAgent = makeRadio("Commission Agent (Mandi) — Mandi + Bardana + Transport");
+    m_pkgManufacturer = makeRadio("Manufacturer — Manufacturer + Bardana");
+    m_pkgTrader = makeRadio("Trader — Core + Transport");
+    m_pkgTransporter = makeRadio("Transporter — Core + Transport");
+    m_pkgGeneral = makeRadio("General / Other (Kirana etc.) — Core only");
     m_packageGroup->addButton(m_pkgAgent, 0);
-    m_packageGroup->addButton(m_pkgMill, 1);
+    m_packageGroup->addButton(m_pkgManufacturer, 1);
     m_packageGroup->addButton(m_pkgTrader, 2);
     m_packageGroup->addButton(m_pkgTransporter, 3);
     m_packageGroup->addButton(m_pkgGeneral, 4);
     formLayout->addWidget(m_pkgAgent);
-    formLayout->addWidget(m_pkgMill);
+    formLayout->addWidget(m_pkgManufacturer);
     formLayout->addWidget(m_pkgTrader);
     formLayout->addWidget(m_pkgTransporter);
     formLayout->addWidget(m_pkgGeneral);
@@ -286,11 +286,11 @@ void NewFirmDialog::setupUi() {
     QLabel* addOnLabel = makeFieldLabel("Add-ons (only valid extras stay enabled)");
     formLayout->addWidget(addOnLabel);
     m_addMandi = makeCheck("Mandi forms (J-Form / I-Form / paddy)");
-    m_addMill = makeCheck("Milling production");
+    m_addManufacturer = makeCheck("Manufacturing production");
     m_addBardana = makeCheck("Bardana (gunny bags)");
     m_addTransport = makeCheck("Transport dispatch & gate register");
     formLayout->addWidget(m_addMandi);
-    formLayout->addWidget(m_addMill);
+    formLayout->addWidget(m_addManufacturer);
     formLayout->addWidget(m_addBardana);
     formLayout->addWidget(m_addTransport);
 
@@ -431,7 +431,7 @@ void NewFirmDialog::updatePackageAddOns() {
     // Reset all to offered-off first (additive choices never linger across
     // package switches — the user re-confirms extras per package).
     offer(m_addMandi, false);
-    offer(m_addMill, false);
+    offer(m_addManufacturer, false);
     offer(m_addBardana, false);
     offer(m_addTransport, false);
     switch (id) {
@@ -439,21 +439,21 @@ void NewFirmDialog::updatePackageAddOns() {
         lock(m_addMandi, true);
         lock(m_addBardana, true);
         lock(m_addTransport, true);
-        if (m_addMill) m_addMill->setEnabled(false);
+        if (m_addManufacturer) m_addManufacturer->setEnabled(false);
         break;
-    case 1: // Rice Mill: mill + bardana; add-ons: mandi forms, transport
-        lock(m_addMill, true);
+    case 1: // Rice Manufacturer: Manufacturer + bardana; add-ons: mandi forms, transport
+        lock(m_addManufacturer, true);
         lock(m_addBardana, true);
         break; // mandi + transport stay offered
     case 2: // Trader: core + transport; add-on: bardana
         lock(m_addTransport, true);
         if (m_addMandi) m_addMandi->setEnabled(false);
-        if (m_addMill) m_addMill->setEnabled(false);
+        if (m_addManufacturer) m_addManufacturer->setEnabled(false);
         break; // bardana stays offered
     case 3: // Transporter: core + transport
         lock(m_addTransport, true);
         if (m_addMandi) m_addMandi->setEnabled(false);
-        if (m_addMill) m_addMill->setEnabled(false);
+        if (m_addManufacturer) m_addManufacturer->setEnabled(false);
         if (m_addBardana) m_addBardana->setEnabled(false);
         break;
     case 4: // General: core only; any package as add-on
@@ -466,7 +466,7 @@ QString NewFirmDialog::selectedPackageKey() const {
     const int id = m_packageGroup ? m_packageGroup->checkedId() : 4;
     switch (id) {
     case 0: return "commission_agent";
-    case 1: return "rice_mill";
+    case 1: return "Manufacturer";
     case 2: return "trader";
     case 3: return "transporter";
     case 4:
@@ -479,7 +479,7 @@ QString NewFirmDialog::selectedPackageLabel() const {
     const int id = m_packageGroup ? m_packageGroup->checkedId() : 4;
     switch (id) {
     case 0: return "Commission Agent (Mandi)";
-    case 1: return "Rice Mill / Manufacturer";
+    case 1: return "Manufacturer";
     case 2: return "Trader";
     case 3: return "Transporter";
     case 4:
@@ -494,14 +494,14 @@ FeatureFlags NewFirmDialog::selectedPackageFlags() const {
     const int id = m_packageGroup ? m_packageGroup->checkedId() : 4;
     switch (id) {
     case 0: f.mandi = true; f.bardana = true; f.transport = true; break;
-    case 1: f.mill = true; f.bardana = true; break;
+    case 1: f.manufacturer = true; f.bardana = true; break;
     case 2: f.transport = true; break;
     case 3: f.transport = true; break;
     case 4:
     default: break;
     }
     if (m_addMandi && m_addMandi->isChecked()) f.mandi = true;
-    if (m_addMill && m_addMill->isChecked()) f.mill = true;
+    if (m_addManufacturer && m_addManufacturer->isChecked()) f.manufacturer = true;
     if (m_addBardana && m_addBardana->isChecked()) f.bardana = true;
     if (m_addTransport && m_addTransport->isChecked()) f.transport = true;
     return f;
@@ -559,7 +559,7 @@ void NewFirmDialog::onCreateClicked() {
             FeatureFlags sel = selectedPackageFlags();
             FeatureFlags eff = FeatureFlags::load();
             eff.mandi = eff.mandi || sel.mandi;
-            eff.mill = eff.mill || sel.mill;
+            eff.manufacturer = eff.manufacturer || sel.manufacturer;
             eff.bardana = eff.bardana || sel.bardana;
             eff.transport = eff.transport || sel.transport;
             FeatureFlags::save(eff);
@@ -572,9 +572,9 @@ void NewFirmDialog::onCreateClicked() {
                 AccountGroupsModel::ensureDomainGroups("mandi");
                 VoucherTypeModel::ensureDomainTypes("mandi");
             }
-            if (eff.mill) {
-                AccountGroupsModel::ensureDomainGroups("mill");
-                VoucherTypeModel::ensureDomainTypes("mill");
+            if (eff.manufacturer) {
+                AccountGroupsModel::ensureDomainGroups("manufacturer");
+                VoucherTypeModel::ensureDomainTypes("manufacturer");
             }
             emit firmCreated(m_firmMgr->currentFirmId(), name);
             accept();

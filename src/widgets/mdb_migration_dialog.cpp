@@ -218,7 +218,7 @@ void MdbMigrationDialog::setupUi() {
     grid->setVerticalSpacing(10);
 
     grid->addWidget(createStatCard("Vouchers & Transactions", &m_stockTxLabel, &m_stockTxTitleLabel, "#F0FDF4", "#BBF7D0", "#166534", "#15803D"), 0, 0);
-    grid->addWidget(createStatCard("GL Transactions", &m_millingLabel, &m_millingTitleLabel, "#EFF6FF", "#BFDBFE", "#1E40AF", "#1D4ED8"), 0, 1);
+    grid->addWidget(createStatCard("GL Transactions", &m_manufacturingLabel, &m_manufacturingTitleLabel, "#EFF6FF", "#BFDBFE", "#1E40AF", "#1D4ED8"), 0, 1);
     grid->addWidget(createStatCard("Stock Items", &m_stockItemsLabel, &m_stockItemsTitleLabel, "#FAF5FF", "#E9D5FF", "#6B21A8", "#7E22CE"), 1, 0);
     grid->addWidget(createStatCard("Master Accounts / Ledgers", &m_ledgersLabel, &m_ledgersTitleLabel, "#FFFBEB", "#FDE68A", "#92400E", "#B45309"), 1, 1);
     m_previewStack->addWidget(statsPage);
@@ -447,12 +447,12 @@ void MdbMigrationDialog::inspectFile() {
             int accountsCount = m_inspectionData.value("accountsCount", 0).toInt();
 
             if (m_stockTxTitleLabel) m_stockTxTitleLabel->setText("Vouchers & Invoices");
-            if (m_millingTitleLabel) m_millingTitleLabel->setText("GL Ledger Splits");
+            if (m_manufacturingTitleLabel) m_manufacturingTitleLabel->setText("GL Ledger Splits");
             if (m_stockItemsTitleLabel) m_stockItemsTitleLabel->setText("Stock Items");
             if (m_ledgersTitleLabel) m_ledgersTitleLabel->setText("Master Ledgers");
 
             if (m_stockTxLabel) m_stockTxLabel->setText(QString::number(vchCount));
-            if (m_millingLabel) m_millingLabel->setText(QString::number(glTxCount));
+            if (m_manufacturingLabel) m_manufacturingLabel->setText(QString::number(glTxCount));
             if (m_stockItemsLabel) m_stockItemsLabel->setText(QString::number(itemsCount));
             if (m_ledgersLabel) m_ledgersLabel->setText(QString::number(accountsCount));
 
@@ -468,12 +468,12 @@ void MdbMigrationDialog::inspectFile() {
             int accountsCount = m_inspectionData.value("accountsCount", 0).toInt();
 
             if (m_stockTxTitleLabel) m_stockTxTitleLabel->setText("Vouchers & Invoices");
-            if (m_millingTitleLabel) m_millingTitleLabel->setText("GL Transactions");
+            if (m_manufacturingTitleLabel) m_manufacturingTitleLabel->setText("GL Transactions");
             if (m_stockItemsTitleLabel) m_stockItemsTitleLabel->setText("Stock Items");
             if (m_ledgersTitleLabel) m_ledgersTitleLabel->setText("Master Accounts");
 
             if (m_stockTxLabel) m_stockTxLabel->setText(QString::number(vchCount));
-            if (m_millingLabel) m_millingLabel->setText(QString::number(glTxCount));
+            if (m_manufacturingLabel) m_manufacturingLabel->setText(QString::number(glTxCount));
             if (m_stockItemsLabel) m_stockItemsLabel->setText(QString::number(itemsCount));
             if (m_ledgersLabel) m_ledgersLabel->setText(QString::number(accountsCount));
 
@@ -484,17 +484,17 @@ void MdbMigrationDialog::inspectFile() {
         } else {
             if (m_detectedInfoTitle) m_detectedInfoTitle->setText("Detected Bahi-Khata Database Information");
             int txCount = m_inspectionData.value("stockTxCount", 0).toInt();
-            int millingCount = m_inspectionData.value("millingCount", 0).toInt();
+            int manufacturingCount = m_inspectionData.value("manufacturingCount", 0).toInt();
             int itmCount = m_inspectionData.value("stockItemsCount", 0).toInt();
             int ledgersCount = m_inspectionData.value("ledgersCount", 0).toInt();
 
             if (m_stockTxTitleLabel) m_stockTxTitleLabel->setText("Stock Transactions");
-            if (m_millingTitleLabel) m_millingTitleLabel->setText("Milling Vouchers");
+            if (m_manufacturingTitleLabel) m_manufacturingTitleLabel->setText("Manufacturing Vouchers");
             if (m_stockItemsTitleLabel) m_stockItemsTitleLabel->setText("Stock Items");
             if (m_ledgersTitleLabel) m_ledgersTitleLabel->setText("Master Ledgers");
 
             if (m_stockTxLabel) m_stockTxLabel->setText(QString::number(txCount));
-            if (m_millingLabel) m_millingLabel->setText(QString::number(millingCount));
+            if (m_manufacturingLabel) m_manufacturingLabel->setText(QString::number(manufacturingCount));
             if (m_stockItemsLabel) m_stockItemsLabel->setText(QString::number(itmCount));
             if (m_ledgersLabel) m_ledgersLabel->setText(QString::number(ledgersCount));
         }

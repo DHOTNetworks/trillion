@@ -223,7 +223,7 @@ void DatabaseManager::ensureTablesExist() {
         ");"
     );
 
-    // Phase 3 flags: effective domain set for the gated DDL below (stored
+    // Flag-resolved: effective domain set for the gated DDL below (stored
     // keys upgraded by data-detected ON bits, so migrated firms always keep
     // their domain tables; fresh generic firms get core tables only).
     // Computed after app_settings exists; detection is existence-guarded,
@@ -297,7 +297,7 @@ void DatabaseManager::ensureTablesExist() {
         ");"
     );
 
-    // 1b. Voucher Types Master (Phase 1 generic-ERP pivot: single source of
+    // 1b. Voucher Types Master (generic-ERP pivot: single source of
     // truth for every voucher kind; replaces hardcoded Sale/Purc/… literals
     // and the never-created voucher_settings table the provider used to read).
     executeNonQuery(
@@ -504,7 +504,8 @@ void DatabaseManager::ensureTablesExist() {
         "dami_ledger_id INTEGER,"
         "market_fee_ledger_id INTEGER,"
         "hrdf_ledger_id INTEGER,"
-        "is_milling_item INTEGER DEFAULT 0,"
+        "is_manufacturing_item INTEGER DEFAULT 0,"
+        "manufacturing_role TEXT NOT NULL DEFAULT '',"
         "include_in_trading INTEGER DEFAULT 1,"
         "calculate_stock INTEGER DEFAULT 1,"
         "labour_rate_unit TEXT DEFAULT 'Packing',"
@@ -533,10 +534,11 @@ void DatabaseManager::ensureTablesExist() {
         ");"
     );
 
-    // 4. Paddy slips, unified (mandi domain; core firms skip them). S7 SSOT:
+    // 4. Paddy slips, unified (mandi OR manufacturer domain — paddy serves both
+    // packages per spec §23.3; core firms skip them). S7 SSOT:
     // arrivals + procurement live in ONE table with slip_type; the two
     // legacy tables are copied over once (setting-guarded) and dropped.
-    if (domainFlags.mandi) {
+    if (domainFlags.mandi || domainFlags.manufacturer) {
     executeNonQuery(
         "CREATE TABLE IF NOT EXISTS paddy_slips ("
         "id INTEGER PRIMARY KEY AUTOINCREMENT,"
@@ -563,7 +565,7 @@ void DatabaseManager::ensureTablesExist() {
         "CREATE UNIQUE INDEX IF NOT EXISTS uq_paddy_purchase_slip "
         "ON paddy_slips(slip_no) WHERE slip_type = 'purchase';"
     );
-    } // domainFlags.mandi (paddy_slips)
+    } // domainFlags.mandi || domainFlags.manufacturer (paddy_slips)
 
     // S7 one-time unification: copy legacy tables into paddy_slips with
     // verified counts, then drop the olds. Idempotent via the marker;
@@ -614,32 +616,30 @@ void DatabaseManager::ensureTablesExist() {
         if (unifiedOk) setSetting("schema_paddy_unified_v1", "1");
     }
 
-    // 5. Milling Batches & Line Items (mill domain; core firms skip them)
-    if (domainFlags.mill) {
+    // 5. manufacturering Batches & Line Items (manufacturer domain; core firms skip them)
+    if (domainFlags.manufacturer) {
     executeNonQuery(
-        "CREATE TABLE IF NOT EXISTS milling_batches ("
+        "CREATE TABLE IF NOT EXISTS manufacturing_batches ("
         "id INTEGER PRIMARY KEY AUTOINCREMENT,"
         "fy_id INTEGER,"
         "financial_year TEXT DEFAULT 'FY 2025-26',"
         "batch_no TEXT NOT NULL,"
         "batch_date TEXT NOT NULL,"
-        "paddy_variety TEXT NOT NULL DEFAULT 'Paddy Basmati',"
-        "paddy_input_qtl REAL NOT NULL DEFAULT 0.0,"
-        "head_rice_qtl REAL NOT NULL DEFAULT 0.0,"
-        "broken_rice_qtl REAL NOT NULL DEFAULT 0.0,"
-        "bran_qtl REAL NOT NULL DEFAULT 0.0,"
-        "husk_qtl REAL NOT NULL DEFAULT 0.0,"
+        "input_variety TEXT NOT NULL DEFAULT '',"
+        "input_qtl REAL NOT NULL DEFAULT 0.0,"
+        "output_qtl REAL NOT NULL DEFAULT 0.0,"
+        "byproduct_qtl REAL NOT NULL DEFAULT 0.0,"
         "wastage_qtl REAL NOT NULL DEFAULT 0.0,"
         "yield_pct REAL NOT NULL DEFAULT 0.0,"
         "narration TEXT,"
         "FOREIGN KEY (fy_id) REFERENCES financial_years(id)"
         ");"
     );
-    } // domainFlags.mill (milling_batches)
+    } // domainFlags.manufacturer (manufacturing_batches)
 
-    if (domainFlags.mill) {
+    if (domainFlags.manufacturer) {
     executeNonQuery(
-        "CREATE TABLE IF NOT EXISTS milling_voucher_items ("
+        "CREATE TABLE IF NOT EXISTS manufacturing_voucher_items ("
         "id INTEGER PRIMARY KEY AUTOINCREMENT,"
         "batch_id INTEGER,"
         "batch_no TEXT NOT NULL,"
@@ -655,11 +655,11 @@ void DatabaseManager::ensureTablesExist() {
         "rate REAL DEFAULT 0.0,"
         "amount REAL DEFAULT 0.0,"
         "narration TEXT,"
-        "FOREIGN KEY (batch_id) REFERENCES milling_batches(id),"
+        "FOREIGN KEY (batch_id) REFERENCES manufacturing_batches(id),"
         "FOREIGN KEY (item_id) REFERENCES stock_items(id)"
         ");"
     );
-    } // domainFlags.mill (milling_voucher_items)
+    } // domainFlags.manufacturer (manufacturering_voucher_items)
 
     // 6. Sales Invoices
     executeNonQuery(
@@ -1401,7 +1401,7 @@ void DatabaseManager::ensureTablesExist() {
     // code-driven consumer (classifier, P&L/BS engines, migrators, salary
     // discovery) works unchanged; domain rows (Trading 18-20/24, Commission
     // 21, Manufacturing 22-23, Mandi 31-34, Employees 35, Isht Dev -1) are
-    // dropped here and restored per-package by ensureDomainGroups (Phase 3).
+    // dropped here and restored per-package by ensureDomainGroups.
     // New-meaning groups take codes >= 100 (never collide with legacy sync).
     // NOTE: "Cash-In-Hand" keeps its Bahi spelling on purpose — the cash
     // report, classifier and migrators all match it; renaming would churn
@@ -1682,7 +1682,7 @@ void DatabaseManager::ensureTablesExist() {
     };
 
     auto addColumnIfNotExists = [this, &getCols, &tableColsCache](const QString& table, const QString& column, const QString& type) {
-        // Existence guard (Phase 3): on generic DBs the domain table may not
+        // Existence guard: on generic DBs the domain table may not
         // exist at all — skip instead of erroring. Flag checks stay out of
         // heal/alter paths by design; presence is the only question here.
         QVariant texists = executeScalar("SELECT 1 FROM sqlite_master WHERE type='table' AND name=? LIMIT 1;", {table});
@@ -1941,8 +1941,8 @@ void DatabaseManager::ensureTablesExist() {
 
     // Legacy sync runs ONLY on legacy charts (Standard/Legacy markers). Fresh
     // generic charts carry 'Generic Chart v1' rows and are never bulk-filled.
-    // Domain codes (mandi 31-34, mill 22-23) are UPDATE-only here: the domain
-    // top-up (ensureDomainGroups, Phase 3) owns their creation, so this sync
+    // Domain codes (mandi 31-34, manufacturer 22-23) are UPDATE-only here: the domain
+    // top-up (ensureDomainGroups) owns their creation, so this sync
     // can neither re-insert them on generic firms nor strand migrated rows.
     QVariant legacyChart = executeScalar(
         "SELECT 1 FROM account_groups WHERE description LIKE 'Standard Group #%' "
@@ -1990,7 +1990,7 @@ void DatabaseManager::ensureTablesExist() {
     addColumnIfNotExists("transport_dispatches", "vehicle_no", "TEXT");
 
     // Deterministic uppercase normalization for all vehicle_no entries.
-    // Phase 3: each UPDATE is existence-guarded — generic DBs may not have
+    // Each UPDATE is existence-guarded — generic DBs may not have
     // the domain tables at all (fail-loud stays for real errors elsewhere).
     executeNonQuery("UPDATE purchase_invoices SET vehicle_no = UPPER(TRIM(vehicle_no)) WHERE vehicle_no IS NOT NULL AND vehicle_no != UPPER(TRIM(vehicle_no));");
     executeNonQuery("UPDATE sales_invoices SET vehicle_no = UPPER(TRIM(vehicle_no)) WHERE vehicle_no IS NOT NULL AND vehicle_no != UPPER(TRIM(vehicle_no));");
@@ -2148,6 +2148,30 @@ void DatabaseManager::ensureTablesExist() {
     addColumnIfNotExists("stock_items", "dami_ledger_id", "INTEGER");
     addColumnIfNotExists("stock_items", "market_fee_ledger_id", "INTEGER");
     addColumnIfNotExists("stock_items", "hrdf_ledger_id", "INTEGER");
+    // Generic manufacturing: item role drives production classification
+    // (input/output/byproduct) — data, never item-name heuristics.
+    addColumnIfNotExists("stock_items", "manufacturing_role", "TEXT DEFAULT ''");
+
+    // Generic manufacturing batch schema (manufacturer domain). The legacy
+    // rice-mill column names (paddy_variety / paddy_input_qtl / head_rice_qtl
+    // / broken_rice_qtl / bran_qtl / husk_qtl) are carried once into the
+    // generic input_variety / input_qtl / output_qtl / byproduct_qtl. The old
+    // columns are left in place (SQLite cannot drop them portably) but nothing
+    // reads them after this point; fresh DBs are created generic.
+    addColumnIfNotExists("manufacturing_batches", "input_variety", "TEXT DEFAULT ''");
+    addColumnIfNotExists("manufacturing_batches", "input_qtl", "REAL DEFAULT 0.0");
+    addColumnIfNotExists("manufacturing_batches", "output_qtl", "REAL DEFAULT 0.0");
+    addColumnIfNotExists("manufacturing_batches", "byproduct_qtl", "REAL DEFAULT 0.0");
+    if (getCols("manufacturing_batches").contains("paddy_variety")
+        && getSetting("schema_manufacturing_generic_v1", "0") != "1") {
+        executeNonQuery(
+            "UPDATE manufacturing_batches SET "
+            " input_variety = paddy_variety, "
+            " input_qtl = paddy_input_qtl, "
+            " output_qtl = head_rice_qtl, "
+            " byproduct_qtl = COALESCE(broken_rice_qtl,0) + COALESCE(bran_qtl,0) + COALESCE(husk_qtl,0);");
+        setSetting("schema_manufacturing_generic_v1", "1");
+    }
 
     // TDS Vouchers deposit tracking
     addColumnIfNotExists("tds_vouchers", "challan_id", "INTEGER");
@@ -2244,13 +2268,13 @@ void DatabaseManager::ensureTablesExist() {
     executeNonQuery("CREATE INDEX IF NOT EXISTS idx_parties_name ON parties(name COLLATE NOCASE);");
     if (FeatureFlags::tableExists("jform_vouchers")) executeNonQuery("CREATE INDEX IF NOT EXISTS idx_jform_nos ON jform_vouchers(voucher_no, jform_no);");
     if (FeatureFlags::tableExists("iform_vouchers")) executeNonQuery("CREATE INDEX IF NOT EXISTS idx_iform_nos ON iform_vouchers(voucher_no, iform_no);");
-    if (FeatureFlags::tableExists("milling_batches")) executeNonQuery("CREATE INDEX IF NOT EXISTS idx_milling_batch_no ON milling_batches(batch_no);");
+    if (FeatureFlags::tableExists("manufacturing_batches")) executeNonQuery("CREATE INDEX IF NOT EXISTS idx_manufacturing_batch_no ON manufacturing_batches(batch_no);");
 
     // One-time transport dedupe (v1): the pre-fix sync re-inserted rows on
     // every view visit, so legacy files can hold thousands of byte-identical
     // dispatches (same slip/voucher/invoice/party/date/vehicle/freight).
     // Keep MIN(id) per identical group; runs once, gated by setting.
-    // Phase 3: skipped entirely when the table was never created.
+    // Skipped entirely when the table was never created.
     if (getSetting("transport_deduped_v1", "") != "1" && FeatureFlags::tableExists("transport_dispatches")) {
         QVariant dupeGroups = executeScalar(
             "SELECT COUNT(*) FROM (SELECT voucher_type, financial_year, voucher_no, invoice_no, slip_no, "
@@ -2325,7 +2349,7 @@ void DatabaseManager::ensureTablesExist() {
     qDebug() << "[DB] ensureTablesExist finished in" << ddlTimer.elapsed()
              << "ms (db:" << m_dbPath << ")";
 
-    // Phase 3 flags: migrated firms pick up domain flags from detected data
+    // Flag-resolved: migrated firms pick up domain flags from detected data
     // (ON-only, never strands rows, never writes for fresh generic DBs).
     FeatureFlags::persistDetected();
 
@@ -2388,13 +2412,13 @@ void DatabaseManager::ensureDomainMasters() {
             {"IFRM", "I-Form (Mandi Sale)", "SALES", "IF-", 111},
         });
     }
-    if (eff.mill) {
+    if (eff.manufacturer) {
         topUpGroups({
-            {"Manufacturing Group", "Primary", "Expense", "Domain: mill", 22, 0, 0, 0, 0},
-            {"Manufacturing Exp.", "Manufacturing Group", "Expense", "Domain: mill", 23, 22, 0, 0, 0},
+            {"Manufacturing Group", "Primary", "Expense", "Domain: manufacturer", 22, 0, 0, 0, 0},
+            {"Manufacturing Exp.", "Manufacturing Group", "Expense", "Domain: manufacturer", 23, 22, 0, 0, 0},
         });
         topUpTypes({
-            {"MILL", "Milling Production", "OTHER", "ML-", 120},
+            {"MANU", "manufacturing Production", "OTHER", "MF-", 120},
         });
     }
 }

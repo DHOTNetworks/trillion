@@ -197,7 +197,7 @@ void ItemMovementDialog::setupUi() {
     outwardLayout->setContentsMargins(0, 0, 0, 0);
     outwardLayout->setSpacing(4);
 
-    QLabel* outHeader = new QLabel("OUTWARD TRANSACTIONS (Sales / Milling Consumptions / Dispatches)", outwardContainer);
+    QLabel* outHeader = new QLabel("OUTWARD TRANSACTIONS (Sales / Manufacturing Consumptions / Dispatches)", outwardContainer);
     outHeader->setStyleSheet("font-size: 12px; font-weight: 800; color: #DC2626; padding: 2px;");
     outwardLayout->addWidget(outHeader);
 

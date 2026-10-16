@@ -65,12 +65,12 @@ private:
     // section appends after banking and only feeds onCreateClicked.
     QButtonGroup* m_packageGroup = nullptr;
     QRadioButton* m_pkgAgent = nullptr;
-    QRadioButton* m_pkgMill = nullptr;
+    QRadioButton* m_pkgManufacturer = nullptr;
     QRadioButton* m_pkgTrader = nullptr;
     QRadioButton* m_pkgTransporter = nullptr;
     QRadioButton* m_pkgGeneral = nullptr;
     QCheckBox* m_addMandi = nullptr;
-    QCheckBox* m_addMill = nullptr;
+    QCheckBox* m_addManufacturer = nullptr;
     QCheckBox* m_addBardana = nullptr;
     QCheckBox* m_addTransport = nullptr;
     void updatePackageAddOns();

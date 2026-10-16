@@ -1,20 +1,20 @@
-#include "milling_statement_model.h"
-#include "milling_model.h"
+#include "manufacturing_statement_model.h"
+#include "manufacturing_model.h"
 #include "../database_manager.h"
 #include "../engine/accounting_engine.h"
 #include <cmath>
 
-MillingBatchListModel::MillingBatchListModel(QObject* parent)
+ManufacturingBatchListModel::ManufacturingBatchListModel(QObject* parent)
     : QAbstractListModel(parent)
 {
 }
 
-int MillingBatchListModel::rowCount(const QModelIndex& parent) const {
+int ManufacturingBatchListModel::rowCount(const QModelIndex& parent) const {
     if (parent.isValid()) return 0;
     return m_entries.size();
 }
 
-QVariant MillingBatchListModel::data(const QModelIndex& index, int role) const {
+QVariant ManufacturingBatchListModel::data(const QModelIndex& index, int role) const {
     if (!index.isValid() || index.row() < 0 || index.row() >= m_entries.size())
         return QVariant();
 
@@ -23,12 +23,10 @@ QVariant MillingBatchListModel::data(const QModelIndex& index, int role) const {
     case IdRole: return item.id;
     case BatchNoRole: return item.batchNo;
     case BatchDateRole: return item.batchDate;
-    case PaddyVarietyRole: return item.paddyVariety;
-    case PaddyInputRole: return item.paddyInput;
-    case HeadRiceRole: return item.headRice;
-    case BrokenRiceRole: return item.brokenRice;
-    case BranRole: return item.bran;
-    case HuskRole: return item.husk;
+    case InputVarietyRole: return item.inputVariety;
+    case InputQtyRole: return item.inputQty;
+    case OutputQtyRole: return item.outputQty;
+    case ByproductQtyRole: return item.byproductQty;
     case WastageRole: return item.wastage;
     case YieldPctRole: return item.yieldPct;
     case NarrationRole: return item.narration;
@@ -36,67 +34,63 @@ QVariant MillingBatchListModel::data(const QModelIndex& index, int role) const {
     }
 }
 
-QHash<int, QByteArray> MillingBatchListModel::roleNames() const {
+QHash<int, QByteArray> ManufacturingBatchListModel::roleNames() const {
     QHash<int, QByteArray> roles;
     roles[IdRole] = "id";
     roles[BatchNoRole] = "batchNo";
     roles[BatchDateRole] = "batchDate";
-    roles[PaddyVarietyRole] = "paddyVariety";
-    roles[PaddyInputRole] = "paddyInput";
-    roles[HeadRiceRole] = "headRice";
-    roles[BrokenRiceRole] = "brokenRice";
-    roles[BranRole] = "bran";
-    roles[HuskRole] = "husk";
+    roles[InputVarietyRole] = "inputVariety";
+    roles[InputQtyRole] = "inputQty";
+    roles[OutputQtyRole] = "outputQty";
+    roles[ByproductQtyRole] = "byproductQty";
     roles[WastageRole] = "wastage";
     roles[YieldPctRole] = "yieldPct";
     roles[NarrationRole] = "narration";
     return roles;
 }
 
-void MillingBatchListModel::setEntries(const QVector<MillingBatchEntry>& entries) {
+void ManufacturingBatchListModel::setEntries(const QVector<ManufacturingBatchEntry>& entries) {
     beginResetModel();
     m_entries = entries;
     endResetModel();
     emit countChanged();
 }
 
-void MillingBatchListModel::clear() {
+void ManufacturingBatchListModel::clear() {
     beginResetModel();
     m_entries.clear();
     endResetModel();
     emit countChanged();
 }
 
-QVariantMap MillingBatchListModel::get(int row) const {
+QVariantMap ManufacturingBatchListModel::get(int row) const {
     if (row < 0 || row >= m_entries.size()) return QVariantMap();
     const auto& item = m_entries.at(row);
     QVariantMap m;
     m["id"] = item.id;
     m["batchNo"] = item.batchNo;
     m["batchDate"] = item.batchDate;
-    m["paddyVariety"] = item.paddyVariety;
-    m["paddyInput"] = item.paddyInput;
-    m["headRice"] = item.headRice;
-    m["brokenRice"] = item.brokenRice;
-    m["bran"] = item.bran;
-    m["husk"] = item.husk;
+    m["inputVariety"] = item.inputVariety;
+    m["inputQty"] = item.inputQty;
+    m["outputQty"] = item.outputQty;
+    m["byproductQty"] = item.byproductQty;
     m["wastage"] = item.wastage;
     m["yieldPct"] = item.yieldPct;
     m["narration"] = item.narration;
     return m;
 }
 
-MillingItemListModel::MillingItemListModel(QObject* parent)
+ManufacturingItemListModel::ManufacturingItemListModel(QObject* parent)
     : QAbstractListModel(parent)
 {
 }
 
-int MillingItemListModel::rowCount(const QModelIndex& parent) const {
+int ManufacturingItemListModel::rowCount(const QModelIndex& parent) const {
     if (parent.isValid()) return 0;
     return m_entries.size();
 }
 
-QVariant MillingItemListModel::data(const QModelIndex& index, int role) const {
+QVariant ManufacturingItemListModel::data(const QModelIndex& index, int role) const {
     if (!index.isValid() || index.row() < 0 || index.row() >= m_entries.size())
         return QVariant();
 
@@ -116,7 +110,7 @@ QVariant MillingItemListModel::data(const QModelIndex& index, int role) const {
     }
 }
 
-QHash<int, QByteArray> MillingItemListModel::roleNames() const {
+QHash<int, QByteArray> ManufacturingItemListModel::roleNames() const {
     QHash<int, QByteArray> roles;
     roles[RowNoRole] = "rowNo";
     roles[DrcrRole] = "drcr";
@@ -131,21 +125,21 @@ QHash<int, QByteArray> MillingItemListModel::roleNames() const {
     return roles;
 }
 
-void MillingItemListModel::setEntries(const QVector<MillingItemEntry>& entries) {
+void ManufacturingItemListModel::setEntries(const QVector<ManufacturingItemEntry>& entries) {
     beginResetModel();
     m_entries = entries;
     endResetModel();
     emit countChanged();
 }
 
-void MillingItemListModel::clear() {
+void ManufacturingItemListModel::clear() {
     beginResetModel();
     m_entries.clear();
     endResetModel();
     emit countChanged();
 }
 
-QVariantMap MillingItemListModel::get(int row) const {
+QVariantMap ManufacturingItemListModel::get(int row) const {
     if (row < 0 || row >= m_entries.size()) return QVariantMap();
     const auto& item = m_entries.at(row);
     QVariantMap m;
@@ -162,12 +156,12 @@ QVariantMap MillingItemListModel::get(int row) const {
     return m;
 }
 
-MillingStatementController::MillingStatementController(QObject* parent)
+ManufacturingStatementController::ManufacturingStatementController(QObject* parent)
     : QObject(parent)
 {
 }
 
-void MillingStatementController::setSearchQuery(const QString& query) {
+void ManufacturingStatementController::setSearchQuery(const QString& query) {
     if (m_searchQuery != query) {
         m_searchQuery = query;
         emit searchQueryChanged();
@@ -175,7 +169,7 @@ void MillingStatementController::setSearchQuery(const QString& query) {
     }
 }
 
-void MillingStatementController::setSelectedVariety(const QString& variety) {
+void ManufacturingStatementController::setSelectedVariety(const QString& variety) {
     if (m_selectedVariety != variety) {
         m_selectedVariety = variety;
         emit selectedVarietyChanged();
@@ -183,14 +177,14 @@ void MillingStatementController::setSelectedVariety(const QString& variety) {
     }
 }
 
-void MillingStatementController::setSelectedBatchIndex(int idx) {
+void ManufacturingStatementController::setSelectedBatchIndex(int idx) {
     if (m_selectedBatchIndex != idx) {
         m_selectedBatchIndex = idx;
         emit selectedBatchIndexChanged();
     }
 }
 
-void MillingStatementController::selectBatch(int index) {
+void ManufacturingStatementController::selectBatch(int index) {
     if (index >= 0 && index < m_batchModel.rowCount()) {
         m_selectedBatchIndex = index;
         emit selectedBatchIndexChanged();
@@ -210,16 +204,16 @@ void MillingStatementController::selectBatch(int index) {
     }
 }
 
-void MillingStatementController::loadBatchItems(int batchId, const QString& batchNo) {
-    MillingModel tempModel;
+void ManufacturingStatementController::loadBatchItems(int batchId, const QString& batchNo) {
+    ManufacturingModel tempModel;
     QVariantList items = tempModel.get_batch_items(batchId, batchNo);
 
-    QVector<MillingItemEntry> itemEntries;
+    QVector<ManufacturingItemEntry> itemEntries;
     itemEntries.reserve(items.size());
 
     for (int i = 0; i < items.size(); ++i) {
         QVariantMap it = items[i].toMap();
-        MillingItemEntry e;
+        ManufacturingItemEntry e;
         e.rowNo = it.value("row_no", i + 1).toInt();
         e.drcr = it.value("drcr", e.rowNo == 1 ? "Cr" : "Dr").toString();
         e.isInput = (e.drcr == "Cr");
@@ -245,7 +239,7 @@ void MillingStatementController::loadBatchItems(int batchId, const QString& batc
     m_itemModel.setEntries(itemEntries);
 }
 
-void MillingStatementController::reload(const QString& fromDate, const QString& toDate, const QString& variety) {
+void ManufacturingStatementController::reload(const QString& fromDate, const QString& toDate, const QString& variety) {
     QString fDate = fromDate.trimmed();
     QString tDate = toDate.trimmed();
 
@@ -254,17 +248,15 @@ void MillingStatementController::reload(const QString& fromDate, const QString& 
         tDate = AccountingEngine::getActiveToDate();
     }
 
-    MillingModel tempModel;
-    QVariantList rawList = tempModel.get_milling_statement(fDate, tDate, variety);
-    QVariantMap totals = tempModel.get_milling_totals(fDate, tDate);
+    ManufacturingModel tempModel;
+    QVariantList rawList = tempModel.get_manufacturing_statement(fDate, tDate, variety);
+    QVariantMap totals = tempModel.get_manufacturing_totals(fDate, tDate);
 
     m_totalBatchesCount = totals.value("total_batches", rawList.size()).toInt();
-    m_totalPaddyMilledFmt = totals.value("total_paddy_fmt", "0.00").toString();
-    m_totalHeadRiceProducedFmt = totals.value("total_head_rice_fmt", "0.00").toString();
-    m_totalBranProducedFmt = totals.value("total_bran_fmt", "0.00").toString();
-    m_totalBrokenProducedFmt = totals.value("total_broken_fmt", "0.00").toString();
-    m_totalHuskProducedFmt = totals.value("total_husk_fmt", "0.00").toString();
-    m_totalWastageMilledFmt = totals.value("total_wastage_fmt", "0.00").toString();
+    m_totalInputFmt = totals.value("total_input_fmt", "0.00").toString();
+    m_totalOutputFmt = totals.value("total_output_fmt", "0.00").toString();
+    m_totalByproductFmt = totals.value("total_byproduct_fmt", "0.00").toString();
+    m_totalWastageFmt = totals.value("total_wastage_fmt", "0.00").toString();
     m_avgYieldPctFmt = totals.value("avg_yield_fmt", "0.00%").toString();
 
     m_allBatches.clear();
@@ -272,16 +264,14 @@ void MillingStatementController::reload(const QString& fromDate, const QString& 
 
     for (int i = 0; i < rawList.size(); ++i) {
         QVariantMap b = rawList[i].toMap();
-        MillingBatchEntry e;
+        ManufacturingBatchEntry e;
         e.id = b.value("id", i + 1).toInt();
         e.batchNo = b.value("batch_no").toString();
         e.batchDate = b.value("batch_date").toString();
-        e.paddyVariety = b.value("paddy_variety", "Paddy Basmati").toString();
-        e.paddyInput = b.value("paddy_input_fmt", QString::number(b.value("paddy_input_qtl").toDouble(), 'f', 3)).toString();
-        e.headRice = b.value("head_rice_fmt", QString::number(b.value("head_rice_qtl").toDouble(), 'f', 3)).toString();
-        e.brokenRice = b.value("broken_rice_fmt", QString::number(b.value("broken_rice_qtl").toDouble(), 'f', 3)).toString();
-        e.bran = b.value("bran_fmt", QString::number(b.value("bran_qtl").toDouble(), 'f', 3)).toString();
-        e.husk = b.value("husk_fmt", QString::number(b.value("husk_qtl").toDouble(), 'f', 3)).toString();
+        e.inputVariety = b.value("input_variety").toString();
+        e.inputQty = b.value("input_qtl_fmt", QString::number(b.value("input_qtl").toDouble(), 'f', 3)).toString();
+        e.outputQty = b.value("output_qtl_fmt", QString::number(b.value("output_qtl").toDouble(), 'f', 3)).toString();
+        e.byproductQty = b.value("byproduct_qtl_fmt", QString::number(b.value("byproduct_qtl").toDouble(), 'f', 3)).toString();
         e.wastage = b.value("wastage_fmt", QString::number(b.value("wastage_qtl").toDouble(), 'f', 3)).toString();
 
         double yPct = b.value("yield_pct").toDouble();
@@ -295,23 +285,23 @@ void MillingStatementController::reload(const QString& fromDate, const QString& 
     applyFilter();
 }
 
-void MillingStatementController::applyFilter() {
+void ManufacturingStatementController::applyFilter() {
     QString q = m_searchQuery.trimmed().toLower();
     QString varFilter = m_selectedVariety.trimmed().toLower();
     bool allVars = (varFilter.isEmpty() || varFilter == "all varieties" || varFilter == "all");
 
-    QVector<MillingBatchEntry> filtered;
+    QVector<ManufacturingBatchEntry> filtered;
     filtered.reserve(m_allBatches.size());
 
     for (const auto& b : m_allBatches) {
-        if (!allVars && b.paddyVariety.toLower() != varFilter) {
+        if (!allVars && b.inputVariety.toLower() != varFilter) {
             continue;
         }
 
         if (!q.isEmpty()) {
             if (!b.batchNo.toLower().contains(q) &&
                 !b.batchDate.toLower().contains(q) &&
-                !b.paddyVariety.toLower().contains(q) &&
+                !b.inputVariety.toLower().contains(q) &&
                 !b.narration.toLower().contains(q)) {
                 continue;
             }

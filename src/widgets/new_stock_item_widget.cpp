@@ -225,7 +225,7 @@ void NewStockItemWidget::setupUi() {
     col1Grid->addWidget(m_unitCombo, 3, 1);
 
     m_companyEdit = new QLineEdit(col1Frame);
-    m_companyEdit->setPlaceholderText("Manufacturer / Mill Brand");
+    m_companyEdit->setPlaceholderText("Manufacturer Brand");
     col1Grid->addWidget(new QLabel("Company / Brand:"), 4, 0);
     col1Grid->addWidget(m_companyEdit, 4, 1);
 

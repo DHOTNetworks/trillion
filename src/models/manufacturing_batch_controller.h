@@ -7,14 +7,14 @@
 #include <QVariantMap>
 #include <QVector>
 
-struct MillingConsumedItem {
+struct ManufacturingConsumedItem {
     QString itemName;
     int bags = 0;
     double weight = 0.0;
     double amount = 0.0;
 };
 
-struct MillingProducedItem {
+struct ManufacturingProducedItem {
     QString itemName;
     double yieldPct = 0.0;
     int bags = 0;
@@ -22,7 +22,7 @@ struct MillingProducedItem {
     double amount = 0.0;
 };
 
-class MillingConsumedModel : public QAbstractListModel {
+class ManufacturingConsumedModel : public QAbstractListModel {
     Q_OBJECT
 
 public:
@@ -33,7 +33,7 @@ public:
         AmountRole
     };
 
-    explicit MillingConsumedModel(QObject *parent = nullptr);
+    explicit ManufacturingConsumedModel(QObject *parent = nullptr);
 
     int rowCount(const QModelIndex &parent = QModelIndex()) const override;
     QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
@@ -47,16 +47,16 @@ public:
     Q_INVOKABLE QVariantMap getRow(int index) const;
     Q_INVOKABLE void setRowProperty(int index, const QString &property, const QVariant &value);
 
-    const QVector<MillingConsumedItem>& items() const { return m_items; }
+    const QVector<ManufacturingConsumedItem>& items() const { return m_items; }
 
 signals:
     void itemsChanged();
 
 private:
-    QVector<MillingConsumedItem> m_items;
+    QVector<ManufacturingConsumedItem> m_items;
 };
 
-class MillingProducedModel : public QAbstractListModel {
+class ManufacturingProducedModel : public QAbstractListModel {
     Q_OBJECT
 
 public:
@@ -68,7 +68,7 @@ public:
         AmountRole
     };
 
-    explicit MillingProducedModel(QObject *parent = nullptr);
+    explicit ManufacturingProducedModel(QObject *parent = nullptr);
 
     int rowCount(const QModelIndex &parent = QModelIndex()) const override;
     QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
@@ -82,16 +82,16 @@ public:
     Q_INVOKABLE QVariantMap getRow(int index) const;
     Q_INVOKABLE void setRowProperty(int index, const QString &property, const QVariant &value);
 
-    const QVector<MillingProducedItem>& items() const { return m_items; }
+    const QVector<ManufacturingProducedItem>& items() const { return m_items; }
 
 signals:
     void itemsChanged();
 
 private:
-    QVector<MillingProducedItem> m_items;
+    QVector<ManufacturingProducedItem> m_items;
 };
 
-class MillingBatchController : public QObject {
+class ManufacturingBatchController : public QObject {
     Q_OBJECT
 
     Q_PROPERTY(QString batchNo READ batchNo WRITE setBatchNo NOTIFY batchNoChanged)
@@ -112,14 +112,14 @@ class MillingBatchController : public QObject {
     Q_PROPERTY(double shortageWeight READ shortageWeight NOTIFY totalsChanged)
     Q_PROPERTY(int shortageBags READ shortageBags NOTIFY totalsChanged)
 
-    Q_PROPERTY(MillingConsumedModel* consumedModel READ consumedModel CONSTANT)
-    Q_PROPERTY(MillingProducedModel* producedModel READ producedModel CONSTANT)
+    Q_PROPERTY(ManufacturingConsumedModel* consumedModel READ consumedModel CONSTANT)
+    Q_PROPERTY(ManufacturingProducedModel* producedModel READ producedModel CONSTANT)
 
     Q_PROPERTY(QString statusMessage READ statusMessage NOTIFY statusChanged)
     Q_PROPERTY(bool isError READ isError NOTIFY statusChanged)
 
 public:
-    explicit MillingBatchController(QObject *parent = nullptr);
+    explicit ManufacturingBatchController(QObject *parent = nullptr);
 
     QString batchNo() const { return m_batchNo; }
     void setBatchNo(const QString &v) { if (m_batchNo != v) { m_batchNo = v; emit batchNoChanged(); } }
@@ -145,8 +145,8 @@ public:
     double shortageWeight() const { return m_shortageWeight; }
     int shortageBags() const { return m_shortageBags; }
 
-    MillingConsumedModel* consumedModel() { return &m_consumedModel; }
-    MillingProducedModel* producedModel() { return &m_producedModel; }
+    ManufacturingConsumedModel* consumedModel() { return &m_consumedModel; }
+    ManufacturingProducedModel* producedModel() { return &m_producedModel; }
 
     QString statusMessage() const { return m_statusMessage; }
     bool isError() const { return m_isError; }
@@ -191,6 +191,6 @@ private:
     QString m_statusMessage;
     bool m_isError = false;
 
-    MillingConsumedModel m_consumedModel;
-    MillingProducedModel m_producedModel;
+    ManufacturingConsumedModel m_consumedModel;
+    ManufacturingProducedModel m_producedModel;
 };

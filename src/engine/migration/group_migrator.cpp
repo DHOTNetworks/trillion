@@ -2,6 +2,7 @@
 #include "../database_manager.h"
 #include "../models/account_classifier.h"
 #include "migration_utils.h"
+#include "migration_columns.h"
 #include <QDebug>
 #include <algorithm>
 
@@ -114,20 +115,28 @@ bool GroupMigrator::migrate_groups_bahikhata(
     MigrationContext& ctx,
     const std::vector<std::map<std::string, std::string>>& groupRows,
     std::map<int, std::string>& outGroupCodeMap,
-    std::map<int, qint64>& outGroupCodeToIdMap
+    std::map<int, qint64>& outGroupCodeToIdMap,
+    std::map<int, std::vector<int>>* outLineage
 ) {
     auto& db = DatabaseManager::instance();
     ctx.updateProgress(22, QString("Migrating %1 Account Groups from Bahi-Khata...").arg(groupRows.size()));
 
     outGroupCodeMap.clear();
     outGroupCodeToIdMap.clear();
+    if (outLineage) outLineage->clear();
+    const QString kName = MigrationColumns::groupField("name");
+    const QString kC1 = MigrationColumns::groupField("code1st");
+    const QString kC2 = MigrationColumns::groupField("code2nd");
+    const QString kC3 = MigrationColumns::groupField("code3rd");
+    const QString kC4 = MigrationColumns::groupField("code4th");
+    const QString kBs = MigrationColumns::groupField("extract_in_balance_sheet");
 
     // First pass: collect all group codes and names
     for (const auto& g : groupRows) {
-        std::string gName = MigrationUtils::cleanText(QString::fromStdString(getFieldStr(g, "GroupName"))).toStdString();
+        std::string gName = MigrationUtils::cleanText(QString::fromStdString(getFieldStr(g, kName.toStdString()))).toStdString();
         if (gName.empty()) continue;
-        int code1 = parseInteger(getFieldStr(g, "Code1st"));
-        int code2 = parseInteger(getFieldStr(g, "Code2nd"));
+        int code1 = parseInteger(getFieldStr(g, kC1.toStdString()));
+        int code2 = parseInteger(getFieldStr(g, kC2.toStdString()));
         if (code2 == 0 && code1 > 35) {
             StandardGroupCode root = AccountClassifier::inferRootCodeFromName(QString::fromStdString(gName));
             int rootCode = static_cast<int>(root);
@@ -140,13 +149,13 @@ bool GroupMigrator::migrate_groups_bahikhata(
 
     // Second pass: insert with 4-level canonical hierarchy
     for (const auto& g : groupRows) {
-        std::string gName = MigrationUtils::cleanText(QString::fromStdString(getFieldStr(g, "GroupName"))).toStdString();
+        std::string gName = MigrationUtils::cleanText(QString::fromStdString(getFieldStr(g, kName.toStdString()))).toStdString();
         if (gName.empty()) continue;
-        int code1 = parseInteger(getFieldStr(g, "Code1st"));
-        int code2 = parseInteger(getFieldStr(g, "Code2nd"));
-        int code3 = parseInteger(getFieldStr(g, "Code3rd"));
-        int code4 = parseInteger(getFieldStr(g, "Code4th"));
-        int extractBs = parseInteger(getFieldStr(g, "ExtractInBalanceSheet", "1"), 1);
+        int code1 = parseInteger(getFieldStr(g, kC1.toStdString()));
+        int code2 = parseInteger(getFieldStr(g, kC2.toStdString()));
+        int code3 = parseInteger(getFieldStr(g, kC3.toStdString()));
+        int code4 = parseInteger(getFieldStr(g, kC4.toStdString()));
+        int extractBs = parseInteger(getFieldStr(g, kBs.toStdString(), "1"), 1);
 
         if (code2 == 0 && code1 > 35) {
             StandardGroupCode root = AccountClassifier::inferRootCodeFromName(QString::fromStdString(gName));
@@ -190,6 +199,10 @@ bool GroupMigrator::migrate_groups_bahikhata(
         );
         qint64 gid = db.lastInsertedId();
         outGroupCodeToIdMap[code1] = gid;
+        // Lineage for downstream passes (ledger partyType classification):
+        // post-inference codes, last row wins — identical to the retired
+        // monolith inline pass.
+        if (outLineage) (*outLineage)[code1] = {code1, code2, code3, code4};
     }
 
     ctx.stats.totalGroups = static_cast<int>(outGroupCodeToIdMap.size());

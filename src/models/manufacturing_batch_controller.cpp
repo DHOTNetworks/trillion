@@ -1,25 +1,26 @@
-#include "milling_batch_controller.h"
-#include "milling_model.h"
+#include "manufacturing_batch_controller.h"
+#include "manufacturing_model.h"
 #include "stock_items_model.h"
 #include "financial_years_model.h"
+#include "../database_manager.h"
 #include "../engine/stock_pipeline.h"
 #include "../services/accounting_date_service.h"
 #include "../services/financial_math_service.h"
 #include <cmath>
 
 // -------------------------------------------------------------
-// MillingConsumedModel
+// ManufacturingConsumedModel
 // -------------------------------------------------------------
-MillingConsumedModel::MillingConsumedModel(QObject *parent)
+ManufacturingConsumedModel::ManufacturingConsumedModel(QObject *parent)
     : QAbstractListModel(parent) {
 }
 
-int MillingConsumedModel::rowCount(const QModelIndex &parent) const {
+int ManufacturingConsumedModel::rowCount(const QModelIndex &parent) const {
     if (parent.isValid()) return 0;
     return m_items.size();
 }
 
-QVariant MillingConsumedModel::data(const QModelIndex &index, int role) const {
+QVariant ManufacturingConsumedModel::data(const QModelIndex &index, int role) const {
     if (!index.isValid() || index.row() < 0 || index.row() >= m_items.size()) {
         return QVariant();
     }
@@ -34,7 +35,7 @@ QVariant MillingConsumedModel::data(const QModelIndex &index, int role) const {
     }
 }
 
-bool MillingConsumedModel::setData(const QModelIndex &index, const QVariant &value, int role) {
+bool ManufacturingConsumedModel::setData(const QModelIndex &index, const QVariant &value, int role) {
     if (!index.isValid() || index.row() < 0 || index.row() >= m_items.size()) {
         return false;
     }
@@ -53,7 +54,7 @@ bool MillingConsumedModel::setData(const QModelIndex &index, const QVariant &val
     return true;
 }
 
-QHash<int, QByteArray> MillingConsumedModel::roleNames() const {
+QHash<int, QByteArray> ManufacturingConsumedModel::roleNames() const {
     QHash<int, QByteArray> roles;
     roles[ItemNameRole] = "itemName";
     roles[BagsRole] = "bags";
@@ -62,14 +63,14 @@ QHash<int, QByteArray> MillingConsumedModel::roleNames() const {
     return roles;
 }
 
-void MillingConsumedModel::appendRow(const QString &itemName, int bags, double weight, double amount) {
+void ManufacturingConsumedModel::appendRow(const QString &itemName, int bags, double weight, double amount) {
     beginInsertRows(QModelIndex(), m_items.size(), m_items.size());
     m_items.append({itemName, bags, weight, amount});
     endInsertRows();
     emit itemsChanged();
 }
 
-void MillingConsumedModel::removeRowAt(int index) {
+void ManufacturingConsumedModel::removeRowAt(int index) {
     if (index < 0 || index >= m_items.size()) return;
     beginRemoveRows(QModelIndex(), index, index);
     m_items.removeAt(index);
@@ -77,14 +78,14 @@ void MillingConsumedModel::removeRowAt(int index) {
     emit itemsChanged();
 }
 
-void MillingConsumedModel::clear() {
+void ManufacturingConsumedModel::clear() {
     beginResetModel();
     m_items.clear();
     endResetModel();
     emit itemsChanged();
 }
 
-QVariantMap MillingConsumedModel::getRow(int index) const {
+QVariantMap ManufacturingConsumedModel::getRow(int index) const {
     QVariantMap map;
     if (index < 0 || index >= m_items.size()) return map;
     const auto &item = m_items.at(index);
@@ -95,7 +96,7 @@ QVariantMap MillingConsumedModel::getRow(int index) const {
     return map;
 }
 
-void MillingConsumedModel::setRowProperty(int index, const QString &property, const QVariant &value) {
+void ManufacturingConsumedModel::setRowProperty(int index, const QString &property, const QVariant &value) {
     if (index < 0 || index >= m_items.size()) return;
     auto &item = m_items[index];
     int role = -1;
@@ -119,18 +120,18 @@ void MillingConsumedModel::setRowProperty(int index, const QString &property, co
 }
 
 // -------------------------------------------------------------
-// MillingProducedModel
+// ManufacturingProducedModel
 // -------------------------------------------------------------
-MillingProducedModel::MillingProducedModel(QObject *parent)
+ManufacturingProducedModel::ManufacturingProducedModel(QObject *parent)
     : QAbstractListModel(parent) {
 }
 
-int MillingProducedModel::rowCount(const QModelIndex &parent) const {
+int ManufacturingProducedModel::rowCount(const QModelIndex &parent) const {
     if (parent.isValid()) return 0;
     return m_items.size();
 }
 
-QVariant MillingProducedModel::data(const QModelIndex &index, int role) const {
+QVariant ManufacturingProducedModel::data(const QModelIndex &index, int role) const {
     if (!index.isValid() || index.row() < 0 || index.row() >= m_items.size()) {
         return QVariant();
     }
@@ -146,7 +147,7 @@ QVariant MillingProducedModel::data(const QModelIndex &index, int role) const {
     }
 }
 
-bool MillingProducedModel::setData(const QModelIndex &index, const QVariant &value, int role) {
+bool ManufacturingProducedModel::setData(const QModelIndex &index, const QVariant &value, int role) {
     if (!index.isValid() || index.row() < 0 || index.row() >= m_items.size()) {
         return false;
     }
@@ -166,7 +167,7 @@ bool MillingProducedModel::setData(const QModelIndex &index, const QVariant &val
     return true;
 }
 
-QHash<int, QByteArray> MillingProducedModel::roleNames() const {
+QHash<int, QByteArray> ManufacturingProducedModel::roleNames() const {
     QHash<int, QByteArray> roles;
     roles[ItemNameRole] = "itemName";
     roles[YieldPctRole] = "yieldPct";
@@ -176,14 +177,14 @@ QHash<int, QByteArray> MillingProducedModel::roleNames() const {
     return roles;
 }
 
-void MillingProducedModel::appendRow(const QString &itemName, double yieldPct, int bags, double weight, double amount) {
+void ManufacturingProducedModel::appendRow(const QString &itemName, double yieldPct, int bags, double weight, double amount) {
     beginInsertRows(QModelIndex(), m_items.size(), m_items.size());
     m_items.append({itemName, yieldPct, bags, weight, amount});
     endInsertRows();
     emit itemsChanged();
 }
 
-void MillingProducedModel::removeRowAt(int index) {
+void ManufacturingProducedModel::removeRowAt(int index) {
     if (index < 0 || index >= m_items.size()) return;
     beginRemoveRows(QModelIndex(), index, index);
     m_items.removeAt(index);
@@ -191,14 +192,14 @@ void MillingProducedModel::removeRowAt(int index) {
     emit itemsChanged();
 }
 
-void MillingProducedModel::clear() {
+void ManufacturingProducedModel::clear() {
     beginResetModel();
     m_items.clear();
     endResetModel();
     emit itemsChanged();
 }
 
-QVariantMap MillingProducedModel::getRow(int index) const {
+QVariantMap ManufacturingProducedModel::getRow(int index) const {
     QVariantMap map;
     if (index < 0 || index >= m_items.size()) return map;
     const auto &item = m_items.at(index);
@@ -210,7 +211,7 @@ QVariantMap MillingProducedModel::getRow(int index) const {
     return map;
 }
 
-void MillingProducedModel::setRowProperty(int index, const QString &property, const QVariant &value) {
+void ManufacturingProducedModel::setRowProperty(int index, const QString &property, const QVariant &value) {
     if (index < 0 || index >= m_items.size()) return;
     auto &item = m_items[index];
     int role = -1;
@@ -238,15 +239,15 @@ void MillingProducedModel::setRowProperty(int index, const QString &property, co
 }
 
 // -------------------------------------------------------------
-// MillingBatchController
+// ManufacturingBatchController
 // -------------------------------------------------------------
-MillingBatchController::MillingBatchController(QObject *parent)
+ManufacturingBatchController::ManufacturingBatchController(QObject *parent)
     : QObject(parent) {
-    connect(&m_consumedModel, &MillingConsumedModel::itemsChanged, this, &MillingBatchController::recalculateTotals);
-    connect(&m_producedModel, &MillingProducedModel::itemsChanged, this, &MillingBatchController::recalculateTotals);
+    connect(&m_consumedModel, &ManufacturingConsumedModel::itemsChanged, this, &ManufacturingBatchController::recalculateTotals);
+    connect(&m_producedModel, &ManufacturingProducedModel::itemsChanged, this, &ManufacturingBatchController::recalculateTotals);
 }
 
-void MillingBatchController::setBatchDate(const QString &v) {
+void ManufacturingBatchController::setBatchDate(const QString &v) {
     QString resolved = AccountingDateService::instance().resolveDate(v);
     if (m_batchDate != resolved) {
         m_batchDate = resolved;
@@ -255,12 +256,12 @@ void MillingBatchController::setBatchDate(const QString &v) {
     }
 }
 
-QString MillingBatchController::dayOfWeek() const {
+QString ManufacturingBatchController::dayOfWeek() const {
     return AccountingDateService::instance().getDayOfWeek(m_batchDate);
 }
 
-void MillingBatchController::resetForm(const QString &workingDate) {
-    MillingModel mModel;
+void ManufacturingBatchController::resetForm(const QString &workingDate) {
+    ManufacturingModel mModel;
     m_batchNo = mModel.get_next_batch_no();
     emit batchNoChanged();
 
@@ -287,45 +288,50 @@ void MillingBatchController::resetForm(const QString &workingDate) {
     recalculateTotals();
 }
 
-void MillingBatchController::autoPickStandardItems() {
+void ManufacturingBatchController::autoPickStandardItems() {
     m_producedModel.clear();
-    double consWt = m_totalConsumedWeight > 0 ? m_totalConsumedWeight : 0.0;
-    int bTotal = m_totalConsumedBags > 0 ? m_totalConsumedBags : 0;
-
-    m_producedModel.appendRow("Rice Basmati(Non Branded)", 65.0, bTotal > 0 ? std::round(bTotal * 0.65) : 0, consWt > 0 ? (consWt * 0.65) : 0.0, 0.0);
-    m_producedModel.appendRow("Rice Bran", 15.0, bTotal > 0 ? std::round(bTotal * 0.15) : 0, consWt > 0 ? (consWt * 0.15) : 0.0, 0.0);
-    m_producedModel.appendRow("Rice Broken", 10.0, bTotal > 0 ? std::round(bTotal * 0.10) : 0, consWt > 0 ? (consWt * 0.10) : 0.0, 0.0);
-    m_producedModel.appendRow("Rice Nakku", 5.0, bTotal > 0 ? std::round(bTotal * 0.05) : 0, consWt > 0 ? (consWt * 0.05) : 0.0, 0.0);
-    m_producedModel.appendRow("Paddy Husk", 5.0, bTotal > 0 ? std::round(bTotal * 0.05) : 0, consWt > 0 ? (consWt * 0.05) : 0.0, 0.0);
-
+    // Data-driven: pick the firm's role-tagged manufacturing items (finished
+    // output first, then by-products). No rice-mill yield template — a
+    // dal / oil / plastic manufacturer auto-picks the same way once its
+    // items carry a manufacturing_role.
+    QVariantList rows = DatabaseManager::instance().executeQuery(
+        "SELECT name FROM stock_items "
+        "WHERE manufacturing_role IN ('output','byproduct') "
+        "ORDER BY CASE manufacturing_role WHEN 'output' THEN 0 ELSE 1 END, name;");
+    for (const QVariant& v : rows) {
+        m_producedModel.appendRow(v.toMap().value("name").toString(), 0.0, 0, 0.0, 0.0);
+    }
+    if (rows.isEmpty()) {
+        m_producedModel.appendRow("", 0.0, 0, 0.0, 0.0);
+    }
     recalculateTotals();
 }
 
-void MillingBatchController::addConsumedRow() {
+void ManufacturingBatchController::addConsumedRow() {
     m_consumedModel.appendRow("", 0, 0.0, 0.0);
     recalculateTotals();
 }
 
-void MillingBatchController::removeConsumedRow(int idx) {
+void ManufacturingBatchController::removeConsumedRow(int idx) {
     if (m_consumedModel.count() > 1) {
         m_consumedModel.removeRowAt(idx);
         recalculateTotals();
     }
 }
 
-void MillingBatchController::addProducedRow() {
+void ManufacturingBatchController::addProducedRow() {
     m_producedModel.appendRow("", 0.0, 0, 0.0, 0.0);
     recalculateTotals();
 }
 
-void MillingBatchController::removeProducedRow(int idx) {
+void ManufacturingBatchController::removeProducedRow(int idx) {
     if (m_producedModel.count() > 1) {
         m_producedModel.removeRowAt(idx);
         recalculateTotals();
     }
 }
 
-void MillingBatchController::updateProducedFromYields() {
+void ManufacturingBatchController::updateProducedFromYields() {
     if (m_totalConsumedWeight <= 0) return;
     StockItemsModel sModel;
 
@@ -350,7 +356,7 @@ void MillingBatchController::updateProducedFromYields() {
     recalculateTotals();
 }
 
-void MillingBatchController::recalculateTotals() {
+void ManufacturingBatchController::recalculateTotals() {
     int cBags = 0;
     double cWt = 0.0;
     double cAmt = 0.0;
@@ -400,19 +406,19 @@ void MillingBatchController::recalculateTotals() {
     emit totalsChanged();
 }
 
-bool MillingBatchController::saveVoucher() {
+bool ManufacturingBatchController::saveVoucher() {
     m_statusMessage.clear();
     m_isError = false;
 
     if (m_totalConsumedWeight <= 0) {
-        m_statusMessage = "Please enter valid Consumed Paddy Weight.";
+        m_statusMessage = "Please enter a valid raw-material input weight.";
         m_isError = true;
         emit statusChanged();
         return false;
     }
 
     if (m_totalProducedWeight <= 0) {
-        m_statusMessage = "Please enter valid Produced Items Weight.";
+        m_statusMessage = "Please enter a valid produced-items weight.";
         m_isError = true;
         emit statusChanged();
         return false;
@@ -433,94 +439,36 @@ bool MillingBatchController::saveVoucher() {
 
     QString isoDate = AccountingDateService::instance().toIso(m_batchDate);
 
-    // Extract primary input item
+    // Extract primary input item (data-driven; no rice assumption)
     auto cFirst = m_consumedModel.getRow(0);
-    QString paddyItem = cFirst.value("itemName").toString().trimmed();
-    if (paddyItem.isEmpty()) paddyItem = "Paddy Common";
-    int paddyBags = m_totalConsumedBags;
-    double paddyWeight = m_totalConsumedWeight;
+    QString inputItem = cFirst.value("itemName").toString().trimmed();
+    if (inputItem.isEmpty()) inputItem = "Raw Material";
 
-    // Extract primary output items
-    QString riceItem = "Rice Basmati";
-    int riceBags = 0;
-    double riceWeight = 0.0;
-    double riceCost = 0.0;
-    double outturnPct = 0.0;
-
-    QString branItem = "Rice Bran";
-    int branBags = 0;
-    double branWeight = 0.0;
-    double branCost = 0.0;
-
-    QString huskItem = "Paddy Husk";
-    int huskBags = 0;
-    double huskWeight = 0.0;
-    double huskCost = 0.0;
-
-    QString nakkuItem = "Rice Nakku";
-    int nakkuBags = 0;
-    double nakkuWeight = 0.0;
-    double nakkuCost = 0.0;
-
-    QString otherItem = "";
-    int otherBags = 0;
-    double otherWeight = 0.0;
-    double otherCost = 0.0;
-
+    // Produced lines pass straight through — the model splits finished
+    // output vs by-products by each item's manufacturing_role.
+    QVariantList produced;
     for (int j = 0; j < m_producedModel.count(); ++j) {
         auto pr = m_producedModel.getRow(j);
-        int b = pr.value("bags").toInt();
-        double w = pr.value("weight").toDouble();
-        double a = pr.value("amount").toDouble();
-        double y = pr.value("yieldPct").toDouble();
-
-        QString rawItemName = pr.value("itemName").toString().trimmed();
-        StockItemRecord itmRec = StockPipeline::instance().getItemByName(rawItemName);
-        if (itmRec.legacyCode == 500 || itmRec.itemType.compare("Bran", Qt::CaseInsensitive) == 0) {
-            branItem = rawItemName;
-            branBags = b; branWeight = w; branCost = a;
-        } else if (itmRec.legacyCode == 501 || itmRec.itemType.compare("Husk", Qt::CaseInsensitive) == 0) {
-            huskItem = rawItemName;
-            huskBags = b; huskWeight = w; huskCost = a;
-        } else if (itmRec.legacyCode == 502 || itmRec.itemType.compare("Broken", Qt::CaseInsensitive) == 0) {
-            nakkuItem = rawItemName;
-            nakkuBags = b; nakkuWeight = w; nakkuCost = a;
-        } else if (riceWeight == 0.0) {
-            riceItem = rawItemName;
-            riceBags = b; riceWeight = w; riceCost = a;
-            outturnPct = y > 0 ? y : (paddyWeight > 0 ? (w / paddyWeight * 100.0) : 0.0);
-        } else {
-            otherItem = rawItemName;
-            otherBags += b; otherWeight += w; otherCost += a;
-        }
+        if (pr.value("itemName").toString().trimmed().isEmpty()) continue;
+        produced.append(pr);
     }
 
-    int totalByproductBags = branBags + huskBags + nakkuBags + otherBags;
-    double totalByproductWeight = branWeight + huskWeight + nakkuWeight + otherWeight;
-    double totalByproductCost = branCost + huskCost + nakkuCost + otherCost;
-
-    MillingModel mModel;
-    bool ok = mModel.add_milling_voucher_full(
-        m_batchNo, isoDate, paddyItem, paddyBags, paddyWeight,
-        riceItem, riceBags, riceWeight, outturnPct, riceCost,
-        branItem, branBags, branWeight, branCost,
-        huskItem, huskBags, huskWeight, huskCost,
-        nakkuItem, nakkuBags, nakkuWeight, nakkuCost,
-        otherItem, otherBags, otherWeight, otherCost,
-        totalByproductBags, totalByproductWeight, totalByproductCost,
-        m_shortageWeight, m_shortagePct, 0.0, m_totalConsumedAmount,
+    ManufacturingModel mModel;
+    bool ok = mModel.add_manufacturing_voucher_full(
+        m_batchNo, isoDate, inputItem, m_totalConsumedBags, m_totalConsumedWeight,
+        produced, m_shortageWeight, m_shortagePct, 0.0, m_totalConsumedAmount,
         "System Admin", m_notes.trimmed()
     );
 
     if (ok) {
-        m_statusMessage = QString("Milling Batch %1 saved & posted successfully!").arg(m_batchNo);
+        m_statusMessage = QString("Manufacturing Batch %1 saved & posted successfully!").arg(m_batchNo);
         m_isError = false;
         emit statusChanged();
         emit voucherSaved();
         resetForm();
         return true;
     } else {
-        m_statusMessage = "Failed to save Milling Batch in database.";
+        m_statusMessage = "Failed to save Manufacturing Batch in database.";
         m_isError = true;
         emit statusChanged();
         return false;

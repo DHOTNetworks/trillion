@@ -10,19 +10,19 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QSplitter>
-#include "../engine/milling_yield_engine.h"
-#include "../models/milling_statement_model.h"
+#include "../engine/manufacturing_yield_engine.h"
+#include "../models/manufacturing_statement_model.h"
 #include "../services/print_export_controller.h"
 
 namespace MahadevERP {
 
-class MillingStatementWidget : public QWidget {
+class ManufacturingStatementWidget : public QWidget {
     Q_OBJECT
 
 public:
-    explicit MillingStatementWidget(PrintExportController* printExportCtrl = nullptr, QWidget* parent = nullptr);
+    explicit ManufacturingStatementWidget(PrintExportController* printExportCtrl = nullptr, QWidget* parent = nullptr);
 
-    void loadMillingData(const QDate& fromDate, const QDate& toDate, const QString& varietyFilter = "All");
+    void loadManufacturingData(const QDate& fromDate, const QDate& toDate, const QString& varietyFilter = "All");
     void markDirty() { m_isDirty = true; }
     bool isDirty() const { return m_isDirty; }
     void focusTable();

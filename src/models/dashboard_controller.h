@@ -9,7 +9,7 @@ class DashboardController : public QObject {
     Q_PROPERTY(QString riceStock READ riceStock NOTIFY statsChanged)
     Q_PROPERTY(QString totalSales READ totalSales NOTIFY statsChanged)
     Q_PROPERTY(QString totalProcurement READ totalProcurement NOTIFY statsChanged)
-    Q_PROPERTY(QString millingEfficiency READ millingEfficiency NOTIFY statsChanged)
+    Q_PROPERTY(QString manufacturingEfficiency READ manufacturingEfficiency NOTIFY statsChanged)
     Q_PROPERTY(QString dbPath READ dbPath CONSTANT)
 
 public:
@@ -19,7 +19,7 @@ public:
     QString riceStock() const { return m_riceStock; }
     QString totalSales() const { return m_totalSales; }
     QString totalProcurement() const { return m_totalProcurement; }
-    QString millingEfficiency() const { return m_millingEfficiency; }
+    QString manufacturingEfficiency() const { return m_manufacturingEfficiency; }
     QString dbPath() const;
 
     Q_INVOKABLE void refresh_stats(const QString& fromDate = "", const QString& toDate = "", const QString& fyLabel = "");
@@ -36,5 +36,5 @@ private:
     QString m_riceStock = "0.0 Qtl";
     QString m_totalSales = "₹0.00";
     QString m_totalProcurement = "₹0.00";
-    QString m_millingEfficiency = "0.0%";
+    QString m_manufacturingEfficiency = "0.0%";
 };

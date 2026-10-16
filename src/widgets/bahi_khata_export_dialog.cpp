@@ -226,7 +226,7 @@ void BahiKhataExportDialog::setupUi() {
     if (m_firmMgr) {
         firmDesc += m_firmMgr->currentFirmName();
     } else {
-        firmDesc += "Mahadev Rice Mill";
+        firmDesc += "ABC";
     }
     QLabel* sub = new QLabel(firmDesc, headerCard);
     sub->setStyleSheet("font-size: 12px; font-weight: 600; color: #64748B; border: none; background: transparent;");
@@ -334,10 +334,10 @@ void BahiKhataExportDialog::setupUi() {
     m_txCheck->setStyleSheet("QCheckBox { font-size: 12px; font-weight: 600; color: #334155; }");
     formLayout->addWidget(m_txCheck);
 
-    m_millingStockCheck = new QCheckBox("Export Stock Items, Commodity Masters & Milling Batches", formCard);
-    m_millingStockCheck->setChecked(true);
-    m_millingStockCheck->setStyleSheet("QCheckBox { font-size: 12px; font-weight: 600; color: #334155; }");
-    formLayout->addWidget(m_millingStockCheck);
+    m_manufacturingStockCheck = new QCheckBox("Export Stock Items, Commodity Masters & Manufacturing Batches", formCard);
+    m_manufacturingStockCheck->setChecked(true);
+    m_manufacturingStockCheck->setStyleSheet("QCheckBox { font-size: 12px; font-weight: 600; color: #334155; }");
+    formLayout->addWidget(m_manufacturingStockCheck);
 
     m_verifyCheck = new QCheckBox("Verify Jet indexes after export (walk + sort check, recommended)", formCard);
     m_verifyCheck->setChecked(true);
@@ -491,7 +491,7 @@ void BahiKhataExportDialog::onExportClicked() {
     opts.createBackup = m_backupCheck->isChecked();
     opts.exportTransactions = m_txCheck->isChecked();
     opts.exportMastersOnly = !m_txCheck->isChecked();
-    opts.exportMillingAndStock = m_millingStockCheck->isChecked();
+    opts.exportManufacturingAndStock = m_manufacturingStockCheck->isChecked();
     const bool doVerify = m_verifyCheck->isChecked();
 
     teardownWorker();

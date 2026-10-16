@@ -131,7 +131,7 @@ void MenuTreeManager::executeMenu(const QString& startMenuId, QWidget* parent, i
 {
     if (!m_menus.contains(startMenuId)) return;
 
-    // Phase 3 flags: re-filter on every open so firm switches (and future
+    // Flag-filtered: re-filter on every open so firm switches (and future
     // Settings toggles) apply immediately. Canonical indices never shift
     // (resumeMenuStack filters at display time), so lastSelectedIndex and
     // callback wirings stay valid while off-domain rows stay hidden.
@@ -164,7 +164,7 @@ void MenuTreeManager::resumeMenuStack(QWidget* parent)
         }
 
         MenuNode& node = m_menus[currentId];
-        // Phase 3 flags: show only enabled rows — off-domain options never
+        // Flag-filtered: show only enabled rows — off-domain options never
         // appear (no grey rows). canonIdx maps each visible row back to its
         // canonical index so callbacks, target views and lastSelectedIndex
         // keep their positional wiring.
@@ -250,24 +250,25 @@ void MenuTreeManager::setupDefaultMenus()
     ledgerMenu.items = {
         MenuItem("[N] New Ledger Entry", "F3 / Alt+N", Qt::Key_N, MenuActionType::OpenView, 6),
         MenuItem("[M] Modify Existing Ledger", "Enter", Qt::Key_M, MenuActionType::OpenView, 7),
-        MenuItem("[L] View Ledger Statement (Account Bahi-Khata)", "F4 / Alt+L", Qt::Key_L, MenuActionType::OpenView, 8),
+        MenuItem("[L] View Ledger Statement (Account Book)", "F4 / Alt+L", Qt::Key_L, MenuActionType::OpenView, 8),
         MenuItem("[G] New Account Group", "", Qt::Key_G, MenuActionType::OpenView, 9),
         MenuItem("[R] Modify Account Group", "", Qt::Key_R, MenuActionType::OpenView, 10),
         MenuItem("[A] All Ledgers Directory / Master List", "Alt+6", Qt::Key_A, MenuActionType::OpenView, 5)
     };
     registerMenu(ledgerMenu);
 
-    // 2. STOCK MASTER MENU (§23.6 titles where the mapping is 1:1; rice-mill
-    // row wording stays until Stage D decides gate-vs-rename per Doc 20 A3).
+    // 2. STOCK MASTER MENU (§23.6 titles where the mapping is 1:1; the three
+    // category rows below use generic vocabulary per Doc 20 A2-A3 and stay
+    // bound to core view 13, always on — reworded, not gated).
     MenuNode stockMenu("stock_master", "STOCK MASTER MENU", "#16A34A", "");
     stockMenu.items = {
         MenuItem("[I] New Stock Item Master", "Alt+I", Qt::Key_I, MenuActionType::OpenView, 11),
         MenuItem("[M] Modify Stock Item Master", "Enter", Qt::Key_M, MenuActionType::OpenView, 12),
         MenuItem("[R] Stock Register (View Options)", "Alt+4 / S", Qt::Key_R, MenuActionType::OpenSubmenu, -1, "stock_register_hub"),
         MenuItem("[C] Closing Stock & Valuation", "Alt+C", Qt::Key_C, MenuActionType::OpenView, 36),
-        MenuItem("[P] Raw Paddy Stock Register", "", Qt::Key_P, MenuActionType::OpenView, 13),
-        MenuItem("[F] Finished Rice Stock Register", "", Qt::Key_F, MenuActionType::OpenView, 13),
-        MenuItem("[H] By-Products & Husk Stock Register", "", Qt::Key_H, MenuActionType::OpenView, 13)
+        MenuItem("[P] Raw Material Stock Register", "", Qt::Key_P, MenuActionType::OpenView, 13),
+        MenuItem("[F] Finished Goods Stock Register", "", Qt::Key_F, MenuActionType::OpenView, 13),
+        MenuItem("[H] By-Products Stock Register", "", Qt::Key_H, MenuActionType::OpenView, 13)
     };
     registerMenu(stockMenu);
 
@@ -315,7 +316,6 @@ void MenuTreeManager::setupDefaultMenus()
         MenuItem("[B] Bardana (Gunny Bag) Packaging Ledger", "B", Qt::Key_B, MenuActionType::OpenView, 70),
         MenuItem("[G] Gate Inward / Outward Register (Weighbridge)", "G", Qt::Key_G, MenuActionType::OpenView, 71),
         MenuItem("[S] Sauda (Forward Contracts) & Dalali Settlement", "S", Qt::Key_S, MenuActionType::OpenView, 72),
-        MenuItem("[I] I-Form Mandi Buyer Issue Voucher", "I / Alt+I", Qt::Key_I, MenuActionType::OpenView, 19),
         MenuItem("[M] Mandi Form M & Statutory Returns (HSAMB)", "M / Alt+M", Qt::Key_M, MenuActionType::OpenView, 20),
         MenuItem("[Q] Quit / Back", "Esc / Q", Qt::Key_Q, MenuActionType::Back)
     };
@@ -332,7 +332,7 @@ void MenuTreeManager::setupDefaultMenus()
         MenuItem("[P] Purchase Register & Summary", "", Qt::Key_P, MenuActionType::OpenView, 4),
         MenuItem("[R] Stock Register (View Options)", "S", Qt::Key_R, MenuActionType::OpenSubmenu, -1, "stock_register_hub"),
         MenuItem("[T] Transport Dispatch & Gate Pass Register", "Alt+T", Qt::Key_T, MenuActionType::OpenView, 27),
-        MenuItem("[M] Milling Production & Out-turn Statement", "Alt+M", Qt::Key_M, MenuActionType::OpenView, 35),
+        MenuItem("[M] Manufacturing Production & Out-turn Statement", "Alt+M", Qt::Key_M, MenuActionType::OpenView, 35),
         MenuItem("[E] Employee Payroll & Salary Register", "Alt+S", Qt::Key_E, MenuActionType::OpenView, 80),
         MenuItem("[A] Audit Trail (Edit Log & Refused Writes)", "", Qt::Key_A, MenuActionType::OpenView, 64)
     };
@@ -345,7 +345,6 @@ void MenuTreeManager::setupDefaultMenus()
         MenuItem("[P] Profit & Loss Statement (Trading & P&L)", "P / Ctrl+Alt+P", Qt::Key_P, MenuActionType::OpenView, 30),
         MenuItem("[T] Trial Balance Sheet (Group & Ledger Summaries)", "A / F7", Qt::Key_T, MenuActionType::OpenSubmenu, -1, "trial_balance_options_hub"),
         MenuItem("[G] GST Compliance Dashboard (GSTR-1, 2A Match, 3B)", "Alt+G", Qt::Key_G, MenuActionType::OpenView, 34),
-        MenuItem("[M] Mandi Form M & Statutory Returns (HSAMB)", "Alt+M", Qt::Key_M, MenuActionType::OpenView, 20),
         MenuItem("[I] Interest Calculator (Bulk & Party-wise)", "Alt+A", Qt::Key_I, MenuActionType::OpenView, 25),
         MenuItem("[C] Capital Accounts Summary", "C", Qt::Key_C, MenuActionType::OpenView, 40),
         MenuItem("[D] Depreciation Chart & Schedule", "E", Qt::Key_D, MenuActionType::OpenSubmenu, -1, "depreciation_options_hub"),

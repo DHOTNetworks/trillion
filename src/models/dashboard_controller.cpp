@@ -86,19 +86,19 @@ void DashboardController::refresh_stats(const QString& fromDate, const QString& 
         }
     }
 
-    // Single-pass milling aggregation (Phase 3: table may not exist on
+    // Single-pass manufacturing aggregation (domain-gated: table may not exist on
     // generic firms — skip silently instead of logging SQL errors).
     QVariantList millRows;
-    if (FeatureFlags::tableExists("milling_voucher_items")) {
+    if (FeatureFlags::tableExists("manufacturing_voucher_items")) {
         millRows = DatabaseManager::instance().executeQuery(
             "SELECT item_code, item_name, drcr, SUM(weight_qtl) as tot_weight "
-            "FROM milling_voucher_items "
+            "FROM manufacturing_voucher_items "
             "WHERE batch_date > ? AND batch_date <= ? "
             "GROUP BY item_code, item_name, drcr;",
             {cDate, targetDate}
         );
     }
-    double inMilling = 0.0;
+    double inManufacturing = 0.0;
     for (const auto& mr : millRows) {
         QVariantMap m = mr.toMap();
         QString name = m.value("item_name").toString().toLower();
@@ -106,12 +106,12 @@ void DashboardController::refresh_stats(const QString& fromDate, const QString& 
         QString drcr = m.value("drcr").toString();
         double w = m.value("tot_weight").toDouble();
         if (drcr == "Dr" && (code == "30" || name.contains("rice"))) {
-            inMilling += w;
+            inManufacturing += w;
         }
     }
 
     double paddyVal = opPaddy + inPaddy - outPaddy;
-    double riceVal = opRice + inRice + inMilling - outRice;
+    double riceVal = opRice + inRice + inManufacturing - outRice;
 
     m_paddyStock = AccountingEngine::formatIndianNumber(paddyVal, 1, "Qtl");
     m_riceStock = AccountingEngine::formatIndianNumber(riceVal, 1, "Qtl");
@@ -156,21 +156,21 @@ void DashboardController::refresh_stats(const QString& fromDate, const QString& 
     }
     m_totalProcurement = AccountingEngine::formatIndianCurrency(procVal);
 
-    // 5. Avg Milling Efficiency (Phase 3: skip silently without the table).
+    // 5. Avg Manufacturing Efficiency (domain-gated: skip silently without the table).
     double effVal = 65.3;
-    if (FeatureFlags::tableExists("milling_batches")) {
+    if (FeatureFlags::tableExists("manufacturing_batches")) {
     if (!fDate.isEmpty() && !tDate.isEmpty()) {
         QVariant effRow = DatabaseManager::instance().executeScalar(
-            "SELECT AVG(yield_pct) FROM milling_batches WHERE batch_date >= ? AND batch_date <= ?;",
+            "SELECT AVG(yield_pct) FROM manufacturing_batches WHERE batch_date >= ? AND batch_date <= ?;",
             {fDate, tDate}
         );
         if (effRow.isValid()) effVal = effRow.toDouble();
     } else {
-        QVariant effRow = DatabaseManager::instance().executeScalar("SELECT AVG(yield_pct) FROM milling_batches;");
+        QVariant effRow = DatabaseManager::instance().executeScalar("SELECT AVG(yield_pct) FROM manufacturing_batches;");
         if (effRow.isValid()) effVal = effRow.toDouble();
     }
     }
-    m_millingEfficiency = QString::number(effVal, 'f', 1) + "%";
+    m_manufacturingEfficiency = QString::number(effVal, 'f', 1) + "%";
 
     emit statsChanged();
 }

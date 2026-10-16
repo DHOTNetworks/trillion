@@ -1,6 +1,8 @@
 #include "migration_utils.h"
+#include "../database_manager.h"
+#include "../fiscal_year_helper.h"
 #include <QRegularExpression>
-#include <cmath>
+#include <QDebug>
 
 namespace MahadevERP {
 
@@ -62,14 +64,10 @@ QString MigrationUtils::parseNormalizedDate(const QString& rawDate) {
 }
 
 QString MigrationUtils::resolveFinancialYear(const QString& isoDate) {
+    // F1: single April choke (was a raw `month() >= 4` here too).
     QDate d = QDate::fromString(isoDate, "yyyy-MM-dd");
-    if (!d.isValid()) return "FY 2025-26";
-    int y = d.year();
-    if (d.month() >= 4) {
-        return QString("FY %1-%2").arg(y).arg(QString::number((y + 1) % 100).rightJustified(2, '0'));
-    } else {
-        return QString("FY %1-%2").arg(y - 1).arg(QString::number(y % 100).rightJustified(2, '0'));
-    }
+    if (!d.isValid()) return FiscalCalendar::fyName(2025);
+    return FiscalCalendar::fyName(FiscalCalendar::fyStartYearForDate(d.year(), d.month()));
 }
 
 QString MigrationUtils::resolveFirmTypeFromPan(const QString& rawType, const QString& pan, const QString& companyName) {
@@ -195,15 +193,98 @@ QString MigrationUtils::extractPincode(const QString& address, const QString& fa
 
 QString MigrationUtils::formatFyVoucherNo(const QString& isoDate, const QString& typeCode, const QString& rawNo) {
     QString fy = resolveFinancialYear(isoDate);
-    QString fyShort = fy.mid(3, 4); // e.g. "2025" -> "25"
-    if (fy.length() >= 9) {
-        fyShort = fy.mid(5, 2) + fy.mid(8, 2); // e.g. "FY 2025-26" -> "2526"
+    // F6: FY token via the single choke (kills mid() slicing). Bare-name FYs
+    // ("2024-25", the pipeline's seeded convention) previously produced
+    // garbage tokens like "4-25" via mid(); fyShortToken parses every
+    // accepted spelling (canonical, bare, slashed, 4-digit).
+    QString fyShort = FiscalYearHelper::fyShortToken(fy);
+    if (fyShort.isEmpty()) {
+        // Fail loud with row context: never fabricate a token. Callers must
+        // not write a voucher number this function could not mint.
+        qWarning() << "[F6] formatFyVoucherNo: cannot derive FY token from"
+                   << fy << "- voucher" << rawNo << "not numbered";
+        return QString();
     }
     QString cleanNo = rawNo.trimmed();
     static const QRegularExpression pRe(QStringLiteral("^(Sale|Sales|Purc|Purchase|Pur|Jrnl|Journal|ChPt|ChRt|Pymt|Rcpt|TDS|JFrm|J-Form)[-\\s#]*"), QRegularExpression::CaseInsensitiveOption);
     cleanNo.remove(pRe);
     if (cleanNo.isEmpty()) cleanNo = rawNo.trimmed();
     return QString("%1/%2-%3").arg(fyShort, typeCode, cleanNo);
+}
+
+namespace {
+// Canonical bare year label: "FY 2024-25" -> "2024-25" (map keys come in
+// both spellings depending on the pipeline; see runBahiKhataPipeline vs
+// runBusyPipeline FY inserts).
+QString canonFyLabel(const QString& fyVal) {
+    QString t = fyVal.trimmed();
+    if (t.left(3).compare("FY ", Qt::CaseInsensitive) == 0) t = t.mid(3).trimmed();
+    return t;
+}
+
+// Parse "2024-25" (or "FY 2024-25") into a start year; -1 when garbage.
+int parseFyStartYear(const QString& fyVal, int* endYyOut = nullptr) {
+    static const QRegularExpression fyRe(QStringLiteral("^\\s*(?:FY\\s+)?(\\d{4})\\s*[-/]\\s*(\\d{2})\\s*$"),
+                                         QRegularExpression::CaseInsensitiveOption);
+    QRegularExpressionMatch m = fyRe.match(fyVal);
+    if (!m.hasMatch()) return -1;
+    const int startY = m.captured(1).toInt();
+    const int endYy = m.captured(2).toInt();
+    if (startY < 1900 || startY > 9999) return -1;
+    if ((startY + 1) % 100 != endYy) return -1;
+    if (endYyOut) *endYyOut = endYy;
+    return startY;
+}
+
+int resolveOrCreateFyId(const QString& requestedKey, const QString& canonBare) {
+    auto& db = DatabaseManager::instance();
+    const int startY = parseFyStartYear(canonBare);
+    if (startY < 0) {
+        qWarning() << "[Migration] unparseable financial year label, row skipped:" << requestedKey;
+        return -1;
+    }
+    // Re-check under the canonical name (another spelling may have created it).
+    QVariant again = db.executeScalar(
+        "SELECT id FROM financial_years WHERE year_name = ? LIMIT 1;",
+        {FiscalCalendar::fyName(startY)});
+    if (again.isValid() && !again.isNull()) return again.toInt();
+    if (!db.executeNonQuery(
+            "INSERT INTO financial_years (year_name, start_date, end_date, is_active, is_locked, status) "
+            "VALUES (?, ?, ?, 0, 0, 'open');",
+            {FiscalCalendar::fyName(startY), FiscalCalendar::fyStartDate(startY),
+             FiscalCalendar::fyEndDate(startY)})) {
+        qWarning() << "[Migration] could not create financial year" << requestedKey
+                   << db.lastErrorText();
+        return -1;
+    }
+    return static_cast<int>(db.lastInsertedId());
+}
+} // namespace
+
+int MigrationUtils::fyIdFor(QMap<QString, int>& map, const QString& fyVal) {
+    auto it = map.constFind(fyVal);
+    if (it != map.constEnd()) return it.value();
+    const QString bare = canonFyLabel(fyVal);
+    it = map.constFind(bare);
+    if (it != map.constEnd()) return it.value();
+    it = map.constFind(QString("FY ") + bare);
+    if (it != map.constEnd()) return it.value();
+    const int id = resolveOrCreateFyId(fyVal, bare);
+    if (id > 0) map[fyVal] = id;
+    return id;
+}
+
+int MigrationUtils::fyIdForStd(std::map<QString, int>& map, const QString& fyVal) {
+    auto it = map.find(fyVal);
+    if (it != map.end()) return it->second;
+    const QString bare = canonFyLabel(fyVal);
+    it = map.find(bare);
+    if (it != map.end()) return it->second;
+    it = map.find(QString("FY ") + bare);
+    if (it != map.end()) return it->second;
+    const int id = resolveOrCreateFyId(fyVal, bare);
+    if (id > 0) map[fyVal] = id;
+    return id;
 }
 
 } // namespace MahadevERP

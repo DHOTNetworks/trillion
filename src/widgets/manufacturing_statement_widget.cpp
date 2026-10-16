@@ -1,4 +1,4 @@
-#include "milling_statement_widget.h"
+#include "manufacturing_statement_widget.h"
 #include "voucher_date_dialog.h"
 #include "kbd_badge_button.h"
 #include "../engine/accounting_engine.h"
@@ -13,7 +13,7 @@
 
 namespace MahadevERP {
 
-MillingStatementWidget::MillingStatementWidget(PrintExportController* printExportCtrl, QWidget* parent)
+ManufacturingStatementWidget::ManufacturingStatementWidget(PrintExportController* printExportCtrl, QWidget* parent)
     : QWidget(parent)
     , m_printExportCtrl(printExportCtrl)
 {
@@ -23,7 +23,7 @@ MillingStatementWidget::MillingStatementWidget(PrintExportController* printExpor
     applyCustomStyles();
 }
 
-void MillingStatementWidget::setupUi() {
+void ManufacturingStatementWidget::setupUi() {
     setStyleSheet("background-color: #F8FAFC;");
 
     auto* mainLayout = new QVBoxLayout(this);
@@ -39,7 +39,7 @@ void MillingStatementWidget::setupUi() {
     headerLayout->setSpacing(10);
 
     // Icon Badge
-    QLabel* iconBox = new QLabel("MILL", headerCard);
+    QLabel* iconBox = new QLabel("MANU", headerCard);
     iconBox->setFixedSize(42, 36);
     iconBox->setAlignment(Qt::AlignCenter);
     iconBox->setStyleSheet("background-color: #FEF3C7; border: 1.5px solid #F59E0B; border-radius: 8px; color: #B45309; font-size: 12px; font-weight: 800;");
@@ -47,9 +47,9 @@ void MillingStatementWidget::setupUi() {
 
     QVBoxLayout* titleLayout = new QVBoxLayout();
     titleLayout->setSpacing(1);
-    QLabel* titleLabel = new QLabel("Paddy Milling & Out-turn Statement Register", headerCard);
+    QLabel* titleLabel = new QLabel("Manufacturing & Production Statement Register", headerCard);
     titleLabel->setStyleSheet("font-size: 16px; font-weight: 800; color: #0F172A; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif; border: none; background: transparent;");
-    QLabel* subtitleLabel = new QLabel("Batch-wise paddy consumption, head rice recoveries, by-products (broken/bran/husk), and milling yield analysis.", headerCard);
+    QLabel* subtitleLabel = new QLabel("Batch-wise raw stock consumption, head product recovery, by-products, and production yield analysis.", headerCard);
     subtitleLabel->setStyleSheet("font-size: 11px; color: #64748B; border: none; background: transparent;");
     titleLayout->addWidget(titleLabel);
     titleLayout->addWidget(subtitleLabel);
@@ -58,15 +58,15 @@ void MillingStatementWidget::setupUi() {
     headerLayout->addStretch(1);
 
     m_newBatchBtn = new KbdBadgeButton("New Batch", "Ctrl+N", QColor("#059669"), QColor("#047857"), QColor("#FFFFFF"), QColor("#059669"), headerCard);
-    connect(m_newBatchBtn, &QPushButton::clicked, this, &MillingStatementWidget::onNewBatchClicked);
+    connect(m_newBatchBtn, &QPushButton::clicked, this, &ManufacturingStatementWidget::onNewBatchClicked);
     headerLayout->addWidget(m_newBatchBtn);
 
     m_refreshBtn = new KbdBadgeButton("Refresh Register", "F5", QColor("#2563EB"), QColor("#1D4ED8"), QColor("#FFFFFF"), QColor("#2563EB"), headerCard);
-    connect(m_refreshBtn, &QPushButton::clicked, this, &MillingStatementWidget::onRefreshClicked);
+    connect(m_refreshBtn, &QPushButton::clicked, this, &ManufacturingStatementWidget::onRefreshClicked);
     headerLayout->addWidget(m_refreshBtn);
 
     m_backBtn = new KbdBadgeButton("Back to Dashboard", "Esc", QColor("#EF4444"), QColor("#DC2626"), QColor("#FFFFFF"), QColor("#EF4444"), headerCard);
-    connect(m_backBtn, &QPushButton::clicked, this, &MillingStatementWidget::backRequested);
+    connect(m_backBtn, &QPushButton::clicked, this, &ManufacturingStatementWidget::backRequested);
     headerLayout->addWidget(m_backBtn);
 
     mainLayout->addWidget(headerCard);
@@ -86,7 +86,7 @@ void MillingStatementWidget::setupUi() {
     m_fromDateEdit = new AccountingDateDisplay(filterCard);
     m_fromDateEdit->setMinimumHeight(34);
     m_fromDateEdit->setMinimumWidth(115);
-    connect(m_fromDateEdit, &AccountingDateDisplay::dateChanged, this, &MillingStatementWidget::onRefreshClicked);
+    connect(m_fromDateEdit, &AccountingDateDisplay::dateChanged, this, &ManufacturingStatementWidget::onRefreshClicked);
     filterLayout->addWidget(m_fromDateEdit);
 
     QLabel* toLbl = new QLabel("To Date:", filterCard);
@@ -96,7 +96,7 @@ void MillingStatementWidget::setupUi() {
     m_toDateEdit = new AccountingDateDisplay(filterCard);
     m_toDateEdit->setMinimumHeight(34);
     m_toDateEdit->setMinimumWidth(115);
-    connect(m_toDateEdit, &AccountingDateDisplay::dateChanged, this, &MillingStatementWidget::onRefreshClicked);
+    connect(m_toDateEdit, &AccountingDateDisplay::dateChanged, this, &ManufacturingStatementWidget::onRefreshClicked);
     filterLayout->addWidget(m_toDateEdit);
 
     auto openPeriodDlg = [this]() {
@@ -135,14 +135,14 @@ void MillingStatementWidget::setupUi() {
             m_varietyCombo->addItem(vName);
         }
     }
-    connect(m_varietyCombo, &QComboBox::currentTextChanged, this, &MillingStatementWidget::onRefreshClicked);
+    connect(m_varietyCombo, &QComboBox::currentTextChanged, this, &ManufacturingStatementWidget::onRefreshClicked);
     filterLayout->addWidget(m_varietyCombo);
 
     m_searchBox = new QLineEdit(filterCard);
     m_searchBox->setPlaceholderText("Search Batch No, Variety, Remarks...");
     m_searchBox->setMinimumHeight(34);
     m_searchBox->setMinimumWidth(220);
-    connect(m_searchBox, &QLineEdit::textChanged, this, &MillingStatementWidget::onRefreshClicked);
+    connect(m_searchBox, &QLineEdit::textChanged, this, &ManufacturingStatementWidget::onRefreshClicked);
     filterLayout->addWidget(m_searchBox);
 
     filterLayout->addStretch(1);
@@ -168,11 +168,11 @@ void MillingStatementWidget::setupUi() {
     m_totalBatchesLabel->setStyleSheet("font-weight: 800; color: #0F172A; font-size: 12px;");
     kpiLayout->addWidget(m_totalBatchesLabel);
 
-    m_totalPaddyInputLabel = new QLabel("Paddy Milled: 0.00 Qtl", kpiCard);
+    m_totalPaddyInputLabel = new QLabel("Raw Material Consumed: 0.00 Qtl", kpiCard);
     m_totalPaddyInputLabel->setStyleSheet("font-weight: 700; color: #B45309; font-size: 12px;");
     kpiLayout->addWidget(m_totalPaddyInputLabel);
 
-    m_totalHeadRiceLabel = new QLabel("Head Rice: 0.00 Qtl", kpiCard);
+    m_totalHeadRiceLabel = new QLabel("Finished Output: 0.00 Qtl", kpiCard);
     m_totalHeadRiceLabel->setStyleSheet("font-weight: 700; color: #16A34A; font-size: 12px;");
     kpiLayout->addWidget(m_totalHeadRiceLabel);
 
@@ -182,7 +182,7 @@ void MillingStatementWidget::setupUi() {
 
     kpiLayout->addStretch(1);
 
-    m_totalByProductsLabel = new QLabel("Bran & Husk: 0.00 Qtl", kpiCard);
+    m_totalByProductsLabel = new QLabel("By-products: 0.00 Qtl", kpiCard);
     m_totalByProductsLabel->setStyleSheet("font-weight: 700; color: #64748B; font-size: 12px;");
     kpiLayout->addWidget(m_totalByProductsLabel);
 
@@ -198,10 +198,10 @@ void MillingStatementWidget::setupUi() {
     batchLayout->setContentsMargins(0, 0, 0, 0);
 
     m_batchTable = new QTableWidget(batchWidget);
-    m_batchTable->setColumnCount(11);
+    m_batchTable->setColumnCount(10);
     m_batchTable->setHorizontalHeaderLabels({
-        "ID", "Batch No", "Date", "Paddy Variety", "Input (Qtl)",
-        "Head Rice (Qtl)", "Broken (Qtl)", "Bran (Qtl)", "Husk (Qtl)", "Yield %", "Benchmark Status"
+        "ID", "Batch No", "Date", "Raw Material", "Input (Qtl)",
+        "Output (Qtl)", "By-products (Qtl)", "Wastage (Qtl)", "Yield %", "Status"
     });
     m_batchTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
     m_batchTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
@@ -221,8 +221,8 @@ void MillingStatementWidget::setupUi() {
     m_batchTable->verticalHeader()->setVisible(false);
     m_batchTable->verticalHeader()->setDefaultSectionSize(36);
     m_batchTable->setShowGrid(true);
-    connect(m_batchTable, &QTableWidget::itemSelectionChanged, this, &MillingStatementWidget::onBatchSelectionChanged);
-    connect(m_batchTable, &QTableWidget::cellDoubleClicked, this, &MillingStatementWidget::onBatchDoubleClicked);
+    connect(m_batchTable, &QTableWidget::itemSelectionChanged, this, &ManufacturingStatementWidget::onBatchSelectionChanged);
+    connect(m_batchTable, &QTableWidget::cellDoubleClicked, this, &ManufacturingStatementWidget::onBatchDoubleClicked);
     // Enter opens the focused batch's alteration (same as double-click).
     // Scoped to the grid so search boxes and buttons keep their own keys.
     auto openFocusedBatch = [this]() {
@@ -315,9 +315,9 @@ void MillingStatementWidget::setupUi() {
     }
 }
 
-void MillingStatementWidget::applyCustomStyles() {
+void ManufacturingStatementWidget::applyCustomStyles() {
     setStyleSheet(
-        "MillingStatementWidget { background-color: #F8FAFC; }"
+        "ManufacturingStatementWidget { background-color: #F8FAFC; }"
         "QTableWidget {"
         "  background-color: #FFFFFF;"
         "  alternate-background-color: #F8FAFC;"
@@ -360,7 +360,7 @@ void MillingStatementWidget::applyCustomStyles() {
     );
 }
 
-void MillingStatementWidget::loadMillingData(const QDate& fromDate, const QDate& toDate, const QString& varietyFilter) {
+void ManufacturingStatementWidget::loadManufacturingData(const QDate& fromDate, const QDate& toDate, const QString& varietyFilter) {
     if (m_fromDateEdit && m_fromDateEdit->date() != fromDate) {
         QSignalBlocker b(m_fromDateEdit);
         m_fromDateEdit->setDate(fromDate);
@@ -374,9 +374,9 @@ void MillingStatementWidget::loadMillingData(const QDate& fromDate, const QDate&
     QString toStr = toDate.toString("yyyy-MM-dd");
 
     QString sql = QString(
-        "SELECT id, batch_no, batch_date, paddy_variety, paddy_input_qtl, "
-        "head_rice_qtl, broken_rice_qtl, bran_qtl, husk_qtl, wastage_qtl, yield_pct, narration "
-        "FROM milling_batches "
+        "SELECT id, batch_no, batch_date, input_variety, input_qtl, "
+        "output_qtl, byproduct_qtl, wastage_qtl, yield_pct, narration "
+        "FROM manufacturing_batches "
         "WHERE batch_date >= '%1' AND batch_date <= '%2' "
         "ORDER BY batch_date ASC, id ASC;"
     ).arg(fromStr, toStr);
@@ -386,15 +386,13 @@ void MillingStatementWidget::loadMillingData(const QDate& fromDate, const QDate&
     m_isDirty = false;
 }
 
-void MillingStatementWidget::populateBatchTable() {
+void ManufacturingStatementWidget::populateBatchTable() {
     m_batchTable->setRowCount(0);
     m_detailTable->setRowCount(0);
 
-    double totalPaddy = 0.0;
-    double totalHead = 0.0;
-    double totalBroken = 0.0;
-    double totalBran = 0.0;
-    double totalHusk = 0.0;
+    double totalInput = 0.0;
+    double totalOutput = 0.0;
+    double totalByproduct = 0.0;
 
     QString selectedVar = m_varietyCombo ? m_varietyCombo->currentText() : "All Varieties";
     QString query = m_searchBox ? m_searchBox->text().trimmed().toLower() : "";
@@ -405,7 +403,7 @@ void MillingStatementWidget::populateBatchTable() {
     for (int i = 0; i < m_rawBatches.size(); ++i) {
         QVariantMap r = m_rawBatches.at(i).toMap();
         QString bNo = r.value("batch_no").toString();
-        QString variety = r.value("paddy_variety").toString();
+        QString variety = r.value("input_variety").toString();
         QString narr = r.value("narration").toString();
 
         if (selectedVar != "All Varieties" && !variety.contains(selectedVar, Qt::CaseInsensitive)) {
@@ -419,11 +417,9 @@ void MillingStatementWidget::populateBatchTable() {
         }
 
         matchedIndices.append(i);
-        totalPaddy += r.value("paddy_input_qtl").toDouble();
-        totalHead += r.value("head_rice_qtl").toDouble();
-        totalBroken += r.value("broken_rice_qtl").toDouble();
-        totalBran += r.value("bran_qtl").toDouble();
-        totalHusk += r.value("husk_qtl").toDouble();
+        totalInput += r.value("input_qtl").toDouble();
+        totalOutput += r.value("output_qtl").toDouble();
+        totalByproduct += r.value("byproduct_qtl").toDouble();
     }
 
     m_batchTable->setUpdatesEnabled(false);
@@ -437,12 +433,11 @@ void MillingStatementWidget::populateBatchTable() {
         QVariantMap r = m_rawBatches.at(matchedIndices.at(row)).toMap();
         QString bNo = r.value("batch_no").toString();
         QString bDate = r.value("batch_date").toString();
-        QString variety = r.value("paddy_variety").toString();
-        double pInput = r.value("paddy_input_qtl").toDouble();
-        double hRice = r.value("head_rice_qtl").toDouble();
-        double bRice = r.value("broken_rice_qtl").toDouble();
-        double bran = r.value("bran_qtl").toDouble();
-        double husk = r.value("husk_qtl").toDouble();
+        QString variety = r.value("input_variety").toString();
+        double pInput = r.value("input_qtl").toDouble();
+        double outQty = r.value("output_qtl").toDouble();
+        double byp = r.value("byproduct_qtl").toDouble();
+        double wastage = r.value("wastage_qtl").toDouble();
         double yieldPct = r.value("yield_pct").toDouble();
 
         m_batchTable->setItem(row, 0, new QTableWidgetItem(r.value("id").toString()));
@@ -454,50 +449,49 @@ void MillingStatementWidget::populateBatchTable() {
         inItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         m_batchTable->setItem(row, 4, inItem);
 
-        auto* hrItem = new QTableWidgetItem(QString::number(hRice, 'f', 2));
-        hrItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        hrItem->setForeground(greenColor);
-        m_batchTable->setItem(row, 5, hrItem);
+        auto* outItem = new QTableWidgetItem(QString::number(outQty, 'f', 2));
+        outItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        outItem->setForeground(greenColor);
+        m_batchTable->setItem(row, 5, outItem);
 
-        auto* brItem = new QTableWidgetItem(QString::number(bRice, 'f', 2));
-        brItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        m_batchTable->setItem(row, 6, brItem);
+        auto* bypItem = new QTableWidgetItem(QString::number(byp, 'f', 2));
+        bypItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        m_batchTable->setItem(row, 6, bypItem);
 
-        auto* branItem = new QTableWidgetItem(QString::number(bran, 'f', 2));
-        branItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        m_batchTable->setItem(row, 7, branItem);
-
-        auto* huskItem = new QTableWidgetItem(QString::number(husk, 'f', 2));
-        huskItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        m_batchTable->setItem(row, 8, huskItem);
+        auto* wasItem = new QTableWidgetItem(QString::number(wastage, 'f', 2));
+        wasItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        m_batchTable->setItem(row, 7, wasItem);
 
         auto* yldItem = new QTableWidgetItem(QString("%1%").arg(QString::number(yieldPct, 'f', 2)));
         yldItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        yldItem->setForeground(yieldPct >= 66.0 ? greenColor : amberColor);
-        m_batchTable->setItem(row, 9, yldItem);
+        yldItem->setForeground(yieldPct > 0.0 ? greenColor : amberColor);
+        m_batchTable->setItem(row, 8, yldItem);
 
-        QString status = (yieldPct >= 67.0) ? "Optimal (>=67%)" : (yieldPct >= 65.0 ? "Normal" : "Low Recovery (<65%)");
+        // Generic: no rice-mill benchmark. Status reflects whether the batch
+        // balances (output + by-products + wastage ~= input).
+        const double accounted = outQty + byp + wastage;
+        QString status = (pInput > 0.0 && std::abs(accounted - pInput) <= std::max(0.5, pInput * 0.005)) ? "Balanced" : "Check";
         auto* statusItem = new QTableWidgetItem(status);
         statusItem->setTextAlignment(Qt::AlignCenter);
-        statusItem->setForeground(yieldPct >= 66.0 ? greenColor : redColor);
-        m_batchTable->setItem(row, 10, statusItem);
+        statusItem->setForeground(status == "Balanced" ? greenColor : redColor);
+        m_batchTable->setItem(row, 9, statusItem);
     }
 
     m_batchTable->setUpdatesEnabled(true);
 
-    double avgYield = (totalPaddy > 0.0) ? (totalHead / totalPaddy) * 100.0 : 0.0;
+    double avgYield = (totalInput > 0.0) ? (totalOutput / totalInput) * 100.0 : 0.0;
     m_totalBatchesLabel->setText(QString("Total Batches: %1").arg(matchedIndices.size()));
-    m_totalPaddyInputLabel->setText(QString("Paddy Milled: %1 Qtl").arg(QString::number(totalPaddy, 'f', 2)));
-    m_totalHeadRiceLabel->setText(QString("Head Rice: %1 Qtl").arg(QString::number(totalHead, 'f', 2)));
+    m_totalPaddyInputLabel->setText(QString("Raw Material Consumed: %1 Qtl").arg(QString::number(totalInput, 'f', 2)));
+    m_totalHeadRiceLabel->setText(QString("Finished Output: %1 Qtl").arg(QString::number(totalOutput, 'f', 2)));
     m_avgYieldLabel->setText(QString("Avg Yield: %1%").arg(QString::number(avgYield, 'f', 2)));
-    m_totalByProductsLabel->setText(QString("Bran & Husk: %1 Qtl").arg(QString::number(totalBran + totalHusk, 'f', 2)));
+    m_totalByProductsLabel->setText(QString("By-products: %1 Qtl").arg(QString::number(totalByproduct, 'f', 2)));
 
     if (!matchedIndices.isEmpty()) {
         m_batchTable->selectRow(0);
     }
 }
 
-void MillingStatementWidget::focusTable() {
+void ManufacturingStatementWidget::focusTable() {
     if (m_batchTable && m_batchTable->rowCount() > 0) {
         m_batchTable->setFocus();
         m_batchTable->selectRow(0);
@@ -508,7 +502,7 @@ void MillingStatementWidget::focusTable() {
     }
 }
 
-void MillingStatementWidget::onBatchDoubleClicked(int row, int col) {
+void ManufacturingStatementWidget::onBatchDoubleClicked(int row, int col) {
     Q_UNUSED(col);
     if (!m_batchTable || row < 0 || row >= m_batchTable->rowCount()) return;
     auto* idItem = m_batchTable->item(row, 0);
@@ -520,7 +514,7 @@ void MillingStatementWidget::onBatchDoubleClicked(int row, int col) {
     emit alterBatchRequested(31, map);
 }
 
-void MillingStatementWidget::onBatchSelectionChanged() {
+void ManufacturingStatementWidget::onBatchSelectionChanged() {
     int curRow = m_batchTable->currentRow();
     if (curRow < 0) return;
 
@@ -544,12 +538,12 @@ void MillingStatementWidget::onBatchSelectionChanged() {
     populateDetailCard(batchId);
 }
 
-void MillingStatementWidget::populateDetailCard(int batchId) {
+void ManufacturingStatementWidget::populateDetailCard(int batchId) {
     m_detailTable->setRowCount(0);
 
     QString sql = QString(
         "SELECT row_no, drcr, item_name, percentage, weight_qtl, bags, rate, amount, narration "
-        "FROM milling_voucher_items "
+        "FROM manufacturing_voucher_items "
         "WHERE batch_id = %1 "
         "ORDER BY drcr DESC, row_no ASC;"
     ).arg(batchId);
@@ -601,15 +595,15 @@ void MillingStatementWidget::populateDetailCard(int batchId) {
     }
 }
 
-void MillingStatementWidget::onRefreshClicked() {
-    loadMillingData(m_fromDateEdit->date(), m_toDateEdit->date(), m_varietyCombo->currentText());
+void ManufacturingStatementWidget::onRefreshClicked() {
+    loadManufacturingData(m_fromDateEdit->date(), m_toDateEdit->date(), m_varietyCombo->currentText());
 }
 
-void MillingStatementWidget::onNewBatchClicked() {
+void ManufacturingStatementWidget::onNewBatchClicked() {
     emit newBatchRequested();
 }
 
-void MillingStatementWidget::keyPressEvent(QKeyEvent* event) {
+void ManufacturingStatementWidget::keyPressEvent(QKeyEvent* event) {
     if (event->key() == Qt::Key_Escape) {
         emit backRequested();
         event->accept();

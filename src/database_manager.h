@@ -28,7 +28,7 @@ public:
     qint64 lastInsertedId();
     void ensureTablesExist();
 
-    // Package master top-ups (Phase 3): idempotent domain groups + voucher
+    // Package master top-ups: idempotent domain groups + voucher
     // types for every currently enabled package. Never deletes. Call after
     // wizard saves, successful migrations, or re-opens with new data.
     void ensureDomainMasters();

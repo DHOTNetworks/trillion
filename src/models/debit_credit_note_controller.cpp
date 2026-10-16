@@ -1060,10 +1060,16 @@ bool DebitCreditNoteController::deleteNote(int id) {
 
     if (noteNoVal.isValid()) {
         QString nNo = noteNoVal.toString();
-        DatabaseManager::instance().executeNonQuery(
+        // Atomic cleanup: the summary row AND the double-entry legs go
+        // together — saving writes both, deleting must mirror both.
+        DatabaseManager::instance().beginTransaction();
+        bool legsOk = DatabaseManager::instance().executeNonQuery(
+            "DELETE FROM transactions WHERE voucher_no = ?;", {nNo});
+        bool headOk = legsOk && DatabaseManager::instance().executeNonQuery(
             "DELETE FROM vouchers WHERE voucher_type IN ('Credit Note', 'Debit Note') AND voucher_no = ?;",
-            {nNo}
-        );
+            {nNo});
+        if (headOk) DatabaseManager::instance().commit();
+        else DatabaseManager::instance().rollback();
     }
 
     bool ok = DatabaseManager::instance().executeNonQuery(

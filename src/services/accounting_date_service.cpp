@@ -96,7 +96,11 @@ QString AccountingDateService::toIso(const QString &dmyStr) const
         if (d.year() >= 1900 && d.year() <= 1970) d = d.addYears(100);
         return d.toString("yyyy-MM-dd");
     }
-    return dmyStr.trimmed();
+    // Fail loud (§2): an unrecognised input yields an EMPTY iso, never an
+    // echo. The old echo let "not-a-date" flow downstream as a date (it
+    // split into 3 parts, computed y=0/m=0, and fabricated an FY window
+    // that writeBlockReason waved through). Callers all validate emptiness.
+    return QString();
 }
 
 QString AccountingDateService::fromIso(const QString &isoStr) const

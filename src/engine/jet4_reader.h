@@ -60,6 +60,7 @@ struct ReadStats {
     long invalidSlots = 0;      /* mdb_find_row failure (bounds-rejected) */
     long emptySlots = 0;        /* zero-length slots (freed/never-used) */
     long crackFailed = 0;       /* mdb_crack_row rejected the row buffer */
+    long brutePages = 0;        /* pages salvaged by the stale-map fallback */
 };
 
 /* Drop-in replacement for the old fetch-cursor readers.

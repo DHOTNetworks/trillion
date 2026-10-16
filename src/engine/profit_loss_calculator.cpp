@@ -418,7 +418,7 @@ ProfitLossData ProfitLossCalculator::calculate(const QString& requestedFromDate,
     }
     if (directExpByGroup.isEmpty() && data.totalDirectExpenses > 0.0) {
         ProfitLossItem dGrp;
-        dGrp.name = "Direct Manufacturing & Milling Expenses";
+        dGrp.name = "Direct Manufacturing & Manufacturing Expenses";
         dGrp.groupName = "Direct Expenses";
         dGrp.amount = data.totalDirectExpenses;
         dGrp.amountFmt = AccountingEngine::formatIndianCurrency(data.totalDirectExpenses, true);

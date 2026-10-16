@@ -5,7 +5,7 @@
 #include "../src/engine/mandi_calculator.h"
 #include "../src/engine/aank_interest_engine.h"
 #include "../src/engine/gst_tax_engine.h"
-#include "../src/engine/milling_yield_engine.h"
+#include "../src/engine/manufacturing_yield_engine.h"
 #include "../src/engine/gstr2_reconciler.h"
 #include "../src/engine/gstr3b_engine.h"
 #include "../src/engine/gstr1_engine.h"
@@ -30,7 +30,7 @@ private slots:
     void testAankInterestEngineMath();
     void testGstTaxEnginePosAndTcs();
     void testGstOddPaiseSplitPreservesTotal();
-    void testMillingYieldEngine();
+    void testManufacturingYieldEngine();
     void testGstr2Reconciliation4WayMatch();
     void testGstr3BEngineCalculationAndExcelExport();
     void testTdsFvuExporter();
@@ -181,9 +181,9 @@ void TestEnginesSuite::testGstOddPaiseSplitPreservesTotal() {
              parts.value("totalTax").toDouble());
 }
 
-void TestEnginesSuite::testMillingYieldEngine() {
+void TestEnginesSuite::testManufacturingYieldEngine() {
     // 1000 Qtl Paddy input -> 670 Qtl Head Rice (67%), 70 Qtl Broken (7%), 80 Qtl Bran (8%), 170 Qtl Husk (17%)
-    MillingBatchResult res = MillingYieldEngine::calculateBatchYield(
+    ManufacturingBatchResult res = ManufacturingYieldEngine::calculateBatchYield(
         "BATCH-01", "Basmati 1121",
         1000.0, 670.0, 70.0, 80.0, 170.0, 67.0
     );
@@ -193,7 +193,7 @@ void TestEnginesSuite::testMillingYieldEngine() {
     QCOMPARE(res.riceBranPct, 8.00);
     QCOMPARE(res.riceHuskPct, 17.00);
     QCOMPARE(res.totalRecoveryPct, 99.00);
-    QCOMPARE(res.millingWastageQtl, 10.00); // 1% wastage = 10 Qtl
+    QCOMPARE(res.manufacturingWastageQtl, 10.00); // 1% wastage = 10 Qtl
     QCOMPARE(res.yieldVariancePct, 0.00);
     QVERIFY(res.isWithinStandardTolerance);
 }

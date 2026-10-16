@@ -82,7 +82,7 @@ void IFormVoucherWidget::setupUi() {
     mainLayout->addWidget(topBarFrame);
 
     // 2. Buyer & Header Info
-    auto* headerBox = new QGroupBox("Buyer (Mill / Trader) & Dispatch Details", this);
+    auto* headerBox = new QGroupBox("Buyer (Manufacturer / Trader) & Dispatch Details", this);
     auto* headerLayout = new QGridLayout(headerBox);
     headerLayout->setContentsMargins(8, 6, 8, 6);
     headerLayout->setSpacing(8);

@@ -6,22 +6,20 @@
 #include <QVariantMap>
 #include <QVariantList>
 
-struct MillingBatchEntry {
+struct ManufacturingBatchEntry {
     int id = 0;
     QString batchNo;
     QString batchDate;
-    QString paddyVariety;
-    QString paddyInput;
-    QString headRice;
-    QString brokenRice;
-    QString bran;
-    QString husk;
+    QString inputVariety;
+    QString inputQty;
+    QString outputQty;
+    QString byproductQty;
     QString wastage;
     QString yieldPct;
     QString narration;
 };
 
-struct MillingItemEntry {
+struct ManufacturingItemEntry {
     int rowNo = 0;
     QString drcr; // "Dr" (produced) or "Cr" (consumed)
     bool isInput = false;
@@ -34,7 +32,7 @@ struct MillingItemEntry {
     QString narration;
 };
 
-class MillingBatchListModel : public QAbstractListModel {
+class ManufacturingBatchListModel : public QAbstractListModel {
     Q_OBJECT
     Q_PROPERTY(int count READ rowCount NOTIFY countChanged)
 
@@ -43,24 +41,22 @@ public:
         IdRole = Qt::UserRole + 1,
         BatchNoRole,
         BatchDateRole,
-        PaddyVarietyRole,
-        PaddyInputRole,
-        HeadRiceRole,
-        BrokenRiceRole,
-        BranRole,
-        HuskRole,
+        InputVarietyRole,
+        InputQtyRole,
+        OutputQtyRole,
+        ByproductQtyRole,
         WastageRole,
         YieldPctRole,
         NarrationRole
     };
 
-    explicit MillingBatchListModel(QObject* parent = nullptr);
+    explicit ManufacturingBatchListModel(QObject* parent = nullptr);
 
     int rowCount(const QModelIndex& parent = QModelIndex()) const override;
     QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const override;
     QHash<int, QByteArray> roleNames() const override;
 
-    void setEntries(const QVector<MillingBatchEntry>& entries);
+    void setEntries(const QVector<ManufacturingBatchEntry>& entries);
     void clear();
     Q_INVOKABLE QVariantMap get(int row) const;
 
@@ -68,10 +64,10 @@ signals:
     void countChanged();
 
 private:
-    QVector<MillingBatchEntry> m_entries;
+    QVector<ManufacturingBatchEntry> m_entries;
 };
 
-class MillingItemListModel : public QAbstractListModel {
+class ManufacturingItemListModel : public QAbstractListModel {
     Q_OBJECT
     Q_PROPERTY(int count READ rowCount NOTIFY countChanged)
 
@@ -89,13 +85,13 @@ public:
         NarrationRole
     };
 
-    explicit MillingItemListModel(QObject* parent = nullptr);
+    explicit ManufacturingItemListModel(QObject* parent = nullptr);
 
     int rowCount(const QModelIndex& parent = QModelIndex()) const override;
     QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const override;
     QHash<int, QByteArray> roleNames() const override;
 
-    void setEntries(const QVector<MillingItemEntry>& entries);
+    void setEntries(const QVector<ManufacturingItemEntry>& entries);
     void clear();
     Q_INVOKABLE QVariantMap get(int row) const;
 
@@ -103,13 +99,13 @@ signals:
     void countChanged();
 
 private:
-    QVector<MillingItemEntry> m_entries;
+    QVector<ManufacturingItemEntry> m_entries;
 };
 
-class MillingStatementController : public QObject {
+class ManufacturingStatementController : public QObject {
     Q_OBJECT
-    Q_PROPERTY(MillingBatchListModel* batchModel READ batchModel CONSTANT)
-    Q_PROPERTY(MillingItemListModel* itemModel READ itemModel CONSTANT)
+    Q_PROPERTY(ManufacturingBatchListModel* batchModel READ batchModel CONSTANT)
+    Q_PROPERTY(ManufacturingItemListModel* itemModel READ itemModel CONSTANT)
 
     Q_PROPERTY(QString searchQuery READ searchQuery WRITE setSearchQuery NOTIFY searchQueryChanged)
     Q_PROPERTY(QString selectedVariety READ selectedVariety WRITE setSelectedVariety NOTIFY selectedVarietyChanged)
@@ -117,19 +113,17 @@ class MillingStatementController : public QObject {
     Q_PROPERTY(QString activeBatchNo READ activeBatchNo NOTIFY activeBatchNoChanged)
 
     Q_PROPERTY(int totalBatchesCount READ totalBatchesCount NOTIFY totalsChanged)
-    Q_PROPERTY(QString totalPaddyMilledFmt READ totalPaddyMilledFmt NOTIFY totalsChanged)
-    Q_PROPERTY(QString totalHeadRiceProducedFmt READ totalHeadRiceProducedFmt NOTIFY totalsChanged)
-    Q_PROPERTY(QString totalBranProducedFmt READ totalBranProducedFmt NOTIFY totalsChanged)
-    Q_PROPERTY(QString totalBrokenProducedFmt READ totalBrokenProducedFmt NOTIFY totalsChanged)
-    Q_PROPERTY(QString totalHuskProducedFmt READ totalHuskProducedFmt NOTIFY totalsChanged)
-    Q_PROPERTY(QString totalWastageMilledFmt READ totalWastageMilledFmt NOTIFY totalsChanged)
+    Q_PROPERTY(QString totalInputFmt READ totalInputFmt NOTIFY totalsChanged)
+    Q_PROPERTY(QString totalOutputFmt READ totalOutputFmt NOTIFY totalsChanged)
+    Q_PROPERTY(QString totalByproductFmt READ totalByproductFmt NOTIFY totalsChanged)
+    Q_PROPERTY(QString totalWastageFmt READ totalWastageFmt NOTIFY totalsChanged)
     Q_PROPERTY(QString avgYieldPctFmt READ avgYieldPctFmt NOTIFY totalsChanged)
 
 public:
-    explicit MillingStatementController(QObject* parent = nullptr);
+    explicit ManufacturingStatementController(QObject* parent = nullptr);
 
-    MillingBatchListModel* batchModel() { return &m_batchModel; }
-    MillingItemListModel* itemModel() { return &m_itemModel; }
+    ManufacturingBatchListModel* batchModel() { return &m_batchModel; }
+    ManufacturingItemListModel* itemModel() { return &m_itemModel; }
 
     QString searchQuery() const { return m_searchQuery; }
     void setSearchQuery(const QString& query);
@@ -143,12 +137,10 @@ public:
     QString activeBatchNo() const { return m_activeBatchNo; }
 
     int totalBatchesCount() const { return m_totalBatchesCount; }
-    QString totalPaddyMilledFmt() const { return m_totalPaddyMilledFmt; }
-    QString totalHeadRiceProducedFmt() const { return m_totalHeadRiceProducedFmt; }
-    QString totalBranProducedFmt() const { return m_totalBranProducedFmt; }
-    QString totalBrokenProducedFmt() const { return m_totalBrokenProducedFmt; }
-    QString totalHuskProducedFmt() const { return m_totalHuskProducedFmt; }
-    QString totalWastageMilledFmt() const { return m_totalWastageMilledFmt; }
+    QString totalInputFmt() const { return m_totalInputFmt; }
+    QString totalOutputFmt() const { return m_totalOutputFmt; }
+    QString totalByproductFmt() const { return m_totalByproductFmt; }
+    QString totalWastageFmt() const { return m_totalWastageFmt; }
     QString avgYieldPctFmt() const { return m_avgYieldPctFmt; }
 
     Q_INVOKABLE void reload(const QString& fromDate = "", const QString& toDate = "", const QString& variety = "");
@@ -165,21 +157,19 @@ private:
     void applyFilter();
     void loadBatchItems(int batchId, const QString& batchNo);
 
-    MillingBatchListModel m_batchModel;
-    MillingItemListModel m_itemModel;
+    ManufacturingBatchListModel m_batchModel;
+    ManufacturingItemListModel m_itemModel;
 
-    QVector<MillingBatchEntry> m_allBatches;
+    QVector<ManufacturingBatchEntry> m_allBatches;
     QString m_searchQuery;
     QString m_selectedVariety = "All Varieties";
     int m_selectedBatchIndex = -1;
     QString m_activeBatchNo;
 
     int m_totalBatchesCount = 0;
-    QString m_totalPaddyMilledFmt = "0.00";
-    QString m_totalHeadRiceProducedFmt = "0.00";
-    QString m_totalBranProducedFmt = "0.00";
-    QString m_totalBrokenProducedFmt = "0.00";
-    QString m_totalHuskProducedFmt = "0.00";
-    QString m_totalWastageMilledFmt = "0.00";
+    QString m_totalInputFmt = "0.00";
+    QString m_totalOutputFmt = "0.00";
+    QString m_totalByproductFmt = "0.00";
+    QString m_totalWastageFmt = "0.00";
     QString m_avgYieldPctFmt = "0.00%";
 };

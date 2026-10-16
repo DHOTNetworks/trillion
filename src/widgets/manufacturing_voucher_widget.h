@@ -7,18 +7,18 @@
 #include <QLabel>
 #include <QFrame>
 #include "item_search_delegate.h"
-#include "../models/milling_batch_controller.h"
-#include "../models/milling_model.h"
+#include "../models/manufacturing_batch_controller.h"
+#include "../models/manufacturing_model.h"
 #include "../services/print_export_controller.h"
 
 namespace MahadevERP {
 
-class MillingVoucherWidget : public QWidget {
+class ManufacturingVoucherWidget : public QWidget {
     Q_OBJECT
 
 public:
-    explicit MillingVoucherWidget(MillingBatchController* batchCtrl = nullptr,
-                                  MillingModel* millingModel = nullptr,
+    explicit ManufacturingVoucherWidget(ManufacturingBatchController* batchCtrl = nullptr,
+                                  ManufacturingModel* manufacturingModel = nullptr,
                                   PrintExportController* printExportCtrl = nullptr,
                                   QWidget* parent = nullptr);
 
@@ -48,8 +48,8 @@ private slots:
 private:
     void setupUi();
 
-    MillingBatchController* m_batchCtrl = nullptr;
-    MillingModel* m_millingModel = nullptr;
+    ManufacturingBatchController* m_batchCtrl = nullptr;
+    ManufacturingModel* m_manufacturingModel = nullptr;
     PrintExportController* m_printExportCtrl = nullptr;
 
     int m_editingBatchId = 0;

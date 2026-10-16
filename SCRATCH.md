@@ -1134,3 +1134,97 @@ Status table written to 00_MASTER_PLAN.md. Rebuild on Mac — purchase voucher n
 
 CA-firm overhaul started: report_html_chrome.h gained print stationery (letterhead with double rule, title block, bordered navy tables, ruled totals, Prepared/Checked/Authorised signatures, generation footer). Trial Balance converted as the pattern: full letterhead, difference row when out of balance, escaped strings, num classes — "KACHA CHITHA" retired. Recipe for the remaining 26 is in Doc 10 §D (keep SQL + row loops, swap shells).
 Mac rebuild notes: re-run cmake (new GLOB files), then build + ctest. Verify trial-balance PDF once — figures logic is untouched (verbatim move), only the shell changed.
+
+The log is updated. Here is the complete plan analysis:
+Plan Analysis — MahadevAc-main/plan/
+The plan's structure (per AGENTS.md §0/§1)
+plan/ defines one strict order: P0 (port manifest) → Phase 1 (voucher types) → Phase 2 (chart/parties) → Phase 3 (flags/DDL/menus) → §23 S1–S9 → §24 F1–F6 → cleanup Stages A–D (Doc 21). Docs 13–18 are frozen history; 23/24 are the active specs.
+✅ FIXED / IMPLEMENTED (verified in tree + on Mac)
+Slice	What	Evidence
+P0	Port manifest sweep	20-file SHA256 confirmed; docs vendored
+Phase 1	voucher_types DDL + 8 seeds, model, keeper-routed migrators/exporter	Fresh DB: 8 types (CHPT,CHRT,CONTRA,JRNL,PURC,PYMT,RCPT,SALE); testVoucherTypeMaster PASS
+Phase 2	28-row generic chart, 6 system ledgers, domain top-up	Fresh DB: 28 groups; testDomainGroupsTopUp PASS
+Phase 3	feature_flags.h, gated DDL (12 post-S7), menu filter, navigateToView choke	10 gate sites via SettingsKeys; testFeatureFlagDetection/testViewFlagMap PASS
+S1	Product strings → Mahadev ERP & Accounting	Landed (W1)
+S2	settings_registry.h + all call sites wired	No raw literals left
+S3	Multi-flag view 1 (paddy = mandi OR mill)	testPaddySharedView PASS
+S4	Mandi top menu, other_voucher slimmed 8→6, §23.6 titles	Landed (W4), hotkey audit PASS
+S5	Dashboard gated 7th card, positional selection 1–7	Landed (W5)
+S6	Package wizard (5 types + 4 add-ons, §23.8 matrix)	Agent-3 verified 9/9 firms end-to-end
+S7	paddy_slips SSOT (unified table, migration step)	Parity proven: 1234 arrivals 1:1, trial 0.00; signed off
+S8	InvoiceTotals single cable	Convergence proven fresh vs migrated (₹16,30,503.88 both)
+S9	schema_mapping.json v0.2 additions	Data-only; loader not yet wired (see C2)
+F1	FiscalCalendar choke (April-fixed, D14a)	All boundary sites converted
+F2	FY status lifecycle + setYearStatus + soft warning	testFiscalYearStatusLifecycle PASS
+F3	Close/reopen engine + dialog (W9-C)	Live close/reopen proven; reversal FK fixed
+F4	Openings snapshot short-circuit (scoped)	F4 step PASS (corrupted-master distinguisher)
+F5	fyIdFor resolve-or-create (kills default-1)	Re-verified today: 4 FYs filed by date, trial 0.00, zero warnings
+F6	fyShortToken choke, fail-loud numbering	Busy tokens 2627/… correct; zero warnings
+Stage A1	scripts/ sim battery (7 sims)	run_all.py GREEN 7/7
+Stage A2	Pinned suite precondition (§2/Doc 21)	Landed today — fixed 6 fixture-shape failures
+B3 / C1(A)	/tmp→QDir::tempPath; Index N comments gone	Done (1 CLI /tmp guard site remains)
+❌ REMAINING
+Blocking now (gate #3 — LogicBoard 56/3/3 vs expected 59/0/3)
+1. testDebitCreditNoteController — deleteNote deletes the voucher header but leaves the 3 transactions legs. Real product cleanup bug (1 fix in deleteNote).
+2. testFyCloseReopen — the A2 pin chain lacks Profit & Loss; the fixture's own Groups table is empty (the 6 "legacy" groups are ensureDomainMasters flag top-ups). One-line test fix.
+3. testBalanceSheetCalculations + a newly-found engine gap — Jet4Reader cannot read the user's live Data.002 Ledgers table: index walks = 0 rows (catalog says 1562) while mdbtools reads 321; the same reader reads pristine_backup fine (2089 rows = the repo DB's 2090 parties) and Data.004 fine (570). The scan fails silently — a §2 fail-loud violation on live-grown Jet files. Until fixed, migrated firms lose all ledger parties (audited capital ₹98,24,356.35 can't render).
+Plan items not yet started (in plan order)
+Item	Doc	Notes
+A3 second test: voucher_types categories ≡ dispatch branches	20/C3, 21/A3	Missing (view-flag test exists)
+B1 grey-row path deletion	20/B1–B2	Runtime-gated; ForbiddenCursor still present
+B2 Phase-jargon strip	20/A8	41 \bPhase [123]\b hits in 19 files (only Agent 2's scope was cleaned)
+C1 domain groups single owner; drop < 40 count gate	20/B3–B4	ensureDomainGroups + cache invalidation landed; legacy sync still UPDATE-only-pending
+C2 src/config/schema_mapping.{h,cpp} loader (fail-closed)	22, 21/C2	Not started; nothing consumes the JSON yet
+C3 Strangler migrators (group→ledger→stock→voucher→mandi→Tally→Busy→exporter)	21/C3	Not started; the Jet4Reader gap above will bite this first
+C4 Delete legacy monolith	21/C4	LAST, not started
+D2 BahiKhata*→Legacy* renames	20/A6	26 files still carry the names
+D3 Domain seeds out of core DDL (Haryana rates C4, Main Godown ×2 C5, 951/948/0 + Maal Khata determinism C6)	20/C4–C6	Open
+C9 navigateBack flag guard	20/C9	Runtime-verify still open
+F4 follow-up	24/§2, README	Report cutover for trial/BS/capital/depreciation/cash-flow openings (currently master+cumulative)
+X1 note	README	Locked-active-year chip initial state (selected+grey)
+Pre-existing observations (non-blocking, logged): BS renderer prints "UNBALANCED/PROVISIONAL" on migrated charts (trial is exactly 0.00 — a render-side classification gap); Engines busy-inspect fixture-path failure; ensureDomainMasters raw SQL without cache invalidation on same-path writes.
+Recommended sequence
+1. Fix the Jet4Reader Ledgers gap (blocker #3 root cause — live-firm migrations silently drop ledgers; add a fail-loud warning when a table scans 0 rows against a non-zero catalog).
+2. Land the two small fixes (deleteNote legs; P&L in the pin chain) → re-run gate #3.
+3. Then Stage A3 test, B1/B2 cleanup, C1, and start C2/C3 strangler work — where the reader hardening from (1) pays off.
+
+   Greeting                      +                                                                                                                                                               
+                                                                                                                                                                                                 
+     Agent 2 brief — 3 independent batches (no shared files with Agent 3's P2):
+     Ownership rule: the file lists below are exclusive. Agent 2 touches only these files; Agent 3 touches only his P2 list. Shared-file protocol Context stays: announce before any out-of-list touch, never restructure the other's code in passing. After every batch: brace-balance proof + append                      
+     only log is plan/00_README.md                                                                                                              
+     
+     Batch 1 — B1 grey-row deletion (owns navigation_menu_dialog.* entirely)                                                                                                                     
+                                                                                                                                                                                                 
+     - Files: src/widgets/navigation_menu_dialog.cpp, src/widgets/navigation_menu_dialog.h — and ONLY these (Agent 3 explicitly excludes them from                                               
+       his B2 strip).                                                                                                                                                                            
+     - Work (Doc 20 B1–B2): delete the disabled-row path (grey labels, ForbiddenCursor, isEnabled/firstEnabledFrom/nextEnabled skips) + the                                                      
+       firstEnabledFrom all-disabled fallback (unreachable — empty visible pops in menu_tree_manager.cpp:158-164) + any Phase-jargon comments in                                                 
+       these two files.                                                                                                                                                                          
+     - Contract after deletion: manager sends enabled rows only; dialog renders what it gets.                                                                                                    
+     - VM proofs: strip-order brace counter = 0; grep gates on these files read zero (grey.*row|ForbiddenCursor, \bPhase [123]\b).                                                               
+     - Handoff to Agent 3: Mac runtime-confirm (no caller constructs the dialog with disabled items except resumeMenuStack) + full suites. If the                                                
+       runtime check finds a disabled-row caller, Agent 3 reports back instead of patching around it.                                                                                            
+                                                                                                                                                                                                 
+     Batch 2 — /tmp residue + CLI surface (continues Agent 2's T2)                                                                                                                               
+                                                                                                                                                                                                 
+     - Files: src/tools/financial_engine_cli.cpp (1 remaining /tmp site, ~:901 guard), src/widgets/accounting_period_dialog.*, src/widgets/                                                      
+       close_year_dialog.*, src/widgets/edit_firm_dialog.*, src/widgets/new_firm_dialog.* — Agent 3 never touches these.                                                                         
+     - Work: (a) generalize the /tmp/-only scratch guard to QDir::tempPath() (same pattern as T2); (b) X1 open note — locked-active-year chip initial                                            
+       state (selected + grey, not clickable-away); (c) close-dialog UX polish only (no engine changes — F3 engine is frozen).                                                                   
+     - VM proofs: braces 0; behavior-identical (string/comment/guard-surface only, no logic rewrites).                                                                                           
+     - Handoff to Agent 3: build + suites + offscreen dialog smoke.                                                                                                                              
+                                                                                                                                                                                                 
+     Batch 3 — schema_mapping.json v0.3 (data-only, zero build risk)                                                                                                                             
+                                                                                                                                                                                                 
+     - Files: plan/schema_mapping.json (+ scripts/ validator extension only) — Agent 3 touches neither in P2.                                                                                    
+     - Work (§23.10 S9): fill Transactions + read_filter EntryType=… sources for jform/iform/paddy (Bahi-Khata has no separate source tables —                                                   
+       derived, verified in mandi_migrator.cpp), domain_flags arrays (paddy: [mandi, mill] — note the P1 change, not mandi-only),                                                                
+       milling_voucher_items, Busy Master4/MandiForms. Bump meta.version to v0.3-draft. Nothing in src/ consumes it yet (promotion is C2 — do NOT                                                
+       wire the loader; that is Agent 3's P3).                                                                                                                                                   
+     - Proofs: JSON parses, version bumped, validator green; scripts/run_all.py stays 7/7.
+     7. Explicitly out of scope for Agent 2 this round                                                     
+     menu_tree_manager.*, main_window.cpp, all engine/models/config files (Agent 3's B2 list), F4 report cutover, C-strangler, monolith deletion,                                                
+     fyShortToken/numbering (frozen post-P0).
+     Sequencing: all three batches can start immediately and in parallel with my P2 — the only cross-agent ordering is Batch 1's tail (my Mac                                                    
+     runtime-confirm after their deletion lands). Want me to start P2 now while Agent 2 picks these up?

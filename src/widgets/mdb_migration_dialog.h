@@ -80,8 +80,8 @@ private:
     QLabel* m_emptyPlaceholderLabel = nullptr;
     QLabel* m_stockTxLabel = nullptr;
     QLabel* m_stockTxTitleLabel = nullptr;
-    QLabel* m_millingLabel = nullptr;
-    QLabel* m_millingTitleLabel = nullptr;
+    QLabel* m_manufacturingLabel = nullptr;
+    QLabel* m_manufacturingTitleLabel = nullptr;
     QLabel* m_stockItemsLabel = nullptr;
     QLabel* m_stockItemsTitleLabel = nullptr;
     QLabel* m_ledgersLabel = nullptr;

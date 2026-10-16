@@ -18,7 +18,7 @@
 #include "mandi_reports_widget.h"
 #include "day_book_widget.h"
 #include "gstr_reports_widget.h"
-#include "milling_statement_widget.h"
+#include "manufacturing_statement_widget.h"
 #include "custom_closing_stock_widget.h"
 #include "new_group_widget.h"
 #include "modify_group_widget.h"
@@ -28,7 +28,7 @@
 #include "purchase_register_widget.h"
 #include "stock_detail_widget.h"
 #include "paddy_procurement_widget.h"
-#include "milling_voucher_widget.h"
+#include "manufacturing_voucher_widget.h"
 #include "tds_voucher_widget.h"
 #include "interest_calculator_widget.h"
 #include "bank_statement_import_widget.h"
@@ -85,8 +85,8 @@
 #include "../models/stock_register_model.h"
 #include "../models/paddy_arrivals_model.h"
 #include "../models/paddy_procurement_controller.h"
-#include "../models/milling_batch_controller.h"
-#include "../models/milling_model.h"
+#include "../models/manufacturing_batch_controller.h"
+#include "../models/manufacturing_model.h"
 #include "../models/tds_voucher_controller.h"
 #include "../models/interest_model.h"
 #include "../models/bank_statement_controller.h"
@@ -111,8 +111,8 @@ struct MainWindowDependencies {
     StockRegisterController* stockRegisterCtrl = nullptr;
     PaddyArrivalsModel* paddyModel = nullptr;
     PaddyProcurementController* paddyProcurementCtrl = nullptr;
-    MillingBatchController* millingBatchCtrl = nullptr;
-    MillingModel* millingModel = nullptr;
+    ManufacturingBatchController* manufacturingBatchCtrl = nullptr;
+    ManufacturingModel* manufacturingModel = nullptr;
     TdsVoucherController* tdsVoucherCtrl = nullptr;
     InterestModel* interestModel = nullptr;
     BankStatementController* bankStatementCtrl = nullptr;
@@ -142,7 +142,7 @@ public:
     MandiReportsWidget* mandiReportsWidget() const { return m_mandiReportsWidget; }
     MahadevERP::DayBookWidget* dayBookWidget() const { return m_dayBookWidget; }
     MahadevERP::GstrReportsWidget* gstrReportsWidget() const { return m_gstrReportsWidget; }
-    MahadevERP::MillingStatementWidget* millingStatementWidget() const { return m_millingStatementWidget; }
+    MahadevERP::ManufacturingStatementWidget* manufacturingStatementWidget() const { return m_manufacturingStatementWidget; }
     MahadevERP::CustomClosingStockWidget* customClosingStockWidget() const { return m_customClosingStockWidget; }
     MahadevERP::NewGroupWidget* newGroupWidget() const { return m_newGroupWidget; }
     MahadevERP::ModifyGroupWidget* modifyGroupWidget() const { return m_modifyGroupWidget; }
@@ -152,7 +152,7 @@ public:
     MahadevERP::PurchaseRegisterWidget* purchaseRegisterWidget() const { return m_purchaseRegisterWidget; }
     MahadevERP::StockDetailWidget* stockDetailWidget() const { return m_stockDetailWidget; }
     MahadevERP::PaddyProcurementWidget* paddyProcurementWidget() const { return m_paddyProcurementWidget; }
-    MahadevERP::MillingVoucherWidget* millingVoucherWidget() const { return m_millingVoucherWidget; }
+    MahadevERP::ManufacturingVoucherWidget* manufacturingVoucherWidget() const { return m_manufacturingVoucherWidget; }
     MahadevERP::TdsVoucherWidget* tdsVoucherWidget() const { return m_tdsVoucherWidget; }
     MahadevERP::InterestCalculatorWidget* interestCalculatorWidget() const { return m_interestCalcWidget; }
     MahadevERP::BankStatementImportWidget* bankStatementWidget() const { return m_bankStatementWidget; }
@@ -231,7 +231,7 @@ private:
     MandiReportsWidget* m_mandiReportsWidget = nullptr;
     MahadevERP::DayBookWidget* m_dayBookWidget = nullptr;
     MahadevERP::GstrReportsWidget* m_gstrReportsWidget = nullptr;
-    MahadevERP::MillingStatementWidget* m_millingStatementWidget = nullptr;
+    MahadevERP::ManufacturingStatementWidget* m_manufacturingStatementWidget = nullptr;
     MahadevERP::CustomClosingStockWidget* m_customClosingStockWidget = nullptr;
 
     MahadevERP::NewGroupWidget* m_newGroupWidget = nullptr;
@@ -242,7 +242,7 @@ private:
     MahadevERP::PurchaseRegisterWidget* m_purchaseRegisterWidget = nullptr;
     MahadevERP::StockDetailWidget* m_stockDetailWidget = nullptr;
     MahadevERP::PaddyProcurementWidget* m_paddyProcurementWidget = nullptr;
-    MahadevERP::MillingVoucherWidget* m_millingVoucherWidget = nullptr;
+    MahadevERP::ManufacturingVoucherWidget* m_manufacturingVoucherWidget = nullptr;
     MahadevERP::TdsVoucherWidget* m_tdsVoucherWidget = nullptr;
     MahadevERP::InterestCalculatorWidget* m_interestCalcWidget = nullptr;
     MahadevERP::BankStatementImportWidget* m_bankStatementWidget = nullptr;
@@ -297,8 +297,8 @@ private:
     StockRegisterController* m_stockRegisterCtrl = nullptr;
     PaddyArrivalsModel* m_paddyModel = nullptr;
     PaddyProcurementController* m_paddyProcurementCtrl = nullptr;
-    MillingBatchController* m_millingBatchCtrl = nullptr;
-    MillingModel* m_millingModel = nullptr;
+    ManufacturingBatchController* m_manufacturingBatchCtrl = nullptr;
+    ManufacturingModel* m_manufacturingModel = nullptr;
     TdsVoucherController* m_tdsVoucherCtrl = nullptr;
     InterestModel* m_interestModel = nullptr;
     BankStatementController* m_bankStatementCtrl = nullptr;

@@ -6,7 +6,7 @@
 
 namespace MahadevERP {
 
-struct MillingBatchResult {
+struct ManufacturingBatchResult {
     QString batchNo;
     QString paddyVariety; // e.g. "Basmati 1121", "PR-106", "1509 Steam"
     double paddyInputQtl = 0.0;
@@ -27,8 +27,8 @@ struct MillingBatchResult {
     double totalOutputQtl = 0.0;
     double totalRecoveryPct = 0.0;
     
-    double millingWastageQtl = 0.0;
-    double millingWastagePct = 0.0;
+    double manufacturingWastageQtl = 0.0;
+    double manufacturingWastagePct = 0.0;
     
     // Quality & Benchmark comparison
     double standardHeadYieldPct = 67.0;
@@ -36,9 +36,9 @@ struct MillingBatchResult {
     bool isWithinStandardTolerance = true;
 };
 
-class MillingYieldEngine {
+class ManufacturingYieldEngine {
 public:
-    static MillingBatchResult calculateBatchYield(
+    static ManufacturingBatchResult calculateBatchYield(
         const QString& batchNo,
         const QString& paddyVariety,
         double paddyInputQtl,

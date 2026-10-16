@@ -174,7 +174,7 @@ void DayBookWidget::setupUi() {
     m_typeFilterCombo = new QComboBox(filterCard);
     m_typeFilterCombo->setMinimumHeight(34);
     m_typeFilterCombo->setMinimumWidth(170);
-    m_typeFilterCombo->addItems({"ALL Vouchers", "Sales (SL)", "Purchases (PU)", "Journal (JV)", "Bank / Cheque (BK)", "Cash Book (CB)", "J-Form (JFrm)", "I-Form (IFrm)", "Milling Production", "TDS Deductions"});
+    m_typeFilterCombo->addItems({"ALL Vouchers", "Sales (SL)", "Purchases (PU)", "Journal (JV)", "Bank / Cheque (BK)", "Cash Book (CB)", "J-Form (JFrm)", "I-Form (IFrm)", "Manufacturing Production", "TDS Deductions"});
     connect(m_typeFilterCombo, &QComboBox::currentTextChanged, this, &DayBookWidget::onRefreshClicked);
     filterLayout->addWidget(m_typeFilterCombo);
 
@@ -420,7 +420,7 @@ void DayBookWidget::onDayBookQueryReady() {
         if (selectedType.contains("CASH") && !vType.contains("Cash", Qt::CaseInsensitive) && tType != "PYMT" && tType != "RCPT" && tType != "CSHP" && tType != "CSHR") continue;
         if (selectedType.contains("J-FORM") && !vType.contains("J-Form", Qt::CaseInsensitive) && tType != "JFRM") continue;
         if (selectedType.contains("I-FORM") && !vType.contains("I-Form", Qt::CaseInsensitive) && tType != "IFRM") continue;
-        if (selectedType.contains("MILLING") && !vType.contains("Milling", Qt::CaseInsensitive) && tType != "MILL") continue;
+        if (selectedType.contains("MANUFACTURING") && !vType.contains("Manufacturing", Qt::CaseInsensitive) && tType != "Manu") continue;
         if (selectedType.contains("TDS") && !vType.contains("TDS", Qt::CaseInsensitive)) continue;
 
         // Search Query Filter

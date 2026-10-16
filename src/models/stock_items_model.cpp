@@ -280,7 +280,8 @@ bool StockItemsModel::save_stock_item_full(const QVariantMap& d) {
     int gstLedgerId = d.value("gst_ledger_id", 0).toInt();
     if (gstLedgerId <= 0 && !gstLedger.isEmpty()) gstLedgerId = resolvePartyId(db, gstLedger);
 
-    int isMillingItem = d.value("is_milling_item", 0).toInt();
+    int isManufacturingItem = d.value("is_manufacturing_item", 0).toInt();
+    QString manufacturingRole = d.value("manufacturing_role", "").toString();
     int includeInTrading = d.value("include_in_trading", 1).toInt();
     int calculateStock = d.value("calculate_stock", 1).toInt();
     QString labourRateUnit = d.value("labour_rate_unit", "Packing").toString().trimmed();
@@ -320,11 +321,11 @@ bool StockItemsModel::save_stock_item_full(const QVariantMap& d) {
         "opening_bags, opening_qty, opening_rate, opening_value, "
         "purchase_ledger, purchase_ledger_id, purchase_return_ledger, purchase_return_ledger_id, "
         "sale_ledger, sale_ledger_id, sale_return_ledger, sale_return_ledger_id, stock_ledger, stock_ledger_id, gst_ledger, gst_ledger_id, "
-        "is_milling_item, include_in_trading, calculate_stock, labour_rate_unit, "
+        "is_manufacturing_item, manufacturing_role, include_in_trading, calculate_stock, labour_rate_unit, "
         "utrai_rate_1, jharai_rate_1, bharai_rate_1, tulai_rate_1, khichai_rate_1, silai_rate_1, loading_rate_1, "
         "utrai_rate_2, jharai_rate_2, bharai_rate_2, tulai_rate_2, khichai_rate_2, silai_rate_2, loading_rate_2, "
         "utrai_rate_3, jharai_rate_3, bharai_rate_3, tulai_rate_3, khichai_rate_3, silai_rate_3, loading_rate_3) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ??, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?));",
         {
             name, code, itemType, goodsType, tradingGroup, groupCode, companyName, tradingGroup, unit, unitCode,
             rateCalcOn, autoAdjustName, itemNarration, capitalGoods, hsnCode, gstRate, cessRate,
@@ -335,7 +336,7 @@ bool StockItemsModel::save_stock_item_full(const QVariantMap& d) {
             openingBags, openingQty, openingRate, openingValue,
             purchaseLedger, purchaseLedgerId, purchaseReturnLedger, purchaseReturnLedgerId,
             saleLedger, saleLedgerId, saleReturnLedger, saleReturnLedgerId, stockLedger, stockLedgerId, gstLedger, gstLedgerId,
-            isMillingItem, includeInTrading, calculateStock, labourRateUnit,
+            isManufacturingItem, manufacturingRole, includeInTrading, calculateStock, labourRateUnit,
             utrai1, jharai1, bharai1, tulai1, khichai1, silai1, loading1,
             utrai2, jharai2, bharai2, tulai2, khichai2, silai2, loading2,
             utrai3, jharai3, bharai3, tulai3, khichai3, silai3, loading3
@@ -452,7 +453,8 @@ bool StockItemsModel::update_stock_item_full(int itemId, const QVariantMap& d) {
     int gstLedgerId = d.value("gst_ledger_id", 0).toInt();
     if (gstLedgerId <= 0 && !gstLedger.isEmpty()) gstLedgerId = resolvePartyId(db, gstLedger);
 
-    int isMillingItem = d.value("is_milling_item", 0).toInt();
+    int isManufacturingItem = d.value("is_manufacturing_item", 0).toInt();
+    QString manufacturingRole = d.value("manufacturing_role", "").toString();
     int includeInTrading = d.value("include_in_trading", 1).toInt();
     int calculateStock = d.value("calculate_stock", 1).toInt();
     QString labourRateUnit = d.value("labour_rate_unit", "Packing").toString().trimmed();
@@ -492,7 +494,7 @@ bool StockItemsModel::update_stock_item_full(int itemId, const QVariantMap& d) {
         "opening_bags = ?, opening_qty = ?, opening_rate = ?, opening_value = ?, "
         "purchase_ledger = ?, purchase_ledger_id = ?, purchase_return_ledger = ?, purchase_return_ledger_id = ?, "
         "sale_ledger = ?, sale_ledger_id = ?, sale_return_ledger = ?, sale_return_ledger_id = ?, stock_ledger = ?, stock_ledger_id = ?, gst_ledger = ?, gst_ledger_id = ?, "
-        "is_milling_item = ?, include_in_trading = ?, calculate_stock = ?, labour_rate_unit = ?, "
+        "is_manufacturing_item = ?, manufacturing_role = ?, include_in_trading = ?, calculate_stock = ?, labour_rate_unit = ?, "
         "utrai_rate_1 = ?, jharai_rate_1 = ?, bharai_rate_1 = ?, tulai_rate_1 = ?, khichai_rate_1 = ?, silai_rate_1 = ?, loading_rate_1 = ?, "
         "utrai_rate_2 = ?, jharai_rate_2 = ?, bharai_rate_2 = ?, tulai_rate_2 = ?, khichai_rate_2 = ?, silai_rate_2 = ?, loading_rate_2 = ?, "
         "utrai_rate_3 = ?, jharai_rate_3 = ?, bharai_rate_3 = ?, tulai_rate_3 = ?, khichai_rate_3 = ?, silai_rate_3 = ?, loading_rate_3 = ? "
@@ -507,7 +509,7 @@ bool StockItemsModel::update_stock_item_full(int itemId, const QVariantMap& d) {
             openingBags, openingQty, openingRate, openingValue,
             purchaseLedger, purchaseLedgerId, purchaseReturnLedger, purchaseReturnLedgerId,
             saleLedger, saleLedgerId, saleReturnLedger, saleReturnLedgerId, stockLedger, stockLedgerId, gstLedger, gstLedgerId,
-            isMillingItem, includeInTrading, calculateStock, labourRateUnit,
+            isManufacturingItem, manufacturingRole, includeInTrading, calculateStock, labourRateUnit,
             utrai1, jharai1, bharai1, tulai1, khichai1, silai1, loading1,
             utrai2, jharai2, bharai2, tulai2, khichai2, silai2, loading2,
             utrai3, jharai3, bharai3, tulai3, khichai3, silai3, loading3,
@@ -537,7 +539,7 @@ bool StockItemsModel::add_stock_item(
         "INSERT INTO stock_items ("
         "name, code, item_type, goods_type, company_name, category_name, unit, purchase_rate, sale_rate, mrp, discount, "
         "hsn_code, gst_rate, cess_rate, packing_kg, opening_bags, opening_qty, opening_rate, opening_value, "
-        "purchase_ledger, sale_ledger, stock_ledger, is_milling_item, include_in_trading, calculate_stock"
+        "purchase_ledger, sale_ledger, stock_ledger, is_manufacturing_item, include_in_trading, calculate_stock"
         ") VALUES (?, ?, ?, 'Goods', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, 1);",
         {
             name, code, item_type, company_name, item_type, unit, purchase_rate, sale_rate, mrp, discount,
@@ -777,10 +779,10 @@ QVariantList StockItemsModel::get_stock_register(const QString& param1, const QS
             inwardPurBags = stInRows.first().toMap().value("in_bg").toLongLong();
         }
 
-        // Inward from Milling Production & Arrivals
-        double inwardMilling = 0.0;
-        long long inwardMillingBags = 0;
-        QString mbSql = "SELECT SUM(weight_qtl) FROM milling_voucher_items WHERE (item_id = ? OR item_name = ? OR item_code = ?) AND drcr = 'Dr'";
+        // Inward from Manufacturing Production & Arrivals
+        double inwardManufacturing = 0.0;
+        long long inwardManufacturingBags = 0;
+        QString mbSql = "SELECT SUM(weight_qtl) FROM manufacturing_voucher_items WHERE (item_id = ? OR item_name = ? OR item_code = ?) AND drcr = 'Dr'";
         QVariantList mbParams = {itemId, name, code};
         if (!fDate.isEmpty() && !tDate.isEmpty()) {
             mbSql += " AND batch_date >= ? AND batch_date <= ?";
@@ -788,8 +790,8 @@ QVariantList StockItemsModel::get_stock_register(const QString& param1, const QS
         }
         QVariant mbVal = DatabaseManager::instance().executeScalar(mbSql, mbParams);
         if (mbVal.isValid()) {
-            inwardMilling = mbVal.toDouble();
-            inwardMillingBags = 0; // Milling output is loose weight (0 bags)
+            inwardManufacturing = mbVal.toDouble();
+            inwardManufacturingBags = 0; // Manufacturing output is loose weight (0 bags)
         }
 
         // Inward from Paddy Procurement / Arrivals (for Raw Paddy items)
@@ -829,10 +831,10 @@ QVariantList StockItemsModel::get_stock_register(const QString& param1, const QS
             outwardSalesBags = stOutRows.first().toMap().value("out_bg").toLongLong();
         }
 
-        // Outward for Paddy Milled (Consumption from milling_voucher_items Cr)
-        double outwardMillingPaddy = 0.0;
-        long long outwardMillingPaddyBags = 0;
-        QString padMillSql = "SELECT SUM(weight_qtl) FROM milling_voucher_items WHERE (item_id = ? OR item_name = ? OR item_code = ?) AND drcr = 'Cr'";
+        // Outward for Paddy Milled (Consumption from manufacturing_voucher_items Cr)
+        double outwardManufacturingPaddy = 0.0;
+        long long outwardManufacturingPaddyBags = 0;
+        QString padMillSql = "SELECT SUM(weight_qtl) FROM manufacturing_voucher_items WHERE (item_id = ? OR item_name = ? OR item_code = ?) AND drcr = 'Cr'";
         QVariantList padMillParams = {itemId, name, code};
         if (!fDate.isEmpty() && !tDate.isEmpty()) {
             padMillSql += " AND batch_date >= ? AND batch_date <= ?";
@@ -840,14 +842,14 @@ QVariantList StockItemsModel::get_stock_register(const QString& param1, const QS
         }
         QVariant padMillVal = DatabaseManager::instance().executeScalar(padMillSql, padMillParams);
         if (padMillVal.isValid()) {
-            outwardMillingPaddy = padMillVal.toDouble();
-            outwardMillingPaddyBags = 0; // Paddy milled from silo/bulk is loose
+            outwardManufacturingPaddy = padMillVal.toDouble();
+            outwardManufacturingPaddyBags = 0; // Paddy milled from silo/bulk is loose
         }
 
-        double inwardTotal = inwardPur + inwardPaddy + inwardMilling;
-        long long inwardBagsTotal = inwardPurBags + inwardPaddyBags + inwardMillingBags;
-        double outwardTotal = outwardSales + outwardMillingPaddy;
-        long long outwardBagsTotal = outwardSalesBags + outwardMillingPaddyBags;
+        double inwardTotal = inwardPur + inwardPaddy + inwardManufacturing;
+        long long inwardBagsTotal = inwardPurBags + inwardPaddyBags + inwardManufacturingBags;
+        double outwardTotal = outwardSales + outwardManufacturingPaddy;
+        long long outwardBagsTotal = outwardSalesBags + outwardManufacturingPaddyBags;
 
         double closingQty = opQty + inwardTotal - outwardTotal;
         long long closingBags = opBags + inwardBagsTotal - outwardBagsTotal;
@@ -1013,10 +1015,10 @@ QVariantList StockItemsModel::get_item_movements(const QString& itemName, const 
         }
     }
 
-    // 2. Milling movements strictly for this item from milling_voucher_items
+    // 2. Manufacturing movements strictly for this item from manufacturing_voucher_items
     QString mviSql = "SELECT mvi.batch_no, mvi.batch_date, mvi.drcr, mvi.weight_qtl, mb.financial_year "
-                     "FROM milling_voucher_items mvi "
-                     "LEFT JOIN milling_batches mb ON mb.id = mvi.batch_id "
+                     "FROM manufacturing_voucher_items mvi "
+                     "LEFT JOIN manufacturing_batches mb ON mb.id = mvi.batch_id "
                      "WHERE (mvi.item_name = ? OR mvi.item_code = (SELECT code FROM stock_items WHERE name = ? LIMIT 1))";
     QVariantList mviParams = {itemName, itemName};
     if (!fromDate.isEmpty() && !toDate.isEmpty()) {
@@ -1032,8 +1034,8 @@ QVariantList StockItemsModel::get_item_movements(const QString& itemName, const 
         m["isInward"] = isInward;
         m["vDate"] = mv.value("batch_date").toString();
         m["refNo"] = "-";
-        m["type"] = isInward ? "Milling Inwards" : "Milling Outwards";
-        m["party"] = isInward ? "Milling Inwards" : "Milling Outwards";
+        m["type"] = isInward ? "Manufacturing Inwards" : "Manufacturing Outwards";
+        m["party"] = isInward ? "Manufacturing Inwards" : "Manufacturing Outwards";
         m["bags"] = 0; // Loose production / consumption
         m["qty"] = mv.value("weight_qtl").toDouble();
         m["rate"] = 0.0;

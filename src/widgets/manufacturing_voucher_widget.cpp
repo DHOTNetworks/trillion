@@ -1,4 +1,4 @@
-#include "milling_voucher_widget.h"
+#include "manufacturing_voucher_widget.h"
 #include "erp_theme.h"
 #include "item_search_delegate.h"
 #include "voucher_date_dialog.h"
@@ -20,23 +20,23 @@
 
 namespace MahadevERP {
 
-MillingVoucherWidget::MillingVoucherWidget(MillingBatchController* batchCtrl,
-                                           MillingModel* millingModel,
+ManufacturingVoucherWidget::ManufacturingVoucherWidget(ManufacturingBatchController* batchCtrl,
+                                           ManufacturingModel* manufacturingModel,
                                            PrintExportController* printExportCtrl,
                                            QWidget* parent)
     : QWidget(parent)
     , m_batchCtrl(batchCtrl)
-    , m_millingModel(millingModel)
+    , m_manufacturingModel(manufacturingModel)
     , m_printExportCtrl(printExportCtrl)
 {
     setupUi();
     resetForm();
 }
 
-void MillingVoucherWidget::setupUi() {
+void ManufacturingVoucherWidget::setupUi() {
     setAttribute(Qt::WA_StyledBackground, true);
     setStyleSheet(
-        "MillingVoucherWidget { background-color: #F8FAFC; font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'Segoe UI', Arial, sans-serif; }"
+        "ManufacturingVoucherWidget { background-color: #F8FAFC; font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'Segoe UI', Arial, sans-serif; }"
         "QLabel { border: none; background: transparent; color: #1E293B; font-size: 11px; font-weight: 700; }"
         "QLineEdit { background-color: #FFFFFF; color: #0F172A; border: 1px solid #CBD5E1; border-radius: 5px; padding: 2px 6px; font-size: 11.5px; font-weight: 700; }"
         "QLineEdit:focus { border: 1.5px solid #7E22CE; background-color: #FAF5FF; color: #0F172A; }"
@@ -51,13 +51,13 @@ void MillingVoucherWidget::setupUi() {
     rootLayout->setSpacing(4);
 
     // ========================================================================
-    // 1. TOP HEADER BAR: Modern Purple Milling Badge + No. + Title + Date & Day
+    // 1. TOP HEADER BAR: Modern Purple Manufacturing Badge + No. + Title + Date & Day
     // ========================================================================
     auto* topHeaderLayout = new QHBoxLayout();
     topHeaderLayout->setContentsMargins(0, 0, 0, 0);
     topHeaderLayout->setSpacing(6);
 
-    auto* badge = new QLabel("Milling / Out-Turn", this);
+    auto* badge = new QLabel("Manufacturing / Out-Turn", this);
     badge->setAlignment(Qt::AlignCenter);
     badge->setMinimumHeight(22);
     badge->setStyleSheet("background-color: #FAF5FF; color: #7E22CE; font-weight: 900; font-size: 12px; padding: 1px 10px; border: 1px solid #E9D5FF; border-radius: 5px;");
@@ -76,7 +76,7 @@ void MillingVoucherWidget::setupUi() {
 
     topHeaderLayout->addStretch(1);
 
-    auto* titleHeaderLabel = new QLabel("F7 : Milling & Rice Out-Turn Production Voucher", this);
+    auto* titleHeaderLabel = new QLabel("F7 : Manufacturing & Rice Out-Turn Production Voucher", this);
     titleHeaderLabel->setAlignment(Qt::AlignCenter);
     titleHeaderLabel->setStyleSheet(ErpTheme::headerTitleStyle(15));
     topHeaderLayout->addWidget(titleHeaderLabel);
@@ -110,7 +110,7 @@ m_batchDateEdit->setFocusPolicy(Qt::ClickFocus);
     backTopBtn->setMinimumHeight(22);
     backTopBtn->setPrimaryColor("#64748B", "#475569");
     backTopBtn->setTextColor("#FFFFFF");
-    connect(backTopBtn, &QPushButton::clicked, this, &MillingVoucherWidget::backRequested);
+    connect(backTopBtn, &QPushButton::clicked, this, &ManufacturingVoucherWidget::backRequested);
     topHeaderLayout->addWidget(backTopBtn);
 
     rootLayout->addLayout(topHeaderLayout);
@@ -124,7 +124,7 @@ m_batchDateEdit->setFocusPolicy(Qt::ClickFocus);
     metaLayout->setContentsMargins(8, 4, 8, 4);
     metaLayout->setSpacing(8);
 
-    auto* narrLbl = new QLabel("Milling Remarks / Narration:", metaCard);
+    auto* narrLbl = new QLabel("Manufacturing Remarks / Narration:", metaCard);
     narrLbl->setStyleSheet("color: #1E293B; font-weight: 800; font-size: 11px; border: none; background: transparent;");
     metaLayout->addWidget(narrLbl);
 
@@ -170,9 +170,9 @@ m_batchDateEdit->setFocusPolicy(Qt::ClickFocus);
 
     m_consumedItemDelegate = new ItemSearchDelegate(this);
     m_consumedTable->setItemDelegate(m_consumedItemDelegate);
-    connect(m_consumedItemDelegate, &ItemSearchDelegate::stockItemConfigured, this, &MillingVoucherWidget::onConsumedItemConfigured);
-    connect(m_consumedItemDelegate, &ItemSearchDelegate::moveNextRequested, this, &MillingVoucherWidget::advanceConsumedCell);
-    connect(m_consumedItemDelegate, &ItemSearchDelegate::movePrevRequested, this, &MillingVoucherWidget::retreatConsumedCell);
+    connect(m_consumedItemDelegate, &ItemSearchDelegate::stockItemConfigured, this, &ManufacturingVoucherWidget::onConsumedItemConfigured);
+    connect(m_consumedItemDelegate, &ItemSearchDelegate::moveNextRequested, this, &ManufacturingVoucherWidget::advanceConsumedCell);
+    connect(m_consumedItemDelegate, &ItemSearchDelegate::movePrevRequested, this, &ManufacturingVoucherWidget::retreatConsumedCell);
 
     cLayout->addWidget(m_consumedTable);
 
@@ -180,13 +180,13 @@ m_batchDateEdit->setFocusPolicy(Qt::ClickFocus);
     auto* addCBtn = new QPushButton("+ Add Input Row", consumedGroup);
     addCBtn->setMinimumHeight(22);
     addCBtn->setStyleSheet("background-color: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 4px; padding: 2px 8px; font-weight: 800; font-size: 10.5px; color: #DC2626;");
-    connect(addCBtn, &QPushButton::clicked, this, &MillingVoucherWidget::onAddConsumedRow);
+    connect(addCBtn, &QPushButton::clicked, this, &ManufacturingVoucherWidget::onAddConsumedRow);
     cBtnRow->addWidget(addCBtn);
 
     auto* remCBtn = new QPushButton("- Remove Row", consumedGroup);
     remCBtn->setMinimumHeight(22);
     remCBtn->setStyleSheet("background-color: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 4px; padding: 2px 8px; font-weight: 700; font-size: 10.5px; color: #64748B;");
-    connect(remCBtn, &QPushButton::clicked, this, &MillingVoucherWidget::onRemoveConsumedRow);
+    connect(remCBtn, &QPushButton::clicked, this, &ManufacturingVoucherWidget::onRemoveConsumedRow);
     cBtnRow->addWidget(remCBtn);
     cBtnRow->addStretch();
     cLayout->addLayout(cBtnRow);
@@ -216,9 +216,9 @@ m_batchDateEdit->setFocusPolicy(Qt::ClickFocus);
 
     m_producedItemDelegate = new ItemSearchDelegate(this);
     m_producedTable->setItemDelegate(m_producedItemDelegate);
-    connect(m_producedItemDelegate, &ItemSearchDelegate::stockItemConfigured, this, &MillingVoucherWidget::onProducedItemConfigured);
-    connect(m_producedItemDelegate, &ItemSearchDelegate::moveNextRequested, this, &MillingVoucherWidget::advanceProducedCell);
-    connect(m_producedItemDelegate, &ItemSearchDelegate::movePrevRequested, this, &MillingVoucherWidget::retreatProducedCell);
+    connect(m_producedItemDelegate, &ItemSearchDelegate::stockItemConfigured, this, &ManufacturingVoucherWidget::onProducedItemConfigured);
+    connect(m_producedItemDelegate, &ItemSearchDelegate::moveNextRequested, this, &ManufacturingVoucherWidget::advanceProducedCell);
+    connect(m_producedItemDelegate, &ItemSearchDelegate::movePrevRequested, this, &ManufacturingVoucherWidget::retreatProducedCell);
 
     pLayout->addWidget(m_producedTable);
 
@@ -226,13 +226,13 @@ m_batchDateEdit->setFocusPolicy(Qt::ClickFocus);
     auto* addPBtn = new QPushButton("+ Add Output Row", producedGroup);
     addPBtn->setMinimumHeight(22);
     addPBtn->setStyleSheet("background-color: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 4px; padding: 2px 8px; font-weight: 800; font-size: 10.5px; color: #16A34A;");
-    connect(addPBtn, &QPushButton::clicked, this, &MillingVoucherWidget::onAddProducedRow);
+    connect(addPBtn, &QPushButton::clicked, this, &ManufacturingVoucherWidget::onAddProducedRow);
     pBtnRow->addWidget(addPBtn);
 
     auto* remPBtn = new QPushButton("- Remove Row", producedGroup);
     remPBtn->setMinimumHeight(22);
     remPBtn->setStyleSheet("background-color: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 4px; padding: 2px 8px; font-weight: 700; font-size: 10.5px; color: #64748B;");
-    connect(remPBtn, &QPushButton::clicked, this, &MillingVoucherWidget::onRemoveProducedRow);
+    connect(remPBtn, &QPushButton::clicked, this, &ManufacturingVoucherWidget::onRemoveProducedRow);
     pBtnRow->addWidget(remPBtn);
     pBtnRow->addStretch();
     pLayout->addLayout(pBtnRow);
@@ -283,7 +283,7 @@ m_batchDateEdit->setFocusPolicy(Qt::ClickFocus);
     cancelBottomBtn->setMinimumHeight(28);
     cancelBottomBtn->setPrimaryColor("#F1F5F9", "#E2E8F0");
     cancelBottomBtn->setTextColor("#475569");
-    connect(cancelBottomBtn, &QPushButton::clicked, this, &MillingVoucherWidget::backRequested);
+    connect(cancelBottomBtn, &QPushButton::clicked, this, &ManufacturingVoucherWidget::backRequested);
     bottomLayout->addWidget(cancelBottomBtn);
 
     bottomLayout->addStretch();
@@ -293,28 +293,28 @@ m_batchDateEdit->setFocusPolicy(Qt::ClickFocus);
     saveBtn->setPrimaryColor("#16A34A", "#15803D");
     saveBtn->setTextColor("#FFFFFF");
     saveBtn->setMinimumWidth(200);
-    connect(saveBtn, &QPushButton::clicked, this, &MillingVoucherWidget::onSaveClicked);
+    connect(saveBtn, &QPushButton::clicked, this, &ManufacturingVoucherWidget::onSaveClicked);
     bottomLayout->addWidget(saveBtn);
     rootLayout->addLayout(bottomLayout);
 
-    connect(m_consumedTable, &QTableWidget::cellChanged, this, &MillingVoucherWidget::onRecalculate);
-    connect(m_producedTable, &QTableWidget::cellChanged, this, &MillingVoucherWidget::onRecalculate);
+    connect(m_consumedTable, &QTableWidget::cellChanged, this, &ManufacturingVoucherWidget::onRecalculate);
+    connect(m_producedTable, &QTableWidget::cellChanged, this, &ManufacturingVoucherWidget::onRecalculate);
 
-    connect(new QShortcut(QKeySequence(Qt::Key_Escape), this), &QShortcut::activated, this, &MillingVoucherWidget::backRequested);
+    connect(new QShortcut(QKeySequence(Qt::Key_Escape), this), &QShortcut::activated, this, &ManufacturingVoucherWidget::backRequested);
     connect(new QShortcut(QKeySequence(Qt::Key_F2), this), &QShortcut::activated, this, [this]() { openDateDialog(false); });
-    connect(new QShortcut(QKeySequence(Qt::ALT | Qt::Key_S), this), &QShortcut::activated, this, &MillingVoucherWidget::onSaveClicked);
-    connect(new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_S), this), &QShortcut::activated, this, &MillingVoucherWidget::onSaveClicked);
+    connect(new QShortcut(QKeySequence(Qt::ALT | Qt::Key_S), this), &QShortcut::activated, this, &ManufacturingVoucherWidget::onSaveClicked);
+    connect(new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_S), this), &QShortcut::activated, this, &ManufacturingVoucherWidget::onSaveClicked);
 }
 
-void MillingVoucherWidget::resetForm() {
+void ManufacturingVoucherWidget::resetForm() {
     m_editingBatchId = 0;
     QDate cur = QDate::currentDate();
     m_batchDateEdit->setText(cur.toString("dd-MM-yyyy"));
     m_dayLabel->setText(cur.toString("dddd"));
     m_narrationEdit->clear();
 
-    if (m_millingModel) {
-        m_batchNoEdit->setText(m_millingModel->get_next_batch_no(cur.toString("yyyy-MM-dd")));
+    if (m_manufacturingModel) {
+        m_batchNoEdit->setText(m_manufacturingModel->get_next_batch_no(cur.toString("yyyy-MM-dd")));
     } else {
         m_batchNoEdit->setText("MB-2026-0001");
     }
@@ -370,7 +370,7 @@ void MillingVoucherWidget::resetForm() {
     onRecalculate();
 }
 
-void MillingVoucherWidget::openDateDialog(bool isInitial) {
+void ManufacturingVoucherWidget::openDateDialog(bool isInitial) {
     Q_UNUSED(isInitial);
     QDate curDate = QDate::fromString(m_batchDateEdit->text(), "dd-MM-yyyy");
     if (!curDate.isValid()) curDate = QDate::currentDate();
@@ -380,13 +380,13 @@ void MillingVoucherWidget::openDateDialog(bool isInitial) {
     if (chosen.isValid()) {
         m_batchDateEdit->setText(chosen.toString("dd-MM-yyyy"));
         m_dayLabel->setText(chosen.toString("dddd"));
-        if (m_editingBatchId == 0 && m_millingModel) {
-            m_batchNoEdit->setText(m_millingModel->get_next_batch_no(chosen.toString("yyyy-MM-dd")));
+        if (m_editingBatchId == 0 && m_manufacturingModel) {
+            m_batchNoEdit->setText(m_manufacturingModel->get_next_batch_no(chosen.toString("yyyy-MM-dd")));
         }
     }
 }
 
-void MillingVoucherWidget::onAddConsumedRow() {
+void ManufacturingVoucherWidget::onAddConsumedRow() {
     int r = m_consumedTable->rowCount();
     m_consumedTable->insertRow(r);
     auto* it0 = new QTableWidgetItem("Paddy Raw");
@@ -406,7 +406,7 @@ void MillingVoucherWidget::onAddConsumedRow() {
     m_consumedTable->setItem(r, 3, it3);
 }
 
-void MillingVoucherWidget::onRemoveConsumedRow() {
+void ManufacturingVoucherWidget::onRemoveConsumedRow() {
     int r = m_consumedTable->currentRow();
     if (r >= 0 && m_consumedTable->rowCount() > 1) {
         m_consumedTable->removeRow(r);
@@ -414,7 +414,7 @@ void MillingVoucherWidget::onRemoveConsumedRow() {
     }
 }
 
-void MillingVoucherWidget::onAddProducedRow() {
+void ManufacturingVoucherWidget::onAddProducedRow() {
     int r = m_producedTable->rowCount();
     m_producedTable->insertRow(r);
     auto* it0 = new QTableWidgetItem("Rice Finished");
@@ -438,7 +438,7 @@ void MillingVoucherWidget::onAddProducedRow() {
     m_producedTable->setItem(r, 4, it4);
 }
 
-void MillingVoucherWidget::onRemoveProducedRow() {
+void ManufacturingVoucherWidget::onRemoveProducedRow() {
     int r = m_producedTable->currentRow();
     if (r >= 0 && m_producedTable->rowCount() > 1) {
         m_producedTable->removeRow(r);
@@ -446,7 +446,7 @@ void MillingVoucherWidget::onRemoveProducedRow() {
     }
 }
 
-void MillingVoucherWidget::onConsumedItemConfigured(int row, const QVariantMap& itemData) {
+void ManufacturingVoucherWidget::onConsumedItemConfigured(int row, const QVariantMap& itemData) {
     QString name = itemData.value("name").toString().trimmed();
     if (!name.isEmpty() && row >= 0 && row < m_consumedTable->rowCount()) {
         auto* it = m_consumedTable->item(row, 0);
@@ -461,7 +461,7 @@ void MillingVoucherWidget::onConsumedItemConfigured(int row, const QVariantMap& 
     onRecalculate();
 }
 
-void MillingVoucherWidget::onProducedItemConfigured(int row, const QVariantMap& itemData) {
+void ManufacturingVoucherWidget::onProducedItemConfigured(int row, const QVariantMap& itemData) {
     QString name = itemData.value("name").toString().trimmed();
     if (!name.isEmpty() && row >= 0 && row < m_producedTable->rowCount()) {
         auto* it = m_producedTable->item(row, 0);
@@ -476,7 +476,7 @@ void MillingVoucherWidget::onProducedItemConfigured(int row, const QVariantMap& 
     onRecalculate();
 }
 
-void MillingVoucherWidget::advanceConsumedCell() {
+void ManufacturingVoucherWidget::advanceConsumedCell() {
     if (!m_consumedTable) return;
     int curRow = m_consumedTable->currentRow();
     int curCol = m_consumedTable->currentColumn();
@@ -497,7 +497,7 @@ void MillingVoucherWidget::advanceConsumedCell() {
     }
 }
 
-void MillingVoucherWidget::retreatConsumedCell() {
+void ManufacturingVoucherWidget::retreatConsumedCell() {
     if (!m_consumedTable) return;
     int curRow = m_consumedTable->currentRow();
     int curCol = m_consumedTable->currentColumn();
@@ -515,7 +515,7 @@ void MillingVoucherWidget::retreatConsumedCell() {
     }
 }
 
-void MillingVoucherWidget::advanceProducedCell() {
+void ManufacturingVoucherWidget::advanceProducedCell() {
     if (!m_producedTable) return;
     int curRow = m_producedTable->currentRow();
     int curCol = m_producedTable->currentColumn();
@@ -536,7 +536,7 @@ void MillingVoucherWidget::advanceProducedCell() {
     }
 }
 
-void MillingVoucherWidget::retreatProducedCell() {
+void ManufacturingVoucherWidget::retreatProducedCell() {
     if (!m_producedTable) return;
     int curRow = m_producedTable->currentRow();
     int curCol = m_producedTable->currentColumn();
@@ -554,7 +554,7 @@ void MillingVoucherWidget::retreatProducedCell() {
     }
 }
 
-void MillingVoucherWidget::onRecalculate() {
+void ManufacturingVoucherWidget::onRecalculate() {
     double totalInput = 0.0;
     for (int r = 0; r < m_consumedTable->rowCount(); ++r) {
         auto* it = m_consumedTable->item(r, 2);
@@ -594,10 +594,10 @@ void MillingVoucherWidget::onRecalculate() {
     m_shortageLabel->setText(QString("%1 Qtl (%2%)").arg(QString::number(shortage, 'f', 2), QString::number(shortPct, 'f', 1)));
 }
 
-bool MillingVoucherWidget::loadBatchForEditing(const QVariant& batchIdOrNo) {
-    if (!m_millingModel) return false;
+bool ManufacturingVoucherWidget::loadBatchForEditing(const QVariant& batchIdOrNo) {
+    if (!m_manufacturingModel) return false;
 
-    QVariantMap batch = m_millingModel->get_milling_batch(batchIdOrNo);
+    QVariantMap batch = m_manufacturingModel->get_manufacturing_batch(batchIdOrNo);
     if (batch.isEmpty()) return false;
 
     m_editingBatchId = batch.value("id").toInt();
@@ -666,7 +666,7 @@ bool MillingVoucherWidget::loadBatchForEditing(const QVariant& batchIdOrNo) {
     return true;
 }
 
-void MillingVoucherWidget::onSaveClicked() {
+void ManufacturingVoucherWidget::onSaveClicked() {
     double totalInput = 0.0;
     for (int r = 0; r < m_consumedTable->rowCount(); ++r) {
         auto* it = m_consumedTable->item(r, 2);
@@ -683,7 +683,7 @@ void MillingVoucherWidget::onSaveClicked() {
     }
 
     bool ok = false;
-    if (m_millingModel) {
+    if (m_manufacturingModel) {
         QVariantList cItems;
         for (int r = 0; r < m_consumedTable->rowCount(); ++r) {
             QVariantMap m;
@@ -706,7 +706,7 @@ void MillingVoucherWidget::onSaveClicked() {
         }
 
         QDate d = QDate::fromString(m_batchDateEdit->text(), "dd-MM-yyyy");
-        ok = m_millingModel->add_milling_voucher(
+        ok = m_manufacturingModel->add_manufacturing_voucher(
             m_batchNoEdit->text(),
             d.toString("yyyy-MM-dd"),
             m_narrationEdit->text().trimmed(),

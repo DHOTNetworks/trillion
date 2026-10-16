@@ -95,6 +95,7 @@ private:
 
     QLabel* m_previewDateRangeLabel = nullptr;
     QLabel* m_previewFyBadge = nullptr;
+    QLabel* m_fyMessageLabel = nullptr; // X1: locked/soft-closed feedback (selection never moves silently)
     KbdBadgeButton* m_applyBtn = nullptr;
     KbdBadgeButton* m_cancelBtn = nullptr;
 

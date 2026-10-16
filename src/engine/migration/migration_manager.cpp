@@ -150,7 +150,7 @@ bool MigrationManager::runBahiKhataPipeline(MigrationContext& ctx) {
     auto stockTransRows = readTableRows(mdb, "StockTransactions");
     auto transportRows = readTableRows(mdb, "SaleTransportationDetail");
     auto transRows = readTableRows(mdb, "Transactions");
-    auto millingRows = readTableRows(mdb, "MillingVouchers");
+    auto manufacturingRows = readTableRows(mdb, "MillingVouchers");
     auto customRows = readTableRows(mdb, "CustomClosingStocks");
     auto tdsRows = readTableRows(mdb, "TDSDeductions");
     auto bardanaRows = readTableRows(mdb, "BardanaTransactions");
@@ -162,9 +162,9 @@ bool MigrationManager::runBahiKhataPipeline(MigrationContext& ctx) {
 
     mdb_close(mdb);
 
-    // Phase 3 flags: prime domain flags from SOURCE data before
+    // Flag-primed: prime domain flags from SOURCE data before
     // ensureTablesExist creates the gated domain tables. ON-only, package-
-    // aligned (D12: mandi implies bardana+transport, mill implies bardana).
+    // aligned (D12: mandi implies bardana+transport, manufacturing implies bardana).
     // JFrm/IFrm TransTypes, sauda/brokerage rows, or paddy/dheri items all
     // evidence mandi business (paddy arrivals register off purchase items).
     {
@@ -192,9 +192,9 @@ bool MigrationManager::runBahiKhataPipeline(MigrationContext& ctx) {
         const bool mandi = hasTransType("JFrm") || hasTransType("IFrm")
             || !saudaVchRows.empty() || !saudaTxRows.empty() || !brokerageRows.empty()
             || hasItemNamed("paddy") || hasItemNamed("dheri");
-        const bool mill = !millingRows.empty();
-        FeatureFlags::primeFromSource(mandi, mill,
-            mandi || mill || !bardanaRows.empty(),
+        const bool manufacturer = !manufacturingRows.empty();
+        FeatureFlags::primeFromSource(mandi, manufacturer,
+            mandi || manufacturer || !bardanaRows.empty(),
             mandi || !transportRows.empty() || !gatePassRows.empty() || !gateRegRows.empty());
     }
 
@@ -213,8 +213,8 @@ bool MigrationManager::runBahiKhataPipeline(MigrationContext& ctx) {
     db.executeNonQuery("DELETE FROM sales_invoices;");
     db.executeNonQuery("DELETE FROM purchase_invoices;");
     db.executeNonQuery("DELETE FROM paddy_slips;");
-    db.executeNonQuery("DELETE FROM milling_voucher_items;");
-    db.executeNonQuery("DELETE FROM milling_batches;");
+    db.executeNonQuery("DELETE FROM manufacturing_voucher_items;");
+    db.executeNonQuery("DELETE FROM manufacturing_batches;");
     db.executeNonQuery("DELETE FROM stock_transactions;");
     db.executeNonQuery("DELETE FROM jform_vouchers;");
     db.executeNonQuery("DELETE FROM jform_voucher_items;");
@@ -235,7 +235,7 @@ bool MigrationManager::runBahiKhataPipeline(MigrationContext& ctx) {
     // Company info & FY
     ctx.updateProgress(15, "Migrating Company Info & Financial Years...");
     int booksStartYear = 0;
-    QString compName = "Mahadev Modern Rice Mills";
+    QString compName = "ABC Pvt. Ltd.";
     QString gstin, pan, firmType, address, state, stateCode, pincode, phone, mobile;
 
     if (!compRows.empty()) {
@@ -279,7 +279,7 @@ bool MigrationManager::runBahiKhataPipeline(MigrationContext& ctx) {
     ctx.stats.firmType = firmType;
 
     // Financial years
-    QMap<QString, int> fyNameToId;
+    std::map<QString, int> fyNameToId;
     int baseStart = (booksStartYear > 0) ? booksStartYear : 2024;
     for (int y = 2000; y <= 2035; ++y) {
         int nextY = (y + 1) % 100;
@@ -300,23 +300,57 @@ bool MigrationManager::runBahiKhataPipeline(MigrationContext& ctx) {
     std::map<int, qint64> groupCodeToIdMap;
     GroupMigrator::migrate_groups_bahikhata(ctx, groupRows, groupCodeMap, groupCodeToIdMap);
 
-    // 2. Ledgers
+    // 2. Ledgers (C3 slice V: detail maps stay alive for the voucher
+    // stage now — the dead-bridge simplification is gone).
     std::map<int, std::string> ledgerCodeToName;
     std::map<int, qint64> ledgerCodeToId;
-    LedgerMigrator::migrate_ledgers_bahikhata(ctx, ledgerRows, groupCodeMap, groupCodeToIdMap, ledgerCodeToName, ledgerCodeToId);
+    std::map<int, PartyDetail> ledgerDetailMap;
+    std::map<int, int> legacyToParty;
+    std::map<int, std::string> ledgerDeletedNameMap;
+    {
+        std::map<int, std::vector<int>> lineage;
+        LedgerMigrator::migrate_ledgers_bahikhata(ctx, ledgerRows, QString(),
+            groupCodeMap, lineage, groupCodeToIdMap, nullptr,
+            ledgerCodeToName, ledgerDetailMap, legacyToParty, ledgerDeletedNameMap);
+        for (const auto& kv : ledgerDetailMap) {
+            ledgerCodeToId[kv.first] = kv.second.id;
+        }
+    }
 
     // 3. Stocks
     std::map<int, std::string> stockGroupMap;
     std::map<int, std::string> stockUnitMap;
     std::map<int, std::string> itemCodeToName;
     std::map<int, qint64> itemCodeToId;
-    StockMigrator::migrate_stocks_bahikhata(ctx, stockGroupRows, stockUnitRows, itemRows, stockGroupMap, stockUnitMap, itemCodeToName, itemCodeToId);
+    std::map<int, ItemDetail> itemDetailMap;
+    {
+        std::map<int, std::string> emptyLedgerNames;
+        std::map<int, int> emptyLegacyToParty;
+        StockMigrator::migrate_stock_masters_bahikhata(ctx, stockGroupRows, stockUnitRows,
+            stockGroupMap, stockUnitMap);
+        StockMigrator::migrate_stock_items_bahikhata(ctx, itemRows,
+            emptyLedgerNames, emptyLegacyToParty, stockGroupMap, stockUnitMap,
+            itemDetailMap, itemCodeToName, itemCodeToId);
+    }
 
-    // 4. Vouchers & Double Entry
-    VoucherMigrator::migrate_vouchers_bahikhata(ctx, transRows, stockTransRows, transportRows, ledgerCodeToName, ledgerCodeToId, itemCodeToName, itemCodeToId, stockUnitMap, fyNameToId);
+    // 4. Vouchers & Double Entry (C3 slice V: live strangler fns with real
+    // maps — the retired dead pipeline body is gone).
+    {
+        std::map<std::string, std::vector<StockMovementEntry>> stockTransMap;
+        std::map<std::string, LogisticsEntry> transportMap;
+        std::map<std::string, std::vector<std::map<std::string, std::string>>> voucherGroups;
+        int salesInvCount = 0, purchaseInvoiceCount = 0;
+        VoucherMigrator::migrate_movements_bahikhata(ctx, stockTransRows, transportRows,
+            itemDetailMap, stockTransMap, transportMap);
+        VoucherMigrator::migrate_transactions_bahikhata(ctx, transRows, stockTransMap, transportMap,
+            ledgerCodeToName, ledgerDetailMap, ledgerDeletedNameMap, fyNameToId,
+            voucherGroups, salesInvCount, purchaseInvoiceCount);
+        VoucherMigrator::migrate_stock_ledger_bahikhata(ctx, transRows, stockTransRows,
+            ledgerDetailMap, itemDetailMap, fyNameToId);
+    }
 
     // 5. Mandi & Agri Operations
-    MandiMigrator::migrate_mandi_bahikhata(ctx, transRows, millingRows, customRows, tdsRows, bardanaRows, gatePassRows, gateRegRows, saudaVchRows, saudaTxRows, brokerageRows, ledgerCodeToName, ledgerCodeToId, itemCodeToName, itemCodeToId, stockUnitMap, fyNameToId);
+    MandiMigrator::migrate_mandi_bahikhata(ctx, transRows, manufacturingRows, customRows, tdsRows, bardanaRows, gatePassRows, gateRegRows, saudaVchRows, saudaTxRows, brokerageRows, ledgerCodeToName, ledgerCodeToId, itemCodeToName, itemCodeToId, stockUnitMap, fyNameToId);
 
     db.commit();
     db.executeNonQuery("PRAGMA foreign_keys = ON;");
@@ -370,7 +404,7 @@ bool MigrationManager::runBusyPipeline(MigrationContext& ctx) {
     auto mandiRows = readTableRows(mdb, "MandiForms");
     mdb_close(mdb);
 
-    // Phase 3 flags: Busy mandi forms imply the mandi bundle (D12).
+    // Flag-primed: Busy mandi forms imply the mandi bundle (D12).
     FeatureFlags::primeFromSource(!mandiRows.empty(), false,
         !mandiRows.empty(), !mandiRows.empty());
 
@@ -399,7 +433,7 @@ bool MigrationManager::runBusyPipeline(MigrationContext& ctx) {
         "VALUES ('Busy Enterprise Firm', 'Haryana', '06');"
     );
 
-    QMap<QString, int> fyNameToId;
+    std::map<QString, int> fyNameToId;
     for (int y = 2000; y <= 2035; ++y) {
         int nextY = (y + 1) % 100;
         QString yName = QString("%1-%2").arg(y).arg(nextY, 2, 10, QChar('0'));
@@ -517,7 +551,7 @@ bool MigrationManager::runTallyPipeline(MigrationContext& ctx) {
         "VALUES ('Tally Imported Enterprise', 'Haryana', '06');"
     );
 
-    QMap<QString, int> fyNameToId;
+    std::map<QString, int> fyNameToId;
     for (int y = 2000; y <= 2035; ++y) {
         int nextY = (y + 1) % 100;
         QString yName = QString("%1-%2").arg(y).arg(nextY, 2, 10, QChar('0'));
