@@ -13,9 +13,44 @@
 #include <QRegularExpression>
 #include <QMap>
 #include <QSet>
+#include <QStringList>
 #include <cmath>
+#include "migration/migration_columns.h"
 
 namespace MahadevERP {
+
+// ---- C3 Tally slice: JSON-driven XML element-name matching ----
+// Each key's accepted element names come from
+// plan/schema_mapping.json (via MigrationColumns), pipe-joined as an
+// ordered fallback. Behaviour is identical to the previous hardcoded
+// literals (the fallbacks mirror the JSON exactly; verify* enforces).
+static inline bool tallyHas(const QString& spec, const QString& sub) {
+    if (spec.isEmpty()) return false;
+    const QStringList parts = spec.split('|');
+    for (const QString& p : parts) {
+        if (p.trimmed() == sub) return true;
+    }
+    return false;
+}
+
+// True when `sub` is the FIRST (primary) element name for `spec` — used
+// where the original code preferred the primary name over a fallback.
+static inline bool tallyIsPrimary(const QString& spec, const QString& sub) {
+    return !spec.isEmpty() && spec.section('|', 0, 0).trimmed() == sub;
+}
+
+static inline bool isAcc(const QString& key, const QString& sub) {
+    return tallyHas(MigrationColumns::tallyAccountField(key), sub);
+}
+static inline bool isStock(const QString& key, const QString& sub) {
+    return tallyHas(MigrationColumns::tallyStockField(key), sub);
+}
+static inline bool isUnit(const QString& key, const QString& sub) {
+    return tallyHas(MigrationColumns::tallyUnitField(key), sub);
+}
+static inline bool isVch(const QString& key, const QString& sub) {
+    return tallyHas(MigrationColumns::tallyVoucherField(key), sub);
+}
 
 static const QMap<QString, QString> s_stateCodes = {
     {"JAMMU AND KASHMIR", "01"}, {"HIMACHAL PRADESH", "02"}, {"PUNJAB", "03"},
@@ -355,9 +390,9 @@ QVariantMap TallyDataMigrator::inspect_tally_data(const QString& tallyPath) {
                         xml.readNext();
                         if (xml.isStartElement()) {
                             QString sub = xml.name().toString().toUpper();
-                            if (sub == "DATE" && !xml.readElementText().trimmed().isEmpty()) {
+                            if (isVch("voucher_date", sub) && !xml.readElementText().trimmed().isEmpty()) {
                                 financialYear = computeFy(parseDateStr(xml.readElementText()));
-                            } else if (sub == "PARTYGSTIN" && gstin.isEmpty()) {
+                            } else if (isVch("party_gstin", sub) && gstin.isEmpty()) {
                                 gstin = xml.readElementText().trimmed().toUpper();
                             } else if (sub == "ALLLEDGERENTRIES.LIST" || sub == "LEDGERENTRIES.LIST" || sub == "ACCOUNTINGALLOCATIONS.LIST") {
                                 glTransactionsCount++;
@@ -365,7 +400,7 @@ QVariantMap TallyDataMigrator::inspect_tally_data(const QString& tallyPath) {
                                     xml.readNext();
                                     if (xml.isStartElement()) {
                                         QString lsub = xml.name().toString().toUpper();
-                                        if (lsub == "AMOUNT") {
+                                        if (isVch("ledger_amount", lsub)) {
                                             double amt = xml.readElementText().toDouble();
                                             if (amt < 0) totalDr += std::abs(amt);
                                             else totalCr += amt;
@@ -561,8 +596,8 @@ bool TallyDataMigrator::migrate_tally_data(const QString& tallyPath, const QStri
                         xml.readNext();
                         if (xml.isStartElement()) {
                             QString sub = xml.name().toString().toUpper();
-                            if (sub == "NAME" && name.isEmpty()) name = xml.readElementText();
-                            else if (sub == "DECIMALPLACES") decPlaces = xml.readElementText().toInt();
+                            if (isUnit("unit_name", sub) && name.isEmpty()) name = xml.readElementText();
+                            else if (isUnit("decimal_places", sub)) decPlaces = xml.readElementText().toInt();
                         }
                     }
                     if (!name.isEmpty()) {
@@ -576,8 +611,8 @@ bool TallyDataMigrator::migrate_tally_data(const QString& tallyPath, const QStri
                         xml.readNext();
                         if (xml.isStartElement()) {
                             QString sub = xml.name().toString().toUpper();
-                            if (sub == "NAME" && sg.name.isEmpty()) sg.name = xml.readElementText();
-                            else if (sub == "PARENT") sg.parent = xml.readElementText();
+                            if (isStock("name", sub) && sg.name.isEmpty()) sg.name = xml.readElementText();
+                            else if (isStock("group_name", sub)) sg.parent = xml.readElementText();
                         }
                     }
                     if (!sg.name.isEmpty()) {
@@ -591,11 +626,11 @@ bool TallyDataMigrator::migrate_tally_data(const QString& tallyPath, const QStri
                         xml.readNext();
                         if (xml.isStartElement()) {
                             QString sub = xml.name().toString().toUpper();
-                            if (sub == "NAME" && g.name.isEmpty()) g.name = xml.readElementText();
-                            else if (sub == "PARENT") g.parent = xml.readElementText();
-                            else if (sub == "ISREVENUE") g.isRevenue = (xml.readElementText().trimmed().toLower() == "yes");
-                            else if (sub == "AFFECTSGROSSPROFIT") g.affectsGrossProfit = (xml.readElementText().trimmed().toLower() == "yes");
-                            else if (sub == "ISDEEMEDPOSITIVE") g.isDeemedPositive = (xml.readElementText().trimmed().toLower() == "yes");
+                            if (isAcc("name", sub) && g.name.isEmpty()) g.name = xml.readElementText();
+                            else if (isAcc("group_name", sub)) g.parent = xml.readElementText();
+                            else if (tallyIsPrimary(MigrationColumns::tallyAccountField("nature"), sub)) g.isRevenue = (xml.readElementText().trimmed().toLower() == "yes");
+                            else if (isAcc("nature", sub)) g.affectsGrossProfit = (xml.readElementText().trimmed().toLower() == "yes");
+                            else if (isAcc("balance_type", sub)) g.isDeemedPositive = (xml.readElementText().trimmed().toLower() == "yes");
                         }
                     }
                     if (!g.name.isEmpty()) {
@@ -611,22 +646,22 @@ bool TallyDataMigrator::migrate_tally_data(const QString& tallyPath, const QStri
                         xml.readNext();
                         if (xml.isStartElement()) {
                             QString sub = xml.name().toString().toUpper();
-                            if (sub == "NAME" && l.name.isEmpty()) l.name = xml.readElementText();
-                            else if (sub == "PARENT") l.parent = xml.readElementText();
-                            else if (sub == "PARTYGSTIN" || sub == "GSTIN" || sub == "GSTREGISTRATIONNUMBER") l.gstin = xml.readElementText().trimmed().toUpper();
-                            else if (sub == "INCOMETAXNUMBER" || sub == "PAN") l.pan = xml.readElementText().trimmed().toUpper();
-                            else if (sub == "PARTYSTATE" || sub == "STATENAME" || sub == "LEDSTATENAME") l.state = xml.readElementText();
-                            else if (sub == "PINCODE") l.pincode = xml.readElementText();
-                            else if (sub == "ADDRESS") {
+                            if (isAcc("name", sub) && l.name.isEmpty()) l.name = xml.readElementText();
+                            else if (isAcc("group_name", sub)) l.parent = xml.readElementText();
+                            else if (isAcc("gstin", sub)) l.gstin = xml.readElementText().trimmed().toUpper();
+                            else if (isAcc("pan", sub)) l.pan = xml.readElementText().trimmed().toUpper();
+                            else if (isAcc("state", sub)) l.state = xml.readElementText();
+                            else if (isAcc("pincode", sub)) l.pincode = xml.readElementText();
+                            else if (isAcc("address", sub)) {
                                 QString a = xml.readElementText().trimmed();
                                 if (!a.isEmpty()) {
                                     l.address = l.address.isEmpty() ? a : (l.address + ", " + a);
                                 }
                             }
-                            else if (sub == "ACCOUNTNUMBER" || sub == "BANKDETAILS") l.bankAccount = xml.readElementText();
-                            else if (sub == "IFSCODE") l.ifsc = xml.readElementText();
-                            else if (sub == "BANKNAME") l.bankName = xml.readElementText();
-                            else if (sub == "OPENINGBALANCE") {
+                            else if (isAcc("bank_account", sub)) l.bankAccount = xml.readElementText();
+                            else if (isAcc("bank_ifsc", sub)) l.ifsc = xml.readElementText();
+                            else if (isAcc("bank_name", sub)) l.bankName = xml.readElementText();
+                            else if (isAcc("opening_balance", sub)) {
                                 double bal = xml.readElementText().toDouble();
                                 if (bal < 0) {
                                     l.openingBalance = std::abs(bal);
@@ -636,11 +671,11 @@ bool TallyDataMigrator::migrate_tally_data(const QString& tallyPath, const QStri
                                     l.balanceType = "Cr";
                                 }
                             }
-                            else if (sub == "ISDEEMEDPOSITIVE") {
+                            else if (isAcc("balance_type", sub)) {
                                 if (xml.readElementText().trimmed().toLower() == "yes") l.balanceType = "Dr";
                             }
-                            else if (sub == "BILLCREDITPERIOD") l.creditDays = xml.readElementText().toInt();
-                            else if (sub == "CREDITLIMIT") l.creditLimit = xml.readElementText().toDouble();
+                            else if (isAcc("credit_days", sub)) l.creditDays = xml.readElementText().toInt();
+                            else if (isAcc("credit_limit", sub)) l.creditLimit = xml.readElementText().toDouble();
                         }
                     }
                     if (!l.name.isEmpty()) {
@@ -657,17 +692,17 @@ bool TallyDataMigrator::migrate_tally_data(const QString& tallyPath, const QStri
                         xml.readNext();
                         if (xml.isStartElement()) {
                             QString sub = xml.name().toString().toUpper();
-                            if (sub == "NAME" && itm.name.isEmpty()) itm.name = xml.readElementText();
-                            else if (sub == "PARENT") itm.parent = xml.readElementText();
-                            else if (sub == "BASEUNITS") itm.unit = xml.readElementText();
-                            else if (sub == "HSNCODE") itm.hsn = xml.readElementText();
-                            else if (sub == "GSTRATE") itm.gstRate = xml.readElementText().toDouble();
-                            else if (sub == "OPENINGBALANCE") {
+                            if (isStock("name", sub) && itm.name.isEmpty()) itm.name = xml.readElementText();
+                            else if (isStock("group_name", sub)) itm.parent = xml.readElementText();
+                            else if (isStock("unit", sub)) itm.unit = xml.readElementText();
+                            else if (isStock("hsn_code", sub)) itm.hsn = xml.readElementText();
+                            else if (isStock("gst_rate", sub)) itm.gstRate = xml.readElementText().toDouble();
+                            else if (isStock("opening_qty", sub)) {
                                 QString rawOp = xml.readElementText().trimmed();
                                 itm.openingQty = rawOp.split(" ").first().toDouble();
                             }
-                            else if (sub == "OPENINGRATE") itm.openingRate = xml.readElementText().toDouble();
-                            else if (sub == "OPENINGVALUE") itm.openingValue = std::abs(xml.readElementText().toDouble());
+                            else if (isStock("opening_rate", sub)) itm.openingRate = xml.readElementText().toDouble();
+                            else if (isStock("opening_value", sub)) itm.openingValue = std::abs(xml.readElementText().toDouble());
                         }
                     }
                     if (!itm.name.isEmpty()) {
@@ -686,43 +721,47 @@ bool TallyDataMigrator::migrate_tally_data(const QString& tallyPath, const QStri
                         xml.readNext();
                         if (xml.isStartElement()) {
                             QString sub = xml.name().toString().toUpper();
-                            if (sub == "VOUCHERTYPENAME" && (v.vchType.isEmpty() || v.vchType == "Journal")) v.vchType = xml.readElementText();
-                            else if (sub == "VOUCHERNUMBER") v.vchNo = xml.readElementText();
-                            else if (sub == "DATE") v.dateStr = parseDateStr(xml.readElementText());
-                            else if (sub == "PARTYLEDGERNAME" || (sub == "PARTYNAME" && v.partyName.isEmpty())) v.partyName = xml.readElementText();
-                            else if (sub == "PARTYGSTIN") v.partyGstin = xml.readElementText().trimmed().toUpper();
-                            else if (sub == "PARTYPINCODE") v.partyPincode = xml.readElementText().trimmed();
-                            else if (sub == "STATENAME" || sub == "PARTYSTATE") v.partyState = xml.readElementText().trimmed();
-                            else if (sub == "NARRATION") v.narration = xml.readElementText();
+                            if (isVch("voucher_type", sub) && (v.vchType.isEmpty() || v.vchType == "Journal")) v.vchType = xml.readElementText();
+                            else if (isVch("voucher_no", sub)) v.vchNo = xml.readElementText();
+                            else if (isVch("voucher_date", sub)) v.dateStr = parseDateStr(xml.readElementText());
+                            else if (isVch("party_name", sub)) {
+                                const QString val = xml.readElementText();
+                                if (tallyIsPrimary(MigrationColumns::tallyVoucherField("party_name"), sub) || v.partyName.isEmpty())
+                                    v.partyName = val;
+                            }
+                            else if (isVch("party_gstin", sub)) v.partyGstin = xml.readElementText().trimmed().toUpper();
+                            else if (isVch("party_pincode", sub)) v.partyPincode = xml.readElementText().trimmed();
+                            else if (isVch("party_state", sub)) v.partyState = xml.readElementText().trimmed();
+                            else if (isVch("narration", sub)) v.narration = xml.readElementText();
                             else if (sub == "ALLINVENTORYENTRIES.LIST") {
                                 TallyVoucherItem vi;
                                 while (!(xml.tokenType() == QXmlStreamReader::EndElement && xml.name().toString().toUpper() == "ALLINVENTORYENTRIES.LIST") && !xml.atEnd()) {
                                     xml.readNext();
                                     if (xml.isStartElement()) {
                                         QString isub = xml.name().toString().toUpper();
-                                        if (isub == "STOCKITEMNAME") vi.item = xml.readElementText();
-                                        else if (isub == "RATE") vi.rate = xml.readElementText().split("/").first().toDouble();
-                                        else if (isub == "AMOUNT") vi.amount = std::abs(xml.readElementText().toDouble());
-                                        else if (isub == "ACTUALQTY" || isub == "BILLEDQTY") {
+                                        if (isVch("item_name", isub)) vi.item = xml.readElementText();
+                                        else if (isVch("item_rate", isub)) vi.rate = xml.readElementText().split("/").first().toDouble();
+                                        else if (isVch("item_amount", isub)) vi.amount = std::abs(xml.readElementText().toDouble());
+                                        else if (isVch("item_qty", isub)) {
                                             QString qstr = xml.readElementText().trimmed();
                                             vi.qty = qstr.split(" ").first().toDouble();
                                             if (qstr.contains(" ")) vi.unit = qstr.split(" ").last();
                                         }
-                                        else if (isub == "BATCHNAME") vi.batch = xml.readElementText();
-                                        else if (isub == "GODOWNNAME") vi.godown = xml.readElementText();
+                                        else if (isVch("item_batch", isub)) vi.batch = xml.readElementText();
+                                        else if (isVch("item_godown", isub)) vi.godown = xml.readElementText();
                                         else if (isub == "ACCOUNTINGALLOCATIONS.LIST") {
                                             TallyVoucherSplit vs;
                                             while (!(xml.tokenType() == QXmlStreamReader::EndElement && xml.name().toString().toUpper() == "ACCOUNTINGALLOCATIONS.LIST") && !xml.atEnd()) {
                                                 xml.readNext();
                                                 if (xml.isStartElement()) {
                                                     QString asub = xml.name().toString().toUpper();
-                                                    if (asub == "LEDGERNAME") vs.ledger = xml.readElementText();
-                                                    else if (asub == "AMOUNT") {
+                                                    if (isVch("ledger_name", asub)) vs.ledger = xml.readElementText();
+                                                    else if (isVch("ledger_amount", asub)) {
                                                         double a = xml.readElementText().toDouble();
                                                         vs.drCr = (a < 0) ? "Dr" : "Cr";
                                                         vs.amount = std::abs(a);
                                                     }
-                                                    else if (asub == "ISDEEMEDPOSITIVE") {
+                                                    else if (isVch("ledger_positive", asub)) {
                                                         if (xml.readElementText().trimmed().toLower() == "yes") vs.drCr = "Dr";
                                                     }
                                                 }
@@ -743,13 +782,13 @@ bool TallyDataMigrator::migrate_tally_data(const QString& tallyPath, const QStri
                                     xml.readNext();
                                     if (xml.isStartElement()) {
                                         QString lsub = xml.name().toString().toUpper();
-                                        if (lsub == "LEDGERNAME") vs.ledger = xml.readElementText();
-                                        else if (lsub == "AMOUNT") {
+                                        if (isVch("ledger_name", lsub)) vs.ledger = xml.readElementText();
+                                        else if (isVch("ledger_amount", lsub)) {
                                             double a = xml.readElementText().toDouble();
                                             vs.drCr = (a < 0) ? "Dr" : "Cr";
                                             vs.amount = std::abs(a);
                                         }
-                                        else if (lsub == "ISDEEMEDPOSITIVE") {
+                                        else if (isVch("ledger_positive", lsub)) {
                                             if (xml.readElementText().trimmed().toLower() == "yes") vs.drCr = "Dr";
                                         }
                                     }

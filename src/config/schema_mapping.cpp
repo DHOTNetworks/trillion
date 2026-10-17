@@ -80,9 +80,11 @@ bool SchemaMapping::load(const QString& path) {
         m["has_read_filter"] = t.contains("read_filter");
         QVariantList cols;
         for (const QJsonValue& c : t.value("columns").toArray()) {
-            QVariantMap cm;
-            cm["source"] = c.toObject().value("source").toString();
-            cm["target"] = c.toObject().value("target").toString();
+            // Pass every declared key through, not just source/target: the
+            // exporter roster (tds_vouchers -> TDSDeductions) is ORDERED and
+            // carries position/jet_type. Consumers key off source/target and
+            // ignore the rest, so extra metadata is additive.
+            QVariantMap cm = c.toObject().toVariantMap();
             if (!cm["source"].toString().isEmpty()) cols.append(cm);
         }
         m["columns"] = cols;

@@ -5,6 +5,7 @@
 #include "../database_manager.h"
 #include "../services/financial_math_service.h"
 #include "fiscal_year_helper.h"
+#include "migration/migration_columns.h"
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
@@ -1362,6 +1363,27 @@ static bool insertSaleTransportationRow(MdbHandle* mdb, MdbTableDef* trTbl, cons
     setTNull(55, QByteArray(), true); // EInvAckDate
 
     return insertJet4Row(mdb, trTbl, fields.data(), trTbl->num_cols);
+}
+
+/* C3 exporter slice: the TDS write-back binds values POSITIONALLY, so the
+ * target template's column ORDER is the contract (see plan/schema_mapping.json
+ * entry tds_vouchers -> TDSDeductions). Compare the template against that
+ * roster and report drift loudly instead of writing mis-ordered values into
+ * the firm's Jet file; the caller then leaves the table untouched. */
+static bool exporterTdsTemplateMatches(MdbTableDef* tdsTbl) {
+    if (!tdsTbl) return false;
+    const QStringList want = MigrationColumns::exporterTdsJetColumns();
+    if (want.isEmpty()) {
+        qWarning() << "[EXPORT] TDS roster is empty (schema map unloadable); skipping TDS export.";
+        return false;
+    }
+    if ((int)tdsTbl->num_cols != want.size()) return false;
+    for (int i = 0; i < (int)tdsTbl->num_cols; ++i) {
+        MdbColumn* c = (MdbColumn*)g_ptr_array_index(tdsTbl->columns, i);
+        const QString have = (c && c->name) ? QString::fromLatin1(c->name) : QString();
+        if (have.compare(want.at(i), Qt::CaseInsensitive) != 0) return false;
+    }
+    return true;
 }
 #endif
 
@@ -2744,6 +2766,18 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
                 mdb_read_columns(tdsTbl);
                 mdb_read_indices(tdsTbl);
 
+                if (!exporterTdsTemplateMatches(tdsTbl)) {
+                    // Fail loud: writing 19 positional values into a template
+                    // with a different order/width would silently corrupt the
+                    // firm's Jet file. Leave the table untouched and name the
+                    // expected order so the mismatch is fixable.
+                    qWarning() << "[EXPORT] TDSDeductions template does not match the C3"
+                               << "roster (columns" << tdsTbl->num_cols << "vs"
+                               << MigrationColumns::exporterTdsJetColumns().size() << ");"
+                               << "expected order:" << MigrationColumns::exporterTdsJetColumns()
+                               << "- table left untouched.";
+                    mdb_free_tabledef(tdsTbl);
+                } else {
                 std::set<std::tuple<int, QString, QString, int>> existingTdsSig;
                 std::vector<Jet4Writer::RowSnapshot> tdsSnap;
                 if (Jet4Writer::TableSnapshot::snapshot(mdb, tdsTbl, tdsSnap).ok) {
@@ -2765,15 +2799,22 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
                     }
                 }
 
-                // Query SQLite TDSDeductions table
+                // Query SQLite TDSDeductions table. account_code resolution
+                // mirrors the Transactions path's chain: the staging value is
+                // "legacy code if known, else party id" (backfill +
+                // tds_model both write it that way), so the legacy-code
+                // interpretation is tried FIRST. Joining it as a bare party
+                // id mis-mapped 144 rows wherever a code collided with a
+                // different party's id.
                 QVariantList tdsRows = appDb.executeQuery(
                     "SELECT d.voucher_date, d.voucher_number, d.trans_type, "
-                    "COALESCE(p.legacy_id, d.account_code) as account_code, "
+                    "COALESCE((SELECT legacy_id FROM parties WHERE legacy_id = d.account_code), "
+                    "(SELECT legacy_id FROM parties WHERE id = d.account_code), "
+                    "d.account_code) AS account_code, "
                     "d.income_amount, d.tds, d.surcharge, d.education, d.tds_rate, "
                     "d.income_type, d.reason_for_non_deduction, d.rate_tds, d.rate_surcharge, d.rate_education, "
                     "d.post_in_books, d.challan_voucher_date, d.challan_voucher_number, d.income_narration, d.prev_income_amount "
                     "FROM TDSDeductions d "
-                    "LEFT JOIN parties p ON d.account_code = p.id "
                     "ORDER BY d.voucher_date ASC, d.voucher_number ASC;"
                 );
 
@@ -2811,8 +2852,14 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
                     double rSur = r.value("rate_surcharge", 0.0).toDouble();
                     double rEdu = r.value("rate_education", 0.0).toDouble();
                     guint32 postBooks = (guint32)r.value("post_in_books", 1).toInt();
-                    double chDateOle = toOleDate(r.value("challan_voucher_date").toString());
-                    guint32 chVchNo = (guint32)r.value("challan_voucher_number", 0).toInt();
+                    // Legacy challan pair: absent = a true Jet NULL. A
+                    // fabricated 1899-12-30 epoch date / 0 would read as real
+                    // register data in the firm's file (C3 TDS
+                    // register-fidelity slice).
+                    const QString chDateStr = r.value("challan_voucher_date").toString().trimmed();
+                    double chDateOle = toOleDate(chDateStr);
+                    const int chVchNoInt = r.value("challan_voucher_number", 0).toInt();
+                    guint32 chVchNo = (guint32)chVchNoInt;
                     double prevAmt = r.value("prev_income_amount", 0.0).toDouble();
 
                     // Col 0: VoucherDate (DateTime)
@@ -2851,9 +2898,11 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
                     f[13].is_null = 0; f[13].value = &rEdu; f[13].siz = 8;
                     // Col 14: PostInBooks (Long Integer 4)
                     f[14].is_null = 0; f[14].value = &postBooks; f[14].siz = 4;
-                    // Col 15: ChallanVoucherDate (DateTime)
-                    f[15].is_null = 0; f[15].value = &chDateOle; f[15].siz = 8;
-                    // Col 16: ChallanVoucherNumber (Long Integer 4)
+                    // Col 15: ChallanVoucherDate (DateTime) — NULL when absent
+                    if (!chDateStr.isEmpty()) { f[15].is_null = 0; f[15].value = &chDateOle; f[15].siz = 8; }
+                    // Col 16: ChallanVoucherNumber (Long Integer 4). Written as-is:
+                    // 0 is the legacy schema's own "no challan" sentinel, so a
+                    // NULL here would not reproduce the firm's stored value.
                     f[16].is_null = 0; f[16].value = &chVchNo; f[16].siz = 4;
                     // Col 17: IncomeNarration (Text 255)
                     MdbColumn* cIN = (MdbColumn*)g_ptr_array_index(tdsTbl->columns, 17);
@@ -2871,6 +2920,7 @@ BahiKhataExporter::ExportSummary BahiKhataExporter::exportViaLibMdb(const Export
                 finalizeJet4Table(mdb, tdsTbl);
                 mdb_free_tabledef(tdsTbl);
                 std::cout << "[EXPORT] TDSDeductions Exported: " << tdsExported << std::endl;
+                } // end C3 roster guard (template matches -> positional write)
             }
 
             // Sync TempLastEnteredVoucher with latest transaction date and FY range.

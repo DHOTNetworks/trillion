@@ -34,22 +34,28 @@ dist/
 
 # Local SQLite databases (keep data folder template if needed)
 data/
+
 scripts/
 *.md
+
 !README.md
 !THIRD_PARTY_NOTICES.md
-docs/*.md
-docs/**/*.md
+
+!docs/*.md
+!docs/**/*.md
 !decompiled-data/*.md
-impl*.md
+!impl*.md
 SCRATCH.md
 TOOL-USAGE.md
 AGENTS.md
+
 *.db
 *.db-shm
 *.db-wal
 *.class
-*.pdf
+
+!*.pdf
+
 *.xls
 *.xlsx
 *.XLS
@@ -58,10 +64,13 @@ AGENTS.md
 *.html
 *.htm
 *.json
+
 !plan/schema_mapping.json
+
 *.ods
 *.odt
-*.png
+
+!*.png
 
 
 # Files

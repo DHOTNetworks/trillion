@@ -242,8 +242,6 @@ set(SOURCES
     src/engine/migration/voucher_migrator.cpp
     src/engine/migration/mandi_migrator.h
     src/engine/migration/mandi_migrator.cpp
-    src/engine/migration/migration_manager.h
-    src/engine/migration/migration_manager.cpp
     src/engine/bahi_khata_migrator.h
     src/engine/bahi_khata_migrator.cpp
     src/engine/bahi_khata_exporter.h

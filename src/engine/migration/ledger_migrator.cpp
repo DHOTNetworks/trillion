@@ -49,17 +49,6 @@ static int parseInteger(const std::string& s, int def = 0) {
     }
 }
 
-static QString toTitleCase(const QString& str) {
-    if (str.trimmed().isEmpty()) return "";
-    QStringList parts = str.split(' ', Qt::SkipEmptyParts);
-    for (QString& p : parts) {
-        if (!p.isEmpty()) {
-            p = p.left(1).toUpper() + p.mid(1).toLower();
-        }
-    }
-    return parts.join(" ");
-}
-
 bool LedgerMigrator::migrate_ledgers_bahikhata(
     MigrationContext& ctx,
     const std::vector<std::map<std::string, std::string>>& ledgerRows,

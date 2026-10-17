@@ -630,9 +630,32 @@ bool TdsModel::save_tds_voucher_in(MahadevERP::DbTx& tx, const QVariantMap& data
     const QString vchCode = QString("TDS-%1").arg(voucherNo);
     const QString vchNumStr = QString::number(voucherNo);
 
+    // Legacy TDS register fields (C3 TDS register-fidelity slice). The app UI
+    // has no trans_type/challan inputs, so a migrated row being edited keeps
+    // what the import stored (the UPDATE above never writes those columns).
+    // The staging row must reuse the SAME identity or the register would end
+    // up with a duplicate (trans_type 'Purc' left behind) — or lose the
+    // challan the firm's legacy file carried.
+    QString legacyTransType = "Jrnl";
+    QString legacyChallanDate;
+    int legacyChallanNo = 0;
+    {
+        const QVariantList keep = tx.query(
+            "SELECT trans_type, challan_voucher_date, challan_voucher_number FROM tds_vouchers "
+            "WHERE voucher_no = ? AND financial_year = ? ORDER BY id DESC LIMIT 1;",
+            {voucherNo, fyLabel});
+        if (!keep.isEmpty()) {
+            const QVariantMap k = keep.first().toMap();
+            const QString tt = k.value("trans_type").toString().trimmed();
+            if (!tt.isEmpty()) legacyTransType = tt;
+            legacyChallanDate = k.value("challan_voucher_date").toString();
+            legacyChallanNo = k.value("challan_voucher_number").toInt();
+        }
+    }
+
     tx.execUnchecked(
-        "DELETE FROM TDSDeductions WHERE (voucher_number = ? OR voucher_number = ?) AND (trans_type = 'Jrnl' OR trans_type = 'TDS');",
-        {voucherNo, vchNumStr}
+        "DELETE FROM TDSDeductions WHERE (voucher_number = ? OR voucher_number = ?) AND (trans_type = 'Jrnl' OR trans_type = 'TDS' OR trans_type = ?);",
+        {voucherNo, vchNumStr, legacyTransType}
     );
     tx.execUnchecked(
         "DELETE FROM vouchers WHERE (voucher_no = ? OR voucher_no = ?) AND (voucher_type = 'TDS' OR voucher_type = 'Jrnl' OR legacy_type LIKE 'TDS%');",
@@ -651,11 +674,12 @@ bool TdsModel::save_tds_voucher_in(MahadevERP::DbTx& tx, const QVariantMap& data
             "income_amount, tds, surcharge, education, tds_rate, "
             "income_type, reason_for_non_deduction, rate_tds, rate_surcharge, rate_education, "
             "post_in_books, challan_voucher_date, challan_voucher_number, income_narration, prev_income_amount"
-            ") VALUES (?, ?, 'Jrnl', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, '', 0, ?, ?);",
+            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?);",
             {
-                voucherDate, voucherNo, partyLegacyCode,
+                voucherDate, voucherNo, legacyTransType, partyLegacyCode,
                 incomeAmount, totalTaxAmount, taxAmountSurcharge, taxAmountCess, totalTaxRate,
                 tdsType, nonDeductionReason, rateTds, rateSurcharge, rateCess,
+                legacyChallanDate, legacyChallanNo,
                 narration.isEmpty() ? tdsType : narration, previousAmount
             }
         );
@@ -813,9 +837,13 @@ bool TdsModel::delete_tds_voucher_in(MahadevERP::DbTx& tx, int voucherId) {
     const QString vchNumStr = QString::number(vchNo);
 
     tx.execUnchecked("DELETE FROM tds_vouchers WHERE id = ?;", {voucherId});
+    // Match the row's own legacy trans_type too, so a migrated register row
+    // (e.g. 'Purc') is removed rather than orphaned (C3 TDS
+    // register-fidelity slice).
+    const QString vchTransType = vch.value("trans_type").toString().trimmed();
     tx.execUnchecked(
-        "DELETE FROM TDSDeductions WHERE (voucher_number = ? OR voucher_number = ?) AND (trans_type = 'Jrnl' OR trans_type = 'TDS');",
-        {vchNo, vchNumStr}
+        "DELETE FROM TDSDeductions WHERE (voucher_number = ? OR voucher_number = ?) AND (trans_type = 'Jrnl' OR trans_type = 'TDS' OR trans_type = ?);",
+        {vchNo, vchNumStr, vchTransType.isEmpty() ? QString("Jrnl") : vchTransType}
     );
     tx.execUnchecked(
         "DELETE FROM vouchers WHERE (voucher_no = ? OR voucher_no = ?) AND (voucher_type = 'TDS' OR voucher_type = 'Jrnl' OR legacy_type LIKE 'TDS%');",

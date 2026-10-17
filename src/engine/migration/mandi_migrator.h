@@ -11,32 +11,6 @@ namespace MahadevERP {
 
 class MandiMigrator {
 public:
-    // NOTE (recon plan/25 §7.1, open): migrate_mandi_bahikhata below is the
-    // pre-strangler prototype — NOT parity-equal to the live monolith
-    // passes (its I-Form branch writes transport_dispatches, not
-    // iform_vouchers). It stays untouched until the coordinator decides
-    // retire-vs-rewrite; the live path is the three strangler fns after it.
-    // Bahi-Khata Mandi, Manufacturing, Bardana, Gate, Sauda & Brokerage Migration
-    static bool migrate_mandi_bahikhata(
-        MigrationContext& ctx,
-        const std::vector<std::map<std::string, std::string>>& transRows,
-        const std::vector<std::map<std::string, std::string>>& manufacturingRows,
-        const std::vector<std::map<std::string, std::string>>& customClosingRows,
-        const std::vector<std::map<std::string, std::string>>& tdsRows,
-        const std::vector<std::map<std::string, std::string>>& bardanaRows,
-        const std::vector<std::map<std::string, std::string>>& gatePassRows,
-        const std::vector<std::map<std::string, std::string>>& gateRegRows,
-        const std::vector<std::map<std::string, std::string>>& saudaRows,
-        const std::vector<std::map<std::string, std::string>>& saudaTxRows,
-        const std::vector<std::map<std::string, std::string>>& brokerageRows,
-        const std::map<int, std::string>& ledgerCodeToName,
-        const std::map<int, qint64>& ledgerCodeToId,
-        const std::map<int, std::string>& itemCodeToName,
-        const std::map<int, qint64>& itemCodeToId,
-        const std::map<int, std::string>& stockUnitMap,
-        std::map<QString, int>& fyNameToId
-    );
-
     // Bahi-Khata manufacturing batches + line items (C3 slice M1:
     // monolith PASS 5.2, verbatim). MillingVouchers-source keys via
     // millingField(); outGroupCount echoes the grouped-key count for the

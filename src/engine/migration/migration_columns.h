@@ -19,6 +19,9 @@
 
 #include "config/schema_mapping.h"
 #include <QMap>
+#include <QPair>
+#include <QStringList>
+#include <QVariant>
 
 namespace MahadevERP {
 
@@ -104,9 +107,10 @@ public:
 
     // Source field for a Bahi-SaleTransportationDetail target key. C3
     // slice V: mirror + verify ONLY — the entry targets the
-    // transport_dispatches table write owned by the mandi slice
-    // (PASS 5.7); the PASS 4 logistics cache keeps its literals until
-    // the JSON entry covers those fields.
+    // transport_dispatches table, which is populated at RUNTIME by
+    // TransportDispatchController::syncFromVouchers (INSERT..SELECT from
+    // migrated vouchers); the Bahi migration path does NOT write it. The
+    // PASS 4 logistics cache keeps its literals.
     static inline QString transportField(const QString& target) {
         return columnsFor("SaleTransportationDetail", "transport_dispatches", "bahikhata", transportFallback()).value(target.trimmed());
     }
@@ -127,7 +131,7 @@ public:
 
     // Source field for a Bahi-MillingVouchers target key ("batch_no",
     // "weight_qtl", ...). C3 slice M1. Pipe-target keys
-    // ("head_rice_qtl|...") and derived:* values are logic markers —
+    // ("output_qtl|byproduct_qtl") and derived:* values are logic markers —
     // mirrored for parity, never field reads.
     static inline QString millingField(const QString& target) {
         return columnsFor("MillingVouchers", "manufacturing_batches+manufacturing_voucher_items", "bahikhata", millingFallback()).value(target.trimmed());
@@ -240,7 +244,474 @@ public:
         return verifyEntry("BrokerageVouchers", "dalali_settlements", "bahikhata", dalaliFallback());
     }
 
+    // ---- C3 Tally slice: XML element-name lookup ----
+    // The Tally source is a directory of XML files, so the "source field"
+    // is one or more element names (pipe-joined ordered fallback) that the
+    // parser matches inside the corresponding record tag. See the parser
+    // helper TallyDataMigrator::accepts(sub, key).
+    static inline QString tallyAccountField(const QString& target) {
+        return columnsFor("TallyTag:GROUP/LEDGER", "account_groups+parties", "tally", tallyAccountFallback()).value(target.trimmed());
+    }
+
+    static inline QString tallyStockField(const QString& target) {
+        return columnsFor("TallyTag:STOCKGROUP/STOCKITEM", "stock_groups+stock_items", "tally", tallyStockFallback()).value(target.trimmed());
+    }
+
+    static inline QString tallyUnitField(const QString& target) {
+        return columnsFor("TallyTag:UNIT", "stock_units", "tally", tallyUnitFallback()).value(target.trimmed());
+    }
+
+    static inline QString tallyVoucherField(const QString& target) {
+        return columnsFor("TallyTag:VOUCHER+ALLLEDGERENTRIES.LIST", "vouchers+transactions", "tally", tallyVoucherFallback()).value(target.trimmed());
+    }
+
+    static inline QString verifyTallyAccountColumns() {
+        return verifyEntry("TallyTag:GROUP/LEDGER", "account_groups+parties", "tally", tallyAccountFallback());
+    }
+
+    static inline QString verifyTallyStockColumns() {
+        return verifyEntry("TallyTag:STOCKGROUP/STOCKITEM", "stock_groups+stock_items", "tally", tallyStockFallback());
+    }
+
+    static inline QString verifyTallyUnitColumns() {
+        return verifyEntry("TallyTag:UNIT", "stock_units", "tally", tallyUnitFallback());
+    }
+
+    static inline QString verifyTallyVoucherColumns() {
+        return verifyEntry("TallyTag:VOUCHER+ALLLEDGERENTRIES.LIST", "vouchers+transactions", "tally", tallyVoucherFallback());
+    }
+
+    // ---- C3 Busy slice: MDB-table column roster ----
+    // One entry per Busy source table ("Busy:<Table>"). Keys are target
+    // fields; values are the source column spec (pipe = ordered fallback
+    // chain). This is the SSOT for which Busy columns feed which target.
+    // The inspect and migrate paths legitimately use DIFFERENT chains for
+    // the same column (e.g. Company.gstin is "GSTNo|GSTIN" in inspect but
+    // "GSTNo" alone in migrate), so the roster DECLARES the union and
+    // scripts/busy_strangler_sim.py gates every read literal in
+    // busy_data_migrator.cpp against it: a read of an undeclared column
+    // fails the sim, never silently at runtime.
+    //
+    // Source spec for one target field of a Busy table ("" when unknown).
+    static inline QString busyField(const QString& entry, const QString& target) {
+        return busyFallback(entry).value(target.trimmed());
+    }
+
+    // "" when the JSON entry and the fallback agree (or JSON unloadable —
+    // absence is not drift); otherwise a description of the mismatch.
+    static inline QString verifyBusyColumns(const QString& entry) {
+        const QString tgt = busyTarget(entry);
+        if (tgt.isEmpty()) return entry + " is not a known Busy roster entry";
+        return verifyEntry(entry, tgt, "busy", busyFallback(entry));
+    }
+
+    // First non-empty verify across the whole roster ("" = all agree).
+    // (busyEntries()/busyTarget() are defined just below.)
+
+    static inline QStringList busyEntries() {
+        static const QStringList e = {
+            "Busy:Company",
+            "Busy:Master1",
+            "Busy:MasterAddressInfo",
+            "Busy:Folio1",
+            "Busy:Tran1",
+            "Busy:Tran2",
+            "Busy:Tran3",
+            "Busy:MandiVchItemDet",
+            "Busy:MandiItemWiseExpense",
+            "Busy:VchGSTSumItemWise",
+            "Busy:Config",
+            "Busy:MandiVchConfig",
+            "Busy:DailySum",
+            "Busy:VchOtherInfo"
+        };
+        return e;
+    }
+
+    static inline QString busyTarget(const QString& entry) {
+        static const QMap<QString, QString> t = {
+            {"Busy:Company", "company_info"},
+            {"Busy:Master1", "parties+account_groups+stock_items"},
+            {"Busy:MasterAddressInfo", "parties"},
+            {"Busy:Folio1", "parties"},
+            {"Busy:Tran1", "vouchers+transactions"},
+            {"Busy:Tran2", "vouchers+transactions"},
+            {"Busy:Tran3", "vouchers+transactions"},
+            {"Busy:MandiVchItemDet", "paddy_slips+jform_voucher_items+iform_voucher_items"},
+            {"Busy:MandiItemWiseExpense", "jform_voucher_items+iform_voucher_items"},
+            {"Busy:VchGSTSumItemWise", "transactions"},
+            {"Busy:Config", "series-config"},
+            {"Busy:MandiVchConfig", "series-config"},
+            {"Busy:DailySum", "day-book-summary"},
+            {"Busy:VchOtherInfo", "vouchers"},
+        };
+        return t.value(entry);
+    }
+
+    static inline QString verifyAllBusyColumns() {
+        for (const QString& e : busyEntries()) {
+            const QString r = verifyBusyColumns(e);
+            if (!r.isEmpty()) return r;
+        }
+        return QString();
+    }
+
+    // ---- C3 exporter slice: SQLite -> Jet positional roster ----
+    // The exporter writes Jet tables POSITIONALLY (col 0..N), so the TDS
+    // write-back mapping is an ORDERED pair of lists, not a name map. The
+    // JSON "export" entry tds_vouchers -> TDSDeductions (columns[] carry
+    // position / source / target / jet_type) is the SSOT; it is mirrored in
+    // exporterTdsFallbackSides(). scripts/exporter_strangler_sim.py gates
+    // every occurrence of that 19-column roster (SQLite DDL, backfill
+    // INSERT, tds_model INSERT, exporter SELECT, exporter positional
+    // write + dedup read) against it, and the exporter itself refuses to
+    // write TDS rows when the target template's column order does not match
+    // (fail loud, skip the table instead of writing mis-ordered values).
+    static inline QPair<QStringList, QStringList> exporterTdsSides() {
+        static QPair<QStringList, QStringList> cached;
+        static bool loaded = false;
+        if (!loaded) {
+            loaded = true;
+            const QPair<QStringList, QStringList> j = exporterTdsSidesFromJson();
+            cached = j.first.isEmpty() ? exporterTdsFallbackSides() : j;
+        }
+        return cached;
+    }
+
+    // Jet column names in positional order ("" entries never occur; a
+    // short list means the roster is empty and the caller must skip loud).
+    static inline QStringList exporterTdsJetColumns() {
+        return exporterTdsSides().second;
+    }
+
+    // SQLite column names in the same positional order.
+    static inline QStringList exporterTdsSqliteColumns() {
+        return exporterTdsSides().first;
+    }
+
+    static inline int exporterTdsCount() { return exporterTdsJetColumns().size(); }
+
+    static inline QString exporterTdsJet(int pos) {
+        const QStringList l = exporterTdsJetColumns();
+        return (pos >= 0 && pos < l.size()) ? l.at(pos) : QString();
+    }
+
+    static inline QString exporterTdsSqlite(int pos) {
+        const QStringList l = exporterTdsSqliteColumns();
+        return (pos >= 0 && pos < l.size()) ? l.at(pos) : QString();
+    }
+
+    // "" when the JSON roster and the fallback agree (both sides, in order)
+    // or the entry is absent/unloadable (absence is not drift); otherwise a
+    // description of the mismatch.
+    static inline QString verifyExporterTdsColumns() {
+        const QPair<QStringList, QStringList> j = exporterTdsSidesFromJson();
+        if (j.first.isEmpty()) return QString();
+        const QPair<QStringList, QStringList> f = exporterTdsFallbackSides();
+        if (j == f) return QString();
+        return QString("exporter TDS roster drift: json=%1|%2 fallback=%3|%4")
+            .arg(j.first.join(","), j.second.join(","), f.first.join(","), f.second.join(","));
+    }
+
 private:
+    // JSON-ordered TDS roster sides; empty pair when the entry is
+    // absent/unloadable or still uses the retired placeholder shape.
+    static inline QPair<QStringList, QStringList> exporterTdsSidesFromJson() {
+        QPair<QStringList, QStringList> out;
+        SchemaMapping sm;
+        if (!sm.loadDefault()) return out;
+        for (const QVariant& v : sm.tables()) {
+            QVariantMap m = v.toMap();
+            if (m.value("source").toString() != "tds_vouchers") continue;
+            if (m.value("target").toString() != "TDSDeductions") continue;
+            if (m.value("provider").toString() != "bahikhata") continue;
+            QMap<int, QPair<QString, QString>> byPos;
+            for (const QVariant& c : m.value("columns").toList()) {
+                QVariantMap cm = c.toMap();
+                if (!cm.contains("position")) return out; // legacy placeholder
+                byPos.insert(cm.value("position").toInt(),
+                             qMakePair(cm.value("source").toString(),
+                                       cm.value("target").toString()));
+            }
+            for (auto it = byPos.constBegin(); it != byPos.constEnd(); ++it) {
+                out.first.append(it.value().first);
+                out.second.append(it.value().second);
+            }
+            return out;
+        }
+        return out;
+    }
+
+    // Mirror of the JSON export entry (positional order 0..18). Kept
+    // byte-identical to the file by verifyExporterTdsColumns().
+    static inline QPair<QStringList, QStringList> exporterTdsFallbackSides() {
+        static const QStringList sqlite = {
+            "voucher_date", "voucher_number", "trans_type", "account_code",
+            "income_amount", "tds", "surcharge", "education", "tds_rate",
+            "income_type", "reason_for_non_deduction", "rate_tds",
+            "rate_surcharge", "rate_education", "post_in_books",
+            "challan_voucher_date", "challan_voucher_number",
+            "income_narration", "prev_income_amount"
+        };
+        static const QStringList jet = {
+            "VoucherDate", "VoucherNumber", "TransType", "AccountCode",
+            "IncomeAmount", "TDS", "Surcharge", "Education", "TDSRate",
+            "IncomeType", "ReasonForNonDeduction", "RateTDS", "RateSurcharge",
+            "RateEducation", "PostInBooks", "ChallanVoucherDate",
+            "ChallanVoucherNumber", "IncomeNarration", "PrevIncomeAmount"
+        };
+        return qMakePair(sqlite, jet);
+    }
+
+    // ---- Busy roster mirrors (JSON-first; verify enforces) ----
+    static inline QMap<QString, QString> busyFallback_Busy_Company() {
+        // Busy:Company -> company_info
+        QMap<QString, QString> f;
+        f["name"] = "Name";
+        f["gstin"] = "GSTNo|GSTIN";
+        f["pan"] = "ITPAN|PAN";
+        f["print_name"] = "PrintName";
+        f["phone"] = "TelNo";
+        f["email"] = "Email";
+        f["address1"] = "Address1";
+        f["address2"] = "Address2";
+        f["address3"] = "Address3";
+        f["fy_beg"] = "BegFY";
+        return f;
+    }
+
+    static inline QMap<QString, QString> busyFallback_Busy_Master1() {
+        // Busy:Master1 -> parties+account_groups+stock_items
+        QMap<QString, QString> f;
+        f["legacy_code"] = "Code";
+        f["name"] = "Name";
+        f["alias"] = "Alias";
+        f["print_name"] = "PrintName";
+        f["master_type"] = "MasterType";
+        f["parent_group"] = "ParentGrp";
+        f["address1"] = "Address1";
+        f["address2"] = "Address2";
+        f["address3"] = "Address3";
+        f["address4"] = "Address4";
+        f["city"] = "City";
+        f["pincode"] = "PinCode";
+        f["gstin"] = "GSTNo";
+        f["pan"] = "ITPAN";
+        f["mobile"] = "MobileNo";
+        f["email"] = "Email";
+        f["bank_name"] = "BankName";
+        f["bank_account"] = "BankAcNo";
+        f["ifsc_code"] = "IFSCCode";
+        f["state_code"] = "StateCodeLong";
+        f["opening_balance"] = "D1";
+        f["balance_sign"] = "I2";
+        f["credit_days"] = "D6";
+        f["credit_limit"] = "D7";
+        f["opening_qty"] = "D1";
+        f["opening_rate"] = "D2";
+        f["opening_value"] = "D3";
+        f["gst_rate"] = "D4";
+        f["hsn_code"] = "HSNCode";
+        f["unit_code"] = "CM2|MasterSupport";
+        f["sale_ledger"] = "CM3";
+        f["purc_ledger"] = "CM4";
+        f["sundry_flag"] = "I1";
+        f["sundry_post_1"] = "CM1";
+        f["sundry_post_2"] = "CM2";
+        return f;
+    }
+
+    static inline QMap<QString, QString> busyFallback_Busy_MasterAddressInfo() {
+        // Busy:MasterAddressInfo -> parties
+        QMap<QString, QString> f;
+        f["master_code"] = "MasterCode";
+        f["address1"] = "Address1";
+        f["address2"] = "Address2";
+        f["address3"] = "Address3";
+        f["address4"] = "Address4";
+        f["city"] = "City";
+        f["pincode"] = "PinCode";
+        f["gstin"] = "GSTNo";
+        f["pan"] = "ITPAN";
+        f["mobile"] = "MobileNo";
+        f["email"] = "Email";
+        f["bank_name"] = "BankName";
+        f["bank_account"] = "BankAcNo";
+        f["ifsc_code"] = "IFSCCode";
+        f["state_code"] = "StateCodeLong";
+        return f;
+    }
+
+    static inline QMap<QString, QString> busyFallback_Busy_Folio1() {
+        // Busy:Folio1 -> parties
+        QMap<QString, QString> f;
+        f["master_code"] = "MasterCode";
+        f["flag"] = "B1";
+        f["value"] = "D1";
+        return f;
+    }
+
+    static inline QMap<QString, QString> busyFallback_Busy_Tran1() {
+        // Busy:Tran1 -> vouchers+transactions
+        QMap<QString, QString> f;
+        f["vch_code"] = "VchCode";
+        f["vch_type"] = "VchType";
+        f["vch_series"] = "VchSeriesCode";
+        f["voucher_no"] = "VchNo";
+        f["voucher_date"] = "Date";
+        f["total_amount"] = "VchAmtBaseCur|VchSalePurcAmt|OrgVchAmtBaseCur|TotalAmount";
+        f["narration"] = "Narration";
+        f["party_code"] = "MasterCode1";
+        f["auto_no"] = "AutoVchNo";
+        f["cancelled"] = "Cancelled";
+        f["vch_cancelled"] = "VchCancelled";
+        return f;
+    }
+
+    static inline QMap<QString, QString> busyFallback_Busy_Tran2() {
+        // Busy:Tran2 -> vouchers+transactions
+        QMap<QString, QString> f;
+        f["vch_code"] = "VchCode";
+        f["record_kind"] = "RecType";
+        f["type"] = "Type";
+        f["amount"] = "Amount";
+        f["value1"] = "Value1";
+        f["value3"] = "Value3";
+        f["d1"] = "D1";
+        f["d2"] = "D2";
+        f["d5"] = "D5";
+        f["account_code"] = "MasterCode1";
+        f["second_code"] = "MasterCode2";
+        f["row_no"] = "SrNo";
+        f["short_narration"] = "ShortNar";
+        return f;
+    }
+
+    static inline QMap<QString, QString> busyFallback_Busy_Tran3() {
+        // Busy:Tran3 -> vouchers+transactions
+        QMap<QString, QString> f;
+        f["vch_code"] = "VchCode";
+        f["ref_no"] = "No";
+        f["ref_status"] = "Status";
+        f["ref_type"] = "Type";
+        return f;
+    }
+
+    static inline QMap<QString, QString> busyFallback_Busy_MandiVchItemDet() {
+        // Busy:MandiVchItemDet -> paddy_slips+jform_voucher_items+iform_voucher_items
+        QMap<QString, QString> f;
+        f["family"] = "derived:series-config";
+        f["vch_code"] = "VchCode";
+        f["voucher_no"] = "VchNo";
+        f["voucher_date"] = "Date";
+        f["row_no"] = "SrNo";
+        f["item_code"] = "ItemCode";
+        f["bs_code"] = "BSCode";
+        f["bags"] = "BagQty";
+        f["weight_per_bag"] = "WeightPerBag";
+        f["loose_weight"] = "LooseWeight";
+        f["buyer_weight"] = "BuyerWeight";
+        f["party_code"] = "PartyCode";
+        f["purchaser_code"] = "PurchaserCode";
+        f["purc_default"] = "PurcDefVal";
+        f["sale_default"] = "SaleDefVal";
+        f["d1"] = "D1";
+        f["d3"] = "D3";
+        f["d5"] = "D5";
+        f["value1"] = "Value1";
+        f["narration1"] = "Narration1";
+        f["narration2"] = "Narration2";
+        f["bill_no"] = "PurchaseBillNo";
+        f["bill_date"] = "PurchaseBillDate";
+        f["vehicle_no"] = "VehicleNo";
+        return f;
+    }
+
+    static inline QMap<QString, QString> busyFallback_Busy_MandiItemWiseExpense() {
+        // Busy:MandiItemWiseExpense -> jform_voucher_items+iform_voucher_items
+        QMap<QString, QString> f;
+        f["item_code"] = "ItemCode";
+        f["bs_code"] = "BSCode";
+        f["purc_default"] = "PurcDefVal";
+        f["sale_default"] = "SaleDefVal";
+        return f;
+    }
+
+    static inline QMap<QString, QString> busyFallback_Busy_VchGSTSumItemWise() {
+        // Busy:VchGSTSumItemWise -> transactions
+        QMap<QString, QString> f;
+        f["vch_code"] = "VchCode";
+        f["party_code"] = "PartyCode";
+        f["hsn_code"] = "HSNCode";
+        f["tax_cat"] = "TaxCatCode";
+        f["tax_rate"] = "TaxRate";
+        f["party_state_code"] = "PartyStateCode";
+        f["party_state_tin_digit"] = "PartyStateTinDigit";
+        f["pos_state_tin_digit"] = "POSStateTinDigit";
+        return f;
+    }
+
+    static inline QMap<QString, QString> busyFallback_Busy_Config() {
+        // Busy:Config -> series-config
+        QMap<QString, QString> f;
+        f["record_kind"] = "RecType";
+        f["series_code"] = "L1";
+        f["series_prefix"] = "C2";
+        return f;
+    }
+
+    static inline QMap<QString, QString> busyFallback_Busy_MandiVchConfig() {
+        // Busy:MandiVchConfig -> series-config
+        QMap<QString, QString> f;
+        f["vs_code"] = "VSCode";
+        f["def_mat_centre"] = "DefMatCentreCode";
+        f["def_sale_purc_acc"] = "DefSalePurcAccCode";
+        f["def_sale_purc_type"] = "DefSalePurcType";
+        f["def_trading_account"] = "DefTradingAccount";
+        f["jrnl_vch_series"] = "JrnlVchSeries";
+        f["stk_tfr_vch_series"] = "StkTfrVchSeries";
+        return f;
+    }
+
+    static inline QMap<QString, QString> busyFallback_Busy_DailySum() {
+        // Busy:DailySum -> day-book-summary
+        QMap<QString, QString> f;
+        f["master_type"] = "MasterType";
+        f["master_code1"] = "MasterCode1";
+        f["master_code2"] = "MasterCode2";
+        f["dr1"] = "Dr1";
+        f["cr1"] = "Cr1";
+        f["dr3"] = "Dr3";
+        f["cr3"] = "Cr3";
+        return f;
+    }
+
+    static inline QMap<QString, QString> busyFallback_Busy_VchOtherInfo() {
+        // Busy:VchOtherInfo -> vouchers
+        QMap<QString, QString> f;
+        f["vch_code"] = "VchCode";
+        f["gr_no"] = "GrNo";
+        return f;
+    }
+
+    static inline QMap<QString, QString> busyFallback(const QString& entry) {
+        if (entry == "Busy:Company") return busyFallback_Busy_Company();
+        if (entry == "Busy:Master1") return busyFallback_Busy_Master1();
+        if (entry == "Busy:MasterAddressInfo") return busyFallback_Busy_MasterAddressInfo();
+        if (entry == "Busy:Folio1") return busyFallback_Busy_Folio1();
+        if (entry == "Busy:Tran1") return busyFallback_Busy_Tran1();
+        if (entry == "Busy:Tran2") return busyFallback_Busy_Tran2();
+        if (entry == "Busy:Tran3") return busyFallback_Busy_Tran3();
+        if (entry == "Busy:MandiVchItemDet") return busyFallback_Busy_MandiVchItemDet();
+        if (entry == "Busy:MandiItemWiseExpense") return busyFallback_Busy_MandiItemWiseExpense();
+        if (entry == "Busy:VchGSTSumItemWise") return busyFallback_Busy_VchGSTSumItemWise();
+        if (entry == "Busy:Config") return busyFallback_Busy_Config();
+        if (entry == "Busy:MandiVchConfig") return busyFallback_Busy_MandiVchConfig();
+        if (entry == "Busy:DailySum") return busyFallback_Busy_DailySum();
+        if (entry == "Busy:VchOtherInfo") return busyFallback_Busy_VchOtherInfo();
+        return {};
+    }
+
     static inline QMap<QString, QString> groupFallback() {
         // Mirror of the JSON entry — change together (verify enforces).
         QMap<QString, QString> f;
@@ -493,12 +964,13 @@ private:
 
     static inline QMap<QString, QString> transportFallback() {
         // Mirror of the JSON SaleTransportationDetail->transport_dispatches
-        // entry — change together (verify enforces). Slice V uses this for
-        // parity only; the table write is mandi-slice (PASS 5.7) territory.
+        // entry — change together (verify enforces). The table is populated
+        // at runtime by TransportDispatchController::syncFromVouchers; the
+        // Bahi migration path does not write it.
         QMap<QString, QString> f;
-        f["dispatch_no"] = "VoucherNumber";
+        f["voucher_no"] = "VoucherNumber";
         f["dispatch_date"] = "VoucherDate";
-        f["consignee_name"] = "AccountCode";
+        f["party_name"] = "AccountCode";
         f["total_freight"] = "Amount";
         return f;
     }
@@ -512,9 +984,9 @@ private:
         QMap<QString, QString> f;
         f["batch_no"] = "VoucherNumber";
         f["batch_date"] = "VoucherDate";
-        f["paddy_variety"] = "derived:paddy-sum";
-        f["paddy_input_qtl"] = "derived:input-sum";
-        f["head_rice_qtl|broken_rice_qtl|bran_qtl|husk_qtl"] = "derived:output-split";
+        f["input_variety"] = "derived:paddy-sum";
+        f["input_qtl"] = "derived:input-sum";
+        f["output_qtl|byproduct_qtl"] = "derived:output-split";
         f["wastage_qtl"] = "derived:input-output";
         f["yield_pct"] = "derived:yield";
         f["narration"] = "Narrtn";
@@ -614,6 +1086,12 @@ private:
         f["total_tax_amount"] = "derived:sum";
         f["net_amount"] = "derived:net";
         f["non_deduction_reason"] = "ReasonForNonDeduction";
+        // Legacy TDS register fields (C3 TDS register-fidelity slice):
+        // carried verbatim so the exporter round-trips the firm's
+        // TDSDeductions rows instead of fabricating 'Jrnl' / '' / 0.
+        f["trans_type"] = "TransType";
+        f["challan_voucher_date"] = "ChallanVoucherDate";
+        f["challan_voucher_number"] = "ChallanVoucherNumber";
         f["exp_ledger_id|tds_ledger_id"] = "derived:jrnl-EntryType";
         f["exp_ledger_name|tds_ledger_name"] = "derived:incType-expense|const:'T D S PEYABAL'";
         return f;
@@ -752,6 +1230,77 @@ private:
         f["net_dalali_payable"] = "derived:net";
         f["journal_voucher_no"] = "derived:JV-DAL-series";
         f["narration"] = "Narration";
+        return f;
+    }
+
+    // ---- C3 Tally slice fallbacks (mirror the JSON; verify enforces) ----
+    static inline QMap<QString, QString> tallyAccountFallback() {
+        // Mirror of TallyTag:GROUP/LEDGER -> account_groups+parties.
+        // Values are XML element names (pipe = ordered fallback); the
+        // parser matches them inside GROUP/LEDGER via accepts().
+        QMap<QString, QString> f;
+        f["name"] = "NAME";
+        f["group_name"] = "PARENT";
+        f["opening_balance"] = "OPENINGBALANCE";
+        f["balance_type"] = "ISDEEMEDPOSITIVE";
+        f["address"] = "ADDRESS";
+        f["pincode"] = "PINCODE";
+        f["state"] = "PARTYSTATE|STATENAME|LEDSTATENAME";
+        f["pan"] = "INCOMETAXNUMBER|PAN";
+        f["gstin"] = "PARTYGSTIN|GSTIN|GSTREGISTRATIONNUMBER";
+        f["bank_name"] = "BANKNAME";
+        f["bank_account"] = "ACCOUNTNUMBER|BANKDETAILS";
+        f["bank_ifsc"] = "IFSCODE";
+        f["credit_limit"] = "CREDITLIMIT";
+        f["credit_days"] = "BILLCREDITPERIOD";
+        f["nature"] = "ISREVENUE|AFFECTSGROSSPROFIT";
+        return f;
+    }
+
+    static inline QMap<QString, QString> tallyStockFallback() {
+        // Mirror of TallyTag:STOCKGROUP/STOCKITEM -> stock_groups+stock_items.
+        QMap<QString, QString> f;
+        f["name"] = "NAME";
+        f["group_name"] = "PARENT";
+        f["unit"] = "BASEUNITS|UNIT";
+        f["opening_qty"] = "OPENINGBALANCE";
+        f["opening_rate"] = "OPENINGRATE";
+        f["opening_value"] = "OPENINGVALUE";
+        f["gst_rate"] = "GSTRATE";
+        f["hsn_code"] = "HSNCODE";
+        return f;
+    }
+
+    static inline QMap<QString, QString> tallyUnitFallback() {
+        // Mirror of TallyTag:UNIT -> stock_units.
+        QMap<QString, QString> f;
+        f["unit_name"] = "NAME";
+        f["decimal_places"] = "DECIMALPLACES";
+        return f;
+    }
+
+    static inline QMap<QString, QString> tallyVoucherFallback() {
+        // Mirror of TallyTag:VOUCHER+ALLLEDGERENTRIES.LIST ->
+        // vouchers+transactions. item_* keys drive the nested
+        // ALLINVENTORYENTRIES.LIST block; ledger_* keys the split blocks.
+        QMap<QString, QString> f;
+        f["voucher_no"] = "VOUCHERNUMBER";
+        f["voucher_date"] = "DATE";
+        f["voucher_type"] = "VOUCHERTYPENAME|VCHTYPE";
+        f["narration"] = "NARRATION";
+        f["item_name"] = "STOCKITEMNAME";
+        f["item_rate"] = "RATE";
+        f["item_amount"] = "AMOUNT";
+        f["item_qty"] = "ACTUALQTY|BILLEDQTY";
+        f["item_batch"] = "BATCHNAME";
+        f["item_godown"] = "GODOWNNAME";
+        f["party_name"] = "PARTYLEDGERNAME|PARTYNAME";
+        f["party_gstin"] = "PARTYGSTIN";
+        f["party_state"] = "STATENAME|PARTYSTATE";
+        f["party_pincode"] = "PARTYPINCODE";
+        f["ledger_name"] = "LEDGERNAME";
+        f["ledger_amount"] = "AMOUNT";
+        f["ledger_positive"] = "ISDEEMEDPOSITIVE";
         return f;
     }
         // legacy_code (Code1st identity), *_ledger* (ledger maps), tax_on_qty (TaxPayable primary,

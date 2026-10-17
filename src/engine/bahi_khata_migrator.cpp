@@ -48,61 +48,6 @@ static QString normalizeMdbPath(const QString& rawPath) {
     return QDir::toNativeSeparators(path);
 }
 
-static std::string cleanText(const std::string& s) {
-    std::string temp;
-    temp.reserve(s.size());
-    for (size_t i = 0; i < s.size(); ++i) {
-        if (static_cast<unsigned char>(s[i]) == 0xC2 && i + 1 < s.size() && static_cast<unsigned char>(s[i+1]) == 0xA0) {
-            temp += ' ';
-            i++;
-        } else if (static_cast<unsigned char>(s[i]) == 0xA0) {
-            temp += ' ';
-        } else {
-            temp += s[i];
-        }
-    }
-    size_t first = temp.find_first_not_of(" \t\r\n");
-    if (first == std::string::npos) return "";
-    size_t last = temp.find_last_not_of(" \t\r\n");
-    std::string sub = temp.substr(first, last - first + 1);
-    if (sub == "none" || sub == "null" || sub == "None" || sub == "NULL") return "";
-    return sub;
-}
-
-static std::string toLowerStr(const std::string& s) {
-    std::string out = s;
-    std::transform(out.begin(), out.end(), out.begin(), [](unsigned char c) { return std::tolower(c); });
-    return out;
-}
-
-static double parseDoubleVal(const std::string& s, double def = 0.0) {
-    std::string clean = cleanText(s);
-    if (clean.empty()) return def;
-    std::string num;
-    for (char c : clean) {
-        if (c != ',' && c != '%') num += c;
-    }
-    try {
-        return std::stod(num);
-    } catch (...) {
-        return def;
-    }
-}
-
-static int parseIntVal(const std::string& s, int def = 0) {
-    std::string clean = cleanText(s);
-    if (clean.empty()) return def;
-    std::string num;
-    for (char c : clean) {
-        if (c != ',') num += c;
-    }
-    try {
-        return static_cast<int>(std::stod(num));
-    } catch (...) {
-        return def;
-    }
-}
-
 static QString parseDateFormatted(const QString& raw) {
     QString s = raw.trimmed();
     if (s.isEmpty()) return "";
@@ -161,51 +106,6 @@ static QString computeFinancialYear(const QString& isoDate) {
     }
 }
 
-static QString mapVoucherTypeStr(const std::string& raw) {
-    // Keeper-based (SSOT): alias normalization via FiscalYearHelper::canonicalTypeToken,
-    // display names identical to VoucherMigrator::mapVoucherTypeStr — one map,
-    // one output per input on every path. Verified identical on all live
-    // Data.002 TransTypes {ChPt,ChRt,Jrnl,PrRn,Purc,Pymt,Rcpt,Sale,SlRn};
-    // J-Form/DbNt/CrNt spellings now yield display names (were raw tokens).
-    QString tok = FiscalYearHelper::canonicalTypeToken(QString::fromStdString(raw));
-    if (tok == "Sale") return "Sales";
-    if (tok == "Purc") return "Purchase";
-    if (tok == "Pymt" || tok == "ChPt") return "Payment";
-    if (tok == "Rcpt" || tok == "ChRt") return "Receipt";
-    if (tok == "Jrnl") return "Journal";
-    if (tok == "Contra") return "Contra";
-    if (tok == "JFrm") return "J-Form";
-    if (tok == "IFrm") return "I-Form";
-    if (tok == "Manu") return "Manufacturing";
-    if (tok == "Bank") return "Bank";
-    if (tok == "TDS") return "TDS";
-    if (tok == "TCS") return "TCS";
-    if (tok == "DbNt") return "Debit Note";
-    if (tok == "CrNt") return "Credit Note";
-    QString t = QString::fromStdString(raw).trimmed();
-    return t.isEmpty() ? "Journal" : t;
-}
-
-static std::string classifyStockItemStr(const std::string& name) {
-    std::string n = toLowerStr(name);
-    static const std::regex rPaddy(R"(\bpaddy\b)", std::regex::icase);
-    static const std::regex rHusk(R"(\bhusk\b)", std::regex::icase);
-    static const std::regex rByProd(R"(\b(bran|husk|broken|nakku)\b)", std::regex::icase);
-    static const std::regex rRice(R"(\brice\b)", std::regex::icase);
-    static const std::regex rPack(R"(\b(bardana|bag|bags|thread|packing)\b)", std::regex::icase);
-    static const std::regex rGen(R"(\b(machinery|dryer|parts|motor)\b)", std::regex::icase);
-
-    if (std::regex_search(n, rPaddy)) {
-        if (std::regex_search(n, rHusk)) return "By-Product";
-        return "Raw Paddy";
-    }
-    if (std::regex_search(n, rByProd)) return "By-Product";
-    if (std::regex_search(n, rRice)) return "Finished Rice";
-    if (std::regex_search(n, rPack)) return "Packing Material";
-    if (std::regex_search(n, rGen)) return "General Goods";
-    return "General Goods";
-}
-
 #if HAS_LIBMDB
 static std::string getField(const std::map<std::string, std::string>& m, const std::string& key, const std::string& def = "") {
     auto it = m.find(key);
@@ -235,17 +135,6 @@ static std::vector<std::map<std::string, std::string>> readTableRows(MdbHandle* 
     return Jet4Reader::readTable(mdb, tableName);
 }
 
-/* Canonical voucher identity "{yyYY}/{Type}-{raw}" (Busy-style FY-embedded
- * numbering) for every voucher_no stored by this migrator. The token comes
- * from the RAW Bahi-Khata TransType so cash/bank families (Pymt vs ChPt,
- * Rcpt vs ChRt) never merge. Mandi JFrm/IFrm keep raw numbers: their
- * lookups are date/id-scoped and stock joins use raw numbers. invoice_no
- * keeps Bahi-Khata originals byte-identical (export round-trip + GSTR). */
-static QString canonVoucherNo(const QString& fyVal, const std::string& rawTransType, const std::string& rawNo) {
-    QString tok = FiscalYearHelper::canonicalTypeToken(QString::fromStdString(rawTransType));
-    if (tok == "JFrm" || tok == "IFrm") return QString::fromStdString(cleanText(rawNo));
-    return FiscalYearHelper::canonicalVoucherNo(fyVal, tok, QString::fromStdString(rawNo));
-}
 #endif
 
 BahiKhataMigrator::BahiKhataMigrator(QObject* parent) : QObject(parent) {}
@@ -404,17 +293,6 @@ QString BahiKhataMigrator::extractFssai(const QString& business, const QString& 
     return "10822019000152";
 }
 
-static QString toTitleCase(const QString& str) {
-    if (str.isEmpty()) return "";
-    QStringList words = str.toLower().split(QRegularExpression("\\s+"), Qt::SkipEmptyParts);
-    for (int i = 0; i < words.size(); ++i) {
-        if (!words[i].isEmpty()) {
-            words[i][0] = words[i][0].toUpper();
-        }
-    }
-    return words.join(" ");
-}
-
 QVariantMap BahiKhataMigrator::inspect_mdb_file(const QString& mdbFilePath) {
     QVariantMap result;
     result["valid"] = false;
@@ -561,121 +439,6 @@ struct LogisticsEntry {
     std::string transport;
     std::string broker_name;
 };
-
-struct ResolvedVoucherParty {
-    std::string primary_party;
-    int primary_party_id = 0;
-    int primary_party_legacy_code = 0;
-    std::string primary_party_gstin;
-    std::string opposing_account = "Cash";
-};
-
-/* Ledger display-name lookup: live detail -> live code map -> deleted-ledger
- * fallback (display only) -> "" when truly unknown. The deleted fallback
- * covers vouchers referencing ledgers deleted later in Bahi-Khata; without
- * it the registers show "Party #<code>". Callers apply their own ultimate
- * fallback ("Party #..." / "Trade Account"). */
-static std::string lookupLedgerName(
-    int acCode,
-    const std::map<int, PartyDetail>& ledgerDetailMap,
-    const std::map<int, std::string>& ledgerCodeMap,
-    const std::map<int, std::string>& ledgerDeletedNameMap
-) {
-    auto it = ledgerDetailMap.find(acCode);
-    if (it != ledgerDetailMap.end() && !it->second.name.empty()) return it->second.name;
-    auto jt = ledgerCodeMap.find(acCode);
-    if (jt != ledgerCodeMap.end() && !jt->second.empty()) return jt->second;
-    auto kt = ledgerDeletedNameMap.find(acCode);
-    if (kt != ledgerDeletedNameMap.end() && !kt->second.empty()) return kt->second;
-    return "";
-}
-
-static ResolvedVoucherParty resolveVoucherParty(
-    const QString& vType,
-    const std::vector<std::map<std::string, std::string>>& rows,
-    const std::map<int, PartyDetail>& ledgerDetailMap,
-    const std::map<int, std::string>& ledgerCodeMap,
-    const std::map<int, std::string>& ledgerDeletedNameMap
-) {
-    ResolvedVoucherParty res;
-    std::string bankOrCash;
-    int bankOrCashId = 0;
-    std::string tradingOrExp;
-    int tradingOrExpId = 0;
-
-    for (const auto& r : rows) {
-        int acCode = parseIntVal(getField(r, "AccountCode"));
-        auto it = ledgerDetailMap.find(acCode);
-        std::string lName = lookupLedgerName(acCode, ledgerDetailMap, ledgerCodeMap, ledgerDeletedNameMap);
-        if (lName.empty()) lName = "Party #" + std::to_string(acCode);
-        int lId = (it != ledgerDetailMap.end()) ? it->second.id : 0;
-        std::string grpName = (it != ledgerDetailMap.end()) ? it->second.group_name : "Sundry Debtors";
-        std::string gLower = toLowerStr(grpName);
-
-        bool isParty = false;
-        const char* partyKeywords[] = {
-            "debtor", "debitor", "creditor", "party", "parties", "buyer",
-            "seller", "vendor", "farmer", "customer", "supplier", "broker",
-            "zimidar", "thekdar", "mandi", "employee"
-        };
-        for (const char* kw : partyKeywords) {
-            if (gLower.find(kw) != std::string::npos) {
-                isParty = true;
-                break;
-            }
-        }
-
-        std::string lLower = toLowerStr(lName);
-        bool isBankOrCash = (gLower.find("bank") != std::string::npos || gLower.find("cash") != std::string::npos ||
-                             lLower.find("bank") != std::string::npos || lLower.find("cash") != std::string::npos ||
-                             lLower.find("c/c") != std::string::npos || lLower.find(" cc ") != std::string::npos ||
-                             lLower.find(" cc") != std::string::npos || lLower.find("c/a") != std::string::npos ||
-                             lLower.find("overdraft") != std::string::npos);
-
-        if (isParty) {
-            if (res.primary_party.empty()) {
-                res.primary_party = lName;
-                res.primary_party_id = lId;
-                res.primary_party_legacy_code = acCode;
-                if (it != ledgerDetailMap.end()) res.primary_party_gstin = it->second.gstin;
-            }
-        } else if (isBankOrCash) {
-            bankOrCash = lName;
-            bankOrCashId = lId;
-        } else if (gLower.find("trading") != std::string::npos || gLower.find("purchase") != std::string::npos || gLower.find("sale") != std::string::npos) {
-            tradingOrExp = lName;
-            tradingOrExpId = lId;
-        }
-    }
-
-    if (res.primary_party.empty()) {
-        if (!bankOrCash.empty()) {
-            res.primary_party = bankOrCash;
-            res.primary_party_id = bankOrCashId;
-        } else if (!tradingOrExp.empty()) {
-            res.primary_party = tradingOrExp;
-            res.primary_party_id = tradingOrExpId;
-        } else if (!rows.empty()) {
-            int firstCode = parseIntVal(getField(rows[0], "AccountCode"));
-            res.primary_party = lookupLedgerName(firstCode, ledgerDetailMap, ledgerCodeMap, ledgerDeletedNameMap);
-            if (res.primary_party.empty()) res.primary_party = "Trade Account";
-            auto itDetail = ledgerDetailMap.find(firstCode);
-            res.primary_party_id = (itDetail != ledgerDetailMap.end()) ? itDetail->second.id : 0;
-            res.primary_party_legacy_code = firstCode;
-            if (itDetail != ledgerDetailMap.end()) res.primary_party_gstin = itDetail->second.gstin;
-        }
-    }
-
-    if (vType == "Sales") {
-        res.opposing_account = bankOrCash.empty() ? "Sales Accounts" : bankOrCash;
-    } else if (vType == "Purchase") {
-        res.opposing_account = bankOrCash.empty() ? "Purchase Accounts" : bankOrCash;
-    } else {
-        res.opposing_account = bankOrCash.empty() ? "Cash" : bankOrCash;
-    }
-
-    return res;
-}
 
 bool BahiKhataMigrator::migrate_mdb_file(const QString& mdbFilePath) {
     QString cleanPath = normalizeMdbPath(mdbFilePath);

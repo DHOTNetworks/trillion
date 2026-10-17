@@ -131,6 +131,10 @@ private slots:
     void testStockStranglerColumns();
     void testVoucherStranglerColumns();
     void testMandiStranglerColumns();
+    void testTallyStranglerColumns();
+    void testBusyStranglerColumns();
+    void testExporterStranglerColumns();
+    void testTdsRegisterFidelity();
 
     // 5. Masters & Regulatory Validations
     void testGstinValidationAndPanExtraction();
@@ -3532,6 +3536,26 @@ void LogicBoardTestSuite::testSchemaMappingLoader() {
     QVERIFY(sawPaddy);
     QVERIFY(!live.codeMapNames().isEmpty());
 
+    // Per-column metadata survives the load (C3 exporter roster is ORDERED:
+    // position/jet_type must reach the consumer, not be silently dropped).
+    bool sawOrderedRoster = false;
+    for (const QVariant& v : live.tables()) {
+        QVariantMap m = v.toMap();
+        if (m.value("source").toString() != "tds_vouchers") continue;
+        if (m.value("target").toString() != "TDSDeductions") continue;
+        const QVariantList cols = m.value("columns").toList();
+        QCOMPARE(cols.size(), 19);
+        for (int i = 0; i < cols.size(); ++i) {
+            QVariantMap cm = cols.at(i).toMap();
+            QVERIFY2(cm.contains("position"), qPrintable(cm.value("target").toString()));
+            QCOMPARE(cm.value("position").toInt(), i);
+            QVERIFY(cm.contains("jet_type"));
+            QVERIFY(!cm.value("target").toString().isEmpty());
+        }
+        sawOrderedRoster = true;
+    }
+    QVERIFY(sawOrderedRoster);
+
     // Fail closed: wrong version never parses as valid (temp file, removed).
     const QString badPath = QDir::tempPath() + "/schema_mapping_bad_version_test.json";
     QFile bad(badPath);
@@ -3702,7 +3726,8 @@ void LogicBoardTestSuite::testVoucherStranglerColumns() {
     QCOMPARE(MahadevERP::MigrationColumns::stockTransField("weight_qtl"), QString("Weight"));
     QCOMPARE(MahadevERP::MigrationColumns::stockTransField("bill_no"), QString("InvoiceNo|TaxInvoiceNo"));
     QCOMPARE(MahadevERP::MigrationColumns::stockTransField("party_id"), QString("PartyCode"));
-    QCOMPARE(MahadevERP::MigrationColumns::transportField("dispatch_no"), QString("VoucherNumber"));
+    QCOMPARE(MahadevERP::MigrationColumns::transportField("voucher_no"), QString("VoucherNumber"));
+    QCOMPARE(MahadevERP::MigrationColumns::transportField("party_name"), QString("AccountCode"));
     QVERIFY(MahadevERP::MigrationColumns::voucherField("no-such-key").isEmpty());
     QVERIFY(MahadevERP::MigrationColumns::stockTransField("no-such-key").isEmpty());
     QVERIFY(MahadevERP::MigrationColumns::transportField("no-such-key").isEmpty());
@@ -3733,6 +3758,251 @@ void LogicBoardTestSuite::testMandiStranglerColumns() {
     QVERIFY(MahadevERP::MigrationColumns::millingField("no-such-key").isEmpty());
     QVERIFY(MahadevERP::MigrationColumns::jformField("no-such-key").isEmpty());
     QVERIFY(MahadevERP::MigrationColumns::iformField("no-such-key").isEmpty());
+}
+
+void LogicBoardTestSuite::testTallyStranglerColumns() {
+    // C3 Tally slice: the JSON TallyTag entries and the compiled fallbacks
+    // must agree (MigrationColumns serves JSON-first). Values are XML
+    // element names (pipe = ordered fallback). Spot keys pin the exact
+    // element sets the pre-slice parser matched — behaviour identity.
+    QCOMPARE(MahadevERP::MigrationColumns::verifyTallyAccountColumns(), QString());
+    QCOMPARE(MahadevERP::MigrationColumns::verifyTallyStockColumns(), QString());
+    QCOMPARE(MahadevERP::MigrationColumns::verifyTallyUnitColumns(), QString());
+    QCOMPARE(MahadevERP::MigrationColumns::verifyTallyVoucherColumns(), QString());
+    QCOMPARE(MahadevERP::MigrationColumns::tallyAccountField("gstin"),
+             QString("PARTYGSTIN|GSTIN|GSTREGISTRATIONNUMBER"));
+    QCOMPARE(MahadevERP::MigrationColumns::tallyAccountField("pan"),
+             QString("INCOMETAXNUMBER|PAN"));
+    QCOMPARE(MahadevERP::MigrationColumns::tallyAccountField("state"),
+             QString("PARTYSTATE|STATENAME|LEDSTATENAME"));
+    QCOMPARE(MahadevERP::MigrationColumns::tallyAccountField("nature"),
+             QString("ISREVENUE|AFFECTSGROSSPROFIT"));
+    QCOMPARE(MahadevERP::MigrationColumns::tallyStockField("unit"),
+             QString("BASEUNITS|UNIT"));
+    QCOMPARE(MahadevERP::MigrationColumns::tallyStockField("hsn_code"), QString("HSNCODE"));
+    QCOMPARE(MahadevERP::MigrationColumns::tallyUnitField("decimal_places"),
+             QString("DECIMALPLACES"));
+    QCOMPARE(MahadevERP::MigrationColumns::tallyVoucherField("voucher_no"),
+             QString("VOUCHERNUMBER"));
+    QCOMPARE(MahadevERP::MigrationColumns::tallyVoucherField("voucher_type"),
+             QString("VOUCHERTYPENAME|VCHTYPE"));
+    QCOMPARE(MahadevERP::MigrationColumns::tallyVoucherField("item_name"),
+             QString("STOCKITEMNAME"));
+    QCOMPARE(MahadevERP::MigrationColumns::tallyVoucherField("ledger_amount"),
+             QString("AMOUNT"));
+    QVERIFY(MahadevERP::MigrationColumns::tallyAccountField("no-such-key").isEmpty());
+    QVERIFY(MahadevERP::MigrationColumns::tallyVoucherField("no-such-key").isEmpty());
+}
+
+void LogicBoardTestSuite::testBusyStranglerColumns() {
+    // C3 Busy slice: the per-MDB-table column roster ("Busy:<Table>") in the
+    // JSON and the compiled fallbacks must agree (MigrationColumns serves
+    // JSON-first, verify enforces). Values are the source column spec
+    // (pipe = ordered fallback chain). Spot keys pin the chains the inspect
+    // and migrate paths use — behaviour identity. No DB writes.
+    QCOMPARE(MahadevERP::MigrationColumns::verifyAllBusyColumns(), QString());
+    QCOMPARE(MahadevERP::MigrationColumns::busyEntries().size(), 14);
+    QCOMPARE(MahadevERP::MigrationColumns::busyTarget("Busy:Company"), QString("company_info"));
+    QCOMPARE(MahadevERP::MigrationColumns::busyTarget("Busy:Tran1"), QString("vouchers+transactions"));
+    QCOMPARE(MahadevERP::MigrationColumns::busyField("Busy:Company", "gstin"), QString("GSTNo|GSTIN"));
+    QCOMPARE(MahadevERP::MigrationColumns::busyField("Busy:Company", "pan"), QString("ITPAN|PAN"));
+    QCOMPARE(MahadevERP::MigrationColumns::busyField("Busy:Master1", "unit_code"),
+             QString("CM2|MasterSupport"));
+    QCOMPARE(MahadevERP::MigrationColumns::busyField("Busy:Master1", "parent_group"),
+             QString("ParentGrp"));
+    QCOMPARE(MahadevERP::MigrationColumns::busyField("Busy:Tran1", "total_amount"),
+             QString("VchAmtBaseCur|VchSalePurcAmt|OrgVchAmtBaseCur|TotalAmount"));
+    QCOMPARE(MahadevERP::MigrationColumns::busyField("Busy:MandiVchItemDet", "family"),
+             QString("derived:series-config"));
+    QCOMPARE(MahadevERP::MigrationColumns::busyField("Busy:VchGSTSumItemWise", "tax_rate"),
+             QString("TaxRate"));
+    QCOMPARE(MahadevERP::MigrationColumns::busyField("Busy:VchOtherInfo", "gr_no"), QString("GrNo"));
+    QVERIFY(MahadevERP::MigrationColumns::busyField("Busy:Company", "no-such-key").isEmpty());
+    QVERIFY(MahadevERP::MigrationColumns::busyField("Busy:NoSuchTable", "name").isEmpty());
+    QVERIFY(!MahadevERP::MigrationColumns::verifyBusyColumns("Busy:NoSuchTable").isEmpty());
+}
+
+void LogicBoardTestSuite::testExporterStranglerColumns() {
+    // C3 exporter slice (reverse direction, app SQLite -> legacy Jet): the
+    // exporter writes Jet TDSDeductions POSITIONALLY, so its roster is an
+    // ORDERED pair of lists (SQLite column <-> Jet column), not a name map.
+    // JSON is the SSOT; the compiled fallback mirrors it and this test pins
+    // the exact positional order the exporter's writes and dedup read rely
+    // on — a reorder would corrupt a round-trip with no compile error.
+    // scripts/exporter_strangler_sim.py gates the same list in the DDL, the
+    // two INSERTs, the SELECT and the positional write comments.
+    using namespace MahadevERP;
+    QCOMPARE(MigrationColumns::verifyExporterTdsColumns(), QString());
+    QCOMPARE(MigrationColumns::exporterTdsCount(), 19);
+    const QStringList jet = MigrationColumns::exporterTdsJetColumns();
+    const QStringList sqlite = MigrationColumns::exporterTdsSqliteColumns();
+    QCOMPARE(jet.size(), 19);
+    QCOMPARE(sqlite.size(), 19);
+    QCOMPARE(QSet<QString>(jet.begin(), jet.end()).size(), 19);
+    QCOMPARE(QSet<QString>(sqlite.begin(), sqlite.end()).size(), 19);
+
+    const QList<QPair<QString, QString>> want = {
+        {"voucher_date", "VoucherDate"}, {"voucher_number", "VoucherNumber"},
+        {"trans_type", "TransType"}, {"account_code", "AccountCode"},
+        {"income_amount", "IncomeAmount"}, {"tds", "TDS"},
+        {"surcharge", "Surcharge"}, {"education", "Education"},
+        {"tds_rate", "TDSRate"}, {"income_type", "IncomeType"},
+        {"reason_for_non_deduction", "ReasonForNonDeduction"},
+        {"rate_tds", "RateTDS"}, {"rate_surcharge", "RateSurcharge"},
+        {"rate_education", "RateEducation"}, {"post_in_books", "PostInBooks"},
+        {"challan_voucher_date", "ChallanVoucherDate"},
+        {"challan_voucher_number", "ChallanVoucherNumber"},
+        {"income_narration", "IncomeNarration"},
+        {"prev_income_amount", "PrevIncomeAmount"}
+    };
+    QCOMPARE(want.size(), 19);
+    for (int i = 0; i < want.size(); ++i) {
+        QCOMPARE(sqlite.at(i), want.at(i).first);
+        QCOMPARE(jet.at(i), want.at(i).second);
+        QCOMPARE(MigrationColumns::exporterTdsSqlite(i), want.at(i).first);
+        QCOMPARE(MigrationColumns::exporterTdsJet(i), want.at(i).second);
+    }
+    // Out-of-range accessors return empty so callers skip loud, never index in.
+    QVERIFY(MigrationColumns::exporterTdsJet(-1).isEmpty());
+    QVERIFY(MigrationColumns::exporterTdsJet(19).isEmpty());
+    QVERIFY(MigrationColumns::exporterTdsSqlite(99).isEmpty());
+
+    // Cross-direction: every Jet name the IMPORTER reads is one of our Jet
+    // columns (both directions agree on the same 19-name legacy roster).
+    SchemaMapping sm;
+    QVERIFY2(sm.loadDefault(), qPrintable(sm.lastError()));
+    bool sawImport = false;
+    int readNames = 0;
+    for (const QVariant& v : sm.tables()) {
+        QVariantMap m = v.toMap();
+        if (m.value("source").toString() != "TDSDeductions") continue;
+        if (m.value("target").toString() != "tds_vouchers") continue;
+        sawImport = true;
+        for (const QVariant& c : m.value("columns").toList()) {
+            const QString s = c.toMap().value("source").toString();
+            if (s.startsWith("derived:") || s.startsWith("const:")) continue;
+            for (const QString& part : s.split('|')) {
+                readNames++;
+                QVERIFY2(jet.contains(part.trimmed()), qPrintable(s));
+            }
+        }
+    }
+    QVERIFY(sawImport);
+    QVERIFY2(readNames >= 14, qPrintable(QString::number(readNames)));
+}
+
+void LogicBoardTestSuite::testTdsRegisterFidelity() {
+    // C3 TDS register-fidelity slice. The firm's legacy Jet TDSDeductions
+    // register fields — trans_type and the ChallanVoucherDate/Number pair —
+    // were dropped by the import (the export staging bridge fabricated
+    // 'Jrnl' / '' / 0 instead), so the export could not reproduce the firm's
+    // TDS register. They are now carried Jet -> tds_vouchers -> staging, and
+    // an app edit of a migrated row must keep its identity (no duplicate
+    // staging row, no wiped challan). Hermetic: isolated scratch DB.
+    using namespace MahadevERP;
+
+    // Static half: the JSON SSOT and the compiled fallback agree, and the
+    // three new target keys resolve to their Jet source columns.
+    QCOMPARE(MigrationColumns::verifyTdsColumns(), QString());
+    QCOMPARE(MigrationColumns::tdsField("trans_type"), QString("TransType"));
+    QCOMPARE(MigrationColumns::tdsField("challan_voucher_date"), QString("ChallanVoucherDate"));
+    QCOMPARE(MigrationColumns::tdsField("challan_voucher_number"), QString("ChallanVoucherNumber"));
+
+    auto& db = DatabaseManager::instance();
+    const QString originalDb = db.dbPath();
+    QTemporaryDir sandbox;
+    QVERIFY2(sandbox.isValid(), "tds-register sandbox temp dir");
+    const QString sandboxDb = sandbox.path() + "/tds_register_sandbox.db";
+    QVERIFY2(db.switchDatabase(sandboxDb), "tds-register sandbox open");
+    db.ensureTablesExist();
+    struct DbRestore {
+        DatabaseManager* d; const QString path;
+        ~DbRestore() { if (d) d->switchDatabase(path); }
+    } dbRestore{&db, originalDb};
+
+    // Additive columns exist on a newly created DB (the migrated-DB path is
+    // addColumnIfNotExists; the sim gates both).
+    {
+        QStringList tdsCols;
+        for (const QVariant& r : db.executeQuery("PRAGMA table_info(tds_vouchers);"))
+            tdsCols << r.toMap().value("name").toString();
+        for (const char* col : {"trans_type", "challan_voucher_date", "challan_voucher_number"})
+            QVERIFY2(tdsCols.contains(QString(col)), col);
+    }
+
+    // Two register shapes: a legacy 'Purc' row carrying a real challan, and an
+    // app-style 'Jrnl' row with none.
+    db.executeNonQuery("DELETE FROM TDSDeductions;");
+    // A migrated firm always carries its FY rows; the app save path resolves
+    // fy_id through them (without one it falls back to a hard-coded id).
+    QVERIFY(db.executeNonQuery(
+        "INSERT OR IGNORE INTO financial_years (year_name, start_date, end_date, is_active, is_locked, status) "
+        "VALUES ('FY 2024-25', '2024-04-01', '2025-03-31', 1, 0, 'open');"));
+    QVERIFY(db.executeNonQuery(
+        "INSERT INTO tds_vouchers (financial_year, voucher_no, voucher_date, tds_type, "
+        "ledger_name, income_amount, total_tax_rate, post_in_books, "
+        "trans_type, challan_voucher_date, challan_voucher_number) "
+        "VALUES ('FY 2024-25', 9001, '2024-11-09', 'COMMISSION', 'TDS Party', 5000.0, 2.0, 1, "
+        "'Purc', '2024-12-07', 2339);"));
+    QVERIFY(db.executeNonQuery(
+        "INSERT INTO tds_vouchers (financial_year, voucher_no, voucher_date, tds_type, "
+        "ledger_name, income_amount, total_tax_rate, post_in_books) "
+        "VALUES ('FY 2024-25', 9002, '2024-11-11', 'RENT', 'TDS Party', 1000.0, 10.0, 1);"));
+
+    // The export staging bridge (fires because the staging table is empty)
+    // must carry the register fields verbatim, not fabricate them.
+    db.ensureTablesExist();
+    const QVariantList backfilled = db.executeQuery(
+        "SELECT trans_type, challan_voucher_date, challan_voucher_number "
+        "FROM TDSDeductions WHERE voucher_number IN (9001, 9002) ORDER BY voucher_number;");
+    QCOMPARE(backfilled.size(), 2);
+    QCOMPARE(backfilled.at(0).toMap().value("trans_type").toString(), QString("Purc"));
+    QCOMPARE(backfilled.at(0).toMap().value("challan_voucher_date").toString().left(10), QString("2024-12-07"));
+    QCOMPARE(backfilled.at(0).toMap().value("challan_voucher_number").toInt(), 2339);
+    QCOMPARE(backfilled.at(1).toMap().value("trans_type").toString(), QString("Jrnl"));
+    QCOMPARE(backfilled.at(1).toMap().value("challan_voucher_number").toInt(), 0);
+
+    // App edit of the migrated row: identity preserved, no duplicate, challan
+    // kept. (Pre-fix the staging DELETE matched only 'Jrnl'/'TDS', so the
+    // 'Purc' staging row survived AND a 'Jrnl' copy was added.)
+    const int rowId = db.executeScalar(
+        "SELECT id FROM tds_vouchers WHERE voucher_no = 9001;").toInt();
+    QVERIFY(rowId > 0);
+    const int before = db.executeScalar(
+        "SELECT COUNT(*) FROM TDSDeductions WHERE voucher_number = 9001;").toInt();
+    QCOMPARE(before, 1);
+
+    TdsModel model;
+    QVariantMap edit;
+    edit["id"] = rowId;
+    edit["voucher_no"] = 9001;
+    edit["voucher_date"] = "2024-11-09";
+    edit["tds_type"] = "Commission";
+    edit["ledger_name"] = "TDS Party";
+    edit["exp_ledger_name"] = "Commission Expense";
+    edit["tds_ledger_name"] = "T D S PEYABAL";
+    edit["income_amount"] = 5000.0;
+    edit["total_for_tds"] = 5000.0;
+    edit["rate_tds"] = 2.0;
+    edit["tax_amount_tds"] = 100.0;
+    edit["total_tax_rate"] = 2.0;
+    edit["total_tax_amount"] = 100.0;
+    edit["net_amount"] = 4900.0;
+    edit["post_in_books"] = 1;
+    QVERIFY2(model.save_tds_voucher(edit), "app save of the migrated TDS row");
+
+    const QVariantList after = db.executeQuery(
+        "SELECT trans_type, challan_voucher_date, challan_voucher_number "
+        "FROM TDSDeductions WHERE voucher_number = 9001;");
+    QCOMPARE(after.size(), 1);  // no orphaned 'Purc' row, no 'Jrnl' duplicate
+    QCOMPARE(after.at(0).toMap().value("trans_type").toString(), QString("Purc"));
+    QCOMPARE(after.at(0).toMap().value("challan_voucher_date").toString().left(10), QString("2024-12-07"));
+    QCOMPARE(after.at(0).toMap().value("challan_voucher_number").toInt(), 2339);
+
+    // Delete path removes the same identity (nothing left behind).
+    QVERIFY(model.delete_tds_voucher(rowId));
+    QCOMPARE(db.executeScalar(
+        "SELECT COUNT(*) FROM TDSDeductions WHERE voucher_number = 9001;").toInt(), 0);
 }
 
 QTEST_MAIN(LogicBoardTestSuite)

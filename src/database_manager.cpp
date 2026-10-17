@@ -1077,7 +1077,12 @@ void DatabaseManager::ensureTablesExist() {
     );
     } // domainFlags.mandi (iform_voucher_items)
 
-    // 7e. TDS Vouchers
+    // 7e. TDS Vouchers. trans_type / challan_voucher_date /
+    // challan_voucher_number are the firm's LEGACY Jet TDSDeductions
+    // register fields, carried verbatim by migration so the exporter can
+    // round-trip them (C3 TDS register-fidelity slice). They are distinct
+    // from challan_id, which links the app's own ITNS-281 deposit record in
+    // tax_deposit_challans.
     executeNonQuery(
         "CREATE TABLE IF NOT EXISTS tds_vouchers ("
         "id INTEGER PRIMARY KEY AUTOINCREMENT,"
@@ -1094,6 +1099,9 @@ void DatabaseManager::ensureTablesExist() {
         "previous_amount REAL DEFAULT 0.0,"
         "total_for_tds REAL DEFAULT 0.0,"
         "narration TEXT,"
+        "trans_type TEXT DEFAULT 'Jrnl',"
+        "challan_voucher_date TEXT,"
+        "challan_voucher_number INTEGER DEFAULT 0,"
         "rate_tds REAL DEFAULT 0.0,"
         "tax_amount_tds REAL DEFAULT 0.0,"
         "rate_surcharge REAL DEFAULT 0.0,"
@@ -1788,7 +1796,12 @@ void DatabaseManager::ensureTablesExist() {
     executeNonQuery("CREATE INDEX IF NOT EXISTS idx_tds_deductions_vch ON TDSDeductions(trans_type, voucher_number, voucher_date);");
     executeNonQuery("CREATE INDEX IF NOT EXISTS idx_tds_deductions_party ON TDSDeductions(account_code, voucher_date);");
 
-    // Backfill TDSDeductions from existing tds_vouchers if table is empty
+    // Backfill TDSDeductions from existing tds_vouchers if table is empty.
+    // trans_type / challan_voucher_* are carried from tds_vouchers instead
+    // of being fabricated ('Jrnl' / '' / 0) so a migrated firm's legacy TDS
+    // register round-trips through the exporter (C3 TDS register-fidelity
+    // slice). post_in_books = 1 stays the row filter (app semantics: only
+    // posted TDS vouchers appear in the register).
     QVariant tdsDedCount = executeScalar("SELECT COUNT(*) FROM TDSDeductions;");
     if (!tdsDedCount.isValid() || tdsDedCount.toLongLong() == 0) {
         executeNonQuery(
@@ -1797,10 +1810,10 @@ void DatabaseManager::ensureTablesExist() {
             "income_amount, tds, surcharge, education, tds_rate, "
             "income_type, reason_for_non_deduction, rate_tds, rate_surcharge, rate_education, "
             "post_in_books, challan_voucher_date, challan_voucher_number, income_narration, prev_income_amount"
-            ") SELECT v.voucher_date, v.voucher_no, 'Jrnl', COALESCE(p.legacy_id, v.ledger_id), "
+            ") SELECT v.voucher_date, v.voucher_no, COALESCE(NULLIF(TRIM(v.trans_type), ''), 'Jrnl'), COALESCE(p.legacy_id, v.ledger_id), "
             "v.income_amount, v.tax_amount_tds, v.tax_amount_surcharge, v.tax_amount_cess, v.total_tax_rate, "
             "v.tds_type, v.non_deduction_reason, v.rate_tds, v.rate_surcharge, v.rate_cess, "
-            "v.post_in_books, '', 0, v.narration, v.previous_amount "
+            "v.post_in_books, v.challan_voucher_date, COALESCE(v.challan_voucher_number, 0), v.narration, v.previous_amount "
             "FROM tds_vouchers v "
             "LEFT JOIN parties p ON v.ledger_id = p.id "
             "WHERE v.post_in_books = 1;"
@@ -2176,6 +2189,11 @@ void DatabaseManager::ensureTablesExist() {
     // TDS Vouchers deposit tracking
     addColumnIfNotExists("tds_vouchers", "challan_id", "INTEGER");
     addColumnIfNotExists("tds_vouchers", "is_deposited", "INTEGER DEFAULT 0");
+    // Legacy Jet TDSDeductions register fields (C3 TDS register-fidelity
+    // slice): additive on existing DBs, carried verbatim for export.
+    addColumnIfNotExists("tds_vouchers", "trans_type", "TEXT DEFAULT 'Jrnl'");
+    addColumnIfNotExists("tds_vouchers", "challan_voucher_date", "TEXT");
+    addColumnIfNotExists("tds_vouchers", "challan_voucher_number", "INTEGER DEFAULT 0");
 
     // Ensure the six generic system ledgers (fresh, non-migrated firms only).
     // Groups resolve BY NAME from the live chart (robust to renames); the

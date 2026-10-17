@@ -63,14 +63,8 @@ jobs:
             }
           }
 
-      - name: Package Portable Zip
-        shell: powershell
-        run: |
-          cd dist
-          tar -a -c -f "MahadevRiceMill-Windows-x64.zip" MahadevRiceMillERP
-
       - name: Upload Windows Standalone Package
         uses: actions/upload-artifact@v4
         with:
           name: MahadevRiceMill-Windows-x64
-          path: dist/MahadevRiceMill-Windows-x64.zip
+          path: dist/MahadevRiceMillERP/

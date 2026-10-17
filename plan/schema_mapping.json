@@ -991,7 +991,7 @@
       "columns": [
         {
           "source": "VoucherNumber",
-          "target": "dispatch_no",
+          "target": "voucher_no",
           "transform": "trim"
         },
         {
@@ -1001,7 +1001,7 @@
         },
         {
           "source": "AccountCode",
-          "target": "consignee_name",
+          "target": "party_name",
           "transform": "id_lookup"
         },
         {
@@ -1589,17 +1589,17 @@
         },
         {
           "source": "derived:paddy-sum",
-          "target": "paddy_variety",
+          "target": "input_variety",
           "transform": "derived"
         },
         {
           "source": "derived:input-sum",
-          "target": "paddy_input_qtl",
+          "target": "input_qtl",
           "transform": "derived"
         },
         {
           "source": "derived:output-split",
-          "target": "head_rice_qtl|broken_rice_qtl|bran_qtl|husk_qtl",
+          "target": "output_qtl|byproduct_qtl",
           "transform": "derived"
         },
         {
@@ -1848,6 +1848,21 @@
           "source": "ReasonForNonDeduction",
           "target": "non_deduction_reason",
           "transform": "trim"
+        },
+        {
+          "source": "TransType",
+          "target": "trans_type",
+          "transform": "trim"
+        },
+        {
+          "source": "ChallanVoucherDate",
+          "target": "challan_voucher_date",
+          "transform": "iso_date"
+        },
+        {
+          "source": "ChallanVoucherNumber",
+          "target": "challan_voucher_number",
+          "transform": "int"
         },
         {
           "source": "derived:jrnl-EntryType",
@@ -2343,278 +2358,698 @@
       ]
     },
     {
-      "source": "Master1",
-      "target": "parties+account_groups+stock_items",
-      "direction": "import",
+      "source": "Busy:Company",
+      "target": "company_info",
       "provider": "busy",
-      "export_supported": false,
-      "note": "CORRECTED Batch 7: migrator reads Master1 only (busy_data_migrator.cpp:532,774); no Master2/Master3 reads. MasterAddressInfo/Folio1 enrich address/balances (see columns).",
+      "direction": "import",
       "columns": [
         {
           "source": "Name",
-          "target": "name",
-          "transform": "trim"
+          "target": "name"
         },
         {
-          "source": "Alias",
-          "target": "alias",
-          "transform": "trim"
+          "source": "GSTNo|GSTIN",
+          "target": "gstin"
         },
         {
-          "source": "MasterType",
-          "target": "master-kind",
-          "transform": "derived"
+          "source": "ITPAN|PAN",
+          "target": "pan"
         },
         {
-          "source": "ParentGrp",
-          "target": "group_name",
-          "transform": "id_lookup"
+          "source": "PrintName",
+          "target": "print_name"
         },
         {
-          "source": "Code",
-          "target": "legacy_code",
-          "transform": "int"
-        },
-        {
-          "source": "Address1|Address2|Address3|Address4",
-          "target": "address",
-          "transform": "trim"
-        },
-        {
-          "source": "City",
-          "target": "city",
-          "transform": "trim"
-        },
-        {
-          "source": "PinCode",
-          "target": "pincode",
-          "transform": "trim"
-        },
-        {
-          "source": "ITPAN",
-          "target": "pan",
-          "transform": "trim"
-        },
-        {
-          "source": "GSTNo",
-          "target": "gstin",
-          "transform": "trim"
-        },
-        {
-          "source": "BankName",
-          "target": "bank_name",
-          "transform": "trim"
-        },
-        {
-          "source": "BankAcNo",
-          "target": "bank_account",
-          "transform": "trim"
-        },
-        {
-          "source": "IFSCCode",
-          "target": "ifsc_code",
-          "transform": "trim"
-        },
-        {
-          "source": "MobileNo",
-          "target": "mobile",
-          "transform": "trim"
+          "source": "TelNo",
+          "target": "phone"
         },
         {
           "source": "Email",
-          "target": "email",
-          "transform": "trim"
+          "target": "email"
         },
         {
-          "source": "D1|D2|D3|D4|D6|D7",
-          "target": "opening-balance-fields",
-          "transform": "derived"
+          "source": "Address1",
+          "target": "address1"
         },
         {
-          "source": "MasterAddressInfo:Address1-4|City|PinCode|GSTNo|ITPAN",
-          "target": "address-enrichment",
-          "transform": "derived"
+          "source": "Address2",
+          "target": "address2"
         },
         {
-          "source": "Folio1:balances",
-          "target": "balance-enrichment",
-          "transform": "derived"
+          "source": "Address3",
+          "target": "address3"
+        },
+        {
+          "source": "BegFY",
+          "target": "fy_beg"
+        }
+      ]
+    },
+    {
+      "source": "Busy:Master1",
+      "target": "parties+account_groups+stock_items",
+      "provider": "busy",
+      "direction": "import",
+      "columns": [
+        {
+          "source": "Code",
+          "target": "legacy_code"
+        },
+        {
+          "source": "Name",
+          "target": "name"
+        },
+        {
+          "source": "Alias",
+          "target": "alias"
+        },
+        {
+          "source": "PrintName",
+          "target": "print_name"
+        },
+        {
+          "source": "MasterType",
+          "target": "master_type"
+        },
+        {
+          "source": "ParentGrp",
+          "target": "parent_group"
+        },
+        {
+          "source": "Address1",
+          "target": "address1"
+        },
+        {
+          "source": "Address2",
+          "target": "address2"
+        },
+        {
+          "source": "Address3",
+          "target": "address3"
+        },
+        {
+          "source": "Address4",
+          "target": "address4"
+        },
+        {
+          "source": "City",
+          "target": "city"
+        },
+        {
+          "source": "PinCode",
+          "target": "pincode"
+        },
+        {
+          "source": "GSTNo",
+          "target": "gstin"
+        },
+        {
+          "source": "ITPAN",
+          "target": "pan"
+        },
+        {
+          "source": "MobileNo",
+          "target": "mobile"
+        },
+        {
+          "source": "Email",
+          "target": "email"
+        },
+        {
+          "source": "BankName",
+          "target": "bank_name"
+        },
+        {
+          "source": "BankAcNo",
+          "target": "bank_account"
+        },
+        {
+          "source": "IFSCCode",
+          "target": "ifsc_code"
+        },
+        {
+          "source": "StateCodeLong",
+          "target": "state_code"
+        },
+        {
+          "source": "D1",
+          "target": "opening_balance"
+        },
+        {
+          "source": "I2",
+          "target": "balance_sign"
+        },
+        {
+          "source": "D6",
+          "target": "credit_days"
+        },
+        {
+          "source": "D7",
+          "target": "credit_limit"
+        },
+        {
+          "source": "D1",
+          "target": "opening_qty"
+        },
+        {
+          "source": "D2",
+          "target": "opening_rate"
+        },
+        {
+          "source": "D3",
+          "target": "opening_value"
+        },
+        {
+          "source": "D4",
+          "target": "gst_rate"
         },
         {
           "source": "HSNCode",
-          "target": "hsn_code",
-          "transform": "trim"
+          "target": "hsn_code"
         },
         {
-          "source": "CM2|CM3|CM4",
-          "target": "posting-ledgers",
-          "transform": "id_lookup"
+          "source": "CM2|MasterSupport",
+          "target": "unit_code"
+        },
+        {
+          "source": "CM3",
+          "target": "sale_ledger"
+        },
+        {
+          "source": "CM4",
+          "target": "purc_ledger"
+        },
+        {
+          "source": "I1",
+          "target": "sundry_flag"
+        },
+        {
+          "source": "CM1",
+          "target": "sundry_post_1"
+        },
+        {
+          "source": "CM2",
+          "target": "sundry_post_2"
         }
       ]
     },
     {
-      "source": "Tran1/Tran2/Tran3",
-      "target": "vouchers+transactions",
-      "direction": "import",
+      "source": "Busy:MasterAddressInfo",
+      "target": "parties",
       "provider": "busy",
-      "export_supported": false,
+      "direction": "import",
+      "columns": [
+        {
+          "source": "MasterCode",
+          "target": "master_code"
+        },
+        {
+          "source": "Address1",
+          "target": "address1"
+        },
+        {
+          "source": "Address2",
+          "target": "address2"
+        },
+        {
+          "source": "Address3",
+          "target": "address3"
+        },
+        {
+          "source": "Address4",
+          "target": "address4"
+        },
+        {
+          "source": "City",
+          "target": "city"
+        },
+        {
+          "source": "PinCode",
+          "target": "pincode"
+        },
+        {
+          "source": "GSTNo",
+          "target": "gstin"
+        },
+        {
+          "source": "ITPAN",
+          "target": "pan"
+        },
+        {
+          "source": "MobileNo",
+          "target": "mobile"
+        },
+        {
+          "source": "Email",
+          "target": "email"
+        },
+        {
+          "source": "BankName",
+          "target": "bank_name"
+        },
+        {
+          "source": "BankAcNo",
+          "target": "bank_account"
+        },
+        {
+          "source": "IFSCCode",
+          "target": "ifsc_code"
+        },
+        {
+          "source": "StateCodeLong",
+          "target": "state_code"
+        }
+      ]
+    },
+    {
+      "source": "Busy:Folio1",
+      "target": "parties",
+      "provider": "busy",
+      "direction": "import",
+      "columns": [
+        {
+          "source": "MasterCode",
+          "target": "master_code"
+        },
+        {
+          "source": "B1",
+          "target": "flag"
+        },
+        {
+          "source": "D1",
+          "target": "value"
+        }
+      ]
+    },
+    {
+      "source": "Busy:Tran1",
+      "target": "vouchers+transactions",
+      "provider": "busy",
+      "direction": "import",
       "columns": [
         {
           "source": "VchCode",
-          "target": "voucher_no",
-          "transform": "derived"
-        },
-        {
-          "source": "Date",
-          "target": "voucher_date",
-          "transform": "iso_date"
+          "target": "vch_code"
         },
         {
           "source": "VchType",
-          "target": "voucher_type",
-          "transform": "derived"
-        },
-        {
-          "source": "VchNo",
-          "target": "voucher_no",
-          "transform": "trim"
-        },
-        {
-          "source": "AutoVchNo",
-          "target": "voucher_no",
-          "transform": "trim"
-        },
-        {
-          "source": "MasterCode1|MasterCode2",
-          "target": "party_id",
-          "transform": "id_lookup"
-        },
-        {
-          "source": "Type",
-          "target": "dr_cr",
-          "transform": "derived"
-        },
-        {
-          "source": "Amount|Value1|Value3",
-          "target": "amount",
-          "transform": "round2_half_away"
-        },
-        {
-          "source": "D1|D2|D5",
-          "target": "date-aux",
-          "transform": "iso_date"
-        },
-        {
-          "source": "Narration|ShortNar",
-          "target": "narration",
-          "transform": "trim"
-        },
-        {
-          "source": "SrNo",
-          "target": "row_no",
-          "transform": "int"
-        },
-        {
-          "source": "RecType",
-          "target": "record-kind",
-          "transform": "derived"
+          "target": "vch_type"
         },
         {
           "source": "VchSeriesCode",
-          "target": "bill-series",
-          "transform": "trim"
+          "target": "vch_series"
         },
         {
-          "source": "Cancelled|VchCancelled",
-          "target": "cancelled-skip",
-          "transform": "derived"
+          "source": "VchNo",
+          "target": "voucher_no"
+        },
+        {
+          "source": "Date",
+          "target": "voucher_date"
+        },
+        {
+          "source": "VchAmtBaseCur|VchSalePurcAmt|OrgVchAmtBaseCur|TotalAmount",
+          "target": "total_amount"
+        },
+        {
+          "source": "Narration",
+          "target": "narration"
+        },
+        {
+          "source": "MasterCode1",
+          "target": "party_code"
+        },
+        {
+          "source": "AutoVchNo",
+          "target": "auto_no"
+        },
+        {
+          "source": "Cancelled",
+          "target": "cancelled"
+        },
+        {
+          "source": "VchCancelled",
+          "target": "vch_cancelled"
         }
       ]
     },
     {
-      "source": "MandiVchItemDet/MandiVchConfig/MandiItemWiseExpense",
-      "target": "jform_vouchers+jform_voucher_items+iform_vouchers+iform_voucher_items",
-      "direction": "import",
+      "source": "Busy:Tran2",
+      "target": "vouchers+transactions",
       "provider": "busy",
-      "export_supported": false,
-      "domain_flags": [
-        "feature.mandi"
-      ],
-      "note": "CORRECTED Batch 7: busy path writes J AND I families (busy_data_migrator.cpp:1509,1631); never paddy (post-S7 paddy_slips is Bahi-derived only).",
+      "direction": "import",
+      "columns": [
+        {
+          "source": "VchCode",
+          "target": "vch_code"
+        },
+        {
+          "source": "RecType",
+          "target": "record_kind"
+        },
+        {
+          "source": "Type",
+          "target": "type"
+        },
+        {
+          "source": "Amount",
+          "target": "amount"
+        },
+        {
+          "source": "Value1",
+          "target": "value1"
+        },
+        {
+          "source": "Value3",
+          "target": "value3"
+        },
+        {
+          "source": "D1",
+          "target": "d1"
+        },
+        {
+          "source": "D2",
+          "target": "d2"
+        },
+        {
+          "source": "D5",
+          "target": "d5"
+        },
+        {
+          "source": "MasterCode1",
+          "target": "account_code"
+        },
+        {
+          "source": "MasterCode2",
+          "target": "second_code"
+        },
+        {
+          "source": "SrNo",
+          "target": "row_no"
+        },
+        {
+          "source": "ShortNar",
+          "target": "short_narration"
+        }
+      ]
+    },
+    {
+      "source": "Busy:Tran3",
+      "target": "vouchers+transactions",
+      "provider": "busy",
+      "direction": "import",
+      "columns": [
+        {
+          "source": "VchCode",
+          "target": "vch_code"
+        },
+        {
+          "source": "No",
+          "target": "ref_no"
+        },
+        {
+          "source": "Status",
+          "target": "ref_status"
+        },
+        {
+          "source": "Type",
+          "target": "ref_type"
+        }
+      ]
+    },
+    {
+      "source": "Busy:MandiVchItemDet",
+      "target": "paddy_slips+jform_voucher_items+iform_voucher_items",
+      "provider": "busy",
+      "direction": "import",
       "columns": [
         {
           "source": "derived:series-config",
-          "target": "voucher-family-J|I",
-          "transform": "derived"
+          "target": "family"
         },
         {
           "source": "VchCode",
-          "target": "voucher_no",
-          "transform": "derived"
+          "target": "vch_code"
         },
         {
-          "source": "ItemCode:BSCode",
-          "target": "item_id",
-          "transform": "id_lookup"
+          "source": "VchNo",
+          "target": "voucher_no"
         },
         {
-          "source": "PurcDefVal|SaleDefVal",
-          "target": "rate",
-          "transform": "round2_half_away"
+          "source": "Date",
+          "target": "voucher_date"
         },
         {
-          "source": "D1|D3|D5|Value1",
-          "target": "qty|weight|amount",
-          "transform": "derived"
+          "source": "SrNo",
+          "target": "row_no"
         },
         {
-          "source": "Narration1|Narration2",
-          "target": "narration",
-          "transform": "trim"
+          "source": "ItemCode",
+          "target": "item_code"
+        },
+        {
+          "source": "BSCode",
+          "target": "bs_code"
+        },
+        {
+          "source": "BagQty",
+          "target": "bags"
+        },
+        {
+          "source": "WeightPerBag",
+          "target": "weight_per_bag"
+        },
+        {
+          "source": "LooseWeight",
+          "target": "loose_weight"
+        },
+        {
+          "source": "BuyerWeight",
+          "target": "buyer_weight"
+        },
+        {
+          "source": "PartyCode",
+          "target": "party_code"
+        },
+        {
+          "source": "PurchaserCode",
+          "target": "purchaser_code"
+        },
+        {
+          "source": "PurcDefVal",
+          "target": "purc_default"
+        },
+        {
+          "source": "SaleDefVal",
+          "target": "sale_default"
+        },
+        {
+          "source": "D1",
+          "target": "d1"
+        },
+        {
+          "source": "D3",
+          "target": "d3"
+        },
+        {
+          "source": "D5",
+          "target": "d5"
+        },
+        {
+          "source": "Value1",
+          "target": "value1"
+        },
+        {
+          "source": "Narration1",
+          "target": "narration1"
+        },
+        {
+          "source": "Narration2",
+          "target": "narration2"
+        },
+        {
+          "source": "PurchaseBillNo",
+          "target": "bill_no"
+        },
+        {
+          "source": "PurchaseBillDate",
+          "target": "bill_date"
         },
         {
           "source": "VehicleNo",
-          "target": "vehicle_no",
-          "transform": "trim"
-        },
-        {
-          "source": "PurchaseBillNo|PurchaseBillDate",
-          "target": "bill-ref",
-          "transform": "trim"
-        },
-        {
-          "source": "VchGSTSumItemWise:HSNCode|TaxCatCode|TaxRate|PartyStateCode",
-          "target": "gst-split",
-          "transform": "derived"
+          "target": "vehicle_no"
         }
       ]
     },
     {
-      "source": "VchGSTSumItemWise",
-      "target": "transactions",
-      "direction": "import",
+      "source": "Busy:MandiItemWiseExpense",
+      "target": "jform_voucher_items+iform_voucher_items",
       "provider": "busy",
-      "export_supported": false,
+      "direction": "import",
+      "columns": [
+        {
+          "source": "ItemCode",
+          "target": "item_code"
+        },
+        {
+          "source": "BSCode",
+          "target": "bs_code"
+        },
+        {
+          "source": "PurcDefVal",
+          "target": "purc_default"
+        },
+        {
+          "source": "SaleDefVal",
+          "target": "sale_default"
+        }
+      ]
+    },
+    {
+      "source": "Busy:VchGSTSumItemWise",
+      "target": "transactions",
+      "provider": "busy",
+      "direction": "import",
       "columns": [
         {
           "source": "VchCode",
-          "target": "voucher_no",
-          "transform": "derived"
+          "target": "vch_code"
         },
         {
           "source": "PartyCode",
-          "target": "party_id",
-          "transform": "id_lookup"
+          "target": "party_code"
         },
         {
-          "source": "PartyStateCode|PartyStateTinDigit",
-          "target": "place_of_supply",
-          "transform": "derived"
+          "source": "HSNCode",
+          "target": "hsn_code"
         },
         {
-          "source": "HSNCode|TaxCatCode|TaxRate",
-          "target": "gst-split",
-          "transform": "derived"
+          "source": "TaxCatCode",
+          "target": "tax_cat"
+        },
+        {
+          "source": "TaxRate",
+          "target": "tax_rate"
+        },
+        {
+          "source": "PartyStateCode",
+          "target": "party_state_code"
+        },
+        {
+          "source": "PartyStateTinDigit",
+          "target": "party_state_tin_digit"
+        },
+        {
+          "source": "POSStateTinDigit",
+          "target": "pos_state_tin_digit"
+        }
+      ]
+    },
+    {
+      "source": "Busy:Config",
+      "target": "series-config",
+      "provider": "busy",
+      "direction": "import",
+      "columns": [
+        {
+          "source": "RecType",
+          "target": "record_kind"
+        },
+        {
+          "source": "L1",
+          "target": "series_code"
+        },
+        {
+          "source": "C2",
+          "target": "series_prefix"
+        }
+      ]
+    },
+    {
+      "source": "Busy:MandiVchConfig",
+      "target": "series-config",
+      "provider": "busy",
+      "direction": "import",
+      "columns": [
+        {
+          "source": "VSCode",
+          "target": "vs_code"
+        },
+        {
+          "source": "DefMatCentreCode",
+          "target": "def_mat_centre"
+        },
+        {
+          "source": "DefSalePurcAccCode",
+          "target": "def_sale_purc_acc"
+        },
+        {
+          "source": "DefSalePurcType",
+          "target": "def_sale_purc_type"
+        },
+        {
+          "source": "DefTradingAccount",
+          "target": "def_trading_account"
+        },
+        {
+          "source": "JrnlVchSeries",
+          "target": "jrnl_vch_series"
+        },
+        {
+          "source": "StkTfrVchSeries",
+          "target": "stk_tfr_vch_series"
+        }
+      ]
+    },
+    {
+      "source": "Busy:DailySum",
+      "target": "day-book-summary",
+      "provider": "busy",
+      "direction": "import",
+      "columns": [
+        {
+          "source": "MasterType",
+          "target": "master_type"
+        },
+        {
+          "source": "MasterCode1",
+          "target": "master_code1"
+        },
+        {
+          "source": "MasterCode2",
+          "target": "master_code2"
+        },
+        {
+          "source": "Dr1",
+          "target": "dr1"
+        },
+        {
+          "source": "Cr1",
+          "target": "cr1"
+        },
+        {
+          "source": "Dr3",
+          "target": "dr3"
+        },
+        {
+          "source": "Cr3",
+          "target": "cr3"
+        }
+      ]
+    },
+    {
+      "source": "Busy:VchOtherInfo",
+      "target": "vouchers",
+      "provider": "busy",
+      "direction": "import",
+      "columns": [
+        {
+          "source": "VchCode",
+          "target": "vch_code"
+        },
+        {
+          "source": "GrNo",
+          "target": "gr_no"
         }
       ]
     },
@@ -2646,8 +3081,18 @@
           "transform": "derived"
         },
         {
-          "source": "ADDRESS|PINCODE|STATENAME|LEDSTATENAME",
-          "target": "address-block",
+          "source": "ADDRESS",
+          "target": "address",
+          "transform": "trim"
+        },
+        {
+          "source": "PINCODE",
+          "target": "pincode",
+          "transform": "trim"
+        },
+        {
+          "source": "PARTYSTATE|STATENAME|LEDSTATENAME",
+          "target": "state",
           "transform": "trim"
         },
         {
@@ -2656,8 +3101,23 @@
           "transform": "trim"
         },
         {
-          "source": "GSTIN|GSTREGISTRATIONNUMBER|PARTYGSTIN",
+          "source": "PARTYGSTIN|GSTIN|GSTREGISTRATIONNUMBER",
           "target": "gstin",
+          "transform": "trim"
+        },
+        {
+          "source": "BANKNAME",
+          "target": "bank_name",
+          "transform": "trim"
+        },
+        {
+          "source": "ACCOUNTNUMBER|BANKDETAILS",
+          "target": "bank_account",
+          "transform": "trim"
+        },
+        {
+          "source": "IFSCODE",
+          "target": "bank_ifsc",
           "transform": "trim"
         },
         {
@@ -2669,11 +3129,6 @@
           "source": "BILLCREDITPERIOD",
           "target": "credit_days",
           "transform": "int"
-        },
-        {
-          "source": "PARTYNAME|PARTYLEDGERNAME",
-          "target": "party-link",
-          "transform": "derived"
         },
         {
           "source": "ISREVENUE|AFFECTSGROSSPROFIT",
@@ -2705,8 +3160,18 @@
           "transform": "trim"
         },
         {
-          "source": "OPENINGRATE|OPENINGVALUE",
-          "target": "opening-rate-value",
+          "source": "OPENINGBALANCE",
+          "target": "opening_qty",
+          "transform": "trim"
+        },
+        {
+          "source": "OPENINGRATE",
+          "target": "opening_rate",
+          "transform": "round2_half_away"
+        },
+        {
+          "source": "OPENINGVALUE",
+          "target": "opening_value",
           "transform": "round2_half_away"
         },
         {
@@ -2718,6 +3183,25 @@
           "source": "HSNCODE",
           "target": "hsn_code",
           "transform": "trim"
+        }
+      ]
+    },
+    {
+      "source": "TallyTag:UNIT",
+      "target": "stock_units",
+      "direction": "import",
+      "provider": "tally",
+      "export_supported": false,
+      "columns": [
+        {
+          "source": "NAME",
+          "target": "unit_name",
+          "transform": "trim"
+        },
+        {
+          "source": "DECIMALPLACES",
+          "target": "decimal_places",
+          "transform": "int"
         }
       ]
     },
@@ -2749,9 +3233,34 @@
           "transform": "trim"
         },
         {
-          "source": "ALLINVENTORYENTRIES.LIST:STOCKITEM",
+          "source": "STOCKITEMNAME",
           "target": "item_name",
-          "transform": "derived"
+          "transform": "trim"
+        },
+        {
+          "source": "RATE",
+          "target": "item_rate",
+          "transform": "trim"
+        },
+        {
+          "source": "AMOUNT",
+          "target": "item_amount",
+          "transform": "trim"
+        },
+        {
+          "source": "ACTUALQTY|BILLEDQTY",
+          "target": "item_qty",
+          "transform": "trim"
+        },
+        {
+          "source": "BATCHNAME",
+          "target": "item_batch",
+          "transform": "trim"
+        },
+        {
+          "source": "GODOWNNAME",
+          "target": "item_godown",
+          "transform": "trim"
         },
         {
           "source": "PARTYLEDGERNAME|PARTYNAME",
@@ -2759,9 +3268,34 @@
           "transform": "derived"
         },
         {
-          "source": "PARTYGSTIN|PARTYSTATE|PARTYPINCODE",
-          "target": "party-block",
+          "source": "PARTYGSTIN",
+          "target": "party_gstin",
           "transform": "trim"
+        },
+        {
+          "source": "STATENAME|PARTYSTATE",
+          "target": "party_state",
+          "transform": "trim"
+        },
+        {
+          "source": "PARTYPINCODE",
+          "target": "party_pincode",
+          "transform": "trim"
+        },
+        {
+          "source": "LEDGERNAME",
+          "target": "ledger_name",
+          "transform": "trim"
+        },
+        {
+          "source": "AMOUNT",
+          "target": "ledger_amount",
+          "transform": "trim"
+        },
+        {
+          "source": "ISDEEMEDPOSITIVE",
+          "target": "ledger_positive",
+          "transform": "derived"
         }
       ]
     },
@@ -3123,20 +3657,30 @@
       "direction": "export",
       "provider": "bahikhata",
       "fy_scoped": true,
-      "note": "Exporter write-back (exporter.cpp:2742+). Positional Jet reads are a C3 exception; pairs document the SQLite side.",
+      "note": "Exporter write-back (exporter.cpp:2742+). The exporter writes the Jet table POSITIONALLY, so this is an ORDERED roster: position = Jet column index, source = SQLite column, target = Jet column, jet_type = Jet type the writer binds. SSOT for the TDS round-trip; MigrationColumns::verifyExporterTdsColumns() + scripts/exporter_strangler_sim.py gate every occurrence (DDL, backfill INSERT, tds_model INSERT, exporter SELECT, exporter positional write/read).",
       "domain_flags": [],
       "columns": [
-        {
-          "source": "note:positional-Jet-read",
-          "target": "col-2|col-9|col-10|col-17",
-          "transform": "derived"
-        },
-        {
-          "source": "note:see-C3-exceptions",
-          "target": "index-based-not-named",
-          "transform": "derived"
-        }
-      ]
+        { "position": 0,  "source": "voucher_date",             "target": "VoucherDate",             "jet_type": "DateTime", "transform": "ole_date" },
+        { "position": 1,  "source": "voucher_number",           "target": "VoucherNumber",           "jet_type": "Double",   "transform": "double" },
+        { "position": 2,  "source": "trans_type",               "target": "TransType",               "jet_type": "Text",     "transform": "text255" },
+        { "position": 3,  "source": "account_code",             "target": "AccountCode",             "jet_type": "Double",   "transform": "legacy_id_lookup" },
+        { "position": 4,  "source": "income_amount",            "target": "IncomeAmount",            "jet_type": "Double",   "transform": "double" },
+        { "position": 5,  "source": "tds",                      "target": "TDS",                     "jet_type": "Double",   "transform": "double" },
+        { "position": 6,  "source": "surcharge",                "target": "Surcharge",               "jet_type": "Double",   "transform": "double" },
+        { "position": 7,  "source": "education",                "target": "Education",               "jet_type": "Double",   "transform": "double" },
+        { "position": 8,  "source": "tds_rate",                 "target": "TDSRate",                 "jet_type": "Double",   "transform": "double" },
+        { "position": 9,  "source": "income_type",              "target": "IncomeType",              "jet_type": "Text",     "transform": "text50" },
+        { "position": 10, "source": "reason_for_non_deduction", "target": "ReasonForNonDeduction",   "jet_type": "Text",     "transform": "text255" },
+        { "position": 11, "source": "rate_tds",                 "target": "RateTDS",                 "jet_type": "Double",   "transform": "double" },
+        { "position": 12, "source": "rate_surcharge",           "target": "RateSurcharge",           "jet_type": "Double",   "transform": "double" },
+        { "position": 13, "source": "rate_education",           "target": "RateEducation",           "jet_type": "Double",   "transform": "double" },
+        { "position": 14, "source": "post_in_books",            "target": "PostInBooks",             "jet_type": "Long",     "transform": "int32" },
+        { "position": 15, "source": "challan_voucher_date",     "target": "ChallanVoucherDate",      "jet_type": "DateTime", "transform": "ole_date" },
+        { "position": 16, "source": "challan_voucher_number",   "target": "ChallanVoucherNumber",    "jet_type": "Long",     "transform": "int32" },
+        { "position": 17, "source": "income_narration",         "target": "IncomeNarration",         "jet_type": "Text",     "transform": "text255" },
+        { "position": 18, "source": "prev_income_amount",       "target": "PrevIncomeAmount",        "jet_type": "Double",   "transform": "double" }
+      ],
+      "dedup_key_jet": [0, 1, 2, 3]
     },
     {
       "source": "transactions",
